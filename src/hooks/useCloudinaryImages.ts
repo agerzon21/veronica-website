@@ -10,47 +10,36 @@ type PageType = 'home' | 'gallery' | 'about' | 'contact';
 
 // Predefined images for each section
 const IMAGES = {
-  home: [
-    {
-      id: 'veronica-photography/home/IMG_6854',
-      name: 'Featured Image',
-      url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310091/IMG_6854_gv0fis.jpg'
-    }
-  ],
+  home: [],
   gallery: [
     {
-      id: 'veronica-photography/gallery/IMG_6831',
-      name: 'Gallery Image 1',
-      url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310090/IMG_6831_gx4dp7.jpg'
-    },
-    {
       id: 'veronica-photography/gallery/IMG_3712',
-      name: 'Gallery Image 2',
+      name: 'Gallery Image 1',
       url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg'
     },
     {
       id: 'veronica-photography/gallery/IMG_3710',
-      name: 'Gallery Image 3',
+      name: 'Gallery Image 2',
       url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg'
     },
     {
       id: 'veronica-photography/gallery/IMG_3711',
-      name: 'Gallery Image 4',
+      name: 'Gallery Image 3',
       url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg'
     },
     {
       id: 'veronica-photography/gallery/IMG_3709',
-      name: 'Gallery Image 5',
+      name: 'Gallery Image 4',
       url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg'
     },
     {
       id: 'veronica-photography/gallery/IMG_3678',
-      name: 'Gallery Image 6',
+      name: 'Gallery Image 5',
       url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310085/IMG_3678_hfzkpx.jpg'
     },
     {
       id: 'veronica-photography/gallery/IMG_6854',
-      name: 'Gallery Image 7',
+      name: 'Gallery Image 6',
       url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310091/IMG_6854_gv0fis.jpg'
     }
   ],
