@@ -15,14 +15,20 @@ const Home: React.FC = () => {
   };
 
   return (
-    <Container maxW="container.xl" py={10}>
+    <Container maxW="container.xl" py={32}>
       <VStack spacing={8} align="stretch">
-        <Box textAlign="center" py={10}>
-          <Heading as="h1" size="2xl" mb={4}>
-            Welcome to Veronica's Photography
+        <Box textAlign="center">
+          <Heading 
+            as="h1" 
+            size="2xl" 
+            fontWeight="light"
+            letterSpacing="tight"
+            mb={4}
+          >
+            Veronica Photography
           </Heading>
           <Text fontSize="xl" color="gray.600">
-            Capturing life's precious moments through the lens
+            Capturing Life's Special Moments
           </Text>
         </Box>
         
