@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Heading, Text, Container, VStack, FormControl, FormLabel, Input, Textarea, Button, useToast } from '@chakra-ui/react';
+import { Box, Container, VStack, FormControl, FormLabel, Input, Textarea, Button, useToast } from '@chakra-ui/react';
+import PageHeader from '../components/PageHeader';
 
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -32,24 +33,10 @@ const Contact: React.FC = () => {
 
   return (
     <Container maxW="1200px" py={32}>
-      <VStack spacing={8} align="stretch" mb={16}>
-        <Heading 
-          as="h1" 
-          size="2xl" 
-          textAlign="center"
-          fontWeight="light"
-          letterSpacing="tight"
-        >
-          Contact
-        </Heading>
-        <Text 
-          fontSize="xl" 
-          textAlign="center" 
-          color="gray.600"
-        >
-          Get in touch to discuss your photography needs
-        </Text>
-      </VStack>
+      <PageHeader 
+        title="Contact"
+        subtitle="Get in touch to discuss your photography needs"
+      />
 
       <Box 
         bg="white" 

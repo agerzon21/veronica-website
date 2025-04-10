@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Box, SimpleGrid, Image, Container, Heading, Spinner, Text, Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, useDisclosure, VStack } from '@chakra-ui/react';
+import { Box, SimpleGrid, Image, Container, Spinner, Text, Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, useDisclosure } from '@chakra-ui/react';
 import { useGoogleDriveFolder } from '../hooks/useGoogleDriveFolder';
+import PageHeader from '../components/PageHeader';
 
 const Gallery = () => {
   const { images, loading, error } = useGoogleDriveFolder();
@@ -39,24 +40,10 @@ const Gallery = () => {
 
   return (
     <Container maxW="1400px" py={32}>
-      <VStack spacing={8} align="stretch" mb={16}>
-        <Heading 
-          as="h1" 
-          size="2xl" 
-          textAlign="center"
-          fontWeight="light"
-          letterSpacing="tight"
-        >
-          Gallery
-        </Heading>
-        <Text 
-          fontSize="xl" 
-          textAlign="center" 
-          color="gray.600"
-        >
-          A collection of my recent work
-        </Text>
-      </VStack>
+      <PageHeader 
+        title="Gallery"
+        subtitle="A collection of my recent work"
+      />
 
       <SimpleGrid 
         columns={{ base: 1, md: 2, lg: 3 }} 

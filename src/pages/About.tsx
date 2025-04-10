@@ -1,26 +1,13 @@
-import { Box, Container, Heading, Text, VStack } from '@chakra-ui/react';
+import { Box, Container, Text } from '@chakra-ui/react';
+import PageHeader from '../components/PageHeader';
 
 const About = () => {
   return (
     <Container maxW="1200px" py={32}>
-      <VStack spacing={8} align="stretch" mb={16}>
-        <Heading 
-          as="h1" 
-          size="2xl" 
-          textAlign="center"
-          fontWeight="light"
-          letterSpacing="tight"
-        >
-          About
-        </Heading>
-        <Text 
-          fontSize="xl" 
-          textAlign="center" 
-          color="gray.600"
-        >
-          Get to know me and my photography journey
-        </Text>
-      </VStack>
+      <PageHeader 
+        title="About"
+        subtitle="Get to know me and my photography journey"
+      />
       <Box 
         bg="white" 
         p={8} 

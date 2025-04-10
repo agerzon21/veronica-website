@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Heading, Text, Container, VStack, Image, Spinner, Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, useDisclosure } from '@chakra-ui/react';
 import { useGoogleDriveFolder } from '../hooks/useGoogleDriveFolder';
+import PageHeader from '../components/PageHeader';
 
 const Home: React.FC = () => {
   const { images, loading, error } = useGoogleDriveFolder();
@@ -16,61 +17,49 @@ const Home: React.FC = () => {
 
   return (
     <Container maxW="container.xl" py={32}>
-      <VStack spacing={8} align="stretch">
-        <Box textAlign="center">
-          <Heading 
-            as="h1" 
-            size="2xl" 
-            fontWeight="light"
-            letterSpacing="tight"
-            mb={4}
-          >
-            Veronica Photography
-          </Heading>
-          <Text fontSize="xl" color="gray.600">
-            Capturing Life's Special Moments
-          </Text>
-        </Box>
+      <PageHeader 
+        title="Veronica Photography"
+        subtitle="Capturing Life's Special Moments"
+      />
         
-        <Box>
-          <Heading as="h2" size="lg" mb={4}>
-            Featured Work
-          </Heading>
-          {loading ? (
-            <Box textAlign="center" py={8}>
-              <Spinner size="xl" />
-              <Text mt={4}>Loading featured image...</Text>
-            </Box>
-          ) : error ? (
-            <Text color="red.500">{error}</Text>
-          ) : images.length > 0 ? (
-            <Box
-              overflow="hidden"
-              borderRadius="lg"
-              boxShadow="lg"
-              mb={6}
-              onClick={() => handleImageClick(images[0])}
-              cursor="pointer"
-              transition="transform 0.2s"
-              _hover={{ transform: 'scale(1.02)' }}
-            >
-              <Image
-                src={images[0].url}
-                alt={images[0].name}
-                w="100%"
-                h="400px"
-                objectFit="contain"
-                bg="gray.100"
-              />
-            </Box>
-          ) : (
-            <Text>No featured images available</Text>
-          )}
-          <Text mt={4}>
-            Explore our gallery to see some of our most recent work and get inspired for your next photo session.
-          </Text>
-        </Box>
-      </VStack>
+      <Box>
+        <Heading as="h2" size="lg" mb={4}>
+          Featured Work
+        </Heading>
+        {loading ? (
+          <Box textAlign="center" py={8}>
+            <Spinner size="xl" />
+            <Text mt={4}>Loading featured image...</Text>
+          </Box>
+        ) : error ? (
+          <Text color="red.500">{error}</Text>
+        ) : images.length > 0 ? (
+          <Box
+            overflow="hidden"
+            borderRadius="lg"
+            boxShadow="lg"
+            mb={6}
+            onClick={() => handleImageClick(images[0])}
+            cursor="pointer"
+            transition="transform 0.2s"
+            _hover={{ transform: 'scale(1.02)' }}
+          >
+            <Image
+              src={images[0].url}
+              alt={images[0].name}
+              w="100%"
+              h="400px"
+              objectFit="contain"
+              bg="gray.100"
+            />
+          </Box>
+        ) : (
+          <Text>No featured images available</Text>
+        )}
+        <Text mt={4}>
+          Explore our gallery to see some of our most recent work and get inspired for your next photo session.
+        </Text>
+      </Box>
 
       <Modal isOpen={isOpen} onClose={onClose} size="full">
         <ModalOverlay />
