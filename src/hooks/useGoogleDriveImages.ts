@@ -18,8 +18,7 @@ export const useGoogleDriveImages = () => {
         setError(null);
         setImages([]);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch images');
-        console.error('Error:', err);
+        setError('Failed to fetch images');
       } finally {
         setLoading(false);
       }
