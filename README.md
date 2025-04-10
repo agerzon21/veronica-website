@@ -1,3 +1,31 @@
+# Veronica's Website
+
+A personal website featuring a gallery of images loaded from Google Drive.
+
+## Features
+
+- Responsive design
+- Image gallery with modal view
+- Google Drive integration for image loading
+- Modern React + TypeScript + Vite setup
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+## Deployment
+
+The site is deployed on Vercel with automatic deployments from the main branch.
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
