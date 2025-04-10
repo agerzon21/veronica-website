@@ -9,6 +9,11 @@ interface BurgerMenuProps {
 }
 
 const BurgerMenu = ({ isOpen, onClick }: BurgerMenuProps) => {
+  const transition = {
+    duration: 0.3,
+    ease: [0.4, 0, 0.2, 1]
+  };
+
   return (
     <Box
       display={{ base: 'block', md: 'none' }}
@@ -21,51 +26,43 @@ const BurgerMenu = ({ isOpen, onClick }: BurgerMenuProps) => {
       <Box position="relative" w="24px" h="20px">
         <MotionBox
           position="absolute"
-          top="0"
-          left="0"
-          right="0"
+          w="24px"
           h="2px"
           bg={isOpen ? "white" : "gray.800"}
-          transformOrigin="center"
+          initial={false}
           animate={{
-            top: isOpen ? '9px' : '0',
-            transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
+            top: isOpen ? "50%" : "0%",
+            transform: isOpen ? "translateY(-50%) rotate(45deg)" : "none",
           }}
-          transition={{
-            duration: 0.3,
-            top: { type: "spring", stiffness: 100 }
-          }}
+          transition={transition}
+          transformOrigin="center"
         />
         <MotionBox
           position="absolute"
-          top="9px"
-          left="0"
-          right="0"
+          w="24px"
           h="2px"
           bg={isOpen ? "white" : "gray.800"}
-          transformOrigin="center"
+          top="50%"
+          initial={false}
           animate={{
             opacity: isOpen ? 0 : 1,
-            transform: isOpen ? 'scaleX(0)' : 'scaleX(1)',
+            transform: isOpen ? "translateY(-50%) scaleX(0)" : "translateY(-50%)",
           }}
-          transition={{ duration: 0.2 }}
+          transition={transition}
+          transformOrigin="center"
         />
         <MotionBox
           position="absolute"
-          bottom="0"
-          left="0"
-          right="0"
+          w="24px"
           h="2px"
           bg={isOpen ? "white" : "gray.800"}
-          transformOrigin="center"
+          initial={false}
           animate={{
-            bottom: isOpen ? '9px' : '0',
-            transform: isOpen ? 'rotate(-45deg)' : 'rotate(0deg)',
+            bottom: isOpen ? "50%" : "0%",
+            transform: isOpen ? "translateY(50%) rotate(-45deg)" : "none",
           }}
-          transition={{
-            duration: 0.3,
-            bottom: { type: "spring", stiffness: 100 }
-          }}
+          transition={transition}
+          transformOrigin="center"
         />
       </Box>
     </Box>
