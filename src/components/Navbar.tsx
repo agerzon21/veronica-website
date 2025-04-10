@@ -1,97 +1,72 @@
-import { Box, Flex, Link, useColorModeValue } from '@chakra-ui/react';
+import { Box, HStack, Link } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useState } from 'react';
+import BurgerMenu from './BurgerMenu';
+import MobileNav from './MobileNav';
 
 const Navbar = () => {
-  const bgColor = useColorModeValue('rgba(255, 255, 255, 0.8)', 'rgba(26, 32, 44, 0.8)');
-  const textColor = useColorModeValue('gray.800', 'white');
-  const hoverColor = useColorModeValue('gray.600', 'gray.200');
+  const [isOpen, setIsOpen] = useState(false);
+
+  const menuItems = [
+    { name: 'Home', path: '/' },
+    { name: 'Gallery', path: '/gallery' },
+    { name: 'About', path: '/about' },
+    { name: 'Contact', path: '/contact' },
+  ];
+
+  const handleToggle = () => setIsOpen(!isOpen);
+  const handleClose = () => setIsOpen(false);
 
   return (
     <Box 
+      as="nav" 
       position="fixed" 
-      w="100%" 
-      zIndex={1000}
-      backdropFilter="blur(10px)"
-      bg={bgColor}
+      top="0" 
+      left="0" 
+      right="0" 
+      bg="white" 
+      zIndex={1500}
+      px={{ base: 4, md: 8 }}
+      py={4}
+      boxShadow="sm"
     >
-      <Flex 
-        h={20} 
-        alignItems="center" 
-        justifyContent="space-between" 
-        maxW="1200px" 
-        mx="auto"
-        px={8}
-      >
-        <Link 
-          as={RouterLink} 
-          to="/" 
-          fontSize="2xl" 
-          fontWeight="bold"
-          color={textColor}
-          _hover={{ 
-            textDecoration: 'none',
-            color: hoverColor,
-            transform: 'scale(1.05)',
-            transition: 'all 0.2s'
-          }}
+      <HStack justify="space-between" align="center" maxW="container.xl" mx="auto">
+        <Link
+          as={RouterLink}
+          to="/"
+          fontSize={{ base: "xl", md: "2xl" }}
+          fontWeight="light"
+          color={isOpen ? "white" : "gray.800"}
+          _hover={{ textDecoration: 'none' }}
+          zIndex={2000}
+          onClick={handleClose}
         >
           Veronica Photography
         </Link>
-        <Flex gap={8}>
-          <Link 
-            as={RouterLink} 
-            to="/" 
-            color={textColor}
-            _hover={{ 
-              textDecoration: 'none',
-              color: hoverColor,
-              transform: 'translateY(-2px)',
-              transition: 'all 0.2s'
-            }}
-          >
-            Home
-          </Link>
-          <Link 
-            as={RouterLink} 
-            to="/gallery" 
-            color={textColor}
-            _hover={{ 
-              textDecoration: 'none',
-              color: hoverColor,
-              transform: 'translateY(-2px)',
-              transition: 'all 0.2s'
-            }}
-          >
-            Gallery
-          </Link>
-          <Link 
-            as={RouterLink} 
-            to="/about" 
-            color={textColor}
-            _hover={{ 
-              textDecoration: 'none',
-              color: hoverColor,
-              transform: 'translateY(-2px)',
-              transition: 'all 0.2s'
-            }}
-          >
-            About
-          </Link>
-          <Link 
-            as={RouterLink} 
-            to="/contact" 
-            color={textColor}
-            _hover={{ 
-              textDecoration: 'none',
-              color: hoverColor,
-              transform: 'translateY(-2px)',
-              transition: 'all 0.2s'
-            }}
-          >
-            Contact
-          </Link>
-        </Flex>
-      </Flex>
+
+        {/* Desktop Navigation */}
+        <HStack spacing={8} display={{ base: 'none', md: 'flex' }}>
+          {menuItems.map((item) => (
+            <Link
+              key={item.path}
+              as={RouterLink}
+              to={item.path}
+              fontSize="md"
+              fontWeight="light"
+              color="gray.800"
+              _hover={{ color: 'gray.600' }}
+            >
+              {item.name}
+            </Link>
+          ))}
+        </HStack>
+
+        {/* Burger Menu Button */}
+        <BurgerMenu isOpen={isOpen} onClick={handleToggle} />
+
+        {/* Mobile Navigation */}
+        <MobileNav isOpen={isOpen} onClose={handleClose} />
+      </HStack>
     </Box>
   );
 };

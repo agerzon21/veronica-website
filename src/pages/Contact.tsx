@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Container, VStack, FormControl, FormLabel, Input, Textarea, Button, useToast } from '@chakra-ui/react';
+import { Box, FormControl, FormLabel, Input, Textarea, Button, useToast, VStack } from '@chakra-ui/react';
 import PageHeader from '../components/PageHeader';
+import PageContainer from '../components/PageContainer';
 
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -32,7 +33,7 @@ const Contact: React.FC = () => {
   };
 
   return (
-    <Container maxW="1200px" py={32}>
+    <PageContainer>
       <PageHeader 
         title="Contact"
         subtitle="Get in touch to discuss your photography needs"
@@ -49,17 +50,18 @@ const Contact: React.FC = () => {
         <form onSubmit={handleSubmit}>
           <VStack spacing={6}>
             <FormControl isRequired>
-              <FormLabel>Name</FormLabel>
+              <FormLabel fontSize={{ base: "sm", md: "md" }}>Name</FormLabel>
               <Input
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="Your name"
                 size="lg"
+                fontSize={{ base: "sm", md: "md" }}
               />
             </FormControl>
             <FormControl isRequired>
-              <FormLabel>Email</FormLabel>
+              <FormLabel fontSize={{ base: "sm", md: "md" }}>Email</FormLabel>
               <Input
                 name="email"
                 type="email"
@@ -67,10 +69,11 @@ const Contact: React.FC = () => {
                 onChange={handleChange}
                 placeholder="Your email"
                 size="lg"
+                fontSize={{ base: "sm", md: "md" }}
               />
             </FormControl>
             <FormControl isRequired>
-              <FormLabel>Message</FormLabel>
+              <FormLabel fontSize={{ base: "sm", md: "md" }}>Message</FormLabel>
               <Textarea
                 name="message"
                 value={formData.message}
@@ -78,6 +81,7 @@ const Contact: React.FC = () => {
                 placeholder="Your message"
                 size="lg"
                 rows={6}
+                fontSize={{ base: "sm", md: "md" }}
               />
             </FormControl>
             <Button
@@ -86,13 +90,14 @@ const Contact: React.FC = () => {
               size="lg"
               width="full"
               mt={4}
+              fontSize={{ base: "sm", md: "md" }}
             >
               Send Message
             </Button>
           </VStack>
         </form>
       </Box>
-    </Container>
+    </PageContainer>
   );
 };
 

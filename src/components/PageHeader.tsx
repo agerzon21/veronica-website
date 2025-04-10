@@ -1,4 +1,4 @@
-import { VStack, Heading, Text } from '@chakra-ui/react';
+import { VStack, Heading, Text, Box } from '@chakra-ui/react';
 
 interface PageHeaderProps {
   title: string;
@@ -7,21 +7,29 @@ interface PageHeaderProps {
 
 const PageHeader = ({ title, subtitle }: PageHeaderProps) => {
   return (
-    <VStack spacing={8} align="stretch" mb={16}>
-      <VStack spacing={6}>
+    <VStack 
+      spacing={{ base: 4, md: 8 }} 
+      align="stretch" 
+      mb={{ base: 8, md: 16 }}
+      px={{ base: 4, md: 0 }}
+    >
+      <VStack spacing={{ base: 3, md: 6 }}>
         <Heading 
           as="h1" 
-          size="2xl" 
+          size={{ base: "xl", md: "2xl" }}
           textAlign="center"
           fontWeight="light"
           letterSpacing="tight"
+          lineHeight="1.2"
         >
           {title}
         </Heading>
         <Text 
-          fontSize="xl" 
+          fontSize={{ base: "lg", md: "xl" }}
           textAlign="center" 
           color="gray.600"
+          maxW="container.md"
+          mx="auto"
         >
           {subtitle}
         </Text>

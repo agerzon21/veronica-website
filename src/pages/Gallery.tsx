@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Box, SimpleGrid, Image, Container, Spinner, Text, Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, useDisclosure } from '@chakra-ui/react';
+import { Box, SimpleGrid, Image, Spinner, Text, useDisclosure } from '@chakra-ui/react';
 import { useGoogleDriveFolder } from '../hooks/useGoogleDriveFolder';
 import PageHeader from '../components/PageHeader';
+import PageContainer from '../components/PageContainer';
+import ImageModal from '../components/ImageModal';
 
 const Gallery = () => {
   const { images, loading, error } = useGoogleDriveFolder();
@@ -10,26 +12,26 @@ const Gallery = () => {
 
   if (loading) {
     return (
-      <Container maxW="1200px" py={32} textAlign="center">
+      <PageContainer textAlign="center">
         <Spinner size="xl" thickness="4px" speed="0.65s" color="gray.500" />
-        <Text mt={4} fontSize="lg" color="gray.600">Loading images...</Text>
-      </Container>
+        <Text textStyle="body" mt={4}>Loading images...</Text>
+      </PageContainer>
     );
   }
 
   if (error) {
     return (
-      <Container maxW="1200px" py={32} textAlign="center">
-        <Text color="red.500" fontSize="lg">{error}</Text>
-      </Container>
+      <PageContainer textAlign="center">
+        <Text textStyle="body" color="red.500">{error}</Text>
+      </PageContainer>
     );
   }
 
   if (images.length === 0) {
     return (
-      <Container maxW="1200px" py={32} textAlign="center">
-        <Text fontSize="lg" color="gray.600">No images found</Text>
-      </Container>
+      <PageContainer textAlign="center">
+        <Text textStyle="body">No images found</Text>
+      </PageContainer>
     );
   }
 
@@ -39,7 +41,7 @@ const Gallery = () => {
   };
 
   return (
-    <Container maxW="1400px" py={32}>
+    <PageContainer>
       <PageHeader 
         title="Gallery"
         subtitle="A collection of my recent work"
@@ -67,9 +69,10 @@ const Gallery = () => {
               src={image.url}
               alt={image.name}
               w="100%"
-              h="400px"
+              h={{ base: "300px", md: "400px" }}
               objectFit="cover"
               transition="transform 0.3s ease"
+              loading="lazy"
               _hover={{
                 transform: 'scale(1.1)'
               }}
@@ -78,42 +81,15 @@ const Gallery = () => {
         ))}
       </SimpleGrid>
 
-      <Modal 
-        isOpen={isOpen} 
-        onClose={onClose} 
-        size="full"
-        motionPreset="scale"
-      >
-        <ModalOverlay bg="blackAlpha.800" />
-        <ModalContent 
-          bg="transparent"
-          boxShadow="none"
-        >
-          <ModalCloseButton 
-            color="white" 
-            size="lg"
-            _hover={{ bg: 'whiteAlpha.200' }}
-          />
-          <ModalBody 
-            p={0} 
-            display="flex" 
-            alignItems="center" 
-            justifyContent="center"
-          >
-            {selectedImage && (
-              <Image
-                src={selectedImage.url}
-                alt={selectedImage.name}
-                maxH="90vh"
-                maxW="90vw"
-                objectFit="contain"
-                borderRadius="lg"
-              />
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    </Container>
+      {selectedImage && (
+        <ImageModal
+          isOpen={isOpen}
+          onClose={onClose}
+          imageUrl={selectedImage.url}
+          imageAlt={selectedImage.name}
+        />
+      )}
+    </PageContainer>
   );
 };
 
