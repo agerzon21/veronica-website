@@ -1,4 +1,3 @@
-import React from 'react';
 import { useState } from 'react';
 import { Box, SimpleGrid, Image, Container, Heading, Spinner, Text, Code, Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, useDisclosure } from '@chakra-ui/react';
 import { useGoogleDriveFolder } from '../hooks/useGoogleDriveFolder';
