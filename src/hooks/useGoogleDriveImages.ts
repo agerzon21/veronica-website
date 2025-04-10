@@ -5,13 +5,23 @@ interface ImageData {
   name: string;
   id: string;
   category: string;
+  fallbackUrls?: string[];
 }
-
-// Main folder ID from Veronica's Google Drive
-const MAIN_FOLDER_ID = '1WTfWq2xfGs16yZHCtGXNMJckrLt_cWSQ';
 
 // Known subfolder names
 export type ImageCategory = 'gallery' | 'portfolio' | 'events' | 'portraits' | 'weddings';
+
+// Folder IDs from Veronica's Google Drive
+const FOLDER_IDS: Partial<Record<ImageCategory, string>> = {
+  events: '1_BDY8hIaX0vTRtNDYkSnUrqFaCcRRL-Y',
+  // We'll add other folder IDs as we get them
+};
+
+// Test image IDs for each category
+const TEST_IMAGES: Partial<Record<ImageCategory, string>> = {
+  events: '1mDeFMejQkKyBhWDv2astpfUQICffsBH5',
+  // We'll add other image IDs as we get them
+};
 
 export const useGoogleDriveImages = (category?: ImageCategory) => {
   const [images, setImages] = useState<ImageData[]>([]);
@@ -21,16 +31,44 @@ export const useGoogleDriveImages = (category?: ImageCategory) => {
   useEffect(() => {
     const fetchImages = async () => {
       try {
-        // For testing, let's use the main folder ID to construct a URL
+        console.log('Fetching images for category:', category);
+        
+        if (!category) {
+          console.log('No category specified');
+          setLoading(false);
+          return;
+        }
+
+        const imageId = TEST_IMAGES[category];
+        console.log('Image ID:', imageId);
+        
+        if (!imageId) {
+          console.log('No image ID found for category:', category);
+          setError(`No image found for category: ${category}`);
+          setLoading(false);
+          return;
+        }
+
+        // Try different URL formats
+        const imageUrls = [
+          `https://drive.google.com/uc?export=view&id=${imageId}`,
+          `https://drive.google.com/thumbnail?id=${imageId}`,
+          `https://drive.google.com/file/d/${imageId}/preview`
+        ];
+
+        console.log('Trying image URLs:', imageUrls);
+        
         const testImages = [
           {
-            id: MAIN_FOLDER_ID,
+            id: imageId,
             name: 'Test Image',
-            url: `https://drive.google.com/uc?export=view&id=${MAIN_FOLDER_ID}`,
-            category: 'gallery'
+            url: imageUrls[0], // Start with the first URL format
+            category: category,
+            fallbackUrls: imageUrls.slice(1) // Store other URL formats as fallbacks
           }
         ];
 
+        console.log('Setting images:', testImages);
         setImages(testImages);
         setLoading(false);
       } catch (error) {
