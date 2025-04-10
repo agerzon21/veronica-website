@@ -28,22 +28,38 @@ const Contact: React.FC = () => {
       duration: 5000,
       isClosable: true,
     });
-    setFormData({ name: '', email: '', message: '' });
   };
 
   return (
-    <Container maxW="container.xl" py={10}>
-      <VStack spacing={8} align="stretch">
-        <Box textAlign="center" py={10}>
-          <Heading as="h1" size="2xl" mb={4}>
-            Contact Me
-          </Heading>
-          <Text fontSize="xl" color="gray.600">
-            Let's create something beautiful together
-          </Text>
-        </Box>
-        
-        <Box as="form" onSubmit={handleSubmit}>
+    <Container maxW="1200px" py={32}>
+      <VStack spacing={8} align="stretch" mb={16}>
+        <Heading 
+          as="h1" 
+          size="2xl" 
+          textAlign="center"
+          fontWeight="light"
+          letterSpacing="tight"
+        >
+          Contact
+        </Heading>
+        <Text 
+          fontSize="xl" 
+          textAlign="center" 
+          color="gray.600"
+        >
+          Get in touch to discuss your photography needs
+        </Text>
+      </VStack>
+
+      <Box 
+        bg="white" 
+        p={8} 
+        borderRadius="xl" 
+        boxShadow="xl"
+        maxW="600px"
+        mx="auto"
+      >
+        <form onSubmit={handleSubmit}>
           <VStack spacing={6}>
             <FormControl isRequired>
               <FormLabel>Name</FormLabel>
@@ -52,9 +68,9 @@ const Contact: React.FC = () => {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="Your name"
+                size="lg"
               />
             </FormControl>
-            
             <FormControl isRequired>
               <FormLabel>Email</FormLabel>
               <Input
@@ -63,9 +79,9 @@ const Contact: React.FC = () => {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Your email"
+                size="lg"
               />
             </FormControl>
-            
             <FormControl isRequired>
               <FormLabel>Message</FormLabel>
               <Textarea
@@ -73,21 +89,22 @@ const Contact: React.FC = () => {
                 value={formData.message}
                 onChange={handleChange}
                 placeholder="Your message"
+                size="lg"
                 rows={6}
               />
             </FormControl>
-            
             <Button
               type="submit"
               colorScheme="blue"
               size="lg"
               width="full"
+              mt={4}
             >
               Send Message
             </Button>
           </VStack>
-        </Box>
-      </VStack>
+        </form>
+      </Box>
     </Container>
   );
 };
