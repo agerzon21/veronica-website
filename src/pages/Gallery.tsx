@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, SimpleGrid, Image, Container, Heading, Spinner, Text, Code, Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, useDisclosure } from '@chakra-ui/react';
+import { Box, SimpleGrid, Image, Container, Heading, Spinner, Text, Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, useDisclosure } from '@chakra-ui/react';
 import { useGoogleDriveFolder } from '../hooks/useGoogleDriveFolder';
 
 const Gallery = () => {
@@ -7,32 +7,27 @@ const Gallery = () => {
   const [selectedImage, setSelectedImage] = useState<{ name: string; url: string } | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  console.log('Gallery state:', { images, loading, error });
-
   if (loading) {
     return (
-      <Container maxW="1200px" py={12} textAlign="center">
-        <Spinner size="xl" />
-        <Text mt={4}>Loading images...</Text>
+      <Container maxW="1200px" py={32} textAlign="center">
+        <Spinner size="xl" thickness="4px" speed="0.65s" color="gray.500" />
+        <Text mt={4} fontSize="lg" color="gray.600">Loading images...</Text>
       </Container>
     );
   }
 
   if (error) {
     return (
-      <Container maxW="1200px" py={12} textAlign="center">
-        <Text color="red.500">{error}</Text>
+      <Container maxW="1200px" py={32} textAlign="center">
+        <Text color="red.500" fontSize="lg">{error}</Text>
       </Container>
     );
   }
 
   if (images.length === 0) {
     return (
-      <Container maxW="1200px" py={12} textAlign="center">
-        <Text>No images found</Text>
-        <Code mt={4} p={2} bg="gray.100">
-          {JSON.stringify({ images, loading, error }, null, 2)}
-        </Code>
+      <Container maxW="1200px" py={32} textAlign="center">
+        <Text fontSize="lg" color="gray.600">No images found</Text>
       </Container>
     );
   }
@@ -43,39 +38,73 @@ const Gallery = () => {
   };
 
   return (
-    <Container maxW="1200px" py={12}>
-      <Heading as="h2" size="xl" mb={8} textAlign="center">
+    <Container maxW="1400px" py={32}>
+      <Heading 
+        as="h2" 
+        size="2xl" 
+        mb={16} 
+        textAlign="center"
+        fontWeight="light"
+        letterSpacing="tight"
+      >
         Events Gallery
       </Heading>
 
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={8}>
+      <SimpleGrid 
+        columns={{ base: 1, md: 2, lg: 3 }} 
+        spacing={8}
+      >
         {images.map((image) => (
           <Box
             key={image.name}
             overflow="hidden"
-            borderRadius="lg"
-            boxShadow="lg"
-            transition="transform 0.2s"
-            _hover={{ transform: 'scale(1.02)', cursor: 'pointer' }}
+            borderRadius="xl"
+            boxShadow="xl"
+            transition="all 0.3s ease"
+            _hover={{ 
+              transform: 'scale(1.02)',
+              cursor: 'pointer',
+              boxShadow: '2xl'
+            }}
             onClick={() => handleImageClick(image)}
           >
             <Image
               src={image.url}
               alt={image.name}
               w="100%"
-              h="300px"
-              objectFit="contain"
-              bg="gray.100"
+              h="400px"
+              objectFit="cover"
+              transition="transform 0.3s ease"
+              _hover={{
+                transform: 'scale(1.1)'
+              }}
             />
           </Box>
         ))}
       </SimpleGrid>
 
-      <Modal isOpen={isOpen} onClose={onClose} size="full">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalCloseButton />
-          <ModalBody p={0} display="flex" alignItems="center" justifyContent="center">
+      <Modal 
+        isOpen={isOpen} 
+        onClose={onClose} 
+        size="full"
+        motionPreset="scale"
+      >
+        <ModalOverlay bg="blackAlpha.800" />
+        <ModalContent 
+          bg="transparent"
+          boxShadow="none"
+        >
+          <ModalCloseButton 
+            color="white" 
+            size="lg"
+            _hover={{ bg: 'whiteAlpha.200' }}
+          />
+          <ModalBody 
+            p={0} 
+            display="flex" 
+            alignItems="center" 
+            justifyContent="center"
+          >
             {selectedImage && (
               <Image
                 src={selectedImage.url}
@@ -83,6 +112,7 @@ const Gallery = () => {
                 maxH="90vh"
                 maxW="90vw"
                 objectFit="contain"
+                borderRadius="lg"
               />
             )}
           </ModalBody>
