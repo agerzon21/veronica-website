@@ -4,7 +4,7 @@ import { Box, SimpleGrid, Image, Container, Heading, Spinner, Text, Code, Modal,
 import { useGoogleDriveFolder } from '../hooks/useGoogleDriveFolder';
 
 const Gallery = () => {
-  DELIBERATE_ERROR_HERE;  // This should cause a different error if the changes are being picked up
+  @@@@THIS_IS_A_SYNTAX_ERROR@@@@  // This should definitely cause a different error
   const { images, loading, error } = useGoogleDriveFolder();
   const [selectedImage, setSelectedImage] = useState<{ name: string; url: string } | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
