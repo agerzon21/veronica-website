@@ -1,4 +1,4 @@
-import { VStack, Heading, Text, Box } from '@chakra-ui/react';
+import { VStack, Heading, Text } from '@chakra-ui/react';
 
 interface PageHeaderProps {
   title: string;
