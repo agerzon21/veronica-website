@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Box, SimpleGrid, Image, Spinner, Text, useDisclosure } from '@chakra-ui/react';
-import { useGoogleDriveFolder } from '../hooks/useGoogleDriveFolder';
+import { useCloudinaryImages } from '../hooks/useCloudinaryImages';
 import PageHeader from '../components/PageHeader';
 import PageContainer from '../components/PageContainer';
 import ImageModal from '../components/ImageModal';
 
 const Gallery = () => {
-  const { images, loading, error } = useGoogleDriveFolder();
+  const { images, loading, error } = useCloudinaryImages('gallery');
   const [selectedImage, setSelectedImage] = useState<{ name: string; url: string } | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
