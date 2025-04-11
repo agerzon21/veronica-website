@@ -48,11 +48,8 @@ const About = () => {
           backgroundImage="url('https://res.cloudinary.com/doj1fanx3/image/upload/v1744340476/%D0%A4%D0%BE%D1%82%D0%BE_%D0%A2%D0%A4%D0%9F_%D0%9B%D0%B8%D0%B7%D0%B0_1491_apmb9t.jpg')"
           backgroundSize="cover"
           backgroundPosition="center"
+          backgroundAttachment="fixed"
           filter="brightness(0.7)"
-          style={{
-            transform: `translateY(${scrollY.get() * 0.5}px)`,
-            transition: 'transform 0.1s ease-out',
-          }}
         />
 
         {/* Gradient Overlay */}
