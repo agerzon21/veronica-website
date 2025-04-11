@@ -1,33 +1,38 @@
 import { Box, VStack, Text, HStack, useColorModeValue, Container } from '@chakra-ui/react';
-import { motion, useScroll, useTransform } from 'framer-motion';
-import { useRef, useState, useEffect } from 'react';
-import PageHeader from '../components/PageHeader';
-import PageContainer from '../components/PageContainer';
+import { motion, useScroll, useInView } from 'framer-motion';
+import { useRef } from 'react';
+import { ChevronDownIcon } from '@chakra-ui/icons';
+import { keyframes } from '@emotion/react';
+
+const scrollAnimation = keyframes`
+  0% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(10px); opacity: 0.7; }
+  100% { transform: translateY(0); opacity: 1; }
+`;
 
 const About = () => {
   const bgColor = useColorModeValue('white', 'gray.800');
   const textColor = useColorModeValue('gray.600', 'gray.300');
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('down');
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const leftColumnRef = useRef<HTMLDivElement>(null);
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+  const isLeftInView = useInView(leftColumnRef, { margin: "-100px" });
+  const isRightInView = useInView(rightColumnRef, { margin: "-100px" });
 
   const { scrollY } = useScroll();
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      setScrollDirection(currentScrollY > lastScrollY ? 'down' : 'up');
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
-
   return (
-    <Box position="relative" minH="100vh" bg={bgColor}>
-      <Box position="relative" h="100vh" w="100%" overflow="hidden">
-        {/* Hero Image with Parallax */}
+    <Box position="relative" minH="100vh">
+      {/* Background wrapper */}
+      <Box
+        position="fixed"
+        top={0}
+        left={0}
+        right={0}
+        height="100vh"
+        zIndex={0}
+        overflow="hidden"
+      >
+        {/* Background Image */}
         <Box
           position="absolute"
           top={0}
@@ -43,7 +48,7 @@ const About = () => {
             transition: 'transform 0.1s ease-out',
           }}
         />
-        
+
         {/* Gradient Overlay */}
         <Box
           position="absolute"
@@ -54,17 +59,15 @@ const About = () => {
           bgGradient="linear(to-b, blackAlpha.600, blackAlpha.800)"
           opacity={0.8}
         />
-        
-        {/* Overlay Content */}
+
+        {/* Hero Content */}
         <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
+          position="relative"
+          height="100%"
           display="flex"
           alignItems="center"
           justifyContent="center"
+          zIndex={1}
         >
           <VStack spacing={8} maxW="800px" px={8} textAlign="center">
             <motion.div
@@ -98,21 +101,43 @@ const About = () => {
               </Text>
             </motion.div>
           </VStack>
+          
+          {/* Scroll Indicator */}
+          <Box
+            position="absolute"
+            bottom="140px"
+            left="50%"
+            transform="translateX(-50%)"
+            textAlign="center"
+            animation={`${scrollAnimation} 2s ease-in-out infinite`}
+            zIndex={3}
+          >
+            <Text color="white" fontSize="sm" mb={3} textShadow="1px 1px 2px rgba(0,0,0,0.5)">Scroll to explore</Text>
+            <ChevronDownIcon color="white" boxSize={8} filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))" />
+          </Box>
         </Box>
       </Box>
 
       {/* Content Section */}
-      <Box py={20} position="relative" ref={contentRef} bg={bgColor} minH="100vh">
-        <Container maxW="1200px" position="relative">
+      <Box 
+        position="relative" 
+        bg={bgColor}
+        marginTop="87vh"
+        borderTopRadius="3xl"
+        zIndex={2}
+        boxShadow="0px -10px 30px rgba(0,0,0,0.2)"
+        minH="100vh"
+        pb={20}
+      >
+        <Container maxW="1200px" py={20}>
           <HStack spacing={12} align="start">
             <motion.div
-              initial={{ opacity: 0, x: -100 }}
-              whileInView={{ 
-                opacity: scrollDirection === 'down' ? 1 : 0, 
-                x: scrollDirection === 'down' ? 0 : -100,
-                transition: { duration: 0.4 }
+              ref={leftColumnRef}
+              animate={{ 
+                opacity: isLeftInView ? 1 : 0,
+                x: isLeftInView ? 0 : -100,
               }}
-              viewport={{ once: false, margin: "-100px" }}
+              transition={{ duration: 0.6 }}
               style={{ flex: 1, width: '100%' }}
             >
               <Box>
@@ -155,13 +180,12 @@ const About = () => {
             </motion.div>
             
             <motion.div
-              initial={{ opacity: 0, x: 100 }}
-              whileInView={{ 
-                opacity: scrollDirection === 'down' ? 1 : 0, 
-                x: scrollDirection === 'down' ? 0 : 100,
-                transition: { duration: 0.4 }
+              ref={rightColumnRef}
+              animate={{ 
+                opacity: isRightInView ? 1 : 0,
+                x: isRightInView ? 0 : 100,
               }}
-              viewport={{ once: false, margin: "-100px" }}
+              transition={{ duration: 0.6 }}
               style={{ flex: 1, width: '100%' }}
             >
               <Box>
