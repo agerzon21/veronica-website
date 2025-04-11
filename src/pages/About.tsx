@@ -65,6 +65,7 @@ const About = () => {
           position="relative"
           height="100%"
           display="flex"
+          flexDirection="column"
           alignItems="center"
           justifyContent="center"
           zIndex={1}
@@ -106,13 +107,17 @@ const About = () => {
           <Box
             position="absolute"
             bottom="140px"
-            left="50%"
-            transform="translateX(-50%)"
-            textAlign="center"
+            left="0"
+            right="0"
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
             animation={`${scrollAnimation} 2s ease-in-out infinite`}
             zIndex={3}
           >
-            <Text color="white" fontSize="sm" mb={3} textShadow="1px 1px 2px rgba(0,0,0,0.5)">Scroll to explore</Text>
+            <Text color="white" fontSize="sm" mb={3} textShadow="1px 1px 2px rgba(0,0,0,0.5)">
+              Scroll to explore
+            </Text>
             <ChevronDownIcon color="white" boxSize={8} filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))" />
           </Box>
         </Box>
