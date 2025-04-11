@@ -1,35 +1,17 @@
-import React, { useState } from 'react';
-import { Box, FormControl, FormLabel, Input, Textarea, Button, useToast, VStack } from '@chakra-ui/react';
+import { Box, VStack, Text, Button, Icon, useColorModeValue } from '@chakra-ui/react';
+import { FaWhatsapp } from 'react-icons/fa';
 import PageHeader from '../components/PageHeader';
 import PageContainer from '../components/PageContainer';
 
-const Contact: React.FC = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    message: ''
-  });
-  const toast = useToast();
+const Contact = () => {
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const buttonBg = '#25D366'; // WhatsApp brand color
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Here you would typically send the form data to your backend
-    console.log('Form submitted:', formData);
-    toast({
-      title: 'Message Sent',
-      description: 'Thank you for your message. We will get back to you soon!',
-      status: 'success',
-      duration: 5000,
-      isClosable: true,
-    });
+  const handleWhatsAppClick = () => {
+    const phoneNumber = '+18493569362'; // Replace with your actual WhatsApp number
+    const message = 'Hello Veronica, I would like to discuss a photography project.';
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   return (
@@ -38,64 +20,48 @@ const Contact: React.FC = () => {
         title="Contact"
         subtitle="Get in touch to discuss your photography needs"
       />
-
+      
       <Box 
-        bg="white" 
+        bg={bgColor} 
         p={8} 
         borderRadius="xl" 
         boxShadow="xl"
         maxW="600px"
         mx="auto"
       >
-        <form onSubmit={handleSubmit}>
-          <VStack spacing={6}>
-            <FormControl isRequired>
-              <FormLabel fontSize={{ base: "sm", md: "md" }}>Name</FormLabel>
-              <Input
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Your name"
-                size="lg"
-                fontSize={{ base: "sm", md: "md" }}
-              />
-            </FormControl>
-            <FormControl isRequired>
-              <FormLabel fontSize={{ base: "sm", md: "md" }}>Email</FormLabel>
-              <Input
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Your email"
-                size="lg"
-                fontSize={{ base: "sm", md: "md" }}
-              />
-            </FormControl>
-            <FormControl isRequired>
-              <FormLabel fontSize={{ base: "sm", md: "md" }}>Message</FormLabel>
-              <Textarea
-                name="message"
-                value={formData.message}
-                onChange={handleChange}
-                placeholder="Your message"
-                size="lg"
-                rows={6}
-                fontSize={{ base: "sm", md: "md" }}
-              />
-            </FormControl>
-            <Button
-              type="submit"
-              colorScheme="blue"
-              size="lg"
-              width="full"
-              mt={4}
-              fontSize={{ base: "sm", md: "md" }}
-            >
-              Send Message
-            </Button>
-          </VStack>
-        </form>
+        <VStack spacing={8}>
+          <Text
+            fontSize={{ base: 'lg', md: 'xl' }}
+            textAlign="center"
+            color="gray.600"
+          >
+            I'd love to hear about your photography needs. Whether it's a portrait session, 
+            event coverage, or a creative project, let's discuss how we can bring your vision to life.
+          </Text>
+
+          <Button
+            size="lg"
+            leftIcon={<Icon as={FaWhatsapp} boxSize={6} />}
+            bg={buttonBg}
+            color="white"
+            _hover={{ bg: '#128C7E' }}
+            _active={{ bg: '#075E54' }}
+            px={8}
+            py={6}
+            fontSize="xl"
+            onClick={handleWhatsAppClick}
+          >
+            Message Me on WhatsApp
+          </Button>
+
+          <Text
+            fontSize="sm"
+            color="gray.500"
+            textAlign="center"
+          >
+            Click the button above to start a conversation on WhatsApp
+          </Text>
+        </VStack>
       </Box>
     </PageContainer>
   );
