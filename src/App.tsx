@@ -45,6 +45,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/gallery" element={<Gallery />} />
+          <Route path="/gallery/:category" element={<Gallery />} />
         </Routes>
       </Router>
     </ChakraProvider>

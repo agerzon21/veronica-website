@@ -1,97 +1,94 @@
-import { useState, useRef } from 'react';
-import { Box, SimpleGrid, Image, Spinner, Text, useDisclosure, Container } from '@chakra-ui/react';
-import { motion, useScroll, useTransform } from 'framer-motion';
-import { useCloudinaryImages } from '../hooks/useCloudinaryImages';
-import PageContainer from '../components/PageContainer';
-import ImageModal from '../components/ImageModal';
+import { Box, Container, Text, IconButton, Flex, Heading } from '@chakra-ui/react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowBackIcon } from '@chakra-ui/icons';
+import GalleryCategories from '../components/GalleryCategories';
+import GalleryGrid from '../components/GalleryGrid';
+
+// Sample images data structure
+const sampleImages = {
+  portraits: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg', width: 800, height: 1200 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg', width: 1200, height: 800 },
+  ],
+  family: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg', width: 800, height: 1200 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg', width: 1200, height: 800 },
+  ],
+  weddings: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg', width: 800, height: 1200 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg', width: 1200, height: 800 },
+  ],
+  maternity: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg', width: 800, height: 1200 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg', width: 1200, height: 800 },
+  ],
+};
+
+const categoryDetails = {
+  portraits: {
+    title: 'Portrait Collection',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg',
+  },
+  family: {
+    title: 'Family Collection',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg',
+  },
+  weddings: {
+    title: 'Wedding Collection',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg',
+  },
+  maternity: {
+    title: 'Maternity Collection',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg',
+  },
+};
 
 const Gallery = () => {
-  const { images, loading, error } = useCloudinaryImages('gallery');
-  const [selectedImage, setSelectedImage] = useState<{ name: string; url: string } | null>(null);
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start 80%", "end start"]
-  });
-
-  const y = useTransform(scrollYProgress, [0, 1], ['0%', '25%']);
-
-  if (loading) {
+  const { category } = useParams();
+  
+  console.log('Current category:', category);
+  console.log('Available categories:', Object.keys(sampleImages));
+  
+  if (!category) {
     return (
-      <PageContainer textAlign="center">
-        <Spinner size="xl" thickness="4px" speed="0.65s" color="gray.500" />
-        <Text textStyle="body" mt={4}>Loading images...</Text>
-      </PageContainer>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageContainer textAlign="center">
-        <Text textStyle="body" color="red.500">{error}</Text>
-      </PageContainer>
-    );
-  }
-
-  if (images.length === 0) {
-    return (
-      <PageContainer textAlign="center">
-        <Text textStyle="body">No images found</Text>
-      </PageContainer>
-    );
-  }
-
-  const handleImageClick = (image: { name: string; url: string }) => {
-    setSelectedImage(image);
-    onOpen();
-  };
-
-  return (
-    <Box position="relative" minH="100vh">
-      {/* Hero Section */}
-      <Box
-        position="relative"
-        height="60vh"
-        overflow="hidden"
-      >
-        <motion.div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            y,
-            backgroundImage: `url(${images[0]?.url})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            filter: 'brightness(0.7) contrast(1.1)',
-            willChange: 'transform'
-          }}
-        />
+      <Box position="relative" minH="100vh">
+        {/* Background wrapper */}
         <Box
-          position="absolute"
+          position="fixed"
           top={0}
           left={0}
           right={0}
-          bottom={0}
-          bgGradient="linear(to-b, blackAlpha.600, blackAlpha.800)"
-          opacity={0.8}
-        />
-        <Container
-          position="relative"
-          height="100%"
-          display="flex"
-          flexDirection="column"
-          justifyContent="center"
-          alignItems="center"
-          zIndex={1}
+          height="60vh"
+          zIndex={0}
+          overflow="hidden"
         >
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1 }}
+          {/* Background Image */}
+          <Box
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            backgroundImage="url(https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg)"
+            backgroundSize="cover"
+            backgroundPosition="center"
+            backgroundRepeat="no-repeat"
+            filter="brightness(0.5)"
+          />
+
+          {/* Hero Content */}
+          <Box
+            position="relative"
+            height="100%"
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            zIndex={1}
           >
             <Text
               fontSize={{ base: '4xl', md: '6xl', lg: '7xl' }}
@@ -100,88 +97,170 @@ const Gallery = () => {
               textTransform="uppercase"
               letterSpacing="wider"
               textShadow="2px 2px 4px rgba(0,0,0,0.3)"
-              textAlign="center"
+              mb={4}
             >
               Gallery
             </Text>
             <Text
-              fontSize={{ base: 'lg', md: 'xl' }}
+              fontSize={{ base: 'xl', md: '2xl' }}
               color="white"
-              textAlign="center"
-              maxW="600px"
-              mx="auto"
-              mt={4}
+              fontStyle="italic"
               textShadow="1px 1px 2px rgba(0,0,0,0.3)"
             >
               A collection of my recent work
             </Text>
-          </motion.div>
-        </Container>
+          </Box>
+        </Box>
+
+        {/* Content Section */}
+        <Box 
+          position="relative" 
+          bg="white"
+          marginTop="45vh"
+          borderTopRadius="3xl"
+          zIndex={2}
+          boxShadow="0px -10px 30px rgba(0,0,0,0.2)"
+          minH="100vh"
+          pb={20}
+        >
+          <Container maxW="container.xl" py={16}>
+            <GalleryCategories />
+          </Container>
+        </Box>
+      </Box>
+    );
+  }
+
+  const images = sampleImages[category as keyof typeof sampleImages] || [];
+  const categoryInfo = categoryDetails[category as keyof typeof categoryDetails];
+  
+  console.log('Selected category images:', images);
+  console.log('Category info:', categoryInfo);
+
+  return (
+    <Box position="relative" minH="100vh">
+      {/* Category Hero Section */}
+      <Box
+        position="relative"
+        height="50vh"
+        width="100%"
+        overflow="hidden"
+      >
+        {/* Background Image */}
+        <Box
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          backgroundImage={`url(${categoryInfo.image})`}
+          backgroundSize="cover"
+          backgroundPosition="center"
+          backgroundRepeat="no-repeat"
+          filter="brightness(0.5)"
+        />
+
+        {/* Category Title */}
+        <Flex
+          position="absolute"
+          bottom={0}
+          left={0}
+          right={0}
+          height="100%"
+          alignItems="center"
+          justifyContent="center"
+          flexDirection="column"
+          bg="linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)"
+        >
+          <Text
+            fontSize={{ base: '3xl', md: '5xl', lg: '6xl' }}
+            fontWeight="light"
+            color="white"
+            textTransform="uppercase"
+            letterSpacing="wider"
+            textShadow="2px 2px 4px rgba(0,0,0,0.3)"
+          >
+            {categoryInfo.title}
+          </Text>
+
+          {/* Mobile Back Button */}
+          <Box
+            mt={6}
+            display={{ base: "block", md: "none" }}
+            zIndex={2}
+          >
+            <Link
+              to="/gallery"
+              style={{ textDecoration: 'none' }}
+            >
+              <Box
+                bg="blackAlpha.500"
+                backdropFilter="blur(8px)"
+                rounded="full"
+                display="flex"
+                alignItems="center"
+                py={2}
+                px={4}
+                _hover={{
+                  bg: "blackAlpha.600"
+                }}
+                cursor="pointer"
+              >
+                <ArrowBackIcon color="white" />
+                <Text
+                  color="white"
+                  fontSize="sm"
+                  fontWeight="medium"
+                  ml={2}
+                >
+                  Back to Gallery
+                </Text>
+              </Box>
+            </Link>
+          </Box>
+        </Flex>
+
+        {/* Desktop Back Button */}
+        <Box
+          position="absolute"
+          top="50%"
+          left={8}
+          transform="translateY(-50%)"
+          zIndex={2}
+          display={{ base: "none", md: "block" }}
+        >
+          <IconButton
+            as={Link}
+            to="/gallery"
+            icon={<ArrowBackIcon />}
+            aria-label="Back to Gallery"
+            size="md"
+            bg="blackAlpha.400"
+            color="white"
+            _hover={{
+              bg: "blackAlpha.600",
+              transform: "translateX(-2px)"
+            }}
+            transition="all 0.2s"
+            rounded="full"
+          />
+        </Box>
       </Box>
 
-      {/* Gallery Grid */}
-      <Box
-        ref={ref}
-        position="relative"
+      {/* Images Grid Section */}
+      <Box 
+        position="relative" 
         bg="white"
-        mt={-20}
         borderTopRadius="3xl"
-        zIndex={2}
-        boxShadow="0px -10px 30px rgba(0,0,0,0.2)"
+        marginTop="-2rem"
+        zIndex={1}
+        minH="50vh"
         pb={20}
       >
-        <Container maxW="container.xl" py={20}>
-          <SimpleGrid 
-            columns={{ base: 1, md: 2, lg: 3 }} 
-            spacing={8}
-          >
-            {images.map((image) => (
-              <motion.div
-                key={image.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                viewport={{ once: true }}
-              >
-                <Box
-                  overflow="hidden"
-                  borderRadius="xl"
-                  boxShadow="xl"
-                  transition="all 0.3s ease"
-                  _hover={{ 
-                    transform: 'scale(1.02)',
-                    cursor: 'pointer',
-                    boxShadow: '2xl'
-                  }}
-                  onClick={() => handleImageClick(image)}
-                >
-                  <Image
-                    src={image.url}
-                    alt={image.name}
-                    w="100%"
-                    h={{ base: "300px", md: "400px" }}
-                    objectFit="cover"
-                    transition="transform 0.3s ease"
-                    loading="lazy"
-                    _hover={{
-                      transform: 'scale(1.1)'
-                    }}
-                  />
-                </Box>
-              </motion.div>
-            ))}
-          </SimpleGrid>
+        <Container maxW="container.xl" py={16}>
+          <GalleryGrid images={images} />
         </Container>
       </Box>
-
-      {selectedImage && (
-        <ImageModal
-          isOpen={isOpen}
-          onClose={onClose}
-          imageUrl={selectedImage.url}
-          imageAlt={selectedImage.name}
-        />
-      )}
     </Box>
   );
 };

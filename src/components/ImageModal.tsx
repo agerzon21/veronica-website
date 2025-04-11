@@ -4,10 +4,10 @@ interface ImageModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageUrl: string;
-  imageAlt: string;
+  imageAlt?: string;
 }
 
-const ImageModal = ({ isOpen, onClose, imageUrl, imageAlt }: ImageModalProps) => {
+const ImageModal = ({ isOpen, onClose, imageUrl, imageAlt = 'Gallery image' }: ImageModalProps) => {
   return (
     <Modal 
       isOpen={isOpen} 
@@ -16,14 +16,14 @@ const ImageModal = ({ isOpen, onClose, imageUrl, imageAlt }: ImageModalProps) =>
       motionPreset="slideInBottom"
       isCentered
     >
-      <ModalOverlay bg="blackAlpha.900" />
+      <ModalOverlay bg="blackAlpha.900" onClick={onClose} />
       <ModalContent 
         bg="transparent" 
         m={0}
         maxW="100vw"
         maxH="100vh"
         position="relative"
-        top="80px"
+        top="120px"
       >
         <ModalCloseButton 
           color="white" 
@@ -40,26 +40,40 @@ const ImageModal = ({ isOpen, onClose, imageUrl, imageAlt }: ImageModalProps) =>
           justifyContent="center"
           position="relative"
           onClick={onClose}
-          h="calc(100vh - 80px)"
+          h="calc(100vh - 120px)"
+          overflowY="auto"
+          css={{
+            '&::-webkit-scrollbar': {
+              width: '4px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: 'transparent',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '2px',
+            },
+          }}
         >
           <Box
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            onClick={onClose}
-            cursor="pointer"
-          />
-          <Image
-            src={imageUrl}
-            alt={imageAlt}
-            maxH="calc(100vh - 100px)"
-            maxW="90vw"
-            objectFit="contain"
-            loading="lazy"
-            onClick={(e) => e.stopPropagation()}
-          />
+            position="relative"
+            minH="calc(100vh - 120px)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            py={8}
+          >
+            <Image
+              src={imageUrl}
+              alt={imageAlt}
+              maxH="calc(100vh - 160px)"
+              maxW="90vw"
+              objectFit="contain"
+              loading="lazy"
+              draggable={false}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </Box>
         </ModalBody>
       </ModalContent>
     </Modal>
