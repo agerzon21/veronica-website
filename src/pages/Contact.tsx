@@ -1,24 +1,8 @@
-import { Box, VStack, Text, Button, Icon, Container, HStack, useColorModeValue } from '@chakra-ui/react';
+import { Box, VStack, Text, Button, Icon, Container, HStack } from '@chakra-ui/react';
 import { FaWhatsapp, FaInstagram } from 'react-icons/fa';
-import { motion, useInView } from 'framer-motion';
-import { useRef } from 'react';
-import { ChevronDownIcon } from '@chakra-ui/icons';
-import { keyframes } from '@emotion/react';
+import { motion } from 'framer-motion';
 
 const Contact = () => {
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const textColor = useColorModeValue('gray.600', 'gray.300');
-  const leftColumnRef = useRef<HTMLDivElement>(null);
-  const rightColumnRef = useRef<HTMLDivElement>(null);
-  const isLeftInView = useInView(leftColumnRef, { 
-    margin: "-100px",
-    once: true
-  });
-  const isRightInView = useInView(rightColumnRef, { 
-    margin: "-100px",
-    once: true
-  });
-
   const handleWhatsAppClick = () => {
     const phoneNumber = '+18493569362';
     const message = 'Hello Veronica, I would like to discuss a photography project.';
