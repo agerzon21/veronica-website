@@ -1,5 +1,5 @@
 import { Box, VStack, Text, HStack, useColorModeValue, Container } from '@chakra-ui/react';
-import { motion, useScroll, useInView } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
 import { keyframes } from '@emotion/react';
@@ -23,8 +23,6 @@ const About = () => {
     margin: "-100px",
     once: true
   });
-
-  const { scrollY } = useScroll();
 
   return (
     <Box position="relative" minH="100vh">
