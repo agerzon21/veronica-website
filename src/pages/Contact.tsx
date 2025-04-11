@@ -14,7 +14,6 @@ const scrollAnimation = keyframes`
 const Contact = () => {
   const bgColor = useColorModeValue('white', 'gray.800');
   const textColor = useColorModeValue('gray.600', 'gray.300');
-  const buttonBg = '#25D366'; // WhatsApp brand color
   const formRef = useRef<HTMLDivElement>(null);
   const isFormInView = useInView(formRef, { margin: "-100px" });
   const { scrollY } = useScroll();
