@@ -1,4 +1,4 @@
-import { Box, Container, Text, IconButton, Flex, Heading } from '@chakra-ui/react';
+import { Box, Container, Text, IconButton, Flex } from '@chakra-ui/react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import GalleryCategories from '../components/GalleryCategories';
@@ -75,7 +75,7 @@ const Gallery = () => {
             bottom={0}
             backgroundImage="url(https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg)"
             backgroundSize="cover"
-            backgroundPosition="center"
+            backgroundPosition="center 45%"
             backgroundRepeat="no-repeat"
             filter="brightness(0.5)"
           />
