@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react';
-import { Box, SimpleGrid, Image, Spinner, Text, useDisclosure, Container } from '@chakra-ui/react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { Box, SimpleGrid, Image, Spinner, Text, useDisclosure, Container, VStack, HStack, useColorModeValue } from '@chakra-ui/react';
+import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import { useCloudinaryImages } from '../hooks/useCloudinaryImages';
 import PageContainer from '../components/PageContainer';
 import ImageModal from '../components/ImageModal';
+import { ChevronDownIcon } from '@chakra-ui/icons';
+import { keyframes } from '@emotion/react';
 
 const Gallery = () => {
   const { images, loading, error } = useCloudinaryImages('gallery');
@@ -16,6 +18,19 @@ const Gallery = () => {
   });
 
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '25%']);
+
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const textColor = useColorModeValue('gray.600', 'gray.300');
+  const leftColumnRef = useRef<HTMLDivElement>(null);
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+  const isLeftInView = useInView(leftColumnRef, { 
+    margin: "-100px",
+    once: true
+  });
+  const isRightInView = useInView(rightColumnRef, { 
+    margin: "-100px",
+    once: true
+  });
 
   if (loading) {
     return (
