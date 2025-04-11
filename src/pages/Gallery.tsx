@@ -2,7 +2,6 @@ import { useState, useRef } from 'react';
 import { Box, SimpleGrid, Image, Spinner, Text, useDisclosure, Container } from '@chakra-ui/react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useCloudinaryImages } from '../hooks/useCloudinaryImages';
-import PageHeader from '../components/PageHeader';
 import PageContainer from '../components/PageContainer';
 import ImageModal from '../components/ImageModal';
 
