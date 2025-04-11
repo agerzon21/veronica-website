@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Box } from '@chakra-ui/react';
 import ImageCarousel from '../components/ImageCarousel';
 import ParallaxSection from '../components/ParallaxSection';
@@ -6,6 +6,10 @@ import StatsSection from '../components/StatsSection';
 import InstagramFeed from '../components/InstagramFeed';
 
 const Home: React.FC = () => {
+  useEffect(() => {
+    document.title = 'Vero Photography';
+  }, []);
+
   const carouselImages = [
     {
       url: "https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg",
