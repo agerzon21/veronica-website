@@ -31,7 +31,6 @@ const Home: React.FC = () => {
       <StatsSection />
       <ParallaxSection 
         imageUrl="https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg"
-        text="Book your appointment today!"
         imagePosition="center 85%"
       />
       <InstagramFeed />

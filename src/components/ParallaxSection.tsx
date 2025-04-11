@@ -5,13 +5,11 @@ import { Link as RouterLink } from 'react-router-dom';
 
 interface ParallaxSectionProps {
   imageUrl: string;
-  text: string;
   imagePosition?: string;
 }
 
 const ParallaxSection: React.FC<ParallaxSectionProps> = ({ 
-  imageUrl, 
-  text,
+  imageUrl,
   imagePosition = 'center'
 }) => {
   const ref = useRef<HTMLDivElement>(null);
