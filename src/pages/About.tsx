@@ -142,15 +142,16 @@ const About = () => {
       >
         <Container maxW="1200px" py={20}>
           <HStack spacing={12} align="start" direction={{ base: 'column', md: 'row' }}>
-            <motion.div
+            <Box
               ref={leftColumnRef}
-              initial={{ opacity: 0, x: -100 }}
-              animate={{ 
-                opacity: isLeftInView ? 1 : 0,
-                x: isLeftInView ? 0 : -100,
-              }}
-              transition={{ duration: 0.6 }}
               style={{ flex: 1, width: '100%' }}
+              sx={{
+                '@media (min-width: 768px)': {
+                  opacity: isLeftInView ? 1 : 0,
+                  transform: isLeftInView ? 'translateX(0)' : 'translateX(-100px)',
+                  transition: 'opacity 0.6s, transform 0.6s',
+                }
+              }}
             >
               <Box>
                 <Text
@@ -201,17 +202,18 @@ const About = () => {
                   of the subject.
                 </Text>
               </Box>
-            </motion.div>
+            </Box>
 
-            <motion.div
+            <Box
               ref={rightColumnRef}
-              initial={{ opacity: 0, x: 100 }}
-              animate={{ 
-                opacity: isRightInView ? 1 : 0,
-                x: isRightInView ? 0 : 100,
-              }}
-              transition={{ duration: 0.6 }}
               style={{ flex: 1, width: '100%' }}
+              sx={{
+                '@media (min-width: 768px)': {
+                  opacity: isRightInView ? 1 : 0,
+                  transform: isRightInView ? 'translateX(0)' : 'translateX(100px)',
+                  transition: 'opacity 0.6s, transform 0.6s',
+                }
+              }}
             >
               <Box>
                 <Text
@@ -254,7 +256,7 @@ const About = () => {
                   and artistry to every assignment.
                 </Text>
               </Box>
-            </motion.div>
+            </Box>
           </HStack>
         </Container>
       </Box>

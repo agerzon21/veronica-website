@@ -23,7 +23,7 @@ const InstagramFeed = () => {
             border: 'none',
             borderRadius: 'lg',
             boxShadow: 'lg',
-            height: { base: '600px', md: '900px' },
+            height: { base: '500px', md: '900px' },
             width: '100%',
             maxWidth: { base: '650px', md: '1000px' }
           }
