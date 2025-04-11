@@ -1,4 +1,4 @@
-import { Box, HStack, Link } from '@chakra-ui/react';
+import { Box, HStack, Link, Image } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useState } from 'react';
 import BurgerMenu from './BurgerMenu';
@@ -34,14 +34,16 @@ const Navbar = () => {
         <Link
           as={RouterLink}
           to="/"
-          fontSize={{ base: "xl", md: "2xl" }}
-          fontWeight="light"
-          color={isOpen ? "white" : "gray.800"}
           _hover={{ textDecoration: 'none' }}
           zIndex={2000}
           onClick={handleClose}
         >
-          Veronica Photography
+          <Image 
+            src="/assets/images/logo.svg" 
+            alt="Veronica Photography" 
+            height="40px"
+            objectFit="contain"
+          />
         </Link>
 
         {/* Desktop Navigation */}
