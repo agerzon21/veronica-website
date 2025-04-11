@@ -56,24 +56,25 @@ const ParallaxSection: React.FC<ParallaxSectionProps> = ({
         textAlign="center"
       >
         <Text
-          fontSize={{ base: 'xl', md: '3xl', lg: '4xl' }}
+          fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
           fontWeight="light"
           color="white"
           textTransform="uppercase"
-          letterSpacing="wider"
+          letterSpacing="widest"
           textShadow="2px 2px 4px rgba(0,0,0,0.3)"
-          mb={8}
+          mb={6}
+          fontStyle="italic"
         >
-          {text}
+          Let's Create Timeless Memories Together
         </Text>
         <Link
           as={RouterLink}
           to="/contact"
-          fontSize={{ base: 'md', md: 'lg' }}
-          fontWeight="light"
+          fontSize={{ base: 'sm', md: 'md' }}
+          fontWeight="medium"
           color="white"
           textTransform="uppercase"
-          letterSpacing="wider"
+          letterSpacing="widest"
           position="relative"
           display="inline-block"
           px={6}
@@ -88,7 +89,7 @@ const ParallaxSection: React.FC<ParallaxSectionProps> = ({
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
           }}
         >
-          Get Started
+          Let's Discuss Your Vision
         </Link>
       </Box>
     </Box>
