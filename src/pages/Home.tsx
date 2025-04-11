@@ -3,6 +3,7 @@ import { Box } from '@chakra-ui/react';
 import ImageCarousel from '../components/ImageCarousel';
 import ParallaxSection from '../components/ParallaxSection';
 import StatsSection from '../components/StatsSection';
+import InstagramFeed from '../components/InstagramFeed';
 
 const Home: React.FC = () => {
   const carouselImages = [
@@ -33,6 +34,7 @@ const Home: React.FC = () => {
         text="Book your appointment today!"
         imagePosition="center 85%"
       />
+      <InstagramFeed />
     </Box>
   );
 };
