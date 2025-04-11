@@ -23,6 +23,9 @@ const InstagramFeed = () => {
             border: 'none',
             borderRadius: 'lg',
             boxShadow: 'lg',
+            height: { base: '600px', md: '900px' },
+            width: '100%',
+            maxWidth: { base: '650px', md: '1000px' }
           }
         }}
       >
@@ -30,7 +33,7 @@ const InstagramFeed = () => {
           as="iframe"
           src="https://www.instagram.com/vero.kz/embed"
           width="100%"
-          height="1025px"
+          height="100%"
           scrolling="no"
           allowTransparency={true}
         />

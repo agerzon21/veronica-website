@@ -15,8 +15,14 @@ const About = () => {
   const textColor = useColorModeValue('gray.600', 'gray.300');
   const leftColumnRef = useRef<HTMLDivElement>(null);
   const rightColumnRef = useRef<HTMLDivElement>(null);
-  const isLeftInView = useInView(leftColumnRef, { margin: "-100px" });
-  const isRightInView = useInView(rightColumnRef, { margin: "-100px" });
+  const isLeftInView = useInView(leftColumnRef, { 
+    margin: "-100px",
+    once: true
+  });
+  const isRightInView = useInView(rightColumnRef, { 
+    margin: "-100px",
+    once: true
+  });
 
   const { scrollY } = useScroll();
 
@@ -135,9 +141,10 @@ const About = () => {
         pb={20}
       >
         <Container maxW="1200px" py={20}>
-          <HStack spacing={12} align="start">
+          <HStack spacing={12} align="start" direction={{ base: 'column', md: 'row' }}>
             <motion.div
               ref={leftColumnRef}
+              initial={{ opacity: 0, x: -100 }}
               animate={{ 
                 opacity: isLeftInView ? 1 : 0,
                 x: isLeftInView ? 0 : -100,
@@ -164,28 +171,41 @@ const About = () => {
                 >
                   About Me
                 </Text>
-                <VStack spacing={6} align="start">
-                  <Text fontSize="lg" color={textColor} lineHeight="tall">
-                    As both a model and photographer, I bring a unique perspective to every project. 
-                    Having experienced both sides of the camera, I understand the nuances of creating 
-                    powerful imagery that tells a story.
-                  </Text>
-                  <Text fontSize="lg" color={textColor} lineHeight="tall">
-                    My journey in photography began through my experiences as a model, where I developed 
-                    a deep appreciation for the art of capturing moments. This dual perspective allows 
-                    me to create images that are not just technically proficient, but emotionally resonant.
-                  </Text>
-                  <Text fontSize="lg" color={textColor} lineHeight="tall">
-                    Whether I'm behind the lens or in front of it, my goal is always the same: to create 
-                    authentic, compelling imagery that captures the essence of the moment and the beauty 
-                    of the subject.
-                  </Text>
-                </VStack>
+                <Text
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  color={textColor}
+                  lineHeight="tall"
+                >
+                  As both a model and photographer, I bring a unique perspective to every project. 
+                  Having experienced both sides of the camera, I understand the nuances of creating 
+                  powerful imagery that tells a story.
+                </Text>
+                <Text
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  color={textColor}
+                  lineHeight="tall"
+                  mt={6}
+                >
+                  My journey in photography began through my experiences as a model, where I developed 
+                  a deep appreciation for the art of capturing moments. This dual perspective allows 
+                  me to create images that are not just technically proficient, but emotionally resonant.
+                </Text>
+                <Text
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  color={textColor}
+                  lineHeight="tall"
+                  mt={6}
+                >
+                  Whether I'm behind the lens or in front of it, my goal is always the same: to create 
+                  authentic, compelling imagery that captures the essence of the moment and the beauty 
+                  of the subject.
+                </Text>
               </Box>
             </motion.div>
-            
+
             <motion.div
               ref={rightColumnRef}
+              initial={{ opacity: 0, x: 100 }}
               animate={{ 
                 opacity: isRightInView ? 1 : 0,
                 x: isRightInView ? 0 : 100,
@@ -212,20 +232,27 @@ const About = () => {
                 >
                   My Approach
                 </Text>
-                <VStack spacing={6} align="start">
-                  <Text fontSize="lg" color={textColor} lineHeight="tall">
-                    I believe in creating a comfortable, collaborative environment where creativity 
-                    can flourish. My experience as a model helps me guide my subjects to their most 
-                    authentic selves, while my technical expertise ensures we capture those moments 
-                    perfectly.
-                  </Text>
-                  <Text fontSize="lg" color={textColor} lineHeight="tall">
-                    Every shoot is a unique journey, and I'm passionate about helping my clients 
-                    discover their vision and bring it to life. Whether it's a fashion editorial, 
-                    portrait session, or commercial project, I bring the same level of dedication 
-                    and artistry to every assignment.
-                  </Text>
-                </VStack>
+                <Text
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  color={textColor}
+                  lineHeight="tall"
+                >
+                  I believe in creating a comfortable, collaborative environment where creativity 
+                  can flourish. My experience as a model helps me guide my subjects to their most 
+                  authentic selves, while my technical expertise ensures we capture those moments 
+                  perfectly.
+                </Text>
+                <Text
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  color={textColor}
+                  lineHeight="tall"
+                  mt={6}
+                >
+                  Every shoot is a unique journey, and I'm passionate about helping my clients 
+                  discover their vision and bring it to life. Whether it's a fashion editorial, 
+                  portrait session, or commercial project, I bring the same level of dedication 
+                  and artistry to every assignment.
+                </Text>
               </Box>
             </motion.div>
           </HStack>
