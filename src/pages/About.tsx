@@ -35,6 +35,11 @@ const About = () => {
         height="100vh"
         zIndex={0}
         overflow="hidden"
+        sx={{
+          '@supports (-webkit-touch-callout: none)': {
+            height: '-webkit-fill-available',
+          }
+        }}
       >
         {/* Background Image */}
         <Box
@@ -46,8 +51,14 @@ const About = () => {
           backgroundImage="url('https://res.cloudinary.com/doj1fanx3/image/upload/v1744340476/%D0%A4%D0%BE%D1%82%D0%BE_%D0%A2%D0%A4%D0%9F_%D0%9B%D0%B8%D0%B7%D0%B0_1491_apmb9t.jpg')"
           backgroundSize="cover"
           backgroundPosition="center"
-          backgroundAttachment="fixed"
+          backgroundRepeat="no-repeat"
           filter="brightness(0.7)"
+          sx={{
+            '@supports (-webkit-touch-callout: none)': {
+              position: 'fixed',
+              height: '-webkit-fill-available',
+            }
+          }}
         />
 
         {/* Gradient Overlay */}
@@ -59,6 +70,12 @@ const About = () => {
           bottom={0}
           bgGradient="linear(to-b, blackAlpha.600, blackAlpha.800)"
           opacity={0.8}
+          sx={{
+            '@supports (-webkit-touch-callout: none)': {
+              position: 'fixed',
+              height: '-webkit-fill-available',
+            }
+          }}
         />
 
         {/* Hero Content */}
