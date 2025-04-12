@@ -7,6 +7,16 @@ import Contact from './pages/Contact';
 import Gallery from './pages/Gallery';
 import Navbar from './components/Navbar';
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 function TitleUpdater() {
   const location = useLocation();
 
@@ -38,6 +48,7 @@ function App() {
   return (
     <ChakraProvider>
       <Router>
+        <ScrollToTop />
         <TitleUpdater />
         <Navbar />
         <Routes>

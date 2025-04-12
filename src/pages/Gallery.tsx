@@ -361,21 +361,34 @@ const Gallery = () => {
           zIndex={2}
           display={{ base: "none", md: "block" }}
         >
-          <IconButton
-            as={Link}
+          <Link
             to="/gallery"
-            icon={<ArrowBackIcon />}
-            aria-label="Back to Gallery"
-            size="md"
-            bg="blackAlpha.400"
-            color="white"
-            _hover={{
-              bg: "blackAlpha.600",
-              transform: "translateX(-2px)"
-            }}
-            transition="all 0.2s"
-            rounded="full"
-          />
+            style={{ textDecoration: 'none' }}
+          >
+            <Box
+              bg="blackAlpha.500"
+              backdropFilter="blur(8px)"
+              rounded="full"
+              display="flex"
+              alignItems="center"
+              py={2}
+              px={4}
+              _hover={{
+                bg: "blackAlpha.600"
+              }}
+              cursor="pointer"
+            >
+              <ArrowBackIcon color="white" />
+              <Text
+                color="white"
+                fontSize="sm"
+                fontWeight="medium"
+                ml={2}
+              >
+                Back to Gallery
+              </Text>
+            </Box>
+          </Link>
         </Box>
       </Box>
 

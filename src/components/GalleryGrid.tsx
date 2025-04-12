@@ -12,7 +12,7 @@ interface GalleryGridProps {
 const MotionBox = motion(Box);
 
 const GalleryGrid = ({ images }: GalleryGridProps) => {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(3);
@@ -32,14 +32,26 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
     return () => window.removeEventListener('resize', updateColumnCount);
   }, []);
 
-  const handleImageClick = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
+  const handleImageClick = (index: number) => {
+    setSelectedImageIndex(index);
     setIsModalOpen(true);
   };
 
   const handleModalClose = () => {
     setIsModalOpen(false);
-    setSelectedImage(null);
+    setSelectedImageIndex(null);
+  };
+
+  const handleNextImage = () => {
+    if (selectedImageIndex !== null && selectedImageIndex < images.length - 1) {
+      setSelectedImageIndex(selectedImageIndex + 1);
+    }
+  };
+
+  const handlePreviousImage = () => {
+    if (selectedImageIndex !== null && selectedImageIndex > 0) {
+      setSelectedImageIndex(selectedImageIndex - 1);
+    }
   };
 
   return (
@@ -64,7 +76,7 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
             whileHover={{ scale: 1.02 }}
             transition={{ duration: 0.3 }}
             cursor="pointer"
-            onClick={() => handleImageClick(image.url)}
+            onClick={() => handleImageClick(index)}
           >
             <Image
               src={image.url}
@@ -80,12 +92,14 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
         ))}
       </Box>
 
-      {selectedImage && (
+      {selectedImageIndex !== null && (
         <ImageModal
           isOpen={isModalOpen}
           onClose={handleModalClose}
-          imageUrl={selectedImage}
-          imageAlt="Gallery image"
+          imageUrl={images[selectedImageIndex].url}
+          imageAlt={`Gallery image ${selectedImageIndex + 1}`}
+          onNext={handleNextImage}
+          onPrevious={handlePreviousImage}
         />
       )}
     </Box>
