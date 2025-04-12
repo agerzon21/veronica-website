@@ -94,10 +94,34 @@ const sampleImages = {
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397111/_DSC4069_wi5mfe.jpg' }
   ],
   family: [
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg' }
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420999/_C6C8265_iso5e3.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420951/_C6C8323_zfeyhx.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420940/_C6C1962_pgm7xn.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420883/_C6C5746_m26ork.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420775/IMG_50511_xrk5hc.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420667/_C6C9374_eq86x9.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420048/7654_jngkqk.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420042/6543_j6wwlb.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420016/545_nqiclf.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418720/IMG_4618_fbdjzz.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418619/IMG_7655_lcio93.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418565/_C6C2669_z1oyet.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418531/_C6C2278_fahzfa.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418527/_C6C1932_s7ao9r.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416973/0066_ce14dy.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416869/_C6C16373_l2cnrk.jpg' }
   ],
   maternity: [
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg' }
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425064/IMG_6930_vkwj13.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425038/QC6C3527_g2mug1.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420003/_C6C90411_bi7gse.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419996/_C6C89133_xgwivd.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419990/_C6C9092_gthvhk.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419985/_C6C8946_pklmnz.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419478/_C6C8862_b8za5r.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416674/0765456_h8sivv.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416508/4567_edlsbl.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416502/0077_rhvzyn.jpg' }
   ],
 };
 
@@ -105,22 +129,26 @@ const categoryDetails = {
   portraits: {
     title: 'Portraits',
     description: 'Capturing the essence of individuals through stunning portrait photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg'
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg',
+    backgroundPosition: 'center 10%'
   },
   weddings: {
     title: 'Weddings',
     description: 'Documenting your special day with beautiful and timeless wedding photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415004/05_rfvs8y.jpg'
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415004/05_rfvs8y.jpg',
+    backgroundPosition: 'center 45%'
   },
   family: {
     title: 'Family',
     description: 'Preserving precious family moments with heartfelt photography sessions.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg'
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416869/_C6C16373_l2cnrk.jpg',
+    backgroundPosition: 'center 40%'
   },
   maternity: {
     title: 'Maternity',
     description: 'Celebrating the beauty of pregnancy with elegant maternity photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg'
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419478/_C6C8862_b8za5r.jpg',
+    backgroundPosition: 'center 35%'
   }
 };
 
@@ -243,7 +271,7 @@ const Gallery = () => {
           bottom={0}
           backgroundImage={`url(${categoryInfo.image})`}
           backgroundSize="cover"
-          backgroundPosition="center 10%"
+          backgroundPosition={categoryInfo.backgroundPosition}
           backgroundRepeat="no-repeat"
           filter="brightness(0.5)"
         />

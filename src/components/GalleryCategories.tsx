@@ -20,13 +20,13 @@ const categories = [
   {
     title: 'Family',
     description: 'Preserving precious family moments with heartfelt photography sessions.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416869/_C6C16373_l2cnrk.jpg',
     link: '/gallery/family'
   },
   {
     title: 'Maternity',
     description: 'Celebrating the beauty of pregnancy with elegant maternity photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419478/_C6C8862_b8za5r.jpg',
     link: '/gallery/maternity'
   }
 ];
