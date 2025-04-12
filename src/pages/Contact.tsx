@@ -1,16 +1,19 @@
 import { Box, VStack, Text, Button, Icon, Container, HStack } from '@chakra-ui/react';
 import { FaWhatsapp, FaInstagram } from 'react-icons/fa';
 import { motion } from 'framer-motion';
+import { trackContactSubmission } from '../utils/analytics';
 
 const Contact = () => {
   const handleWhatsAppClick = () => {
     const phoneNumber = '+18493569362';
     const message = 'Hello Veronika, I would like to discuss a photography project.';
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+    trackContactSubmission('WhatsApp');
     window.open(whatsappUrl, '_blank');
   };
 
   const handleInstagramClick = () => {
+    trackContactSubmission('Instagram');
     window.open('https://www.instagram.com/vero.kz', '_blank');
   };
 
