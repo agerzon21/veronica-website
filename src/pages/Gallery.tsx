@@ -1,4 +1,4 @@
-import { Box, Container, Text, IconButton, Flex } from '@chakra-ui/react';
+import { Box, Container, Text, Flex } from '@chakra-ui/react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import GalleryCategories from '../components/GalleryCategories';

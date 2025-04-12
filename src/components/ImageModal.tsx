@@ -1,4 +1,4 @@
-import { Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton, Image, Box, IconButton, Text, Flex } from '@chakra-ui/react';
+import { Modal, ModalOverlay, ModalContent, ModalBody, Image, Box, IconButton, Text, Flex } from '@chakra-ui/react';
 import { ChevronLeftIcon, ChevronRightIcon, AddIcon, MinusIcon, CloseIcon } from '@chakra-ui/icons';
 import { useState, useEffect } from 'react';
 
@@ -68,21 +68,6 @@ const ImageModal = ({ isOpen, onClose, imageUrl, imageAlt = 'Gallery image', onN
           pointerEvents="auto"
           _hover={{ bg: 'whiteAlpha.200' }}
         />
-
-        {/* Image Info */}
-        <Box
-          position="absolute"
-          top="80px"
-          left="24px"
-          bg="blackAlpha.700"
-          p={2}
-          borderRadius="md"
-          pointerEvents="auto"
-        >
-          <Text color="white" fontSize="sm">
-            {imageAlt}
-          </Text>
-        </Box>
 
         {/* Navigation Buttons */}
         {onPrevious && (
