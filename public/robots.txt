@@ -1,4 +1,11 @@
 User-agent: *
 Allow: /
+Disallow: /private/
+Disallow: /admin/
+Disallow: /api/
 
-Sitemap: https://veronica-photography.com/sitemap.xml 
+# Sitemap
+Sitemap: https://veronica-photography.com/sitemap.xml
+
+# Crawl-delay
+Crawl-delay: 10 
