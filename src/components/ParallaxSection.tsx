@@ -1,24 +1,38 @@
 import React, { useRef } from 'react';
-import { Box, Text, Link } from '@chakra-ui/react';
+import { Box, Text, Link, useBreakpointValue } from '@chakra-ui/react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { Link as RouterLink } from 'react-router-dom';
 
 interface ParallaxSectionProps {
   imageUrl: string;
+  mobileImageUrl?: string;
   imagePosition?: string;
+  mobileImagePosition?: string;
 }
 
 const ParallaxSection: React.FC<ParallaxSectionProps> = ({ 
   imageUrl,
-  imagePosition = 'center'
+  mobileImageUrl,
+  imagePosition = 'center',
+  mobileImagePosition
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const isMobile = useBreakpointValue({ base: true, md: false });
+
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start 80%", "end start"]
   });
 
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '25%']);
+
+  const getCurrentPosition = () => {
+    return isMobile ? (mobileImagePosition || imagePosition) : imagePosition;
+  };
+
+  const getCurrentImageUrl = () => {
+    return isMobile ? (mobileImageUrl || imageUrl) : imageUrl;
+  };
 
   return (
     <Box
@@ -36,9 +50,9 @@ const ParallaxSection: React.FC<ParallaxSectionProps> = ({
           right: 0,
           bottom: '-20vh',
           y,
-          backgroundImage: `url(${imageUrl})`,
+          backgroundImage: `url(${getCurrentImageUrl()})`,
           backgroundSize: 'cover',
-          backgroundPosition: imagePosition,
+          backgroundPosition: getCurrentPosition(),
           filter: 'brightness(0.7) contrast(1.1)',
           willChange: 'transform'
         }}
