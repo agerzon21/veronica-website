@@ -11,7 +11,7 @@ const Contact = () => {
   };
 
   const handleInstagramClick = () => {
-    window.open('https://www.instagram.com/vero.kz', '_blank');
+    window.open('https://www.instagram.com/vero.photog', '_blank');
   };
 
   return (
