@@ -1,4 +1,4 @@
-import { Box, Image } from '@chakra-ui/react';
+import { Box, Image, Skeleton } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import ImageModal from './ImageModal';
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -13,6 +13,7 @@ interface ImageDimensions {
   url: string;
   width: number;
   height: number;
+  loaded: boolean;
 }
 
 const MotionBox = motion(Box);
@@ -20,15 +21,48 @@ const MotionBox = motion(Box);
 // Cache for image dimensions
 const imageDimensionCache = new Map<string, ImageDimensions>();
 
+// Function to generate Cloudinary URL with transformations
+const getOptimizedImageUrl = (url: string, width: number) => {
+  const baseUrl = url.split('/upload/')[0];
+  const imagePath = url.split('/upload/')[1];
+  return `${baseUrl}/upload/w_${width},q_auto,f_auto/${imagePath}`;
+};
+
 const GalleryGrid = ({ images }: GalleryGridProps) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageDimensions, setImageDimensions] = useState<ImageDimensions[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(3);
+  const [visibleImages, setVisibleImages] = useState<Set<string>>(new Set());
 
   // Memoize the image URLs to prevent unnecessary recalculations
   const imageUrls = useMemo(() => images.map(img => img.url), [images]);
+
+  // Intersection Observer for lazy loading
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const imgUrl = entry.target.getAttribute('data-src');
+            if (imgUrl) {
+              setVisibleImages((prev) => new Set([...prev, imgUrl]));
+            }
+          }
+        });
+      },
+      {
+        rootMargin: '50px 0px',
+        threshold: 0.1,
+      }
+    );
+
+    const elements = document.querySelectorAll('[data-src]');
+    elements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [imageDimensions]);
 
   useEffect(() => {
     const loadImageDimensions = async () => {
@@ -46,7 +80,8 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
               const dimension = {
                 url,
                 width: img.naturalWidth,
-                height: img.naturalHeight
+                height: img.naturalHeight,
+                loaded: false
               };
               // Cache the result
               imageDimensionCache.set(url, dimension);
@@ -116,7 +151,29 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
   }, [imageDimensions]);
 
   if (imageDimensions.length === 0) {
-    return null;
+    return (
+      <Box 
+        ref={containerRef}
+        py={8} 
+        px={4}
+        maxW="1400px"
+        mx="auto"
+      >
+        <Box
+          display="grid"
+          gridTemplateColumns={`repeat(${columnCount}, 1fr)`}
+          gap={4}
+        >
+          {[...Array(6)].map((_, index) => (
+            <Skeleton
+              key={index}
+              height="300px"
+              borderRadius="lg"
+            />
+          ))}
+        </Box>
+      </Box>
+    );
   }
 
   return (
@@ -132,29 +189,54 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
         gridTemplateColumns={`repeat(${columnCount}, 1fr)`}
         gap={4}
       >
-        {sortedImages.map((image, index) => (
-          <MotionBox
-            key={index}
-            position="relative"
-            overflow="hidden"
-            borderRadius="lg"
-            whileHover={{ scale: 1.02 }}
-            transition={{ duration: 0.3 }}
-            cursor="pointer"
-            onClick={() => handleImageClick(image.url)}
-            gridRow={`span ${getAspectRatio(image.width, image.height) > 1.5 ? 2 : 1}`}
-          >
-            <Image
-              src={image.url}
-              alt={`Gallery image ${index + 1}`}
-              width="100%"
-              height="100%"
-              objectFit="cover"
-              transition="all 0.3s ease"
-              _hover={{ filter: 'brightness(0.9)' }}
-            />
-          </MotionBox>
-        ))}
+        {sortedImages.map((image, index) => {
+          const isVisible = visibleImages.has(image.url);
+          const containerWidth = containerRef.current?.offsetWidth || 1200;
+          const imageWidth = Math.floor(containerWidth / columnCount);
+          
+          return (
+            <MotionBox
+              key={index}
+              position="relative"
+              overflow="hidden"
+              borderRadius="lg"
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.3 }}
+              cursor="pointer"
+              onClick={() => handleImageClick(image.url)}
+              gridRow={`span ${getAspectRatio(image.width, image.height) > 1.5 ? 2 : 1}`}
+            >
+              <Skeleton
+                isLoaded={isVisible}
+                height="100%"
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+              >
+                <Image
+                  src={isVisible ? getOptimizedImageUrl(image.url, imageWidth) : ''}
+                  data-src={image.url}
+                  alt={`Gallery image ${index + 1}`}
+                  width="100%"
+                  height="100%"
+                  objectFit="cover"
+                  transition="all 0.3s ease"
+                  _hover={{ filter: 'brightness(0.9)' }}
+                  loading="lazy"
+                  onLoad={() => {
+                    setImageDimensions(prev => 
+                      prev.map(img => 
+                        img.url === image.url ? { ...img, loaded: true } : img
+                      )
+                    );
+                  }}
+                />
+              </Skeleton>
+            </MotionBox>
+          );
+        })}
       </Box>
 
       {selectedImage && (
