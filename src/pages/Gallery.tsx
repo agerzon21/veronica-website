@@ -51,11 +51,50 @@ const sampleImages = {
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744393406/IMG_0289_copy_b5lodk.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744392680/QC6C6660_%D0%BA%D0%BE%D0%BF%D0%B8%D1%8F_zqhxlw.jpg' }
   ],
+  weddings: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419019/QC6C4557_xa2iye.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419010/QC6C4533_aoi0g7.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416258/_C6C4729_hp5p5p.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416025/_C6C7549_p44ynu.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416012/_C6C4657_xnvdyo.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415936/_C6C0557_qlhoqc.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415882/_C6C23721_jhyzol.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415875/_C6C22691_xnm9za.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415849/IMG_1032_rjcgsa.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415550/IMG_1094_quo7wq.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415402/IMG_1101_qdv55f.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415271/DSC03274_mtuzs8.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415150/IMG_8996_copy_y63gjs.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415125/IMG_9193_pv8xq4.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415094/43276CB5-0809-4348-9484-F627D8CC7B13_jkvkda.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415084/34567_eozg8w.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415075/45678_moqymz.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415069/607CB7D4-0C7F-409F-A06D-233109EEE45F_pv1eds.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415067/41F5FD94-3D27-43A1-B47C-89B43F58C664_tdc8hl.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415004/05_rfvs8y.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414955/01_r3bxzy.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414711/_C6C9949_xbdpyi.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414710/_C6C7794_po9wdj.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414710/_C6C7681_wp8bbb.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414705/_C6C9949_musgap.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414690/_C6C0557_snztep.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414665/_C6C65087_ewhiln.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414580/_C6C0601_yhjlbf.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414134/_C6C0529_wrdewc.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414096/_C6C0084_vcgdtb.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744400099/QC6C4544_jprmgj.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744400076/QC6C4542_haryyr.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744400067/E0AB1A0C-3430-4A0B-ABD5-857612F6197E_aep7s6.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744400026/BDF7C74A-CC72-4501-A46E-0AE2F0D4F5C9_ive4mf.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744399932/_C6C3926_caafmp.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744399932/_C6C3980_zzzpzo.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744398610/IMG_6916_2_mga9r9.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397278/IMG_9132_r8nabt.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397228/_DSC4218_ugnjse.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397111/_DSC4069_wi5mfe.jpg' }
+  ],
   family: [
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg' }
-  ],
-  weddings: [
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg' }
   ],
   maternity: [
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg' }
@@ -64,21 +103,25 @@ const sampleImages = {
 
 const categoryDetails = {
   portraits: {
-    title: 'Portrait Collection',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg',
-  },
-  family: {
-    title: 'Family Collection',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg',
+    title: 'Portraits',
+    description: 'Capturing the essence of individuals through stunning portrait photography.',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg'
   },
   weddings: {
-    title: 'Wedding Collection',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg',
+    title: 'Weddings',
+    description: 'Documenting your special day with beautiful and timeless wedding photography.',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415004/05_rfvs8y.jpg'
+  },
+  family: {
+    title: 'Family',
+    description: 'Preserving precious family moments with heartfelt photography sessions.',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg'
   },
   maternity: {
-    title: 'Maternity Collection',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg',
-  },
+    title: 'Maternity',
+    description: 'Celebrating the beauty of pregnancy with elegant maternity photography.',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg'
+  }
 };
 
 const Gallery = () => {
@@ -176,6 +219,9 @@ const Gallery = () => {
   const images = sampleImages[category as keyof typeof sampleImages] || [];
   const categoryInfo = categoryDetails[category as keyof typeof categoryDetails];
   
+  // Randomize the order of images
+  const randomizedImages = [...images].sort(() => Math.random() - 0.5);
+
   console.log('Selected category images:', images);
   console.log('Category info:', categoryInfo);
 
@@ -197,7 +243,7 @@ const Gallery = () => {
           bottom={0}
           backgroundImage={`url(${categoryInfo.image})`}
           backgroundSize="cover"
-          backgroundPosition="center 0%"
+          backgroundPosition="center 10%"
           backgroundRepeat="no-repeat"
           filter="brightness(0.5)"
         />
@@ -300,7 +346,7 @@ const Gallery = () => {
         pb={20}
       >
         <Container maxW="container.xl" py={16}>
-          <GalleryGrid images={images} />
+          <GalleryGrid images={randomizedImages} />
         </Container>
       </Box>
     </Box>

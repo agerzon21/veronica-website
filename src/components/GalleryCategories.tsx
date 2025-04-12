@@ -6,29 +6,29 @@ const MotionBox = motion(Box);
 
 const categories = [
   {
-    id: 'portraits',
     title: 'Portraits',
-    description: 'Capturing the essence of individuals',
+    description: 'Capturing the essence of individuals through stunning portrait photography.',
     image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg',
+    link: '/gallery/portraits'
   },
   {
-    id: 'family',
-    title: 'Family',
-    description: 'Cherished moments with loved ones',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg',
-  },
-  {
-    id: 'weddings',
     title: 'Weddings',
-    description: 'Celebrating love and commitment',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg',
+    description: 'Documenting your special day with beautiful and timeless wedding photography.',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415004/05_rfvs8y.jpg',
+    link: '/gallery/weddings'
   },
   {
-    id: 'maternity',
-    title: 'Maternity',
-    description: 'The beauty of new life',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg',
+    title: 'Family',
+    description: 'Preserving precious family moments with heartfelt photography sessions.',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg',
+    link: '/gallery/family'
   },
+  {
+    title: 'Maternity',
+    description: 'Celebrating the beauty of pregnancy with elegant maternity photography.',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744318392/IMG_3712_uvjtxr.jpg',
+    link: '/gallery/maternity'
+  }
 ];
 
 const GalleryCategories = () => {
@@ -38,8 +38,8 @@ const GalleryCategories = () => {
         {categories.map((category) => (
           <ChakraLink
             as={Link}
-            to={`/gallery/${category.id}`}
-            key={category.id}
+            to={category.link}
+            key={category.title}
             _hover={{ textDecoration: 'none' }}
           >
             <MotionBox
