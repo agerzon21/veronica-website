@@ -136,7 +136,7 @@ const categoryDetails = {
     title: 'Weddings',
     description: 'Documenting your special day with beautiful and timeless wedding photography.',
     image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415004/05_rfvs8y.jpg',
-    backgroundPosition: 'center 45%'
+    backgroundPosition: 'center 25%'
   },
   family: {
     title: 'Family',
