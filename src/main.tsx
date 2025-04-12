@@ -4,7 +4,7 @@ import App from './App';
 
 // Cache busting version
 const VERSION = '1.0.1';
-document.title = `Veronica's Photography v${VERSION}`;
+document.title = `Vero Photography v${VERSION}`;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

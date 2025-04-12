@@ -99,7 +99,7 @@ const About = () => {
                 letterSpacing="wider"
                 textShadow="2px 2px 4px rgba(0,0,0,0.3)"
               >
-                Veronica
+                Veronika
               </Text>
             </motion.div>
             <motion.div

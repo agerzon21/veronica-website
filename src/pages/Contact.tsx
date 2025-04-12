@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 const Contact = () => {
   const handleWhatsAppClick = () => {
     const phoneNumber = '+18493569362';
-    const message = 'Hello Veronica, I would like to discuss a photography project.';
+    const message = 'Hello Veronika, I would like to discuss a photography project.';
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };

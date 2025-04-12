@@ -50,7 +50,7 @@ const StatsSection = () => {
               letterSpacing="widest"
               color="gray.800"
             >
-              VERONICA POLBINA
+              VERONIKA GERZON
             </Text>
           </MotionBox>
           

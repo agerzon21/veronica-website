@@ -1,4 +1,4 @@
-# Veronica's Website
+# Veronika's Website
 
 A personal website featuring a gallery of images loaded from Google Drive.
 
