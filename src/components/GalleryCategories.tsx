@@ -9,7 +9,7 @@ const categories = [
     id: 'portraits',
     title: 'Portraits',
     description: 'Capturing the essence of individuals',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg',
   },
   {
     id: 'family',

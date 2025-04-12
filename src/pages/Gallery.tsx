@@ -7,31 +7,65 @@ import GalleryGrid from '../components/GalleryGrid';
 // Sample images data structure
 const sampleImages = {
   portraits: [
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg', width: 1200, height: 800 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg', width: 800, height: 1200 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420852/_C6C7147_zexgnh.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418498/_C6C33921_nj0vzv.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418481/_C6C7842_ar2new.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418469/_C6C2698_le8ea3.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418111/_C6C0622_nowzuo.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418108/_C6C0550_jjaeuc.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744417774/_C6C0375_npexhn.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744417695/_C6C0663_kbabsi.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744417686/_C6C5894_i0gtia.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744417403/2000jpg_ewkcnf.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416813/QC6C8127_xfctsx.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416772/QC6C3092_mp9qli.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416477/IMG_4656_xasnim.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744414012/IMG_5689_2_fl8csc.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744413559/IMG_3896_zl0u6l.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744413549/154A0186_2_cwv1ub.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744413421/_C6C4873_ssggj0.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744400636/_C6C4393_dq8vhn.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744400015/%D0%B0%D0%B2%D0%BF_cl6hdn.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744399893/_C6C1095_lqimij.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744399881/_C6C1737_ilmxhh.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744399881/_C6C1344_owaca5.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744398816/2500_ixvxpa.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744398816/_C6C33182000_rhcf4y.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744398813/_C6C34192500_jb931s.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744398368/IMG_6921_kccbyg.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397813/IMG_6920_vhaobr.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397034/_C6C4709_copy_tzkqaa.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397032/_C6C6868_copy_amaout.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397027/_C6C4032_fyviyu.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744395095/IMG_6118_x9khmv.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394809/_C6C5384_copy_zapuhx.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394695/765456_mqaert.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394626/IMG_5100_2_r4kcmr.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394600/IMG_9840_xdmiic.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394543/IMG_77601_copy_qystxt.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394380/09988_wcuogo.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394107/IMG_4768_copy_a1b13h.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744393947/IMG_5509_copy_ouxnki.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744393565/QC6C6905_copy_cgvysy.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744393406/IMG_0289_copy_b5lodk.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744392680/QC6C6660_%D0%BA%D0%BE%D0%BF%D0%B8%D1%8F_zqhxlw.jpg' }
   ],
   family: [
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg', width: 1200, height: 800 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg', width: 800, height: 1200 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg' }
   ],
   weddings: [
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg', width: 1200, height: 800 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg', width: 800, height: 1200 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310088/IMG_3711_yr6cby.jpg' }
   ],
   maternity: [
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg', width: 1200, height: 800 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg', width: 800, height: 1200 },
-    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3710_utj2oy.jpg', width: 1200, height: 800 },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310086/IMG_3709_w1cvak.jpg' }
   ],
 };
 
 const categoryDetails = {
   portraits: {
     title: 'Portrait Collection',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg',
   },
   family: {
     title: 'Family Collection',
@@ -73,11 +107,19 @@ const Gallery = () => {
             left={0}
             right={0}
             bottom={0}
-            backgroundImage="url(https://res.cloudinary.com/doj1fanx3/image/upload/v1744310089/IMG_3712_uvjtxr.jpg)"
+            backgroundImage={`url(https://res.cloudinary.com/doj1fanx3/image/upload/v1744399893/_C6C1095_lqimij.jpg)`}
             backgroundSize="cover"
-            backgroundPosition="center 45%"
+            backgroundPosition="center 15%"
             backgroundRepeat="no-repeat"
-            filter="brightness(0.5)"
+            _before={{
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              bg: 'blackAlpha.600',
+            }}
           />
 
           {/* Hero Content */}
@@ -155,7 +197,7 @@ const Gallery = () => {
           bottom={0}
           backgroundImage={`url(${categoryInfo.image})`}
           backgroundSize="cover"
-          backgroundPosition="center"
+          backgroundPosition="center 0%"
           backgroundRepeat="no-repeat"
           filter="brightness(0.5)"
         />
