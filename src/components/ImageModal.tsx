@@ -1,5 +1,15 @@
-import { Modal, ModalOverlay, ModalContent, ModalBody, Image, Box, IconButton, Text, Flex } from '@chakra-ui/react';
-import { ChevronLeftIcon, ChevronRightIcon, AddIcon, MinusIcon, CloseIcon } from '@chakra-ui/icons';
+import {
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalBody,
+  Image,
+  Box,
+  IconButton,
+  Flex,
+  useBreakpointValue,
+} from '@chakra-ui/react';
+import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddIcon, MinusIcon } from '@chakra-ui/icons';
 import { useState, useEffect } from 'react';
 
 interface ImageModalProps {
