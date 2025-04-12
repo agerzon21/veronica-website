@@ -8,7 +8,7 @@ const categories = [
   {
     title: 'Portraits',
     description: 'Capturing the essence of individuals through stunning portrait photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg',
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394695/765456_mqaert.jpg',
     link: '/gallery/portraits'
   },
   {

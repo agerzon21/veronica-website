@@ -16,30 +16,27 @@ const About = () => {
   const leftColumnRef = useRef<HTMLDivElement>(null);
   const rightColumnRef = useRef<HTMLDivElement>(null);
   const isLeftInView = useInView(leftColumnRef, { 
-    margin: "-100px",
-    once: true
+    margin: "0px",
+    once: true,
+    amount: 0.3
   });
   const isRightInView = useInView(rightColumnRef, { 
-    margin: "-100px",
-    once: true
+    margin: "0px",
+    once: true,
+    amount: 0.3
   });
 
   return (
     <Box position="relative" minH="100vh">
       {/* Background wrapper */}
       <Box
-        position="fixed"
+        position="relative"
         top={0}
         left={0}
         right={0}
-        height="100vh"
+        height="87vh"
         zIndex={0}
         overflow="hidden"
-        sx={{
-          '@supports (-webkit-touch-callout: none)': {
-            height: '-webkit-fill-available',
-          }
-        }}
       >
         {/* Background Image */}
         <Box
@@ -145,14 +142,15 @@ const About = () => {
       <Box 
         position="relative" 
         bg={bgColor}
-        marginTop="87vh"
+        marginTop="0"
         borderTopRadius="3xl"
         zIndex={2}
         boxShadow="0px -10px 30px rgba(0,0,0,0.2)"
-        minH="100vh"
-        pb={20}
+        pb={8}
+        mt="-2rem"
       >
-        <Container maxW="1200px" py={20}>
+        <Container maxW="1200px" py={8}>
+          <Box h="5vh" />  {/* This creates space above the text */}
           <HStack spacing={12} align="start" direction={{ base: 'column', md: 'row' }}>
             <Box
               ref={leftColumnRef}

@@ -7,6 +7,13 @@ import GalleryGrid from '../components/GalleryGrid';
 // Sample images data structure
 const sampleImages = {
   portraits: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744428055/IMG_6959_copy_jxexk0.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744427989/IMG_3710_novk5a.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744427902/IMG_3678_dkizqw.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744427382/76567_xurb9l.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425449/QC6C8144_yecnhu.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425342/QC6C7945_c5rvex.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425266/QC6C7740_ixuqy3.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420852/_C6C7147_zexgnh.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418498/_C6C33921_nj0vzv.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418481/_C6C7842_ar2new.jpg' },
@@ -52,6 +59,8 @@ const sampleImages = {
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744392680/QC6C6660_%D0%BA%D0%BE%D0%BF%D0%B8%D1%8F_zqhxlw.jpg' }
   ],
   weddings: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744427294/111-02.jp_%D0%BA%D0%BE%D0%BF%D0%B8%D1%8F_qpchzk.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744427237/_C6C0709_q5gvmt.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419019/QC6C4557_xa2iye.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419010/QC6C4533_aoi0g7.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416258/_C6C4729_hp5p5p.jpg' },
@@ -94,6 +103,12 @@ const sampleImages = {
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744397111/_DSC4069_wi5mfe.jpg' }
   ],
   family: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744426596/_C6C2533_rnqh8h.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744426594/_C6C2573_wre0pj.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744426591/_C6C2389_lvysin.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744426591/_C6C2283_ngx2qh.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744426585/_C6C2049_hg8ksq.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425813/QC6C9310_gafufb.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420999/_C6C8265_iso5e3.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420951/_C6C8323_zfeyhx.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420940/_C6C1962_pgm7xn.jpg' },
@@ -112,6 +127,8 @@ const sampleImages = {
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416869/_C6C16373_l2cnrk.jpg' }
   ],
   maternity: [
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744426849/QC6C35776_hdhnjl.jpg' },
+    { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744426772/QC6C3516_kjvkfs.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425064/IMG_6930_vkwj13.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744425038/QC6C3527_g2mug1.jpg' },
     { url: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744420003/_C6C90411_bi7gse.jpg' },
@@ -129,8 +146,8 @@ const categoryDetails = {
   portraits: {
     title: 'Portraits',
     description: 'Capturing the essence of individuals through stunning portrait photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744418398/_C6C0250_kgvym7.jpg',
-    backgroundPosition: 'center 10%'
+    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394695/765456_mqaert.jpg',
+    backgroundPosition: 'center 50%'
   },
   weddings: {
     title: 'Weddings',
@@ -234,7 +251,7 @@ const Gallery = () => {
           zIndex={2}
           boxShadow="0px -10px 30px rgba(0,0,0,0.2)"
           minH="100vh"
-          pb={20}
+          pb={0}
         >
           <Container maxW="container.xl" py={16}>
             <GalleryCategories />
