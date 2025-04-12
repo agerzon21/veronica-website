@@ -26,7 +26,7 @@ const Navigation: React.FC = () => {
             fontWeight="bold"
             _hover={{ textDecoration: 'none' }}
           >
-            Veronica's Photography
+            Vero Photography
           </Link>
           
           <Flex gap={6}>
