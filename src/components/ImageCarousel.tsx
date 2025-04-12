@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Image, Flex, Input, Text, Button, useBreakpointValue } from '@chakra-ui/react';
+import { Box, Image, Flex, Text, Button, useBreakpointValue } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ImageCarouselProps {
@@ -16,10 +16,8 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 const ImageCarousel: React.FC<ImageCarouselProps> = ({ images: initialImages }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [tempPositions, setTempPositions] = useState<{ [key: number]: string }>({});
   const [isPaused, setIsPaused] = useState(false);
   const isMobile = useBreakpointValue({ base: true, md: false });
-  const [tempPosition, setTempPosition] = useState<string | null>(null);
   const [images, setImages] = useState(initialImages);
 
   // Shuffle images on component mount
@@ -38,27 +36,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({ images: initialImages }) 
     return () => clearInterval(interval);
   }, [images.length, isPaused]);
 
-  const handlePositionChange = (value: string, axis: 'x' | 'y') => {
-    const currentPosition = getCurrentPosition();
-    const [x, y] = currentPosition.split(' ');
-    
-    if (axis === 'x') {
-      setTempPositions(prev => ({
-        ...prev,
-        [currentIndex]: `${value} ${y}`
-      }));
-    } else {
-      setTempPositions(prev => ({
-        ...prev,
-        [currentIndex]: `${x} ${value}%`
-      }));
-    }
-  };
-
   const getCurrentPosition = () => {
-    if (tempPositions[currentIndex]) {
-      return tempPositions[currentIndex];
-    }
     const currentImage = images[currentIndex];
     return isMobile && currentImage.mobilePosition 
       ? currentImage.mobilePosition 
