@@ -7,7 +7,6 @@ import {
   Box,
   IconButton,
   Flex,
-  useBreakpointValue,
 } from '@chakra-ui/react';
 import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddIcon, MinusIcon } from '@chakra-ui/icons';
 import { useState, useEffect } from 'react';
