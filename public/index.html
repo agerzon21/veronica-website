@@ -1,22 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <link rel="icon" type="image/x-icon" href="%PUBLIC_URL%/assets/images/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/assets/images/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/assets/images/favicon-16x16.png" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/assets/images/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Professional photographer in Punta Cana specializing in luxury weddings, family portraits, maternity, and destination photography. Creating timeless memories through artistic storytelling."
-    />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <title>Vero Photography | Professional Photographer in Punta Cana</title>
+    <script type="module">
+import RefreshRuntime from "/@react-refresh"
+RefreshRuntime.injectIntoGlobalHook(window)
+window.$RefreshReg$ = () => {}
+window.$RefreshSig$ = () => (type) => type
+window.__vite_plugin_react_preamble_installed__ = true
+</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.ico" />
+    <link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vero Photography</title>
+    <meta name="description" content="Professional photography services by Veronika" />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Photographer",
+      "name": "Veronika Gerzon",
+      "image": "https://res.cloudinary.com/doj1fanx3/image/upload/v1744340476/%D0%A4%D0%BE%D1%82%D0%BE_%D0%A2%D0%A4%D0%9F_%D0%9B%D0%B8%D0%B7%D0%B0_1491_apmb9t.jpg",
+      "url": "https://vero.photography",
+      "description": "Professional photography services by Veronika Gerzon. Specializing in weddings, portraits, family sessions, and maternity photography in Punta Cana and worldwide. Creating timeless memories through artistic and emotional storytelling.",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Punta Cana",
+        "addressRegion": "Dominican Republic",
+        "addressCountry": "DO"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": "18.5601",
+        "longitude": "-68.3725"
+      },
+      "serviceType": [
+        "Wedding Photography",
+        "Portrait Photography",
+        "Family Photography",
+        "Maternity Photography",
+        "Event Photography",
+        "Destination Photography",
+        "Beach Photography",
+        "Editorial Photography"
+      ],
+      "sameAs": [
+        "https://www.instagram.com/vero.kz/"
+      ]
+    }
+    </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html> 
