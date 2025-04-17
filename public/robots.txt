@@ -5,7 +5,7 @@ Disallow: /admin/
 Disallow: /api/
 
 # Sitemap
-Sitemap: https://veronica-photography.com/sitemap.xml
+Sitemap: https://vero.photography/sitemap.xml
 
 # Crawl-delay
 Crawl-delay: 10 
