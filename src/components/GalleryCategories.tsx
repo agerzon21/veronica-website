@@ -33,7 +33,7 @@ const categories = [
 
 const GalleryCategories = () => {
   return (
-    <Container maxW="container.xl" mt={8} mb={16}>
+    <Container maxW="full" mt={8} mb={16}>
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
         {categories.map((category) => (
           <ChakraLink

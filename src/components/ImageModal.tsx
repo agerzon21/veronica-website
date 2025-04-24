@@ -1,15 +1,15 @@
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalBody,
   Image,
   Box,
   IconButton,
+  Text,
+  useColorModeValue,
   Flex,
+  useBreakpointValue,
 } from '@chakra-ui/react';
-import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, AddIcon, MinusIcon } from '@chakra-ui/icons';
-import { useState, useEffect } from 'react';
+import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, MinusIcon, AddIcon } from '@chakra-ui/icons';
+import { useState, useEffect, useRef } from 'react';
+import React from 'react';
 
 interface ImageModalProps {
   isOpen: boolean;
@@ -18,203 +18,243 @@ interface ImageModalProps {
   imageAlt?: string;
   onNext?: () => void;
   onPrevious?: () => void;
+  currentIndex?: number;
+  totalImages?: number;
 }
 
-const ImageModal = ({ isOpen, onClose, imageUrl, imageAlt = 'Gallery image', onNext, onPrevious }: ImageModalProps) => {
+const ImageModal = ({ 
+  isOpen, 
+  onClose, 
+  imageUrl, 
+  imageAlt = 'Gallery image', 
+  onNext, 
+  onPrevious,
+  currentIndex,
+  totalImages
+}: ImageModalProps) => {
   const [scale, setScale] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const toggleZoom = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newZoomState = !isZoomed;
+    setIsZoomed(newZoomState);
+    setScale(newZoomState ? 1.5 : 1);
+  };
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'ArrowLeft' && onPrevious) onPrevious();
     if (e.key === 'ArrowRight' && onNext) onNext();
     if (e.key === 'Escape') onClose();
-    if (e.key === '+') setScale(prev => Math.min(prev + 0.1, 3));
-    if (e.key === '-') setScale(prev => Math.max(prev - 0.1, 0.5));
   };
 
   useEffect(() => {
     if (isOpen) {
+      setScale(1);
+      setIsZoomed(false);
       window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
+
+      // Prevent background scrolling
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      // Cleanup function
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        // Restore background scrolling
+        document.body.style.overflow = originalOverflow;
+      };
     }
-  }, [isOpen, onNext, onPrevious]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isZoomed && scrollContainerRef.current) {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          const container = scrollContainerRef.current;
+          const targetScrollLeft = (container.scrollWidth - container.clientWidth) / 2;
+          container.scrollLeft = targetScrollLeft;
+          const targetScrollTop = (container.scrollHeight - container.clientHeight) / 2;
+          container.scrollTop = targetScrollTop;
+        }
+      });
+    } else if (!isZoomed && scrollContainerRef.current) {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollLeft = 0;
+          scrollContainerRef.current.scrollTop = 0;
+        }
+      });
+    }
+  }, [isZoomed]);
+
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const controlColor = useColorModeValue('gray.600', 'whiteAlpha.700');
+  const controlHoverBg = useColorModeValue('gray.100', 'whiteAlpha.200');
+  const overlayBg = useColorModeValue('rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)');
+
+  // Define padding based on breakpoint and zoom state
+  const paddingTop = useBreakpointValue({
+    base: isZoomed ? "0px" : "0px", // Mobile zoomed/default
+    md: isZoomed ? "80px" : "100px",   // Desktop zoomed/default
+  });
+  const paddingBottom = useBreakpointValue({
+    base: isZoomed ? "120px" : "0px", // Mobile zoomed/default
+    md: isZoomed ? "350px" : "20px",   // Desktop zoomed/default
+  });
+  const paddingLeft = useBreakpointValue({
+    base: isZoomed ? "225px" : 0,    // Mobile zoomed/default
+    md: isZoomed ? "100px" : 0,      // Desktop zoomed/default (symmetrical w/ right)
+  });
+   const paddingRight = useBreakpointValue({
+    base: isZoomed ? "100px" : 0,    // Mobile zoomed/default
+    md: isZoomed ? "100px" : 0,      // Desktop zoomed/default (symmetrical w/ left)
+  });
+
+  if (!isOpen) return null;
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      size="full"
-      motionPreset="slideInBottom"
-      isCentered
-    >
-      <ModalOverlay bg="blackAlpha.900" onClick={onClose} />
-      
-      {/* Controls Container - Fixed Position */}
-      <Box
+    <React.Fragment>
+      <Box 
+        key="modal-wrapper-static"
         position="fixed"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        zIndex={9999}
-        pointerEvents="none"
+        inset="0"
+        zIndex={1300}
       >
-        {/* Close Button */}
-        <IconButton
-          aria-label="Close modal"
-          icon={<CloseIcon />}
-          onClick={onClose}
-          color="white"
-          size="lg"
+        <Box
           position="absolute"
-          top="80px"
-          right="24px"
-          bg="blackAlpha.700"
-          borderRadius="full"
-          p={3}
-          w="48px"
-          h="48px"
-          pointerEvents="auto"
-          _hover={{ bg: 'whiteAlpha.200' }}
+          inset="0"
+          bg={overlayBg}
+          onClick={onClose}
+          zIndex={1350}
         />
 
-        {/* Navigation Buttons */}
-        {onPrevious && (
-          <IconButton
-            aria-label="Previous image"
-            icon={<ChevronLeftIcon />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onPrevious();
-            }}
-            colorScheme="whiteAlpha"
-            size="lg"
-            position="absolute"
-            left={4}
-            top="50%"
-            transform="translateY(-50%)"
-            pointerEvents="auto"
-          />
-        )}
-
-        {onNext && (
-          <IconButton
-            aria-label="Next image"
-            icon={<ChevronRightIcon />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onNext();
-            }}
-            colorScheme="whiteAlpha"
-            size="lg"
-            position="absolute"
-            right={4}
-            top="50%"
-            transform="translateY(-50%)"
-            pointerEvents="auto"
-          />
-        )}
-
-        {/* Zoom Controls */}
-        <Flex
+        <Box
           position="absolute"
-          bottom={4}
-          left="50%"
-          transform="translateX(-50%)"
-          gap={4}
-          bg="blackAlpha.700"
-          p={2}
-          borderRadius="md"
-          pointerEvents="auto"
-        >
-          <IconButton
-            aria-label="Zoom out"
-            icon={<MinusIcon />}
-            onClick={(e) => {
-              e.stopPropagation();
-              setScale(prev => Math.max(prev - 0.1, 0.5));
-            }}
-            colorScheme="whiteAlpha"
-            size="lg"
-          />
-          <IconButton
-            aria-label="Zoom in"
-            icon={<AddIcon />}
-            onClick={(e) => {
-              e.stopPropagation();
-              setScale(prev => Math.min(prev + 0.1, 3));
-            }}
-            colorScheme="whiteAlpha"
-            size="lg"
-          />
-        </Flex>
-      </Box>
-
-      {/* Image Content */}
-      <ModalContent 
-        bg="transparent" 
-        m={0}
-        maxW="100vw"
-        maxH="100vh"
-        position="relative"
-        top="80px"
-      >
-        <ModalBody 
-          p={0} 
-          display="flex" 
-          alignItems="center" 
+          inset="0"
+          display="flex"
+          alignItems="center"
           justifyContent="center"
-          position="relative"
-          onClick={onClose}
-          h="calc(100vh - 80px)"
-          overflowY="auto"
-          css={{
-            '&::-webkit-scrollbar': {
-              width: '4px',
-            },
-            '&::-webkit-scrollbar-track': {
-              background: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'rgba(255, 255, 255, 0.2)',
-              borderRadius: '2px',
-            },
-          }}
+          pointerEvents="none"
+          zIndex={1400}
         >
+          <Box 
+            position="absolute"
+            inset="0"
+            bg={bgColor} 
+          />
+
+          <Flex
+            position="absolute"
+            top="80px"
+            left={0}
+            right={0}
+            px={4}
+            justifyContent="space-between"
+            alignItems="center"
+            zIndex={1450}
+            pointerEvents="auto"
+          >
+            <Box>
+              {currentIndex !== undefined && totalImages !== undefined && (
+                <Text fontSize="lg" fontWeight="medium" color={controlColor} userSelect="none">
+                  {currentIndex + 1} / {totalImages}
+                </Text>
+              )}
+            </Box>
+            <Flex gap={2}>
+              <IconButton
+                aria-label="Toggle zoom"
+                icon={isZoomed ? <MinusIcon /> : <AddIcon />}
+                onClick={toggleZoom}
+                variant="ghost"
+                color={controlColor}
+                size="lg"
+                _hover={{ bg: controlHoverBg }}
+              />
+              <IconButton
+                aria-label="Close modal"
+                icon={<CloseIcon />}
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                variant="ghost"
+                color={controlColor}
+                size="lg"                    
+                _hover={{ bg: controlHoverBg }}
+              />
+            </Flex>
+          </Flex>
+
+          {onPrevious && (
+            <IconButton
+              aria-label="Previous image"
+              icon={<ChevronLeftIcon boxSize={8} />}
+              onClick={(e) => { e.stopPropagation(); onPrevious(); }}
+              variant="ghost"
+              color={controlColor}
+              size="lg"
+              position="absolute"
+              left={4}
+              top="50%"
+              transform="translateY(-50%)"
+              zIndex={1450}
+              pointerEvents="auto"
+            />
+          )}
+
+          {onNext && (
+            <IconButton
+              aria-label="Next image"
+              icon={<ChevronRightIcon boxSize={8} />}
+              onClick={(e) => { e.stopPropagation(); onNext(); }}
+              variant="ghost"
+              color={controlColor}
+              size="lg"
+              position="absolute"
+              right={4}
+              top="50%"
+              transform="translateY(-50%)"
+              zIndex={1450}
+              pointerEvents="auto"
+            />
+          )}
+
           <Box
-            position="relative"
-            minH="calc(100vh - 80px)"
+            ref={scrollContainerRef}
+            width="100%"
+            height="100%"
             display="flex"
             alignItems="center"
             justifyContent="center"
-            py={8}
-            onClick={(e) => e.stopPropagation()}
+            overflow="auto"
+            zIndex={1400}
+            paddingTop={paddingTop}
+            paddingBottom={paddingBottom}
+            paddingLeft={paddingLeft}
+            paddingRight={paddingRight}
           >
             <Image
+              key={imageUrl}
               src={imageUrl}
               alt={imageAlt}
-              maxH="calc(100vh - 120px)"
-              maxW="90vw"
+              bg={bgColor} 
+              maxH="calc(100vh - 160px)" 
+              maxW="calc(100vw - 80px)"
               objectFit="contain"
               loading="lazy"
               draggable={false}
-              transform={`scale(${scale})`}
-              transition="transform 0.2s ease-in-out"
-              cursor={isZoomed ? 'zoom-out' : 'zoom-in'}
-              onClick={() => {
-                if (isZoomed) {
-                  setScale(1);
-                  setIsZoomed(false);
-                } else {
-                  setScale(1.5);
-                  setIsZoomed(true);
-                }
+              pointerEvents="auto" 
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              style={{ 
+                
+                
+                margin: isZoomed ? 'auto' : undefined 
               }}
             />
           </Box>
-        </ModalBody>
-      </ModalContent>
-    </Modal>
+        </Box>
+      </Box>
+    </React.Fragment>
   );
 };
 

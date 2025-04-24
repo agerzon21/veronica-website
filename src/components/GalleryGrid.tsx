@@ -1,15 +1,19 @@
-import { Box, Image } from '@chakra-ui/react';
-import { motion } from 'framer-motion';
+import { Box, Image, useColorModeValue } from '@chakra-ui/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ImageModal from './ImageModal';
 import { useState, useEffect, useRef } from 'react';
 
 interface GalleryGridProps {
   images: Array<{
     url: string;
+    alt: string;
+    title: string;
+    description: string;
   }>;
 }
 
 const MotionBox = motion(Box);
+const MotionImage = motion(Image);
 
 const GalleryGrid = ({ images }: GalleryGridProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
@@ -58,50 +62,56 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
     <Box 
       ref={containerRef}
       py={8} 
-      px={4}
-      maxW="1400px"
-      mx="auto"
+      px={0}
     >
       <Box
         display="grid"
         gridTemplateColumns={`repeat(${columnCount}, 1fr)`}
-        gap={4}
+        gap={8}
       >
         {images.map((image, index) => (
           <MotionBox
             key={index}
+            layout
+            layoutId={`box-${image.url}`}
             position="relative"
-            overflow="hidden"
-            borderRadius="lg"
+            bg={useColorModeValue('gray.100', 'gray.700')}
             whileHover={{ scale: 1.02 }}
-            transition={{ duration: 0.3 }}
             cursor="pointer"
             onClick={() => handleImageClick(index)}
           >
-            <Image
+            <MotionImage
+              layout
+              layoutId={`image-${image.url}`}
               src={image.url}
-              alt={`Gallery image ${index + 1}`}
+              alt={image.alt}
+              title={image.title}
               width="100%"
               height="100%"
               objectFit="cover"
-              transition="all 0.3s ease"
               _hover={{ filter: 'brightness(0.9)' }}
               loading="lazy"
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             />
           </MotionBox>
         ))}
       </Box>
 
-      {selectedImageIndex !== null && (
-        <ImageModal
-          isOpen={isModalOpen}
-          onClose={handleModalClose}
-          imageUrl={images[selectedImageIndex].url}
-          imageAlt={`Gallery image ${selectedImageIndex + 1}`}
-          onNext={handleNextImage}
-          onPrevious={handlePreviousImage}
-        />
-      )}
+      <AnimatePresence>
+        {selectedImageIndex !== null && (
+          <ImageModal
+            key={`modal-${images[selectedImageIndex].url}`}
+            isOpen={isModalOpen}
+            onClose={handleModalClose}
+            imageUrl={images[selectedImageIndex].url}
+            imageAlt={images[selectedImageIndex].alt}
+            onNext={handleNextImage}
+            onPrevious={handlePreviousImage}
+            currentIndex={selectedImageIndex}
+            totalImages={images.length}
+          />
+        )}
+      </AnimatePresence>
     </Box>
   );
 };
