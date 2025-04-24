@@ -55,15 +55,11 @@ const ImageModal = ({
       setIsZoomed(false);
       window.addEventListener('keydown', handleKeyDown);
 
-      // Prevent background scrolling
-      const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
 
-      // Cleanup function
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        // Restore background scrolling
-        document.body.style.overflow = originalOverflow;
+        document.body.style.removeProperty('overflow');
       };
     }
   }, [isOpen]);
