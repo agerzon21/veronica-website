@@ -222,12 +222,16 @@ const ImageModal = ({
             display="flex"
             alignItems="center"
             justifyContent="center"
-            overflow="auto"
+            overflow="scroll"
             zIndex={1400}
             paddingTop={paddingTop}
             paddingBottom={paddingBottom}
             paddingLeft={paddingLeft}
             paddingRight={paddingRight}
+            sx={{
+              WebkitOverflowScrolling: 'touch',
+              touchAction: 'pan-x pan-y',
+            }}
           >
             <Image
               key={imageUrl}
