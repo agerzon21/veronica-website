@@ -246,8 +246,8 @@ const ImageModal = ({
               pointerEvents="auto" 
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
               style={{ 
-                
-                
+                transformOrigin: 'top center',
+                transform: `scale(${scale})`,
                 margin: isZoomed ? 'auto' : undefined 
               }}
             />
