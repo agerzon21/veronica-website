@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /private/
+Disallow: /admin/
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://vero.photography/sitemap.xml
+
+# Crawl-delay
+Crawl-delay: 10 
