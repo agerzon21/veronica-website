@@ -6,28 +6,36 @@ const MotionBox = motion(Box);
 
 const categories = [
   {
+    name: 'portraits',
     title: 'Portraits',
     description: 'Capturing the essence of individuals through stunning portrait photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744394695/765456_mqaert.jpg',
-    link: '/gallery/portraits'
+    image: '/assets/photos/765456_mqaert.webp',
+    link: '/gallery/portraits',
+    backgroundPosition: 'center 50%'
   },
   {
+    name: 'weddings',
     title: 'Weddings',
     description: 'Documenting your special day with beautiful and timeless wedding photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744415004/05_rfvs8y.jpg',
-    link: '/gallery/weddings'
+    image: '/assets/photos/05_rfvs8y.webp',
+    link: '/gallery/weddings',
+    backgroundPosition: 'center 25%'
   },
   {
+    name: 'family',
     title: 'Family',
     description: 'Preserving precious family moments with heartfelt photography sessions.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744416869/_C6C16373_l2cnrk.jpg',
-    link: '/gallery/family'
+    image: '/assets/photos/_C6C16373_l2cnrk.webp',
+    link: '/gallery/family',
+    backgroundPosition: 'center 40%'
   },
   {
+    name: 'maternity',
     title: 'Maternity',
     description: 'Celebrating the beauty of pregnancy with elegant maternity photography.',
-    image: 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744419478/_C6C8862_b8za5r.jpg',
-    link: '/gallery/maternity'
+    image: '/assets/photos/_C6C8862_b8za5r.webp',
+    link: '/gallery/maternity',
+    backgroundPosition: 'center 35%'
   }
 ];
 
@@ -54,7 +62,7 @@ const GalleryCategories = () => {
                 height="300px"
                 backgroundImage={`url(${category.image})`}
                 backgroundSize="cover"
-                backgroundPosition="center"
+                backgroundPosition={category.backgroundPosition}
                 filter="brightness(0.7)"
               />
               <Box

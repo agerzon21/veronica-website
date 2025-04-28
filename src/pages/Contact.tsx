@@ -33,7 +33,7 @@ const Contact = () => {
         left={0}
         right={0}
         bottom={0}
-        backgroundImage="url('https://res.cloudinary.com/doj1fanx3/image/upload/v1744350443/%D0%A4%D0%BE%D1%82%D0%BE_%D0%A2%D0%A4%D0%9F_%D0%9B%D0%B8%D0%B7%D0%B0_879_gr9dpv.jpg')"
+        backgroundImage="url('/assets/photos/Фото_ТФП_Лиза_879_gr9dpv.webp')"
         backgroundSize="cover"
         backgroundPosition="center"
         filter="brightness(0.7)"

@@ -12,7 +12,7 @@ interface SEOProps {
 const SEO = ({
   title = 'Vero Photography | Professional Photographer in Punta Cana & Worldwide',
   description = 'Professional photography services by Veronika Gerzon. Specializing in weddings, portraits, family sessions, and maternity photography in Punta Cana and worldwide. Creating timeless memories through artistic and emotional storytelling.',
-  image = 'https://res.cloudinary.com/doj1fanx3/image/upload/v1744340476/%D0%A4%D0%BE%D1%82%D0%BE_%D0%A2%D0%A4%D0%9F_%D0%9B%D0%B8%D0%B7%D0%B0_1491_apmb9t.jpg',
+  image = '/assets/photos/Vero.webp',
   url = 'https://vero.photography',
   type = 'website',
   keywords = [
