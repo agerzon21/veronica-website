@@ -328,9 +328,43 @@ const IndividualPhoto: React.FC = () => {
         // Remove CSS classes
         document.body.classList.remove('fullscreen-open');
         document.documentElement.classList.remove('fullscreen-open');
+        
+        // Force restore scrolling by explicitly setting overflow back to auto
+        document.body.style.overflow = 'auto';
+        document.body.style.position = 'static';
+        document.body.style.width = 'auto';
+        document.body.style.height = 'auto';
+        document.documentElement.style.overflow = 'auto';
+        document.documentElement.style.position = 'static';
+        document.documentElement.style.width = 'auto';
+        document.documentElement.style.height = 'auto';
       };
     }
   }, [isFullscreen, position, scale, isDragging, dragStart]);
+
+  // Cleanup effect when component unmounts
+  useEffect(() => {
+    return () => {
+      // Ensure all fullscreen styles are cleaned up when component unmounts
+      const existingStyle = document.getElementById('fullscreen-scroll-prevention');
+      if (existingStyle) {
+        existingStyle.remove();
+      }
+      
+      document.body.classList.remove('fullscreen-open');
+      document.documentElement.classList.remove('fullscreen-open');
+      
+      // Force restore scrolling
+      document.body.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      document.body.style.width = 'auto';
+      document.body.style.height = 'auto';
+      document.documentElement.style.overflow = 'auto';
+      document.documentElement.style.position = 'static';
+      document.documentElement.style.width = 'auto';
+      document.documentElement.style.height = 'auto';
+    };
+  }, []);
 
   // Ensure scale never exceeds our limits
   useEffect(() => {
