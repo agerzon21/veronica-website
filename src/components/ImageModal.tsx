@@ -207,7 +207,7 @@ const ImageModal = ({
                 </Text>
               )}
             </Box>
-            <Flex gap={2}>
+                        <Flex gap={2}>
               {photoData && (
                 <>
                   <IconButton
@@ -215,24 +215,30 @@ const ImageModal = ({
                     icon={<ExternalLinkIcon />}
                     onClick={handleShare}
                     variant="ghost"
-                    color={controlColor}
+                    color="black"
                     size="lg"
-                    _hover={{ bg: controlHoverBg }}
+                    bg="white"
+                    border="1px solid"
+                    borderColor="gray.200"
+                    _hover={{ bg: 'gray.50' }}
                   />
                   <IconButton
                     aria-label="Open in new tab"
                     icon={<ViewIcon />}
-                                         onClick={() => {
-                       if (photoData && category) {
-                         const shareUrl = `/photo/${category}/${photoData.id}`;
-                         const fullUrl = `${window.location.origin}${shareUrl}`;
-                         window.open(fullUrl, '_blank');
-                       }
-                     }}
+                    onClick={() => {
+                      if (photoData && category) {
+                        const shareUrl = `/photo/${category}/${photoData.id}`;
+                        const fullUrl = `${window.location.origin}${shareUrl}`;
+                        window.open(fullUrl, '_blank');
+                      }
+                    }}
                     variant="ghost"
-                    color={controlColor}
+                    color="black"
                     size="lg"
-                    _hover={{ bg: controlHoverBg }}
+                    bg="white"
+                    border="1px solid"
+                    borderColor="gray.200"
+                    _hover={{ bg: 'gray.50' }}
                   />
                 </>
               )}
@@ -241,18 +247,24 @@ const ImageModal = ({
                 icon={isZoomed ? <MinusIcon /> : <AddIcon />}
                 onClick={toggleZoom}
                 variant="ghost"
-                color={controlColor}
+                color="black"
                 size="lg"
-                _hover={{ bg: controlHoverBg }}
+                bg="white"
+                border="1px solid"
+                borderColor="gray.200"
+                _hover={{ bg: 'gray.50' }}
               />
               <IconButton
                 aria-label="Close modal"
                 icon={<CloseIcon />}
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
                 variant="ghost"
-                color={controlColor}
-                size="lg"                    
-                _hover={{ bg: controlHoverBg }}
+                color="black"
+                size="lg"
+                bg="white"
+                border="1px solid"
+                borderColor="gray.200"
+                _hover={{ bg: 'gray.50' }}
               />
             </Flex>
           </Flex>

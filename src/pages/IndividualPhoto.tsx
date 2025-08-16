@@ -181,22 +181,53 @@ const IndividualPhoto: React.FC = () => {
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
+      // Single touch - start dragging
       const touch = e.touches[0];
       setIsDragging(true);
       setDragStart({
         x: touch.clientX - position.x,
         y: touch.clientY - position.y
       });
+    } else if (e.touches.length === 2) {
+      // Two touches - start pinch gesture
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) +
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      );
+      // Store initial distance for pinch calculations
+      (e.currentTarget as any).initialPinchDistance = distance;
+      (e.currentTarget as any).initialScale = scale;
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 1 && isDragging) {
+      // Single touch - continue dragging
       const touch = e.touches[0];
       setPosition({
         x: touch.clientX - dragStart.x,
         y: touch.clientY - dragStart.y
       });
+    } else if (e.touches.length === 2) {
+      // Two touches - handle pinch to zoom
+      e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const currentDistance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) +
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      );
+      
+      const initialDistance = (e.currentTarget as any).initialPinchDistance;
+      const initialScale = (e.currentTarget as any).initialScale;
+      
+      if (initialDistance && initialScale) {
+        const scaleChange = currentDistance / initialDistance;
+        const newScale = Math.max(0.1, Math.min(2, initialScale * scaleChange));
+        setScale(newScale);
+      }
     }
   };
 
@@ -535,7 +566,7 @@ const IndividualPhoto: React.FC = () => {
             onTouchEnd={handleTouchEnd}
             sx={{
               WebkitOverflowScrolling: 'touch',
-              touchAction: 'none',
+              touchAction: 'manipulation',
             }}
             pointerEvents="auto"
           >
