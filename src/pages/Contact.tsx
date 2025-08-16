@@ -5,7 +5,7 @@ import { trackContactSubmission } from '../utils/analytics';
 
 const Contact = () => {
   const handleWhatsAppClick = () => {
-    const phoneNumber = '+18493569362';
+    const phoneNumber = '+15709095707';
     const message = 'Hello Veronika, I would like to discuss a photography project.';
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     trackContactSubmission('WhatsApp');
@@ -14,7 +14,7 @@ const Contact = () => {
 
   const handleInstagramClick = () => {
     trackContactSubmission('Instagram');
-    window.open('https://www.instagram.com/vero.kz', '_blank');
+    window.open('https://www.instagram.com/vero.art.photo', '_blank');
   };
 
   return (

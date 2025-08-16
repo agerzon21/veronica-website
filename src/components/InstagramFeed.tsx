@@ -31,7 +31,7 @@ const InstagramFeed = () => {
       >
         <Box
           as="iframe"
-          src="https://www.instagram.com/vero.kz/embed"
+          src="https://www.instagram.com/vero.art.photo/embed"
           width="100%"
           height="100%"
           scrolling="no"
