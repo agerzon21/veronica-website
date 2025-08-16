@@ -100,12 +100,46 @@ const IndividualPhoto: React.FC = () => {
           url: window.location.href,
         });
       } catch (error) {
-        // Fallback to copy link if sharing fails
-        handleCopyLink();
+        // If user cancels share, don't show any error
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        // For other errors, try to copy link but don't show error if it fails
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          toast({
+            title: 'Link copied!',
+            description: 'Photo link has been copied to clipboard',
+            status: 'success',
+            duration: 2000,
+            isClosable: true,
+          });
+        } catch (copyError) {
+          // Silently fail if copy also fails
+          console.log('Share and copy both failed:', error, copyError);
+        }
       }
     } else {
-      // Fallback to copy link if native sharing is not supported
-      handleCopyLink();
+      // If native sharing is not supported, try to copy link
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast({
+          title: 'Link copied!',
+          description: 'Photo link has been copied to clipboard',
+          status: 'success',
+          duration: 2000,
+          isClosable: true,
+        });
+      } catch (copyError) {
+        // Only show error if copy fails and we're not in a share context
+        toast({
+          title: 'Share not available',
+          description: 'Please copy the link manually',
+          status: 'info',
+          duration: 2000,
+          isClosable: true,
+        });
+      }
     }
   };
 
@@ -179,61 +213,7 @@ const IndividualPhoto: React.FC = () => {
     setScale(newScale);
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      // Single touch - start dragging
-      const touch = e.touches[0];
-      setIsDragging(true);
-      setDragStart({
-        x: touch.clientX - position.x,
-        y: touch.clientY - position.y
-      });
-    } else if (e.touches.length === 2) {
-      // Two touches - start pinch gesture
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.sqrt(
-        Math.pow(touch2.clientX - touch1.clientX, 2) +
-        Math.pow(touch2.clientY - touch1.clientY, 2)
-      );
-      // Store initial distance for pinch calculations
-      (e.currentTarget as any).initialPinchDistance = distance;
-      (e.currentTarget as any).initialScale = scale;
-    }
-  };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 1 && isDragging) {
-      // Single touch - continue dragging
-      const touch = e.touches[0];
-      setPosition({
-        x: touch.clientX - dragStart.x,
-        y: touch.clientY - dragStart.y
-      });
-    } else if (e.touches.length === 2) {
-      // Two touches - handle pinch to zoom
-      e.preventDefault();
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const currentDistance = Math.sqrt(
-        Math.pow(touch2.clientX - touch1.clientX, 2) +
-        Math.pow(touch2.clientY - touch1.clientY, 2)
-      );
-      
-      const initialDistance = (e.currentTarget as any).initialPinchDistance;
-      const initialScale = (e.currentTarget as any).initialScale;
-      
-      if (initialDistance && initialScale) {
-        const scaleChange = currentDistance / initialDistance;
-        const newScale = Math.max(0.1, Math.min(2, initialScale * scaleChange));
-        setScale(newScale);
-      }
-    }
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-  };
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -245,17 +225,112 @@ const IndividualPhoto: React.FC = () => {
   useEffect(() => {
     if (isFullscreen) {
       window.addEventListener('keydown', handleKeyDown);
-      // Prevent page scrolling when fullscreen is open
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
+      
+      // Add CSS rules to completely prevent scrolling
+      const style = document.createElement('style');
+      style.id = 'fullscreen-scroll-prevention';
+      style.textContent = `
+        body.fullscreen-open, html.fullscreen-open {
+          overflow: hidden !important;
+          position: fixed !important;
+          width: 100% !important;
+          height: 100% !important;
+          top: 0 !important;
+          left: 0 !important;
+          touch-action: none !important;
+          -webkit-overflow-scrolling: auto !important;
+        }
+        body.fullscreen-open *, html.fullscreen-open * {
+          overflow: hidden !important;
+        }
+      `;
+      document.head.appendChild(style);
+      
+      // Add CSS class for additional prevention
+      document.body.classList.add('fullscreen-open');
+      document.documentElement.classList.add('fullscreen-open');
+      
+      // Set up proper touch event listeners to avoid passive event listener issues
+      const container = scrollContainerRef.current;
+      if (container) {
+        const touchStartHandler = (e: TouchEvent) => {
+          if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            setIsDragging(true);
+            setDragStart({
+              x: touch.clientX - position.x,
+              y: touch.clientY - position.y
+            });
+          } else if (e.touches.length === 2) {
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            const distance = Math.sqrt(
+              Math.pow(touch2.clientX - touch1.clientX, 2) +
+              Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
+            (container as any).initialPinchDistance = distance;
+            (container as any).initialScale = scale;
+          }
+        };
+        
+        const touchMoveHandler = (e: TouchEvent) => {
+          if (e.touches.length === 1 && isDragging) {
+            const touch = e.touches[0];
+            setPosition({
+              x: touch.clientX - dragStart.x,
+              y: touch.clientY - dragStart.y
+            });
+          } else if (e.touches.length === 2) {
+            e.preventDefault(); // This will work now since we're using addEventListener
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            const currentDistance = Math.sqrt(
+              Math.pow(touch2.clientX - touch1.clientX, 2) +
+              Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
+            
+            const initialDistance = (container as any).initialPinchDistance;
+            const initialScale = (container as any).initialScale;
+            
+            if (initialDistance && initialScale) {
+              const scaleChange = currentDistance / initialDistance;
+              const newScale = Math.max(0.1, Math.min(2, initialScale * scaleChange));
+              setScale(newScale);
+            }
+          }
+        };
+        
+        const touchEndHandler = () => {
+          setIsDragging(false);
+        };
+        
+        // Add event listeners with proper options
+        container.addEventListener('touchstart', touchStartHandler, { passive: false });
+        container.addEventListener('touchmove', touchMoveHandler, { passive: false });
+        container.addEventListener('touchend', touchEndHandler, { passive: false });
+        
+        return () => {
+          container.removeEventListener('touchstart', touchStartHandler);
+          container.removeEventListener('touchmove', touchMoveHandler);
+          container.removeEventListener('touchend', touchEndHandler);
+        };
+      }
+      
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        // Restore page scrolling when fullscreen is closed
-        document.body.style.removeProperty('overflow');
-        document.documentElement.style.removeProperty('overflow');
+        
+        // Remove CSS rules
+        const existingStyle = document.getElementById('fullscreen-scroll-prevention');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+        
+        // Remove CSS classes
+        document.body.classList.remove('fullscreen-open');
+        document.documentElement.classList.remove('fullscreen-open');
       };
     }
-  }, [isFullscreen]);
+  }, [isFullscreen, position, scale, isDragging, dragStart]);
 
   // Ensure scale never exceeds our limits
   useEffect(() => {
@@ -531,6 +606,11 @@ const IndividualPhoto: React.FC = () => {
           inset="0"
           zIndex={1000}
           bg="white"
+          style={{
+            overflow: 'hidden',
+            touchAction: 'none',
+            WebkitOverflowScrolling: 'touch'
+          }}
         >
           {/* Zoom Slider - Left side on mobile, right side on desktop */}
           <Box
@@ -647,12 +727,10 @@ const IndividualPhoto: React.FC = () => {
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onWheel={handleWheel}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+
             sx={{
               WebkitOverflowScrolling: 'touch',
-              touchAction: 'manipulation',
+              touchAction: 'none',
             }}
             pointerEvents="auto"
           >
