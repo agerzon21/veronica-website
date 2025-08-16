@@ -5,17 +5,19 @@ import { useState, useEffect, useRef } from 'react';
 
 interface GalleryGridProps {
   images: Array<{
+    id?: string;
     url: string;
     alt: string;
     title: string;
     description: string;
   }>;
+  category?: string;
 }
 
 const MotionBox = motion(Box);
 const MotionImage = motion(Image);
 
-const GalleryGrid = ({ images }: GalleryGridProps) => {
+const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,6 +111,8 @@ const GalleryGrid = ({ images }: GalleryGridProps) => {
             onPrevious={handlePreviousImage}
             currentIndex={selectedImageIndex}
             totalImages={images.length}
+            photoData={images[selectedImageIndex]}
+            category={category}
           />
         )}
       </AnimatePresence>

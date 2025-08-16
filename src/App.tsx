@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Gallery from './pages/Gallery';
+import IndividualPhoto from './pages/IndividualPhoto';
 import Navbar from './components/Navbar';
 import SEO from './components/SEO';
 import { initGA, trackPageView } from './utils/analytics';
@@ -69,6 +70,7 @@ function App() {
             <Route path="/contact" element={<Contact />} />
             <Route path="/gallery" element={<Gallery />} />
             <Route path="/gallery/:category" element={<Gallery />} />
+            <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
           </Routes>
         </Router>
       </ChakraProvider>

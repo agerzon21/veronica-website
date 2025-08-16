@@ -6,8 +6,9 @@ import {
   useColorModeValue,
   Flex,
   useBreakpointValue,
+  useToast,
 } from '@chakra-ui/react';
-import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, MinusIcon, AddIcon } from '@chakra-ui/icons';
+import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, MinusIcon, AddIcon, ExternalLinkIcon, ViewIcon } from '@chakra-ui/icons';
 import { useState, useEffect, useRef } from 'react';
 import React from 'react';
 
@@ -20,6 +21,14 @@ interface ImageModalProps {
   onPrevious?: () => void;
   currentIndex?: number;
   totalImages?: number;
+  photoData?: {
+    id?: string;
+    url: string;
+    alt: string;
+    title: string;
+    description: string;
+  };
+  category?: string;
 }
 
 const ImageModal = ({ 
@@ -30,7 +39,9 @@ const ImageModal = ({
   onNext, 
   onPrevious,
   currentIndex,
-  totalImages
+  totalImages,
+  photoData,
+  category
 }: ImageModalProps) => {
   const [scale, setScale] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -89,6 +100,43 @@ const ImageModal = ({
   const controlColor = useColorModeValue('gray.600', 'whiteAlpha.700');
   const controlHoverBg = useColorModeValue('gray.100', 'whiteAlpha.200');
   const overlayBg = useColorModeValue('rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)');
+  const toast = useToast();
+
+  const handleShare = () => {
+    if (photoData && category) {
+      const shareUrl = `/photo/${category}/${photoData.id}`;
+      const fullUrl = `${window.location.origin}${shareUrl}`;
+      
+      if (navigator.share) {
+        navigator.share({
+          title: 'Vero Photography',
+          text: 'Check out this beautiful photo from Vero Photography',
+          url: fullUrl,
+        });
+      } else {
+        // Copy to clipboard
+        navigator.clipboard.writeText(fullUrl).then(() => {
+          toast({
+            title: 'Link copied!',
+            description: 'Photo link has been copied to clipboard',
+            status: 'success',
+            duration: 2000,
+            isClosable: true,
+          });
+        }).catch(() => {
+          toast({
+            title: 'Copy failed',
+            description: 'Please copy the link manually',
+            status: 'error',
+            duration: 2000,
+            isClosable: true,
+          });
+        });
+      }
+    }
+  };
+
+
 
   // Define padding based on breakpoint and zoom state
   const paddingTop = useBreakpointValue({
@@ -160,6 +208,34 @@ const ImageModal = ({
               )}
             </Box>
             <Flex gap={2}>
+              {photoData && (
+                <>
+                  <IconButton
+                    aria-label="Share photo"
+                    icon={<ExternalLinkIcon />}
+                    onClick={handleShare}
+                    variant="ghost"
+                    color={controlColor}
+                    size="lg"
+                    _hover={{ bg: controlHoverBg }}
+                  />
+                  <IconButton
+                    aria-label="Open in new tab"
+                    icon={<ViewIcon />}
+                                         onClick={() => {
+                       if (photoData && category) {
+                         const shareUrl = `/photo/${category}/${photoData.id}`;
+                         const fullUrl = `${window.location.origin}${shareUrl}`;
+                         window.open(fullUrl, '_blank');
+                       }
+                     }}
+                    variant="ghost"
+                    color={controlColor}
+                    size="lg"
+                    _hover={{ bg: controlHoverBg }}
+                  />
+                </>
+              )}
               <IconButton
                 aria-label="Toggle zoom"
                 icon={isZoomed ? <MinusIcon /> : <AddIcon />}
