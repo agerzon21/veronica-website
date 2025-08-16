@@ -9,21 +9,21 @@ const sampleImages = {
   portraits: [
     {
       url: '/assets/photos/IMG_6959_copy_jxexk0.webp',
-      alt: 'Woman in swimsuit under palm tree at sunset in Punta Cana, gazing peacefully.',
+      alt: 'Woman in swimsuit under palm tree at sunset, gazing peacefully.',
       title: 'Sunset Portrait under Palm Tree | Vero Photography',
-      description: 'A woman in a swimsuit stands barefoot beneath a palm tree on a tranquil Punta Cana beach, bathed in the golden light of sunset, lost in a serene moment.'
+      description: 'A woman in a swimsuit stands barefoot beneath a palm tree on a tranquil beach, bathed in the golden light of sunset, lost in a serene moment.'
     },
     {
       url: '/assets/photos/IMG_3710_novk5a.webp',
-      alt: 'Woman in swimsuit relaxes on white sand under palm tree at sunset in Punta Cana.',
+      alt: 'Woman in swimsuit relaxes on white sand under palm tree at sunset.',
       title: 'Relaxing on White Sand at Sunset | Vero Photography',
-      description: 'Relaxing on soft white sand, a woman in a swimsuit basks under a palm tree during a warm Punta Cana sunset, her expression calm and peaceful.'
+      description: 'Relaxing on soft white sand, a woman in a swimsuit basks under a palm tree during a warm sunset, her expression calm and peaceful.'
     },
     {
       url: '/assets/photos/IMG_3678_dkizqw.webp',
-      alt: 'Elegant woman in handmade swimsuit posing with seashell decor background in Punta Cana.',
+      alt: 'Elegant woman in handmade swimsuit posing with seashell decor background.',
       title: 'Handmade Swimsuit & Seashell Decor Portrait | Vero Photography',
-      description: 'Captured in soft, natural light in Punta Cana, this portrait features a woman wearing a unique handmade swimsuit, seated elegantly before delicate seashell decor.'
+      description: 'Captured in soft, natural light, this portrait features a woman wearing a unique handmade swimsuit, seated elegantly before delicate seashell decor.'
     },
     {
       url: '/assets/photos/76567_xurb9l.webp',
@@ -33,9 +33,9 @@ const sampleImages = {
     },
     {
       url: '/assets/photos/IMG_3711_zrqb93.webp',
-      alt: 'Joyful girl embracing a large palm leaf against a clear blue sky in Punta Cana.',
+      alt: 'Joyful girl embracing a large palm leaf against a clear blue sky.',
       title: 'Girl Embracing Palm Leaf | Vero Photography',
-      description: 'Against a bright blue sky in Punta Cana, a girl joyfully embraces a palm leaf, her expression reflecting happiness and a strong connection with nature\'s beauty.'
+      description: 'Against a bright blue sky, a girl joyfully embraces a palm leaf, her expression reflecting happiness and a strong connection with nature\'s beauty.'
     },
     {
       url: '/assets/photos/QC6C8144_yecnhu.webp',

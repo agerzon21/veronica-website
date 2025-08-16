@@ -101,7 +101,7 @@ const StatsSection = () => {
               fontSize="sm"
               letterSpacing="wide"
             >
-              Punta Cana, Dominican Republic
+              Scranton, Pennsylvania, USA
             </MotionText>
           </VStack>
 
