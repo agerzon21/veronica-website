@@ -49,6 +49,26 @@ const ImageModal = ({
   const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Function to reapply scrolling prevention styles
+  const reapplyScrollingPrevention = () => {
+    if (isOpen) {
+      // Reapply all the important styles to prevent scrolling
+      document.body.style.setProperty('overflow', 'hidden', 'important');
+      document.body.style.setProperty('position', 'fixed', 'important');
+      document.body.style.setProperty('width', '100%', 'important');
+      document.body.style.setProperty('height', '100%', 'important');
+      document.body.style.setProperty('top', '0', 'important');
+      document.body.style.setProperty('left', '0', 'important');
+      
+      document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+      document.documentElement.style.setProperty('position', 'fixed', 'important');
+      document.documentElement.style.setProperty('width', '100%', 'important');
+      document.documentElement.style.setProperty('height', '100%', 'important');
+      document.documentElement.style.setProperty('top', '0', 'important');
+      document.documentElement.style.setProperty('left', '0', 'important');
+    }
+  };
+
   const toggleZoom = (e: React.MouseEvent) => {
     e.stopPropagation();
     const newZoomState = !isZoomed;
@@ -120,7 +140,7 @@ const ImageModal = ({
         document.documentElement.style.height = 'auto';
       };
     }
-  }, [isOpen]);
+  }, [isOpen, imageUrl]);
 
   // Cleanup effect when component unmounts
   useEffect(() => {
@@ -155,6 +175,14 @@ const ImageModal = ({
       document.documentElement.style.height = 'auto';
     };
   }, []);
+
+  // Effect to maintain scrolling prevention when navigating between images
+  useEffect(() => {
+    if (isOpen) {
+      // Ensure scrolling prevention is maintained when image changes
+      reapplyScrollingPrevention();
+    }
+  }, [imageUrl, isOpen, reapplyScrollingPrevention]);
 
   useEffect(() => {
     if (isZoomed && scrollContainerRef.current) {
@@ -243,8 +271,12 @@ const ImageModal = ({
     
     if (isLeftSwipe && onNext) {
       onNext();
+      // Reapply scrolling prevention after navigation
+      setTimeout(() => reapplyScrollingPrevention(), 0);
     } else if (isRightSwipe && onPrevious) {
       onPrevious();
+      // Reapply scrolling prevention after navigation
+      setTimeout(() => reapplyScrollingPrevention(), 0);
     }
     
     // Reset touch positions
@@ -347,6 +379,8 @@ const ImageModal = ({
                     border="1px solid"
                     borderColor="gray.200"
                     _hover={{ bg: 'gray.50' }}
+                    userSelect="none"
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
                   />
                   <IconButton
                     aria-label="Open in new tab"
@@ -365,6 +399,8 @@ const ImageModal = ({
                     border="1px solid"
                     borderColor="gray.200"
                     _hover={{ bg: 'gray.50' }}
+                    userSelect="none"
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
                   />
                 </>
               )}
@@ -379,6 +415,8 @@ const ImageModal = ({
                 border="1px solid"
                 borderColor="gray.200"
                 _hover={{ bg: 'gray.50' }}
+                userSelect="none"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
               />
               <IconButton
                 aria-label="Close modal"
@@ -391,6 +429,8 @@ const ImageModal = ({
                 border="1px solid"
                 borderColor="gray.200"
                 _hover={{ bg: 'gray.50' }}
+                userSelect="none"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
               />
             </Flex>
           </Flex>
@@ -399,7 +439,12 @@ const ImageModal = ({
             <IconButton
               aria-label="Previous image"
               icon={<ChevronLeftIcon boxSize={8} />}
-              onClick={(e) => { e.stopPropagation(); onPrevious(); }}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                onPrevious(); 
+                // Reapply scrolling prevention after navigation
+                setTimeout(() => reapplyScrollingPrevention(), 0);
+              }}
               variant="ghost"
               color="black"
               size="lg"
@@ -413,6 +458,8 @@ const ImageModal = ({
               transform="translateY(-50%)"
               zIndex={1450}
               pointerEvents="auto"
+              userSelect="none"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
           )}
 
@@ -420,7 +467,12 @@ const ImageModal = ({
             <IconButton
               aria-label="Next image"
               icon={<ChevronRightIcon boxSize={8} />}
-              onClick={(e) => { e.stopPropagation(); onNext(); }}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                onNext(); 
+                // Reapply scrolling prevention after navigation
+                setTimeout(() => reapplyScrollingPrevention(), 0);
+              }}
               variant="ghost"
               color="black"
               size="lg"
@@ -434,6 +486,8 @@ const ImageModal = ({
               transform="translateY(-50%)"
               zIndex={1450}
               pointerEvents="auto"
+              userSelect="none"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
           )}
 
