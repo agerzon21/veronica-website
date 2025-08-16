@@ -226,29 +226,24 @@ const IndividualPhoto: React.FC = () => {
     if (isFullscreen) {
       window.addEventListener('keydown', handleKeyDown);
       
-      // Add CSS rules to completely prevent scrolling
-      const style = document.createElement('style');
-      style.id = 'fullscreen-scroll-prevention';
-      style.textContent = `
-        body.fullscreen-open, html.fullscreen-open {
-          overflow: hidden !important;
-          position: fixed !important;
-          width: 100% !important;
-          height: 100% !important;
-          top: 0 !important;
-          left: 0 !important;
-          touch-action: none !important;
-          -webkit-overflow-scrolling: auto !important;
-        }
-        body.fullscreen-open *, html.fullscreen-open * {
-          overflow: hidden !important;
-        }
-      `;
-      document.head.appendChild(style);
-      
-      // Add CSS class for additional prevention
+      // Add CSS class and set styles directly to prevent scrolling
       document.body.classList.add('fullscreen-open');
       document.documentElement.classList.add('fullscreen-open');
+      
+      // Set styles directly on body and html elements
+      document.body.style.setProperty('overflow', 'hidden', 'important');
+      document.body.style.setProperty('position', 'fixed', 'important');
+      document.body.style.setProperty('width', '100%', 'important');
+      document.body.style.setProperty('height', '100%', 'important');
+      document.body.style.setProperty('top', '0', 'important');
+      document.body.style.setProperty('left', '0', 'important');
+      
+      document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+      document.documentElement.style.setProperty('position', 'fixed', 'important');
+      document.documentElement.style.setProperty('width', '100%', 'important');
+      document.documentElement.style.setProperty('height', '100%', 'important');
+      document.documentElement.style.setProperty('top', '0', 'important');
+      document.documentElement.style.setProperty('left', '0', 'important');
       
       // Set up proper touch event listeners to avoid passive event listener issues
       const container = scrollContainerRef.current;
@@ -319,15 +314,24 @@ const IndividualPhoto: React.FC = () => {
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
         
-        // Remove CSS rules
-        const existingStyle = document.getElementById('fullscreen-scroll-prevention');
-        if (existingStyle) {
-          existingStyle.remove();
-        }
-        
         // Remove CSS classes
         document.body.classList.remove('fullscreen-open');
         document.documentElement.classList.remove('fullscreen-open');
+        
+        // Remove all the important styles we set
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('position');
+        document.body.style.removeProperty('width');
+        document.body.style.removeProperty('height');
+        document.body.style.removeProperty('top');
+        document.body.style.removeProperty('left');
+        
+        document.documentElement.style.removeProperty('overflow');
+        document.documentElement.style.removeProperty('position');
+        document.documentElement.style.removeProperty('width');
+        document.documentElement.style.removeProperty('height');
+        document.documentElement.style.removeProperty('top');
+        document.documentElement.style.removeProperty('left');
         
         // Force restore scrolling by explicitly setting overflow back to auto
         document.body.style.overflow = 'auto';
@@ -346,13 +350,23 @@ const IndividualPhoto: React.FC = () => {
   useEffect(() => {
     return () => {
       // Ensure all fullscreen styles are cleaned up when component unmounts
-      const existingStyle = document.getElementById('fullscreen-scroll-prevention');
-      if (existingStyle) {
-        existingStyle.remove();
-      }
-      
       document.body.classList.remove('fullscreen-open');
       document.documentElement.classList.remove('fullscreen-open');
+      
+      // Remove all the important styles we set
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('position');
+      document.body.style.removeProperty('width');
+      document.body.style.removeProperty('height');
+      document.body.style.removeProperty('top');
+      document.body.style.removeProperty('left');
+      
+      document.documentElement.style.removeProperty('overflow');
+      document.documentElement.style.removeProperty('position');
+      document.documentElement.style.removeProperty('width');
+      document.documentElement.style.removeProperty('height');
+      document.documentElement.style.removeProperty('top');
+      document.documentElement.style.removeProperty('left');
       
       // Force restore scrolling
       document.body.style.overflow = 'auto';
