@@ -324,14 +324,58 @@ const IndividualPhoto: React.FC = () => {
             cursor="pointer"
             onClick={toggleFullscreen}
             _hover={{ transform: 'scale(1.02)', transition: 'transform 0.2s' }}
+            role="group"
           >
-            <Image
-              src={photo.url}
-              alt={photo.alt}
-              width="100%"
-              height="auto"
-              objectFit="cover"
-            />
+            <Box position="relative">
+              <Image
+                src={photo.url}
+                alt={photo.alt}
+                width="100%"
+                height="auto"
+                objectFit="cover"
+              />
+              
+              {/* Clickable Indicator Overlay */}
+              <Box
+                position="absolute"
+                top="50%"
+                left="50%"
+                transform="translate(-50%, -50%)"
+                bg="rgba(0, 0, 0, 0.7)"
+                color="white"
+                px={4}
+                py={2}
+                borderRadius="full"
+                fontSize="sm"
+                fontWeight="medium"
+                opacity="0"
+                _groupHover={{ opacity: 1 }}
+                transition="opacity 0.2s"
+                pointerEvents="none"
+                zIndex={1}
+              >
+                <HStack spacing={2} align="center">
+                  <Text>Click to view fullscreen</Text>
+                  <Box fontSize="lg">↗</Box>
+                </HStack>
+              </Box>
+              
+              {/* Always Visible Corner Hint */}
+              <Box
+                position="absolute"
+                top={3}
+                right={3}
+                bg="rgba(0, 0, 0, 0.6)"
+                color="white"
+                borderRadius="full"
+                p={2}
+                fontSize="lg"
+                pointerEvents="none"
+                zIndex={1}
+              >
+                ↗
+              </Box>
+            </Box>
           </Box>
 
           {/* Photo Info */}
@@ -478,12 +522,13 @@ const IndividualPhoto: React.FC = () => {
           zIndex={1000}
           bg="white"
         >
-          {/* Zoom Slider - Hidden on Mobile */}
+          {/* Zoom Slider - Left side on mobile, right side on desktop */}
           <Box
             position="fixed"
-            right={4}
-            top="50%"
-            transform="translateY(-50%)"
+            left={{ base: 4, md: "auto" }}
+            right={{ base: "auto", md: 4 }}
+            top={{ base: 20, md: "50%" }}
+            transform={{ base: "none", md: "translateY(-50%)" }}
             zIndex={9999}
             bg="white"
             border="1px solid"
@@ -491,30 +536,61 @@ const IndividualPhoto: React.FC = () => {
             borderRadius="lg"
             p={3}
             boxShadow="md"
-            display={{ base: 'none', md: 'block' }}
           >
             <VStack spacing={2}>
-              <Text fontSize="xs" fontWeight="medium" color="gray.600" textAlign="center">
-                Zoom
-              </Text>
-              <Slider
-                orientation="vertical"
-                min={0.1}
-                max={1.8}
-                step={0.05}
-                value={scale}
-                onChange={(value) => setScale(value)}
-                minH="160px"
-                maxW="40px"
-              >
-                <SliderTrack>
-                  <SliderFilledTrack bg="blue.400" />
-                </SliderTrack>
-                <SliderThumb boxSize={4} bg="blue.500" />
-              </Slider>
-              <Text fontSize="xs" color="gray.500" textAlign="center">
-                {Math.round(scale * 100)}%
-              </Text>
+              
+              {/* Mobile Horizontal Slider */}
+              <Box display={{ base: "block", md: "none" }}>
+                <HStack spacing={3} align="center">
+                  <Text fontSize="xs" fontWeight="medium" color="gray.600">
+                    Zoom
+                  </Text>
+                  <Slider
+                    orientation="horizontal"
+                    min={0.1}
+                    max={1.8}
+                    step={0.05}
+                    value={scale}
+                    onChange={(value) => setScale(value)}
+                    maxW="160px"
+                    minW="160px"
+                  >
+                    <SliderTrack>
+                      <SliderFilledTrack bg="blue.400" />
+                    </SliderTrack>
+                    <SliderThumb boxSize={3} bg="blue.500" />
+                  </Slider>
+                  <Text fontSize="xs" color="gray.500" minW="30px" textAlign="right">
+                    {Math.round(scale * 100)}%
+                  </Text>
+                </HStack>
+              </Box>
+              
+              {/* Desktop Vertical Slider */}
+              <Box display={{ base: "none", md: "block" }}>
+                <Slider
+                  orientation="vertical"
+                  min={0.1}
+                  max={1.8}
+                  step={0.05}
+                  value={scale}
+                  onChange={(value) => setScale(value)}
+                  minH="160px"
+                  maxW="40px"
+                >
+                  <SliderTrack>
+                    <SliderFilledTrack bg="blue.400" />
+                  </SliderTrack>
+                  <SliderThumb boxSize={4} bg="blue.500" />
+                </Slider>
+              </Box>
+              
+              {/* Percentage shown inline with mobile slider, below desktop slider */}
+              <Box display={{ base: "none", md: "block" }}>
+                <Text fontSize="xs" color="gray.500" textAlign="center">
+                  {Math.round(scale * 100)}%
+                </Text>
+              </Box>
             </VStack>
           </Box>
 
@@ -612,7 +688,7 @@ const IndividualPhoto: React.FC = () => {
               setPosition({ x: 0, y: 0 });
             }}
             position="fixed"
-            bottom={4}
+            bottom={12}
             left="50%"
             transform="translateX(-50%)"
             zIndex={9999}

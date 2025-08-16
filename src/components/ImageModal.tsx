@@ -45,6 +45,8 @@ const ImageModal = ({
 }: ImageModalProps) => {
   const [scale, setScale] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
+  const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const toggleZoom = (e: React.MouseEvent) => {
@@ -97,7 +99,6 @@ const ImageModal = ({
   }, [isZoomed]);
 
   const bgColor = useColorModeValue('white', 'gray.800');
-  const controlColor = useColorModeValue('gray.600', 'whiteAlpha.700');
   const overlayBg = useColorModeValue('rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)');
   const toast = useToast();
 
@@ -133,6 +134,43 @@ const ImageModal = ({
         });
       }
     }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Only handle touch gestures on mobile devices
+    if (window.innerWidth >= 768) return;
+    
+    const touch = e.touches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    // Only handle touch gestures on mobile devices
+    if (window.innerWidth >= 768) return;
+    
+    const touch = e.touches[0];
+    setTouchEnd({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleTouchEnd = () => {
+    // Only handle touch gestures on mobile devices
+    if (window.innerWidth >= 768) return;
+    
+    if (!touchStart.x || !touchEnd.x) return;
+    
+    const distance = touchStart.x - touchEnd.x;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+    
+    if (isLeftSwipe && onNext) {
+      onNext();
+    } else if (isRightSwipe && onPrevious) {
+      onPrevious();
+    }
+    
+    // Reset touch positions
+    setTouchStart({ x: 0, y: 0 });
+    setTouchEnd({ x: 0, y: 0 });
   };
 
 
@@ -181,6 +219,9 @@ const ImageModal = ({
           justifyContent="center"
           pointerEvents="none"
           zIndex={1400}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           <Box 
             position="absolute"
@@ -199,9 +240,16 @@ const ImageModal = ({
             zIndex={1450}
             pointerEvents="auto"
           >
-            <Box>
+            <Box
+              bg="white"
+              border="1px solid"
+              borderColor="gray.200"
+              borderRadius="lg"
+              px={3}
+              py={2}
+            >
               {currentIndex !== undefined && totalImages !== undefined && (
-                <Text fontSize="lg" fontWeight="medium" color={controlColor} userSelect="none">
+                <Text fontSize="lg" fontWeight="medium" color="black" userSelect="none">
                   {currentIndex + 1} / {totalImages}
                 </Text>
               )}
@@ -274,8 +322,12 @@ const ImageModal = ({
               icon={<ChevronLeftIcon boxSize={8} />}
               onClick={(e) => { e.stopPropagation(); onPrevious(); }}
               variant="ghost"
-              color={controlColor}
+              color="black"
               size="lg"
+              bg="white"
+              border="1px solid"
+              borderColor="gray.200"
+              _hover={{ bg: 'gray.50' }}
               position="absolute"
               left={4}
               top="50%"
@@ -291,8 +343,12 @@ const ImageModal = ({
               icon={<ChevronRightIcon boxSize={8} />}
               onClick={(e) => { e.stopPropagation(); onNext(); }}
               variant="ghost"
-              color={controlColor}
+              color="black"
               size="lg"
+              bg="white"
+              border="1px solid"
+              borderColor="gray.200"
+              _hover={{ bg: 'gray.50' }}
               position="absolute"
               right={4}
               top="50%"
