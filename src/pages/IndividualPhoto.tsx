@@ -162,6 +162,38 @@ const IndividualPhoto: React.FC = () => {
       if (!hasSeenGuide) {
         setShowGuide(true);
       }
+    } else {
+      // Immediately clean up when fullscreen is closed
+      console.log('Cleaning up fullscreen styles immediately');
+      
+      // Remove CSS classes
+      document.body.classList.remove('fullscreen-open');
+      document.documentElement.classList.remove('fullscreen-open');
+      
+      // Remove all the important styles we set
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('position');
+      document.body.style.removeProperty('width');
+      document.body.style.removeProperty('height');
+      document.body.style.removeProperty('top');
+      document.body.style.removeProperty('left');
+      
+      document.documentElement.style.removeProperty('overflow');
+      document.documentElement.style.removeProperty('position');
+      document.documentElement.style.removeProperty('width');
+      document.documentElement.style.removeProperty('height');
+      document.documentElement.style.removeProperty('top');
+      document.documentElement.style.removeProperty('left');
+      
+      // Force restore scrolling by explicitly setting overflow back to auto
+      document.body.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      document.body.style.width = 'auto';
+      document.body.style.height = 'auto';
+      document.documentElement.style.overflow = 'auto';
+      document.documentElement.style.position = 'static';
+      document.documentElement.style.width = 'auto';
+      document.documentElement.style.height = 'auto';
     }
   };
 
@@ -346,39 +378,67 @@ const IndividualPhoto: React.FC = () => {
     }
   }, [isFullscreen, position, scale, isDragging, dragStart]);
 
+  // Cleanup function that can be called manually
+  const cleanupFullscreenStyles = () => {
+    console.log('Manual cleanup of fullscreen styles');
+    
+    // Remove CSS classes
+    document.body.classList.remove('fullscreen-open');
+    document.documentElement.classList.remove('fullscreen-open');
+    
+    // Remove all the important styles we set
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('position');
+    document.body.style.removeProperty('width');
+    document.body.style.removeProperty('height');
+    document.body.style.removeProperty('top');
+    document.body.style.removeProperty('left');
+    
+    document.documentElement.style.removeProperty('overflow');
+    document.documentElement.style.removeProperty('position');
+    document.documentElement.style.removeProperty('width');
+    document.documentElement.style.removeProperty('height');
+    document.documentElement.style.removeProperty('top');
+    document.documentElement.style.removeProperty('left');
+    
+    // Force restore scrolling by explicitly setting overflow back to auto
+    document.body.style.overflow = 'auto';
+    document.body.style.position = 'static';
+    document.body.style.width = 'auto';
+    document.body.style.height = 'auto';
+    document.documentElement.style.overflow = 'auto';
+    document.documentElement.style.position = 'static';
+    document.documentElement.style.width = 'auto';
+    document.documentElement.style.height = 'auto';
+  };
+
   // Cleanup effect when component unmounts
   useEffect(() => {
+    // Add window focus/blur listeners for mobile cleanup
+    const handleWindowFocus = () => {
+      if (!isFullscreen) {
+        cleanupFullscreenStyles();
+      }
+    };
+    
+    const handleWindowBlur = () => {
+      if (isFullscreen) {
+        cleanupFullscreenStyles();
+      }
+    };
+    
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('blur', handleWindowBlur);
+    
     return () => {
       // Ensure all fullscreen styles are cleaned up when component unmounts
-      document.body.classList.remove('fullscreen-open');
-      document.documentElement.classList.remove('fullscreen-open');
+      cleanupFullscreenStyles();
       
-      // Remove all the important styles we set
-      document.body.style.removeProperty('overflow');
-      document.body.style.removeProperty('position');
-      document.body.style.removeProperty('width');
-      document.body.style.removeProperty('height');
-      document.body.style.removeProperty('top');
-      document.body.style.removeProperty('left');
-      
-      document.documentElement.style.removeProperty('overflow');
-      document.documentElement.style.removeProperty('position');
-      document.documentElement.style.removeProperty('width');
-      document.documentElement.style.removeProperty('height');
-      document.documentElement.style.removeProperty('top');
-      document.documentElement.style.removeProperty('left');
-      
-      // Force restore scrolling
-      document.body.style.overflow = 'auto';
-      document.body.style.position = 'static';
-      document.body.style.width = 'auto';
-      document.body.style.height = 'auto';
-      document.documentElement.style.overflow = 'auto';
-      document.documentElement.style.position = 'static';
-      document.documentElement.style.width = 'auto';
-      document.documentElement.style.height = 'auto';
+      // Remove event listeners
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('blur', handleWindowBlur);
     };
-  }, []);
+  }, [isFullscreen]);
 
   // Ensure scale never exceeds our limits
   useEffect(() => {
