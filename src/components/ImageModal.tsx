@@ -98,7 +98,6 @@ const ImageModal = ({
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const controlColor = useColorModeValue('gray.600', 'whiteAlpha.700');
-  const controlHoverBg = useColorModeValue('gray.100', 'whiteAlpha.200');
   const overlayBg = useColorModeValue('rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)');
   const toast = useToast();
 
