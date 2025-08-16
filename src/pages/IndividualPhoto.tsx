@@ -245,10 +245,14 @@ const IndividualPhoto: React.FC = () => {
   useEffect(() => {
     if (isFullscreen) {
       window.addEventListener('keydown', handleKeyDown);
+      // Prevent page scrolling when fullscreen is open
       document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
+        // Restore page scrolling when fullscreen is closed
         document.body.style.removeProperty('overflow');
+        document.documentElement.style.removeProperty('overflow');
       };
     }
   }, [isFullscreen]);
@@ -310,7 +314,13 @@ const IndividualPhoto: React.FC = () => {
   }
 
   return (
-    <PageContainer py={{ base: 24, md: 24 }}>
+    <PageContainer 
+      py={{ base: 24, md: 24 }}
+      style={{ 
+        overflow: isFullscreen ? 'hidden' : 'auto',
+        height: isFullscreen ? '100vh' : 'auto'
+      }}
+    >
       <Container maxW="container.lg">
         <VStack spacing={6} align="stretch">
           {/* Photo */}
