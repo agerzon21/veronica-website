@@ -20,6 +20,7 @@ import {
 } from '@chakra-ui/react';
 import { CopyIcon, ExternalLinkIcon, CloseIcon } from '@chakra-ui/icons';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import PageContainer from '../components/PageContainer';
 
 // Import the sampleImages data from Gallery.tsx
@@ -497,13 +498,28 @@ const IndividualPhoto: React.FC = () => {
   }
 
   return (
-    <PageContainer 
-      py={{ base: 24, md: 24 }}
-      style={{ 
-        overflow: isFullscreen ? 'hidden' : 'auto',
-        height: isFullscreen ? '100vh' : 'auto'
-      }}
-    >
+    <>
+      <Helmet>
+        <title>{photo.title}</title>
+        <meta name="description" content={photo.description} />
+        <meta property="og:title" content={photo.title} />
+        <meta property="og:description" content={photo.description} />
+        <meta property="og:image" content={`https://vero.photography${photo.url}`} />
+        <meta property="og:url" content={window.location.href} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={photo.title} />
+        <meta name="twitter:description" content={photo.description} />
+        <meta name="twitter:image" content={`https://vero.photography${photo.url}`} />
+        <link rel="canonical" href={window.location.href} />
+      </Helmet>
+      <PageContainer 
+        py={{ base: 24, md: 24 }}
+        style={{ 
+          overflow: isFullscreen ? 'hidden' : 'auto',
+          height: isFullscreen ? '100vh' : 'auto'
+        }}
+      >
       <Container maxW="container.lg">
         <VStack spacing={6} align="stretch">
           {/* Photo */}
@@ -944,6 +960,7 @@ const IndividualPhoto: React.FC = () => {
         </Box>
       )}
     </PageContainer>
+    </>
   );
 };
 
