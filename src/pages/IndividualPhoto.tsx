@@ -73,7 +73,7 @@ const IndividualPhoto: React.FC = () => {
     const handler = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.95 : 1.05;
-      setScale((prev) => Math.max(0.5, Math.min(3, prev * delta)));
+      setScale((prev) => Math.max(0.1, Math.min(5, prev * delta)));
     };
     el.addEventListener('wheel', handler, { passive: false });
     return () => el.removeEventListener('wheel', handler);
@@ -99,16 +99,18 @@ const IndividualPhoto: React.FC = () => {
   const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistRef = useRef<number | null>(null);
   const touchDragDistRef = useRef(0);
+  const wasPinchingRef = useRef(false);
 
   const getTouchDist = (t1: React.Touch, t2: React.Touch) =>
     Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchDragDistRef.current = 0;
-    if (e.touches.length === 1) {
+    if (e.touches.length === 1 && !wasPinchingRef.current) {
+      touchDragDistRef.current = 0;
       lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       lastPinchDistRef.current = null;
     } else if (e.touches.length === 2) {
+      wasPinchingRef.current = true;
       lastTouchRef.current = null;
       lastPinchDistRef.current = getTouchDist(e.touches[0], e.touches[1]);
     }
@@ -116,7 +118,7 @@ const IndividualPhoto: React.FC = () => {
 
   const handleTouchMove = (e: React.TouchEvent) => {
     e.preventDefault();
-    if (e.touches.length === 1 && lastTouchRef.current) {
+    if (e.touches.length === 1 && lastTouchRef.current && !wasPinchingRef.current) {
       const dx = e.touches[0].clientX - lastTouchRef.current.x;
       const dy = e.touches[0].clientY - lastTouchRef.current.y;
       touchDragDistRef.current += Math.abs(dx) + Math.abs(dy);
@@ -125,22 +127,23 @@ const IndividualPhoto: React.FC = () => {
     } else if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
       const newDist = getTouchDist(e.touches[0], e.touches[1]);
       const ratio = newDist / lastPinchDistRef.current;
-      setScale((prev) => Math.max(0.5, Math.min(3, prev * ratio)));
+      setScale((prev) => Math.max(0.1, Math.min(5, prev * ratio)));
       lastPinchDistRef.current = newDist;
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (e.touches.length === 0) {
-      // If barely moved, treat as tap to close
-      if (touchDragDistRef.current < 10 && lastPinchDistRef.current === null) {
+      // Only treat as tap-to-close if it was a clean single-finger tap (not a pinch)
+      if (touchDragDistRef.current < 10 && !wasPinchingRef.current) {
         toggleFullscreen();
       }
       lastTouchRef.current = null;
       lastPinchDistRef.current = null;
+      wasPinchingRef.current = false;
     } else if (e.touches.length === 1) {
-      // Went from pinch to single finger — start panning
-      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      // Went from pinch to single finger — don't start panning, just wait for full release
+      lastTouchRef.current = null;
       lastPinchDistRef.current = null;
     }
   };
