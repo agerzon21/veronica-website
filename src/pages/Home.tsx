@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from '@chakra-ui/react';
+import { Helmet } from 'react-helmet-async';
 import ImageCarousel from '../components/ImageCarousel';
 import ParallaxSection from '../components/ParallaxSection';
 import StatsSection from '../components/StatsSection';
@@ -87,6 +88,9 @@ const Home: React.FC = () => {
       width="100%"
       overflow="hidden"
     >
+      <Helmet>
+        <meta property="og:image" content="https://vero.photography/assets/photos/contact-bg.webp" />
+      </Helmet>
       <ImageCarousel images={carouselImages} />
       <StatsSection />
       <ParallaxSection

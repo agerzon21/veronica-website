@@ -12,7 +12,7 @@ interface SEOProps {
 const SEO = ({
   title = 'Vero Photography | Professional Photographer in Scranton, Pennsylvania & Worldwide',
   description = 'Professional photography services by Veronika Gerzon. Specializing in weddings, portraits, family sessions, and maternity photography in Scranton, Pennsylvania and worldwide. Creating timeless memories through artistic and emotional storytelling.',
-  image = '/assets/photos/Vero.webp',
+  image = 'https://vero.photography/assets/photos/contact-bg.webp',
   url = 'https://vero.photography',
   type = 'website',
   keywords = [

@@ -24,6 +24,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/photo/:category/:photoId",
+      "destination": "/photo/:category/:photoId.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

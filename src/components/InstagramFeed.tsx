@@ -3,16 +3,26 @@ import { Box, VStack, Text } from '@chakra-ui/react';
 const InstagramFeed = () => {
   return (
     <Box py={16} px={4} bg="white">
-      <VStack spacing={8} mb={12}>
+      <VStack spacing={6} mb={12}>
         <Text
-          fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
-          fontWeight="light"
+          fontSize="xs"
+          fontWeight="500"
           textTransform="uppercase"
+          letterSpacing="0.2em"
+          color="#c9a96e"
+        >
+          Follow Along
+        </Text>
+        <Box w="35px" h="1px" bg="#c9a96e" />
+        <Text
+          fontSize={{ base: 'xl', md: '2xl' }}
+          fontWeight="200"
+          color="gray.700"
         >
           Latest on Instagram
         </Text>
       </VStack>
-      
+
       <Box
         maxW="1200px"
         mx="auto"
@@ -21,8 +31,6 @@ const InstagramFeed = () => {
         sx={{
           'iframe': {
             border: 'none',
-            borderRadius: 'lg',
-            boxShadow: 'lg',
             height: { base: '500px', md: '1050px' },
             width: '100%',
             maxWidth: { base: '650px', md: '1300px' }
@@ -42,4 +50,4 @@ const InstagramFeed = () => {
   );
 };
 
-export default InstagramFeed; 
+export default InstagramFeed;

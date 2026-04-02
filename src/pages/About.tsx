@@ -1,277 +1,311 @@
-import { Box, VStack, Text, HStack, useColorModeValue, Container } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, Image } from '@chakra-ui/react';
+import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { ChevronDownIcon } from '@chakra-ui/icons';
-import { keyframes } from '@emotion/react';
 
-const scrollAnimation = keyframes`
-  0% { transform: translateY(0); opacity: 1; }
-  50% { transform: translateY(10px); opacity: 0.7; }
-  100% { transform: translateY(0); opacity: 1; }
-`;
+const MotionDiv = motion.div;
 
 const About = () => {
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const textColor = useColorModeValue('gray.600', 'gray.300');
-  const leftColumnRef = useRef<HTMLDivElement>(null);
-  const rightColumnRef = useRef<HTMLDivElement>(null);
-  const isLeftInView = useInView(leftColumnRef, { 
-    margin: "0px",
-    once: true,
-    amount: 0.3
-  });
-  const isRightInView = useInView(rightColumnRef, { 
-    margin: "0px",
-    once: true,
-    amount: 0.3
-  });
+  const heroRef = useRef<HTMLDivElement>(null);
+  const isHeroInView = useInView(heroRef, { once: true, amount: 0.15 });
+  const approachRef = useRef<HTMLDivElement>(null);
+  const isApproachInView = useInView(approachRef, { once: true, amount: 0.15 });
+  const storyRef = useRef<HTMLDivElement>(null);
+  const isStoryInView = useInView(storyRef, { once: true, amount: 0.15 });
 
   return (
-    <Box position="relative" minH="100vh">
-      {/* Background wrapper */}
-      <Box
-        position="relative"
-        top={0}
-        left={0}
-        right={0}
-        height="87vh"
-        zIndex={0}
-        overflow="hidden"
-      >
-        {/* Background Image */}
-        <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          backgroundImage="url('/assets/photos/Vero.webp')"
-          backgroundSize="cover"
-          backgroundPosition="center"
-          backgroundRepeat="no-repeat"
-          filter="brightness(0.7)"
-          sx={{
-            '@supports (-webkit-touch-callout: none)': {
-              position: 'fixed',
-              height: '-webkit-fill-available',
-            }
-          }}
-        />
-
-        {/* Gradient Overlay */}
-        <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          bgGradient="linear(to-b, blackAlpha.600, blackAlpha.800)"
-          opacity={0.8}
-          sx={{
-            '@supports (-webkit-touch-callout: none)': {
-              position: 'fixed',
-              height: '-webkit-fill-available',
-            }
-          }}
-        />
-
-        {/* Hero Content */}
-        <Box
-          position="relative"
-          height="100%"
-          display="flex"
-          flexDirection="column"
-          alignItems="center"
-          justifyContent="center"
-          zIndex={1}
-        >
-          <VStack spacing={8} maxW="800px" px={8} textAlign="center">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.2 }}
-            >
-              <Text
-                fontSize={{ base: '4xl', md: '6xl', lg: '7xl' }}
-                fontWeight="light"
-                color="white"
-                textTransform="uppercase"
-                letterSpacing="wider"
-                textShadow="2px 2px 4px rgba(0,0,0,0.3)"
-              >
-                Veronika
-              </Text>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.4 }}
-            >
-              <Text
-                fontSize={{ base: 'xl', md: '2xl' }}
-                color="white"
-                fontStyle="italic"
-                textShadow="1px 1px 2px rgba(0,0,0,0.3)"
-              >
-                Through the lens of both model and photographer
-              </Text>
-            </motion.div>
-          </VStack>
-          
-          {/* Scroll Indicator */}
-          <Box
+    <Box minH="100vh">
+      <Helmet>
+        <meta property="og:image" content="https://vero.photography/assets/photos/about-bg.webp" />
+      </Helmet>
+      {/* ─── Mobile: stacked hero ─── */}
+      <Box display={{ base: 'block', lg: 'none' }}>
+        <Box position="relative" h="60vh" overflow="hidden">
+          <Image
+            src="/assets/photos/about-bg.webp"
+            alt="Veronika Gerzon — Photographer at work"
+            objectFit="cover"
+            objectPosition="center 0%"
+            w="100%"
+            h="100%"
+          />
+          <Box position="absolute" inset={0} bg="rgba(0,0,0,0.45)" />
+          <Flex
             position="absolute"
-            bottom="140px"
-            left="0"
-            right="0"
-            display="flex"
-            flexDirection="column"
-            alignItems="center"
-            animation={`${scrollAnimation} 2s ease-in-out infinite`}
-            zIndex={3}
+            inset={0}
+            align="center"
+            justify="center"
           >
-            <Text color="white" fontSize="sm" mb={3} textShadow="1px 1px 2px rgba(0,0,0,0.5)">
-              Scroll to explore
-            </Text>
-            <ChevronDownIcon color="white" boxSize={8} filter="drop-shadow(1px 1px 2px rgba(0,0,0,0.5))" />
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Content Section */}
-      <Box 
-        position="relative" 
-        bg={bgColor}
-        marginTop="0"
-        borderTopRadius="3xl"
-        zIndex={2}
-        boxShadow="0px -10px 30px rgba(0,0,0,0.2)"
-        pb={8}
-        mt="-2rem"
-      >
-        <Container maxW="1200px" py={8}>
-          <Box h="5vh" />  {/* This creates space above the text */}
-          <HStack spacing={12} align="start" direction={{ base: 'column', md: 'row' }}>
-            <Box
-              ref={leftColumnRef}
-              style={{ flex: 1, width: '100%' }}
-              sx={{
-                '@media (min-width: 768px)': {
-                  opacity: isLeftInView ? 1 : 0,
-                  transform: isLeftInView ? 'translateX(0)' : 'translateX(-100px)',
-                  transition: 'opacity 0.6s, transform 0.6s',
-                }
-              }}
+            <MotionDiv
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              <Box>
+              <VStack spacing={4} textAlign="center" px={6}>
                 <Text
-                  fontSize={{ base: '2xl', md: '3xl' }}
-                  fontWeight="light"
-                  mb={8}
+                  fontSize="xs"
+                  fontWeight="500"
                   textTransform="uppercase"
-                  position="relative"
-                  _after={{
-                    content: '""',
-                    position: 'absolute',
-                    bottom: '-10px',
-                    left: '0',
-                    width: '60px',
-                    height: '2px',
-                    bg: 'currentColor',
-                  }}
+                  letterSpacing="0.2em"
+                  color="#c9a96e"
                 >
                   About Me
                 </Text>
+                <Box w="35px" h="1px" bg="#c9a96e" />
                 <Text
-                  fontSize={{ base: 'md', md: 'lg' }}
-                  color={textColor}
-                  lineHeight="tall"
+                  fontSize="2xl"
+                  fontWeight="200"
+                  color="white"
+                  lineHeight="1.4"
                 >
-                  As both a model and photographer, I bring a unique perspective to every project. 
-                  Having experienced both sides of the camera, I understand the nuances of creating 
-                  powerful imagery that tells a story.
+                  Creating images that feel as
+                  <br />
+                  natural as the moment itself.
                 </Text>
-                <Text
-                  fontSize={{ base: 'md', md: 'lg' }}
-                  color={textColor}
-                  lineHeight="tall"
-                  mt={6}
-                >
-                  My journey in photography began through my experiences as a model, where I developed 
-                  a deep appreciation for the art of capturing moments. This dual perspective allows 
-                  me to create images that are not just technically proficient, but emotionally resonant.
-                </Text>
-                <Text
-                  fontSize={{ base: 'md', md: 'lg' }}
-                  color={textColor}
-                  lineHeight="tall"
-                  mt={6}
-                >
-                  Whether I'm behind the lens or in front of it, my goal is always the same: to create 
-                  authentic, compelling imagery that captures the essence of the moment and the beauty 
-                  of the subject.
-                </Text>
-              </Box>
-            </Box>
+              </VStack>
+            </MotionDiv>
+          </Flex>
+        </Box>
 
-            <Box
-              ref={rightColumnRef}
-              style={{ flex: 1, width: '100%' }}
-              sx={{
-                '@media (min-width: 768px)': {
-                  opacity: isRightInView ? 1 : 0,
-                  transform: isRightInView ? 'translateX(0)' : 'translateX(100px)',
-                  transition: 'opacity 0.6s, transform 0.6s',
-                }
-              }}
-            >
-              <Box>
+        {/* Mobile: My Approach */}
+        <Box bg="white" py={16} px={8}>
+          <Flex justify="center">
+            <Box maxW="600px" ref={approachRef}>
+              <MotionDiv
+                initial={{ opacity: 0, y: 25 }}
+                animate={isApproachInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+              >
+              <VStack spacing={6} textAlign="center">
                 <Text
-                  fontSize={{ base: '2xl', md: '3xl' }}
-                  fontWeight="light"
-                  mb={8}
+                  fontSize="xs"
+                  fontWeight="500"
                   textTransform="uppercase"
-                  position="relative"
-                  _after={{
-                    content: '""',
-                    position: 'absolute',
-                    bottom: '-10px',
-                    left: '0',
-                    width: '60px',
-                    height: '2px',
-                    bg: 'currentColor',
-                  }}
+                  letterSpacing="0.2em"
+                  color="#c9a96e"
                 >
                   My Approach
                 </Text>
-                <Text
-                  fontSize={{ base: 'md', md: 'lg' }}
-                  color={textColor}
-                  lineHeight="tall"
-                >
-                  I believe in creating a comfortable, collaborative environment where creativity 
-                  can flourish. My experience as a model helps me guide my subjects to their most 
-                  authentic selves, while my technical expertise ensures we capture those moments 
-                  perfectly.
-                </Text>
-                <Text
-                  fontSize={{ base: 'md', md: 'lg' }}
-                  color={textColor}
-                  lineHeight="tall"
-                  mt={6}
-                >
-                  Every shoot is a unique journey, and I'm passionate about helping my clients 
-                  discover their vision and bring it to life. Whether it's a fashion editorial, 
-                  portrait session, or commercial project, I bring the same level of dedication 
-                  and artistry to every assignment.
-                </Text>
-              </Box>
+                <Box w="35px" h="1px" bg="#c9a96e" />
+                <VStack spacing={4}>
+                  <Text fontSize="sm" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
+                    Every session starts with understanding your vision. I believe the best photos come
+                    from a comfortable, collaborative environment — not stiff poses or forced smiles.
+                  </Text>
+                  <Text fontSize="sm" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
+                    Whether it's a wedding, portrait, editorial, or commercial project, I focus on
+                    capturing authentic moments and genuine emotion. My goal is for you to look at
+                    your photos and feel exactly what you felt that day.
+                  </Text>
+                  <Text fontSize="sm" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
+                    I bring patience, attention to detail, and a dedication to making every client
+                    feel confident and beautiful in front of the camera.
+                  </Text>
+                </VStack>
+              </VStack>
+              </MotionDiv>
             </Box>
-          </HStack>
-        </Container>
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ─── Desktop: side-by-side photo + text ─── */}
+      <Flex
+        display={{ base: 'none', lg: 'flex' }}
+        h="calc(100vh - 72px + 10vh)"
+        direction="row"
+      >
+        {/* Left: photo with dark overlay */}
+        <Box position="relative" w="55%" h="100%" overflow="hidden">
+          <Image
+            src="/assets/photos/about-bg.webp"
+            alt="Veronika Gerzon — Photographer at work"
+            objectFit="cover"
+            objectPosition="center 70%"
+            w="100%"
+            h="100%"
+          />
+          <Box position="absolute" inset={0} bg="rgba(0,0,0,0.4)" />
+          <Flex
+            position="absolute"
+            inset={0}
+            align="center"
+            justify="center"
+            ref={heroRef}
+          >
+            <MotionDiv
+              initial={{ opacity: 0, y: 20 }}
+              animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            >
+              <VStack spacing={4} textAlign="center" px={10}>
+                <Text
+                  fontSize="xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.2em"
+                  color="#c9a96e"
+                >
+                  About Me
+                </Text>
+                <Box w="35px" h="1px" bg="#c9a96e" />
+                <Text
+                  fontSize={{ lg: '3xl', xl: '4xl' }}
+                  fontWeight="200"
+                  color="white"
+                  lineHeight="1.4"
+                >
+                  Creating images that feel as
+                  <br />
+                  natural as the moment itself.
+                </Text>
+              </VStack>
+            </MotionDiv>
+          </Flex>
+        </Box>
+
+        {/* Right: text content on white */}
+        <Flex
+          w="45%"
+          h="100%"
+          bg="white"
+          align="center"
+          justify="center"
+          px={{ lg: 12, xl: 20 }}
+        >
+          <Box maxW="480px">
+            <MotionDiv
+              initial={{ opacity: 0, y: 25 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            >
+            <VStack spacing={6} textAlign="center">
+              <Text
+                fontSize="xs"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.2em"
+                color="#c9a96e"
+              >
+                My Approach
+              </Text>
+              <Box w="35px" h="1px" bg="#c9a96e" />
+              <VStack spacing={4}>
+                <Text fontSize="sm" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
+                  Every session starts with understanding your vision. I believe the best photos come
+                  from a comfortable, collaborative environment — not stiff poses or forced smiles.
+                </Text>
+                <Text fontSize="sm" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
+                  Whether it's a wedding, portrait, editorial, or commercial project, I focus on
+                  capturing authentic moments and genuine emotion. My goal is for you to look at
+                  your photos and feel exactly what you felt that day.
+                </Text>
+                <Text fontSize="sm" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
+                  I bring patience, attention to detail, and a dedication to making every client
+                  feel confident and beautiful in front of the camera.
+                </Text>
+              </VStack>
+            </VStack>
+            </MotionDiv>
+          </Box>
+        </Flex>
+      </Flex>
+
+      {/* ─── A Unique Perspective — dark section ─── */}
+      <Box
+        bg="gray.900"
+        py={{ base: 20, md: 24 }}
+        px={{ base: 8, md: 12 }}
+      >
+        <Flex justify="center">
+          <Box maxW="600px" ref={storyRef}>
+            <MotionDiv
+              initial={{ opacity: 0, y: 25 }}
+              animate={isStoryInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            >
+              <Text
+                fontSize="xs"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.2em"
+                color="#c9a96e"
+                mb={4}
+                textAlign="center"
+              >
+                A Unique Perspective
+              </Text>
+
+              <Box w="35px" h="1px" bg="#c9a96e" mx="auto" mb={8} />
+
+              <Text
+                fontSize={{ base: 'lg', md: 'xl' }}
+                fontWeight="200"
+                color="white"
+                textAlign="center"
+                lineHeight="2"
+                fontStyle="italic"
+                mb={6}
+              >
+                "Having been on both sides of the camera gives me
+                an understanding that most photographers simply don't have."
+              </Text>
+
+              <VStack spacing={4}>
+                <Text fontSize="sm" color="whiteAlpha.600" lineHeight="2" fontWeight="300" textAlign="center">
+                  Before picking up a camera, I spent years working as a model. That experience
+                  taught me how it feels to be directed, what makes a subject comfortable, and
+                  how small adjustments in posing and light can completely transform an image.
+                </Text>
+                <Text fontSize="sm" color="whiteAlpha.600" lineHeight="2" fontWeight="300" textAlign="center">
+                  This dual perspective is my edge — I know how to guide you naturally because
+                  I've been in your shoes. The result is photography that feels effortless, authentic,
+                  and truly you.
+                </Text>
+              </VStack>
+            </MotionDiv>
+          </Box>
+        </Flex>
+      </Box>
+
+      {/* ─── Details bar ─── */}
+      <Box bg="white" py={{ base: 14, md: 16 }}>
+        <Flex
+          justify="center"
+          gap={{ base: 10, md: 20 }}
+          direction={{ base: 'column', md: 'row' }}
+          align="center"
+          px={8}
+        >
+          {[
+            { label: 'Based in', value: 'Scranton, PA' },
+            { label: 'Experience', value: '12+ Years' },
+            { label: 'Available', value: 'Worldwide' },
+          ].map((stat) => (
+            <VStack key={stat.label} spacing={1.5}>
+              <Text
+                fontSize="10px"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.2em"
+                color="#c9a96e"
+              >
+                {stat.label}
+              </Text>
+              <Text
+                fontSize="md"
+                fontWeight="200"
+                color="gray.700"
+                letterSpacing="0.05em"
+              >
+                {stat.value}
+              </Text>
+            </VStack>
+          ))}
+        </Flex>
       </Box>
     </Box>
   );
 };
 
-export default About; 
+export default About;

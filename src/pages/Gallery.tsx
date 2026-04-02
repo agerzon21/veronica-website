@@ -1,8 +1,12 @@
-import { Box, Container, Text, Flex } from '@chakra-ui/react';
+import { Box, Text, Flex, VStack, Image } from '@chakra-ui/react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowBackIcon } from '@chakra-ui/icons';
+import { Helmet } from 'react-helmet-async';
+import { motion } from 'framer-motion';
 import GalleryCategories from '../components/GalleryCategories';
 import GalleryGrid from '../components/GalleryGrid';
+
+const MotionDiv = motion.div;
 
 // Updated images data structure with metadata (escaped quotes)
 export const sampleImages = {
@@ -924,88 +928,62 @@ const Gallery = () => {
   console.log('Current category:', category);
   console.log('Available categories:', Object.keys(sampleImages));
   
+
   if (!category) {
     return (
-      <Box position="relative" minH="100vh">
-        {/* Background wrapper */}
-        <Box
-          position="fixed"
-          top={0}
-          left={0}
-          right={0}
-          height="60vh"
-          zIndex={0}
-          overflow="hidden"
-        >
-          {/* Background Image */}
-          <Box
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            backgroundImage={`url(/assets/photos/_C6C1095_lqimij.webp)`}
-            backgroundSize="cover"
-            backgroundPosition="center 15%"
-            backgroundRepeat="no-repeat"
-            _before={{
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              bg: 'blackAlpha.600',
-            }}
+      <Box minH="100vh" bg="white">
+        <Helmet>
+          <meta property="og:image" content="https://vero.photography/assets/photos/_C6C1095_lqimij.webp" />
+        </Helmet>
+        {/* Hero */}
+        <Box position="relative" h={{ base: '45vh', lg: '50vh' }} overflow="hidden">
+          <Image
+            src="/assets/photos/_C6C1095_lqimij.webp"
+            alt="Gallery"
+            objectFit="cover"
+            objectPosition="center 15%"
+            w="100%"
+            h="100%"
           />
+          <Box position="absolute" inset={0} bg="rgba(0,0,0,0.5)" />
+          <Flex
+            position="absolute"
+            inset={0}
+            align="center"
+            justify="center"
 
-          {/* Hero Content */}
-          <Box
-            position="relative"
-            height="100%"
-            display="flex"
-            flexDirection="column"
-            alignItems="center"
-            justifyContent="center"
-            zIndex={1}
           >
-            <Text
-              fontSize={{ base: '4xl', md: '6xl', lg: '7xl' }}
-              fontWeight="light"
-              color="white"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              textShadow="2px 2px 4px rgba(0,0,0,0.3)"
-              mb={4}
+            <MotionDiv
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              Gallery
-            </Text>
-            <Text
-              fontSize={{ base: 'xl', md: '2xl' }}
-              color="white"
-              fontStyle="italic"
-              textShadow="1px 1px 2px rgba(0,0,0,0.3)"
-            >
-              A collection of my recent work
-            </Text>
-          </Box>
+              <VStack spacing={4} textAlign="center" px={6}>
+                <Text
+                  fontSize="xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.2em"
+                  color="#c9a96e"
+                >
+                  Portfolio
+                </Text>
+                <Box w="35px" h="1px" bg="#c9a96e" />
+                <Text
+                  fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
+                  fontWeight="200"
+                  color="white"
+                  lineHeight="1.4"
+                >
+                  A collection of my recent work
+                </Text>
+              </VStack>
+            </MotionDiv>
+          </Flex>
         </Box>
 
-        {/* Content Section */}
-        <Box 
-          position="relative" 
-          bg="white"
-          marginTop="45vh"
-          borderTopRadius="3xl"
-          zIndex={2}
-          boxShadow="0px -10px 30px rgba(0,0,0,0.2)"
-          minH="100vh"
-          pb={0}
-        >
-          <Container maxW="full" px={4} py={2}>
-            <GalleryCategories />
-          </Container>
-        </Box>
+        {/* Categories */}
+        <GalleryCategories />
       </Box>
     );
   }
@@ -1020,141 +998,90 @@ const Gallery = () => {
   console.log('Category info:', categoryInfo);
 
   return (
-    <Box position="relative" minH="100vh">
-      {/* Category Hero Section */}
-      <Box
-        position="relative"
-        height="50vh"
-        width="100%"
-        overflow="hidden"
-      >
-        {/* Background Image */}
-        <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          backgroundImage={`url(${categoryInfo.image})`}
-          backgroundSize="cover"
-          backgroundPosition={categoryInfo.backgroundPosition}
-          backgroundRepeat="no-repeat"
-          filter="brightness(0.5)"
+    <Box minH="100vh" bg="white">
+      <Helmet>
+        <meta property="og:image" content={`https://vero.photography${categoryInfo.image}`} />
+      </Helmet>
+      {/* Category Hero */}
+      <Box position="relative" h={{ base: '40vh', lg: '45vh' }} overflow="hidden">
+        <Image
+          src={categoryInfo.image}
+          alt={categoryInfo.title}
+          objectFit="cover"
+          objectPosition={categoryInfo.backgroundPosition}
+          w="100%"
+          h="100%"
         />
-
-        {/* Category Title */}
+        <Box position="absolute" inset={0} bg="rgba(0,0,0,0.5)" />
         <Flex
           position="absolute"
-          bottom={0}
-          left={0}
-          right={0}
-          height="100%"
-          alignItems="center"
-          justifyContent="center"
-          flexDirection="column"
-          bg="linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)"
+          inset={0}
+          pt="36px"
+          align="center"
+          justify="center"
         >
-          <Text
-            fontSize={{ base: '3xl', md: '5xl', lg: '6xl' }}
-            fontWeight="light"
-            color="white"
-            textTransform="uppercase"
-            letterSpacing="wider"
-            textShadow="2px 2px 4px rgba(0,0,0,0.3)"
+          <MotionDiv
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            {categoryInfo.title}
-          </Text>
-
-          {/* Mobile Back Button */}
-          <Box
-            mt={6}
-            display={{ base: "block", md: "none" }}
-            zIndex={2}
-          >
-            <Link
-              to="/gallery"
-              style={{ textDecoration: 'none' }}
-            >
-              <Box
-                bg="blackAlpha.500"
-                backdropFilter="blur(8px)"
-                rounded="full"
-                display="flex"
-                alignItems="center"
-                py={2}
-                px={4}
-                _hover={{
-                  bg: "blackAlpha.600"
-                }}
-                cursor="pointer"
+            <VStack spacing={4} textAlign="center" px={6}>
+              <Text
+                fontSize="xs"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.2em"
+                color="#c9a96e"
               >
-                <ArrowBackIcon color="white" />
-                <Text
-                  color="white"
-                  fontSize="sm"
-                  fontWeight="medium"
-                  ml={2}
-                >
-                  Back to Gallery
-                </Text>
-              </Box>
-            </Link>
-          </Box>
+                Gallery
+              </Text>
+              <Box w="35px" h="1px" bg="#c9a96e" />
+              <Text
+                fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
+                fontWeight="200"
+                color="white"
+                lineHeight="1.4"
+              >
+                {categoryInfo.title}
+              </Text>
+            </VStack>
+          </MotionDiv>
         </Flex>
 
-        {/* Desktop Back Button */}
+        {/* Back Button */}
         <Box
           position="absolute"
-          top="50%"
-          left={8}
+          top="calc(50% + 18px)"
+          left={{ base: 4, md: 8 }}
           transform="translateY(-50%)"
           zIndex={2}
-          display={{ base: "none", md: "block" }}
         >
-          <Link
-            to="/gallery"
-            style={{ textDecoration: 'none' }}
-          >
-            <Box
-              bg="blackAlpha.500"
-              backdropFilter="blur(8px)"
-              rounded="full"
-              display="flex"
-              alignItems="center"
-              py={2}
-              px={4}
-              _hover={{
-                bg: "blackAlpha.600"
-              }}
+          <Link to="/gallery" style={{ textDecoration: 'none' }}>
+            <Flex
+              align="center"
+              color="whiteAlpha.800"
+              transition="all 0.3s"
+              _hover={{ color: '#c9a96e' }}
               cursor="pointer"
+              gap={2}
             >
-              <ArrowBackIcon color="white" />
+              <ArrowBackIcon />
               <Text
-                color="white"
-                fontSize="sm"
-                fontWeight="medium"
-                ml={2}
+                fontSize="xs"
+                fontWeight="400"
+                letterSpacing="0.15em"
+                textTransform="uppercase"
               >
-                Back to Gallery
+                Back
               </Text>
-            </Box>
+            </Flex>
           </Link>
         </Box>
       </Box>
 
-      {/* Images Grid Section */}
-      <Box 
-        position="relative" 
-        bg="white"
-        borderTopRadius="3xl"
-        marginTop="-2rem"
-        zIndex={5}
-        minH="50vh"
-        pb={20}
-      >
-        <Container maxW="full" py={4} px={12}>
-          <GalleryGrid images={randomizedImages} category={category} />
-        </Container>
+      {/* Images Grid */}
+      <Box py={{ base: 6, md: 10 }} px={{ base: 4, md: 12 }}>
+        <GalleryGrid images={randomizedImages} category={category} />
       </Box>
     </Box>
   );

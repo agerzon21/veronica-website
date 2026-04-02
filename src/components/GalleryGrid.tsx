@@ -1,7 +1,7 @@
-import { Box, Image, useColorModeValue } from '@chakra-ui/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Box } from '@chakra-ui/react';
+import { motion } from 'framer-motion';
 import ImageModal from './ImageModal';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface GalleryGridProps {
   images: Array<{
@@ -15,12 +15,13 @@ interface GalleryGridProps {
 }
 
 const MotionBox = motion(Box);
-const MotionImage = motion(Image);
 
 const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [columnCount, setColumnCount] = useState(3);
 
   useEffect(() => {
@@ -38,15 +39,36 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     return () => window.removeEventListener('resize', updateColumnCount);
   }, []);
 
+  useEffect(() => {
+    imageRefs.current = imageRefs.current.slice(0, images.length);
+  }, [images.length]);
+
   const handleImageClick = (index: number) => {
+    // Capture the bounding rect of the clicked thumbnail before opening the modal
+    const el = imageRefs.current[index];
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setOriginRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+    } else {
+      setOriginRect(null);
+    }
     setSelectedImageIndex(index);
     setIsModalOpen(true);
   };
 
-  const handleModalClose = () => {
+  const getImageRect = useCallback((index: number) => {
+    const el = imageRefs.current[index];
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+  }, []);
+
+  const handleModalClose = useCallback((_finalIndex: number) => {
+    // Modal already scrolled the page to the right spot before animating closed
     setIsModalOpen(false);
     setSelectedImageIndex(null);
-  };
+    setOriginRect(null);
+  }, []);
 
   const handleNextImage = () => {
     if (selectedImageIndex !== null && selectedImageIndex < images.length - 1) {
@@ -61,63 +83,61 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   };
 
   return (
-    <Box 
+    <Box
       ref={containerRef}
-      py={8} 
+      py={8}
       px={0}
     >
       <Box
         display="grid"
         gridTemplateColumns={`repeat(${columnCount}, 1fr)`}
-        gap={8}
+        gap={4}
       >
         {images.map((image, index) => (
           <MotionBox
-            key={index}
-            layout
-            layoutId={`box-${image.url}`}
+            key={image.id || index}
+            ref={(el: HTMLDivElement | null) => { imageRefs.current[index] = el; }}
             position="relative"
-            bg={useColorModeValue('gray.100', 'gray.700')}
-            whileHover={{ scale: 1.02 }}
+            overflow="hidden"
             cursor="pointer"
             onClick={() => handleImageClick(index)}
+            whileHover={{ scale: 1.01 }}
+            transition={{ duration: 0.3 }}
           >
-            <MotionImage
-              layout
-              layoutId={`image-${image.url}`}
+            <img
               src={image.url}
               alt={image.alt}
               title={image.title}
-              width="100%"
-              height="100%"
-              objectFit="cover"
-              _hover={{ filter: 'brightness(0.9)' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
               loading="lazy"
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             />
           </MotionBox>
         ))}
       </Box>
 
-      <AnimatePresence>
-        {selectedImageIndex !== null && (
-          <ImageModal
-            key={`modal-${images[selectedImageIndex].url}`}
-            isOpen={isModalOpen}
-            onClose={handleModalClose}
-            imageUrl={images[selectedImageIndex].url}
-            imageAlt={images[selectedImageIndex].alt}
-            onNext={handleNextImage}
-            onPrevious={handlePreviousImage}
-            currentIndex={selectedImageIndex}
-            totalImages={images.length}
-            photoData={images[selectedImageIndex]}
-            category={category}
-          />
-        )}
-      </AnimatePresence>
+      {selectedImageIndex !== null && isModalOpen && (
+        <ImageModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          imageUrl={images[selectedImageIndex].url}
+          imageAlt={images[selectedImageIndex].alt}
+          onNext={handleNextImage}
+          onPrevious={handlePreviousImage}
+          currentIndex={selectedImageIndex}
+          totalImages={images.length}
+          photoData={images[selectedImageIndex]}
+          category={category}
+          originRect={originRect}
+          getImageRect={getImageRect}
+        />
+      )}
     </Box>
   );
 };
 
-export default GalleryGrid; 
+export default GalleryGrid;

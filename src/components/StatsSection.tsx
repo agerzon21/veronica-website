@@ -1,167 +1,74 @@
-import { Box, Text, Flex, VStack, HStack } from '@chakra-ui/react';
+import { Box, Text, Flex, VStack } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 
-const MotionBox = motion(Box);
-const MotionText = motion(Text);
+const MotionDiv = motion.div;
 
 const StatsSection = () => {
   return (
-    <Box 
-      bg="white" 
-      py={12}
-      px={4}
-      position="relative"
-    >
-      <Flex
-        maxW="1200px"
-        mx="auto"
-        direction={{ base: 'column', md: 'row' }}
-        justify="space-between"
-        align="center"
-        gap={12}
+    <Box bg="white" py={{ base: 14, md: 16 }} px={8}>
+      <MotionDiv
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
       >
-        <VStack 
-          align={{ base: 'center', md: 'flex-start' }}
-          spacing={4}
-          flex={1}
-          position="relative"
-        >
-          <Box
-            position="absolute"
-            left="-40px"
-            top="50%"
-            transform="translateY(-50%)"
-            width="1px"
-            height="100px"
-            bg="gray.200"
-            display={{ base: 'none', md: 'block' }}
-          />
-          
-          <MotionBox
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+        <VStack spacing={6} mb={10}>
+          <Text
+            fontSize="xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.2em"
+            color="#c9a96e"
           >
-            <Text
-              fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
-              fontWeight="light"
-              textTransform="uppercase"
-              letterSpacing="widest"
-              color="gray.800"
-            >
-              VERONIKA GERZON
-            </Text>
-          </MotionBox>
-          
-          <MotionBox
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
+            Veronika Gerzon
+          </Text>
+          <Box w="35px" h="1px" bg="#c9a96e" />
+          <Text
+            fontSize={{ base: 'lg', md: 'xl' }}
+            fontWeight="200"
+            color="gray.500"
+            fontStyle="italic"
+            letterSpacing="wide"
           >
-            <Text
-              fontSize={{ base: 'lg', md: 'xl' }}
-              color="gray.600"
-              fontStyle="italic"
-              letterSpacing="wide"
-            >
-              Wedding & Portrait Photographer
-            </Text>
-          </MotionBox>
+            Wedding & Portrait Photographer
+          </Text>
         </VStack>
 
-        <HStack 
-          spacing={8} 
-          align="flex-start"
-          flex={1}
-          justify={{ base: 'center', md: 'flex-end' }}
-          wrap="wrap"
+        <Flex
+          justify="center"
+          gap={{ base: 10, md: 20 }}
+          direction="row"
+          align="center"
         >
-          <VStack align="flex-start" spacing={2}>
-            <MotionText
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-              fontWeight="medium"
-              fontSize="xs"
-              letterSpacing="widest"
-              color="gray.500"
-              textTransform="uppercase"
-            >
-              BASED IN
-            </MotionText>
-            <MotionText
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.5 }}
-              color="gray.700"
-              fontSize="sm"
-              letterSpacing="wide"
-            >
-              Scranton, Pennsylvania, USA
-            </MotionText>
-          </VStack>
-
-          <VStack align="flex-start" spacing={2}>
-            <MotionText
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-              fontWeight="medium"
-              fontSize="xs"
-              letterSpacing="widest"
-              color="gray.500"
-              textTransform="uppercase"
-            >
-              AVAILABLE FOR
-            </MotionText>
-            <MotionText
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.7 }}
-              color="gray.700"
-              fontSize="sm"
-              letterSpacing="wide"
-            >
-              Worldwide Travel
-            </MotionText>
-          </VStack>
-
-          <VStack align="flex-start" spacing={2}>
-            <MotionText
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.8 }}
-              fontWeight="medium"
-              fontSize="xs"
-              letterSpacing="widest"
-              color="gray.500"
-              textTransform="uppercase"
-            >
-              EXPERIENCE
-            </MotionText>
-            <MotionText
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.9 }}
-              color="gray.700"
-              fontSize="sm"
-              letterSpacing="wide"
-            >
-              12+ Years of Excellence
-            </MotionText>
-          </VStack>
-        </HStack>
-      </Flex>
+          {[
+            { label: 'Based in', value: 'Scranton, PA' },
+            { label: 'Experience', value: '12+ Years' },
+            { label: 'Available', value: 'Worldwide' },
+          ].map((stat) => (
+            <VStack key={stat.label} spacing={1.5}>
+              <Text
+                fontSize="10px"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.2em"
+                color="#c9a96e"
+              >
+                {stat.label}
+              </Text>
+              <Text
+                fontSize="md"
+                fontWeight="200"
+                color="gray.700"
+                letterSpacing="0.05em"
+              >
+                {stat.value}
+              </Text>
+            </VStack>
+          ))}
+        </Flex>
+      </MotionDiv>
     </Box>
   );
 };
 
-export default StatsSection; 
+export default StatsSection;

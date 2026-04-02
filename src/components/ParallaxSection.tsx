@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Box, Text, Link, useBreakpointValue } from '@chakra-ui/react';
+import { Box, Text, Link, VStack, useBreakpointValue } from '@chakra-ui/react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -10,7 +10,7 @@ interface ParallaxSectionProps {
   mobileImagePosition?: string;
 }
 
-const ParallaxSection: React.FC<ParallaxSectionProps> = ({ 
+const ParallaxSection: React.FC<ParallaxSectionProps> = ({
   imageUrl,
   mobileImageUrl,
   imagePosition = 'center',
@@ -53,7 +53,7 @@ const ParallaxSection: React.FC<ParallaxSectionProps> = ({
           backgroundImage: `url(${getCurrentImageUrl()})`,
           backgroundSize: 'cover',
           backgroundPosition: getCurrentPosition(),
-          filter: 'brightness(0.7) contrast(1.1)',
+          filter: 'brightness(0.45) contrast(1.1)',
           willChange: 'transform'
         }}
       />
@@ -67,45 +67,53 @@ const ParallaxSection: React.FC<ParallaxSectionProps> = ({
         maxWidth="800px"
         textAlign="center"
       >
-        <Text
-          fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
-          fontWeight="light"
-          color="white"
-          textTransform="uppercase"
-          letterSpacing="widest"
-          textShadow="2px 2px 4px rgba(0,0,0,0.3)"
-          mb={6}
-          fontStyle="italic"
-        >
-          Let's Create Timeless Memories Together
-        </Text>
-        <Link
-          as={RouterLink}
-          to="/contact"
-          fontSize={{ base: 'sm', md: 'md' }}
-          fontWeight="medium"
-          color="white"
-          textTransform="uppercase"
-          letterSpacing="widest"
-          position="relative"
-          display="inline-block"
-          px={6}
-          py={2}
-          border="1px solid rgba(255,255,255,0.3)"
-          borderRadius="full"
-          transition="all 0.3s ease"
-          _hover={{
-            textDecoration: 'none',
-            borderColor: 'white',
-            transform: 'translateY(-2px)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-          }}
-        >
-          Let's Discuss Your Vision
-        </Link>
+        <VStack spacing={6}>
+          <Text
+            fontSize="xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.2em"
+            color="#c9a96e"
+          >
+            Let's Work Together
+          </Text>
+          <Box w="35px" h="1px" bg="#c9a96e" />
+          <Text
+            fontSize={{ base: 'xl', md: '2xl', lg: '3xl' }}
+            fontWeight="200"
+            color="white"
+            lineHeight="1.5"
+            fontStyle="italic"
+            textShadow="0 2px 12px rgba(0,0,0,0.3)"
+          >
+            Let's create timeless memories together
+          </Text>
+          <Link
+            as={RouterLink}
+            to="/contact"
+            fontSize="xs"
+            fontWeight="400"
+            color="white"
+            textTransform="uppercase"
+            letterSpacing="0.2em"
+            display="inline-block"
+            px={8}
+            py={3}
+            border="1px solid rgba(201,169,110,0.5)"
+            transition="all 0.4s ease"
+            _hover={{
+              textDecoration: 'none',
+              borderColor: '#c9a96e',
+              color: '#c9a96e',
+              transform: 'translateY(-2px)',
+            }}
+          >
+            Get in Touch
+          </Link>
+        </VStack>
       </Box>
     </Box>
   );
 };
 
-export default ParallaxSection; 
+export default ParallaxSection;
