@@ -95,6 +95,56 @@ const IndividualPhoto: React.FC = () => {
 
   const handleMouseUp = () => setIsDragging(false);
 
+  // Touch handling for mobile: single-finger pan + two-finger pinch-to-zoom
+  const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const lastPinchDistRef = useRef<number | null>(null);
+  const touchDragDistRef = useRef(0);
+
+  const getTouchDist = (t1: React.Touch, t2: React.Touch) =>
+    Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchDragDistRef.current = 0;
+    if (e.touches.length === 1) {
+      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastPinchDistRef.current = null;
+    } else if (e.touches.length === 2) {
+      lastTouchRef.current = null;
+      lastPinchDistRef.current = getTouchDist(e.touches[0], e.touches[1]);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && lastTouchRef.current) {
+      const dx = e.touches[0].clientX - lastTouchRef.current.x;
+      const dy = e.touches[0].clientY - lastTouchRef.current.y;
+      touchDragDistRef.current += Math.abs(dx) + Math.abs(dy);
+      setPosition((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
+      const newDist = getTouchDist(e.touches[0], e.touches[1]);
+      const ratio = newDist / lastPinchDistRef.current;
+      setScale((prev) => Math.max(0.5, Math.min(3, prev * ratio)));
+      lastPinchDistRef.current = newDist;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      // If barely moved, treat as tap to close
+      if (touchDragDistRef.current < 10 && lastPinchDistRef.current === null) {
+        toggleFullscreen();
+      }
+      lastTouchRef.current = null;
+      lastPinchDistRef.current = null;
+    } else if (e.touches.length === 1) {
+      // Went from pinch to single finger — start panning
+      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastPinchDistRef.current = null;
+    }
+  };
+
   useEffect(() => {
     if (category && photoId) {
       const categoryImages = sampleImages[category as keyof typeof sampleImages];
@@ -324,6 +374,9 @@ const IndividualPhoto: React.FC = () => {
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
                 cursor={isDragging ? 'grabbing' : 'grab'}
                 onClick={(e) => { if (e.target === e.currentTarget && dragDistanceRef.current < 5) toggleFullscreen(); }}
                 sx={{ touchAction: 'none' }}
