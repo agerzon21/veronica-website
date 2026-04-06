@@ -170,3 +170,42 @@ for (const [category, images] of Object.entries(sampleImages)) {
 }
 
 console.log(`Pre-rendered ${totalPages} individual photo pages.`);
+
+// Regenerate sitemap.xml from the same image data so it never drifts.
+const SITE = 'https://vero.photography';
+const staticUrls = [
+  { loc: '/', changefreq: 'weekly', priority: '1.0' },
+  { loc: '/about', changefreq: 'monthly', priority: '0.8' },
+  { loc: '/contact', changefreq: 'monthly', priority: '0.8' },
+  { loc: '/gallery', changefreq: 'weekly', priority: '0.9' },
+  { loc: '/gallery/portraits', changefreq: 'weekly', priority: '0.85' },
+  { loc: '/gallery/weddings', changefreq: 'weekly', priority: '0.85' },
+  { loc: '/gallery/family', changefreq: 'weekly', priority: '0.85' },
+  { loc: '/gallery/maternity', changefreq: 'weekly', priority: '0.85' },
+];
+
+const photoUrls = [];
+for (const [category, images] of Object.entries(sampleImages)) {
+  for (const photo of images) {
+    photoUrls.push({
+      loc: `/photo/${category}/${photo.id}`,
+      changefreq: 'monthly',
+      priority: '0.7',
+    });
+  }
+}
+
+const allUrls = [...staticUrls, ...photoUrls];
+const sitemapXml =
+  `<?xml version="1.0" encoding="UTF-8"?>\n` +
+  `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+  allUrls
+    .map(
+      (u) =>
+        `  <url>\n    <loc>${SITE}${u.loc}</loc>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`
+    )
+    .join('\n') +
+  `\n</urlset>\n`;
+
+writeFileSync(join(distDir, 'sitemap.xml'), sitemapXml);
+console.log(`Wrote sitemap.xml with ${allUrls.length} URLs (${photoUrls.length} photos).`);
