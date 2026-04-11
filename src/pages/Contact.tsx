@@ -229,7 +229,7 @@ const Contact = () => {
                       _active={{ bg: '#b8964f', transform: 'translateY(0)' }}
                       transition="all 0.3s"
                     >
-                      Send Inquiry
+                      Check Availability
                     </Button>
                   </VStack>
                 </Box>
