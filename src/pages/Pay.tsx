@@ -35,7 +35,7 @@ const Pay = () => {
   };
 
   return (
-    <Box minH="100vh" bg="white">
+    <Box h="100vh" overflow="hidden" bg="white">
       <CopyNotification />
       <Helmet>
         <meta name="robots" content="noindex, nofollow" />
@@ -45,7 +45,7 @@ const Pay = () => {
       <Flex
         justify="center"
         px={6}
-        pt={{ base: 28, md: 28 }}
+        pt={{ base: 32, md: 28 }}
         pb={10}
       >
         <Box ref={contentRef} w="100%" maxW="420px">
