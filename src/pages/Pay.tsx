@@ -66,11 +66,24 @@ const Pay = () => {
                 borderColor="gray.200"
                 borderBottom="none"
                 px={8}
-                py={10}
+                py={6}
                 textAlign="center"
+                position="relative"
+                overflow="hidden"
               >
-                <VStack spacing={4}>
-                  <Icon as={FaHeart} color="#c9a96e" boxSize={5} />
+                {/* Watermark heart */}
+                <Icon
+                  as={FaHeart}
+                  color="#c9a96e"
+                  opacity={0.06}
+                  boxSize={{ base: '90px', md: '110px' }}
+                  position="absolute"
+                  top="50%"
+                  left="50%"
+                  transform="translate(-50%, -50%)"
+                  pointerEvents="none"
+                />
+                <VStack spacing={2} position="relative">
                   <Text
                     fontSize={{ base: 'xl', md: '2xl' }}
                     fontWeight="200"
@@ -84,7 +97,6 @@ const Pay = () => {
                     fontSize="sm"
                     color="gray.500"
                     fontWeight="300"
-                    lineHeight="1.8"
                   >
                     Your support means the world to me.
                   </Text>
