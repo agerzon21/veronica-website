@@ -5,7 +5,7 @@ import { useState, useCallback, useRef } from 'react';
 
 const MotionBox = motion(Box);
 
-export function useCopyNotification() {
+export function useCopyNotification(label = 'Link Copied') {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -56,7 +56,7 @@ export function useCopyNotification() {
             textTransform="uppercase"
             color="gray.600"
           >
-            Link Copied
+            {label}
           </Text>
         </MotionBox>
       )}
