@@ -43,12 +43,10 @@ const Pay = () => {
       </Helmet>
 
       <Flex
-        minH="100vh"
-        align="center"
         justify="center"
         px={6}
-        pt={{ base: 24, md: 20 }}
-        pb={16}
+        pt={{ base: 28, md: 28 }}
+        pb={10}
       >
         <Box ref={contentRef} w="100%" maxW="420px">
           <MotionDiv
