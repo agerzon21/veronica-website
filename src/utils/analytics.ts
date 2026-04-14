@@ -32,11 +32,15 @@ export const trackGalleryInteraction = (action: string, category?: string) => {
 // Track contact form submissions
 export const trackContactSubmission = (method: string) => {
   trackEvent('Contact', 'Submit', method);
-  // Fire GA4 recommended event for Google Ads conversion tracking
+  // Fire GA4 recommended event for analytics
   if (method === 'Form') {
     ReactGA.event('generate_lead', {
       event_category: 'Contact',
       event_label: 'Contact Form',
     });
+    // Fire Google Ads conversion event
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', 'conversion_event_submit_lead_form_1', {});
+    }
   }
 };
