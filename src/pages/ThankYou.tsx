@@ -1,62 +1,27 @@
-import { Box, VStack, Text, Icon, Flex, Input, Textarea, Select, Button } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, Button, Icon } from '@chakra-ui/react';
 import { FaWhatsapp, FaInstagram, FaRegEnvelope } from 'react-icons/fa';
 import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
-import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import ReactGA from 'react-ga4';
 import { trackContactSubmission } from '../utils/analytics';
 
 const MotionDiv = motion.div;
 
-const WEB3FORMS_KEY = '4cc6342e-8d13-4060-b349-7d4c91fc31fb';
-
-const inputStyles = {
-  bg: 'whiteAlpha.100',
-  border: '1px solid',
-  borderColor: 'whiteAlpha.200',
-  color: 'white',
-  _placeholder: { color: 'whiteAlpha.700' },
-  _hover: { borderColor: 'whiteAlpha.400' },
-  _focus: { borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' },
-  fontSize: 'sm',
-  fontWeight: '300',
-  borderRadius: 'sm',
-};
-
-const Contact = () => {
+const ThankYou = () => {
   const contentRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(contentRef, { once: true, amount: 0.15 });
-  const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-
-    const formData = new FormData(e.currentTarget);
-    formData.append('access_key', WEB3FORMS_KEY);
-    formData.append('subject', `New Inquiry — ${formData.get('shoot_type')} Session`);
-    formData.append('from_name', 'Vero Photography Website');
-
-    try {
-      const response = await fetch('https://api.web3forms.com/submit', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await response.json();
-      if (data.success) {
-        navigate('/contact/thank-you');
-      } else {
-        setError('Something went wrong. Please try again.');
-      }
-    } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+  useEffect(() => {
+    ReactGA.event('generate_lead', {
+      event_category: 'Contact',
+      event_label: 'Contact Form',
+    });
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', 'conversion_event_submit_lead_form_1', {});
     }
-  };
+  }, []);
 
   const handleWhatsAppClick = () => {
     const phoneNumber = '+15709095707';
@@ -79,9 +44,11 @@ const Contact = () => {
   return (
     <Box position="relative" minH="100vh" overflow="hidden">
       <Helmet>
+        <title>Thank You - Vero Photography</title>
+        <meta name="robots" content="noindex, nofollow" />
         <meta property="og:image" content="https://vero.photography/assets/photos/contact-bg.webp" />
       </Helmet>
-      {/* Full background photo */}
+
       <Box
         position="absolute"
         inset={0}
@@ -91,7 +58,6 @@ const Contact = () => {
         filter="brightness(0.4)"
       />
 
-      {/* Content — centered */}
       <Flex
         position="relative"
         zIndex={2}
@@ -108,7 +74,6 @@ const Contact = () => {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <VStack spacing={10}>
-              {/* Heading */}
               <VStack spacing={4}>
                 <Text
                   fontSize={{ base: '3xl', md: '4xl' }}
@@ -118,7 +83,7 @@ const Contact = () => {
                   letterSpacing="0.3em"
                   textAlign="center"
                 >
-                  Book a Session
+                  Thank You
                 </Text>
                 <Box w="40px" h="1px" bg="#c9a96e" />
                 <Text
@@ -129,103 +94,41 @@ const Contact = () => {
                   lineHeight="1.9"
                   maxW="400px"
                 >
-                  Tell me about your vision and let's create something beautiful together.
+                  Your inquiry has been sent. I'll get back to you within 24 hours.
                 </Text>
               </VStack>
 
-              {/* Form */}
-              <Box as="form" onSubmit={handleSubmit} w="100%">
-                  {/* Honeypot for spam */}
-                  <input type="hidden" name="botcheck" style={{ display: 'none' }} />
-
-                  <VStack spacing={4} w="100%">
-                    <Flex gap={4} w="100%" direction={{ base: 'column', sm: 'row' }}>
-                      <Input
-                        name="name"
-                        placeholder="Your Name"
-                        required
-                        {...inputStyles}
-                        h="48px"
-                      />
-                      <Input
-                        name="email"
-                        type="email"
-                        placeholder="Your Email"
-                        required
-                        {...inputStyles}
-                        h="48px"
-                      />
-                    </Flex>
-
-                    <Select
-                      name="shoot_type"
-                      required
-                      {...inputStyles}
-                      h="48px"
-                      sx={{
-                        '& option': { bg: '#1a1a1a', color: 'white' },
-                      }}
-                    >
-                      <option value="" disabled selected hidden>Type of Session</option>
-                      <option value="Portrait Session">Portrait Session</option>
-                      <option value="Wedding Photography">Wedding Photography</option>
-                      <option value="Family Session">Family Session</option>
-                      <option value="Maternity Session">Maternity Session</option>
-                      <option value="Other">Other</option>
-                    </Select>
-
-                    <Textarea
-                      name="message"
-                      placeholder="Tell me about your project, preferred dates, location..."
-                      required
-                      {...inputStyles}
-                      rows={4}
-                      resize="none"
-                    />
-
-                    {error && (
-                      <Text fontSize="sm" color="red.300" fontWeight="300">
-                        {error}
-                      </Text>
-                    )}
-
-                    <Button
-                      type="submit"
-                      isLoading={isSubmitting}
-                      loadingText="Sending..."
-                      w="100%"
-                      h="52px"
-                      bg="#c9a96e"
-                      color="white"
-                      fontSize="sm"
-                      fontWeight="400"
-                      letterSpacing="0.2em"
-                      textTransform="uppercase"
-                      borderRadius="sm"
-                      _hover={{ bg: '#d4b87a', transform: 'translateY(-1px)' }}
-                      _active={{ bg: '#b8964f', transform: 'translateY(0)' }}
-                      transition="all 0.3s"
-                    >
-                      Check Availability
-                    </Button>
-                  </VStack>
-                </Box>
+              <Button
+                as={Link}
+                to="/"
+                w="100%"
+                maxW="320px"
+                h="52px"
+                bg="#c9a96e"
+                color="white"
+                fontSize="sm"
+                fontWeight="400"
+                letterSpacing="0.2em"
+                textTransform="uppercase"
+                borderRadius="sm"
+                _hover={{ bg: '#d4b87a', transform: 'translateY(-1px)' }}
+                _active={{ bg: '#b8964f', transform: 'translateY(0)' }}
+                transition="all 0.3s"
+              >
+                Back to Home
+              </Button>
 
               {/* Divider with "or" */}
               <Flex align="center" w="100%" gap={4}>
                 <Box flex={1} h="1px" bg="whiteAlpha.200" />
                 <Text fontSize="xs" color="whiteAlpha.700" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase">
-                  or reach out directly
+                  need a faster reply?
                 </Text>
                 <Box flex={1} h="1px" bg="whiteAlpha.200" />
               </Flex>
 
               {/* Secondary contact methods */}
-              <Flex
-                gap={{ base: 6, md: 16 }}
-                direction="row"
-                justify="center"
-              >
+              <Flex gap={{ base: 6, md: 16 }} direction="row" justify="center">
                 <VStack
                   as="button"
                   type="button"
@@ -284,18 +187,6 @@ const Contact = () => {
                   </Text>
                 </VStack>
               </Flex>
-
-              {/* Location */}
-              <Text
-                fontSize="xs"
-                color="whiteAlpha.700"
-                fontWeight="300"
-                letterSpacing="0.15em"
-                textTransform="uppercase"
-                textAlign="center"
-              >
-                Scranton, PA · Available Worldwide
-              </Text>
             </VStack>
           </MotionDiv>
         </Box>
@@ -304,4 +195,4 @@ const Contact = () => {
   );
 };
 
-export default Contact;
+export default ThankYou;

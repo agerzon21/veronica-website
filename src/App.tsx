@@ -9,6 +9,7 @@ import Gallery from './pages/Gallery';
 import IndividualPhoto from './pages/IndividualPhoto';
 import Pay from './pages/Pay';
 import NotFound from './pages/NotFound';
+import ThankYou from './pages/ThankYou';
 import Navbar from './components/Navbar';
 import SEO from './components/SEO';
 import { initGA, trackPageView } from './utils/analytics';
@@ -70,6 +71,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/contact/thank-you" element={<ThankYou />} />
             <Route path="/gallery" element={<Gallery />} />
             <Route path="/gallery/:category" element={<Gallery />} />
             <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />

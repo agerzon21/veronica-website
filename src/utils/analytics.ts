@@ -29,18 +29,8 @@ export const trackGalleryInteraction = (action: string, category?: string) => {
   trackEvent('Gallery', action, category);
 };
 
-// Track contact form submissions
+// Track contact form submissions (WhatsApp/Email/Instagram clicks).
+// Form submission conversions are tracked on the /contact/thank-you page.
 export const trackContactSubmission = (method: string) => {
   trackEvent('Contact', 'Submit', method);
-  // Fire GA4 recommended event for analytics
-  if (method === 'Form') {
-    ReactGA.event('generate_lead', {
-      event_category: 'Contact',
-      event_label: 'Contact Form',
-    });
-    // Fire Google Ads conversion event
-    if (typeof window !== 'undefined' && (window as any).gtag) {
-      (window as any).gtag('event', 'conversion_event_submit_lead_form_1', {});
-    }
-  }
 };
