@@ -124,7 +124,7 @@ const ThankYou = () => {
                   fontWeight="300"
                   lineHeight="1.7"
                 >
-                  Check your <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text> folder and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> — that way my real reply lands in your inbox tomorrow.
+                  Check your <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text> folder and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> — that way my real reply lands in your inbox as soon as I send it.
                 </Text>
               </Box>
 
