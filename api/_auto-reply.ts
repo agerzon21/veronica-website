@@ -96,12 +96,9 @@ export function buildTransporter(opts: { debug?: boolean } = {}): nodemailer.Tra
   }
 
   // Port 465 = implicit TLS (no STARTTLS upgrade — saves ~2 SMTP roundtrips).
-  // Port 587 = plain connect then STARTTLS upgrade (current setup).
+  // Port 587 = plain connect then STARTTLS upgrade.
   // Autodetect from the port number so this works either way.
   const useImplicitTls = port === 465;
-
-  // TEMP: confirm port + TLS mode in logs while we tune. Remove before prod.
-  console.log(`[smtp] using ${host}:${port} (${useImplicitTls ? 'implicit TLS' : 'STARTTLS'})`);
 
   return nodemailer.createTransport({
     host,
