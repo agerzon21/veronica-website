@@ -37,64 +37,21 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
     ? ` about a ${escapeHtml(data.shoot_type.toLowerCase())}`
     : '';
 
+  // Slim layout: no nested tables, minimal inline styles. Same content as the
+  // text version. Targets ~1.5KB instead of ~4.7KB so ImprovMX's body-side
+  // scanning (DKIM, spam, link reputation) doesn't time us out.
   return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Thanks for reaching out</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: #2d2d2d;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5; padding: 40px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; max-width: 600px; width: 100%;">
-          <tr>
-            <td style="padding: 40px 36px;">
-              <p style="font-size: 11px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: #c9a96e; margin: 0 0 24px;">Vero Photography</p>
-
-              <p style="font-size: 17px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeFirst},</p>
-
-              <p style="font-size: 16px; color: #4a4a4a; line-height: 1.7; margin: 0 0 20px;">
-                Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.
-              </p>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
-                <tr>
-                  <td style="background-color: #fef9e6; border-left: 3px solid #c9a96e; padding: 18px 22px;">
-                    <p style="font-size: 15px; color: #4a4a4a; line-height: 1.6; margin: 0;">
-                      <strong style="color: #2d2d2d;">Don't see my reply by tomorrow?</strong><br>
-                      Please check your <strong>Spam</strong> or <strong>Promotions</strong> folder and mark this email as <strong>Not Spam</strong> — it helps make sure my next reply lands in your inbox.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="font-size: 16px; color: #4a4a4a; line-height: 1.7; margin: 0 0 12px;">
-                Need a faster reply? You can also reach me on:
-              </p>
-
-              <p style="font-size: 16px; color: #4a4a4a; line-height: 1.9; margin: 0 0 28px;">
-                Instagram:&nbsp;<a href="${INSTAGRAM_URL}" style="color: #c9a96e; text-decoration: none;">@vero.art.photo</a><br>
-                WhatsApp:&nbsp;<a href="${WHATSAPP_URL}" style="color: #c9a96e; text-decoration: none;">${escapeHtml(WHATSAPP_PHONE)}</a>
-              </p>
-
-              <p style="font-size: 16px; color: #4a4a4a; line-height: 1.7; margin: 0 0 4px;">Talk soon,</p>
-              <p style="font-size: 16px; color: #2d2d2d; margin: 0; font-style: italic;">Veronika</p>
-
-              <hr style="border: none; border-top: 1px solid #ececec; margin: 36px 0 24px;">
-
-              <p style="font-size: 12px; color: #888; line-height: 1.6; margin: 0 0 8px;">
-                You're receiving this because you submitted the contact form at vero.photography. If this wasn't you, just ignore this message.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
+<p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
+<p>Hi ${safeFirst},</p>
+<p>Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.</p>
+<p style="background:#fef9e6;border-left:3px solid #c9a96e;padding:12px 16px;font-size:14px;"><strong>Don't see my reply by tomorrow?</strong> Please check your <strong>Spam</strong> or <strong>Promotions</strong> folder and mark this email as <strong>Not Spam</strong> — it helps make sure my next reply lands in your inbox.</p>
+<p>Need a faster reply? You can also reach me on:</p>
+<p>Instagram: <a href="${INSTAGRAM_URL}" style="color:#c9a96e">@vero.art.photo</a><br>WhatsApp: <a href="${WHATSAPP_URL}" style="color:#c9a96e">${escapeHtml(WHATSAPP_PHONE)}</a></p>
+<p>Talk soon,<br><em>Veronika</em></p>
+<hr style="border:none;border-top:1px solid #ececec;margin:28px 0 12px;">
+<p style="font-size:12px;color:#888;">You're receiving this because you submitted the contact form at vero.photography. If this wasn't you, just ignore this message.</p>
+</body></html>`;
 }
 
 export function buildAutoReplyText(data: ContactPayload): string {
