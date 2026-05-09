@@ -24,24 +24,38 @@ const ThankYou = () => {
   const isInView = useInView(contentRef, { once: true, amount: 0.15 });
 
   const location = useLocation();
-  const navState = location.state as
-    | { autoReplyPayload?: AutoReplyPayload; submissionId?: string }
-    | null;
-  const rawPayload = navState?.autoReplyPayload ?? null;
-  const submissionId = navState?.submissionId ?? null;
 
-  // Dedupe: if the user navigates back to /contact/thank-you (e.g. via
-  // browser back from /), the location state is still in history. Without
-  // this guard we'd re-fire the auto-reply for the same submission.
-  // sessionStorage keeps the marker for the lifetime of the tab.
-  const alreadyProcessed =
-    submissionId !== null &&
-    typeof window !== 'undefined' &&
-    sessionStorage.getItem(`auto-reply-sent:${submissionId}`) !== null;
-
-  // Treat back-navigations as "no payload" so the page renders the
-  // direct-visit variant — no spinner, no re-send.
-  const autoReplyPayload = alreadyProcessed ? null : rawPayload;
+  // Read the nav state and apply dedup ONCE on mount via useState's lazy
+  // initializer. We can't recompute on every render because the useEffect
+  // below sets a sessionStorage marker as soon as the fetch starts —
+  // re-evaluating on later renders would flip the dedup decision and hide
+  // the success/failed status block we just rendered.
+  //
+  // On a fresh form submit: marker is absent → autoReplyPayload is the real
+  //   payload → spinner shows → fetch fires → status updates → status block
+  //   stays visible because this useState value doesn't change.
+  // On back-navigation re-mount: marker is present → autoReplyPayload is
+  //   null on first render → renders the direct-visit variant, no re-fire.
+  const [{ autoReplyPayload, submissionId }] = useState<{
+    autoReplyPayload: AutoReplyPayload | null;
+    submissionId: string | null;
+  }>(() => {
+    const navState = location.state as
+      | { autoReplyPayload?: AutoReplyPayload; submissionId?: string }
+      | null;
+    const rawPayload = navState?.autoReplyPayload ?? null;
+    const subId = navState?.submissionId ?? null;
+    if (!rawPayload || !subId) {
+      return { autoReplyPayload: null, submissionId: subId };
+    }
+    if (
+      typeof window !== 'undefined' &&
+      sessionStorage.getItem(`auto-reply-sent:${subId}`) !== null
+    ) {
+      return { autoReplyPayload: null, submissionId: subId };
+    }
+    return { autoReplyPayload: rawPayload, submissionId: subId };
+  });
 
   const [autoReplyStatus, setAutoReplyStatus] = useState<AutoReplyStatus>(
     autoReplyPayload ? 'loading' : 'idle'

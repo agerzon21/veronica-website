@@ -58,10 +58,10 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
 <p>Hi ${safeFirst},</p>
 <p>Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.</p>
 ${messageBlock}
+<p style="background:#fef9e6;border-left:3px solid #c9a96e;padding:12px 16px;font-size:14px;">If this email landed in your <strong>Spam</strong> or <strong>Promotions</strong> folder, please mark it as <strong>Not Spam</strong> — it'll help my future replies reach your inbox.</p>
 <p>Need a faster reply? You can also reach me on:</p>
 <p>Instagram: <a href="${INSTAGRAM_URL}" style="color:#c9a96e">@vero.art.photo</a><br>WhatsApp: <a href="${WHATSAPP_URL}" style="color:#c9a96e">${escapeHtml(WHATSAPP_PHONE)}</a></p>
-<p style="font-size:13px;color:#888;font-style:italic;margin-top:24px;">P.S. If this email landed in your spam folder, please mark it as Not Spam so my future replies reach your inbox.</p>
-<p style="margin-top:20px;">Looking forward to connecting,<br><em>Veronika</em></p>
+<p>Warmly,<br><em>Veronika</em></p>
 <hr style="border:none;border-top:1px solid #ececec;margin:28px 0 12px;">
 <p style="font-size:12px;color:#888;">You're receiving this because you submitted the contact form at vero.photography. If this wasn't you, just ignore this message.</p>
 </body></html>`;
@@ -78,13 +78,13 @@ export function buildAutoReplyText(data: ContactPayload): string {
 
 Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.${messageBlock}
 
+If this email landed in your Spam or Promotions folder, please mark it as Not Spam — it'll help my future replies reach your inbox.
+
 Need a faster reply? You can also reach me on:
   Instagram: ${INSTAGRAM_URL}
   WhatsApp: ${WHATSAPP_PHONE} (${WHATSAPP_URL})
 
-P.S. If this email landed in your spam folder, please mark it as Not Spam so my future replies reach your inbox.
-
-Looking forward to connecting,
+Warmly,
 Veronika
 Vero Photography
 `;
