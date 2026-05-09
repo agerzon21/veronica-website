@@ -22,6 +22,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/contact.ts": {
+      "maxDuration": 30
+    },
+    "api/test-email.ts": {
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
     {
       "source": "/photo/:category/:photoId",
