@@ -30,12 +30,19 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/** Produces a natural English phrase from the dropdown's shoot_type value. */
+function getShootBlurb(shootType: string | undefined): string {
+  if (!shootType || shootType === 'Other') return '';
+  // Special case: "Wedding Photography" doesn't pair with "a" + "session"
+  if (shootType === 'Wedding Photography') return ' about your wedding';
+  // The rest are "X Session" — read naturally with "your"
+  return ` about your ${shootType.toLowerCase()}`;
+}
+
 export function buildAutoReplyHtml(data: ContactPayload): string {
   const firstName = (data.name || '').trim().split(/\s+/)[0] || 'there';
   const safeFirst = escapeHtml(firstName);
-  const shootBlurb = data.shoot_type
-    ? ` about a ${escapeHtml(data.shoot_type.toLowerCase())}`
-    : '';
+  const shootBlurb = escapeHtml(getShootBlurb(data.shoot_type));
 
   // Slim layout: no nested tables, minimal inline styles. Same content as the
   // text version. Targets ~1.5KB instead of ~4.7KB so ImprovMX's body-side
@@ -56,7 +63,7 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
 
 export function buildAutoReplyText(data: ContactPayload): string {
   const firstName = (data.name || '').trim().split(/\s+/)[0] || 'there';
-  const shootBlurb = data.shoot_type ? ` about a ${data.shoot_type.toLowerCase()}` : '';
+  const shootBlurb = getShootBlurb(data.shoot_type);
   return `Hi ${firstName},
 
 Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.
