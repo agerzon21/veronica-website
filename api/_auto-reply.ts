@@ -100,6 +100,9 @@ export function buildTransporter(opts: { debug?: boolean } = {}): nodemailer.Tra
   // Autodetect from the port number so this works either way.
   const useImplicitTls = port === 465;
 
+  // TEMP: confirm port + TLS mode in logs while we tune. Remove before prod.
+  console.log(`[smtp] using ${host}:${port} (${useImplicitTls ? 'implicit TLS' : 'STARTTLS'})`);
+
   return nodemailer.createTransport({
     host,
     port,
