@@ -109,18 +109,65 @@ export function buildTransporter(opts: { debug?: boolean } = {}): nodemailer.Tra
   });
 }
 
+/**
+ * True for connection-level errors that are likely to succeed on retry —
+ * typically caused by ImprovMX's DNS round-robin pointing us at an unhealthy
+ * backend server. Each retry creates a new transporter (fresh DNS lookup), so
+ * we usually land on a different (healthy) IP.
+ *
+ * Auth failures and recipient/sender rejections are NOT retried — they'll fail
+ * the same way next time and waste our budget.
+ */
+function isRetryable(err: unknown): boolean {
+  if (!err) return false;
+  const e = err as { code?: string; responseCode?: number };
+  if (e.code === 'ETIMEDOUT' || e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET' || e.code === 'EDNS') {
+    return true;
+  }
+  if (e.responseCode && e.responseCode >= 400 && e.responseCode < 500) {
+    return false; // client errors (auth, etc.) won't fix themselves
+  }
+  if (e.responseCode && e.responseCode >= 500) {
+    return false; // server-side rejections (recipient unknown, etc.)
+  }
+  const msg = String(err);
+  if (msg.includes('Greeting never received')) return true;
+  if (msg.includes('Connection closed unexpectedly')) return true;
+  return false;
+}
+
 /** Send the auto-reply for a contact form submission. */
 export async function sendAutoReply(
   data: ContactPayload,
-  opts: { debug?: boolean } = {}
+  opts: { debug?: boolean; maxAttempts?: number } = {}
 ): Promise<nodemailer.SentMessageInfo> {
-  const transporter = buildTransporter({ debug: opts.debug });
-  return transporter.sendMail({
+  const maxAttempts = opts.maxAttempts ?? 3;
+  const message = {
     from: `"${FROM_DISPLAY}" <${FROM_ADDRESS}>`,
     to: data.email,
     replyTo: FROM_ADDRESS,
     subject: `Re: Your ${data.shoot_type || 'Photography'} Inquiry`,
     text: buildAutoReplyText(data),
     html: buildAutoReplyHtml(data),
-  });
+  };
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const transporter = buildTransporter({ debug: opts.debug });
+      const info = await transporter.sendMail(message);
+      if (attempt > 1) {
+        console.log(`[auto-reply] succeeded on attempt ${attempt}/${maxAttempts}`);
+      }
+      return info;
+    } catch (err) {
+      lastError = err;
+      const retryable = isRetryable(err);
+      console.warn(
+        `[auto-reply] attempt ${attempt}/${maxAttempts} failed (retryable=${retryable}): ${err}`
+      );
+      if (!retryable || attempt === maxAttempts) break;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
