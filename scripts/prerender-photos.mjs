@@ -13,106 +13,126 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const templatePath = join(distDir, 'index.html');
+const csvPath = join(__dirname, '..', 'src', 'data', 'photos.csv');
+
+const TITLE_SUFFIX = ' | Vero Photography';
+const GALLERY_CATEGORIES = new Set(['portraits', 'weddings', 'family', 'maternity']);
 
 // Read the built index.html as template
 const template = readFileSync(templatePath, 'utf-8');
+const csvRaw = readFileSync(csvPath, 'utf-8');
 
-// We need to import the image data. Since it's in TSX, we'll extract it from Gallery.
-// For simplicity, we'll read the source file and parse the sampleImages object.
-const gallerySource = readFileSync(
-  join(__dirname, '..', 'src', 'pages', 'Gallery.tsx'),
-  'utf-8'
-);
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
 
-// Extract each category's images using regex
-function extractImages(source) {
-  const categories = {};
-  // Match category blocks like: portraits: [ ... ], weddings: [ ... ]
-  const categoryRegex = /(\w+):\s*\[/g;
-  let match;
-  const categoryNames = [];
-
-  while ((match = categoryRegex.exec(source)) !== null) {
-    const name = match[1];
-    if (['portraits', 'weddings', 'family', 'maternity'].includes(name)) {
-      categoryNames.push({ name, startIndex: match.index });
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field);
+      field = '';
+    } else if (c === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else if (c === '\r') {
+      // skip
+    } else {
+      field += c;
     }
   }
-
-  for (let i = 0; i < categoryNames.length; i++) {
-    const catName = categoryNames[i].name;
-    const start = categoryNames[i].startIndex;
-
-    // Find all image objects in this category
-    // Use a regex that handles escaped quotes inside single-quoted strings
-    const imageRegex = /\{\s*id:\s*'([^']+)',\s*url:\s*'([^']+)',\s*alt:\s*'((?:[^'\\]|\\.)*)',\s*title:\s*'((?:[^'\\]|\\.)*)',\s*description:\s*'((?:[^'\\]|\\.)*)'/g;
-
-    // Get the substring for this category (until next category or end)
-    const end = i < categoryNames.length - 1 ? categoryNames[i + 1].startIndex : source.length;
-    const categorySource = source.substring(start, end);
-
-    const images = [];
-    let imgMatch;
-    while ((imgMatch = imageRegex.exec(categorySource)) !== null) {
-      images.push({
-        id: imgMatch[1],
-        url: imgMatch[2],
-        // Unescape the escaped single quotes
-        alt: imgMatch[3].replace(/\\'/g, "'"),
-        title: imgMatch[4].replace(/\\'/g, "'"),
-        description: imgMatch[5].replace(/\\'/g, "'"),
-      });
-    }
-
-    categories[catName] = images;
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
   }
-
-  return categories;
+  return rows.filter((r) => r.some((cell) => cell.trim().length > 0));
 }
 
-const sampleImages = extractImages(gallerySource);
+const rows = parseCsv(csvRaw);
+const header = rows[0];
+const dataRows = rows.slice(1);
+
+const idx = {
+  filename: header.indexOf('filename'),
+  category: header.indexOf('category'),
+  alt: header.indexOf('alt'),
+  title: header.indexOf('title'),
+  description: header.indexOf('description'),
+  keywords: header.indexOf('keywords'),
+};
+
+const photos = dataRows
+  .map((row) => {
+    const filename = (row[idx.filename] ?? '').trim();
+    const category = (row[idx.category] ?? '').trim();
+    const titleRaw = row[idx.title] ?? '';
+    return {
+      id: filename.replace(/\.webp$/i, ''),
+      filename,
+      category,
+      url: `/assets/photos/${category}/${filename}`,
+      alt: row[idx.alt] ?? '',
+      title: titleRaw ? `${titleRaw}${TITLE_SUFFIX}` : '',
+      description: row[idx.description] ?? '',
+      keywords: (row[idx.keywords] ?? '')
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean),
+    };
+  })
+  .filter((p) => GALLERY_CATEGORIES.has(p.category) && p.title.length > 0);
 
 let totalPages = 0;
 
-for (const [category, images] of Object.entries(sampleImages)) {
-  for (const photo of images) {
-    const pagePath = `photo/${category}/${photo.id}`;
-    const outputDir = join(distDir, 'photo', category);
-    const outputFile = join(outputDir, `${photo.id}.html`);
+for (const photo of photos) {
+  const pagePath = `photo/${photo.category}/${photo.id}`;
+  const outputDir = join(distDir, 'photo', photo.category);
+  const outputFile = join(outputDir, `${photo.id}.html`);
 
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
+  if (!existsSync(outputDir)) {
+    mkdirSync(outputDir, { recursive: true });
+  }
 
-    const fullUrl = `https://vero.photography/${pagePath}`;
-    const imageUrl = `https://vero.photography${photo.url}`;
+  const fullUrl = `https://vero.photography/${pagePath}`;
+  const imageUrl = `https://vero.photography${photo.url}`;
 
-    // Escape double quotes for use in HTML attributes
-    const safeTitle = photo.title.replace(/"/g, '&quot;');
-    const safeDescription = photo.description.replace(/"/g, '&quot;');
+  const safeTitle = photo.title.replace(/"/g, '&quot;');
+  const safeDescription = photo.description.replace(/"/g, '&quot;');
+  const keywordsContent = photo.keywords.join(', ').replace(/"/g, '&quot;');
 
-    // Start with the template
-    let html = template;
+  let html = template;
 
-    // Replace title
-    html = html.replace(
-      /<title>[^<]*<\/title>/,
-      `<title>${photo.title}</title>`
-    );
+  html = html.replace(
+    /<title>[^<]*<\/title>/,
+    `<title>${photo.title}</title>`
+  );
 
-    // Replace meta description
-    html = html.replace(
-      /<meta name="description" content="[^"]*" \/>/,
-      `<meta name="description" content="${safeDescription}" />`
-    );
+  html = html.replace(
+    /<meta name="description" content="[^"]*" \/>/,
+    `<meta name="description" content="${safeDescription}" />`
+  );
 
-    // Remove ALL existing OG tags from the template so we don't get duplicates
-    html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/,  '');
-    // Also remove any stray og: meta tags that might remain
-    html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
+  // Strip existing OG block + any stray og: tags from the template
+  html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/, '');
+  html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
 
-    // Add photo-specific meta tags before closing </head>
-    const photoMeta = `
+  const photoMeta = `
     <!-- Open Graph -->
     <meta property="og:title" content="${safeTitle}" />
     <meta property="og:description" content="${safeDescription}" />
@@ -127,7 +147,8 @@ for (const [category, images] of Object.entries(sampleImages)) {
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${safeTitle}" />
     <meta name="twitter:description" content="${safeDescription}" />
-    <meta name="twitter:image" content="${imageUrl}" />
+    <meta name="twitter:image" content="${imageUrl}" />${keywordsContent ? `
+    <meta name="keywords" content="${keywordsContent}" />` : ''}
     <link rel="canonical" href="${fullUrl}" />
     <script type="application/ld+json">
     {
@@ -137,7 +158,8 @@ for (const [category, images] of Object.entries(sampleImages)) {
       "description": "${photo.description.replace(/"/g, '\\"')}",
       "contentUrl": "${imageUrl}",
       "thumbnailUrl": "${imageUrl}",
-      "url": "${fullUrl}",
+      "url": "${fullUrl}",${photo.keywords.length ? `
+      "keywords": "${photo.keywords.join(', ').replace(/"/g, '\\"')}",` : ''}
       "author": {
         "@type": "Person",
         "name": "Veronika Gerzon"
@@ -149,24 +171,22 @@ for (const [category, images] of Object.entries(sampleImages)) {
     }
     </script>`;
 
-    html = html.replace('</head>', `${photoMeta}\n  </head>`);
+  html = html.replace('</head>', `${photoMeta}\n  </head>`);
 
-    // Add a noscript fallback with the photo content for crawlers
-    const noscriptContent = `
+  const noscriptContent = `
     <noscript>
       <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:sans-serif;">
         <h1>${photo.title}</h1>
         <img src="${photo.url}" alt="${photo.alt}" style="width:100%;height:auto;" />
         <p>${photo.description}</p>
-        <p><a href="/gallery/${category}">Back to ${category} gallery</a></p>
+        <p><a href="/gallery/${photo.category}">Back to ${photo.category} gallery</a></p>
       </div>
     </noscript>`;
 
-    html = html.replace('<div id="root"></div>', `<div id="root"></div>${noscriptContent}`);
+  html = html.replace('<div id="root"></div>', `<div id="root"></div>${noscriptContent}`);
 
-    writeFileSync(outputFile, html);
-    totalPages++;
-  }
+  writeFileSync(outputFile, html);
+  totalPages++;
 }
 
 console.log(`Pre-rendered ${totalPages} individual photo pages.`);
@@ -184,16 +204,11 @@ const staticUrls = [
   { loc: '/gallery/maternity', changefreq: 'weekly', priority: '0.85' },
 ];
 
-const photoUrls = [];
-for (const [category, images] of Object.entries(sampleImages)) {
-  for (const photo of images) {
-    photoUrls.push({
-      loc: `/photo/${category}/${photo.id}`,
-      changefreq: 'monthly',
-      priority: '0.7',
-    });
-  }
-}
+const photoUrls = photos.map((p) => ({
+  loc: `/photo/${p.category}/${p.id}`,
+  changefreq: 'monthly',
+  priority: '0.7',
+}));
 
 const allUrls = [...staticUrls, ...photoUrls];
 const sitemapXml =

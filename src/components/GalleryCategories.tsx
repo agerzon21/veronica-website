@@ -9,28 +9,28 @@ const categories = [
   {
     name: 'portraits',
     title: 'Portraits',
-    image: '/assets/photos/765456_mqaert.webp',
+    image: '/assets/photos/portraits/shadow-play-portrait.webp',
     link: '/gallery/portraits',
     backgroundPosition: 'center 50%'
   },
   {
     name: 'weddings',
     title: 'Weddings',
-    image: '/assets/photos/05_rfvs8y.webp',
+    image: '/assets/photos/weddings/newlyweds-running-sea.webp',
     link: '/gallery/weddings',
     backgroundPosition: 'center 25%'
   },
   {
     name: 'family',
     title: 'Family',
-    image: '/assets/photos/_C6C16373_l2cnrk.webp',
+    image: '/assets/photos/family/elegant-family-studio-portrait-black.webp',
     link: '/gallery/family',
     backgroundPosition: 'center 40%'
   },
   {
     name: 'maternity',
     title: 'Maternity',
-    image: '/assets/photos/_C6C8862_b8za5r.webp',
+    image: '/assets/photos/maternity/couples-beach-baby-bump-moment.webp',
     link: '/gallery/maternity',
     backgroundPosition: 'center 35%'
   }

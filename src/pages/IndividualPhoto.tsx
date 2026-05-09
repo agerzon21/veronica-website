@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -6,6 +6,10 @@ import {
   Text,
   VStack,
   Flex,
+  SimpleGrid,
+  Tag,
+  Wrap,
+  WrapItem,
 } from '@chakra-ui/react';
 import { CopyIcon, ExternalLinkIcon, CloseIcon } from '@chakra-ui/icons';
 import { useCopyNotification } from '../components/CopyNotification';
@@ -13,16 +17,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Import the sampleImages data from Gallery.tsx
-import { sampleImages } from './Gallery';
-
-interface Photo {
-  id?: string;
-  url: string;
-  alt: string;
-  title: string;
-  description: string;
-}
+import { findPhoto, findRelatedPhotos, type Photo } from '../data/photos';
 
 const MotionDiv = motion.div;
 
@@ -39,6 +34,11 @@ const IndividualPhoto: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { show: showCopied, Notification: CopyNotification } = useCopyNotification();
+
+  const relatedPhotos = useMemo(
+    () => (photo ? findRelatedPhotos(photo, 6) : []),
+    [photo]
+  );
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
@@ -64,8 +64,6 @@ const IndividualPhoto: React.FC = () => {
     }
   }, [isFullscreen]);
 
-  // Wheel handler is attached via useEffect with { passive: false }
-  // so that preventDefault actually blocks browser zoom
   useEffect(() => {
     if (!isFullscreen) return;
     const el = scrollContainerRef.current;
@@ -95,7 +93,6 @@ const IndividualPhoto: React.FC = () => {
 
   const handleMouseUp = () => setIsDragging(false);
 
-  // Touch handling for mobile: single-finger pan + two-finger pinch-to-zoom
   const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistRef = useRef<number | null>(null);
   const touchDragDistRef = useRef(0);
@@ -134,7 +131,6 @@ const IndividualPhoto: React.FC = () => {
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (e.touches.length === 0) {
-      // Only treat as tap-to-close if it was a clean single-finger tap (not a pinch)
       if (touchDragDistRef.current < 10 && !wasPinchingRef.current) {
         toggleFullscreen();
       }
@@ -142,7 +138,6 @@ const IndividualPhoto: React.FC = () => {
       lastPinchDistRef.current = null;
       wasPinchingRef.current = false;
     } else if (e.touches.length === 1) {
-      // Went from pinch to single finger — don't start panning, just wait for full release
       lastTouchRef.current = null;
       lastPinchDistRef.current = null;
     }
@@ -150,13 +145,8 @@ const IndividualPhoto: React.FC = () => {
 
   useEffect(() => {
     if (category && photoId) {
-      const categoryImages = sampleImages[category as keyof typeof sampleImages];
-      if (categoryImages) {
-        const foundPhoto = categoryImages.find((img: any) => img.id === photoId);
-        if (foundPhoto) {
-          setPhoto(foundPhoto);
-        }
-      }
+      const found = findPhoto(category, photoId);
+      setPhoto(found ?? null);
       setLoading(false);
     }
   }, [category, photoId]);
@@ -218,12 +208,14 @@ const IndividualPhoto: React.FC = () => {
   }
 
   const categoryLabel = category ? category.charAt(0).toUpperCase() + category.slice(1) : '';
+  const keywordsForMeta = photo.keywords.join(', ');
 
   return (
     <>
       <Helmet>
         <title>{photo.title}</title>
         <meta name="description" content={photo.description} />
+        {keywordsForMeta && <meta name="keywords" content={keywordsForMeta} />}
         <meta property="og:title" content={photo.title} />
         <meta property="og:description" content={photo.description} />
         <meta property="og:image" content={`https://vero.photography${photo.url}`} />
@@ -294,6 +286,33 @@ const IndividualPhoto: React.FC = () => {
                   {photo.description}
                 </Text>
 
+                {/* Keyword chips (display-only) */}
+                {photo.keywords.length > 0 && (
+                  <Wrap spacing={2} justify="center" maxW="500px">
+                    {photo.keywords.map((keyword) => (
+                      <WrapItem key={keyword}>
+                        <Tag
+                          size="sm"
+                          variant="subtle"
+                          bg="gray.50"
+                          color="gray.500"
+                          fontWeight="400"
+                          fontSize="2xs"
+                          letterSpacing="0.1em"
+                          textTransform="uppercase"
+                          px={3}
+                          py={1}
+                          borderRadius="full"
+                          border="1px solid"
+                          borderColor="gray.100"
+                        >
+                          {keyword}
+                        </Tag>
+                      </WrapItem>
+                    ))}
+                  </Wrap>
+                )}
+
                 {/* Divider */}
                 <Box w="100%" maxW="400px" h="1px" bg="gray.200" />
 
@@ -351,6 +370,92 @@ const IndividualPhoto: React.FC = () => {
           </Box>
         </Container>
 
+        {/* Related photos */}
+        {relatedPhotos.length > 0 && (
+          <Box bg="gray.50" py={{ base: 12, md: 16 }} px={{ base: 4, md: 8 }}>
+            <Container maxW="container.lg" px={0}>
+              <VStack spacing={8}>
+                <VStack spacing={3}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="500"
+                    textTransform="uppercase"
+                    letterSpacing="0.2em"
+                    color="#c9a96e"
+                  >
+                    Related
+                  </Text>
+                  <Box w="30px" h="1px" bg="#c9a96e" />
+                  <Text
+                    fontSize={{ base: 'lg', md: 'xl' }}
+                    fontWeight="200"
+                    color="gray.700"
+                  >
+                    More like this
+                  </Text>
+                </VStack>
+
+                <SimpleGrid
+                  columns={{ base: 2, md: 3 }}
+                  spacing={{ base: 3, md: 4 }}
+                  w="100%"
+                >
+                  {relatedPhotos.map((rp) => (
+                    <Box
+                      as={Link}
+                      to={`/photo/${rp.category}/${rp.id}`}
+                      key={rp.id}
+                      position="relative"
+                      overflow="hidden"
+                      cursor="pointer"
+                      role="group"
+                      bg="white"
+                    >
+                      <Image
+                        src={rp.url}
+                        alt={rp.alt}
+                        w="100%"
+                        h={{ base: '180px', md: '240px' }}
+                        objectFit="cover"
+                        transition="transform 0.5s ease, filter 0.3s ease"
+                        _groupHover={{ transform: 'scale(1.03)', filter: 'brightness(0.85)' }}
+                        loading="lazy"
+                      />
+                      <Box
+                        position="absolute"
+                        inset={0}
+                        bgGradient="linear(to-t, rgba(0,0,0,0.55), rgba(0,0,0,0))"
+                        opacity={0}
+                        transition="opacity 0.3s ease"
+                        _groupHover={{ opacity: 1 }}
+                        pointerEvents="none"
+                      />
+                      <Text
+                        position="absolute"
+                        bottom={3}
+                        left={3}
+                        right={3}
+                        fontSize="2xs"
+                        fontWeight="400"
+                        textTransform="uppercase"
+                        letterSpacing="0.15em"
+                        color="white"
+                        opacity={0}
+                        transform="translateY(5px)"
+                        transition="all 0.3s ease"
+                        _groupHover={{ opacity: 1, transform: 'translateY(0)' }}
+                        pointerEvents="none"
+                      >
+                        {rp.title.replace(' | Vero Photography', '')}
+                      </Text>
+                    </Box>
+                  ))}
+                </SimpleGrid>
+              </VStack>
+            </Container>
+          </Box>
+        )}
+
         {/* Fullscreen inspect modal */}
         <AnimatePresence>
           {isFullscreen && (
@@ -366,7 +471,6 @@ const IndividualPhoto: React.FC = () => {
                 background: 'rgba(0,0,0,0.95)',
               }}
             >
-              {/* Zoomable image container — lowest layer */}
               <Box
                 ref={scrollContainerRef}
                 position="absolute"
@@ -399,8 +503,6 @@ const IndividualPhoto: React.FC = () => {
                 />
               </Box>
 
-              {/* UI layer — always on top of image, never affected by zoom */}
-              {/* Close button */}
               <Flex
                 as="button"
                 position="absolute"
@@ -423,7 +525,6 @@ const IndividualPhoto: React.FC = () => {
                 <CloseIcon boxSize={3} />
               </Flex>
 
-              {/* Reset button */}
               <Flex
                 as="button"
                 position="absolute"

@@ -9,74 +9,74 @@ import InstagramFeed from '../components/InstagramFeed';
 const Home: React.FC = () => {
   const carouselImages = [
     {
-      url: "/assets/photos/IMG_9840_xdmiic.webp",
-      mobileUrl: "/assets/photos/IMG_9840_xdmiic.webp",
+      url: "/assets/photos/portraits/tropical-bikini-pose-bamboo.webp",
+      mobileUrl: "/assets/photos/portraits/tropical-bikini-pose-bamboo.webp",
       position: "center 35%",
       mobilePosition: "40% 80%"
     },
     {
-      url: "/assets/photos/765456_mqaert.webp",
-      mobileUrl: "/assets/photos/765456_mqaert.webp",
+      url: "/assets/photos/portraits/shadow-play-portrait.webp",
+      mobileUrl: "/assets/photos/portraits/shadow-play-portrait.webp",
       position: "center 30%",
       mobilePosition: "40% 40%"
     },
     {
-      url: "/assets/photos/IMG_3711_zrqb93.webp",
-      mobileUrl: "/assets/photos/IMG_3711_zrqb93.webp",
+      url: "/assets/photos/portraits/girl-embracing-palm-leaf.webp",
+      mobileUrl: "/assets/photos/portraits/girl-embracing-palm-leaf.webp",
       position: "center 33%",
       mobilePosition: "center 43%"
     },
     {
-      url: "/assets/photos/QC6C6660_копия_zqhxlw.webp",
-      mobileUrl: "/assets/photos/QC6C6660_копия_zqhxlw.webp",
+      url: "/assets/photos/portraits/ocean-swimming-joy.webp",
+      mobileUrl: "/assets/photos/portraits/ocean-swimming-joy.webp",
       position: "center 33%",
       mobilePosition: "35% 43%"
     },
     {
-      url: "/assets/photos/_C6C3980_zzzpzo.webp",
-      mobileUrl: "/assets/photos/_C6C3980_zzzpzo.webp",
+      url: "/assets/photos/weddings/winged-couple-fantasy-portrait.webp",
+      mobileUrl: "/assets/photos/weddings/winged-couple-fantasy-portrait.webp",
       position: "center 38%",
       mobilePosition: "center 48%"
     },
     {
-      url: "/assets/photos/IMG_8996_copy_y63gjs.webp",
-      mobileUrl: "/assets/photos/IMG_8996_copy_y63gjs.webp",
+      url: "/assets/photos/weddings/passionate-kiss-by-sea.webp",
+      mobileUrl: "/assets/photos/weddings/passionate-kiss-by-sea.webp",
       position: "center 50%",
       mobilePosition: "0% 60%"
     },
     {
-      url: "/assets/photos/_C6C4657_xnvdyo.webp",
-      mobileUrl: "/assets/photos/_C6C4657_xnvdyo.webp",
+      url: "/assets/photos/weddings/couple-embracing-greenery.webp",
+      mobileUrl: "/assets/photos/weddings/couple-embracing-greenery.webp",
       position: "center 0%",
       mobilePosition: "37% 10%"
     },
     {
-      url: "/assets/photos/05_rfvs8y.webp",
-      mobileUrl: "/assets/photos/05_rfvs8y.webp",
+      url: "/assets/photos/weddings/newlyweds-running-sea.webp",
+      mobileUrl: "/assets/photos/weddings/newlyweds-running-sea.webp",
       position: "center 40%",
       mobilePosition: "40% 50%"
     },
     {
-      url: "/assets/photos/_C6C16373_l2cnrk.webp",
-      mobileUrl: "/assets/photos/2500_ixvxpa.webp",
+      url: "/assets/photos/family/elegant-family-studio-portrait-black.webp",
+      mobileUrl: "/assets/photos/portraits/lace-pink-dress-blue-glacier.webp",
       position: "center 30%",
       mobilePosition: "center 40%"
     },
     {
-      url: "/assets/photos/IMG_4618_fbdjzz.webp",
-      mobileUrl: "/assets/photos/QC6C6905_copy_cgvysy.webp",
+      url: "/assets/photos/family/large-family-beach-gathering.webp",
+      mobileUrl: "/assets/photos/portraits/green-eyes-palm-leaves.webp",
       position: "center 90%",
       mobilePosition: "center 80%"
     },
     {
-      url: "/assets/photos/0066_ce14dy.webp",
-      mobileUrl: "/assets/photos/0066_ce14dy.webp",
+      url: "/assets/photos/family/family-white-beach.webp",
+      mobileUrl: "/assets/photos/family/family-white-beach.webp",
       position: "center 35%",
       mobilePosition: "center 45%"
     },
     {
-      url: "/assets/photos/_C6C90411_bi7gse.webp",
-      mobileUrl: "/assets/photos/_C6C90411_bi7gse.webp",
+      url: "/assets/photos/maternity/pregnant-friends-colorful-dresses.webp",
+      mobileUrl: "/assets/photos/maternity/pregnant-friends-colorful-dresses.webp",
       position: "center 40%",
       mobilePosition: "center 50%"
     }
@@ -89,13 +89,13 @@ const Home: React.FC = () => {
       overflow="hidden"
     >
       <Helmet>
-        <meta property="og:image" content="https://vero.photography/assets/photos/contact-bg.webp" />
+        <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />
       </Helmet>
       <ImageCarousel images={carouselImages} />
       <StatsSection />
       <ParallaxSection
-        imageUrl="/assets/photos/IMG_3709_w1cvak.webp"
-        mobileImageUrl="/assets/photos/_C6C4032_fyviyu.webp"
+        imageUrl="/assets/photos/site/home-cta-bg.webp"
+        mobileImageUrl="/assets/photos/portraits/white-dress-lighthouse.webp"
         imagePosition="center 85%"
         mobileImagePosition="50% 10%"
       />
@@ -104,4 +104,4 @@ const Home: React.FC = () => {
   );
 };
 
-export default Home; 
+export default Home;

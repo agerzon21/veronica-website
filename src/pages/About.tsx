@@ -16,13 +16,13 @@ const About = () => {
   return (
     <Box minH="100vh">
       <Helmet>
-        <meta property="og:image" content="https://vero.photography/assets/photos/about-bg.webp" />
+        <meta property="og:image" content="https://vero.photography/assets/photos/site/about-bg.webp" />
       </Helmet>
       {/* ─── Mobile: stacked hero ─── */}
       <Box display={{ base: 'block', lg: 'none' }}>
         <Box position="relative" h="60vh" overflow="hidden">
           <Image
-            src="/assets/photos/about-bg.webp"
+            src="/assets/photos/site/about-bg.webp"
             alt="Veronika Gerzon — Photographer at work"
             objectFit="cover"
             objectPosition="center 0%"
@@ -118,7 +118,7 @@ const About = () => {
         {/* Left: photo with dark overlay */}
         <Box position="relative" w="55%" h="100%" overflow="hidden">
           <Image
-            src="/assets/photos/about-bg.webp"
+            src="/assets/photos/site/about-bg.webp"
             alt="Veronika Gerzon — Photographer at work"
             objectFit="cover"
             objectPosition="center 70%"

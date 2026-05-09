@@ -46,13 +46,13 @@ const ThankYou = () => {
       <Helmet>
         <title>Thank You - Vero Photography</title>
         <meta name="robots" content="noindex, nofollow" />
-        <meta property="og:image" content="https://vero.photography/assets/photos/contact-bg.webp" />
+        <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />
       </Helmet>
 
       <Box
         position="absolute"
         inset={0}
-        backgroundImage="url('/assets/photos/contact-bg.webp')"
+        backgroundImage="url('/assets/photos/site/contact-bg.webp')"
         backgroundSize={{ base: '300%', md: 'cover' }}
         backgroundPosition={{ base: '25% center', md: 'center' }}
         filter="brightness(0.4)"
