@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import { FaGoogle, FaStar } from 'react-icons/fa';
@@ -9,7 +10,17 @@ const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 const RATING = '5.0';
 const REVIEW_COUNT = 15;
 
-const TESTIMONIALS = [
+const TESTIMONIAL_POOL = [
+  {
+    name: 'Kimberly Diotte',
+    quote:
+      'Veronika was the absolute best photographer we could have asked for on our wedding day. Her confidence and creativity put you completely at ease — you just trust her. Our photos are something we will treasure forever.',
+  },
+  {
+    name: 'Polina Korchagina',
+    quote:
+      'All of them were very professional and beautiful. I printed and hanged her photos all over my house. Highly recommend her if you want your memorable events stay with you forever.',
+  },
   {
     name: 'Lilia Petruk',
     quote:
@@ -22,6 +33,8 @@ const TESTIMONIALS = [
   },
 ];
 
+const TESTIMONIALS_TO_DISPLAY = 2;
+
 const FiveStars = ({ size = 3.5 }: { size?: number }) => (
   <HStack spacing={0.5}>
     {[0, 1, 2, 3, 4].map((i) => (
@@ -31,6 +44,15 @@ const FiveStars = ({ size = 3.5 }: { size?: number }) => (
 );
 
 const GoogleReviewsSection = () => {
+  const [testimonials, setTestimonials] = useState(
+    TESTIMONIAL_POOL.slice(0, TESTIMONIALS_TO_DISPLAY)
+  );
+
+  useEffect(() => {
+    const shuffled = [...TESTIMONIAL_POOL].sort(() => Math.random() - 0.5);
+    setTestimonials(shuffled.slice(0, TESTIMONIALS_TO_DISPLAY));
+  }, []);
+
   return (
     <Box bg="white" pt={0} pb={{ base: 14, md: 16 }} px={6}>
       <MotionDiv
@@ -89,7 +111,7 @@ const GoogleReviewsSection = () => {
           direction={{ base: 'column', md: 'row' }}
           align="stretch"
         >
-          {TESTIMONIALS.map((t) => (
+          {testimonials.map((t) => (
             <VStack
               key={t.name}
               flex={1}
