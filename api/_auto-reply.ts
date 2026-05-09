@@ -101,9 +101,14 @@ export function buildTransporter(opts: { debug?: boolean } = {}): nodemailer.Tra
     secure: false,
     requireTLS: true,
     auth: { user, pass },
+    // Fail fast on connection-level issues (broken backend = retry helps)
     connectionTimeout: 5000,
     greetingTimeout: 5000,
-    socketTimeout: 8000,
+    // Be patient on socket activity. ImprovMX can take 10-15s to ack the
+    // body after we've sent it — they're DKIM-signing + spam-scoring +
+    // queueing synchronously before responding. If we give up too early
+    // we report 'failed' to the user even though the email actually shipped.
+    socketTimeout: 15000,
     logger: opts.debug ?? false,
     debug: opts.debug ?? false,
   });
