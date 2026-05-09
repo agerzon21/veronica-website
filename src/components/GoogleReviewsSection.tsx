@@ -7,18 +7,18 @@ const MotionDiv = motion.div;
 const GOOGLE_PROFILE_URL = 'https://g.page/r/CSNq8ccyWt_wEAE';
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 const RATING = '5.0';
-const REVIEW_COUNT = 11;
+const REVIEW_COUNT = 15;
 
 const TESTIMONIALS = [
   {
-    name: 'Kimberly Diotte',
+    name: 'Lilia Petruk',
     quote:
-      'Veronika was the absolute best photographer we could have asked for on our wedding day. Her confidence and creativity put you completely at ease — you just trust her. Our photos are something we will treasure forever.',
+      'I had a personal photo shoot. The photos are amazing and I felt Veronica saw my soul.',
   },
   {
-    name: 'Polina Korchagina',
+    name: 'Kamila Muzaffarova',
     quote:
-      'All of them were very professional and beautiful. I printed and hanged her photos all over my house. Highly recommend her if you want your memorable events stay with you forever.',
+      'Veronica is very professional! It was a pleasure working with her. Highly recommended.',
   },
 ];
 
