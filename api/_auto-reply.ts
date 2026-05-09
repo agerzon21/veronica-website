@@ -95,20 +95,25 @@ export function buildTransporter(opts: { debug?: boolean } = {}): nodemailer.Tra
     throw new Error('Missing SMTP env vars (IMPROVMX_SMTP_HOST/USER/PASS)');
   }
 
+  // Port 465 = implicit TLS (no STARTTLS upgrade — saves ~2 SMTP roundtrips).
+  // Port 587 = plain connect then STARTTLS upgrade (current setup).
+  // Autodetect from the port number so this works either way.
+  const useImplicitTls = port === 465;
+
   return nodemailer.createTransport({
     host,
     port,
-    secure: false,
-    requireTLS: true,
+    secure: useImplicitTls,
+    requireTLS: !useImplicitTls,
     auth: { user, pass },
     // Fail fast on connection-level issues (broken backend = retry helps)
     connectionTimeout: 5000,
     greetingTimeout: 5000,
-    // Be patient on socket activity. ImprovMX can take 10-15s to ack the
-    // body after we've sent it — they're DKIM-signing + spam-scoring +
-    // queueing synchronously before responding. If we give up too early
-    // we report 'failed' to the user even though the email actually shipped.
-    socketTimeout: 15000,
+    // Be patient on socket activity. ImprovMX can take 10-20s to respond
+    // at any SMTP step under load (DKIM signing, spam scoring, etc.).
+    // Pushed close to Vercel's 30s function budget so we wait out slow
+    // backends instead of false-failing emails that actually shipped.
+    socketTimeout: 25000,
     logger: opts.debug ?? false,
     debug: opts.debug ?? false,
   });
