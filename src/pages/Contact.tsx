@@ -8,6 +8,8 @@ import { trackContactSubmission } from '../utils/analytics';
 
 const MotionDiv = motion.div;
 
+const WEB3FORMS_KEY = '4cc6342e-8d13-4060-b349-7d4c91fc31fb';
+
 const inputStyles = {
   bg: 'whiteAlpha.100',
   border: '1px solid',
@@ -34,7 +36,12 @@ const Contact = () => {
     setError('');
 
     const formData = new FormData(e.currentTarget);
-    const payload = {
+    formData.append('access_key', WEB3FORMS_KEY);
+    formData.append('subject', `New Inquiry — ${formData.get('shoot_type')} Session`);
+    formData.append('from_name', 'Vero Photography Website');
+
+    // Capture fields for the auto-reply payload before we send to Web3Forms
+    const autoReplyPayload = {
       name: String(formData.get('name') || ''),
       email: String(formData.get('email') || ''),
       shoot_type: String(formData.get('shoot_type') || ''),
@@ -43,16 +50,27 @@ const Contact = () => {
     };
 
     try {
-      const response = await fetch('/api/contact', {
+      // 1. Notify Vero via Web3Forms — must run client-side to pass Cloudflare's
+      //    bot challenge (server-side requests get a 403 challenge page).
+      const response = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: formData,
       });
       const data = await response.json();
       if (data.success) {
+        // 2. Fire-and-forget auto-reply via our serverless function.
+        //    keepalive lets the request survive the page navigation that follows.
+        fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(autoReplyPayload),
+          keepalive: true,
+        }).catch(() => {
+          // best-effort — Vero already got the lead notification
+        });
         navigate('/contact/thank-you');
       } else {
-        setError(data.error || 'Something went wrong. Please try again.');
+        setError('Something went wrong. Please try again.');
       }
     } catch {
       setError('Something went wrong. Please try again.');

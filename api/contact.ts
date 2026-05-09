@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import nodemailer from 'nodemailer';
 
-const WEB3FORMS_KEY = '4cc6342e-8d13-4060-b349-7d4c91fc31fb';
 const FROM_DISPLAY = 'Vero Photography';
 const FROM_ADDRESS = 'vero@vero.photography';
 const INSTAGRAM_URL = 'https://www.instagram.com/vero.art.photo';
@@ -111,40 +110,6 @@ Vero Photography
 `;
 }
 
-async function notifyVeroViaWeb3Forms(data: ContactPayload): Promise<void> {
-  const payload: Record<string, string> = {
-    access_key: WEB3FORMS_KEY,
-    subject: `New Inquiry — ${data.shoot_type || 'Photography'} Session`,
-    from_name: 'Vero Photography Website',
-    name: data.name,
-    email: data.email,
-  };
-  if (data.shoot_type) payload.shoot_type = data.shoot_type;
-  if (data.message) payload.message = data.message;
-  if (data.botcheck) payload.botcheck = data.botcheck;
-
-  const res = await fetch('https://api.web3forms.com/submit', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  // Read body as text first so we can include it in the error if parsing fails.
-  const raw = await res.text();
-  let json: { success?: boolean; message?: string } = {};
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    throw new Error(`Web3Forms returned non-JSON (status ${res.status}): ${raw.slice(0, 200)}`);
-  }
-  if (!json.success) {
-    throw new Error(`Web3Forms rejected submission (status ${res.status}): ${json.message || 'unknown'}`);
-  }
-}
-
 async function sendAutoReply(data: ContactPayload): Promise<void> {
   const transporter = nodemailer.createTransport({
     host: process.env.IMPROVMX_SMTP_HOST,
@@ -183,19 +148,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Name and email are required' });
   }
 
-  // Notify Vero — required. If this fails, the lead is lost, so surface error.
-  try {
-    await notifyVeroViaWeb3Forms(data);
-  } catch (err) {
-    console.error('[contact] Web3Forms notify failed:', err);
-    return res.status(500).json({ success: false, error: 'Could not send your message. Please try again or message us on Instagram or WhatsApp.' });
-  }
-
-  // Auto-reply — best effort. Don't fail the whole request if SMTP hiccups.
   try {
     await sendAutoReply(data);
   } catch (err) {
     console.error('[contact] Auto-reply failed:', err);
+    return res.status(500).json({ success: false, error: 'Auto-reply failed' });
   }
 
   return res.status(200).json({ success: true });
