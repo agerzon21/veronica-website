@@ -12,7 +12,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sendAutoReply, type ContactPayload } from './_auto-reply';
+import { sendAutoReply, type ContactPayload } from './_auto-reply.js';
 
 interface Step {
   step: string;
