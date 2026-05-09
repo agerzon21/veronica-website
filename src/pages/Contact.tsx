@@ -40,14 +40,27 @@ const Contact = () => {
     formData.append('subject', `New Inquiry — ${formData.get('shoot_type')} Session`);
     formData.append('from_name', 'Vero Photography Website');
 
+    // Capture fields for the auto-reply payload that ThankYou will fire
+    const autoReplyPayload = {
+      name: String(formData.get('name') || ''),
+      email: String(formData.get('email') || ''),
+      shoot_type: String(formData.get('shoot_type') || ''),
+      message: String(formData.get('message') || ''),
+      botcheck: String(formData.get('botcheck') || ''),
+    };
+
     try {
+      // Notify Vero via Web3Forms — must run client-side to pass Cloudflare's
+      // bot challenge (server-side requests get a 403 challenge page).
       const response = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
         body: formData,
       });
       const data = await response.json();
       if (data.success) {
-        navigate('/contact/thank-you');
+        // ThankYou page kicks off /api/contact for the auto-reply and shows
+        // a live loading→success/failed status to the user.
+        navigate('/contact/thank-you', { state: { autoReplyPayload } });
       } else {
         setError('Something went wrong. Please try again.');
       }
