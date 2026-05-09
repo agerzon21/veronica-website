@@ -112,24 +112,36 @@ Vero Photography
 }
 
 async function notifyVeroViaWeb3Forms(data: ContactPayload): Promise<void> {
-  const body = new URLSearchParams();
-  body.append('access_key', WEB3FORMS_KEY);
-  body.append('subject', `New Inquiry — ${data.shoot_type || 'Photography'} Session`);
-  body.append('from_name', 'Vero Photography Website');
-  body.append('name', data.name);
-  body.append('email', data.email);
-  if (data.shoot_type) body.append('shoot_type', data.shoot_type);
-  if (data.message) body.append('message', data.message);
-  if (data.botcheck) body.append('botcheck', data.botcheck);
+  const payload: Record<string, string> = {
+    access_key: WEB3FORMS_KEY,
+    subject: `New Inquiry — ${data.shoot_type || 'Photography'} Session`,
+    from_name: 'Vero Photography Website',
+    name: data.name,
+    email: data.email,
+  };
+  if (data.shoot_type) payload.shoot_type = data.shoot_type;
+  if (data.message) payload.message = data.message;
+  if (data.botcheck) payload.botcheck = data.botcheck;
 
   const res = await fetch('https://api.web3forms.com/submit', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
   });
-  const json = (await res.json()) as { success?: boolean; message?: string };
+
+  // Read body as text first so we can include it in the error if parsing fails.
+  const raw = await res.text();
+  let json: { success?: boolean; message?: string } = {};
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error(`Web3Forms returned non-JSON (status ${res.status}): ${raw.slice(0, 200)}`);
+  }
   if (!json.success) {
-    throw new Error(`Web3Forms rejected submission: ${json.message || 'unknown'}`);
+    throw new Error(`Web3Forms rejected submission (status ${res.status}): ${json.message || 'unknown'}`);
   }
 }
 
