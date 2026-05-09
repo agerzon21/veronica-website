@@ -24,8 +24,25 @@ const ThankYou = () => {
   const isInView = useInView(contentRef, { once: true, amount: 0.15 });
 
   const location = useLocation();
-  const autoReplyPayload =
-    (location.state as { autoReplyPayload?: AutoReplyPayload } | null)?.autoReplyPayload ?? null;
+  const navState = location.state as
+    | { autoReplyPayload?: AutoReplyPayload; submissionId?: string }
+    | null;
+  const rawPayload = navState?.autoReplyPayload ?? null;
+  const submissionId = navState?.submissionId ?? null;
+
+  // Dedupe: if the user navigates back to /contact/thank-you (e.g. via
+  // browser back from /), the location state is still in history. Without
+  // this guard we'd re-fire the auto-reply for the same submission.
+  // sessionStorage keeps the marker for the lifetime of the tab.
+  const alreadyProcessed =
+    submissionId !== null &&
+    typeof window !== 'undefined' &&
+    sessionStorage.getItem(`auto-reply-sent:${submissionId}`) !== null;
+
+  // Treat back-navigations as "no payload" so the page renders the
+  // direct-visit variant — no spinner, no re-send.
+  const autoReplyPayload = alreadyProcessed ? null : rawPayload;
+
   const [autoReplyStatus, setAutoReplyStatus] = useState<AutoReplyStatus>(
     autoReplyPayload ? 'loading' : 'idle'
   );
@@ -42,7 +59,11 @@ const ThankYou = () => {
 
   // Fire the auto-reply request once on mount if we have a payload
   useEffect(() => {
-    if (!autoReplyPayload) return;
+    if (!autoReplyPayload || !submissionId) return;
+    // Mark this submission as processed BEFORE the fetch resolves, so a
+    // back-navigation that re-mounts the component doesn't re-fire it.
+    sessionStorage.setItem(`auto-reply-sent:${submissionId}`, '1');
+
     let cancelled = false;
     (async () => {
       try {
@@ -62,7 +83,7 @@ const ThankYou = () => {
     return () => {
       cancelled = true;
     };
-  }, [autoReplyPayload]);
+  }, [autoReplyPayload, submissionId]);
 
   const handleWhatsAppClick = () => {
     const phoneNumber = '+15709095707';
@@ -297,7 +318,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
             </Text>
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Check your inbox now. If it landed in <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text>, please mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> — that way my real reply lands in your inbox.
+            Look for an email from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text>. If it's not in your inbox, <Text as="span" color="#c9a96e" fontWeight="400">please check your Spam or Promotions folder</Text> — that's often where it lands. When you find it, mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
           </Text>
         </Box>
       </MotionDiv>
