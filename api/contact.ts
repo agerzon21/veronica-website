@@ -111,17 +111,40 @@ Vero Photography
 }
 
 async function sendAutoReply(data: ContactPayload): Promise<void> {
-  const transporter = nodemailer.createTransport({
-    host: process.env.IMPROVMX_SMTP_HOST,
-    port: Number(process.env.IMPROVMX_SMTP_PORT || 587),
-    secure: false, // STARTTLS upgrade on port 587
-    auth: {
-      user: process.env.IMPROVMX_SMTP_USER,
-      pass: process.env.IMPROVMX_SMTP_PASS,
-    },
+  const host = process.env.IMPROVMX_SMTP_HOST;
+  const port = Number(process.env.IMPROVMX_SMTP_PORT || 587);
+  const user = process.env.IMPROVMX_SMTP_USER;
+  const pass = process.env.IMPROVMX_SMTP_PASS;
+
+  console.log('[contact] SMTP config:', {
+    host: host || '(missing)',
+    port,
+    user: user || '(missing)',
+    passLength: pass?.length ?? 0,
   });
 
-  await transporter.sendMail({
+  if (!host || !user || !pass) {
+    throw new Error('Missing SMTP env vars');
+  }
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: false,         // STARTTLS upgrade on port 587
+    requireTLS: true,      // fail if server doesn't support STARTTLS
+    auth: { user, pass },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 5000,
+    logger: true,          // pipes nodemailer's internal events to console
+    debug: true,
+  });
+
+  console.log('[contact] verifying SMTP connection…');
+  await transporter.verify();
+  console.log('[contact] verify ok, sending mail…');
+
+  const info = await transporter.sendMail({
     from: `"${FROM_DISPLAY}" <${FROM_ADDRESS}>`,
     to: data.email,
     replyTo: FROM_ADDRESS,
@@ -129,6 +152,7 @@ async function sendAutoReply(data: ContactPayload): Promise<void> {
     text: buildAutoReplyText(data),
     html: buildAutoReplyHtml(data),
   });
+  console.log('[contact] sent:', { messageId: info.messageId, accepted: info.accepted, rejected: info.rejected });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
