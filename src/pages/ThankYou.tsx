@@ -88,15 +88,45 @@ const ThankYou = () => {
                 <Box w="40px" h="1px" bg="#c9a96e" />
                 <Text
                   fontSize={{ base: 'sm', md: 'md' }}
-                  color="whiteAlpha.700"
+                  color="whiteAlpha.800"
                   textAlign="center"
                   fontWeight="300"
                   lineHeight="1.9"
-                  maxW="400px"
+                  maxW="440px"
                 >
-                  Your inquiry has been sent. I'll get back to you within 24 hours.
+                  Your message is in. I just sent you a quick confirmation from{' '}
+                  <Text as="span" color="#c9a96e">vero@vero.photography</Text> — please open it now to confirm we're connected, then I'll personally reply within 24 hours.
                 </Text>
               </VStack>
+
+              {/* Spam-folder warning */}
+              <Box
+                w="100%"
+                maxW="460px"
+                bg="rgba(201, 169, 110, 0.08)"
+                borderLeft="2px solid #c9a96e"
+                px={5}
+                py={4}
+              >
+                <Text
+                  fontSize="xs"
+                  color="whiteAlpha.900"
+                  fontWeight="500"
+                  letterSpacing="0.1em"
+                  textTransform="uppercase"
+                  mb={2}
+                >
+                  Don't see it?
+                </Text>
+                <Text
+                  fontSize="sm"
+                  color="whiteAlpha.800"
+                  fontWeight="300"
+                  lineHeight="1.7"
+                >
+                  Check your <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text> folder and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> — that way my real reply lands in your inbox tomorrow.
+                </Text>
+              </Box>
 
               <Button
                 as={Link}
@@ -122,33 +152,13 @@ const ThankYou = () => {
               <Flex align="center" w="100%" gap={4}>
                 <Box flex={1} h="1px" bg="whiteAlpha.200" />
                 <Text fontSize="xs" color="whiteAlpha.700" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase">
-                  need a faster reply?
+                  or message me directly
                 </Text>
                 <Box flex={1} h="1px" bg="whiteAlpha.200" />
               </Flex>
 
-              {/* Secondary contact methods */}
+              {/* Secondary contact methods — WhatsApp/Instagram emphasized */}
               <Flex gap={{ base: 6, md: 16 }} direction="row" justify="center">
-                <VStack
-                  as="button"
-                  type="button"
-                  onClick={handleEmailClick}
-                  cursor="pointer"
-                  spacing={2}
-                  transition="all 0.4s"
-                  _hover={{ transform: 'translateY(-3px)', '& svg': { color: 'white' } }}
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
-                  role="group"
-                >
-                  <Flex h="24px" align="center"><Icon as={FaRegEnvelope} color="#c9a96e" boxSize={5} transition="all 0.4s" /></Flex>
-                  <Text color="whiteAlpha.800" fontSize="xs" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase"
-                    _groupHover={{ color: '#c9a96e' }} transition="all 0.4s"
-                    textIndent="0.15em"
-                  >
-                    Email
-                  </Text>
-                </VStack>
-
                 <VStack
                   as="button"
                   type="button"
@@ -184,6 +194,26 @@ const ThankYou = () => {
                     _groupHover={{ color: '#c9a96e' }} transition="all 0.4s"
                   >
                     Instagram
+                  </Text>
+                </VStack>
+
+                <VStack
+                  as="button"
+                  type="button"
+                  onClick={handleEmailClick}
+                  cursor="pointer"
+                  spacing={2}
+                  transition="all 0.4s"
+                  _hover={{ transform: 'translateY(-3px)', '& svg': { color: 'white' } }}
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  role="group"
+                >
+                  <Flex h="24px" align="center"><Icon as={FaRegEnvelope} color="#c9a96e" boxSize={5} transition="all 0.4s" /></Flex>
+                  <Text color="whiteAlpha.800" fontSize="xs" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase"
+                    _groupHover={{ color: '#c9a96e' }} transition="all 0.4s"
+                    textIndent="0.15em"
+                  >
+                    Email
                   </Text>
                 </VStack>
               </Flex>

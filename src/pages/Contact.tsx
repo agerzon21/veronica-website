@@ -8,8 +8,6 @@ import { trackContactSubmission } from '../utils/analytics';
 
 const MotionDiv = motion.div;
 
-const WEB3FORMS_KEY = '4cc6342e-8d13-4060-b349-7d4c91fc31fb';
-
 const inputStyles = {
   bg: 'whiteAlpha.100',
   border: '1px solid',
@@ -36,20 +34,25 @@ const Contact = () => {
     setError('');
 
     const formData = new FormData(e.currentTarget);
-    formData.append('access_key', WEB3FORMS_KEY);
-    formData.append('subject', `New Inquiry — ${formData.get('shoot_type')} Session`);
-    formData.append('from_name', 'Vero Photography Website');
+    const payload = {
+      name: String(formData.get('name') || ''),
+      email: String(formData.get('email') || ''),
+      shoot_type: String(formData.get('shoot_type') || ''),
+      message: String(formData.get('message') || ''),
+      botcheck: String(formData.get('botcheck') || ''),
+    };
 
     try {
-      const response = await fetch('https://api.web3forms.com/submit', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (data.success) {
         navigate('/contact/thank-you');
       } else {
-        setError('Something went wrong. Please try again.');
+        setError(data.error || 'Something went wrong. Please try again.');
       }
     } catch {
       setError('Something went wrong. Please try again.');
