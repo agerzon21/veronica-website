@@ -2,7 +2,7 @@ import { Box, VStack, Text } from '@chakra-ui/react';
 
 const InstagramFeed = () => {
   return (
-    <Box py={16} px={4} bg="white">
+    <Box py={{ base: 14, md: 16 }} px={4} bg="white">
       <VStack spacing={6} mb={12}>
         <Text
           fontSize="xs"
@@ -31,7 +31,7 @@ const InstagramFeed = () => {
         sx={{
           'iframe': {
             border: 'none',
-            height: { base: '500px', md: '1050px' },
+            height: { base: '500px', md: '800px' },
             width: '100%',
             maxWidth: { base: '650px', md: '1300px' }
           }

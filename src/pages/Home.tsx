@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import ImageCarousel from '../components/ImageCarousel';
 import ParallaxSection from '../components/ParallaxSection';
 import StatsSection from '../components/StatsSection';
+import GoogleReviewsSection from '../components/GoogleReviewsSection';
 import InstagramFeed from '../components/InstagramFeed';
 
 const Home: React.FC = () => {
@@ -100,6 +101,7 @@ const Home: React.FC = () => {
         mobileImagePosition="50% 10%"
       />
       <InstagramFeed />
+      <GoogleReviewsSection />
     </Box>
   );
 };
