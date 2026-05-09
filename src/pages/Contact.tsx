@@ -59,8 +59,11 @@ const Contact = () => {
       const data = await response.json();
       if (data.success) {
         // ThankYou page kicks off /api/contact for the auto-reply and shows
-        // a live loading→success/failed status to the user.
-        navigate('/contact/thank-you', { state: { autoReplyPayload } });
+        // a live loading→success/failed status to the user. The submissionId
+        // is used to dedupe the auto-reply send if the user navigates back
+        // to the thank-you page later (we'd otherwise re-fire the email).
+        const submissionId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        navigate('/contact/thank-you', { state: { autoReplyPayload, submissionId } });
       } else {
         setError('Something went wrong. Please try again.');
       }

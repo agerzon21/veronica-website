@@ -24,8 +24,39 @@ const ThankYou = () => {
   const isInView = useInView(contentRef, { once: true, amount: 0.15 });
 
   const location = useLocation();
-  const autoReplyPayload =
-    (location.state as { autoReplyPayload?: AutoReplyPayload } | null)?.autoReplyPayload ?? null;
+
+  // Read the nav state and apply dedup ONCE on mount via useState's lazy
+  // initializer. We can't recompute on every render because the useEffect
+  // below sets a sessionStorage marker as soon as the fetch starts —
+  // re-evaluating on later renders would flip the dedup decision and hide
+  // the success/failed status block we just rendered.
+  //
+  // On a fresh form submit: marker is absent → autoReplyPayload is the real
+  //   payload → spinner shows → fetch fires → status updates → status block
+  //   stays visible because this useState value doesn't change.
+  // On back-navigation re-mount: marker is present → autoReplyPayload is
+  //   null on first render → renders the direct-visit variant, no re-fire.
+  const [{ autoReplyPayload, submissionId }] = useState<{
+    autoReplyPayload: AutoReplyPayload | null;
+    submissionId: string | null;
+  }>(() => {
+    const navState = location.state as
+      | { autoReplyPayload?: AutoReplyPayload; submissionId?: string }
+      | null;
+    const rawPayload = navState?.autoReplyPayload ?? null;
+    const subId = navState?.submissionId ?? null;
+    if (!rawPayload || !subId) {
+      return { autoReplyPayload: null, submissionId: subId };
+    }
+    if (
+      typeof window !== 'undefined' &&
+      sessionStorage.getItem(`auto-reply-sent:${subId}`) !== null
+    ) {
+      return { autoReplyPayload: null, submissionId: subId };
+    }
+    return { autoReplyPayload: rawPayload, submissionId: subId };
+  });
+
   const [autoReplyStatus, setAutoReplyStatus] = useState<AutoReplyStatus>(
     autoReplyPayload ? 'loading' : 'idle'
   );
@@ -42,7 +73,11 @@ const ThankYou = () => {
 
   // Fire the auto-reply request once on mount if we have a payload
   useEffect(() => {
-    if (!autoReplyPayload) return;
+    if (!autoReplyPayload || !submissionId) return;
+    // Mark this submission as processed BEFORE the fetch resolves, so a
+    // back-navigation that re-mounts the component doesn't re-fire it.
+    sessionStorage.setItem(`auto-reply-sent:${submissionId}`, '1');
+
     let cancelled = false;
     (async () => {
       try {
@@ -62,7 +97,7 @@ const ThankYou = () => {
     return () => {
       cancelled = true;
     };
-  }, [autoReplyPayload]);
+  }, [autoReplyPayload, submissionId]);
 
   const handleWhatsAppClick = () => {
     const phoneNumber = '+15709095707';
@@ -297,7 +332,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
             </Text>
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Check your inbox now. If it landed in <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text>, please mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> — that way my real reply lands in your inbox.
+            Look for an email from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text>. If it's not in your inbox, <Text as="span" color="#c9a96e" fontWeight="400">please check your Spam or Promotions folder</Text> — that's often where it lands. When you find it, mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
           </Text>
         </Box>
       </MotionDiv>

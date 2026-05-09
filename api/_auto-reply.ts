@@ -44,18 +44,24 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
   const safeFirst = escapeHtml(firstName);
   const shootBlurb = escapeHtml(getShootBlurb(data.shoot_type));
 
-  // Slim layout: no nested tables, minimal inline styles. Same content as the
-  // text version. Targets ~1.5KB instead of ~4.7KB so ImprovMX's body-side
-  // scanning (DKIM, spam, link reputation) doesn't time us out.
+  const trimmedMessage = (data.message || '').trim();
+  const messageBlock = trimmedMessage
+    ? `<p style="margin:8px 0 0;font-size:13px;color:#888;">Your message:</p>
+<p style="border-left:3px solid #d8d8d8;margin:6px 0 20px;padding:6px 0 6px 14px;color:#5a5a5a;font-style:italic;font-size:14px;">${escapeHtml(trimmedMessage).replace(/\n/g, '<br>')}</p>`
+    : '';
+
+  // Slim layout: no nested tables, minimal inline styles. Targets ~1.5KB so
+  // ImprovMX's body-side scanning (DKIM, spam, link reputation) is fast.
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
 <p>Hi ${safeFirst},</p>
 <p>Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.</p>
-<p style="background:#fef9e6;border-left:3px solid #c9a96e;padding:12px 16px;font-size:14px;"><strong>Don't see my reply by tomorrow?</strong> Please check your <strong>Spam</strong> or <strong>Promotions</strong> folder and mark this email as <strong>Not Spam</strong> — it helps make sure my next reply lands in your inbox.</p>
+${messageBlock}
+<p style="background:#fef9e6;border-left:3px solid #c9a96e;padding:12px 16px;font-size:14px;">If this email landed in your <strong>Spam</strong> or <strong>Promotions</strong> folder, please mark it as <strong>Not Spam</strong> — it'll help my future replies reach your inbox.</p>
 <p>Need a faster reply? You can also reach me on:</p>
 <p>Instagram: <a href="${INSTAGRAM_URL}" style="color:#c9a96e">@vero.art.photo</a><br>WhatsApp: <a href="${WHATSAPP_URL}" style="color:#c9a96e">${escapeHtml(WHATSAPP_PHONE)}</a></p>
-<p>Talk soon,<br><em>Veronika</em></p>
+<p>Warmly,<br><em>Veronika</em></p>
 <hr style="border:none;border-top:1px solid #ececec;margin:28px 0 12px;">
 <p style="font-size:12px;color:#888;">You're receiving this because you submitted the contact form at vero.photography. If this wasn't you, just ignore this message.</p>
 </body></html>`;
@@ -64,17 +70,21 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
 export function buildAutoReplyText(data: ContactPayload): string {
   const firstName = (data.name || '').trim().split(/\s+/)[0] || 'there';
   const shootBlurb = getShootBlurb(data.shoot_type);
+  const trimmedMessage = (data.message || '').trim();
+  const messageBlock = trimmedMessage
+    ? `\n\nYour message:\n${trimmedMessage.split('\n').map((l) => `> ${l}`).join('\n')}`
+    : '';
   return `Hi ${firstName},
 
-Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.
+Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.${messageBlock}
 
-Don't see my reply by tomorrow? Please check your Spam or Promotions folder and mark this email as "Not Spam" — it helps make sure my next reply lands in your inbox.
+If this email landed in your Spam or Promotions folder, please mark it as Not Spam — it'll help my future replies reach your inbox.
 
 Need a faster reply? You can also reach me on:
   Instagram: ${INSTAGRAM_URL}
   WhatsApp: ${WHATSAPP_PHONE} (${WHATSAPP_URL})
 
-Talk soon,
+Warmly,
 Veronika
 Vero Photography
 `;
