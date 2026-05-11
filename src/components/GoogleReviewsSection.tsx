@@ -8,7 +8,7 @@ const MotionDiv = motion.div;
 const GOOGLE_PROFILE_URL = 'https://g.page/r/CSNq8ccyWt_wEAE';
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 const RATING = '5.0';
-const REVIEW_COUNT = 15;
+const REVIEW_COUNT = 19;
 
 const TESTIMONIAL_POOL = [
   {
@@ -30,6 +30,26 @@ const TESTIMONIAL_POOL = [
     name: 'Kamila Muzaffarova',
     quote:
       'Veronica is very professional! It was a pleasure working with her. Highly recommended.',
+  },
+  {
+    name: 'Ariadne Comulada',
+    quote:
+      'Vero is so amazing to work with. Very responsible and teamwork was amazing. You won’t regret hiring her! We did a destination wedding in Puerto Rico and it was amazing to work with her.',
+  },
+  {
+    name: 'Robert Mwandia',
+    quote:
+      'Had an amazing experience shooting with Vero in the Dominican Republic. Super professional, made everything feel natural, and absolutely nailed the vision. The photos came out incredible, and the drone footage took everything to another level. Highly recommend if you want quality content and a smooth experience from start to finish.',
+  },
+  {
+    name: 'Angelina Rodau',
+    quote:
+      'Veronica has an incredible eye for photography, capturing beautiful moments with creativity and precision while always delivering stunning results. Thank you.',
+  },
+  {
+    name: 'Tali Kipnis',
+    quote:
+      'Veronica is the best!! Thank you so much for capturing such beautiful moments of my special day. The guests also came up to me commenting how nice she is! Highly recommend.',
   },
 ];
 
