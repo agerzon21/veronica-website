@@ -112,10 +112,11 @@ const Contact = () => {
         position="relative"
         zIndex={2}
         minH="100vh"
-        align="center"
+        align="flex-start"
         justify="center"
         px={6}
-        py={{ base: 24, md: 16 }}
+        pt={{ base: 28, md: 28 }}
+        pb={{ base: 24, md: 16 }}
       >
         <Box ref={contentRef} w="100%" maxW="520px">
           <MotionDiv

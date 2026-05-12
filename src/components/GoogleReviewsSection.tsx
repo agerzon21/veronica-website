@@ -114,10 +114,16 @@ const GoogleReviewsSection = () => {
                 fontWeight="300"
                 color="gray.700"
                 letterSpacing="0.05em"
-                _groupHover={{ color: '#c9a96e' }}
-                transition="color 0.3s"
+                textDecoration="underline"
+                textUnderlineOffset="4px"
+                textDecorationColor="gray.400"
+                transition="color 0.3s, text-decoration-color 0.3s"
+                _groupHover={{
+                  color: '#c9a96e',
+                  textDecorationColor: '#c9a96e',
+                }}
               >
-                {RATING} · {REVIEW_COUNT} Reviews on Google
+                {RATING} · {REVIEW_COUNT} Reviews on Google →
               </Text>
             </HStack>
           </Link>

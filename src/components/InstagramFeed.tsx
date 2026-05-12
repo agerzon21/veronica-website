@@ -31,7 +31,7 @@ const InstagramFeed = () => {
         sx={{
           'iframe': {
             border: 'none',
-            height: { base: '500px', md: '800px' },
+            height: { base: '500px', md: '1050px' },
             width: '100%',
             maxWidth: { base: '650px', md: '1300px' }
           }

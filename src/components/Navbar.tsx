@@ -56,7 +56,15 @@ const Navbar = () => {
               fontSize="md"
               fontWeight="light"
               color="gray.800"
-              _hover={{ color: 'gray.600' }}
+              textDecoration="none"
+              textUnderlineOffset="6px"
+              transition="color 0.3s"
+              _hover={{
+                color: '#c9a96e',
+                textDecoration: 'underline',
+                textDecorationColor: '#c9a96e',
+                textDecorationThickness: '1px',
+              }}
             >
               {item.name}
             </Link>
