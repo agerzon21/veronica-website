@@ -8,7 +8,7 @@ const MotionDiv = motion.div;
 const GOOGLE_PROFILE_URL = 'https://g.page/r/CSNq8ccyWt_wEAE';
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 const RATING = '5.0';
-const REVIEW_COUNT = 19;
+const REVIEW_COUNT = 16;
 
 const TESTIMONIAL_POOL = [
   {
