@@ -41,13 +41,15 @@ const Home: React.FC = () => {
       url: "/assets/photos/weddings/passionate-kiss-by-sea.webp",
       mobileUrl: "/assets/photos/weddings/passionate-kiss-by-sea.webp",
       position: "center 50%",
-      mobilePosition: "0% 60%"
+      mobilePosition: "0% 60%",
+      mobileSkip: true, // doesn't crop well to portrait LCD — desktop only
     },
     {
       url: "/assets/photos/weddings/couple-embracing-greenery.webp",
       mobileUrl: "/assets/photos/weddings/couple-embracing-greenery.webp",
       position: "center 0%",
-      mobilePosition: "37% 10%"
+      mobilePosition: "37% 10%",
+      desktopSkip: true
     },
     {
       url: "/assets/photos/weddings/newlyweds-running-sea.webp",

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Box, Image, Flex, Text, Button, useBreakpointValue } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -8,6 +9,10 @@ interface ImageCarouselProps {
     position?: string;
     mobileUrl?: string;
     mobilePosition?: string;
+    /** If true, this image is excluded from the carousel on mobile viewports. */
+    mobileSkip?: boolean;
+    /** If true, this image is excluded from the carousel on desktop viewports. */
+    desktopSkip?: boolean;
   }>;
   height?: string | { base?: string; sm?: string; md?: string; lg?: string };
   hideDevIndicator?: boolean;
@@ -25,12 +30,22 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const isMobile = useBreakpointValue({ base: true, md: false });
   const [images, setImages] = useState(initialImages);
+  // Portal target only safe after mount (SSR + first-paint guard)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  // Shuffle images on component mount
+  // Filter out viewport-specific skipped images, then shuffle. Re-runs if the
+  // viewport breakpoint changes between mobile/desktop.
   useEffect(() => {
-    const shuffledImages = [...initialImages].sort(() => Math.random() - 0.5);
-    setImages(shuffledImages);
-  }, [initialImages]);
+    const filtered = initialImages.filter((img) => {
+      if (isMobile === true && img.mobileSkip) return false;
+      if (isMobile === false && img.desktopSkip) return false;
+      return true;
+    });
+    const shuffled = [...filtered].sort(() => Math.random() - 0.5);
+    setImages(shuffled);
+    setCurrentIndex(0);
+  }, [initialImages, isMobile]);
 
   useEffect(() => {
     if (isPaused) return;
@@ -88,42 +103,50 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
         </motion.div>
       </AnimatePresence>
 
-      {isDevelopment && !hideDevIndicator && (
+      {/* Dev controls — rendered via a Portal to document.body so they escape
+          the parent's CSS transform scaling (the camera MotionBox uses scale
+          transforms, which would otherwise make these buttons huge or tiny
+          depending on scroll position). Fixed-position relative to viewport. */}
+      {mounted && isDevelopment && !hideDevIndicator && createPortal(
         <Flex
-          position="absolute"
-          bottom="20px"
+          position="fixed"
+          bottom="16px"
           left="50%"
           transform="translateX(-50%)"
-          bg="blackAlpha.700"
-          p={4}
+          bg="blackAlpha.800"
+          px={3}
+          py={2}
           borderRadius="md"
-          zIndex={10}
-          gap={4}
+          zIndex={9999}
+          gap={2}
           alignItems="center"
         >
-          <Text color="white">Image {currentIndex + 1} of {images.length}</Text>
+          <Text color="white" fontSize="xs" whiteSpace="nowrap">
+            {currentIndex + 1} / {images.length}
+          </Text>
           <Button
             onClick={() => setCurrentIndex((prev) => (prev - 1 + images.length) % images.length)}
-            size="sm"
+            size="xs"
             colorScheme="whiteAlpha"
           >
-            Previous
+            Prev
           </Button>
           <Button
             onClick={() => setCurrentIndex((prev) => (prev + 1) % images.length)}
-            size="sm"
+            size="xs"
             colorScheme="whiteAlpha"
           >
             Next
           </Button>
           <Button
             onClick={() => setIsPaused(!isPaused)}
-            size="sm"
+            size="xs"
             colorScheme={isPaused ? "green" : "red"}
           >
-            {isPaused ? "Resume" : "Pause"}
+            {isPaused ? "Play" : "Stop"}
           </Button>
-        </Flex>
+        </Flex>,
+        document.body,
       )}
     </Box>
   );

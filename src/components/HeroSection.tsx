@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Box, Flex, VStack, Text, Link, Icon, Image, useBreakpointValue } from '@chakra-ui/react';
+import { Box, Flex, VStack, Text, Link, Icon, Image } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import { motion, useScroll, useTransform, MotionValue } from 'framer-motion';
 import { FaMapMarkerAlt, FaCamera, FaGlobe } from 'react-icons/fa';
@@ -48,56 +48,89 @@ const ViewfinderCorner: React.FC<{
 };
 
 // Real Canon EOS R6 Mark II product photo used as the camera body.
-// LCD bounding box (dialed in visually): left 22%, top 45%, width 37%, height 34%.
+// On desktop the camera is shown horizontally (landscape, 5:4 aspect, LCD on
+// the left side of the body). On mobile it's rotated 90° COUNTER-clockwise
+// (eyepiece ends up on the LEFT, Canon branding on the RIGHT) so mobile-shape
+// carousel photos display naturally inside the now-vertical LCD.
 const CAMERA_IMAGE_SRC = '/assets/images/eos_r6_mark_ii_body_2.webp';
-const CAMERA_WIDTH = 480;
-const CAMERA_HEIGHT = 384; // 480 / (800/640) preserves 5:4 aspect
-const LCD_LEFT_PCT = 22;
-const LCD_TOP_PCT = 45;
-const LCD_WIDTH_PCT = 37;
-const LCD_HEIGHT_PCT = 34;
 
-// LCD center within the camera box, as percentages — used for transform-origin
-// so the scale animation keeps the LCD anchored on screen.
-const LCD_CENTER_X_PCT = LCD_LEFT_PCT + LCD_WIDTH_PCT / 2; // 40.5%
-const LCD_CENTER_Y_PCT = LCD_TOP_PCT + LCD_HEIGHT_PCT / 2; // 62%
+// LCD bounding box for each orientation (as % of CameraBody container).
+// Mobile bounds are the desktop bounds rotated 90° CCW. For CCW rotation:
+//   new_left   = old_top
+//   new_top    = 100 - old_left - old_width
+//   new_width  = old_height
+//   new_height = old_width
+const LCD_BOUNDS = {
+  desktop: { left: 22, top: 45, width: 37, height: 34 },
+  mobile: { left: 46, top: 43, width: 27, height: 30 },
+};
 
-// LCD's horizontal offset from camera center, used to slide camera so LCD is
-// centered in viewport at start (full-bleed) and camera is centered at end.
-const LCD_OFFSET_FROM_CAMERA_CENTER_X = ((50 - LCD_CENTER_X_PCT) / 100) * CAMERA_WIDTH;
+// Derived helpers — LCD center is used as the scale transform-origin so the
+// LCD stays anchored on screen during zoom. Horizontal offset is the distance
+// from camera center to LCD center, used to slide the camera so the LCD lands
+// at viewport center at start (full-bleed) and the camera body is centered at
+// the end.
+const lcdCenterOf = (b: { left: number; top: number; width: number; height: number }) => ({
+  x: b.left + b.width / 2,
+  y: b.top + b.height / 2,
+});
 
-const CameraBody: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Box
-    position="relative"
-    width={`${CAMERA_WIDTH}px`}
-    height={`${CAMERA_HEIGHT}px`}
-  >
-    <Image
-      src={CAMERA_IMAGE_SRC}
-      alt="Canon EOS R6 camera back"
-      width="100%"
-      height="100%"
-      objectFit="contain"
-      draggable={false}
-      userSelect="none"
-    />
+// CameraBody — responsive container that goes portrait on mobile / landscape
+// on desktop. The Canon image is rotated 90° on mobile via CSS, while the LCD
+// container (with the photo carousel) is a separate non-rotated sibling at the
+// rotated LCD bounds — so portrait photos display naturally inside without
+// being themselves rotated.
+const CameraBody = React.forwardRef<HTMLDivElement, { children: React.ReactNode }>(
+  ({ children }, ref) => (
     <Box
-      position="absolute"
-      left={`${LCD_LEFT_PCT}%`}
-      top={`${LCD_TOP_PCT}%`}
-      width={`${LCD_WIDTH_PCT}%`}
-      height={`${LCD_HEIGHT_PCT}%`}
-      overflow="hidden"
-      borderRadius="2px"
+      ref={ref}
+      position="relative"
+      width={{ base: '85vw', md: '480px' }}
+      maxWidth={{ base: '420px', md: '500px' }}
+      aspectRatio={{ base: '4 / 5', md: '5 / 4' }}
     >
-      {children}
+      {/* Canon image. On mobile: rendered at 5:4 dimensions inside a 4:5
+          container, then rotated 90° to fill the container after rotation.
+          width 125% / height 80% gives a 5:4 box (since container is 4:5),
+          which becomes 4:5 fitting the container after the 90° rotation. */}
+      <Image
+        src={CAMERA_IMAGE_SRC}
+        alt="Canon EOS R6 camera back"
+        position="absolute"
+        top="50%"
+        left="50%"
+        width={{ base: '125%', md: '100%' }}
+        height={{ base: '80%', md: '100%' }}
+        objectFit="contain"
+        transform={{
+          base: 'translate(-50%, -50%) rotate(-90deg)',
+          md: 'translate(-50%, -50%)',
+        }}
+        draggable={false}
+        userSelect="none"
+      />
+      {/* LCD container — positioned at the rotated-LCD bounds on mobile,
+          original bounds on desktop. NOT rotated, so the photo carousel
+          inside displays in its natural portrait/landscape orientation. */}
+      <Box
+        position="absolute"
+        left={{ base: `${LCD_BOUNDS.mobile.left}%`, md: `${LCD_BOUNDS.desktop.left}%` }}
+        top={{ base: `${LCD_BOUNDS.mobile.top}%`, md: `${LCD_BOUNDS.desktop.top}%` }}
+        width={{ base: `${LCD_BOUNDS.mobile.width}%`, md: `${LCD_BOUNDS.desktop.width}%` }}
+        height={{ base: `${LCD_BOUNDS.mobile.height}%`, md: `${LCD_BOUNDS.desktop.height}%` }}
+        overflow="hidden"
+        borderRadius="2px"
+      >
+        {children}
+      </Box>
     </Box>
-  </Box>
+  ),
 );
+CameraBody.displayName = 'CameraBody';
 
 const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
-  const isMobile = useBreakpointValue({ base: true, md: false });
+  const cameraBoxRef = useRef<HTMLDivElement>(null);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -105,127 +138,122 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     layoutEffect: false,
   });
 
-  // Responsive max scale — ensures LCD fills the viewport regardless of width.
-  // LCD natural width ≈ 38% × CAMERA_WIDTH. Required scale = viewport_w / LCD_natural_width.
-  const [maxScale, setMaxScale] = useState(7);
+  // Track whether we're on a mobile viewport. The camera image is rotated 90°
+  // and the LCD bounds shift, so transform-origin + horizontal offset need to
+  // use the orientation-specific LCD center.
+  const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const recompute = () => {
-      const lcdNativeWidth = CAMERA_WIDTH * (LCD_WIDTH_PCT / 100);
-      const requiredScale = window.innerWidth / lcdNativeWidth + 0.2;
-      setMaxScale(Math.max(requiredScale, 6));
-    };
-    recompute();
-    window.addEventListener('resize', recompute);
-    return () => window.removeEventListener('resize', recompute);
+    const update = () => setIsMobile(window.innerWidth < 768);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, []);
 
-  // ─── ANIMATION TIMING (all driven by scroll progress 0 → 1) ───
-  //
-  // Sequential, three-stage choreography:
-  //   1. Camera zooms out (0  → 0.40)   — text invisible during this stage
-  //   2. Text fades in    (0.40 → 0.55) — once camera is locked at scale 1.0
-  //   3. Stable end-state (0.55 → 1.0)  — everything visible, nothing moving
-  //
-  // Tweak these ranges to make a stage start earlier/later. Tweak the slide
-  // distances (-30 / 30) to make text drop down / rise up more dramatically.
+  // Resolve the active LCD bounds + derived center/offset for the current
+  // orientation. These drive the scale's transform-origin and the camera's
+  // horizontal slide-in offset.
+  const lcdBounds = isMobile ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
+  const lcdCenter = lcdCenterOf(lcdBounds);
+  const lcdOffsetPct = 50 - lcdCenter.x; // 9.5 on desktop, 12 on mobile
 
-  const CAMERA_ZOOM_END = 0.35;
-  const TEXT_FADE_START = 0.55;
-  const TEXT_FADE_END = 0.55;
+  // Responsive max scale — ensures LCD fills the viewport regardless of width.
+  // Measures the actual rendered camera box (which is responsive via Chakra
+  // breakpoint props), then derives the scale needed for the LCD to fill the
+  // viewport. Uses ResizeObserver so it adapts to viewport changes correctly
+  // on both mobile (smaller camera) and desktop (fixed 480px camera).
+  const [maxScale, setMaxScale] = useState(5);
+  useEffect(() => {
+    const recompute = () => {
+      const box = cameraBoxRef.current;
+      if (!box) return;
+      const cameraWidth = box.offsetWidth;
+      const cameraHeight = box.offsetHeight;
+      if (cameraWidth === 0 || cameraHeight === 0) return;
+
+      // LCD dimensions as % of camera, dependent on orientation. The scale
+      // needs to cover BOTH viewport width AND height — otherwise on tall
+      // mobile viewports (e.g. 375×844) the LCD fills width but leaves the
+      // camera body visible top/bottom. Take the max of the two requirements.
+      const isMobileViewport = window.innerWidth < 768;
+      const bounds = isMobileViewport ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
+      const lcdNativeWidth = cameraWidth * (bounds.width / 100);
+      const lcdNativeHeight = cameraHeight * (bounds.height / 100);
+      const scaleForWidth = window.innerWidth / lcdNativeWidth;
+      const scaleForHeight = window.innerHeight / lcdNativeHeight;
+      // 1.2× buffer (not a flat +0.3) — gives proportional margin across
+      // viewport sizes so the LCD's photo content extends well past the
+      // viewport edges and no camera body / LCD bezel from the camera image
+      // peeks in at the edges during the full-bleed start state.
+      const requiredScale = Math.max(scaleForWidth, scaleForHeight) * 1.2;
+      setMaxScale(Math.max(requiredScale, 3));
+    };
+    // Initial measurement after layout settles
+    const timer = setTimeout(recompute, 50);
+    const observer = new ResizeObserver(recompute);
+    const node = cameraBoxRef.current;
+    if (node) observer.observe(node);
+    window.addEventListener('resize', recompute);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      window.removeEventListener('resize', recompute);
+    };
+  }, []);
+
+  // ─── SCROLL CHOREOGRAPHY (in vh — 1% of viewport height) ───
+  //
+  // Hero plays out as three independent scroll phases:
+  //   1. Camera zooms out      — takes CAMERA_ZOOM_VH of scroll
+  //   2. (pause)               — takes ZOOM_TO_TEXT_GAP_VH of scroll, then
+  //                              text snaps in
+  //   3. Stable end state      — takes STABLE_SCROLL_VH of scroll where the
+  //                              composed scene stays locked before the page
+  //                              continues past the hero to Instagram
+  //
+  // Change any of these THREE values independently. The total section
+  // height auto-derives below so changing STABLE_SCROLL_VH only shortens
+  // the stable period without affecting how fast the zoom animation plays.
+
+  const CAMERA_ZOOM_VH = 60;
+  const ZOOM_TO_TEXT_GAP_VH = 15;
+  const STABLE_SCROLL_VH = 0;
+
+  // Derived — don't usually need to touch.
+  const PINNED_SCROLL_VH = CAMERA_ZOOM_VH + ZOOM_TO_TEXT_GAP_VH + STABLE_SCROLL_VH;
+  const SECTION_HEIGHT_VH = PINNED_SCROLL_VH + 100; // +100vh for the sticky inner
+  const CAMERA_ZOOM_END = CAMERA_ZOOM_VH / PINNED_SCROLL_VH;
+  const TEXT_FADE_AT = (CAMERA_ZOOM_VH + ZOOM_TO_TEXT_GAP_VH) / PINNED_SCROLL_VH;
 
   // Camera scales from "LCD fills viewport" down to natural (1.0×).
   const cameraScale = useTransform(scrollYProgress, [0, CAMERA_ZOOM_END], [maxScale, 1.0]);
 
-  // Camera horizontal offset: at start push camera right so LCD center is at
-  // viewport center (full-bleed). At end no offset, camera body centered.
+  // Camera horizontal offset (as % of camera width): at start push camera right
+  // so LCD center is at viewport center (full-bleed). At end no offset, camera
+  // body centered. Percentage-based so it adapts to mobile vs desktop camera sizes.
   const cameraOffsetX = useTransform(
     scrollYProgress,
     [0, CAMERA_ZOOM_END],
-    [LCD_OFFSET_FROM_CAMERA_CENTER_X, 0],
+    [`${lcdOffsetPct}%`, '0%'],
   );
 
   // Gold viewfinder corners — visible early, fade out as camera zooms back
   const cornerOpacity = useTransform(scrollYProgress, [0, 0.12], [1, 0]);
 
   // Header (name + title) ABOVE camera: slides down from above + fades in
-  const headerOpacity = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [0, 1]);
-  const headerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [-30, 0]);
+  const headerOpacity = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [0, 1]);
+  const headerY = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [-30, 0]);
 
   // Footer (stats + CTA) BELOW camera: slides up from below + fades in
-  const footerOpacity = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [0, 1]);
-  const footerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [30, 0]);
+  const footerOpacity = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [0, 1]);
+  const footerY = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [30, 0]);
 
-  // MOBILE — static stacked layout
-  if (isMobile) {
-    return (
-      <Box position="relative" width="100%">
-        <Box height="60vh" position="relative" overflow="hidden">
-          <ImageCarousel images={images} height="100%" hideDevIndicator />
-          <Box position="absolute" top="20px" left="20px" w="28px" h="28px" borderTop="1px solid #c9a96e" borderLeft="1px solid #c9a96e" pointerEvents="none" />
-          <Box position="absolute" top="20px" right="20px" w="28px" h="28px" borderTop="1px solid #c9a96e" borderRight="1px solid #c9a96e" pointerEvents="none" />
-          <Box position="absolute" bottom="20px" left="20px" w="28px" h="28px" borderBottom="1px solid #c9a96e" borderLeft="1px solid #c9a96e" pointerEvents="none" />
-          <Box position="absolute" bottom="20px" right="20px" w="28px" h="28px" borderBottom="1px solid #c9a96e" borderRight="1px solid #c9a96e" pointerEvents="none" />
-        </Box>
-        <Flex bg="white" align="center" justify="center" px={6} py={14}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 }}
-          >
-            <VStack spacing={6} align="center" maxW="400px">
-              <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.2em" color="#c9a96e">
-                Veronika Gerzon
-              </Text>
-              <Box w="35px" h="1px" bg="#c9a96e" />
-              <Text fontSize="xl" fontWeight="200" color="gray.700" fontStyle="italic" lineHeight="1.3" textAlign="center">
-                Wedding & Portrait Photographer
-              </Text>
-              <VStack spacing={3} pt={4}>
-                {STATS.map((stat) => (
-                  <Flex key={stat.label} gap={3} align="center">
-                    <Text fontSize="10px" fontWeight="500" textTransform="uppercase" letterSpacing="0.2em" color="#c9a96e">
-                      {stat.label}
-                    </Text>
-                    <Text fontSize="sm" fontWeight="200" color="gray.700">
-                      {stat.value}
-                    </Text>
-                  </Flex>
-                ))}
-              </VStack>
-              <Link
-                as={RouterLink}
-                to="/contact"
-                fontSize="xs"
-                fontWeight="400"
-                color="gray.700"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                display="inline-block"
-                px={8}
-                py={3}
-                mt={4}
-                border="1px solid"
-                borderColor="#c9a96e"
-                transition="all 0.4s ease"
-                _hover={{
-                  textDecoration: 'none',
-                  bg: '#c9a96e',
-                  color: 'white',
-                  transform: 'translateY(-2px)',
-                }}
-              >
-                Book a Session
-              </Link>
-            </VStack>
-          </motion.div>
-        </Flex>
-      </Box>
-    );
-  }
+  // "Scroll" hint at bottom of viewport — visible at start, fades out as soon
+  // as the user begins scrolling (the camera zoom is just starting).
+  const scrollHintOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0]);
 
-  // DESKTOP — scroll-driven camera reveal
+  // Unified mobile + desktop — scroll-driven camera reveal
   return (
-    <Box ref={sectionRef} position="relative" width="100%" height="220vh" bg="white">
+    <Box ref={sectionRef} position="relative" width="100%" height={`${SECTION_HEIGHT_VH}vh`} bg="white">
       <Box position="sticky" top={0} width="100%" height="100vh" overflow="hidden" bg="white">
         {/* Flex column: camera on top (scales), bio info below (fades in).
             pt clears the fixed navbar (~74px) with comfortable breathing room. */}
@@ -235,9 +263,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           direction="column"
           align="center"
           justify="center"
-          pt={{ md: '100px', lg: '110px' }}
-          pb="40px"
-          gap="24px"
+          pt={{ base: '90px', md: '100px', lg: '110px' }}
+          pb={{ base: '30px', md: '40px' }}
+          gap={{ base: '16px', md: '24px' }}
+          px={{ base: 4, md: 0 }}
           zIndex={2}
         >
           {/* HEADER above camera: name + divider + title */}
@@ -254,12 +283,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               </Text>
               <Box w="40px" h="1px" bg="#c9a96e" />
               <Text
-                fontSize={{ md: '2xl', lg: '3xl' }}
+                fontSize={{ base: 'lg', md: '2xl', lg: '3xl' }}
                 fontWeight="200"
                 fontStyle="italic"
                 color="gray.700"
                 letterSpacing="wide"
                 lineHeight="1.2"
+                textAlign="center"
               >
                 Wedding & Portrait Photographer
               </Text>
@@ -274,9 +304,9 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               at each scale and quality stays sharp. */}
           <MotionBox
             style={{ scale: cameraScale, x: cameraOffsetX }}
-            transformOrigin={`${LCD_CENTER_X_PCT}% ${LCD_CENTER_Y_PCT}%`}
+            transformOrigin={`${lcdCenter.x}% ${lcdCenter.y}%`}
           >
-            <CameraBody>
+            <CameraBody ref={cameraBoxRef}>
               <ImageCarousel images={images} height="100%" hideDevIndicator />
             </CameraBody>
           </MotionBox>
@@ -284,10 +314,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           {/* FOOTER below camera: stats + CTA */}
           <MotionBox style={{ opacity: footerOpacity, y: footerY }}>
             <VStack spacing={4} align="center">
-              <Flex gap={{ md: 10, lg: 14 }} align="center">
+              <Flex gap={{ base: 6, md: 10, lg: 14 }} align="center">
               {STATS.map((stat, i) => (
                 <React.Fragment key={stat.label}>
-                  <VStack spacing={2} minW="100px">
+                  <VStack spacing={2} minW={{ base: '80px', md: '100px' }}>
                     <Icon as={stat.icon} boxSize={4} color="#c9a96e" />
                     <Text
                       fontSize="10px"
@@ -339,6 +369,66 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         <ViewfinderCorner corner="tr" opacity={cornerOpacity} />
         <ViewfinderCorner corner="bl" opacity={cornerOpacity} />
         <ViewfinderCorner corner="br" opacity={cornerOpacity} />
+
+        {/* Scroll-down hint at the bottom of the viewport — small "SCROLL"
+            label with a thin gold rail and a pill that travels down it.
+            Fades out as soon as the user starts scrolling. */}
+        <MotionBox
+          position="absolute"
+          bottom={{ base: '24px', md: '32px' }}
+          left="50%"
+          transform="translateX(-50%)"
+          zIndex={5}
+          pointerEvents="none"
+          style={{ opacity: scrollHintOpacity }}
+        >
+          <VStack spacing={3} align="center">
+            <Text
+              fontSize="10px"
+              fontWeight="500"
+              textTransform="uppercase"
+              letterSpacing="0.4em"
+              color="white"
+              textShadow="0 1px 6px rgba(0,0,0,0.55)"
+              pl="0.4em" // optical centering for letterSpacing on the last char
+            >
+              Scroll
+            </Text>
+            {/* Mouse outline with a glowing scroll-wheel dot animating down */}
+            <Box
+              position="relative"
+              width="22px"
+              height="36px"
+              border="1.5px solid rgba(201, 169, 110, 0.75)"
+              borderRadius="14px"
+              boxShadow="0 1px 6px rgba(0,0,0,0.3)"
+            >
+              <motion.div
+                style={{
+                  position: 'absolute',
+                  top: 6,
+                  left: '50%',
+                  marginLeft: -1.5,
+                  width: 3,
+                  height: 7,
+                  background: '#c9a96e',
+                  borderRadius: 2,
+                  boxShadow: '0 0 6px rgba(201,169,110,0.85)',
+                }}
+                animate={{
+                  y: [0, 12, 12],
+                  opacity: [1, 0, 0],
+                }}
+                transition={{
+                  duration: 1.6,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                  repeatDelay: 0.1,
+                }}
+              />
+            </Box>
+          </VStack>
+        </MotionBox>
       </Box>
     </Box>
   );
