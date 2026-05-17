@@ -9,12 +9,18 @@ interface ImageCarouselProps {
     mobileUrl?: string;
     mobilePosition?: string;
   }>;
+  height?: string | { base?: string; sm?: string; md?: string; lg?: string };
+  hideDevIndicator?: boolean;
 }
 
 // Safe check for development mode
 const isDevelopment = process.env.NODE_ENV === 'development';
 
-const ImageCarousel: React.FC<ImageCarouselProps> = ({ images: initialImages }) => {
+const ImageCarousel: React.FC<ImageCarouselProps> = ({
+  images: initialImages,
+  height = '100vh',
+  hideDevIndicator = false,
+}) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const isMobile = useBreakpointValue({ base: true, md: false });
@@ -58,7 +64,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({ images: initialImages }) 
     <Box
       position="relative"
       width="100%"
-      height="100vh"
+      height={height}
       overflow="hidden"
     >
       <AnimatePresence initial={false}>
@@ -82,7 +88,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({ images: initialImages }) 
         </motion.div>
       </AnimatePresence>
 
-      {isDevelopment && (
+      {isDevelopment && !hideDevIndicator && (
         <Flex
           position="absolute"
           bottom="20px"

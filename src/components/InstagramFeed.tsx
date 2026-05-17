@@ -43,7 +43,6 @@ const InstagramFeed = () => {
           width="100%"
           height="100%"
           scrolling="no"
-          allowTransparency={true}
         />
       </Box>
     </Box>

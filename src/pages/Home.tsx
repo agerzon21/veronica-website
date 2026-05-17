@@ -1,9 +1,7 @@
 import React from 'react';
 import { Box } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import ImageCarousel from '../components/ImageCarousel';
-import ParallaxSection from '../components/ParallaxSection';
-import StatsSection from '../components/StatsSection';
+import HeroSection from '../components/HeroSection';
 import GoogleReviewsSection from '../components/GoogleReviewsSection';
 import InstagramFeed from '../components/InstagramFeed';
 
@@ -87,19 +85,11 @@ const Home: React.FC = () => {
     <Box
       position="relative"
       width="100%"
-      overflow="hidden"
     >
       <Helmet>
         <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />
       </Helmet>
-      <ImageCarousel images={carouselImages} />
-      <StatsSection />
-      <ParallaxSection
-        imageUrl="/assets/photos/site/home-cta-bg.webp"
-        mobileImageUrl="/assets/photos/portraits/white-dress-lighthouse.webp"
-        imagePosition="center 85%"
-        mobileImagePosition="50% 10%"
-      />
+      <HeroSection images={carouselImages} />
       <InstagramFeed />
       <GoogleReviewsSection />
     </Box>
