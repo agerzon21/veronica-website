@@ -51,9 +51,23 @@ function useScopedLenis() {
     const startLenis = () => {
       if (lenis) return;
       lenis = new Lenis({
+        // Wheel (desktop trackpads/mice)
         lerp: 0.18,
         smoothWheel: true,
         wheelMultiplier: 0.8,
+        // Touch (mobile) — these are the knobs that actually do anything on
+        // iPhone. Lenis defaults syncTouch to FALSE so it ignores touch
+        // entirely, which is why the cinematic felt unchanged on mobile
+        // before. Turning it on lets the lerp loop intercept touch scrolls
+        // the same way it does wheel scrolls.
+        // syncTouchLerp is intentionally snappier than the wheel lerp —
+        // finger movement carries its own implicit "easing" so a tighter
+        // value avoids feeling laggy under fast swipes. The inertia
+        // exponent controls the throw curve after a fling (higher =
+        // longer/softer glide).
+        syncTouch: true,
+        syncTouchLerp: 0.08,
+        touchInertiaExponent: 1.6,
       });
       const raf = (time: number) => {
         lenis?.raf(time);
