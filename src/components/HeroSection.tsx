@@ -263,16 +263,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH,
   );
   const PINNED_SCROLL_VH = ANIMATIONS_END_VH + STABLE_SCROLL_VH;
-  // When the footer is extracted (short viewports), the section needs extra
-  // scroll past the pin so the footer can slide up into view from below.
-  // ~60vh covers ~120-180px of footer + a small viewing window before the
-  // section ends and the next one takes over.
-  const POST_PIN_REVEAL_VH = size.extractFooter ? 60 : 0;
-  const SCROLL_RANGE_VH = PINNED_SCROLL_VH + POST_PIN_REVEAL_VH;
-  const SECTION_HEIGHT_VH = SCROLL_RANGE_VH + 100;
-  const CAMERA_ZOOM_END = CAMERA_ZOOM_VH / SCROLL_RANGE_VH;
-  const TEXT_FADE_START = TEXT_FADE_START_VH / SCROLL_RANGE_VH;
-  const TEXT_FADE_END = (TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH) / SCROLL_RANGE_VH;
+  const SECTION_HEIGHT_VH = PINNED_SCROLL_VH + 100;
+  const CAMERA_ZOOM_END = CAMERA_ZOOM_VH / PINNED_SCROLL_VH;
+  const TEXT_FADE_START = TEXT_FADE_START_VH / PINNED_SCROLL_VH;
+  const TEXT_FADE_END = (TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH) / PINNED_SCROLL_VH;
 
   // Scale animates DOWN from 1 (full natural size, LCD covers viewport) to
   // finalScale (camera at small final size). Direction is critical for iOS.
@@ -350,13 +344,14 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   );
 
   return (
+    <>
     <Box ref={sectionRef} position="relative" width="100%" height={`${SECTION_HEIGHT_VH}vh`} bg="white">
       <Box
         position="sticky"
         top={0}
         width="100%"
         height="100dvh"
-        overflow={size.extractFooter ? 'visible' : 'hidden'}
+        overflow="hidden"
         bg="white"
       >
         {/* HEADER — anchored CAMERA_GAP px above the camera's top edge. Symmetric
@@ -434,14 +429,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           </MotionBox>
         </Box>
 
-        {/* FOOTER — two modes:
-            (1) Normal: anchored just below the camera's bottom edge inside the
-                sticky viewport, fades in with the cinematic.
-            (2) Extracted: positioned just below the sticky viewport (top:
-                100dvh). It's offscreen during the pin, then slides up into
-                view as the user keeps scrolling past the cinematic — the
-                section is taller in this mode to give it room. */}
-        {!size.extractFooter ? (
+        {/* FOOTER — when the camera + footer can fit inside the sticky
+            viewport, anchor it just below the camera's bottom edge and let it
+            fade in with the cinematic. When they can't (extracted mode, eg.
+            landscape phone), the footer is rendered as a sibling AFTER the
+            sticky section instead — see below. */}
+        {!size.extractFooter && (
           <Box
             position="absolute"
             top={`calc(50% + ${footerTopOffset}px)`}
@@ -455,19 +448,6 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             <MotionBox style={{ opacity: footerOpacity, y: footerY }}>
               {footerContent}
             </MotionBox>
-          </Box>
-        ) : (
-          <Box
-            position="absolute"
-            top="calc(100dvh + 24px)"
-            left="50%"
-            transform="translateX(-50%)"
-            width="100%"
-            maxW="100vw"
-            px={4}
-            zIndex={3}
-          >
-            {footerContent}
           </Box>
         )}
 
@@ -535,6 +515,24 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         </MotionBox>
       </Box>
     </Box>
+    {/* Extracted footer: sibling of the sticky section, not inside it. Once
+        the sticky scrolls past the viewport, this block appears underneath as
+        a regular flow element — guaranteed to never overlap the next section
+        (Instagram) because it's part of the normal document flow, not pinned
+        or offset. */}
+    {size.extractFooter && (
+      <Box
+        width="100%"
+        bg="white"
+        py={6}
+        px={4}
+        display="flex"
+        justifyContent="center"
+      >
+        {footerContent}
+      </Box>
+    )}
+    </>
   );
 };
 
