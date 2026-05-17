@@ -33,8 +33,19 @@ const InstagramFeed = () => {
             border: 'none',
             height: { base: '500px', md: '1050px' },
             width: '100%',
-            maxWidth: { base: '650px', md: '1300px' }
-          }
+            maxWidth: { base: '650px', md: '1300px' },
+          },
+          // Chakra's `md` breakpoint is width-only, so landscape phones (wide
+          // but very short) were getting the 1050px iframe on a ~393px
+          // viewport — Instagram's actual content only fills ~400-500px, so
+          // the rest was a huge blank space before Google Reviews. Cap the
+          // iframe to viewport height on short screens only, leaving portrait
+          // and desktop sizing untouched.
+          '@media (max-height: 500px)': {
+            'iframe': {
+              height: 'calc(100vh - 40px)',
+            },
+          },
         }}
       >
         <Box

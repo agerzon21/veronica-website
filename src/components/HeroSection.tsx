@@ -58,11 +58,16 @@ const lcdCenterOf = (b: { left: number; top: number; width: number; height: numb
 });
 
 // Final on-screen camera widths — the camera shrinks DOWN to this size at scroll
-// end. Capped per orientation, lower-bounded so it stays recognizable on tiny
-// viewports (eg. landscape phone).
+// end. Capped per orientation, lower-bounded so it stays recognizable.
 const FINAL_WIDTH_LANDSCAPE_MAX = 540;
 const FINAL_WIDTH_PORTRAIT_MAX = 320;
-const FINAL_WIDTH_MIN = 120;
+const FINAL_WIDTH_MIN = 200;
+
+// If full layout (footer inside sticky) would force the camera below this
+// height, drop into "extracted footer" mode: footer is hoisted to live just
+// below the sticky viewport so the user can reveal it by continuing to scroll.
+// Camera then only has to share space with the header above it.
+const MIN_FULL_LAYOUT_CAMERA_HEIGHT = 180;
 
 // Cap natural size so we don't allocate absurd GPU memory on 4K monitors.
 const MAX_NATURAL_WIDTH = 6000;
@@ -148,6 +153,7 @@ const computeCameraSize = (
   finalHeight: number;
   isPortrait: boolean;
   verticalShiftPx: number;
+  extractFooter: boolean;
 } => {
   const isPortrait = vh > vw;
   const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
@@ -161,11 +167,20 @@ const computeCameraSize = (
     MAX_NATURAL_WIDTH,
   );
 
-  // Final: fit within (vw - 2*hPadding) × (vh - reserved header/footer).
   const hPadding = isPortrait ? 20 : 48;
   const maxFinalW = isPortrait ? FINAL_WIDTH_PORTRAIT_MAX : FINAL_WIDTH_LANDSCAPE_MAX;
   const availableW = vw - 2 * hPadding;
-  const availableH = vh - HEADER_RESERVED - FOOTER_RESERVED - 2 * CAMERA_GAP;
+
+  // Try the full layout first (header + camera + footer all inside sticky).
+  // If the resulting camera would be cramped, switch to extracted-footer mode:
+  // the camera only has to share the viewport with the header, and the footer
+  // sits just below the sticky and is revealed by additional scroll.
+  const fullAvailableH = vh - HEADER_RESERVED - FOOTER_RESERVED - 2 * CAMERA_GAP;
+  const extractFooter = fullAvailableH < MIN_FULL_LAYOUT_CAMERA_HEIGHT;
+
+  const availableH = extractFooter
+    ? vh - HEADER_RESERVED - CAMERA_GAP - SAFE_BUFFER
+    : fullAvailableH;
   const final = Math.max(
     FINAL_WIDTH_MIN,
     Math.min(availableW, availableH * camAspect, maxFinalW),
@@ -180,7 +195,7 @@ const computeCameraSize = (
     NAVBAR_HEIGHT + SAFE_BUFFER + HEADER_CONTENT + CAMERA_GAP + finalHeight / 2;
   const verticalShiftPx = Math.max(0, minCameraCenterY - vh / 2);
 
-  return { natural, final, finalHeight, isPortrait, verticalShiftPx };
+  return { natural, final, finalHeight, isPortrait, verticalShiftPx, extractFooter };
 };
 
 const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
@@ -248,10 +263,16 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH,
   );
   const PINNED_SCROLL_VH = ANIMATIONS_END_VH + STABLE_SCROLL_VH;
-  const SECTION_HEIGHT_VH = PINNED_SCROLL_VH + 100;
-  const CAMERA_ZOOM_END = CAMERA_ZOOM_VH / PINNED_SCROLL_VH;
-  const TEXT_FADE_START = TEXT_FADE_START_VH / PINNED_SCROLL_VH;
-  const TEXT_FADE_END = (TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH) / PINNED_SCROLL_VH;
+  // When the footer is extracted (short viewports), the section needs extra
+  // scroll past the pin so the footer can slide up into view from below.
+  // ~60vh covers ~120-180px of footer + a small viewing window before the
+  // section ends and the next one takes over.
+  const POST_PIN_REVEAL_VH = size.extractFooter ? 60 : 0;
+  const SCROLL_RANGE_VH = PINNED_SCROLL_VH + POST_PIN_REVEAL_VH;
+  const SECTION_HEIGHT_VH = SCROLL_RANGE_VH + 100;
+  const CAMERA_ZOOM_END = CAMERA_ZOOM_VH / SCROLL_RANGE_VH;
+  const TEXT_FADE_START = TEXT_FADE_START_VH / SCROLL_RANGE_VH;
+  const TEXT_FADE_END = (TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH) / SCROLL_RANGE_VH;
 
   // Scale animates DOWN from 1 (full natural size, LCD covers viewport) to
   // finalScale (camera at small final size). Direction is critical for iOS.
@@ -277,9 +298,67 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const footerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [30, 0]);
   const scrollHintOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0]);
 
+  const footerContent = (
+    <VStack spacing={4} align="center">
+      <Flex gap={{ base: 6, md: 10, lg: 14 }} align="center">
+        {STATS.map((stat, i) => (
+          <React.Fragment key={stat.label}>
+            <VStack spacing={2} minW={{ base: '80px', md: '100px' }}>
+              <Icon as={stat.icon} boxSize={4} color="#c9a96e" />
+              <Text
+                fontSize="10px"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.2em"
+                color="#c9a96e"
+              >
+                {stat.label}
+              </Text>
+              <Text fontSize="sm" fontWeight="200" color="gray.700">
+                {stat.value}
+              </Text>
+            </VStack>
+            {i < STATS.length - 1 && <Box w="1px" h="50px" bg="#c9a96e" opacity={0.3} />}
+          </React.Fragment>
+        ))}
+      </Flex>
+      <Link
+        as={RouterLink}
+        to="/contact"
+        fontSize="xs"
+        fontWeight="400"
+        color="gray.700"
+        textTransform="uppercase"
+        letterSpacing="0.2em"
+        display="inline-block"
+        px={8}
+        py={3}
+        mt={2}
+        border="1px solid"
+        borderColor="#c9a96e"
+        transition="all 0.4s ease"
+        _hover={{
+          textDecoration: 'none',
+          bg: '#c9a96e',
+          color: 'white',
+          transform: 'translateY(-2px)',
+        }}
+      >
+        Book a Session
+      </Link>
+    </VStack>
+  );
+
   return (
     <Box ref={sectionRef} position="relative" width="100%" height={`${SECTION_HEIGHT_VH}vh`} bg="white">
-      <Box position="sticky" top={0} width="100%" height="100dvh" overflow="hidden" bg="white">
+      <Box
+        position="sticky"
+        top={0}
+        width="100%"
+        height="100dvh"
+        overflow={size.extractFooter ? 'visible' : 'hidden'}
+        bg="white"
+      >
         {/* HEADER — anchored CAMERA_GAP px above the camera's top edge. Symmetric
             with the footer below. Whitespace between header and camera no longer
             balloons on tall viewports because the position tracks the camera's
@@ -355,69 +434,42 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           </MotionBox>
         </Box>
 
-        {/* FOOTER — anchored CAMERA_GAP px below the camera's bottom edge.
-            Symmetric with the header above. */}
-        <Box
-          position="absolute"
-          top={`calc(50% + ${footerTopOffset}px)`}
-          left="50%"
-          transform="translateX(-50%)"
-          width={{ base: '100%', md: 'auto' }}
-          maxW="100vw"
-          px={{ base: 4, md: 0 }}
-          zIndex={3}
-        >
-          <MotionBox style={{ opacity: footerOpacity, y: footerY }}>
-            <VStack spacing={4} align="center">
-              <Flex gap={{ base: 6, md: 10, lg: 14 }} align="center">
-                {STATS.map((stat, i) => (
-                  <React.Fragment key={stat.label}>
-                    <VStack spacing={2} minW={{ base: '80px', md: '100px' }}>
-                      <Icon as={stat.icon} boxSize={4} color="#c9a96e" />
-                      <Text
-                        fontSize="10px"
-                        fontWeight="500"
-                        textTransform="uppercase"
-                        letterSpacing="0.2em"
-                        color="#c9a96e"
-                      >
-                        {stat.label}
-                      </Text>
-                      <Text fontSize="sm" fontWeight="200" color="gray.700">
-                        {stat.value}
-                      </Text>
-                    </VStack>
-                    {i < STATS.length - 1 && <Box w="1px" h="50px" bg="#c9a96e" opacity={0.3} />}
-                  </React.Fragment>
-                ))}
-              </Flex>
-              <Link
-                as={RouterLink}
-                to="/contact"
-                fontSize="xs"
-                fontWeight="400"
-                color="gray.700"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                display="inline-block"
-                px={8}
-                py={3}
-                mt={2}
-                border="1px solid"
-                borderColor="#c9a96e"
-                transition="all 0.4s ease"
-                _hover={{
-                  textDecoration: 'none',
-                  bg: '#c9a96e',
-                  color: 'white',
-                  transform: 'translateY(-2px)',
-                }}
-              >
-                Book a Session
-              </Link>
-            </VStack>
-          </MotionBox>
-        </Box>
+        {/* FOOTER — two modes:
+            (1) Normal: anchored just below the camera's bottom edge inside the
+                sticky viewport, fades in with the cinematic.
+            (2) Extracted: positioned just below the sticky viewport (top:
+                100dvh). It's offscreen during the pin, then slides up into
+                view as the user keeps scrolling past the cinematic — the
+                section is taller in this mode to give it room. */}
+        {!size.extractFooter ? (
+          <Box
+            position="absolute"
+            top={`calc(50% + ${footerTopOffset}px)`}
+            left="50%"
+            transform="translateX(-50%)"
+            width={{ base: '100%', md: 'auto' }}
+            maxW="100vw"
+            px={{ base: 4, md: 0 }}
+            zIndex={3}
+          >
+            <MotionBox style={{ opacity: footerOpacity, y: footerY }}>
+              {footerContent}
+            </MotionBox>
+          </Box>
+        ) : (
+          <Box
+            position="absolute"
+            top="calc(100dvh + 24px)"
+            left="50%"
+            transform="translateX(-50%)"
+            width="100%"
+            maxW="100vw"
+            px={4}
+            zIndex={3}
+          >
+            {footerContent}
+          </Box>
+        )}
 
         {/* Viewfinder corners */}
         <ViewfinderCorner corner="tl" opacity={cornerOpacity} />
