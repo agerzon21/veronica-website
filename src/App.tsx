@@ -12,6 +12,7 @@ import Pay from './pages/Pay';
 import NotFound from './pages/NotFound';
 import ThankYou from './pages/ThankYou';
 import Navbar from './components/Navbar';
+import PullToRefresh from './components/PullToRefresh';
 import SEO from './components/SEO';
 import { initGA, trackPageView } from './utils/analytics';
 
@@ -162,6 +163,7 @@ function App() {
       <ChakraProvider>
         <Router>
           <LenisHost />
+          <PullToRefresh />
           <SEO />
           <ScrollToTop />
           <TitleUpdater />
