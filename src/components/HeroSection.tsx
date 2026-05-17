@@ -61,18 +61,25 @@ const lcdCenterOf = (b: { left: number; top: number; width: number; height: numb
 // end. Capped per orientation, lower-bounded so it stays recognizable on tiny
 // viewports (eg. landscape phone).
 const FINAL_WIDTH_LANDSCAPE_MAX = 540;
-const FINAL_WIDTH_PORTRAIT_MAX = 360;
-const FINAL_WIDTH_MIN = 140;
+const FINAL_WIDTH_PORTRAIT_MAX = 320;
+const FINAL_WIDTH_MIN = 120;
 
 // Cap natural size so we don't allocate absurd GPU memory on 4K monitors.
 const MAX_NATURAL_WIDTH = 6000;
 
-// Reserved vertical space for header + footer at scroll end. The header is
-// anchored CAMERA_GAP px above the camera and the footer the same below it, so
-// the camera's final size has to leave room for both.
-const HEADER_AREA = 100;
-const FOOTER_AREA = 170;
-const CAMERA_GAP = 32;
+// Vertical layout budget. The fixed Navbar overlays the top of the viewport, so
+// HEADER_RESERVED has to include its height plus the hero header content plus a
+// small visual buffer. FOOTER_RESERVED only includes the footer content + a
+// buffer to the viewport bottom. SAFE_BUFFER sits between navbar/header and
+// footer/viewport-bottom — what reads as "breathing room", not whitespace.
+const NAVBAR_HEIGHT = 72;
+const HEADER_CONTENT = 92;
+const FOOTER_CONTENT = 130;
+const SAFE_BUFFER = 16;
+const CAMERA_GAP = 24;
+
+const HEADER_RESERVED = NAVBAR_HEIGHT + SAFE_BUFFER + HEADER_CONTENT;
+const FOOTER_RESERVED = FOOTER_CONTENT + SAFE_BUFFER;
 
 // CameraBody rendered at a configurable CSS-natural width (passed in as px).
 // The parent animates CSS transform scale DOWN from 1 → finalScale to shrink it.
@@ -135,7 +142,13 @@ CameraBody.displayName = 'CameraBody';
 const computeCameraSize = (
   vw: number,
   vh: number,
-): { natural: number; final: number; finalHeight: number; isPortrait: boolean } => {
+): {
+  natural: number;
+  final: number;
+  finalHeight: number;
+  isPortrait: boolean;
+  verticalShiftPx: number;
+} => {
   const isPortrait = vh > vw;
   const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
   const camAspect = isPortrait ? 4 / 5 : 5 / 4; // width/height
@@ -152,13 +165,22 @@ const computeCameraSize = (
   const hPadding = isPortrait ? 20 : 48;
   const maxFinalW = isPortrait ? FINAL_WIDTH_PORTRAIT_MAX : FINAL_WIDTH_LANDSCAPE_MAX;
   const availableW = vw - 2 * hPadding;
-  const availableH = vh - HEADER_AREA - FOOTER_AREA - 2 * CAMERA_GAP;
+  const availableH = vh - HEADER_RESERVED - FOOTER_RESERVED - 2 * CAMERA_GAP;
   const final = Math.max(
     FINAL_WIDTH_MIN,
     Math.min(availableW, availableH * camAspect, maxFinalW),
   );
   const finalHeight = final / camAspect;
-  return { natural, final, finalHeight, isPortrait };
+
+  // The fixed Navbar overlays the top NAVBAR_HEIGHT of the viewport. If the
+  // camera centered at vh/2 would push the header up behind the navbar, shift
+  // the whole stack DOWN until the header clears it. On tall viewports
+  // (desktop) this stays 0 and the stack sits at the visual center.
+  const minCameraCenterY =
+    NAVBAR_HEIGHT + SAFE_BUFFER + HEADER_CONTENT + CAMERA_GAP + finalHeight / 2;
+  const verticalShiftPx = Math.max(0, minCameraCenterY - vh / 2);
+
+  return { natural, final, finalHeight, isPortrait, verticalShiftPx };
 };
 
 const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
@@ -198,9 +220,22 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const lcdOffsetY = 50 - lcdCenter.y;
   const finalScale = size.final / size.natural;
 
-  // Header bottom edge / footer top edge sit this many px from viewport center,
-  // giving a symmetric CAMERA_GAP gap on both sides of the camera at scroll end.
+  // CSS-pixel offsets that determine header/footer positions at scroll end.
+  // anchorOffset places them CAMERA_GAP px outside the camera's final edges;
+  // verticalShiftPx pushes both DOWN equally to clear the navbar overlay on
+  // short viewports — header gap shrinks, footer gap grows by the same amount
+  // so the two stay visually balanced around the (shifted) camera.
   const anchorOffset = size.finalHeight / 2 + CAMERA_GAP;
+  const headerBottomOffset = anchorOffset - size.verticalShiftPx;
+  const footerTopOffset = anchorOffset + size.verticalShiftPx;
+
+  // Motion-y at scroll end translates the camera body down by verticalShiftPx
+  // so its center matches the header/footer anchor. Expressed as a percentage
+  // of the natural element's height (framer-motion's % translation is in
+  // unscaled CSS pixels, applied after scale, so this stays geometrically
+  // correct at any finalScale).
+  const naturalHeight = size.natural / (size.isPortrait ? 4 / 5 : 5 / 4);
+  const verticalShiftPct = (size.verticalShiftPx * 100) / naturalHeight;
 
   // ─── SCROLL CHOREOGRAPHY ───
   const CAMERA_ZOOM_VH = 60;
@@ -232,7 +267,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const cameraOffsetY = useTransform(
     scrollYProgress,
     [0, CAMERA_ZOOM_END],
-    [`${lcdOffsetY}%`, '0%'],
+    [`${lcdOffsetY}%`, `${verticalShiftPct}%`],
   );
 
   const cornerOpacity = useTransform(scrollYProgress, [0, 0.12], [1, 0]);
@@ -251,7 +286,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             final size, not the viewport top. */}
         <Box
           position="absolute"
-          bottom={`calc(50% + ${anchorOffset}px)`}
+          bottom={`calc(50% + ${headerBottomOffset}px)`}
           left="50%"
           transform="translateX(-50%)"
           width={{ base: '100%', md: 'auto' }}
@@ -311,6 +346,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
               transformStyle: 'preserve-3d',
+              willChange: 'transform',
             }}
           >
             <CameraBody isPortrait={size.isPortrait} width={size.natural}>
@@ -323,7 +359,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             Symmetric with the header above. */}
         <Box
           position="absolute"
-          top={`calc(50% + ${anchorOffset}px)`}
+          top={`calc(50% + ${footerTopOffset}px)`}
           left="50%"
           transform="translateX(-50%)"
           width={{ base: '100%', md: 'auto' }}
