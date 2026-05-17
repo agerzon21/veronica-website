@@ -140,8 +140,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
 
   // Track whether we're on a mobile viewport. The camera image is rotated 90°
   // and the LCD bounds shift, so transform-origin + horizontal offset need to
-  // use the orientation-specific LCD center.
-  const [isMobile, setIsMobile] = useState(false);
+  // use the orientation-specific LCD center. Initialized with the actual
+  // viewport size on first render (not just `false`) so iOS Safari doesn't
+  // briefly render with desktop transform values then re-rasterize on update.
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768,
+  );
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 768);
     update();
@@ -161,7 +165,23 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // breakpoint props), then derives the scale needed for the LCD to fill the
   // viewport. Uses ResizeObserver so it adapts to viewport changes correctly
   // on both mobile (smaller camera) and desktop (fixed 480px camera).
-  const [maxScale, setMaxScale] = useState(5);
+  // Initial estimate of maxScale. Computed from the viewport before the
+  // first paint so iOS Safari doesn't render with a too-small scale, then
+  // re-rasterize and look blurry until the user scrolls. The useEffect below
+  // refines this to the exact value once the camera box is measured.
+  const [maxScale, setMaxScale] = useState(() => {
+    if (typeof window === 'undefined') return 7;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const onMobile = w < 768;
+    const bounds = onMobile ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
+    // Estimate camera width from the Chakra responsive props
+    const estCameraW = onMobile ? w * 0.85 : 480;
+    const estCameraH = estCameraW * (onMobile ? 5 / 4 : 4 / 5);
+    const lcdW = estCameraW * (bounds.width / 100);
+    const lcdH = estCameraH * (bounds.height / 100);
+    return Math.max(w / lcdW, h / lcdH) * 1.2;
+  });
   useEffect(() => {
     const recompute = () => {
       const box = cameraBoxRef.current;
@@ -202,27 +222,35 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
 
   // ─── SCROLL CHOREOGRAPHY (in vh — 1% of viewport height) ───
   //
-  // Hero plays out as three independent scroll phases:
-  //   1. Camera zooms out      — takes CAMERA_ZOOM_VH of scroll
-  //   2. (pause)               — takes ZOOM_TO_TEXT_GAP_VH of scroll, then
-  //                              text snaps in
-  //   3. Stable end state      — takes STABLE_SCROLL_VH of scroll where the
-  //                              composed scene stays locked before the page
-  //                              continues past the hero to Instagram
+  // Four independent knobs. Each one is an absolute scroll distance you can
+  // tune without affecting the others.
   //
-  // Change any of these THREE values independently. The total section
-  // height auto-derives below so changing STABLE_SCROLL_VH only shortens
-  // the stable period without affecting how fast the zoom animation plays.
+  //   CAMERA_ZOOM_VH       — how much scroll drives the camera zoom-out
+  //   TEXT_FADE_START_VH   — scroll position where text BEGINS fading in
+  //                          (lower = earlier; can overlap the zoom by setting
+  //                          this below CAMERA_ZOOM_VH for a coordinated feel)
+  //   TEXT_FADE_DURATION_VH — how SLOWLY the text fades in (length of the fade)
+  //   STABLE_SCROLL_VH     — how much "everything locked" scroll at the end
+  //                          before the page moves past the hero to Instagram
+  //
+  // The section height auto-derives. Animations end at whichever finishes
+  // last (camera zoom vs text fade), then stable kicks in.
 
   const CAMERA_ZOOM_VH = 60;
-  const ZOOM_TO_TEXT_GAP_VH = 15;
+  const TEXT_FADE_START_VH = 50;
+  const TEXT_FADE_DURATION_VH = 15;
   const STABLE_SCROLL_VH = 0;
 
   // Derived — don't usually need to touch.
-  const PINNED_SCROLL_VH = CAMERA_ZOOM_VH + ZOOM_TO_TEXT_GAP_VH + STABLE_SCROLL_VH;
+  const ANIMATIONS_END_VH = Math.max(
+    CAMERA_ZOOM_VH,
+    TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH,
+  );
+  const PINNED_SCROLL_VH = ANIMATIONS_END_VH + STABLE_SCROLL_VH;
   const SECTION_HEIGHT_VH = PINNED_SCROLL_VH + 100; // +100vh for the sticky inner
   const CAMERA_ZOOM_END = CAMERA_ZOOM_VH / PINNED_SCROLL_VH;
-  const TEXT_FADE_AT = (CAMERA_ZOOM_VH + ZOOM_TO_TEXT_GAP_VH) / PINNED_SCROLL_VH;
+  const TEXT_FADE_START = TEXT_FADE_START_VH / PINNED_SCROLL_VH;
+  const TEXT_FADE_END = (TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH) / PINNED_SCROLL_VH;
 
   // Camera scales from "LCD fills viewport" down to natural (1.0×).
   const cameraScale = useTransform(scrollYProgress, [0, CAMERA_ZOOM_END], [maxScale, 1.0]);
@@ -240,12 +268,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const cornerOpacity = useTransform(scrollYProgress, [0, 0.12], [1, 0]);
 
   // Header (name + title) ABOVE camera: slides down from above + fades in
-  const headerOpacity = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [0, 1]);
-  const headerY = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [-30, 0]);
+  // gradually over the TEXT_FADE_DURATION_VH window after the camera zoom.
+  const headerOpacity = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [0, 1]);
+  const headerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [-30, 0]);
 
   // Footer (stats + CTA) BELOW camera: slides up from below + fades in
-  const footerOpacity = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [0, 1]);
-  const footerY = useTransform(scrollYProgress, [TEXT_FADE_AT, TEXT_FADE_AT], [30, 0]);
+  const footerOpacity = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [0, 1]);
+  const footerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [30, 0]);
 
   // "Scroll" hint at bottom of viewport — visible at start, fades out as soon
   // as the user begins scrolling (the camera zoom is just starting).
@@ -303,7 +332,16 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               when scrolling out→in quickly. Without it, the browser re-renders
               at each scale and quality stays sharp. */}
           <MotionBox
-            style={{ scale: cameraScale, x: cameraOffsetX }}
+            style={{
+              scale: cameraScale,
+              x: cameraOffsetX,
+              // iOS Safari rasterization hints — without these the camera
+              // renders at a low-res raster initially (page looks blurry on
+              // real iPhones until the user scrolls and triggers re-paint).
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transformStyle: 'preserve-3d',
+            }}
             transformOrigin={`${lcdCenter.x}% ${lcdCenter.y}%`}
           >
             <CameraBody ref={cameraBoxRef}>
@@ -375,7 +413,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             Fades out as soon as the user starts scrolling. */}
         <MotionBox
           position="absolute"
-          bottom={{ base: '24px', md: '32px' }}
+          // On mobile, mobile browser chrome (Safari URL bar, Chrome
+          // navigation) overlays the bottom ~50-80px of the viewport, so push
+          // the indicator higher so it stays visible above the bars.
+          bottom={{ base: '90px', md: '32px' }}
           left="50%"
           transform="translateX(-50%)"
           zIndex={5}
