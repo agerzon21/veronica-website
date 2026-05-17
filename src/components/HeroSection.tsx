@@ -96,6 +96,13 @@ const CameraBody = React.forwardRef<HTMLDivElement, { children: React.ReactNode 
       <Image
         src={CAMERA_IMAGE_SRC}
         alt="Canon EOS R6 camera back"
+        // Native pixel dimensions of the source — helps iOS Safari pick a
+        // higher-quality rasterization path instead of stretching a small
+        // cached bitmap when the parent applies a large CSS scale transform.
+        htmlWidth={800}
+        htmlHeight={640}
+        decoding="sync"
+        fetchPriority="high"
         position="absolute"
         top="50%"
         left="50%"
@@ -108,6 +115,11 @@ const CameraBody = React.forwardRef<HTMLDivElement, { children: React.ReactNode 
         }}
         draggable={false}
         userSelect="none"
+        sx={{
+          // Ask the browser for the highest-quality scaling algorithm
+          // (default is browser-dependent and often coarse on iOS).
+          imageRendering: 'high-quality',
+        }}
       />
       {/* LCD container — positioned at the rotated-LCD bounds on mobile,
           original bounds on desktop. NOT rotated, so the photo carousel
@@ -283,7 +295,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // Unified mobile + desktop — scroll-driven camera reveal
   return (
     <Box ref={sectionRef} position="relative" width="100%" height={`${SECTION_HEIGHT_VH}vh`} bg="white">
-      <Box position="sticky" top={0} width="100%" height="100vh" overflow="hidden" bg="white">
+      {/* sticky inner uses 100dvh (dynamic viewport height) so it matches the
+          VISIBLE viewport on mobile — 100vh refers to the LARGE viewport on
+          iOS Safari (the size when chrome bars are hidden), which made the
+          scroll indicator at the bottom land under the Safari toolbar. */}
+      <Box position="sticky" top={0} width="100%" height="100dvh" overflow="hidden" bg="white">
         {/* Flex column: camera on top (scales), bio info below (fades in).
             pt clears the fixed navbar (~74px) with comfortable breathing room. */}
         <Flex
@@ -413,10 +429,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             Fades out as soon as the user starts scrolling. */}
         <MotionBox
           position="absolute"
-          // On mobile, mobile browser chrome (Safari URL bar, Chrome
-          // navigation) overlays the bottom ~50-80px of the viewport, so push
-          // the indicator higher so it stays visible above the bars.
-          bottom={{ base: '90px', md: '32px' }}
+          // Sticky inner is sized in 100dvh now, so its bottom is at the
+          // visible viewport bottom on mobile regardless of chrome state.
+          // 24px clears it cleanly above any toolbar/home indicator.
+          bottom={{ base: '24px', md: '32px' }}
           left="50%"
           transform="translateX(-50%)"
           zIndex={5}
