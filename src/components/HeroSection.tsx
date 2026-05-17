@@ -57,13 +57,22 @@ const lcdCenterOf = (b: { left: number; top: number; width: number; height: numb
   y: b.top + b.height / 2,
 });
 
-// Final on-screen camera widths — the size the camera shrinks DOWN to at end-of-scroll.
-const FINAL_WIDTH_DESKTOP = 480;
-const FINAL_WIDTH_MOBILE_RATIO = 0.85;
-const FINAL_WIDTH_MOBILE_MAX = 420;
+// Final on-screen camera widths — the camera shrinks DOWN to this size at scroll
+// end. Capped per orientation, lower-bounded so it stays recognizable on tiny
+// viewports (eg. landscape phone).
+const FINAL_WIDTH_LANDSCAPE_MAX = 540;
+const FINAL_WIDTH_PORTRAIT_MAX = 360;
+const FINAL_WIDTH_MIN = 140;
 
 // Cap natural size so we don't allocate absurd GPU memory on 4K monitors.
 const MAX_NATURAL_WIDTH = 6000;
+
+// Reserved vertical space for header + footer at scroll end. The header is
+// anchored CAMERA_GAP px above the camera and the footer the same below it, so
+// the camera's final size has to leave room for both.
+const HEADER_AREA = 100;
+const FOOTER_AREA = 170;
+const CAMERA_GAP = 32;
 
 // CameraBody rendered at a configurable CSS-natural width (passed in as px).
 // The parent animates CSS transform scale DOWN from 1 → finalScale to shrink it.
@@ -71,16 +80,16 @@ const MAX_NATURAL_WIDTH = 6000;
 // bitmap-DOWNSCALING is sharp while bitmap-UPSCALING (the old approach) is blurry.
 const CameraBody = React.forwardRef<
   HTMLDivElement,
-  { children: React.ReactNode; isMobile: boolean; width: number }
->(({ children, isMobile, width }, ref) => {
-  const bounds = isMobile ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
+  { children: React.ReactNode; isPortrait: boolean; width: number }
+>(({ children, isPortrait, width }, ref) => {
+  const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
   return (
     <Box
       ref={ref}
       position="relative"
       style={{
         width,
-        aspectRatio: isMobile ? '4 / 5' : '5 / 4',
+        aspectRatio: isPortrait ? '4 / 5' : '5 / 4',
       }}
     >
       <Image
@@ -93,10 +102,10 @@ const CameraBody = React.forwardRef<
         position="absolute"
         top="50%"
         left="50%"
-        width={isMobile ? '125%' : '100%'}
-        height={isMobile ? '80%' : '100%'}
+        width={isPortrait ? '125%' : '100%'}
+        height={isPortrait ? '80%' : '100%'}
         objectFit="contain"
-        transform={isMobile ? 'translate(-50%, -50%) rotate(-90deg)' : 'translate(-50%, -50%)'}
+        transform={isPortrait ? 'translate(-50%, -50%) rotate(-90deg)' : 'translate(-50%, -50%)'}
         draggable={false}
         userSelect="none"
         sx={{ imageRendering: 'high-quality' }}
@@ -117,25 +126,39 @@ const CameraBody = React.forwardRef<
 });
 CameraBody.displayName = 'CameraBody';
 
-// Computes the camera's natural CSS size — large enough that the LCD covers the
-// viewport with a 1.2× buffer, capped to MAX_NATURAL_WIDTH.
+// Computes the camera's natural CSS size (huge — fills viewport + 1.2× buffer
+// so the LCD covers it at scroll start, allowing sharp iOS bitmap-downscaling)
+// and its final shrunken size (fits within the viewport with room reserved for
+// the header/footer). Orientation follows viewport aspect ratio, NOT a width
+// breakpoint — so iPhone landscape uses the landscape camera at a size that
+// fits, not a fixed 480px that dwarfs the 393px-tall viewport.
 const computeCameraSize = (
   vw: number,
   vh: number,
-): { natural: number; final: number; isMobile: boolean } => {
-  const isMobile = vw < 768;
-  const bounds = isMobile ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
-  const camAspect = isMobile ? 4 / 5 : 5 / 4; // width/height
+): { natural: number; final: number; finalHeight: number; isPortrait: boolean } => {
+  const isPortrait = vh > vw;
+  const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
+  const camAspect = isPortrait ? 4 / 5 : 5 / 4; // width/height
+
+  // Natural: large enough that the LCD covers the viewport with 20% overshoot.
   const camForVw = (vw * 100) / bounds.width;
   const camForVh = (vh * camAspect * 100) / bounds.height;
   const natural = Math.min(
     Math.max(camForVw, camForVh) * 1.2,
     MAX_NATURAL_WIDTH,
   );
-  const final = isMobile
-    ? Math.min(vw * FINAL_WIDTH_MOBILE_RATIO, FINAL_WIDTH_MOBILE_MAX)
-    : FINAL_WIDTH_DESKTOP;
-  return { natural, final, isMobile };
+
+  // Final: fit within (vw - 2*hPadding) × (vh - reserved header/footer).
+  const hPadding = isPortrait ? 20 : 48;
+  const maxFinalW = isPortrait ? FINAL_WIDTH_PORTRAIT_MAX : FINAL_WIDTH_LANDSCAPE_MAX;
+  const availableW = vw - 2 * hPadding;
+  const availableH = vh - HEADER_AREA - FOOTER_AREA - 2 * CAMERA_GAP;
+  const final = Math.max(
+    FINAL_WIDTH_MIN,
+    Math.min(availableW, availableH * camAspect, maxFinalW),
+  );
+  const finalHeight = final / camAspect;
+  return { natural, final, finalHeight, isPortrait };
 };
 
 const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
@@ -169,11 +192,15 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  const bounds = size.isMobile ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
+  const bounds = size.isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
   const lcdCenter = lcdCenterOf(bounds);
   const lcdOffsetX = 50 - lcdCenter.x;
   const lcdOffsetY = 50 - lcdCenter.y;
   const finalScale = size.final / size.natural;
+
+  // Header bottom edge / footer top edge sit this many px from viewport center,
+  // giving a symmetric CAMERA_GAP gap on both sides of the camera at scroll end.
+  const anchorOffset = size.finalHeight / 2 + CAMERA_GAP;
 
   // ─── SCROLL CHOREOGRAPHY ───
   const CAMERA_ZOOM_VH = 60;
@@ -218,12 +245,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   return (
     <Box ref={sectionRef} position="relative" width="100%" height={`${SECTION_HEIGHT_VH}vh`} bg="white">
       <Box position="sticky" top={0} width="100%" height="100dvh" overflow="hidden" bg="white">
-        {/* HEADER — absolutely positioned at top of viewport. No longer in flex
-            flow with the camera, since the camera at natural size is huge and
-            would push header/footer off-screen. */}
+        {/* HEADER — anchored CAMERA_GAP px above the camera's top edge. Symmetric
+            with the footer below. Whitespace between header and camera no longer
+            balloons on tall viewports because the position tracks the camera's
+            final size, not the viewport top. */}
         <Box
           position="absolute"
-          top={{ base: '90px', md: '100px', lg: '110px' }}
+          bottom={`calc(50% + ${anchorOffset}px)`}
           left="50%"
           transform="translateX(-50%)"
           width={{ base: '100%', md: 'auto' }}
@@ -285,16 +313,17 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               transformStyle: 'preserve-3d',
             }}
           >
-            <CameraBody isMobile={size.isMobile} width={size.natural}>
+            <CameraBody isPortrait={size.isPortrait} width={size.natural}>
               <ImageCarousel images={images} height="100%" hideDevIndicator />
             </CameraBody>
           </MotionBox>
         </Box>
 
-        {/* FOOTER — absolutely positioned at bottom of viewport */}
+        {/* FOOTER — anchored CAMERA_GAP px below the camera's bottom edge.
+            Symmetric with the header above. */}
         <Box
           position="absolute"
-          bottom={{ base: '30px', md: '40px' }}
+          top={`calc(50% + ${anchorOffset}px)`}
           left="50%"
           transform="translateX(-50%)"
           width={{ base: '100%', md: 'auto' }}
