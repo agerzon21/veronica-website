@@ -269,6 +269,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           transform="translate(-50%, -50%)"
           zIndex={2}
         >
+          {/* transform-origin stays at element center (default). Shrinking
+              toward LCD center would anchor the small camera at the LCD
+              position within the huge natural box — i.e. bottom-left of the
+              viewport. Scaling around the body center keeps the body centered
+              at viewport center at scroll end. The motion x/y still puts the
+              LCD at viewport center at scroll start. */}
           <MotionBox
             style={{
               scale: cameraScale,
@@ -278,7 +284,6 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               WebkitBackfaceVisibility: 'hidden',
               transformStyle: 'preserve-3d',
             }}
-            transformOrigin={`${lcdCenter.x}% ${lcdCenter.y}%`}
           >
             <CameraBody isMobile={size.isMobile} width={size.natural}>
               <ImageCarousel images={images} height="100%" hideDevIndicator />
