@@ -1,20 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, RefObject } from 'react';
 import { Box, Icon } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import { FaSyncAlt } from 'react-icons/fa';
 
-// Pull-to-refresh: we suppress native iOS pull-to-refresh (overscroll-behavior
-// + Lenis syncTouch consume the gesture), so this re-implements it custom and
-// in-brand. Indicator drops down from the top of the viewport, the ring fills
-// as the user keeps pulling, and the page reloads when the threshold is hit.
-const TRIGGER_DISTANCE = 80;   // px of resisted pull before refresh fires
-const MAX_DISTANCE = 110;      // ceiling so the indicator never escapes too far
-const RESISTANCE = 0.5;        // raw delta is halved — makes the pull feel weighty
-const INDICATOR_OFFSET = 56;   // initial offset above the viewport top
+// Pull-to-refresh, GTA6-style:
+//   - When the user pulls down at scrollY = 0, the *page content* translates
+//     down with the gesture (with resistance), leaving a gap below the
+//     navbar where a gold indicator drops in.
+//   - The navbar (rendered as a sibling of the contentRef wrapper in App.tsx)
+//     stays anchored, so a real visible gap opens between header and content.
+//   - Past the trigger threshold, the indicator's ring saturates ("release to
+//     refresh"). Release past the threshold reloads the page; release before
+//     it snaps content + indicator back into place.
+const TRIGGER_DISTANCE = 70;    // px of resisted pull before refresh fires
+const MAX_DISTANCE = 100;       // ceiling on the visible pull
+const RESISTANCE = 0.5;         // raw finger delta is halved — pull feels weighty
+const NAVBAR_HEIGHT = 72;       // matches the fixed Navbar's actual rendered height
 
-const PullToRefresh = () => {
+type Props = {
+  contentRef: RefObject<HTMLDivElement>;
+};
+
+const PullToRefresh = ({ contentRef }: Props) => {
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Apply translateY to the content wrapper as the pull progresses. Snap-back
+  // gets a soft ease-out; while the user is actively pulling, follow 1:1 with
+  // no transition (transition during pull would feel laggy).
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    el.style.transform = pullDistance > 0 ? `translateY(${pullDistance}px)` : '';
+    el.style.transition =
+      pullDistance === 0
+        ? 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)'
+        : 'none';
+    el.style.willChange = pullDistance > 0 ? 'transform' : '';
+  }, [pullDistance, contentRef]);
 
   useEffect(() => {
     let startY = 0;
@@ -22,8 +45,8 @@ const PullToRefresh = () => {
     let active = false;
 
     const onTouchStart = (e: TouchEvent) => {
-      // Only arm the gesture when the user is at the absolute top of the page.
-      // 2px of tolerance covers Lenis's lerp jitter near 0.
+      // Only arm when the user is at the absolute top. 2px tolerance covers
+      // Lenis's lerp jitter near 0.
       if (window.scrollY > 2 || e.touches.length !== 1) return;
       startY = e.touches[0].clientY;
       pullDelta = 0;
@@ -32,16 +55,16 @@ const PullToRefresh = () => {
 
     const onTouchMove = (e: TouchEvent) => {
       if (!active) return;
-      // If the page has scrolled down mid-gesture (Lenis/native took over),
-      // bail out of pull mode.
       if (window.scrollY > 2) {
+        // Scroll started mid-gesture (Lenis or native took over). Cancel
+        // pull mode and snap back.
         active = false;
         setPullDistance(0);
         return;
       }
       const delta = e.touches[0].clientY - startY;
       if (delta <= 0) {
-        // User pulled up, not a refresh gesture.
+        // User pulled up — not a refresh gesture.
         active = false;
         setPullDistance(0);
         return;
@@ -56,8 +79,8 @@ const PullToRefresh = () => {
       const finalDistance = pullDelta * RESISTANCE;
       pullDelta = 0;
       if (finalDistance >= TRIGGER_DISTANCE && !refreshing) {
-        // Lock the indicator at the trigger position so the user sees the
-        // committed state before the reload kicks in.
+        // Lock the indicator at the trigger position briefly so the user
+        // sees the committed state, then reload.
         setPullDistance(TRIGGER_DISTANCE);
         setRefreshing(true);
         setTimeout(() => window.location.reload(), 450);
@@ -81,12 +104,16 @@ const PullToRefresh = () => {
 
   const progress = Math.min(pullDistance / TRIGGER_DISTANCE, 1);
   const armed = progress >= 1;
+  // Indicator is centered in the gap that opens between the navbar bottom
+  // and the (translated) content top. As pullDistance grows, the gap grows;
+  // we center the 44px indicator in it.
+  const indicatorTop = NAVBAR_HEIGHT + Math.max(0, (pullDistance - 44) / 2);
   const visible = pullDistance > 4 || refreshing;
 
   return (
     <Box
       position="fixed"
-      top={0}
+      top={`${indicatorTop}px`}
       left="50%"
       width="44px"
       height="44px"
@@ -94,14 +121,11 @@ const PullToRefresh = () => {
       zIndex={9999}
       pointerEvents="none"
       style={{
-        // Translate so the indicator drops in from above the viewport edge.
-        transform: `translateY(${pullDistance - INDICATOR_OFFSET}px)`,
         opacity: visible ? 1 : 0,
-        // Animate the snap-back when the gesture is released without a trigger;
-        // during the pull itself, follow the finger 1:1.
-        transition: pullDistance === 0
-          ? 'transform 0.3s ease-out, opacity 0.25s ease-out'
-          : 'opacity 0.15s ease-out',
+        transition:
+          pullDistance === 0
+            ? 'top 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s'
+            : 'opacity 0.15s',
       }}
     >
       <Box
@@ -115,8 +139,6 @@ const PullToRefresh = () => {
         justifyContent="center"
         position="relative"
       >
-        {/* Ring — softer when the user is mid-pull, fully saturated once
-            they're past the trigger threshold (signals "release to refresh"). */}
         <Box
           position="absolute"
           inset={0}
@@ -127,9 +149,7 @@ const PullToRefresh = () => {
         />
         <motion.div
           animate={
-            refreshing
-              ? { rotate: 360 }
-              : { rotate: progress * 270 }
+            refreshing ? { rotate: 360 } : { rotate: progress * 270 }
           }
           transition={
             refreshing

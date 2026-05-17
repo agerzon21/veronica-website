@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ChakraProvider } from '@chakra-ui/react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import Lenis from 'lenis';
 import Home from './pages/Home';
@@ -23,22 +23,17 @@ import { initGA, trackPageView } from './utils/analytics';
 initGA('G-T769KRMR0E');
 
 /**
- * Drives Lenis imperatively, creating + destroying the instance based on
- * route AND scroll position. Even with `prevent`, just having Lenis mounted
- * patches global CSS (overflow, scroll-behavior, scroll-padding) on <html>
- * that affects the feel of native scroll for everything underneath — so for
- * heavy content like the Instagram iframe, having Lenis in the tree is bad
- * even when it's not actively smoothing.
+ * Lenis is alive for the entire home page (where the cinematic lives) and
+ * not mounted at all on other routes. Within the home page we DON'T destroy
+ * at the hero/non-hero boundary — destroying mid-scroll kills Lenis's
+ * built-up velocity, and native scroll picks up with zero momentum, which
+ * felt like a "scroll barrier" right past the cinematic.
  *
- * Lifecycle:
- *   - Off route ≠ '/': no Lenis at all (native scroll everywhere).
- *   - On '/', scrollY < hero region: Lenis active (cinematic gets lerped
- *     smoothing).
- *   - On '/', scrollY >= hero region: Lenis fully destroyed, native scroll
- *     resumes (Instagram/Reviews are unaffected).
- *
- * The boundary scroll listener uses a small hysteresis so we don't thrash
- * create/destroy if the user hovers right at the threshold.
+ * Instead, we keep Lenis running and dynamically push its smoothing
+ * parameters to 1.0 ("instant") once the user is past the hero. With
+ * lerp = 1, current scroll matches target every frame — no smoothing, no
+ * lag, finger maps 1:1 to scroll. Inside the hero we use the tight values
+ * (0.18 wheel, 0.08 touch) that make the cinematic feel buttery.
  */
 function useScopedLenis() {
   const { pathname } = useLocation();
@@ -46,69 +41,50 @@ function useScopedLenis() {
   useEffect(() => {
     if (pathname !== '/') return;
 
-    let lenis: Lenis | null = null;
-    let rafId: number | null = null;
+    const SMOOTH_WHEEL_LERP = 0.18;
+    const SMOOTH_TOUCH_LERP = 0.08;
 
-    const startLenis = () => {
-      if (lenis) return;
-      lenis = new Lenis({
-        // Wheel (desktop trackpads/mice)
-        lerp: 0.18,
-        smoothWheel: true,
-        wheelMultiplier: 0.8,
-        // Touch (mobile) — these are the knobs that actually do anything on
-        // iPhone. Lenis defaults syncTouch to FALSE so it ignores touch
-        // entirely, which is why the cinematic felt unchanged on mobile
-        // before. Turning it on lets the lerp loop intercept touch scrolls
-        // the same way it does wheel scrolls.
-        // syncTouchLerp is intentionally snappier than the wheel lerp —
-        // finger movement carries its own implicit "easing" so a tighter
-        // value avoids feeling laggy under fast swipes. The inertia
-        // exponent controls the throw curve after a fling (higher =
-        // longer/softer glide).
-        syncTouch: true,
-        syncTouchLerp: 0.08,
-        touchInertiaExponent: 1.6,
-      });
-      const raf = (time: number) => {
-        lenis?.raf(time);
-        rafId = requestAnimationFrame(raf);
-      };
+    const lenis = new Lenis({
+      lerp: SMOOTH_WHEEL_LERP,
+      smoothWheel: true,
+      wheelMultiplier: 0.8,
+      // syncTouch lets Lenis smooth touch scrolls too (it ignores them by
+      // default). Past the hero we set syncTouchLerp = 1 to neutralize it
+      // back to native-feeling touch without removing Lenis entirely.
+      syncTouch: true,
+      syncTouchLerp: SMOOTH_TOUCH_LERP,
+      touchInertiaExponent: 1.6,
+    });
+
+    let rafId: number | null = null;
+    const raf = (time: number) => {
+      lenis.raf(time);
       rafId = requestAnimationFrame(raf);
     };
+    rafId = requestAnimationFrame(raf);
 
-    const stopLenis = () => {
-      if (rafId != null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      if (lenis) {
-        lenis.destroy();
-        lenis = null;
-      }
+    // Past hero, push smoothing to 1.0 so Lenis acts as a passthrough.
+    // No destroy = no momentum cliff at the boundary; Lenis just stops
+    // applying meaningful lerp and the user gets near-native scroll feel.
+    const updateSmoothing = () => {
+      const heroPx = window.innerHeight * 2.0;
+      const pastHero = window.scrollY > heroPx;
+      // Lenis reads these per-frame, so mutation takes effect immediately.
+      // Cast through any because the option types are marked as readonly
+      // on the public interface even though the runtime accepts updates.
+      (lenis.options as any).lerp = pastHero ? 1.0 : SMOOTH_WHEEL_LERP;
+      (lenis.options as any).syncTouchLerp = pastHero ? 1.0 : SMOOTH_TOUCH_LERP;
     };
 
-    const HERO_PX = () => window.innerHeight * 2.0;
-    const HYSTERESIS = 40;
-
-    const evaluate = () => {
-      const heroPx = HERO_PX();
-      const y = window.scrollY;
-      if (!lenis && y < heroPx - HYSTERESIS) {
-        startLenis();
-      } else if (lenis && y > heroPx + HYSTERESIS) {
-        stopLenis();
-      }
-    };
-
-    evaluate();
-    window.addEventListener('scroll', evaluate, { passive: true });
-    window.addEventListener('resize', evaluate);
+    updateSmoothing();
+    window.addEventListener('scroll', updateSmoothing, { passive: true });
+    window.addEventListener('resize', updateSmoothing);
 
     return () => {
-      window.removeEventListener('scroll', evaluate);
-      window.removeEventListener('resize', evaluate);
-      stopLenis();
+      window.removeEventListener('scroll', updateSmoothing);
+      window.removeEventListener('resize', updateSmoothing);
+      if (rafId != null) cancelAnimationFrame(rafId);
+      lenis.destroy();
     };
   }, [pathname]);
 }
@@ -157,28 +133,43 @@ function TitleUpdater() {
   return null;
 }
 
+function AppShell() {
+  // Pull-to-refresh translates this container down with the gesture while
+  // the Navbar (outside the ref) stays anchored — so a real gap opens
+  // between the header and the page content, GTA6-style.
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <>
+      <LenisHost />
+      <PullToRefresh contentRef={contentRef} />
+      <SEO />
+      <ScrollToTop />
+      <TitleUpdater />
+      <Navbar />
+      <div ref={contentRef}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/contact/thank-you" element={<ThankYou />} />
+          <Route path="/gallery" element={<Gallery />} />
+          <Route path="/gallery/:category" element={<Gallery />} />
+          <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
+          <Route path="/pay" element={<Pay />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </div>
+    </>
+  );
+}
+
 function App() {
   return (
     <HelmetProvider>
       <ChakraProvider>
         <Router>
-          <LenisHost />
-          <PullToRefresh />
-          <SEO />
-          <ScrollToTop />
-          <TitleUpdater />
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/contact/thank-you" element={<ThankYou />} />
-            <Route path="/gallery" element={<Gallery />} />
-            <Route path="/gallery/:category" element={<Gallery />} />
-            <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
-            <Route path="/pay" element={<Pay />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AppShell />
         </Router>
       </ChakraProvider>
     </HelmetProvider>

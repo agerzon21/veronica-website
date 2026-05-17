@@ -256,7 +256,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const CAMERA_ZOOM_VH = 60;
   const TEXT_FADE_START_VH = 50;
   const TEXT_FADE_DURATION_VH = 15;
-  const STABLE_SCROLL_VH = 10;
+  const STABLE_SCROLL_VH = 20;
 
   const ANIMATIONS_END_VH = Math.max(
     CAMERA_ZOOM_VH,
