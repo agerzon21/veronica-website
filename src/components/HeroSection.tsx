@@ -85,7 +85,19 @@ const CameraBody = React.forwardRef<HTMLDivElement, { children: React.ReactNode 
     <Box
       ref={ref}
       position="relative"
-      width={{ base: '85vw', md: '480px' }}
+      // Width is the SMALLER of:
+      //   - 85vw (mobile) / 480px (desktop) — width-based bound, the natural sizing
+      //   - height-derived (svh-based) — caps the camera so the header above and
+      //     footer below always have room and aren't cropped on short viewports
+      //     (e.g. iPhone Safari with chrome visible, phone in landscape)
+      // Using svh (small-viewport-height) instead of dvh keeps the size stable
+      // as the browser chrome shows/hides — otherwise the camera would resize
+      // mid-scroll which causes the maxScale recompute and the "zoom in before
+      // zoom out" glitch on iOS Safari.
+      width={{
+        base: 'min(85vw, calc(45svh * 4 / 5))',
+        md: 'min(480px, calc(60svh * 5 / 4))',
+      }}
       maxWidth={{ base: '420px', md: '500px' }}
       aspectRatio={{ base: '4 / 5', md: '5 / 4' }}
     >
@@ -143,6 +155,13 @@ CameraBody.displayName = 'CameraBody';
 const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const cameraBoxRef = useRef<HTMLDivElement>(null);
+  // Tracks the last width used to compute maxScale. iOS Safari fires resize
+  // events when its bottom chrome bar hides/shows as the user scrolls — but
+  // only the height changes, not the width. Recomputing maxScale on those
+  // height-only events causes the camera to briefly "zoom IN" at scroll
+  // progress=0 (since the new maxScale lands at progress 0). Guarding on width
+  // keeps maxScale stable through chrome retraction.
+  const lastWidthRef = useRef<number>(0);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -201,6 +220,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
       const cameraWidth = box.offsetWidth;
       const cameraHeight = box.offsetHeight;
       if (cameraWidth === 0 || cameraHeight === 0) return;
+
+      // Skip if only viewport height changed (iOS Safari chrome hide/show).
+      // Camera width is svh-based, so the box dimensions are also stable on
+      // height-only changes — recomputing would shift maxScale at progress=0
+      // and look like a "zoom in" right when the user starts scrolling.
+      if (window.innerWidth === lastWidthRef.current) return;
+      lastWidthRef.current = window.innerWidth;
 
       // LCD dimensions as % of camera, dependent on orientation. The scale
       // needs to cover BOTH viewport width AND height — otherwise on tall
