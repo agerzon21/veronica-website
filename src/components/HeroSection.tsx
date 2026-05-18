@@ -267,26 +267,32 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   });
 
   // Spring-smooth the scroll progress that every camera animation reads.
-  // Native iOS touch scroll fires events at a coarser rate than the render
-  // frame — feeding the raw value to useTransform gives choppy animation
-  // even though the scroll itself feels instant. This spring lerps between
-  // sample points at 60fps and produces buttery animation values without
-  // touching how scroll feels. Tuning: stiffness/damping picked to match
-  // the responsiveness of Lenis @ lerp 0.18 (smooth but snappy on
-  // direction reversal); restDelta keeps it from settling jittery near 0/1.
+  // Two jobs: (1) make scroll-driven animation values frame-aligned even
+  // when scroll events fire at a coarser rate (iOS Safari), and (2)
+  // *intentionally lag* the animation slightly behind raw scroll so the
+  // visible animation tail extends past the moment the user's finger
+  // stops moving. Lower stiffness = more lag = more visible animation on
+  // fast flicks (where the raw scroll completes in 200ms but the spring
+  // takes ~250ms more to finish catching up — half a second of visible
+  // cinematic instead of a 200ms blur).
   const scrollYProgress = useSpring(rawProgress, {
-    stiffness: 220,
-    damping: 35,
-    mass: 0.4,
+    stiffness: 130,
+    damping: 22,
+    mass: 0.5,
     restDelta: 0.0005,
   });
 
-  // Camera natural + final sizes. Updates on width change or large height change
-  // (orientation flip). Small height changes (iOS chrome retract/extend) are
-  // ignored to keep the camera stable mid-scroll.
-  const [size, setSize] = useState(() => {
-    if (typeof window === 'undefined') return computeCameraSize(1200, 800);
-    return computeCameraSize(window.innerWidth, window.innerHeight);
+  // Viewport state — captured ONCE on mount and only refreshed on a real
+  // resize (orientation flip / window drag). Mobile browsers fire constant
+  // `resize` events as the chrome bar retracts/extends during scroll; those
+  // are ~80-150px height jitters that we *deliberately* ignore. The 200px
+  // threshold below means anything smaller than that doesn't trigger a
+  // recompute, which keeps the hero's CSS heights stable and stops the
+  // page from re-laying out (and re-drawing the camera animation) every
+  // time iOS Safari or Chrome decides to hide a URL bar.
+  const [vp, setVp] = useState(() => {
+    if (typeof window === 'undefined') return { vw: 1200, vh: 800 };
+    return { vw: window.innerWidth, vh: window.innerHeight };
   });
   useEffect(() => {
     let lastW = window.innerWidth;
@@ -294,14 +300,18 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     const update = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      if (w === lastW && Math.abs(h - lastH) < 100) return;
+      // Real resize: width changed (window drag, orientation flip) OR the
+      // height changed by more than 200px (only possible on orientation
+      // flip — chrome bars are smaller than that). Below 200px = ignore.
+      if (w === lastW && Math.abs(h - lastH) < 200) return;
       lastW = w;
       lastH = h;
-      setSize(computeCameraSize(w, h));
+      setVp({ vw: w, vh: h });
     };
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
+  const size = computeCameraSize(vp.vw, vp.vh);
 
   const bounds = size.isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
   const lcdCenter = lcdCenterOf(bounds);
@@ -329,9 +339,17 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const verticalShiftPct = (size.verticalShiftPx * 100) / naturalHeight;
 
   // ─── SCROLL CHOREOGRAPHY ───
-  const CAMERA_ZOOM_VH = 60;
-  const TEXT_FADE_START_VH = 50;
-  const TEXT_FADE_DURATION_VH = 15;
+  // Values stretched so fast mobile flicks can't clear the pin range in
+  // one swipe. Old CAMERA_ZOOM_VH 60 gave a ~85vh pin (with stable 30) =
+  // ~680px on iPhone. A typical flick covers that in ~200ms — animation
+  // technically played but felt skipped because the sticky un-pinned
+  // almost instantly and the camera scrolled off mid-animation. Bumping
+  // the active animation window to 110vh gives a ~140vh pin (~1120px on
+  // iPhone) which a fast 2000px swipe still spends ~560ms inside —
+  // enough to see the cinematic land.
+  const CAMERA_ZOOM_VH = 110;
+  const TEXT_FADE_START_VH = 80;
+  const TEXT_FADE_DURATION_VH = 25;
   const STABLE_SCROLL_VH = 30;
 
   const ANIMATIONS_END_VH = Math.max(
@@ -435,12 +453,28 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
 
   return (
     <>
-    <Box ref={sectionRef} position="relative" width="100%" height={`${SECTION_HEIGHT_VH}vh`} bg="white">
+    {/* Heights use `lvh` (large viewport height) rather than `vh`/`dvh`.
+        - `dvh` changes with chrome retract/extend → layout shifts on
+          every scroll → the glitchy redraw issue.
+        - `vh` on iOS Safari already maps to `lvh` (max viewport, chrome
+          hidden) but isn't guaranteed on every browser.
+        - `lvh` is explicitly the largest-possible viewport and is
+          stable across chrome state changes everywhere — supported in
+          Chrome 108+, Safari 15.4+, Firefox 101+ (all 2022, universal
+          today). This locks the hero's CSS dimensions for the entire
+          session unless the device orientation actually flips. */}
+    <Box
+      ref={sectionRef}
+      position="relative"
+      width="100%"
+      height={`${SECTION_HEIGHT_VH}lvh`}
+      bg="white"
+    >
       <Box
         position="sticky"
         top={0}
         width="100%"
-        height="100dvh"
+        height="100lvh"
         overflow="hidden"
         bg="white"
       >
