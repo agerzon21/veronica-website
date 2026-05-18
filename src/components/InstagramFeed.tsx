@@ -3,47 +3,28 @@ import { FaInstagram } from 'react-icons/fa';
 import instagramData from '../data/instagram.json';
 
 // Native grid replacement for the Instagram embed. Cross-origin iframes
-// can't be promoted to independent compositor layers on iOS and Instagram's
-// own JS inside the frame runs scroll observers we have no control over —
-// rendering posts as plain <img> tags eliminates that cost and unlocks
-// every framer-motion animation for the section.
+// can't be promoted to independent compositor layers on iOS Safari and
+// Instagram's own JS inside them runs scroll observers we have no control
+// over — rendering posts as plain <img> tags eliminates the scroll cost
+// and unlocks every framer-motion animation for the section.
 //
-// Posts are fetched at build time by scripts/fetch-instagram.mjs hitting
-// the Instagram Graph API and written to src/data/instagram.json. If the
-// fetch hasn't run yet (no env vars locally, or first build before token
-// is set) we fall back to a curated set from her existing gallery so the
-// section always renders something coherent.
+// Posts AND profile metadata are pulled at build time by
+// scripts/fetch-instagram.mjs hitting the Instagram Graph API. If the
+// fetch hasn't populated the JSON yet (no env vars locally, or first
+// build before the token is set), we fall back to a curated set from her
+// existing gallery so the section never looks broken.
 
 const INSTAGRAM_URL = 'https://www.instagram.com/vero.art.photo';
-const INSTAGRAM_HANDLE = 'vero.art.photo';
 
 type Photo = { url: string; alt: string; permalink?: string };
 
 const FALLBACK_PHOTOS: Photo[] = [
-  {
-    url: '/assets/photos/portraits/sunset-palm-tree-portrait.webp',
-    alt: 'Sunset portrait beneath a palm tree',
-  },
-  {
-    url: '/assets/photos/weddings/winged-couple-fantasy-portrait.webp',
-    alt: 'Wedding couple with fantasy wings',
-  },
-  {
-    url: '/assets/photos/family/family-white-beach.webp',
-    alt: 'Family portrait on a white-sand beach',
-  },
-  {
-    url: '/assets/photos/maternity/pregnant-friends-colorful-dresses.webp',
-    alt: 'Maternity portrait of friends in flowing dresses',
-  },
-  {
-    url: '/assets/photos/portraits/lace-pink-dress-blue-glacier.webp',
-    alt: 'Lace dress portrait at a blue glacier',
-  },
-  {
-    url: '/assets/photos/weddings/couple-embracing-greenery.webp',
-    alt: 'Couple embracing in lush greenery',
-  },
+  { url: '/assets/photos/portraits/sunset-palm-tree-portrait.webp', alt: 'Sunset portrait beneath a palm tree' },
+  { url: '/assets/photos/weddings/winged-couple-fantasy-portrait.webp', alt: 'Wedding couple with fantasy wings' },
+  { url: '/assets/photos/family/family-white-beach.webp', alt: 'Family portrait on a white-sand beach' },
+  { url: '/assets/photos/maternity/pregnant-friends-colorful-dresses.webp', alt: 'Maternity portrait of friends in flowing dresses' },
+  { url: '/assets/photos/portraits/lace-pink-dress-blue-glacier.webp', alt: 'Lace dress portrait at a blue glacier' },
+  { url: '/assets/photos/weddings/couple-embracing-greenery.webp', alt: 'Couple embracing in lush greenery' },
 ];
 
 const livePhotos: Photo[] = (instagramData.posts ?? []).map((p: any) => ({
@@ -53,6 +34,25 @@ const livePhotos: Photo[] = (instagramData.posts ?? []).map((p: any) => ({
 }));
 
 const PHOTOS: Photo[] = livePhotos.length >= 6 ? livePhotos.slice(0, 6) : FALLBACK_PHOTOS;
+
+// Cast through any so TS doesn't narrow these to the literal types from
+// the stub JSON — the runtime values will be real strings once the API
+// fetch runs.
+const profile = (instagramData.profile as any) ?? {};
+const USERNAME: string = profile.username ?? 'vero.art.photo';
+const DISPLAY_NAME: string = profile.name ?? 'Veronika Gerzon';
+const BIO: string = profile.biography ?? 'Wedding & Portrait Photographer';
+const PROFILE_PIC_URL: string | null = profile.profilePictureUrl ?? null;
+const FOLLOWERS_COUNT: number | null = profile.followersCount ?? null;
+const MEDIA_COUNT: number | null = profile.mediaCount ?? null;
+
+// Convert raw counts to "1.2K" / "12.3K" / "1.2M" style.
+const formatCount = (n: number): string => {
+  if (n < 1000) return n.toString();
+  if (n < 10000) return (n / 1000).toFixed(1).replace('.0', '') + 'K';
+  if (n < 1000000) return Math.round(n / 1000) + 'K';
+  return (n / 1000000).toFixed(1).replace('.0', '') + 'M';
+};
 
 const InstagramFeed = () => {
   return (
@@ -70,8 +70,9 @@ const InstagramFeed = () => {
         <Box w="40px" h="1px" bg="#c9a96e" />
       </VStack>
 
-      {/* Instagram-style profile card so the section reads as a real social
-          preview, not just a grid. */}
+      {/* Instagram-style profile card. Avatar is the real IG profile pic
+          when available (falls back to the site logo). Followers + posts
+          counts come from the Graph API. */}
       <HStack
         maxW="640px"
         mx="auto"
@@ -82,8 +83,8 @@ const InstagramFeed = () => {
       >
         <Link href={INSTAGRAM_URL} isExternal flexShrink={0}>
           <Box
-            width={{ base: '64px', md: '78px' }}
-            height={{ base: '64px', md: '78px' }}
+            width={{ base: '72px', md: '88px' }}
+            height={{ base: '72px', md: '88px' }}
             borderRadius="full"
             border="2px solid #c9a96e"
             padding="3px"
@@ -100,18 +101,28 @@ const InstagramFeed = () => {
               alignItems="center"
               justifyContent="center"
             >
-              <Image
-                src="/assets/images/logo.svg"
-                alt="Vero Photography logo"
-                objectFit="contain"
-                width="80%"
-                height="80%"
-              />
+              {PROFILE_PIC_URL ? (
+                <Image
+                  src={PROFILE_PIC_URL}
+                  alt={`${USERNAME} profile picture`}
+                  objectFit="cover"
+                  width="100%"
+                  height="100%"
+                />
+              ) : (
+                <Image
+                  src="/assets/images/logo.svg"
+                  alt="Vero Photography logo"
+                  objectFit="contain"
+                  width="80%"
+                  height="80%"
+                />
+              )}
             </Box>
           </Box>
         </Link>
 
-        <VStack align="start" spacing={1} flex={1} minW={0}>
+        <VStack align="start" spacing={1.5} flex={1} minW={0}>
           <Link
             href={INSTAGRAM_URL}
             isExternal
@@ -124,18 +135,49 @@ const InstagramFeed = () => {
                 color="gray.700"
                 transition="color 0.3s"
               >
-                {INSTAGRAM_HANDLE}
+                {USERNAME}
               </Text>
               <Icon as={FaInstagram} color="#c9a96e" boxSize={{ base: 4, md: 5 }} />
             </HStack>
           </Link>
+
+          {/* Counts row — only renders if we have live data, so the
+              fallback profile card stays clean. */}
+          {(FOLLOWERS_COUNT != null || MEDIA_COUNT != null) && (
+            <HStack
+              spacing={{ base: 3, md: 4 }}
+              fontSize={{ base: 'xs', md: 'sm' }}
+              color="gray.600"
+              fontWeight="400"
+            >
+              {MEDIA_COUNT != null && (
+                <Text>
+                  <Text as="span" fontWeight="600" color="gray.800">
+                    {formatCount(MEDIA_COUNT)}
+                  </Text>{' '}
+                  posts
+                </Text>
+              )}
+              {FOLLOWERS_COUNT != null && (
+                <Text>
+                  <Text as="span" fontWeight="600" color="gray.800">
+                    {formatCount(FOLLOWERS_COUNT)}
+                  </Text>{' '}
+                  followers
+                </Text>
+              )}
+            </HStack>
+          )}
+
           <Text
             fontSize={{ base: 'xs', md: 'sm' }}
             fontWeight="300"
             color="gray.500"
             letterSpacing="0.02em"
+            noOfLines={2}
           >
-            Veronika Gerzon · Wedding & Portrait Photographer
+            {DISPLAY_NAME !== USERNAME ? `${DISPLAY_NAME} · ` : ''}
+            {BIO}
           </Text>
         </VStack>
       </HStack>

@@ -43,7 +43,7 @@ if (!token || !userId) {
   process.exit(0);
 }
 
-const FIELDS = [
+const MEDIA_FIELDS = [
   'id',
   'media_type',
   'media_url',
@@ -53,17 +53,39 @@ const FIELDS = [
   'timestamp',
 ].join(',');
 
-const url =
+const PROFILE_FIELDS = [
+  'id',
+  'username',
+  'name',
+  'biography',
+  'profile_picture_url',
+  'followers_count',
+  'media_count',
+  'account_type',
+].join(',');
+
+const mediaUrl =
   `https://graph.instagram.com/v21.0/${userId}/media` +
-  `?fields=${FIELDS}` +
+  `?fields=${MEDIA_FIELDS}` +
   `&limit=${POST_LIMIT}` +
   `&access_token=${token}`;
 
+const profileUrl =
+  `https://graph.instagram.com/v21.0/${userId}` +
+  `?fields=${PROFILE_FIELDS}` +
+  `&access_token=${token}`;
+
 try {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`[fetch-instagram] API responded ${res.status}: ${body}`);
+  // Fetch profile + media in parallel; both endpoints share the rate limit so
+  // we may as well save the round-trip.
+  const [mediaRes, profileRes] = await Promise.all([
+    fetch(mediaUrl),
+    fetch(profileUrl),
+  ]);
+
+  if (!mediaRes.ok || !profileRes.ok) {
+    const failing = !mediaRes.ok ? mediaRes : profileRes;
+    console.error(`[fetch-instagram] API responded ${failing.status}: ${await failing.text()}`);
     console.error(
       '[fetch-instagram] Leaving existing instagram.json in place. ' +
       'Token may have expired — refresh it and redeploy.',
@@ -71,8 +93,10 @@ try {
     process.exit(0); // intentionally exit 0 so build still succeeds
   }
 
-  const json = await res.json();
-  const posts = (json.data ?? [])
+  const mediaJson = await mediaRes.json();
+  const profileJson = await profileRes.json();
+
+  const posts = (mediaJson.data ?? [])
     // VIDEO posts give us thumbnail_url; IMAGE posts give us media_url.
     // CAROUSEL posts give us the first image as media_url.
     .filter((p) => p.media_type !== 'VIDEO' || p.thumbnail_url)
@@ -85,12 +109,29 @@ try {
       timestamp: p.timestamp,
     }));
 
+  const profile = {
+    username: profileJson.username ?? null,
+    name: profileJson.name ?? null,
+    biography: profileJson.biography ?? null,
+    profilePictureUrl: profileJson.profile_picture_url ?? null,
+    followersCount: profileJson.followers_count ?? null,
+    mediaCount: profileJson.media_count ?? null,
+    accountType: profileJson.account_type ?? null,
+  };
+
   await mkdir(dirname(OUTPUT_PATH), { recursive: true });
   await writeFile(
     OUTPUT_PATH,
-    JSON.stringify({ fetchedAt: new Date().toISOString(), posts }, null, 2),
+    JSON.stringify(
+      { fetchedAt: new Date().toISOString(), profile, posts },
+      null,
+      2,
+    ),
   );
-  console.log(`[fetch-instagram] wrote ${posts.length} posts to ${OUTPUT_PATH}`);
+  console.log(
+    `[fetch-instagram] wrote ${posts.length} posts and profile ` +
+    `(@${profile.username}, ${profile.followersCount} followers) to ${OUTPUT_PATH}`,
+  );
 } catch (err) {
   console.error('[fetch-instagram] fetch failed:', err);
   console.error('[fetch-instagram] Leaving existing instagram.json in place.');

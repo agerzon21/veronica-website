@@ -1,4 +1,13 @@
 {
   "fetchedAt": null,
+  "profile": {
+    "username": null,
+    "name": null,
+    "biography": null,
+    "profilePictureUrl": null,
+    "followersCount": null,
+    "mediaCount": null,
+    "accountType": null
+  },
   "posts": []
 }

@@ -130,8 +130,23 @@ const CameraBody = React.forwardRef<
         height={`${bounds.height}%`}
         overflow="hidden"
         borderRadius="2px"
+        // Inset shadow gives the LCD a recessed bezel look — the photo
+        // reads as "behind glass" instead of pasted on. Strength tuned so
+        // it's visible at the small final size but doesn't darken the
+        // photo too much at scroll-start when LCD covers the viewport.
+        boxShadow="inset 0 0 14px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.35)"
       >
         {children}
+        {/* Glass reflection: a subtle diagonal sheen overlay so the LCD
+            picks up an LCD-screen-like highlight instead of looking matte.
+            Pointer-events:none so it never blocks the carousel interactions. */}
+        <Box
+          position="absolute"
+          inset={0}
+          pointerEvents="none"
+          zIndex={2}
+          background="linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 18%, transparent 40%, transparent 65%, rgba(0,0,0,0.08) 100%)"
+        />
       </Box>
     </Box>
   );
@@ -271,7 +286,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const CAMERA_ZOOM_VH = 60;
   const TEXT_FADE_START_VH = 50;
   const TEXT_FADE_DURATION_VH = 15;
-  const STABLE_SCROLL_VH = 20;
+  const STABLE_SCROLL_VH = 30;
 
   const ANIMATIONS_END_VH = Math.max(
     CAMERA_ZOOM_VH,
@@ -306,6 +321,16 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const footerOpacity = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [0, 1]);
   const footerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [30, 0]);
   const scrollHintOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0]);
+
+  // Progress indicator visibility: fades in once the user has started
+  // scrolling (so it doesn't sit empty at scroll 0), holds through the
+  // cinematic, then fades out as the animation completes so it doesn't
+  // linger over the rest of the page.
+  const progressOpacity = useTransform(
+    scrollYProgress,
+    [0, 0.04, 0.94, 1],
+    [0, 1, 1, 0],
+  );
 
   const footerContent = (
     <VStack spacing={4} align="center">
@@ -471,6 +496,36 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         <ViewfinderCorner corner="tr" opacity={cornerOpacity} />
         <ViewfinderCorner corner="bl" opacity={cornerOpacity} />
         <ViewfinderCorner corner="br" opacity={cornerOpacity} />
+
+        {/* Scroll progress indicator — thin gold rail on the right edge of
+            the viewport that fills as you scroll through the cinematic.
+            Fades in once scrolling starts and fades out once the animation
+            settles, so it never overlays the rest of the page. */}
+        <MotionBox
+          position="absolute"
+          right={{ base: '14px', md: '22px' }}
+          top="50%"
+          marginTop="-60px"
+          width="2px"
+          height="120px"
+          bg="rgba(201, 169, 110, 0.22)"
+          borderRadius="2px"
+          zIndex={5}
+          pointerEvents="none"
+          style={{ opacity: progressOpacity }}
+        >
+          <MotionBox
+            width="100%"
+            height="100%"
+            bg="#c9a96e"
+            borderRadius="2px"
+            style={{
+              scaleY: scrollYProgress,
+              transformOrigin: '50% 0%',
+              boxShadow: '0 0 8px rgba(201, 169, 110, 0.6)',
+            }}
+          />
+        </MotionBox>
 
         {/* Scroll hint */}
         <MotionBox

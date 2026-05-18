@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ChakraProvider } from '@chakra-ui/react';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import Lenis from 'lenis';
 import Home from './pages/Home';
@@ -12,7 +12,6 @@ import Pay from './pages/Pay';
 import NotFound from './pages/NotFound';
 import ThankYou from './pages/ThankYou';
 import Navbar from './components/Navbar';
-import PullToRefresh from './components/PullToRefresh';
 import SEO from './components/SEO';
 import { initGA, trackPageView } from './utils/analytics';
 
@@ -112,43 +111,27 @@ function TitleUpdater() {
   return null;
 }
 
-function AppShell() {
-  // Pull-to-refresh translates this container down with the gesture while
-  // the Navbar (outside the ref) stays anchored — so a real gap opens
-  // between the header and the page content, GTA6-style.
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  return (
-    <>
-      <LenisHost />
-      <PullToRefresh contentRef={contentRef} />
-      <SEO />
-      <ScrollToTop />
-      <TitleUpdater />
-      <Navbar />
-      <div ref={contentRef}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/contact/thank-you" element={<ThankYou />} />
-          <Route path="/gallery" element={<Gallery />} />
-          <Route path="/gallery/:category" element={<Gallery />} />
-          <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
-          <Route path="/pay" element={<Pay />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </div>
-    </>
-  );
-}
-
 function App() {
   return (
     <HelmetProvider>
       <ChakraProvider>
         <Router>
-          <AppShell />
+          <LenisHost />
+          <SEO />
+          <ScrollToTop />
+          <TitleUpdater />
+          <Navbar />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/contact/thank-you" element={<ThankYou />} />
+            <Route path="/gallery" element={<Gallery />} />
+            <Route path="/gallery/:category" element={<Gallery />} />
+            <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
+            <Route path="/pay" element={<Pay />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </Router>
       </ChakraProvider>
     </HelmetProvider>
