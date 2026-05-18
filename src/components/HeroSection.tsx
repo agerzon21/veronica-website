@@ -339,18 +339,19 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const verticalShiftPct = (size.verticalShiftPx * 100) / naturalHeight;
 
   // ─── SCROLL CHOREOGRAPHY ───
-  // Values stretched so fast mobile flicks can't clear the pin range in
-  // one swipe. Old CAMERA_ZOOM_VH 60 gave a ~85vh pin (with stable 30) =
-  // ~680px on iPhone. A typical flick covers that in ~200ms — animation
-  // technically played but felt skipped because the sticky un-pinned
-  // almost instantly and the camera scrolled off mid-animation. Bumping
-  // the active animation window to 110vh gives a ~140vh pin (~1120px on
-  // iPhone) which a fast 2000px swipe still spends ~560ms inside —
-  // enough to see the cinematic land.
-  const CAMERA_ZOOM_VH = 110;
-  const TEXT_FADE_START_VH = 80;
-  const TEXT_FADE_DURATION_VH = 25;
-  const STABLE_SCROLL_VH = 30;
+  // Animation window stretched so the cinematic feels deliberate rather
+  // than rushed at any scroll speed. CAMERA_ZOOM_VH is the dominant
+  // knob — it sets how many viewport-heights of scroll the camera takes
+  // to fully zoom out. Bigger value = slower cinematic = more scroll
+  // required. At 160vh on iPhone (~1280px), even a fast 1500-2000px
+  // swipe spends close to a full second inside the animation.
+  // TEXT_FADE_START_VH stays just behind the end of the camera zoom so
+  // the header/footer fade in as the camera finishes settling, not
+  // before. Tune this constant up further if it still feels rushed.
+  const CAMERA_ZOOM_VH = 500;
+  const TEXT_FADE_START_VH = 450;
+  const TEXT_FADE_DURATION_VH = 50;
+  const STABLE_SCROLL_VH = 150;
 
   const ANIMATIONS_END_VH = Math.max(
     CAMERA_ZOOM_VH,
