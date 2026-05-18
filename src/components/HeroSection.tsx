@@ -47,9 +47,18 @@ const ViewfinderCorner: React.FC<{
 
 const CAMERA_IMAGE_SRC = '/assets/images/eos_r6_mark_ii_body_2.webp';
 
+// Camera image (trimmed of transparent padding) is 1135x833 — aspect ~1.363.
+// LCD_BOUNDS are percentages of the camera *container* (which matches the
+// image aspect), so they correspond directly to LCD pixel coordinates in
+// the image. Both sets eyeballed against the actual image; lcdCenterOf
+// further down derives the scroll-start centering offset directly from
+// these so the LCD lands at viewport center at scroll 0 automatically.
+const CAMERA_IMG_W = 1135;
+const CAMERA_IMG_H = 833;
+
 const LCD_BOUNDS = {
-  desktop: { left: 22, top: 45, width: 37, height: 34 },
-  mobile: { left: 46, top: 43, width: 27, height: 30 },
+  desktop: { left: 12, top: 45.5, width: 49, height: 50 },
+  mobile: { left: 47, top: 41.5, width: 36, height: 37 },
 };
 
 const lcdCenterOf = (b: { left: number; top: number; width: number; height: number }) => ({
@@ -109,14 +118,19 @@ const CameraBody = React.forwardRef<
       position="relative"
       style={{
         width,
-        aspectRatio: isPortrait ? '4 / 5' : '5 / 4',
+        // Match the camera image aspect exactly so it fills the box with no
+        // letterboxing. Portrait orientation swaps width/height because the
+        // image is rotated -90° inside.
+        aspectRatio: isPortrait
+          ? `${CAMERA_IMG_H} / ${CAMERA_IMG_W}`
+          : `${CAMERA_IMG_W} / ${CAMERA_IMG_H}`,
       }}
     >
       <Image
         src={CAMERA_IMAGE_SRC}
         alt="Canon EOS R6 camera back"
-        htmlWidth={800}
-        htmlHeight={640}
+        htmlWidth={CAMERA_IMG_W}
+        htmlHeight={CAMERA_IMG_H}
         decoding="sync"
         fetchPriority="high"
         position="absolute"
@@ -194,7 +208,12 @@ const computeCameraSize = (
 } => {
   const isPortrait = vh > vw;
   const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
-  const camAspect = isPortrait ? 4 / 5 : 5 / 4; // width/height
+  // width / height of the camera box. Matches the image's own aspect so
+  // everything (natural size, scale-down math, LCD bounds) lines up with
+  // actual pixel positions in the camera image.
+  const camAspect = isPortrait
+    ? CAMERA_IMG_H / CAMERA_IMG_W
+    : CAMERA_IMG_W / CAMERA_IMG_H;
 
   // Natural: large enough that the LCD covers the viewport with 20% overshoot.
   const camForVw = (vw * 100) / bounds.width;
@@ -301,7 +320,9 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // of the natural element's height (framer-motion's % translation is in
   // unscaled CSS pixels, applied after scale, so this stays geometrically
   // correct at any finalScale).
-  const naturalHeight = size.natural / (size.isPortrait ? 4 / 5 : 5 / 4);
+  const naturalHeight =
+    size.natural /
+    (size.isPortrait ? CAMERA_IMG_H / CAMERA_IMG_W : CAMERA_IMG_W / CAMERA_IMG_H);
   const verticalShiftPct = (size.verticalShiftPx * 100) / naturalHeight;
 
   // ─── SCROLL CHOREOGRAPHY ───
@@ -353,6 +374,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     [0, 0.04, 0.94, 1],
     [0, 1, 1, 0],
   );
+
+  // Position of the moving thumb dot on the progress rail — tracks the
+  // leading edge of the gold fill.
+  const progressThumbTop = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
   const footerContent = (
     <VStack spacing={4} align="center">
@@ -519,34 +544,72 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         <ViewfinderCorner corner="bl" opacity={cornerOpacity} />
         <ViewfinderCorner corner="br" opacity={cornerOpacity} />
 
-        {/* Scroll progress indicator — thin gold rail on the right edge of
-            the viewport that fills as you scroll through the cinematic.
-            Fades in once scrolling starts and fades out once the animation
-            settles, so it never overlays the rest of the page. */}
+        {/* Scroll progress indicator — vertical rail on the right edge of
+            the viewport with a gold fill + travelling thumb dot, plus a
+            small SCROLL label so it reads as a real UI element rather
+            than a stray line. Fades in once scrolling starts and out as
+            the cinematic settles. */}
         <MotionBox
           position="absolute"
-          right={{ base: '14px', md: '22px' }}
+          right={{ base: '18px', md: '32px' }}
           top="50%"
-          marginTop="-60px"
-          width="2px"
-          height="120px"
-          bg="rgba(201, 169, 110, 0.22)"
-          borderRadius="2px"
+          marginTop="-86px"
           zIndex={5}
           pointerEvents="none"
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
           style={{ opacity: progressOpacity }}
         >
-          <MotionBox
-            width="100%"
-            height="100%"
-            bg="#c9a96e"
-            borderRadius="2px"
-            style={{
-              scaleY: scrollYProgress,
-              transformOrigin: '50% 0%',
-              boxShadow: '0 0 8px rgba(201, 169, 110, 0.6)',
-            }}
-          />
+          {/* Track */}
+          <Box
+            position="relative"
+            width="2px"
+            height="140px"
+            bg="rgba(0, 0, 0, 0.14)"
+            borderRadius="full"
+          >
+            {/* Gold fill, anchored to top of track, scaleY follows scroll */}
+            <MotionBox
+              position="absolute"
+              top={0}
+              left={0}
+              width="100%"
+              height="100%"
+              bg="#c9a96e"
+              borderRadius="full"
+              style={{
+                scaleY: scrollYProgress,
+                transformOrigin: '50% 0%',
+                boxShadow: '0 0 8px rgba(201, 169, 110, 0.55)',
+              }}
+            />
+            {/* Travelling thumb dot at the leading edge of the fill */}
+            <MotionBox
+              position="absolute"
+              left="50%"
+              width="9px"
+              height="9px"
+              marginLeft="-4.5px"
+              marginTop="-4.5px"
+              borderRadius="full"
+              bg="#c9a96e"
+              boxShadow="0 0 10px rgba(201, 169, 110, 0.85), 0 1px 3px rgba(0, 0, 0, 0.2)"
+              style={{ top: progressThumbTop }}
+            />
+          </Box>
+          {/* Small label */}
+          <Text
+            fontSize="9px"
+            fontWeight="500"
+            color="#c9a96e"
+            letterSpacing="0.3em"
+            textTransform="uppercase"
+            mt={3}
+            pl="0.3em"
+          >
+            Scroll
+          </Text>
         </MotionBox>
 
         {/* Scroll hint */}
