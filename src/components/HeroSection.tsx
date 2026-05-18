@@ -45,7 +45,10 @@ const ViewfinderCorner: React.FC<{
   );
 };
 
-const CAMERA_IMAGE_SRC = '/assets/images/eos_r6_mark_ii_body_2.webp';
+// Filename is versioned (_v2) so renaming the file when we swap in a new
+// camera image bypasses every browser + CDN cache automatically. Path
+// changes => fresh fetch, no manual cache-clear required by visitors.
+const CAMERA_IMAGE_SRC = '/assets/images/eos_r6_mark_ii_body_v2.webp';
 
 // Camera image (trimmed of transparent padding) is 1135x833 — aspect ~1.363.
 // LCD_BOUNDS are percentages of the camera *container* (which matches the
