@@ -1,11 +1,12 @@
 import { Box, HStack, Link, Image } from '@chakra-ui/react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import BurgerMenu from './BurgerMenu';
 import MobileNav from './MobileNav';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
 
   const menuItems = [
     { name: 'Home', path: '/' },
@@ -16,6 +17,19 @@ const Navbar = () => {
 
   const handleToggle = () => setIsOpen(!isOpen);
   const handleClose = () => setIsOpen(false);
+
+  // Logo click: from any other route, RouterLink takes you home. But when
+  // already on `/`, RouterLink is a no-op — feels broken. Force a reload so
+  // the click always does something visible (resets scroll + replays the
+  // hero cinematic from the top), matching the "click logo to go home"
+  // expectation visitors have on every site.
+  const handleLogoClick = (e: React.MouseEvent) => {
+    handleClose();
+    if (location.pathname === '/') {
+      e.preventDefault();
+      window.location.reload();
+    }
+  };
 
   return (
     <Box 
@@ -36,7 +50,7 @@ const Navbar = () => {
           to="/"
           _hover={{ textDecoration: 'none' }}
           zIndex={2000}
-          onClick={handleClose}
+          onClick={handleLogoClick}
         >
           <Image 
             src="/assets/images/logo.svg" 

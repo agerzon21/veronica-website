@@ -348,10 +348,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // TEXT_FADE_START_VH stays just behind the end of the camera zoom so
   // the header/footer fade in as the camera finishes settling, not
   // before. Tune this constant up further if it still feels rushed.
-  const CAMERA_ZOOM_VH = 500;
-  const TEXT_FADE_START_VH = 450;
-  const TEXT_FADE_DURATION_VH = 50;
-  const STABLE_SCROLL_VH = 150;
+  const CAMERA_ZOOM_VH = 250;
+  const TEXT_FADE_START_VH = 200;
+  const TEXT_FADE_DURATION_VH = 100;
+  const STABLE_SCROLL_VH = 50;
 
   const ANIMATIONS_END_VH = Math.max(
     CAMERA_ZOOM_VH,
