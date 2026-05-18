@@ -23,37 +23,35 @@ import { initGA, trackPageView } from './utils/analytics';
 initGA('G-T769KRMR0E');
 
 /**
- * Lenis is alive for the entire home page (where the cinematic lives) and
- * not mounted at all on other routes. Within the home page we DON'T destroy
- * at the hero/non-hero boundary — destroying mid-scroll kills Lenis's
- * built-up velocity, and native scroll picks up with zero momentum, which
- * felt like a "scroll barrier" right past the cinematic.
+ * Lenis runs globally for desktop WHEEL smoothing only (syncTouch is left at
+ * its default `false`). This is the architecturally-correct way to use Lenis
+ * on a site with heavy content underneath the cinematic:
  *
- * Instead, we keep Lenis running and dynamically push its smoothing
- * parameters to 1.0 ("instant") once the user is past the hero. With
- * lerp = 1, current scroll matches target every frame — no smoothing, no
- * lag, finger maps 1:1 to scroll. Inside the hero we use the tight values
- * (0.18 wheel, 0.08 touch) that make the cinematic feel buttery.
+ *   - iOS native touch scroll uses the COMPOSITOR thread — zero main-thread
+ *     latency between finger and screen. Lenis with syncTouch:true intercepts
+ *     touch into the main thread and routes it through a rAF lerp, which adds
+ *     >= 1 frame of lag per touch event. That lag is what reads as "stops me
+ *     from scrolling" / "have to scroll more to get through less" on heavy
+ *     pages — the Instagram embed runs its own scroll handlers, the main
+ *     thread gets busy, Lenis's rAF can't keep up, frames drop.
+ *
+ *   - Native iOS scroll doesn't have this problem because the compositor
+ *     handles it independently of main-thread work.
+ *
+ * So: native touch everywhere (instant feel on iOS), Lenis-smoothed wheel on
+ * desktop (where there's no equivalent compositor optimization). The hero
+ * cinematic gets its smoothing from a useSpring wrapper on scrollYProgress
+ * inside HeroSection — same mathematical lerp, but applied to the *animation
+ * value* instead of the scroll position. Free smoothing for the animation,
+ * native scroll feel for the page.
  */
-function useScopedLenis() {
-  const { pathname } = useLocation();
-
+function useGlobalLenis() {
   useEffect(() => {
-    if (pathname !== '/') return;
-
-    const SMOOTH_WHEEL_LERP = 0.18;
-    const SMOOTH_TOUCH_LERP = 0.08;
-
     const lenis = new Lenis({
-      lerp: SMOOTH_WHEEL_LERP,
+      lerp: 0.12,
       smoothWheel: true,
-      wheelMultiplier: 0.8,
-      // syncTouch lets Lenis smooth touch scrolls too (it ignores them by
-      // default). Past the hero we set syncTouchLerp = 1 to neutralize it
-      // back to native-feeling touch without removing Lenis entirely.
-      syncTouch: true,
-      syncTouchLerp: SMOOTH_TOUCH_LERP,
-      touchInertiaExponent: 1.6,
+      wheelMultiplier: 1,
+      // syncTouch left at default (false) — mobile uses native scroll.
     });
 
     let rafId: number | null = null;
@@ -63,34 +61,15 @@ function useScopedLenis() {
     };
     rafId = requestAnimationFrame(raf);
 
-    // Past hero, push smoothing to 1.0 so Lenis acts as a passthrough.
-    // No destroy = no momentum cliff at the boundary; Lenis just stops
-    // applying meaningful lerp and the user gets near-native scroll feel.
-    const updateSmoothing = () => {
-      const heroPx = window.innerHeight * 2.0;
-      const pastHero = window.scrollY > heroPx;
-      // Lenis reads these per-frame, so mutation takes effect immediately.
-      // Cast through any because the option types are marked as readonly
-      // on the public interface even though the runtime accepts updates.
-      (lenis.options as any).lerp = pastHero ? 1.0 : SMOOTH_WHEEL_LERP;
-      (lenis.options as any).syncTouchLerp = pastHero ? 1.0 : SMOOTH_TOUCH_LERP;
-    };
-
-    updateSmoothing();
-    window.addEventListener('scroll', updateSmoothing, { passive: true });
-    window.addEventListener('resize', updateSmoothing);
-
     return () => {
-      window.removeEventListener('scroll', updateSmoothing);
-      window.removeEventListener('resize', updateSmoothing);
       if (rafId != null) cancelAnimationFrame(rafId);
       lenis.destroy();
     };
-  }, [pathname]);
+  }, []);
 }
 
 function LenisHost() {
-  useScopedLenis();
+  useGlobalLenis();
   return null;
 }
 

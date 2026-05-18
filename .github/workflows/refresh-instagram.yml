@@ -1,0 +1,33 @@
+name: Refresh Instagram feed
+
+# Triggers a Vercel redeploy on a schedule so scripts/fetch-instagram.mjs
+# runs and pulls Veronika's latest IG posts into the site.
+#
+# Setup (one-time):
+#   1. In Vercel → Project → Settings → Git → Deploy Hooks, create a new
+#      hook named "instagram-refresh" pointing to the main branch. Copy
+#      the URL Vercel gives you (looks like https://api.vercel.com/v1/...).
+#   2. In this GitHub repo → Settings → Secrets and variables → Actions,
+#      add a new secret named VERCEL_DEPLOY_HOOK with that URL as the value.
+#
+# After that, this workflow fires daily at 06:00 UTC and triggers a
+# redeploy; the build runs fetch-instagram.mjs and ships fresh posts.
+# You can also trigger manually via the Actions tab → "Run workflow".
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # daily at 06:00 UTC (~2 AM ET)
+  workflow_dispatch:
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deploy hook
+        run: |
+          if [ -z "${{ secrets.VERCEL_DEPLOY_HOOK }}" ]; then
+            echo "VERCEL_DEPLOY_HOOK secret is not set — skipping."
+            exit 0
+          fi
+          curl -fSs -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
+          echo "Redeploy triggered."

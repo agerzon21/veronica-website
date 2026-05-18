@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, Flex, VStack, Text, Link, Icon, Image } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
-import { motion, useScroll, useTransform, MotionValue } from 'framer-motion';
+import { motion, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
 import { FaMapMarkerAlt, FaCamera, FaGlobe } from 'react-icons/fa';
 import ImageCarousel from './ImageCarousel';
 
@@ -201,10 +201,25 @@ const computeCameraSize = (
 const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  const { scrollYProgress } = useScroll({
+  const { scrollYProgress: rawProgress } = useScroll({
     target: sectionRef,
     offset: ['start start', 'end end'],
     layoutEffect: false,
+  });
+
+  // Spring-smooth the scroll progress that every camera animation reads.
+  // Native iOS touch scroll fires events at a coarser rate than the render
+  // frame — feeding the raw value to useTransform gives choppy animation
+  // even though the scroll itself feels instant. This spring lerps between
+  // sample points at 60fps and produces buttery animation values without
+  // touching how scroll feels. Tuning: stiffness/damping picked to match
+  // the responsiveness of Lenis @ lerp 0.18 (smooth but snappy on
+  // direction reversal); restDelta keeps it from settling jittery near 0/1.
+  const scrollYProgress = useSpring(rawProgress, {
+    stiffness: 220,
+    damping: 35,
+    mass: 0.4,
+    restDelta: 0.0005,
   });
 
   // Camera natural + final sizes. Updates on width change or large height change
