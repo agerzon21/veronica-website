@@ -26,11 +26,16 @@ const ViewfinderCorner: React.FC<{
   corner: 'tl' | 'tr' | 'bl' | 'br';
   opacity: MotionValue<number>;
 }> = ({ corner, opacity }) => {
+  // Bottom corners sit ~110px up on mobile so they clear iOS Safari and
+  // Chrome's bottom toolbar (~50-90px) when chrome is visible. Sticky inner
+  // is sized to 100lvh (chrome-hidden viewport), so anything measured from
+  // its bottom lands BEHIND the chrome bar when chrome is showing —
+  // pushing them up gets them back into the visible viewport.
   const positions: Record<typeof corner, any> = {
-    tl: { top: '110px', left: '40px', borderTop: '1px solid #c9a96e', borderLeft: '1px solid #c9a96e' },
-    tr: { top: '110px', right: '40px', borderTop: '1px solid #c9a96e', borderRight: '1px solid #c9a96e' },
-    bl: { bottom: '40px', left: '40px', borderBottom: '1px solid #c9a96e', borderLeft: '1px solid #c9a96e' },
-    br: { bottom: '40px', right: '40px', borderBottom: '1px solid #c9a96e', borderRight: '1px solid #c9a96e' },
+    tl: { top: '110px', left: { base: '24px', md: '40px' }, borderTop: '1px solid #c9a96e', borderLeft: '1px solid #c9a96e' },
+    tr: { top: '110px', right: { base: '24px', md: '40px' }, borderTop: '1px solid #c9a96e', borderRight: '1px solid #c9a96e' },
+    bl: { bottom: { base: '110px', md: '40px' }, left: { base: '24px', md: '40px' }, borderBottom: '1px solid #c9a96e', borderLeft: '1px solid #c9a96e' },
+    br: { bottom: { base: '110px', md: '40px' }, right: { base: '24px', md: '40px' }, borderBottom: '1px solid #c9a96e', borderRight: '1px solid #c9a96e' },
   };
   return (
     <MotionBox
@@ -650,10 +655,14 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           </Text>
         </MotionBox>
 
-        {/* Scroll hint */}
+        {/* Scroll hint — pinned higher on mobile (110px) so it clears the
+            iOS Safari / Chrome bottom toolbar; tighter on desktop where
+            there's no chrome to worry about. Both the SCROLL text and the
+            mouse outline were bumped to higher opacity + stronger shadows
+            so the whole thing stays readable over any LCD photo. */}
         <MotionBox
           position="absolute"
-          bottom={{ base: '24px', md: '32px' }}
+          bottom={{ base: '110px', md: '40px' }}
           left="50%"
           transform="translateX(-50%)"
           zIndex={5}
@@ -663,11 +672,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           <VStack spacing={3} align="center">
             <Text
               fontSize="10px"
-              fontWeight="500"
+              fontWeight="600"
               textTransform="uppercase"
               letterSpacing="0.4em"
               color="white"
-              textShadow="0 1px 6px rgba(0,0,0,0.55)"
+              textShadow="0 1px 2px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6)"
               pl="0.4em"
             >
               Scroll
@@ -676,9 +685,9 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               position="relative"
               width="22px"
               height="36px"
-              border="1.5px solid rgba(201, 169, 110, 0.75)"
+              border="1.5px solid rgba(201, 169, 110, 0.95)"
               borderRadius="14px"
-              boxShadow="0 1px 6px rgba(0,0,0,0.3)"
+              boxShadow="0 1px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.15)"
             >
               <motion.div
                 style={{
@@ -690,7 +699,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                   height: 7,
                   background: '#c9a96e',
                   borderRadius: 2,
-                  boxShadow: '0 0 6px rgba(201,169,110,0.85)',
+                  boxShadow: '0 0 8px rgba(201,169,110,1)',
                 }}
                 animate={{
                   y: [0, 12, 12],
