@@ -95,6 +95,14 @@ const CameraBody = React.forwardRef<
   { children: React.ReactNode; isPortrait: boolean; width: number }
 >(({ children, isPortrait, width }, ref) => {
   const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
+  // LCD width in CSS pixels at the natural camera size. We derive the LCD
+  // corner radius + bezel shadow size from this so the effects scale with
+  // the camera — meaningful at scroll-end (small camera) and proportional
+  // when the LCD covers the viewport at scroll-start.
+  const lcdNaturalWidth = (width * bounds.width) / 100;
+  const lcdRadius = Math.round(lcdNaturalWidth * 0.035); // ~3.5% of LCD width
+  const bezelBlur = Math.round(lcdNaturalWidth * 0.05);
+  const bezelSpread = Math.round(lcdNaturalWidth * 0.012);
   return (
     <Box
       ref={ref}
@@ -129,23 +137,37 @@ const CameraBody = React.forwardRef<
         width={`${bounds.width}%`}
         height={`${bounds.height}%`}
         overflow="hidden"
-        borderRadius="2px"
-        // Inset shadow gives the LCD a recessed bezel look — the photo
-        // reads as "behind glass" instead of pasted on. Strength tuned so
-        // it's visible at the small final size but doesn't darken the
-        // photo too much at scroll-start when LCD covers the viewport.
-        boxShadow="inset 0 0 14px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.35)"
+        // borderRadius scales with the LCD size so the curve is visibly
+        // rounded at the small final state (where it really sells the
+        // "this is an LCD" read) AND naturally proportional when the LCD
+        // fills the viewport. Without this it looked photoshopped — hard
+        // 90° corners on a screen that should have a small bezel curve.
+        style={{ borderRadius: `${lcdRadius}px` }}
+        // Inset shadow gives the LCD a recessed bezel — the photo reads
+        // as "behind glass" instead of pasted on. Blur + spread also scale
+        // with LCD size so the bezel weight stays visually consistent
+        // regardless of how zoomed-in or zoomed-out the camera is.
+        boxShadow={`inset 0 0 ${bezelBlur}px ${bezelSpread}px rgba(0, 0, 0, 0.55), inset 0 0 0 ${Math.max(1, Math.round(lcdNaturalWidth * 0.003))}px rgba(0, 0, 0, 0.4)`}
       >
         {children}
-        {/* Glass reflection: a subtle diagonal sheen overlay so the LCD
-            picks up an LCD-screen-like highlight instead of looking matte.
-            Pointer-events:none so it never blocks the carousel interactions. */}
+        {/* Glass reflection: subtle diagonal sheen for the LCD-screen-like
+            highlight. Pointer-events:none so it never blocks carousel taps. */}
         <Box
           position="absolute"
           inset={0}
           pointerEvents="none"
           zIndex={2}
-          background="linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 18%, transparent 40%, transparent 65%, rgba(0,0,0,0.08) 100%)"
+          background="linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 20%, transparent 42%, transparent 62%, rgba(0,0,0,0.07) 100%)"
+        />
+        {/* Vignette: very subtle darkening toward the edges so the photo
+            doesn't hit the bezel at full brightness — same trick real
+            LCDs have because of the polarizer + glass at the edges. */}
+        <Box
+          position="absolute"
+          inset={0}
+          pointerEvents="none"
+          zIndex={3}
+          background="radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.10) 92%, rgba(0,0,0,0.22) 100%)"
         />
       </Box>
     </Box>
