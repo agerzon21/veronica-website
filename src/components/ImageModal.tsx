@@ -3,11 +3,13 @@ import {
   Text,
   Flex,
 } from '@chakra-ui/react';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon, ViewIcon } from '@chakra-ui/icons';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useCopyNotification } from './CopyNotification';
+import CTAButton from './ui/CTAButton';
 
 interface Rect {
   top: number;
@@ -59,7 +61,18 @@ const ImageModal = ({
   const [showUI, setShowUI] = useState(false);
   const [backdropOpacity, setBackdropOpacity] = useState(1);
 
+  const navigate = useNavigate();
   const { show: showCopied, Notification: CopyNotification } = useCopyNotification();
+  const photoPageUrl =
+    photoData && category && photoData.id ? `/photo/${category}/${photoData.id}` : null;
+  const photoTitle = photoData?.title?.replace(' | Vero Photography', '') ?? '';
+
+  const handleViewPhotoPage = useCallback(() => {
+    // Use replace because GalleryGrid already pushed this exact URL when the
+    // modal opened. Without replace, navigate() would push a duplicate entry
+    // on top and require TWO back presses to escape the photo page.
+    if (photoPageUrl) navigate(photoPageUrl, { replace: true });
+  }, [navigate, photoPageUrl]);
 
   // Open position: centered in viewport
   const openPos = {
@@ -189,6 +202,29 @@ const ImageModal = ({
     }
   }, [isOpen, handleKeyDown]);
 
+  // Resize listener — recompute the image's fullscreen rect when the viewport
+  // changes. Without this the image stays pinned at the size/position it had
+  // when the modal opened, while the rest of the UI (top bar, bottom CTA,
+  // arrows) follows the new viewport, looking visibly broken. Uses an instant
+  // transition because the user is actively dragging the window edge and any
+  // animation lag reads as jank.
+  useEffect(() => {
+    if (!isOpen || isClosing) return;
+    const handleResize = () => {
+      setAnimTransition({ duration: 0, ease: [0, 0, 1, 1] });
+      setAnimTarget({
+        top: window.innerHeight * 0.075,
+        left: window.innerWidth * 0.05,
+        width: window.innerWidth * 0.9,
+        height: window.innerHeight * 0.85,
+        opacity: 1,
+        borderRadius: 0,
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpen, isClosing]);
+
   const handleShare = () => {
     if (photoData && category) {
       const shareUrl = `/photo/${category}/${photoData.id}`;
@@ -274,34 +310,17 @@ const ImageModal = ({
 
         <Flex gap={5} align="center" onClick={(e) => e.stopPropagation()}>
           {photoData && category && (
-            <>
-              <Box
-                as="button"
-                aria-label="Share photo"
-                onClick={handleShare}
-                color="whiteAlpha.600"
-                transition="color 0.3s"
-                _hover={{ color: '#c9a96e' }}
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <ExternalLinkIcon boxSize={4} />
-              </Box>
-              <Box
-                as="button"
-                aria-label="Open in new tab"
-                onClick={() => {
-                  const shareUrl = `/photo/${category}/${photoData.id}`;
-                  const fullUrl = `${window.location.origin}${shareUrl}`;
-                  window.open(fullUrl, '_blank');
-                }}
-                color="whiteAlpha.600"
-                transition="color 0.3s"
-                _hover={{ color: '#c9a96e' }}
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <ViewIcon boxSize={4} />
-              </Box>
-            </>
+            <Box
+              as="button"
+              aria-label="Share photo"
+              onClick={handleShare}
+              color="whiteAlpha.600"
+              transition="color 0.3s"
+              _hover={{ color: '#c9a96e' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <ExternalLinkIcon boxSize={4} />
+            </Box>
           )}
           <Box
             as="button"
@@ -319,6 +338,46 @@ const ImageModal = ({
           </Box>
         </Flex>
       </Flex>
+
+      {/* Bottom bar — photo title + clear CTA to the full photo page.
+          Replaces the old icon-only "open in new tab" eye that nobody found.
+          Same showUI gating as the top bar so it fades in/out with the rest. */}
+      {photoPageUrl && (
+        <Flex
+          position="absolute"
+          bottom={0}
+          left={0}
+          right={0}
+          px={{ base: 4, md: 8 }}
+          py={{ base: 4, md: 5 }}
+          justify="space-between"
+          align="center"
+          gap={4}
+          zIndex={1450}
+          opacity={showUI ? 1 : 0}
+          transition="opacity 0.25s"
+          pointerEvents={showUI ? 'auto' : 'none'}
+          bg="linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {photoTitle && (
+            <Text
+              fontSize={{ base: 'xs', md: 'sm' }}
+              fontWeight="300"
+              color="whiteAlpha.800"
+              letterSpacing="0.05em"
+              noOfLines={1}
+              flex="1 1 auto"
+              minW={0}
+            >
+              {photoTitle}
+            </Text>
+          )}
+          <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
+            View Photo Page →
+          </CTAButton>
+        </Flex>
+      )}
 
       {/* Navigation arrows */}
       {onPrevious && (

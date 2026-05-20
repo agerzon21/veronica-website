@@ -169,6 +169,18 @@ for (const photo of photos) {
         "name": "Vero Photography"
       }
     }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://vero.photography" },
+        { "@type": "ListItem", "position": 2, "name": "Gallery", "item": "https://vero.photography/gallery" },
+        { "@type": "ListItem", "position": 3, "name": "${photo.category.charAt(0).toUpperCase() + photo.category.slice(1)}", "item": "https://vero.photography/gallery/${photo.category}" },
+        { "@type": "ListItem", "position": 4, "name": "${photo.title.replace(/ \\| Vero Photography$/, '').replace(/"/g, '\\"')}", "item": "${fullUrl}" }
+      ]
+    }
     </script>`;
 
   html = html.replace('</head>', `${photoMeta}\n  </head>`);

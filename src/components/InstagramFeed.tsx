@@ -1,6 +1,7 @@
 import { Box, VStack, HStack, Text, Link, Grid, AspectRatio, Image, Icon } from '@chakra-ui/react';
 import { FaInstagram } from 'react-icons/fa';
 import instagramData from '../data/instagram.json';
+import CTAButton from './ui/CTAButton';
 
 // Native grid replacement for the Instagram embed. Cross-origin iframes
 // can't be promoted to independent compositor layers on iOS Safari and
@@ -230,32 +231,7 @@ const InstagramFeed = () => {
       </Grid>
 
       <VStack mt={{ base: 10, md: 12 }}>
-        <Link
-          href={INSTAGRAM_URL}
-          isExternal
-          display="inline-flex"
-          alignItems="center"
-          gap={2.5}
-          fontSize="xs"
-          fontWeight="500"
-          letterSpacing="0.25em"
-          textTransform="uppercase"
-          color="gray.700"
-          border="1px solid"
-          borderColor="#c9a96e"
-          px={8}
-          py={3}
-          transition="all 0.4s ease"
-          _hover={{
-            bg: '#c9a96e',
-            color: 'white',
-            textDecoration: 'none',
-            transform: 'translateY(-2px)',
-          }}
-        >
-          <Icon as={FaInstagram} boxSize={4} />
-          Follow on Instagram
-        </Link>
+        <CTAButton href={INSTAGRAM_URL} icon={FaInstagram}>Follow on Instagram</CTAButton>
       </VStack>
     </Box>
   );

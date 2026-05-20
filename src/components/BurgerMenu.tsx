@@ -16,12 +16,18 @@ const BurgerMenu = ({ isOpen, onClick }: BurgerMenuProps) => {
 
   return (
     <Box
+      as="button"
+      type="button"
+      aria-label={isOpen ? 'Close menu' : 'Open menu'}
+      aria-expanded={isOpen}
       display={{ base: 'block', md: 'none' }}
       onClick={onClick}
       cursor="pointer"
       zIndex={2000}
       p={2}
       position="relative"
+      bg="transparent"
+      border="none"
     >
       <Box position="relative" w="24px" h="20px">
         <MotionBox

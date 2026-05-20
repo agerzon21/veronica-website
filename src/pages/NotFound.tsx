@@ -1,8 +1,8 @@
-import { Box, VStack, Text, Flex, Button } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex } from '@chakra-ui/react';
+import CTAButton from '../components/ui/CTAButton';
 import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { Link } from 'react-router-dom';
 
 const MotionDiv = motion.div;
 
@@ -63,41 +63,8 @@ const NotFound = () => {
               </VStack>
 
               <Flex gap={4} direction={{ base: 'column', sm: 'row' }}>
-                <Button
-                  as={Link}
-                  to="/"
-                  bg="#c9a96e"
-                  color="white"
-                  fontSize="xs"
-                  fontWeight="400"
-                  letterSpacing="0.2em"
-                  textTransform="uppercase"
-                  h="48px"
-                  px={10}
-                  borderRadius="sm"
-                  _hover={{ bg: '#d4b87a', transform: 'translateY(-1px)' }}
-                  transition="all 0.3s"
-                >
-                  Go Home
-                </Button>
-                <Button
-                  as={Link}
-                  to="/gallery"
-                  variant="outline"
-                  borderColor="gray.300"
-                  color="gray.600"
-                  fontSize="xs"
-                  fontWeight="300"
-                  letterSpacing="0.2em"
-                  textTransform="uppercase"
-                  h="48px"
-                  px={10}
-                  borderRadius="sm"
-                  _hover={{ borderColor: '#c9a96e', color: '#c9a96e' }}
-                  transition="all 0.3s"
-                >
-                  View Gallery
-                </Button>
+                <CTAButton to="/" variant="solid">Go Home</CTAButton>
+                <CTAButton to="/gallery">View Gallery</CTAButton>
               </Flex>
             </VStack>
           </MotionDiv>

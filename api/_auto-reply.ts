@@ -11,6 +11,8 @@ export interface ContactPayload {
   name: string;
   email: string;
   shoot_type?: string;
+  date?: string;
+  location?: string;
   message?: string;
   botcheck?: string;
 }
@@ -44,6 +46,18 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
   const safeFirst = escapeHtml(firstName);
   const shootBlurb = escapeHtml(getShootBlurb(data.shoot_type));
 
+  const trimmedDate = (data.date || '').trim();
+  const trimmedLocation = (data.location || '').trim();
+  const detailsBlock =
+    trimmedDate || trimmedLocation
+      ? `<p style="margin:8px 0 0;font-size:13px;color:#888;">Your inquiry:</p>
+<p style="margin:6px 0 16px;padding:8px 14px;background:#f7f5f1;border-radius:4px;color:#5a5a5a;font-size:14px;line-height:1.7;">${
+          trimmedDate ? `<strong style="color:#2d2d2d;">Preferred date:</strong> ${escapeHtml(trimmedDate)}<br>` : ''
+        }${
+          trimmedLocation ? `<strong style="color:#2d2d2d;">Location:</strong> ${escapeHtml(trimmedLocation)}` : ''
+        }</p>`
+      : '';
+
   const trimmedMessage = (data.message || '').trim();
   const messageBlock = trimmedMessage
     ? `<p style="margin:8px 0 0;font-size:13px;color:#888;">Your message:</p>
@@ -57,7 +71,7 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
 <p>Hi ${safeFirst},</p>
 <p>Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.</p>
-${messageBlock}
+${detailsBlock}${messageBlock}
 <p style="background:#fef9e6;border-left:3px solid #c9a96e;padding:12px 16px;font-size:14px;">If this email landed in your <strong>Spam</strong> or <strong>Promotions</strong> folder, please mark it as <strong>Not Spam</strong> — it'll help my future replies reach your inbox.</p>
 <p>Need a faster reply? You can also reach me on:</p>
 <p>Instagram: <a href="${INSTAGRAM_URL}" style="color:#c9a96e">@vero.art.photo</a><br>WhatsApp: <a href="${WHATSAPP_URL}" style="color:#c9a96e">${escapeHtml(WHATSAPP_PHONE)}</a></p>
@@ -70,13 +84,21 @@ ${messageBlock}
 export function buildAutoReplyText(data: ContactPayload): string {
   const firstName = (data.name || '').trim().split(/\s+/)[0] || 'there';
   const shootBlurb = getShootBlurb(data.shoot_type);
+  const trimmedDate = (data.date || '').trim();
+  const trimmedLocation = (data.location || '').trim();
+  const detailsLines: string[] = [];
+  if (trimmedDate) detailsLines.push(`  Preferred date: ${trimmedDate}`);
+  if (trimmedLocation) detailsLines.push(`  Location: ${trimmedLocation}`);
+  const detailsBlock = detailsLines.length
+    ? `\n\nYour inquiry:\n${detailsLines.join('\n')}`
+    : '';
   const trimmedMessage = (data.message || '').trim();
   const messageBlock = trimmedMessage
     ? `\n\nYour message:\n${trimmedMessage.split('\n').map((l) => `> ${l}`).join('\n')}`
     : '';
   return `Hi ${firstName},
 
-Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.${messageBlock}
+Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.${detailsBlock}${messageBlock}
 
 If this email landed in your Spam or Promotions folder, please mark it as Not Spam — it'll help my future replies reach your inbox.
 

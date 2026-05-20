@@ -5,9 +5,12 @@
     <link rel="shortcut icon" href="https://vero.photography/assets/images/favicon.ico" />
     <link rel="icon" type="image/x-icon" href="https://vero.photography/assets/images/favicon.ico" />
     <link rel="apple-touch-icon" href="https://vero.photography/assets/images/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Vero Photography | Professional Photographer in Scranton, Pennsylvania</title>
-    <meta name="description" content="Professional photographer in Scranton, Pennsylvania specializing in luxury weddings, family portraits, maternity, and destination photography. Creating timeless memories through artistic storytelling." />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Vero Photography | Wedding & Portrait Photographer in Scranton, Pennsylvania</title>
+    <meta name="description" content="Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide." />
+
+    <!-- Preload the hero camera image so LCP starts the network fetch before JS parses -->
+    <link rel="preload" as="image" href="/assets/images/eos_r6_mark_ii_body_v2.webp" fetchpriority="high" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -26,15 +29,23 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "LocalBusiness",
+      "@type": "Photographer",
       "name": "Vero Photography",
+      "alternateName": "Veronika Gerzon Photography",
       "image": "https://vero.photography/assets/photos/site/contact-bg.webp",
+      "logo": "https://vero.photography/assets/images/logo.svg",
       "url": "https://vero.photography",
-      "description": "Professional photography services by Veronika Gerzon. Specializing in weddings, portraits, family sessions, and maternity photography in Scranton, Pennsylvania and worldwide. Creating timeless memories through artistic and emotional storytelling.",
+      "telephone": "+1-570-909-5707",
+      "priceRange": "$$",
+      "description": "Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide.",
+      "founder": {
+        "@type": "Person",
+        "name": "Veronika Gerzon"
+      },
       "address": {
         "@type": "PostalAddress",
         "addressLocality": "Scranton",
-        "addressRegion": "Pennsylvania",
+        "addressRegion": "PA",
         "addressCountry": "US"
       },
       "geo": {
@@ -42,14 +53,22 @@
         "latitude": "41.4087",
         "longitude": "-75.6621"
       },
+      "areaServed": [
+        { "@type": "City", "name": "Scranton" },
+        { "@type": "AdministrativeArea", "name": "Northeast Pennsylvania" },
+        { "@type": "Country", "name": "United States" },
+        { "@type": "Place", "name": "Worldwide" }
+      ],
+      "knowsAbout": [
+        "Wedding Photography",
+        "Portrait Photography",
+        "Family Photography",
+        "Maternity Photography",
+        "Destination Photography"
+      ],
       "sameAs": [
         "https://www.instagram.com/vero.art.photo/"
-      ],
-      "potentialAction": {
-        "@type": "ViewAction",
-        "target": "https://vero.photography",
-        "image": "https://vero.photography/assets/images/favicon.ico"
-      }
+      ]
     }
     </script>
 

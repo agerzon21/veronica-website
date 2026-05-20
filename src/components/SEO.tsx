@@ -1,341 +1,119 @@
 import { Helmet } from 'react-helmet-async';
+import { useLocation } from 'react-router-dom';
 
-interface SEOProps {
-  title?: string;
-  description?: string;
-  image?: string;
-  url?: string;
-  type?: string;
-  keywords?: string[];
-}
+// Route-aware base SEO. Each route gets its own title, description, canonical,
+// and OG/Twitter image so Google doesn't see every page as a duplicate of /.
+// Page components are still free to override individual tags via their own
+// Helmet — later Helmet instances win, so e.g. IndividualPhoto.tsx overrides
+// these for /photo/:category/:photoId.
 
-const SEO = ({
-  title = 'Vero Photography | Professional Photographer in Scranton, Pennsylvania & Worldwide',
-  description = 'Professional photography services by Veronika Gerzon. Specializing in weddings, portraits, family sessions, and maternity photography in Scranton, Pennsylvania and worldwide. Creating timeless memories through artistic and emotional storytelling.',
-  image = 'https://vero.photography/assets/photos/site/contact-bg.webp',
-  url = 'https://vero.photography',
-  type = 'website',
-  keywords = [
-    // Business & Personal Branding Keywords
-    'Vero Photography',
-    'Veronika Gerzon',
-    'Vero Photography Scranton',
-    'Veronika Gerzon Photography',
-    'Vero Photography DR',
-    'Veronika Gerzon Photographer',
-    'Vero Photography Pennsylvania',
-    'Veronika Gerzon Wedding Photographer',
-    'Vero Photography Wedding',
-    'Veronika Gerzon Portraits',
-    'Vero Photography Portraits',
-    'Veronika Gerzon Family Photography',
-    'Vero Photography Family',
-    'Veronika Gerzon Maternity',
-    'Vero Photography Maternity',
-    'Vero Photography Website',
-    'Veronika Gerzon Portfolio',
-    'Vero Photography Portfolio',
-    'Veronika Gerzon Gallery',
-    'Vero Photography Gallery',
-    'Vero Photography Contact',
-    'Veronika Gerzon Contact',
-    'Vero Photography Booking',
-    'Veronika Gerzon Booking',
-    'Vero Photography Services',
-    'Veronika Gerzon Services',
-    'Vero Photography Packages',
-    'Veronika Gerzon Packages',
-    'Vero Photography Reviews',
-    'Veronika Gerzon Reviews',
+const SITE_URL = 'https://vero.photography';
+const DEFAULT_IMAGE = `${SITE_URL}/assets/photos/site/contact-bg.webp`;
 
-    // Scranton & Pennsylvania Specific Keywords
-    'Scranton Photographer',
-    'Pennsylvania Photographer',
-    'Wedding Photography Scranton',
-    'Portrait Photography Scranton',
-    'Family Photography Scranton',
-    'Maternity Photography Scranton',
-    'Professional Photographer Scranton PA',
-    'Wedding Photographer Scranton Pennsylvania',
-    'Family Photographer Scranton',
-    'Portrait Photographer Scranton',
-    'Maternity Photographer Scranton',
-    'Professional Photography Scranton',
-    'Wedding Photography Pennsylvania',
-    'Portrait Photography Pennsylvania',
-    'Family Photography Pennsylvania',
-    'Maternity Photography Pennsylvania',
-    'Professional Photographer Pennsylvania',
-    'Scranton Wedding Photography',
-    'Scranton Portrait Photography',
-    'Scranton Family Photography',
-    'Scranton Maternity Photography',
-    'Northeast Pennsylvania Photographer',
-    'NEPA Photographer',
-    'Scranton Area Photographer',
-    'Pennsylvania Wedding Photographer',
-    'Pennsylvania Portrait Photographer',
-    'Pennsylvania Family Photographer',
-    'Pennsylvania Maternity Photographer',
-    
-    // Punta Cana Specific Keywords
-    'Punta Cana Photographer',
-    'Wedding Photography Punta Cana',
-    'Portrait Photography Punta Cana',
-    'Family Photography Punta Cana',
-    'Maternity Photography Punta Cana',
-    'Beach Photography Punta Cana',
-    'Resort Photography Punta Cana',
-    'Caribbean Photographer',
-    'Dominican Republic Photographer',
-    'Luxury Beach Wedding Photography Punta Cana',
-    'Destination Wedding Photographer Punta Cana',
-    'Professional Resort Photographer Punta Cana',
-    'Tropical Wedding Photography Dominican Republic',
-    'Beach Portrait Session Punta Cana',
-    'Resort Family Photos Punta Cana',
-    'Luxury Maternity Photography Punta Cana',
-    'Professional Event Photography Punta Cana',
-    'Caribbean Destination Photographer',
-    'Punta Cana Wedding Photojournalist',
-    'Resort Lifestyle Photography Punta Cana',
-    'Luxury Resort Wedding Photography Punta Cana',
-    'Professional Beach Portrait Photography Punta Cana',
-    'Tropical Destination Wedding Photographer Punta Cana',
-    'Caribbean Beach Wedding Photography',
-    'Punta Cana Resort Wedding Photography',
-    'Luxury Caribbean Wedding Photography',
-    'Professional Punta Cana Photographer',
-    'Tropical Beach Portrait Photography Punta Cana',
-    'Caribbean Destination Wedding Photography',
-    'Luxury Punta Cana Wedding Photography',
-    
-    // Wedding Photography Keywords
-    'Destination Wedding Photographer',
-    'Wedding Photography',
-    'Beach Wedding Photography',
-    'Luxury Wedding Photography',
-    'Intimate Wedding Photography',
-    'Wedding Photojournalism',
-    'Candid Wedding Photography',
-    'Artistic Wedding Photos',
-    'Luxury Destination Wedding Photography',
-    'Beach Wedding Photo Session',
-    'Intimate Wedding Ceremony Photography',
-    'Wedding Day Photo Coverage',
-    'Professional Wedding Photojournalist',
-    'Artistic Wedding Photo Session',
-    'Luxury Wedding Photo Package',
-    'Destination Wedding Photo Coverage',
-    'Wedding Photography Services',
-    'Professional Wedding Photo Session',
-    'Wedding Photo Storytelling',
-    'Wedding Photo Documentary',
-    'Luxury Wedding Photo Coverage',
-    'Professional Wedding Photography Services',
-    'Artistic Wedding Photo Coverage',
-    'Destination Wedding Photo Session',
-    'Beach Wedding Photo Coverage',
-    'Intimate Wedding Photo Session',
-    'Wedding Photo Storytelling Session',
-    'Professional Wedding Photo Package',
-    'Luxury Wedding Photo Session',
-    'Wedding Photo Documentary Coverage',
-    
-    // Portrait Photography Keywords
-    'Professional Portrait Photography',
-    'Contemporary Portrait Photography',
-    'Natural Light Portraits',
-    'Lifestyle Portrait Photography',
-    'Environmental Portraits',
-    'Fashion Photography',
-    'Editorial Photography',
-    'Luxury Portrait Photography',
-    'Professional Headshot Photography',
-    'Natural Light Portrait Session',
-    'Environmental Portrait Photography',
-    'Lifestyle Portrait Session',
-    'Contemporary Portrait Session',
-    'Professional Portrait Photo Session',
-    'Artistic Portrait Photography',
-    'Editorial Portrait Session',
-    'Fashion Portrait Photography',
-    'Professional Portrait Photo Package',
-    'Luxury Portrait Photo Session',
-    'Portrait Photography Services',
-    'Luxury Portrait Photo Coverage',
-    'Professional Portrait Photo Services',
-    'Artistic Portrait Photo Session',
-    'Natural Light Portrait Coverage',
-    'Environmental Portrait Session',
-    'Lifestyle Portrait Coverage',
-    'Contemporary Portrait Coverage',
-    'Professional Portrait Photo Coverage',
-    'Artistic Portrait Photo Coverage',
-    'Editorial Portrait Coverage',
-    
-    // Family Photography Keywords
-    'Family Portrait Photography',
-    'Family Beach Portraits',
-    'Multi-Generation Family Photos',
-    'Candid Family Photography',
-    'Modern Family Portraits',
-    'Family Lifestyle Photography',
-    'Luxury Family Photography',
-    'Professional Family Photo Session',
-    'Beach Family Portrait Session',
-    'Multi-Generation Family Portrait',
-    'Candid Family Photo Session',
-    'Modern Family Photo Package',
-    'Family Lifestyle Photo Session',
-    'Professional Family Photography',
-    'Family Portrait Photo Package',
-    'Luxury Family Photo Session',
-    'Family Photography Services',
-    'Professional Family Photo Coverage',
-    'Family Photo Storytelling',
-    'Family Photo Documentary',
-    'Luxury Family Photo Coverage',
-    'Professional Family Photo Services',
-    'Artistic Family Photo Session',
-    'Beach Family Photo Coverage',
-    'Multi-Generation Family Coverage',
-    'Candid Family Photo Coverage',
-    'Modern Family Photo Session',
-    'Family Lifestyle Photo Coverage',
-    'Professional Family Photo Package',
-    'Family Portrait Photo Coverage',
-    
-    // Maternity Photography Keywords
-    'Maternity Photography',
-    'Pregnancy Photo Session',
-    'Beach Maternity Photos',
-    'Artistic Maternity Portraits',
-    'Natural Maternity Photography',
-    'Luxury Maternity Photography',
-    'Professional Maternity Photo Session',
-    'Beach Maternity Portrait Session',
-    'Artistic Maternity Photo Session',
-    'Natural Maternity Photo Package',
-    'Professional Maternity Photography',
-    'Maternity Portrait Photo Session',
-    'Luxury Maternity Photo Package',
-    'Maternity Photography Services',
-    'Professional Maternity Photo Coverage',
-    'Maternity Photo Storytelling',
-    'Maternity Photo Documentary',
-    'Pregnancy Portrait Photography',
-    'Expecting Mother Photography',
-    'Maternity Photo Session Package',
-    'Luxury Maternity Photo Coverage',
-    'Professional Maternity Photo Services',
-    'Artistic Maternity Photo Coverage',
-    'Beach Maternity Photo Session',
-    'Natural Maternity Photo Coverage',
-    'Pregnancy Photo Coverage',
-    'Expecting Mother Photo Session',
-    'Maternity Portrait Photo Coverage',
-    'Professional Maternity Photo Package',
-    'Luxury Maternity Photo Session',
-    
-    // Style & Approach Keywords
-    'Fine Art Photography',
-    'Documentary Photography',
-    'Natural Light Specialist',
-    'Emotional Storytelling',
-    'Timeless Photography',
-    'Luxury Photography Services',
-    'International Photographer',
-    'Travel Photography',
-    'Artistic Photography Style',
-    'Professional Photojournalism',
-    'Natural Light Photography',
-    'Emotional Photo Storytelling',
-    'Timeless Photo Style',
-    'Luxury Photo Services',
-    'International Photo Coverage',
-    'Travel Photo Services',
-    'Fine Art Photo Style',
-    'Documentary Photo Approach',
-    'Professional Photo Services',
-    'Artistic Photo Style',
-    'Luxury Photo Coverage',
-    'Professional Photo Coverage',
-    'Artistic Photo Coverage',
-    'Natural Light Photo Style',
-    'Emotional Photo Coverage',
-    'Timeless Photo Coverage',
-    'International Photo Style',
-    'Travel Photo Coverage',
-    'Fine Art Photo Coverage',
-    'Documentary Photo Coverage',
-    
-    // Location Keywords
-    'Destination Photographer',
-    'Beach Photography',
-    'Resort Photography',
-    'Tropical Wedding Photography',
-    'US Wedding Photographer',
-    'Worldwide Photography Services',
-    'International Destination Photographer',
-    'Beach Photo Session',
-    'Resort Photo Coverage',
-    'Tropical Photo Session',
-    'US Photo Services',
-    'Worldwide Photo Coverage',
-    'International Photo Services',
-    'Destination Photo Session',
-    'Beach Photo Coverage',
-    'Resort Photo Session',
-    'Tropical Photo Coverage',
-    'US Photo Session',
-    'Worldwide Photo Session',
-    'International Photo Coverage',
-    'Luxury Destination Photography',
-    'Professional Beach Photography',
-    'Artistic Resort Photography',
-    'Natural Tropical Photography',
-    'Professional US Photography',
-    'Luxury Worldwide Photography',
-    'International Beach Photography',
-    'Destination Resort Photography',
-    'Tropical Beach Photography',
-    'US Destination Photography'
-  ],
-}: SEOProps) => {
+type RouteMeta = { title: string; description: string; image?: string };
+
+const ROUTE_META: Record<string, RouteMeta> = {
+  '/': {
+    title: 'Vero Photography | Wedding & Portrait Photographer in Scranton, Pennsylvania',
+    description:
+      'Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide.',
+  },
+  '/about': {
+    title: 'About Veronika Gerzon | Vero Photography',
+    description:
+      'About Veronika Gerzon — wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
+    image: `${SITE_URL}/assets/photos/site/about-bg.webp`,
+  },
+  '/contact': {
+    title: 'Book a Session | Vero Photography',
+    description:
+      'Get in touch to plan a wedding, portrait, family, or maternity session. Based in Scranton, Pennsylvania — available worldwide.',
+  },
+  '/contact/thank-you': {
+    title: 'Thank You | Vero Photography',
+    description:
+      'Your inquiry has been received — Veronika will be in touch shortly to discuss your photography session.',
+  },
+  '/gallery': {
+    title: 'Photography Portfolio | Vero Photography',
+    description:
+      'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Gerzon.',
+  },
+  '/gallery/portraits': {
+    title: 'Portrait Photography Portfolio | Vero Photography',
+    description:
+      'Portrait photography portfolio — natural-light, lifestyle, and editorial portraits by Veronika Gerzon.',
+    image: `${SITE_URL}/assets/photos/portraits/shadow-play-portrait.webp`,
+  },
+  '/gallery/weddings': {
+    title: 'Wedding Photography Portfolio | Vero Photography',
+    description:
+      'Wedding photography portfolio — destination, beach, and intimate ceremony coverage by Veronika Gerzon.',
+    image: `${SITE_URL}/assets/photos/weddings/newlyweds-running-sea.webp`,
+  },
+  '/gallery/family': {
+    title: 'Family Photography Portfolio | Vero Photography',
+    description:
+      'Family photography portfolio — multi-generation, lifestyle, and candid family sessions by Veronika Gerzon.',
+    image: `${SITE_URL}/assets/photos/family/elegant-family-studio-portrait-black.webp`,
+  },
+  '/gallery/maternity': {
+    title: 'Maternity Photography Portfolio | Vero Photography',
+    description:
+      'Maternity photography portfolio — beach, studio, and artistic maternity sessions by Veronika Gerzon.',
+    image: `${SITE_URL}/assets/photos/maternity/couples-beach-baby-bump-moment.webp`,
+  },
+};
+
+const SEO = () => {
+  const { pathname } = useLocation();
+  // Strip trailing slash for lookup (but keep root). Avoids /about and /about/
+  // diverging on the meta we serve.
+  const normalized =
+    pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  const meta = ROUTE_META[normalized];
+  // For unrecognized paths (e.g. /photo/:category/:photoId, /pay, /404), fall
+  // back to the home defaults. Per-page Helmet on those routes overrides this.
+  const resolved = meta ?? ROUTE_META['/'];
+  const canonical = `${SITE_URL}${normalized === '/' ? '' : normalized}`;
+  const image = resolved.image ?? DEFAULT_IMAGE;
+
   return (
     <Helmet>
-      {/* Basic Meta Tags */}
-      <title>{title}</title>
-      <meta name="description" content={description} />
-      <meta name="keywords" content={keywords.join(', ')} />
-      <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+      <title>{resolved.title}</title>
+      <meta name="description" content={resolved.description} />
+      <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       <meta charSet="utf-8" />
       <meta name="language" content="English" />
-      <meta name="revisit-after" content="7 days" />
       <meta name="robots" content="index, follow" />
-      <link rel="canonical" href={url} />
+      <link rel="canonical" href={canonical} />
 
-      {/* Mobile Specific Meta Tags */}
+      {/* Mobile */}
       <meta name="theme-color" content="#000000" />
       <meta name="apple-mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-status-bar-style" content="black" />
       <meta name="format-detection" content="telephone=no" />
 
-      {/* Open Graph Meta Tags */}
-      <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
+      {/* Open Graph */}
+      <meta property="og:title" content={resolved.title} />
+      <meta property="og:description" content={resolved.description} />
       <meta property="og:image" content={image} />
-      <meta property="og:url" content={url} />
-      <meta property="og:type" content={type} />
+      <meta property="og:url" content={canonical} />
+      <meta property="og:type" content="website" />
       <meta property="og:site_name" content="Vero Photography" />
       <meta property="og:locale" content="en_US" />
       <meta property="og:locale:alternate" content="es_DO" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content="Vero Photography - Professional Photographer" />
+      <meta property="og:image:alt" content="Vero Photography — Professional Photographer" />
+
+      {/* Twitter */}
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={resolved.title} />
+      <meta name="twitter:description" content={resolved.description} />
+      <meta name="twitter:image" content={image} />
     </Helmet>
   );
 };
 
-export default SEO; 
+export default SEO;

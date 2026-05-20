@@ -208,27 +208,85 @@ const IndividualPhoto: React.FC = () => {
   }
 
   const categoryLabel = category ? category.charAt(0).toUpperCase() + category.slice(1) : '';
-  const keywordsForMeta = photo.keywords.join(', ');
+  const titleNoSuffix = photo.title.replace(' | Vero Photography', '');
+  // Build the canonical URL from route params instead of window.location.href
+  // so it's stable across SSR/prerender and never includes query strings.
+  const photoUrl = `https://vero.photography/photo/${category}/${photoId}`;
+  const photoImage = `https://vero.photography${photo.url}`;
+
+  // BreadcrumbList schema — makes the page eligible for breadcrumb rich results
+  // and tells Google how the photo fits in the site hierarchy. Helps with
+  // indexing thin photo pages by establishing internal-link context.
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://vero.photography' },
+      { '@type': 'ListItem', position: 2, name: 'Gallery', item: 'https://vero.photography/gallery' },
+      { '@type': 'ListItem', position: 3, name: categoryLabel, item: `https://vero.photography/gallery/${category}` },
+      { '@type': 'ListItem', position: 4, name: titleNoSuffix, item: photoUrl },
+    ],
+  };
 
   return (
     <>
       <Helmet>
         <title>{photo.title}</title>
         <meta name="description" content={photo.description} />
-        {keywordsForMeta && <meta name="keywords" content={keywordsForMeta} />}
         <meta property="og:title" content={photo.title} />
         <meta property="og:description" content={photo.description} />
-        <meta property="og:image" content={`https://vero.photography${photo.url}`} />
-        <meta property="og:url" content={window.location.href} />
-        <meta property="og:type" content="website" />
+        <meta property="og:image" content={photoImage} />
+        <meta property="og:url" content={photoUrl} />
+        <meta property="og:type" content="article" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={photo.title} />
         <meta name="twitter:description" content={photo.description} />
-        <meta name="twitter:image" content={`https://vero.photography${photo.url}`} />
-        <link rel="canonical" href={window.location.href} />
+        <meta name="twitter:image" content={photoImage} />
+        <link rel="canonical" href={photoUrl} />
+        <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
       </Helmet>
 
       <Box minH="100vh" bg="white" pt="72px">
+        {/* Breadcrumb — small, semantic. Real <a href> tags so they're
+            crawlable and provide internal links INTO the photo pages from
+            the perspective of Googlebot crawling the gallery → category → photo. */}
+        <Box
+          as="nav"
+          aria-label="Breadcrumb"
+          px={{ base: 4, md: 8 }}
+          py={3}
+          maxW="container.xl"
+          mx="auto"
+        >
+          <Flex
+            as="ol"
+            listStyleType="none"
+            gap={2}
+            fontSize="2xs"
+            fontWeight="400"
+            letterSpacing="0.1em"
+            textTransform="uppercase"
+            color="gray.400"
+            flexWrap="wrap"
+          >
+            <Box as="li">
+              <Link to="/" style={{ color: 'inherit' }}>Home</Link>
+            </Box>
+            <Box as="li" aria-hidden="true">/</Box>
+            <Box as="li">
+              <Link to="/gallery" style={{ color: 'inherit' }}>Gallery</Link>
+            </Box>
+            <Box as="li" aria-hidden="true">/</Box>
+            <Box as="li">
+              <Link to={`/gallery/${category}`} style={{ color: 'inherit' }}>{categoryLabel}</Link>
+            </Box>
+            <Box as="li" aria-hidden="true">/</Box>
+            <Box as="li" aria-current="page" color="gray.600">
+              {titleNoSuffix}
+            </Box>
+          </Flex>
+        </Box>
+
         {/* Hero image — full width */}
         <Box position="relative" w="100%" bg="white">
           <Image
@@ -267,10 +325,12 @@ const IndividualPhoto: React.FC = () => {
 
                 {/* Title */}
                 <Text
+                  as="h1"
                   fontSize={{ base: 'xl', md: '2xl' }}
                   fontWeight="200"
                   color="gray.800"
                   lineHeight="1.5"
+                  m={0}
                 >
                   {photo.title.replace(' | Vero Photography', '')}
                 </Text>

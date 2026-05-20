@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import { FaGoogle, FaStar } from 'react-icons/fa';
+import CTAButton from './ui/CTAButton';
 
 const MotionDiv = motion.div;
 
@@ -170,29 +171,7 @@ const GoogleReviewsSection = () => {
 
         {/* CTA — links to write-review URL */}
         <Flex justify="center" mt={{ base: 14, md: 20 }}>
-          <Link
-            href={GOOGLE_WRITE_REVIEW_URL}
-            isExternal
-            fontSize="xs"
-            fontWeight="400"
-            color="gray.700"
-            textTransform="uppercase"
-            letterSpacing="0.2em"
-            display="inline-block"
-            px={8}
-            py={3}
-            border="1px solid"
-            borderColor="gray.300"
-            transition="all 0.4s ease"
-            _hover={{
-              textDecoration: 'none',
-              borderColor: '#c9a96e',
-              color: '#c9a96e',
-              transform: 'translateY(-2px)',
-            }}
-          >
-            Leave a Review
-          </Link>
+          <CTAButton href={GOOGLE_WRITE_REVIEW_URL}>Leave a Review</CTAButton>
         </Flex>
       </MotionDiv>
     </Box>

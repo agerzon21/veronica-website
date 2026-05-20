@@ -86,10 +86,12 @@ const Gallery = () => {
                 </Text>
                 <Box w="35px" h="1px" bg="#c9a96e" />
                 <Text
+                  as="h1"
                   fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
                   fontWeight="200"
                   color="white"
                   lineHeight="1.4"
+                  m={0}
                 >
                   A collection of my recent work
                 </Text>
@@ -154,10 +156,12 @@ const Gallery = () => {
               </Text>
               <Box w="35px" h="1px" bg="#c9a96e" />
               <Text
+                as="h1"
                 fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
                 fontWeight="200"
                 color="white"
                 lineHeight="1.4"
+                m={0}
               >
                 {categoryInfo.title}
               </Text>

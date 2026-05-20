@@ -31,34 +31,6 @@ function ScrollToTop() {
   return null;
 }
 
-
-function TitleUpdater() {
-  const location = useLocation();
-
-  useEffect(() => {
-    const path = location.pathname;
-    let title = 'Vero Photography';
-
-    switch (path) {
-      case '/about':
-        title = 'About - Vero Photography';
-        break;
-      case '/contact':
-        title = 'Contact - Vero Photography';
-        break;
-      case '/gallery':
-        title = 'Gallery - Vero Photography';
-        break;
-      default:
-        title = 'Vero Photography';
-    }
-
-    document.title = title;
-  }, [location]);
-
-  return null;
-}
-
 function App() {
   return (
     <HelmetProvider>
@@ -66,7 +38,6 @@ function App() {
         <Router>
           <SEO />
           <ScrollToTop />
-          <TitleUpdater />
           <Navbar />
           <Routes>
             <Route path="/" element={<Home />} />

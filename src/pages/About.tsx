@@ -18,6 +18,9 @@ const About = () => {
       <Helmet>
         <meta property="og:image" content="https://vero.photography/assets/photos/site/about-bg.webp" />
       </Helmet>
+      <Box as="h1" position="absolute" left="-10000px" w="1px" h="1px" overflow="hidden">
+        About Veronika Gerzon — Vero Photography
+      </Box>
       {/* ─── Mobile: stacked hero ─── */}
       <Box display={{ base: 'block', lg: 'none' }}>
         <Box position="relative" h="60vh" overflow="hidden">

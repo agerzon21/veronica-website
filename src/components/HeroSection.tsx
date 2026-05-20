@@ -1,9 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Box, Flex, VStack, Text, Link, Icon, Image } from '@chakra-ui/react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Box, Flex, VStack, Text, Icon, Image } from '@chakra-ui/react';
 import { motion, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
 import { FaMapMarkerAlt, FaCamera, FaGlobe } from 'react-icons/fa';
 import ImageCarousel from './ImageCarousel';
+import CTAButton from './ui/CTAButton';
 
 const MotionBox = motion(Box);
 
@@ -353,10 +353,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // TEXT_FADE_START_VH stays just behind the end of the camera zoom so
   // the header/footer fade in as the camera finishes settling, not
   // before. Tune this constant up further if it still feels rushed.
-  const CAMERA_ZOOM_VH = 250;
-  const TEXT_FADE_START_VH = 200;
-  const TEXT_FADE_DURATION_VH = 100;
-  const STABLE_SCROLL_VH = 50;
+  const CAMERA_ZOOM_VH = 180;
+  const TEXT_FADE_START_VH = 150;
+  const TEXT_FADE_DURATION_VH = 60;
+  const STABLE_SCROLL_VH = 40;
 
   const ANIMATIONS_END_VH = Math.max(
     CAMERA_ZOOM_VH,
@@ -430,30 +430,9 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           </React.Fragment>
         ))}
       </Flex>
-      <Link
-        as={RouterLink}
-        to="/contact"
-        fontSize="xs"
-        fontWeight="400"
-        color="gray.700"
-        textTransform="uppercase"
-        letterSpacing="0.2em"
-        display="inline-block"
-        px={8}
-        py={3}
-        mt={2}
-        border="1px solid"
-        borderColor="#c9a96e"
-        transition="all 0.4s ease"
-        _hover={{
-          textDecoration: 'none',
-          bg: '#c9a96e',
-          color: 'white',
-          transform: 'translateY(-2px)',
-        }}
-      >
-        Book a Session
-      </Link>
+      <Box mt={2}>
+        <CTAButton to="/contact">Book a Session</CTAButton>
+      </Box>
     </VStack>
   );
 
@@ -511,6 +490,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               </Text>
               <Box w="40px" h="1px" bg="#c9a96e" />
               <Text
+                as="h1"
                 fontSize={{ base: 'lg', md: '2xl', lg: '3xl' }}
                 fontWeight="200"
                 fontStyle="italic"
@@ -518,6 +498,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                 letterSpacing="wide"
                 lineHeight="1.2"
                 textAlign="center"
+                m={0}
               >
                 Wedding & Portrait Photographer
               </Text>
