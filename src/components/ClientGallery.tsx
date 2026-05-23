@@ -7,7 +7,7 @@ import {
   Icon,
   SimpleGrid,
 } from '@chakra-ui/react';
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@chakra-ui/icons';
@@ -31,6 +31,9 @@ interface ClientGalleryProps {
 
 const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryProps) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Touch swipe for mobile prev/next inside the lightbox. Matches the pattern
+  // used in the public ImageModal so the two galleries feel consistent.
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const openAt = (i: number) => setSelectedIndex(i);
   const close = useCallback(() => setSelectedIndex(null), []);
@@ -44,6 +47,28 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
       setSelectedIndex(selectedIndex - 1);
     }
   }, [selectedIndex]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Only handle swipes on touch devices — desktop has arrow keys + buttons.
+    if (window.innerWidth >= 768) return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (window.innerWidth >= 768) return;
+    const start = touchStartRef.current;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = start.x - t.clientX;
+    const dy = Math.abs(start.y - t.clientY);
+    // Require mostly-horizontal swipe (dy < dx) so vertical scrolls don't
+    // accidentally page through photos. 50px threshold avoids twitchy taps.
+    if (Math.abs(dx) > 50 && dy < Math.abs(dx)) {
+      if (dx > 0) next();
+      else prev();
+    }
+    touchStartRef.current = null;
+  };
 
   // Keyboard navigation when the viewer is open.
   useEffect(() => {
@@ -216,8 +241,11 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
               inset: 0,
               zIndex: 2100,
               background: 'rgba(0,0,0,0.93)',
+              touchAction: 'pan-y',
             }}
             onClick={close}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
           >
             {/* Top bar — counter + close + per-photo download */}
             <Flex
@@ -330,14 +358,19 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
               </Box>
             )}
 
-            {/* The image itself */}
+            {/* The image itself. The Flex passes clicks through with
+                pointerEvents="none" — only the Image swallows the click via
+                stopPropagation. So clicks anywhere outside the actual photo
+                fall through to the backdrop's close handler. Touch swipe
+                handlers live on the outer motion.div above, which has full
+                pointer events. */}
             <Flex
               position="absolute"
               inset={0}
               align="center"
               justify="center"
               p={{ base: 4, md: 12 }}
-              onClick={(e) => e.stopPropagation()}
+              pointerEvents="none"
             >
               <Image
                 src={selected.viewUrl}
@@ -347,6 +380,8 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
                 objectFit="contain"
                 userSelect="none"
                 draggable={false}
+                pointerEvents="auto"
+                onClick={(e) => e.stopPropagation()}
               />
             </Flex>
 

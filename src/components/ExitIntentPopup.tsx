@@ -62,13 +62,22 @@ const ExitIntentPopup = () => {
     setIsOpen(false);
   }, []);
 
-  const trigger = useCallback(() => {
+  const trigger = useCallback((opts?: { force?: boolean }) => {
     if (triggeredRef.current) return;
-    if (wasShownRecently()) return;
+    if (!opts?.force && wasShownRecently()) return;
     triggeredRef.current = true;
-    markShown();
+    if (!opts?.force) markShown();
     setIsOpen(true);
   }, []);
+
+  // Debug hatch: ?popup=test on any URL forces the popup immediately and
+  // ignores the 30-day cap. Useful for verifying the popup works on a preview
+  // deploy without aiming a mouse out the top edge of the viewport.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('popup') === 'test') trigger({ force: true });
+  }, [trigger]);
 
   // Desktop: mouse leaves top edge of viewport → likely going to close tab
   // or hit the URL bar. Trigger the popup.
