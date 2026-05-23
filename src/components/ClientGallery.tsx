@@ -1,5 +1,6 @@
 import {
   Box,
+  Flex,
   Text,
   VStack,
   Image,
@@ -7,7 +8,7 @@ import {
   SimpleGrid,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback } from 'react';
-import { FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
@@ -29,6 +30,166 @@ interface ClientGalleryProps {
   files: DriveFile[];
   warning?: string;
 }
+
+interface GridTileProps {
+  file: DriveFile;
+  index: number;
+  onSelect: (i: number) => void;
+  setRef: (el: HTMLDivElement | null) => void;
+}
+
+/**
+ * One thumbnail in the gallery grid. Extracted as its own component so each
+ * tile owns its thumbnail-load state — if a thumbnail fails (e.g. Drive's
+ * thumbnail endpoint occasionally 4xx's video files until they're fully
+ * processed) we swap to a placeholder card instead of leaving the user with
+ * a broken-image icon. Video files also get a play-icon overlay so it's
+ * clear they're not photos before the user even clicks.
+ */
+const GridTile = ({ file, index, onSelect, setRef }: GridTileProps) => {
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const isVideo = file.mimeType.startsWith('video/');
+
+  return (
+    <Box
+      ref={setRef}
+      position="relative"
+      cursor="pointer"
+      overflow="hidden"
+      role="group"
+      onClick={() => onSelect(index)}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Box position="relative" pb="100%" overflow="hidden" bg="gray.100">
+        {thumbFailed ? (
+          // Placeholder: dark tile with appropriate icon + filename. Shown
+          // when Drive's thumbnail endpoint doesn't return an image (most
+          // common cause: a video whose thumbnail Drive hasn't generated
+          // yet, or any non-standard file mime type).
+          <Flex
+            position="absolute"
+            inset={0}
+            direction="column"
+            align="center"
+            justify="center"
+            bg="gray.900"
+            color="whiteAlpha.800"
+            p={4}
+          >
+            <Flex
+              bg="rgba(201, 169, 110, 0.15)"
+              borderRadius="full"
+              w="56px"
+              h="56px"
+              align="center"
+              justify="center"
+              mb={3}
+            >
+              <Icon
+                as={isVideo ? FaPlay : FaImage}
+                color="#c9a96e"
+                boxSize={5}
+                ml={isVideo ? 1 : 0}
+              />
+            </Flex>
+            <Text
+              fontSize="2xs"
+              textAlign="center"
+              noOfLines={2}
+              letterSpacing="0.02em"
+              color="whiteAlpha.700"
+            >
+              {file.name}
+            </Text>
+          </Flex>
+        ) : (
+          <>
+            <Image
+              src={file.thumbnailUrl}
+              alt={file.name}
+              onError={() => setThumbFailed(true)}
+              position="absolute"
+              inset={0}
+              w="100%"
+              h="100%"
+              objectFit="cover"
+              loading="lazy"
+              transition="transform 0.5s ease"
+              _groupHover={{ transform: 'scale(1.03)' }}
+            />
+            {isVideo && (
+              // Play icon overlay on video thumbnails — even when the
+              // thumbnail loads correctly, users should see immediately
+              // that this is a video. The lightbox CTA will then read
+              // "Open in Drive" instead of "Save to Photos" (since
+              // videos are almost always over our 40MB threshold).
+              <Flex
+                position="absolute"
+                inset={0}
+                align="center"
+                justify="center"
+                pointerEvents="none"
+              >
+                <Flex
+                  bg="rgba(0, 0, 0, 0.55)"
+                  borderRadius="full"
+                  w="52px"
+                  h="52px"
+                  align="center"
+                  justify="center"
+                  backdropFilter="blur(4px)"
+                >
+                  <Icon as={FaPlay} color="white" boxSize={4} ml={1} />
+                </Flex>
+              </Flex>
+            )}
+          </>
+        )}
+        <Box
+          position="absolute"
+          inset={0}
+          bg="rgba(0,0,0,0)"
+          transition="background 0.3s ease"
+          _groupHover={{ bg: 'rgba(0,0,0,0.15)' }}
+          pointerEvents="none"
+        />
+      </Box>
+      {/* Per-photo quick-download in the corner — desktop only. Hidden on
+          touch via @media (hover: hover) since iOS Safari fires :hover on
+          first tap, which would briefly flash this icon. Canonical mobile
+          save flow is the "Save to Photos" button inside the lightbox. */}
+      <Box
+        as="a"
+        href={file.downloadUrl}
+        download={file.name}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        position="absolute"
+        top={2}
+        right={2}
+        bg="rgba(0,0,0,0.55)"
+        color="white"
+        w="32px"
+        h="32px"
+        display={{ base: 'none', md: 'flex' }}
+        alignItems="center"
+        justifyContent="center"
+        borderRadius="full"
+        opacity={0}
+        transition="opacity 0.3s ease, background 0.2s ease"
+        aria-label={`Download ${file.name}`}
+        sx={{
+          WebkitTapHighlightColor: 'transparent',
+          '@media (hover: hover)': {
+            '.chakra-group:hover &, [role="group"]:hover &': { opacity: 1 },
+          },
+        }}
+        _hover={{ bg: '#c9a96e' }}
+      >
+        <Icon as={FaDownload} boxSize={3.5} />
+      </Box>
+    </Box>
+  );
+};
 
 const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryProps) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -121,75 +282,13 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
             spacing={{ base: 1, md: 2 }}
           >
             {files.map((file, i) => (
-              <Box
+              <GridTile
                 key={file.id}
-                ref={(el: HTMLDivElement | null) => { itemRefs.current[i] = el; }}
-                position="relative"
-                cursor="pointer"
-                overflow="hidden"
-                role="group"
-                onClick={() => handleOpen(i)}
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <Box position="relative" pb="100%" overflow="hidden" bg="gray.100">
-                  <Image
-                    src={file.thumbnailUrl}
-                    alt={file.name}
-                    position="absolute"
-                    inset={0}
-                    w="100%"
-                    h="100%"
-                    objectFit="cover"
-                    loading="lazy"
-                    transition="transform 0.5s ease"
-                    _groupHover={{ transform: 'scale(1.03)' }}
-                  />
-                  <Box
-                    position="absolute"
-                    inset={0}
-                    bg="rgba(0,0,0,0)"
-                    transition="background 0.3s ease"
-                    _groupHover={{ bg: 'rgba(0,0,0,0.15)' }}
-                    pointerEvents="none"
-                  />
-                </Box>
-                {/* Per-photo quick-download in the corner — desktop power
-                    users only. Hidden on touch devices via the @media
-                    (hover: hover) media query: touch devices fire :hover
-                    on tap, which would briefly flash this icon and confuse
-                    the "tap a photo to open lightbox" interaction. The
-                    canonical mobile save flow is the "Save to Photos"
-                    button inside the lightbox. */}
-                <Box
-                  as="a"
-                  href={file.downloadUrl}
-                  download={file.name}
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  position="absolute"
-                  top={2}
-                  right={2}
-                  bg="rgba(0,0,0,0.55)"
-                  color="white"
-                  w="32px"
-                  h="32px"
-                  display={{ base: 'none', md: 'flex' }}
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="full"
-                  opacity={0}
-                  transition="opacity 0.3s ease, background 0.2s ease"
-                  aria-label={`Download ${file.name}`}
-                  sx={{
-                    WebkitTapHighlightColor: 'transparent',
-                    '@media (hover: hover)': {
-                      '.chakra-group:hover &, [role="group"]:hover &': { opacity: 1 },
-                    },
-                  }}
-                  _hover={{ bg: '#c9a96e' }}
-                >
-                  <Icon as={FaDownload} boxSize={3.5} />
-                </Box>
-              </Box>
+                file={file}
+                index={i}
+                onSelect={handleOpen}
+                setRef={(el) => { itemRefs.current[i] = el; }}
+              />
             ))}
           </SimpleGrid>
         </Box>
