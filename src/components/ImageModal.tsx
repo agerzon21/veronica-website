@@ -74,6 +74,7 @@ const ImageModal = ({
   // Touch-device detection. Captured once on mount via useEffect so SSR/
   // prerender stays consistent (no `window` access during render).
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
   useEffect(() => {
     setIsTouchDevice(
       window.matchMedia?.('(pointer: coarse)').matches ||
@@ -81,6 +82,55 @@ const ImageModal = ({
     );
   }, []);
   const useMobileSaveFlow = isTouchDevice && Boolean(mobileSaveUrl);
+
+  // Mobile save handler. The web doesn't expose a "save directly to camera
+  // roll" API — even native apps require permission prompts. The closest
+  // standardised path is the Web Share API: hand the file to the OS, which
+  // presents its share sheet with "Save to Photos" (iOS) / "Download image"
+  // (Android) as a one-tap option. That's 2 taps total (this button + the
+  // share-sheet choice) — better than the previous "open + long-press" flow.
+  //
+  // If the fetch is blocked by CORS or Web Share isn't supported (older
+  // browsers), we fall back to opening the image in a new tab — the user
+  // can still long-press to save from there.
+  const handleMobileSave = useCallback(async () => {
+    if (!mobileSaveUrl) return;
+    setIsSavingPhoto(true);
+    try {
+      const response = await fetch(mobileSaveUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const fallbackName = downloadFilename || 'photo.jpg';
+      const file = new File([blob], fallbackName, {
+        type: blob.type || 'image/jpeg',
+      });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+        } catch (err) {
+          // AbortError = user dismissed the share sheet. Not an error.
+          if ((err as Error).name !== 'AbortError') throw err;
+        }
+      } else {
+        // Web Share API doesn't support files on this browser — fall back to
+        // a blob-URL download. iOS Safari 14+ will Save As; older versions
+        // open the image (user can long-press from there).
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fallbackName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (err) {
+      console.warn('[ImageModal] mobile save failed, falling back:', err);
+      window.open(mobileSaveUrl, '_blank');
+    } finally {
+      setIsSavingPhoto(false);
+    }
+  }, [mobileSaveUrl, downloadFilename]);
   const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
   const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
   const scrollYRef = useRef(0);
@@ -405,17 +455,19 @@ const ImageModal = ({
           )}
           {downloadUrl || mobileSaveUrl ? (
             useMobileSaveFlow ? (
-              // Mobile path: open the original image in a new tab. User
-              // long-presses → "Save to Photos" lands the photo in the
-              // phone's Photos app, not the Files app.
+              // Mobile path: tap → fetch image → native share sheet with
+              // "Save to Photos" as the prominent option. One extra tap
+              // vs. true one-tap save (which isn't a web capability) but
+              // a real improvement over open-and-long-press.
               <CTAButton
-                href={mobileSaveUrl!}
-                newTab
+                onClick={handleMobileSave}
+                isLoading={isSavingPhoto}
+                loadingText="Preparing..."
                 icon={FaDownload}
                 tone="dark"
                 size="sm"
               >
-                Save Photo
+                Save to Photos
               </CTAButton>
             ) : (
               // Desktop path: anchor with download attribute triggers the
