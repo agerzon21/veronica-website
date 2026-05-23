@@ -1,17 +1,15 @@
 import {
   Box,
-  Flex,
   Text,
   VStack,
   Image,
   Icon,
   SimpleGrid,
 } from '@chakra-ui/react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useRef, useCallback } from 'react';
 import { FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@chakra-ui/icons';
 import CTAButton from './ui/CTAButton';
+import ImageModal from './ImageModal';
 
 export interface DriveFile {
   id: string;
@@ -31,73 +29,38 @@ interface ClientGalleryProps {
 
 const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryProps) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  // Touch swipe for mobile prev/next inside the lightbox. Matches the pattern
-  // used in the public ImageModal so the two galleries feel consistent.
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Refs per thumbnail so ImageModal can animate open from the clicked
+  // thumbnail's rect and animate close back to its current rect — same
+  // motion language as the public gallery uses via GalleryGrid.
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
 
-  const openAt = (i: number) => setSelectedIndex(i);
-  const close = useCallback(() => setSelectedIndex(null), []);
-  const next = useCallback(() => {
-    if (selectedIndex !== null && selectedIndex < files.length - 1) {
-      setSelectedIndex(selectedIndex + 1);
+  const handleOpen = (i: number) => {
+    const el = itemRefs.current[i];
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setOriginRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    } else {
+      setOriginRect(null);
     }
-  }, [selectedIndex, files.length]);
-  const prev = useCallback(() => {
-    if (selectedIndex !== null && selectedIndex > 0) {
-      setSelectedIndex(selectedIndex - 1);
-    }
-  }, [selectedIndex]);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    // Only handle swipes on touch devices — desktop has arrow keys + buttons.
-    if (window.innerWidth >= 768) return;
-    const t = e.touches[0];
-    touchStartRef.current = { x: t.clientX, y: t.clientY };
+    setSelectedIndex(i);
   };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (window.innerWidth >= 768) return;
-    const start = touchStartRef.current;
-    if (!start) return;
-    const t = e.changedTouches[0];
-    const dx = start.x - t.clientX;
-    const dy = Math.abs(start.y - t.clientY);
-    // Require mostly-horizontal swipe (dy < dx) so vertical scrolls don't
-    // accidentally page through photos. 50px threshold avoids twitchy taps.
-    if (Math.abs(dx) > 50 && dy < Math.abs(dx)) {
-      if (dx > 0) next();
-      else prev();
-    }
-    touchStartRef.current = null;
-  };
-
-  // Keyboard navigation when the viewer is open.
-  useEffect(() => {
-    if (selectedIndex === null) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-      else if (e.key === 'ArrowLeft') prev();
-      else if (e.key === 'ArrowRight') next();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [selectedIndex, close, next, prev]);
-
-  // Scroll lock while the viewer is open.
-  useEffect(() => {
-    if (selectedIndex === null) return;
-    const scrollY = window.scrollY;
-    document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    return () => {
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      window.scrollTo(0, scrollY);
-    };
-  }, [selectedIndex]);
+  const handleClose = useCallback(() => {
+    setSelectedIndex(null);
+    setOriginRect(null);
+  }, []);
+  const handleNext = useCallback(() => {
+    setSelectedIndex((i) => (i !== null && i < files.length - 1 ? i + 1 : i));
+  }, [files.length]);
+  const handlePrev = useCallback(() => {
+    setSelectedIndex((i) => (i !== null && i > 0 ? i - 1 : i));
+  }, []);
+  const getImageRect = useCallback((index: number) => {
+    const el = itemRefs.current[index];
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  }, []);
 
   const selected = selectedIndex !== null ? files[selectedIndex] : null;
 
@@ -157,11 +120,12 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
             {files.map((file, i) => (
               <Box
                 key={file.id}
+                ref={(el: HTMLDivElement | null) => { itemRefs.current[i] = el; }}
                 position="relative"
                 cursor="pointer"
                 overflow="hidden"
                 role="group"
-                onClick={() => openAt(i)}
+                onClick={() => handleOpen(i)}
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
                 <Box position="relative" pb="100%" overflow="hidden" bg="gray.100">
@@ -177,7 +141,6 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
                     transition="transform 0.5s ease"
                     _groupHover={{ transform: 'scale(1.03)' }}
                   />
-                  {/* Hover overlay: dim + download icon in corner */}
                   <Box
                     position="absolute"
                     inset={0}
@@ -187,7 +150,8 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
                     pointerEvents="none"
                   />
                 </Box>
-                {/* Per-photo download corner button — accessible to mouse + keyboard */}
+                {/* Per-photo quick-download in the corner — for power users
+                    who don't want to open the lightbox just to download. */}
                 <Box
                   as="a"
                   href={file.downloadUrl}
@@ -228,183 +192,33 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
         </Box>
       )}
 
-      {/* Lightbox viewer */}
-      <AnimatePresence>
-        {selected && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 2100,
-              background: 'rgba(0,0,0,0.93)',
-              touchAction: 'pan-y',
-            }}
-            onClick={close}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            {/* Top bar — counter (left) + close (right). Matches public
-                ImageModal's top bar layout for consistency. The download
-                action lives in the bottom CTA bar (also matching the public
-                gallery's bottom "View Photo Page" pattern). */}
-            <Flex
-              position="absolute"
-              top={0}
-              left={0}
-              right={0}
-              px={{ base: 4, md: 8 }}
-              py={4}
-              justify="space-between"
-              align="center"
-              zIndex={2}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Text
-                fontSize="xs"
-                color="whiteAlpha.700"
-                letterSpacing="0.15em"
-                fontWeight="400"
-              >
-                {(selectedIndex ?? 0) + 1} / {files.length}
-              </Text>
-              <Box
-                as="button"
-                type="button"
-                onClick={close}
-                color="whiteAlpha.800"
-                transition="color 0.3s"
-                _hover={{ color: 'white' }}
-                aria-label="Close"
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <CloseIcon boxSize={3} />
-              </Box>
-            </Flex>
-
-            {/* Prev arrow */}
-            {selectedIndex !== null && selectedIndex > 0 && (
-              <Box
-                as="button"
-                type="button"
-                onClick={(e: React.MouseEvent) => { e.stopPropagation(); prev(); }}
-                position="absolute"
-                left={{ base: 2, md: 6 }}
-                top="50%"
-                transform="translateY(-50%)"
-                zIndex={2}
-                w="44px"
-                h="44px"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color="whiteAlpha.600"
-                transition="color 0.3s"
-                _hover={{ color: 'white' }}
-                aria-label="Previous"
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <ChevronLeftIcon boxSize={8} />
-              </Box>
-            )}
-
-            {/* Next arrow */}
-            {selectedIndex !== null && selectedIndex < files.length - 1 && (
-              <Box
-                as="button"
-                type="button"
-                onClick={(e: React.MouseEvent) => { e.stopPropagation(); next(); }}
-                position="absolute"
-                right={{ base: 2, md: 6 }}
-                top="50%"
-                transform="translateY(-50%)"
-                zIndex={2}
-                w="44px"
-                h="44px"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color="whiteAlpha.600"
-                transition="color 0.3s"
-                _hover={{ color: 'white' }}
-                aria-label="Next"
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <ChevronRightIcon boxSize={8} />
-              </Box>
-            )}
-
-            {/* The image itself. The Flex passes clicks through with
-                pointerEvents="none" — only the Image swallows the click via
-                stopPropagation. So clicks anywhere outside the actual photo
-                fall through to the backdrop's close handler. Touch swipe
-                handlers live on the outer motion.div above, which has full
-                pointer events. */}
-            <Flex
-              position="absolute"
-              inset={0}
-              align="center"
-              justify="center"
-              p={{ base: 4, md: 12 }}
-              pointerEvents="none"
-            >
-              <Image
-                src={selected.viewUrl}
-                alt={selected.name}
-                maxW="100%"
-                maxH="100%"
-                objectFit="contain"
-                userSelect="none"
-                draggable={false}
-                pointerEvents="auto"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </Flex>
-
-            {/* Bottom bar — filename (left) + Download CTA (right). Mirrors
-                the public ImageModal's bottom bar with "View Photo Page →" so
-                both galleries feel like the same product. */}
-            <Flex
-              position="absolute"
-              bottom={0}
-              left={0}
-              right={0}
-              px={{ base: 4, md: 8 }}
-              py={{ base: 4, md: 5 }}
-              justify="space-between"
-              align="center"
-              gap={4}
-              zIndex={2}
-              bg="linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Text
-                fontSize={{ base: 'xs', md: 'sm' }}
-                fontWeight="300"
-                color="whiteAlpha.800"
-                letterSpacing="0.05em"
-                noOfLines={1}
-                flex="1 1 auto"
-                minW={0}
-              >
-                {selected.name}
-              </Text>
-              <CTAButton
-                href={selected.downloadUrl}
-                download={selected.name}
-                icon={FaDownload}
-                tone="dark"
-                size="sm"
-              >
-                Download
-              </CTAButton>
-            </Flex>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Lightbox — same ImageModal the public gallery uses. The download
+          props swap the bottom CTA to "Download" (saving the file via the
+          anchor's download attribute) and the share icon is hidden since
+          client photos don't have a public share URL. */}
+      {selected && selectedIndex !== null && (
+        <ImageModal
+          isOpen={true}
+          onClose={handleClose}
+          imageUrl={selected.viewUrl}
+          imageAlt={selected.name}
+          onNext={handleNext}
+          onPrevious={handlePrev}
+          currentIndex={selectedIndex}
+          totalImages={files.length}
+          photoData={{
+            url: selected.viewUrl,
+            alt: selected.name,
+            title: selected.name,
+            description: '',
+          }}
+          originRect={originRect}
+          getImageRect={getImageRect}
+          downloadUrl={selected.downloadUrl}
+          downloadFilename={selected.name}
+          hideShare
+        />
+      )}
 
       {/* Bottom secondary CTA — Download All */}
       {files.length > 0 && (
