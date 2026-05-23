@@ -82,7 +82,9 @@ export async function listFolderMedia(folderId: string): Promise<DriveFile[]> {
       thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
       viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
       downloadUrl: `https://drive.google.com/uc?export=download&id=${f.id}`,
-      originalUrl: `https://drive.google.com/uc?export=view&id=${f.id}`,
+      // Same-origin proxy so the browser can fetch() the bytes without
+      // hitting Drive's CORS block. Required for the Web Share API path.
+      originalUrl: `/api/photo?id=${f.id}`,
     }));
 }
 

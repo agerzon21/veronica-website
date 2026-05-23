@@ -74,7 +74,6 @@ const ImageModal = ({
   // Touch-device detection. Captured once on mount via useEffect so SSR/
   // prerender stays consistent (no `window` access during render).
   const [isTouchDevice, setIsTouchDevice] = useState(false);
-  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
   useEffect(() => {
     setIsTouchDevice(
       window.matchMedia?.('(pointer: coarse)').matches ||
@@ -83,54 +82,72 @@ const ImageModal = ({
   }, []);
   const useMobileSaveFlow = isTouchDevice && Boolean(mobileSaveUrl);
 
-  // Mobile save handler. The web doesn't expose a "save directly to camera
-  // roll" API — even native apps require permission prompts. The closest
-  // standardised path is the Web Share API: hand the file to the OS, which
-  // presents its share sheet with "Save to Photos" (iOS) / "Download image"
-  // (Android) as a one-tap option. That's 2 taps total (this button + the
-  // share-sheet choice) — better than the previous "open + long-press" flow.
+  // Pre-fetch the photo file when the modal opens (and whenever the selected
+  // photo changes via prev/next). Two reasons:
   //
-  // If the fetch is blocked by CORS or Web Share isn't supported (older
-  // browsers), we fall back to opening the image in a new tab — the user
-  // can still long-press to save from there.
-  const handleMobileSave = useCallback(async () => {
+  // 1. iOS Safari's `navigator.share()` requires "transient activation" —
+  //    the user gesture must still be valid when share() is called. After
+  //    an `await fetch(...)`, the gesture is consumed and share silently
+  //    fails. Pre-fetching means the click handler can call share
+  //    synchronously from inside the user gesture, no await needed.
+  //
+  // 2. /api/photo is our own origin (same-origin proxy through the service
+  //    account), so fetch isn't blocked by Drive's CORS policy.
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  useEffect(() => {
+    if (!useMobileSaveFlow || !mobileSaveUrl || !isOpen) return;
+    let cancelled = false;
+    setPhotoBlob(null);
+    fetch(mobileSaveUrl)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((blob) => {
+        if (!cancelled) setPhotoBlob(blob);
+      })
+      .catch((err) => {
+        console.warn('[ImageModal] pre-fetch failed:', err);
+        // photoBlob stays null → click handler falls back to opening URL
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useMobileSaveFlow, mobileSaveUrl, isOpen]);
+
+  const handleMobileSave = useCallback(() => {
+    // Inside the click handler — must stay synchronous up to the point where
+    // we hand off to navigator.share() to preserve the user gesture.
     if (!mobileSaveUrl) return;
-    setIsSavingPhoto(true);
-    try {
-      const response = await fetch(mobileSaveUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      const fallbackName = downloadFilename || 'photo.jpg';
-      const file = new File([blob], fallbackName, {
-        type: blob.type || 'image/jpeg',
+    const filename = downloadFilename || 'photo.jpg';
+
+    if (photoBlob) {
+      const file = new File([photoBlob], filename, {
+        type: photoBlob.type || 'image/jpeg',
       });
       if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file] });
-        } catch (err) {
-          // AbortError = user dismissed the share sheet. Not an error.
-          if ((err as Error).name !== 'AbortError') throw err;
-        }
-      } else {
-        // Web Share API doesn't support files on this browser — fall back to
-        // a blob-URL download. iOS Safari 14+ will Save As; older versions
-        // open the image (user can long-press from there).
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fallbackName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // The share sheet is presented synchronously; the promise resolves
+        // when the user picks an option or dismisses. AbortError = dismiss,
+        // which we treat as a no-op.
+        navigator.share({ files: [file] }).catch((err) => {
+          if ((err as Error).name === 'AbortError') return;
+          console.warn('[ImageModal] share failed, falling back:', err);
+        });
+        return;
       }
-    } catch (err) {
-      console.warn('[ImageModal] mobile save failed, falling back:', err);
-      window.open(mobileSaveUrl, '_blank');
-    } finally {
-      setIsSavingPhoto(false);
+      // Browser doesn't support file sharing — fall through to the
+      // open-in-new-tab path so user can long-press to save manually.
     }
-  }, [mobileSaveUrl, downloadFilename]);
+
+    // Either the pre-fetch failed (CORS or 5xx) or this browser can't share
+    // files. Best fallback: open the image URL in a new tab. iOS Safari
+    // shows the image; user long-press → "Save to Photos". This works
+    // because we're still inside the user-gesture sync code path.
+    const a = document.createElement('a');
+    a.href = mobileSaveUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [mobileSaveUrl, downloadFilename, photoBlob]);
   const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
   const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
   const scrollYRef = useRef(0);
@@ -455,14 +472,13 @@ const ImageModal = ({
           )}
           {downloadUrl || mobileSaveUrl ? (
             useMobileSaveFlow ? (
-              // Mobile path: tap → fetch image → native share sheet with
-              // "Save to Photos" as the prominent option. One extra tap
-              // vs. true one-tap save (which isn't a web capability) but
-              // a real improvement over open-and-long-press.
+              // Mobile path: photo is pre-fetched on modal open. Click
+              // calls navigator.share() synchronously inside the user
+              // gesture → native share sheet with "Save to Photos" as the
+              // first option. If pre-fetch failed (CORS, network), falls
+              // back to opening the URL so user can long-press to save.
               <CTAButton
                 onClick={handleMobileSave}
-                isLoading={isSavingPhoto}
-                loadingText="Preparing..."
                 icon={FaDownload}
                 tone="dark"
                 size="sm"

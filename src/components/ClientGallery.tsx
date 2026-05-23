@@ -151,8 +151,13 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
                     pointerEvents="none"
                   />
                 </Box>
-                {/* Per-photo quick-download in the corner — for power users
-                    who don't want to open the lightbox just to download. */}
+                {/* Per-photo quick-download in the corner — desktop power
+                    users only. Hidden on touch devices via the @media
+                    (hover: hover) media query: touch devices fire :hover
+                    on tap, which would briefly flash this icon and confuse
+                    the "tap a photo to open lightbox" interaction. The
+                    canonical mobile save flow is the "Save to Photos"
+                    button inside the lightbox. */}
                 <Box
                   as="a"
                   href={file.downloadUrl}
@@ -165,16 +170,20 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
                   color="white"
                   w="32px"
                   h="32px"
-                  display="flex"
+                  display={{ base: 'none', md: 'flex' }}
                   alignItems="center"
                   justifyContent="center"
                   borderRadius="full"
                   opacity={0}
                   transition="opacity 0.3s ease, background 0.2s ease"
-                  _groupHover={{ opacity: 1 }}
-                  _hover={{ bg: '#c9a96e' }}
                   aria-label={`Download ${file.name}`}
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  sx={{
+                    WebkitTapHighlightColor: 'transparent',
+                    '@media (hover: hover)': {
+                      '.chakra-group:hover &, [role="group"]:hover &': { opacity: 1 },
+                    },
+                  }}
+                  _hover={{ bg: '#c9a96e' }}
                 >
                   <Icon as={FaDownload} boxSize={3.5} />
                 </Box>
