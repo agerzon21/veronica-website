@@ -29,6 +29,9 @@ interface CTAButtonProps {
   fullWidth?: boolean;
   // External link target — defaults to _blank for href, _self for `to`
   newTab?: boolean;
+  // When set, renders `download` on the anchor so the browser saves the file
+  // instead of navigating. String = suggested filename. Auto-forces newTab=false.
+  download?: string | boolean;
 }
 
 const GOLD = '#c9a96e';
@@ -88,6 +91,7 @@ const CTAButton = ({
   loadingText,
   fullWidth = false,
   newTab,
+  download,
 }: CTAButtonProps) => {
   const common = {
     display: 'inline-flex',
@@ -126,12 +130,17 @@ const CTAButton = ({
   }
 
   if (href) {
-    const openInNewTab = newTab ?? true;
+    // Downloads stay in the same tab — opening a new tab just to immediately
+    // close it after the download starts is jarring UX.
+    const openInNewTab = download ? false : (newTab ?? true);
     return (
       <Box
         as="a"
         href={href}
         {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        {...(download !== undefined
+          ? { download: typeof download === 'string' ? download : '' }
+          : {})}
         {...common}
       >
         {content}

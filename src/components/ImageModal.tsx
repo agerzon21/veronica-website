@@ -4,6 +4,7 @@ import {
   Flex,
 } from '@chakra-ui/react';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
+import { FaDownload } from 'react-icons/fa';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -37,6 +38,13 @@ interface ImageModalProps {
   category?: string;
   originRect?: Rect | null;
   getImageRect?: (index: number) => Rect | null;
+  // When set, the bottom CTA becomes a "Download" button (with the file
+  // saved via the anchor's download attribute) instead of the default
+  // "View Photo Page" link. Lets the client portal reuse this same modal.
+  downloadUrl?: string;
+  downloadFilename?: string;
+  // Hide the share icon in the top bar (client portal galleries don't share).
+  hideShare?: boolean;
 }
 
 const ImageModal = ({
@@ -52,6 +60,9 @@ const ImageModal = ({
   category,
   originRect,
   getImageRect,
+  downloadUrl,
+  downloadFilename,
+  hideShare,
 }: ImageModalProps) => {
   const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
   const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
@@ -309,7 +320,7 @@ const ImageModal = ({
         </Text>
 
         <Flex gap={5} align="center" onClick={(e) => e.stopPropagation()}>
-          {photoData && category && (
+          {photoData && category && !hideShare && (
             <Box
               as="button"
               aria-label="Share photo"
@@ -339,10 +350,12 @@ const ImageModal = ({
         </Flex>
       </Flex>
 
-      {/* Bottom bar — photo title + clear CTA to the full photo page.
-          Replaces the old icon-only "open in new tab" eye that nobody found.
-          Same showUI gating as the top bar so it fades in/out with the rest. */}
-      {photoPageUrl && (
+      {/* Bottom bar — photo title (left) + action CTA (right). The action is
+          "Download" for client-portal galleries (downloadUrl set) or "View
+          Photo Page" for the public gallery (photoPageUrl set). Same showUI
+          gating as the top bar so both fade in together once the open
+          animation lands. */}
+      {(photoPageUrl || downloadUrl) && (
         <Flex
           position="absolute"
           bottom={0}
@@ -373,9 +386,21 @@ const ImageModal = ({
               {photoTitle}
             </Text>
           )}
-          <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
-            View Photo Page →
-          </CTAButton>
+          {downloadUrl ? (
+            <CTAButton
+              href={downloadUrl}
+              download={downloadFilename ?? true}
+              icon={FaDownload}
+              tone="dark"
+              size="sm"
+            >
+              Download
+            </CTAButton>
+          ) : (
+            <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
+              View Photo Page →
+            </CTAButton>
+          )}
         </Flex>
       )}
 

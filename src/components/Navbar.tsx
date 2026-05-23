@@ -13,6 +13,7 @@ const Navbar = () => {
     { name: 'Gallery', path: '/gallery' },
     { name: 'About', path: '/about' },
     { name: 'Contact', path: '/contact' },
+    { name: 'Client Portal', path: '/portal' },
   ];
 
   const handleToggle = () => setIsOpen(!isOpen);
