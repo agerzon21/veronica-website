@@ -80,15 +80,16 @@ const Portal = () => {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      {/* Background — soft gradient matching the site's dark feel */}
+      {/* Background photo — same cover + no-repeat + brightness(0.4) treatment
+          the Contact page uses so the two pages feel like siblings. */}
       <Box
         position="absolute"
         inset={0}
-        backgroundImage="url('/assets/photos/site/contact-bg.webp')"
+        backgroundImage="url('/assets/photos/site/client-portal.webp')"
         backgroundSize="cover"
         backgroundPosition={{ base: 'center 30%', md: 'center' }}
         backgroundRepeat="no-repeat"
-        filter="brightness(0.3)"
+        filter="brightness(0.4)"
       />
       <Box
         position="absolute"

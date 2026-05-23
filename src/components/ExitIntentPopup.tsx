@@ -8,6 +8,7 @@ import {
   IconButton,
 } from '@chakra-ui/react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CloseIcon } from '@chakra-ui/icons';
 import { FaCheck } from 'react-icons/fa';
@@ -17,9 +18,16 @@ const STORAGE_KEY = 'vero_exit_popup_shown_at';
 // Don't re-show the popup within this many days of a previous show.
 // 30 days = roughly "you've already seen this, stop bugging them."
 const REPEAT_DELAY_DAYS = 30;
-// Mobile: no real "exit intent" signal — fall back to time + scroll.
-const MOBILE_TIME_THRESHOLD_MS = 45_000;
-const MOBILE_SCROLL_THRESHOLD = 0.5; // 50% of page scrolled
+// Mobile: no real "exit intent" signal — fall back to a generous timer.
+// 3 minutes = "you've been browsing a while, here's a thank-you" — short
+// enough to catch engaged users, long enough not to feel pushy.
+const MOBILE_TIME_THRESHOLD_MS = 3 * 60 * 1000;
+
+// Routes where the popup is suppressed entirely. Client-portal visitors are
+// already paying customers — offering them a discount for a new shoot reads
+// weirdly. Add other off-limits routes here (e.g. /portal/anything once we
+// have nested portal routes).
+const SUPPRESSED_PATH_PREFIXES = ['/portal'];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -57,6 +65,10 @@ const ExitIntentPopup = () => {
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const [error, setError] = useState('');
   const triggeredRef = useRef(false);
+  const { pathname } = useLocation();
+  const isSuppressedRoute = SUPPRESSED_PATH_PREFIXES.some((prefix) =>
+    pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 
   const close = useCallback(() => {
     setIsOpen(false);
@@ -64,11 +76,14 @@ const ExitIntentPopup = () => {
 
   const trigger = useCallback((opts?: { force?: boolean }) => {
     if (triggeredRef.current) return;
+    // Don't fire on routes where the popup doesn't make sense (client portal).
+    // Force still bypasses this so ?popup=test works for debugging.
+    if (!opts?.force && isSuppressedRoute) return;
     if (!opts?.force && wasShownRecently()) return;
     triggeredRef.current = true;
     if (!opts?.force) markShown();
     setIsOpen(true);
-  }, []);
+  }, [isSuppressedRoute]);
 
   // Debug hatch: ?popup=test on any URL forces the popup immediately and
   // ignores the 30-day cap. Useful for verifying the popup works on a preview
@@ -92,26 +107,14 @@ const ExitIntentPopup = () => {
     return () => document.removeEventListener('mouseleave', handleMouseLeave);
   }, [trigger]);
 
-  // Mobile fallback: time on page + scroll depth. Either condition fires it,
-  // since both indicate "engaged enough to maybe care about a discount."
+  // Mobile fallback: time on page only. Dropped the "50% scroll" trigger
+  // because it fires on people who just scrolled fast through the gallery,
+  // which reads as harassment more than engagement. Pure time-on-page is a
+  // cleaner "they've been here a while" signal.
   useEffect(() => {
     if (!isMobile()) return;
-
-    const timeoutId = window.setTimeout(trigger, MOBILE_TIME_THRESHOLD_MS);
-
-    const handleScroll = () => {
-      const scrolled = window.scrollY;
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      if (maxScroll > 0 && scrolled / maxScroll >= MOBILE_SCROLL_THRESHOLD) {
-        trigger();
-      }
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      window.removeEventListener('scroll', handleScroll);
-    };
+    const timeoutId = window.setTimeout(() => trigger(), MOBILE_TIME_THRESHOLD_MS);
+    return () => window.clearTimeout(timeoutId);
   }, [trigger]);
 
   // Keyboard: escape closes
