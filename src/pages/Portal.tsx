@@ -89,7 +89,7 @@ const Portal = () => {
         backgroundSize="cover"
         backgroundPosition={{ base: 'center 30%', md: 'center' }}
         backgroundRepeat="no-repeat"
-        filter="brightness(0.4)"
+        filter="brightness(0.6)"
       />
       <Box
         position="absolute"
