@@ -74,25 +74,15 @@ const ExitIntentPopup = () => {
     setIsOpen(false);
   }, []);
 
-  const trigger = useCallback((opts?: { force?: boolean }) => {
+  const trigger = useCallback(() => {
     if (triggeredRef.current) return;
     // Don't fire on routes where the popup doesn't make sense (client portal).
-    // Force still bypasses this so ?popup=test works for debugging.
-    if (!opts?.force && isSuppressedRoute) return;
-    if (!opts?.force && wasShownRecently()) return;
+    if (isSuppressedRoute) return;
+    if (wasShownRecently()) return;
     triggeredRef.current = true;
-    if (!opts?.force) markShown();
+    markShown();
     setIsOpen(true);
   }, [isSuppressedRoute]);
-
-  // Debug hatch: ?popup=test on any URL forces the popup immediately and
-  // ignores the 30-day cap. Useful for verifying the popup works on a preview
-  // deploy without aiming a mouse out the top edge of the viewport.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('popup') === 'test') trigger({ force: true });
-  }, [trigger]);
 
   // Desktop: mouse leaves top edge of viewport → likely going to close tab
   // or hit the URL bar. Trigger the popup.
