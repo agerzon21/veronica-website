@@ -15,10 +15,12 @@ export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
+  size: number | null;
   thumbnailUrl: string;
   viewUrl: string;
   downloadUrl: string;
   originalUrl: string;
+  driveViewUrl: string;
 }
 
 interface ClientGalleryProps {
@@ -227,6 +229,8 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
           downloadUrl={selected.downloadUrl}
           downloadFilename={selected.name}
           mobileSaveUrl={selected.originalUrl}
+          fileSize={selected.size ?? undefined}
+          driveViewUrl={selected.driveViewUrl}
           hideShare
         />
       )}

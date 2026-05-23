@@ -4,7 +4,7 @@ import {
   Flex,
 } from '@chakra-ui/react';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
-import { FaDownload } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -46,12 +46,26 @@ interface ImageModalProps {
   // On touch devices, "download" goes to the phone's Files app, which is the
   // wrong destination — clients want photos in Photos / Camera Roll. When
   // mobileSaveUrl is provided (and we detect a touch device), the bottom CTA
-  // instead opens the original-quality image in a new tab where the user
-  // can long-press → "Save to Photos" (iOS) / "Download image" (Android).
+  // pre-fetches the photo and shares via Web Share API → "Save to Photos".
   mobileSaveUrl?: string;
+  // File size in bytes. Used to short-circuit the Web Share flow on big
+  // files where pre-fetching through our proxy would either time out the
+  // Vercel function, exhaust mobile browser memory, or just waste a lot of
+  // bandwidth. Above the threshold (LARGE_FILE_THRESHOLD), the mobile CTA
+  // becomes "Open in Drive" — links to Drive's native viewer where the
+  // user gets a proper download button regardless of file size.
+  fileSize?: number;
+  driveViewUrl?: string;
   // Hide the share icon in the top bar (client portal galleries don't share).
   hideShare?: boolean;
 }
+
+// 40 MB. Reasoning: typical wedding/portrait JPEGs are 5–25 MB (well
+// under), high-end JPEGs hit 20–50 MB (just above), TIFFs/RAWs/videos
+// start at 50+ MB (clearly above). 40 MB keeps the Save-to-Photos flow
+// for ~95% of real photos and gracefully degrades the rest to Drive's
+// native viewer where size isn't a problem.
+const LARGE_FILE_THRESHOLD = 40 * 1024 * 1024;
 
 const ImageModal = ({
   isOpen,
@@ -69,6 +83,8 @@ const ImageModal = ({
   downloadUrl,
   downloadFilename,
   mobileSaveUrl,
+  fileSize,
+  driveViewUrl,
   hideShare,
 }: ImageModalProps) => {
   // Touch-device detection. Captured once on mount via useEffect so SSR/
@@ -80,7 +96,12 @@ const ImageModal = ({
         /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
     );
   }, []);
-  const useMobileSaveFlow = isTouchDevice && Boolean(mobileSaveUrl);
+  const isLargeFile =
+    typeof fileSize === 'number' && fileSize > LARGE_FILE_THRESHOLD;
+  const useMobileSaveFlow =
+    isTouchDevice && Boolean(mobileSaveUrl) && !isLargeFile;
+  const useMobileDriveFlow =
+    isTouchDevice && isLargeFile && Boolean(driveViewUrl);
 
   // Pre-fetch the photo file when the modal opens (and whenever the selected
   // photo changes via prev/next). Two reasons:
@@ -470,13 +491,29 @@ const ImageModal = ({
               {photoTitle}
             </Text>
           )}
-          {downloadUrl || mobileSaveUrl ? (
-            useMobileSaveFlow ? (
-              // Mobile path: photo is pre-fetched on modal open. Click
-              // calls navigator.share() synchronously inside the user
-              // gesture → native share sheet with "Save to Photos" as the
-              // first option. If pre-fetch failed (CORS, network), falls
-              // back to opening the URL so user can long-press to save.
+          {downloadUrl || mobileSaveUrl || driveViewUrl ? (
+            useMobileDriveFlow ? (
+              // Large-file path on mobile: skip the in-app save flow
+              // entirely. Pre-fetching a 100+ MB blob through our Vercel
+              // proxy would either time out, exhaust browser memory, or
+              // waste a lot of bandwidth. Drive's native viewer handles
+              // arbitrarily large files just fine.
+              <CTAButton
+                href={driveViewUrl!}
+                newTab
+                icon={FaExternalLinkAlt}
+                tone="dark"
+                size="sm"
+              >
+                Open in Drive
+              </CTAButton>
+            ) : useMobileSaveFlow ? (
+              // Mobile path (small files): photo is pre-fetched on modal
+              // open. Click calls navigator.share() synchronously inside
+              // the user gesture → native share sheet with "Save to
+              // Photos" as the first option. If pre-fetch failed (CORS,
+              // network), falls back to opening the URL so user can
+              // long-press to save.
               <CTAButton
                 onClick={handleMobileSave}
                 icon={FaDownload}
@@ -485,17 +522,23 @@ const ImageModal = ({
               >
                 Save to Photos
               </CTAButton>
-            ) : (
+            ) : downloadUrl ? (
               // Desktop path: anchor with download attribute triggers the
               // browser's Save As dialog so the user picks a location.
+              // Works fine for any file size since downloads stream
+              // straight to disk (no memory pressure).
               <CTAButton
-                href={downloadUrl!}
+                href={downloadUrl}
                 download={downloadFilename ?? true}
                 icon={FaDownload}
                 tone="dark"
                 size="sm"
               >
                 Download
+              </CTAButton>
+            ) : (
+              <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
+                View Photo Page →
               </CTAButton>
             )
           ) : (

@@ -41,6 +41,10 @@ export type DriveFile = {
   id: string;
   name: string;
   mimeType: string;
+  // File size in bytes. May be null for files Drive doesn't report size on
+  // (rare for images/video — mostly affects Google-native docs). Used on
+  // the frontend to route huge files away from the in-app save flow.
+  size: number | null;
   // Drive's thumbnail endpoint — server-side resized, fast loads in the grid.
   // sz=w800 is plenty for typical thumbnail rendering at any reasonable
   // viewport width.
@@ -55,6 +59,10 @@ export type DriveFile = {
   // "Download image" (Android), getting the file into the phone's gallery
   // rather than its Files app.
   originalUrl: string;
+  // Drive's native viewer URL — for files too large to safely pull through
+  // our proxy + Web Share API on mobile. Opens Drive's file viewer where
+  // the user gets a proper download button regardless of file size.
+  driveViewUrl: string;
 };
 
 /**
@@ -66,25 +74,29 @@ export async function listFolderMedia(folderId: string): Promise<DriveFile[]> {
   const drive = getDrive();
   const res = await drive.files.list({
     q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed = false`,
-    fields: 'files(id, name, mimeType)',
+    fields: 'files(id, name, mimeType, size)',
     pageSize: 1000,
     orderBy: 'name',
   });
   const files = res.data.files ?? [];
   return files
-    .filter((f): f is { id: string; name: string; mimeType: string } =>
+    .filter((f): f is { id: string; name: string; mimeType: string; size?: string | null } =>
       Boolean(f.id && f.name && f.mimeType),
     )
     .map((f) => ({
       id: f.id,
       name: f.name,
       mimeType: f.mimeType,
+      // Drive returns size as a stringified number. Parse to int; null if
+      // unreported (rare for media files).
+      size: f.size ? parseInt(f.size, 10) : null,
       thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
       viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
       downloadUrl: `https://drive.google.com/uc?export=download&id=${f.id}`,
       // Same-origin proxy so the browser can fetch() the bytes without
       // hitting Drive's CORS block. Required for the Web Share API path.
       originalUrl: `/api/photo?id=${f.id}`,
+      driveViewUrl: `https://drive.google.com/file/d/${f.id}/view`,
     }));
 }
 
