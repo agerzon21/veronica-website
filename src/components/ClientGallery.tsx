@@ -247,7 +247,10 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
-            {/* Top bar — counter + close + per-photo download */}
+            {/* Top bar — counter (left) + close (right). Matches public
+                ImageModal's top bar layout for consistency. The download
+                action lives in the bottom CTA bar (also matching the public
+                gallery's bottom "View Photo Page" pattern). */}
             <Flex
               position="absolute"
               top={0}
@@ -268,42 +271,18 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
               >
                 {(selectedIndex ?? 0) + 1} / {files.length}
               </Text>
-              <Flex gap={5} align="center">
-                <Box
-                  as="a"
-                  href={selected.downloadUrl}
-                  download={selected.name}
-                  color="whiteAlpha.800"
-                  transition="color 0.3s"
-                  _hover={{ color: '#c9a96e' }}
-                  aria-label="Download photo"
-                  display="flex"
-                  alignItems="center"
-                  gap={2}
-                  fontSize="xs"
-                  fontWeight="400"
-                  letterSpacing="0.2em"
-                  textTransform="uppercase"
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
-                >
-                  <Icon as={FaDownload} boxSize={3.5} />
-                  <Box as="span" display={{ base: 'none', md: 'inline' }}>
-                    Download
-                  </Box>
-                </Box>
-                <Box
-                  as="button"
-                  type="button"
-                  onClick={close}
-                  color="whiteAlpha.800"
-                  transition="color 0.3s"
-                  _hover={{ color: 'white' }}
-                  aria-label="Close"
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
-                >
-                  <CloseIcon boxSize={3} />
-                </Box>
-              </Flex>
+              <Box
+                as="button"
+                type="button"
+                onClick={close}
+                color="whiteAlpha.800"
+                transition="color 0.3s"
+                _hover={{ color: 'white' }}
+                aria-label="Close"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <CloseIcon boxSize={3} />
+              </Box>
             </Flex>
 
             {/* Prev arrow */}
@@ -385,27 +364,44 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
               />
             </Flex>
 
-            {/* Filename at bottom */}
-            <Box
+            {/* Bottom bar — filename (left) + Download CTA (right). Mirrors
+                the public ImageModal's bottom bar with "View Photo Page →" so
+                both galleries feel like the same product. */}
+            <Flex
               position="absolute"
               bottom={0}
               left={0}
               right={0}
               px={{ base: 4, md: 8 }}
-              py={4}
-              textAlign="center"
-              pointerEvents="none"
+              py={{ base: 4, md: 5 }}
+              justify="space-between"
+              align="center"
+              gap={4}
+              zIndex={2}
+              bg="linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))"
+              onClick={(e) => e.stopPropagation()}
             >
               <Text
-                fontSize="xs"
-                color="whiteAlpha.500"
+                fontSize={{ base: 'xs', md: 'sm' }}
                 fontWeight="300"
+                color="whiteAlpha.800"
                 letterSpacing="0.05em"
                 noOfLines={1}
+                flex="1 1 auto"
+                minW={0}
               >
                 {selected.name}
               </Text>
-            </Box>
+              <CTAButton
+                href={selected.downloadUrl}
+                download={selected.name}
+                icon={FaDownload}
+                tone="dark"
+                size="sm"
+              >
+                Download
+              </CTAButton>
+            </Flex>
           </motion.div>
         )}
       </AnimatePresence>

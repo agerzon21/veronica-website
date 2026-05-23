@@ -230,14 +230,18 @@ const ExitIntentPopup = () => {
                   </Text>
                   <Text fontSize="xl" fontWeight="200" color="gray.800" lineHeight="1.4">
                     {submittedCode === 'already'
-                      ? 'You signed up before — check your inbox for the code.'
+                      ? 'You signed up before — your code is in your inbox.'
                       : 'Check your inbox in a moment.'}
                   </Text>
-                  {submittedCode === 'new' && (
-                    <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="320px">
-                      Your 10% off code is on the way. Just mention it when you book.
-                    </Text>
-                  )}
+                  <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="340px" lineHeight="1.7">
+                    {submittedCode === 'new'
+                      ? 'Your 10% off code is on the way. Just mention it when you book.'
+                      : ''}
+                    {' '}
+                    <Box as="span" color="gray.500" fontWeight="400">
+                      Don&rsquo;t see it? Check your spam or promotions folder.
+                    </Box>
+                  </Text>
                   <CTAButton onClick={close} variant="outline" size="sm">
                     Close
                   </CTAButton>
