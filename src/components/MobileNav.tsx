@@ -15,6 +15,7 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
     { name: 'Gallery', path: '/gallery' },
     { name: 'About', path: '/about' },
     { name: 'Contact', path: '/contact' },
+    { name: 'Client Portal', path: '/portal' },
   ];
 
   return (

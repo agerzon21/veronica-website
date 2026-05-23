@@ -10,8 +10,10 @@ import IndividualPhoto from './pages/IndividualPhoto';
 import Pay from './pages/Pay';
 import NotFound from './pages/NotFound';
 import ThankYou from './pages/ThankYou';
+import Portal from './pages/Portal';
 import Navbar from './components/Navbar';
 import SEO from './components/SEO';
+import ExitIntentPopup from './components/ExitIntentPopup';
 import { initGA, trackPageView } from './utils/analytics';
 
 // Initialize Google Analytics
@@ -48,8 +50,10 @@ function App() {
             <Route path="/gallery/:category" element={<Gallery />} />
             <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
             <Route path="/pay" element={<Pay />} />
+            <Route path="/portal" element={<Portal />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <ExitIntentPopup />
         </Router>
       </ChakraProvider>
     </HelmetProvider>
