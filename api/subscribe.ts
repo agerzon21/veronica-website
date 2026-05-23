@@ -63,21 +63,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, alreadySubscribed: true });
     }
 
-    // Fresh signup — fire the welcome email. Don't block the response on the
-    // email send; if SMTP fails the subscriber still exists and we can resend
-    // manually. Log failures for visibility.
-    sendWelcomeEmail({ email, discountCode })
-      .then((info) => {
-        console.log('[subscribe] welcome email sent:', {
-          messageId: info.messageId,
-          to: info.accepted,
-        });
-      })
-      .catch((err) => {
-        console.error('[subscribe] welcome email failed:', err);
+    // Mirrors api/contact.ts behavior exactly: await the email send and
+    // return 500 if it fails. Vercel serverless suspends the function once
+    // res.send() runs — fire-and-forget promises never complete, which is
+    // why the previous version's emails silently never went out even though
+    // the popup said "You're in". The popup catches non-200 responses and
+    // displays an error so the user can retry.
+    try {
+      const info = await sendWelcomeEmail({ email, discountCode });
+      console.log('[subscribe] welcome email sent:', {
+        messageId: info.messageId,
+        to: info.accepted,
       });
-
-    return res.status(200).json({ success: true });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('[subscribe] welcome email failed:', err);
+      // Roll back the subscriber insert so the user's retry doesn't hit
+      // the unique constraint and get a misleading "already subscribed".
+      try {
+        await sql`delete from subscribers where email = ${email} and discount_code = ${discountCode}`;
+      } catch (rollbackErr) {
+        console.error('[subscribe] rollback failed:', rollbackErr);
+      }
+      return res.status(500).json({ success: false, error: 'Could not send the welcome email. Please try again.' });
+    }
   } catch (err) {
     console.error('[subscribe] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });
