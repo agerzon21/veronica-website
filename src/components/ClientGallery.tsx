@@ -18,6 +18,7 @@ export interface DriveFile {
   thumbnailUrl: string;
   viewUrl: string;
   downloadUrl: string;
+  originalUrl: string;
 }
 
 interface ClientGalleryProps {
@@ -216,6 +217,7 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
           getImageRect={getImageRect}
           downloadUrl={selected.downloadUrl}
           downloadFilename={selected.name}
+          mobileSaveUrl={selected.originalUrl}
           hideShare
         />
       )}

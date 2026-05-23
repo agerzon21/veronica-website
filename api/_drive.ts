@@ -47,8 +47,14 @@ export type DriveFile = {
   thumbnailUrl: string;
   // Larger preview, used in the lightbox/full-view modal.
   viewUrl: string;
-  // Original file, forced as a download (browser triggers Save As).
+  // Original file, forced as a download (browser triggers Save As). Used on
+  // desktop where Save As → file system is the right UX.
   downloadUrl: string;
+  // Original file, served inline as an image. Used on mobile where opening
+  // the image lets the user long-press → "Save to Photos" (iOS) /
+  // "Download image" (Android), getting the file into the phone's gallery
+  // rather than its Files app.
+  originalUrl: string;
 };
 
 /**
@@ -76,6 +82,7 @@ export async function listFolderMedia(folderId: string): Promise<DriveFile[]> {
       thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
       viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
       downloadUrl: `https://drive.google.com/uc?export=download&id=${f.id}`,
+      originalUrl: `https://drive.google.com/uc?export=view&id=${f.id}`,
     }));
 }
 

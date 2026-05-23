@@ -43,6 +43,12 @@ interface ImageModalProps {
   // "View Photo Page" link. Lets the client portal reuse this same modal.
   downloadUrl?: string;
   downloadFilename?: string;
+  // On touch devices, "download" goes to the phone's Files app, which is the
+  // wrong destination — clients want photos in Photos / Camera Roll. When
+  // mobileSaveUrl is provided (and we detect a touch device), the bottom CTA
+  // instead opens the original-quality image in a new tab where the user
+  // can long-press → "Save to Photos" (iOS) / "Download image" (Android).
+  mobileSaveUrl?: string;
   // Hide the share icon in the top bar (client portal galleries don't share).
   hideShare?: boolean;
 }
@@ -62,8 +68,19 @@ const ImageModal = ({
   getImageRect,
   downloadUrl,
   downloadFilename,
+  mobileSaveUrl,
   hideShare,
 }: ImageModalProps) => {
+  // Touch-device detection. Captured once on mount via useEffect so SSR/
+  // prerender stays consistent (no `window` access during render).
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  useEffect(() => {
+    setIsTouchDevice(
+      window.matchMedia?.('(pointer: coarse)').matches ||
+        /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+    );
+  }, []);
+  const useMobileSaveFlow = isTouchDevice && Boolean(mobileSaveUrl);
   const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
   const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
   const scrollYRef = useRef(0);
@@ -386,16 +403,33 @@ const ImageModal = ({
               {photoTitle}
             </Text>
           )}
-          {downloadUrl ? (
-            <CTAButton
-              href={downloadUrl}
-              download={downloadFilename ?? true}
-              icon={FaDownload}
-              tone="dark"
-              size="sm"
-            >
-              Download
-            </CTAButton>
+          {downloadUrl || mobileSaveUrl ? (
+            useMobileSaveFlow ? (
+              // Mobile path: open the original image in a new tab. User
+              // long-presses → "Save to Photos" lands the photo in the
+              // phone's Photos app, not the Files app.
+              <CTAButton
+                href={mobileSaveUrl!}
+                newTab
+                icon={FaDownload}
+                tone="dark"
+                size="sm"
+              >
+                Save Photo
+              </CTAButton>
+            ) : (
+              // Desktop path: anchor with download attribute triggers the
+              // browser's Save As dialog so the user picks a location.
+              <CTAButton
+                href={downloadUrl!}
+                download={downloadFilename ?? true}
+                icon={FaDownload}
+                tone="dark"
+                size="sm"
+              >
+                Download
+              </CTAButton>
+            )
           ) : (
             <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
               View Photo Page →
