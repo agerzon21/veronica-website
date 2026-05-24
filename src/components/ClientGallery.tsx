@@ -24,10 +24,20 @@ export interface DriveFile {
   driveViewUrl: string;
 }
 
+export interface FolderSection {
+  id: string;
+  name: string;
+  files: DriveFile[];
+}
+
 interface ClientGalleryProps {
   clientName: string | null;
   driveUrl: string;
-  files: DriveFile[];
+  // Files placed directly in the gallery's root folder (no subfolder).
+  rootFiles: DriveFile[];
+  // One entry per subfolder, in delivery order. Empty array if Veronika
+  // delivered as a flat folder.
+  sections: FolderSection[];
   warning?: string;
 }
 
@@ -191,11 +201,24 @@ const GridTile = ({ file, index, onSelect, setRef }: GridTileProps) => {
   );
 };
 
-const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryProps) => {
+const ClientGallery = ({
+  clientName,
+  driveUrl,
+  rootFiles,
+  sections,
+  warning,
+}: ClientGalleryProps) => {
+  // Flatten everything into one ordered array. The lightbox navigates by
+  // index into this array, so prev/next walks across all sections in
+  // delivery order. Section headers are purely visual — they don't gate
+  // navigation. This matches photographer-platform convention (Pixieset,
+  // ShootProof) where you scroll through the full set seamlessly.
+  const allFiles = [...rootFiles, ...sections.flatMap((s) => s.files)];
+  const totalCount = allFiles.length;
+
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  // Refs per thumbnail so ImageModal can animate open from the clicked
-  // thumbnail's rect and animate close back to its current rect — same
-  // motion language as the public gallery uses via GalleryGrid.
+  // Refs per thumbnail (indexed against the flat allFiles array) so
+  // ImageModal can animate open from the clicked thumbnail's rect.
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
 
@@ -214,8 +237,8 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
     setOriginRect(null);
   }, []);
   const handleNext = useCallback(() => {
-    setSelectedIndex((i) => (i !== null && i < files.length - 1 ? i + 1 : i));
-  }, [files.length]);
+    setSelectedIndex((i) => (i !== null && i < totalCount - 1 ? i + 1 : i));
+  }, [totalCount]);
   const handlePrev = useCallback(() => {
     setSelectedIndex((i) => (i !== null && i > 0 ? i - 1 : i));
   }, []);
@@ -226,7 +249,7 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
     return { top: r.top, left: r.left, width: r.width, height: r.height };
   }, []);
 
-  const selected = selectedIndex !== null ? files[selectedIndex] : null;
+  const selected = selectedIndex !== null ? allFiles[selectedIndex] : null;
 
   return (
     <Box bg="white" minH="100vh" pt="72px">
@@ -254,9 +277,15 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
         >
           {clientName ? `Welcome, ${clientName}` : 'Your Photos'}
         </Text>
-        {files.length > 0 && (
+        {totalCount > 0 && (
           <Text fontSize="sm" color="gray.500" fontWeight="300" mt={2}>
-            {files.length} {files.length === 1 ? 'photo' : 'photos'}
+            {totalCount} {totalCount === 1 ? 'photo' : 'photos'}
+            {sections.length > 0 && (
+              <>
+                {' · '}
+                {sections.length} {sections.length === 1 ? 'section' : 'sections'}
+              </>
+            )}
           </Text>
         )}
 
@@ -275,22 +304,91 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
       </Box>
 
       {/* Grid */}
-      {files.length > 0 ? (
+      {totalCount > 0 ? (
         <Box px={{ base: 2, md: 6 }} pb={20}>
-          <SimpleGrid
-            columns={{ base: 2, md: 3, lg: 4 }}
-            spacing={{ base: 1, md: 2 }}
-          >
-            {files.map((file, i) => (
-              <GridTile
-                key={file.id}
-                file={file}
-                index={i}
-                onSelect={handleOpen}
-                setRef={(el) => { itemRefs.current[i] = el; }}
-              />
-            ))}
-          </SimpleGrid>
+          {/* Root-level files (no subfolder). Show first, no header — these
+              are the files Veronika placed directly in the gallery root. If
+              she delivered everything in subfolders, this is empty. */}
+          {rootFiles.length > 0 && (
+            <SimpleGrid
+              columns={{ base: 2, md: 3, lg: 4 }}
+              spacing={{ base: 1, md: 2 }}
+            >
+              {rootFiles.map((file, i) => (
+                <GridTile
+                  key={file.id}
+                  file={file}
+                  index={i}
+                  onSelect={handleOpen}
+                  setRef={(el) => { itemRefs.current[i] = el; }}
+                />
+              ))}
+            </SimpleGrid>
+          )}
+
+          {/* Sections — one per subfolder. Each gets its own labeled grid.
+              Index offset accumulates so itemRefs[i] always maps to
+              allFiles[i] (the same array the lightbox navigates by). */}
+          {sections.map((section, sIdx) => {
+            const offset =
+              rootFiles.length +
+              sections.slice(0, sIdx).reduce((acc, s) => acc + s.files.length, 0);
+            return (
+              <Box
+                key={section.id}
+                mt={rootFiles.length > 0 || sIdx > 0 ? { base: 10, md: 14 } : 0}
+              >
+                {/* Section header — matches the gallery's main header
+                    treatment but scaled down: small gold uppercase label,
+                    larger section name in light weight, thin gold rule.
+                    Consistent with the rest of the site's typography. */}
+                <Box textAlign="center" mb={{ base: 6, md: 8 }} px={4}>
+                  <Text
+                    fontSize="2xs"
+                    fontWeight="500"
+                    textTransform="uppercase"
+                    letterSpacing="0.25em"
+                    color="#c9a96e"
+                    mb={2}
+                  >
+                    Section
+                  </Text>
+                  <Text
+                    as="h2"
+                    fontSize={{ base: 'xl', md: '2xl' }}
+                    fontWeight="200"
+                    color="gray.800"
+                    letterSpacing="0.02em"
+                    m={0}
+                    mb={2}
+                  >
+                    {section.name}
+                  </Text>
+                  <Box w="30px" h="1px" bg="#c9a96e" mx="auto" mb={1.5} />
+                  <Text fontSize="xs" color="gray.500" fontWeight="300">
+                    {section.files.length} {section.files.length === 1 ? 'photo' : 'photos'}
+                  </Text>
+                </Box>
+                <SimpleGrid
+                  columns={{ base: 2, md: 3, lg: 4 }}
+                  spacing={{ base: 1, md: 2 }}
+                >
+                  {section.files.map((file, i) => {
+                    const flatIndex = offset + i;
+                    return (
+                      <GridTile
+                        key={file.id}
+                        file={file}
+                        index={flatIndex}
+                        onSelect={handleOpen}
+                        setRef={(el) => { itemRefs.current[flatIndex] = el; }}
+                      />
+                    );
+                  })}
+                </SimpleGrid>
+              </Box>
+            );
+          })}
         </Box>
       ) : (
         <Box textAlign="center" py={20} px={6}>
@@ -316,7 +414,7 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
           onNext={handleNext}
           onPrevious={handlePrev}
           currentIndex={selectedIndex}
-          totalImages={files.length}
+          totalImages={totalCount}
           photoData={{
             url: selected.viewUrl,
             alt: selected.name,
@@ -335,7 +433,7 @@ const ClientGallery = ({ clientName, driveUrl, files, warning }: ClientGalleryPr
       )}
 
       {/* Bottom secondary CTA — Download All */}
-      {files.length > 0 && (
+      {totalCount > 0 && (
         <Box bg="gray.50" py={12} px={6} textAlign="center">
           <VStack spacing={4}>
             <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.2em" color="#c9a96e">

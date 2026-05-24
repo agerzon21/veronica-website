@@ -4,14 +4,15 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import CTAButton from '../components/ui/CTAButton';
-import ClientGallery, { type DriveFile } from '../components/ClientGallery';
+import ClientGallery, { type DriveFile, type FolderSection } from '../components/ClientGallery';
 
 const MotionDiv = motion.div;
 
 type GalleryData = {
   clientName: string | null;
   driveUrl: string;
-  files: DriveFile[];
+  rootFiles: DriveFile[];
+  sections: FolderSection[];
   warning?: string;
 };
 
@@ -39,7 +40,8 @@ const Portal = () => {
         setGallery({
           clientName: data.client_name ?? null,
           driveUrl: data.drive_url,
-          files: data.files ?? [],
+          rootFiles: data.rootFiles ?? [],
+          sections: data.sections ?? [],
           warning: data.warning,
         });
       } else if (res.status === 401) {
@@ -65,7 +67,8 @@ const Portal = () => {
         <ClientGallery
           clientName={gallery.clientName}
           driveUrl={gallery.driveUrl}
-          files={gallery.files}
+          rootFiles={gallery.rootFiles}
+          sections={gallery.sections}
           warning={gallery.warning}
         />
       </>

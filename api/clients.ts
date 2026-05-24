@@ -14,7 +14,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
-import { listFolderMedia, extractFolderId, type DriveFile } from './_drive.js';
+import { listFolderTree, extractFolderId, type FolderTree } from './_drive.js';
 
 const WRONG_PASSWORD_DELAY_MS = 750;
 
@@ -61,9 +61,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, error: 'Gallery is misconfigured. Please contact us.' });
     }
 
-    let files: DriveFile[] = [];
+    let tree: FolderTree = { rootFiles: [], sections: [] };
     try {
-      files = await listFolderMedia(folderId);
+      tree = await listFolderTree(folderId);
     } catch (err) {
       console.error('[clients] Drive API failed:', err);
       // Even if Drive listing fails, we still return the bare gallery so the
@@ -72,7 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         client_name,
         drive_url,
-        files: [],
+        rootFiles: [],
+        sections: [],
         warning: 'Could not load photo previews — use "View in Drive" below.',
       });
     }
@@ -81,7 +82,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       client_name,
       drive_url,
-      files,
+      rootFiles: tree.rootFiles,
+      sections: tree.sections,
     });
   } catch (err) {
     console.error('[clients] handler failed:', err);

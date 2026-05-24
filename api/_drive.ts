@@ -70,34 +70,131 @@ export type DriveFile = {
  * non-media files (so a misplaced .txt in the folder won't render).
  * Sorted by filename so the client sees a stable, predictable order.
  */
-export async function listFolderMedia(folderId: string): Promise<DriveFile[]> {
-  const drive = getDrive();
+export type FolderSection = {
+  id: string;
+  name: string;
+  files: DriveFile[];
+};
+
+export type FolderTree = {
+  // Files placed directly inside the gallery's root folder (no subfolder).
+  // If Veronika organizes everything into subfolders, this is empty.
+  rootFiles: DriveFile[];
+  // One entry per subfolder under the root. Subfolders are sorted by name
+  // (so Veronika can prefix with "01 ", "02 ", etc. to control order).
+  sections: FolderSection[];
+};
+
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+function toDriveFile(f: {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string | null;
+}): DriveFile {
+  return {
+    id: f.id,
+    name: f.name,
+    mimeType: f.mimeType,
+    // Drive returns size as a stringified number. Parse to int; null if
+    // unreported (rare for media files).
+    size: f.size ? parseInt(f.size, 10) : null,
+    thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
+    viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
+    downloadUrl: `https://drive.google.com/uc?export=download&id=${f.id}`,
+    // Same-origin proxy so the browser can fetch() the bytes without
+    // hitting Drive's CORS block. Required for the Web Share API path.
+    originalUrl: `/api/photo?id=${f.id}`,
+    driveViewUrl: `https://drive.google.com/file/d/${f.id}/view`,
+  };
+}
+
+function isMediaFile(f: { mimeType?: string | null }): boolean {
+  return Boolean(
+    f.mimeType?.startsWith('image/') || f.mimeType?.startsWith('video/'),
+  );
+}
+
+async function listMediaInFolder(
+  drive: drive_v3.Drive,
+  folderId: string,
+): Promise<DriveFile[]> {
   const res = await drive.files.list({
     q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed = false`,
     fields: 'files(id, name, mimeType, size)',
     pageSize: 1000,
     orderBy: 'name',
   });
-  const files = res.data.files ?? [];
-  return files
+  return (res.data.files ?? [])
     .filter((f): f is { id: string; name: string; mimeType: string; size?: string | null } =>
       Boolean(f.id && f.name && f.mimeType),
     )
-    .map((f) => ({
-      id: f.id,
-      name: f.name,
-      mimeType: f.mimeType,
-      // Drive returns size as a stringified number. Parse to int; null if
-      // unreported (rare for media files).
-      size: f.size ? parseInt(f.size, 10) : null,
-      thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
-      viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
-      downloadUrl: `https://drive.google.com/uc?export=download&id=${f.id}`,
-      // Same-origin proxy so the browser can fetch() the bytes without
-      // hitting Drive's CORS block. Required for the Web Share API path.
-      originalUrl: `/api/photo?id=${f.id}`,
-      driveViewUrl: `https://drive.google.com/file/d/${f.id}/view`,
-    }));
+    .map(toDriveFile);
+}
+
+/**
+ * Lists media in the gallery's root folder AND each immediate subfolder.
+ * Returns a tree with one section per subfolder, in name-sorted order.
+ * Photographers commonly deliver weddings as a parent folder with subfolders
+ * for each part of the day (Bride, Groom, Ceremony, etc.) — this preserves
+ * that organization in the client portal.
+ *
+ * Supports ONE level of nesting. Deeper structures (Bride/Hair/closeups)
+ * are flattened: anything under a top-level subfolder shows up in that
+ * section regardless of deeper nesting. Good enough for typical wedding
+ * delivery; revisit if Veronika starts using deeper trees.
+ */
+export async function listFolderTree(parentFolderId: string): Promise<FolderTree> {
+  const drive = getDrive();
+
+  // 1. List immediate children (both folders + media files in one call).
+  const rootRes = await drive.files.list({
+    q: `'${parentFolderId}' in parents and trashed = false`,
+    fields: 'files(id, name, mimeType, size)',
+    pageSize: 1000,
+    orderBy: 'name',
+  });
+  const items = rootRes.data.files ?? [];
+
+  const subFolders = items.filter((f) => f.mimeType === FOLDER_MIME);
+  const rootFiles = items.filter(isMediaFile).map((f) =>
+    toDriveFile({
+      id: f.id!,
+      name: f.name!,
+      mimeType: f.mimeType!,
+      size: f.size,
+    }),
+  );
+
+  // 2. For each subfolder, fetch its media in parallel. Bounded fanout —
+  //    typical weddings have <20 subfolders, well under Drive's quota.
+  const sections = await Promise.all(
+    subFolders
+      .filter((f): f is { id: string; name: string; mimeType: string } =>
+        Boolean(f.id && f.name),
+      )
+      .map(async (folder) => ({
+        id: folder.id,
+        name: folder.name,
+        files: await listMediaInFolder(drive, folder.id),
+      })),
+  );
+
+  return {
+    rootFiles,
+    // Drop empty sections so we don't render bare headers for folders
+    // that just have nested subfolders (or are entirely empty).
+    sections: sections.filter((s) => s.files.length > 0),
+  };
+}
+
+/**
+ * Legacy flat listing — kept for code paths that don't care about folder
+ * structure. New callers should use listFolderTree.
+ */
+export async function listFolderMedia(folderId: string): Promise<DriveFile[]> {
+  return listMediaInFolder(getDrive(), folderId);
 }
 
 /**
