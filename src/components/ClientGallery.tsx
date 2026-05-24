@@ -220,7 +220,17 @@ const ClientGallery = ({
   // Refs per thumbnail (indexed against the flat allFiles array) so
   // ImageModal can animate open from the clicked thumbnail's rect.
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Refs per section header so the sticky section-nav can scroll to them.
+  // Keyed by section.id since sections can be reordered without remounting.
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+
+  const scrollToSection = useCallback((id: string) => {
+    const el = sectionRefs.current[id];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
 
   const handleOpen = (i: number) => {
     const el = itemRefs.current[i];
@@ -303,6 +313,69 @@ const ClientGallery = ({
         )}
       </Box>
 
+      {/* Section navigation — sticky bar of section buttons so the client
+          can jump between Bride / Groom / Ceremony / etc. without scrolling
+          through every photo. Only renders when there are 2+ sections;
+          single section galleries don't need a nav. Sits just under the
+          fixed Navbar (top: 72px) and uses a thin border + light blur so
+          it doesn't dominate. */}
+      {sections.length > 1 && (
+        <Box
+          position="sticky"
+          top="72px"
+          zIndex={10}
+          bg="rgba(255, 255, 255, 0.92)"
+          borderBottom="1px solid"
+          borderColor="gray.100"
+          backdropFilter="blur(8px)"
+          py={3}
+        >
+          <Flex
+            gap={2}
+            px={{ base: 3, md: 6 }}
+            overflowX="auto"
+            justify={{ base: 'flex-start', md: 'center' }}
+            sx={{
+              // Hide scrollbar for cleanliness — users still get touch/swipe
+              // scrolling on overflow, just no visible bar.
+              '&::-webkit-scrollbar': { display: 'none' },
+              scrollbarWidth: 'none',
+            }}
+          >
+            {sections.map((section) => (
+              <Box
+                key={section.id}
+                as="button"
+                type="button"
+                onClick={() => scrollToSection(section.id)}
+                flexShrink={0}
+                px={{ base: 4, md: 5 }}
+                py={2}
+                fontSize="2xs"
+                fontWeight="500"
+                letterSpacing="0.2em"
+                textTransform="uppercase"
+                color="gray.700"
+                bg="transparent"
+                border="1px solid"
+                borderColor="gray.200"
+                borderRadius="full"
+                transition="all 0.25s ease"
+                cursor="pointer"
+                _hover={{
+                  borderColor: '#c9a96e',
+                  color: '#c9a96e',
+                  bg: 'rgba(201, 169, 110, 0.06)',
+                }}
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                {section.name}
+              </Box>
+            ))}
+          </Flex>
+        </Box>
+      )}
+
       {/* Grid */}
       {totalCount > 0 ? (
         <Box px={{ base: 2, md: 6 }} pb={20}>
@@ -336,7 +409,14 @@ const ClientGallery = ({
             return (
               <Box
                 key={section.id}
+                ref={(el: HTMLDivElement | null) => {
+                  sectionRefs.current[section.id] = el;
+                }}
                 mt={rootFiles.length > 0 || sIdx > 0 ? { base: 10, md: 14 } : 0}
+                // scroll-margin-top so scrollIntoView lands the section
+                // header below the fixed Navbar (72px) + sticky section
+                // nav (~52px) + a little breathing room.
+                sx={{ scrollMarginTop: '140px' }}
               >
                 {/* Section header — matches the gallery's main header
                     treatment but scaled down: small gold uppercase label,

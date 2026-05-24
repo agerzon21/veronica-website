@@ -185,11 +185,19 @@ const Portal = () => {
                     <Input
                       id="password"
                       name="password"
-                      type="password"
+                      // Visible text instead of masked dots — clients are
+                      // typing 8-char codes Veronika texted them, accuracy
+                      // matters more than over-shoulder secrecy (and the
+                      // threat model already assumes clients re-share their
+                      // own portal access freely).
+                      type="text"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
-                      autoComplete="current-password"
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
                       autoFocus
                       h="48px"
                       bg="blackAlpha.500"
