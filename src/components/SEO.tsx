@@ -14,7 +14,10 @@ type RouteMeta = { title: string; description: string; image?: string };
 
 const ROUTE_META: Record<string, RouteMeta> = {
   '/': {
-    title: 'Vero Photography | Wedding & Portrait Photographer in Scranton, Pennsylvania',
+    // 59 chars — under Google's 60-char SERP truncation threshold so the
+    // whole brand+keyword string shows in search results. Previous title
+    // was 78 chars and got truncated mid-word.
+    title: 'Vero Photography | Scranton Wedding & Portrait Photographer',
     description:
       'Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide.',
   },

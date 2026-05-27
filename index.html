@@ -6,7 +6,7 @@
     <link rel="icon" type="image/x-icon" href="https://vero.photography/assets/images/favicon.ico" />
     <link rel="apple-touch-icon" href="https://vero.photography/assets/images/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Vero Photography | Wedding & Portrait Photographer in Scranton, Pennsylvania</title>
+    <title>Vero Photography | Scranton Wedding & Portrait Photographer</title>
     <meta name="description" content="Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide." />
 
     <!-- Preload the hero camera image so LCP starts the network fetch before JS parses -->
@@ -25,11 +25,13 @@
     />
     <meta property="og:image:alt" content="Vero Photography - Professional Photographer" />
 
-    <!-- Structured Data -->
+    <!-- Structured Data: ProfessionalService is the correct schema.org type
+         for a service business — "Photographer" was not a valid @type and
+         was triggering validation errors across every page. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "Photographer",
+      "@type": "ProfessionalService",
       "name": "Vero Photography",
       "alternateName": "Veronika Gerzon Photography",
       "image": "https://vero.photography/assets/photos/site/contact-bg.webp",
