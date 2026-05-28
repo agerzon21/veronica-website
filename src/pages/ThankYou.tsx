@@ -75,57 +75,30 @@ const ThankYou = () => {
     }
   }, []);
 
-  // Fire the auto-reply request once on mount if we have a payload, then poll
-  // Resend for the delivery status. We only flip to the green "delivered" state
-  // once the recipient's mail server has actually accepted the message — not
-  // when Resend merely queued it (which lands seconds before real delivery).
+  // Fire the auto-reply request once on mount if we have a payload.
+  //
+  // TEMP: real delivery-status polling (via /api/email-status → Resend
+  // emails.get) needs a Full-access Resend key, which is being swapped in.
+  // Until then the lookup always returns "unknown" and times out, so we fall
+  // back to an optimistic confirmation: hold the spinner for a short beat,
+  // then — if the send succeeded — show the confirmation with a "may take a
+  // couple minutes" note. The send itself is reliable; we just can't confirm
+  // *delivery* yet. Restore the polling version (see git history) once the
+  // Full-access key is live.
   useEffect(() => {
     if (!autoReplyPayload || !submissionId) return;
     // Mark this submission as processed BEFORE the fetch resolves, so a
     // back-navigation that re-mounts the component doesn't re-fire it.
     sessionStorage.setItem(`auto-reply-sent:${submissionId}`, '1');
 
-    const POLL_INTERVAL_MS = 3000;
-    const MAX_WAIT_MS = 60000;
-    // Resend events that mean we're done waiting, one way or the other.
-    const DELIVERED = 'delivered';
-    const TERMINAL_FAILURES = ['bounced', 'complained', 'failed', 'canceled', 'suppressed'];
+    const MIN_SPINNER_MS = 10000;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const startedAt = Date.now();
-
-    const poll = async (emailId: string) => {
-      if (cancelled) return;
-      let status: string | undefined;
-      try {
-        const res = await fetch(`/api/email-status?id=${encodeURIComponent(emailId)}`);
-        const data = await res.json().catch(() => ({ status: 'unknown' }));
-        status = data?.status;
-      } catch {
-        status = 'unknown';
-      }
-      if (cancelled) return;
-
-      if (status === DELIVERED) {
-        setAutoReplyStatus('delivered');
-        return;
-      }
-      if (status && TERMINAL_FAILURES.includes(status)) {
-        setAutoReplyStatus('failed');
-        return;
-      }
-      // queued / sent / delivery_delayed / unknown → still in transit. Give up
-      // waiting after the window and show the soft "on its way" state; the
-      // email was sent, we just haven't seen the delivery confirmation yet.
-      if (Date.now() - startedAt >= MAX_WAIT_MS) {
-        setAutoReplyStatus('pending');
-        return;
-      }
-      timer = setTimeout(() => poll(emailId), POLL_INTERVAL_MS);
-    };
 
     (async () => {
+      const startedAt = Date.now();
+      let ok = false;
       try {
         const res = await fetch('/api/contact', {
           method: 'POST',
@@ -133,20 +106,22 @@ const ThankYou = () => {
           body: JSON.stringify(autoReplyPayload),
         });
         const data = await res.json().catch(() => ({ success: false }));
-        if (cancelled) return;
-        if (data?.success && data?.emailId) {
-          poll(data.emailId);
-        } else if (data?.success) {
-          // Sent, but no id to track delivery against — can't poll, so show the
-          // soft "on its way" state rather than a misleading green.
-          setAutoReplyStatus('pending');
-        } else {
-          setAutoReplyStatus('failed');
-        }
+        ok = Boolean(data?.success);
       } catch {
-        if (cancelled) return;
-        setAutoReplyStatus('failed');
+        ok = false;
       }
+      if (cancelled) return;
+
+      if (!ok) {
+        setAutoReplyStatus('failed');
+        return;
+      }
+      // Hold the spinner for a short beat so it reads as "working", then
+      // optimistically confirm (send succeeded; delivery isn't tracked yet).
+      const remaining = Math.max(0, MIN_SPINNER_MS - (Date.now() - startedAt));
+      timer = setTimeout(() => {
+        if (!cancelled) setAutoReplyStatus('delivered');
+      }, remaining);
     })();
 
     return () => {
@@ -384,11 +359,11 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
               letterSpacing="0.1em"
               textTransform="uppercase"
             >
-              Confirmation Delivered
+              Confirmation Sent
             </Text>
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            It just arrived from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text>. If you don't see it in your inbox, <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text> — and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
+            Look for an email from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text> — it's on its way and can take a couple of minutes to arrive. If you don't see it, <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text>, and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
           </Text>
         </Box>
       </MotionDiv>
