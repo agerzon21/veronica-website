@@ -55,11 +55,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: 'Auto-reply failed' });
   }
 
-  const info = autoReplyResult.value;
-  console.log('[contact] sent:', {
-    messageId: info.messageId,
-    accepted: info.accepted,
-    rejected: info.rejected,
-  });
+  console.log('[contact] auto-reply sent:', { id: autoReplyResult.value.id });
   return res.status(200).json({ success: true });
 }

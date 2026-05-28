@@ -1,11 +1,16 @@
 /**
- * Shared auto-reply email helpers used by /api/contact and /api/test-email.
+ * Shared transactional email helpers used by /api/contact and /api/subscribe.
  *
  * Filename starts with `_` so Vercel does not expose it as an HTTP endpoint
  * (only files with a default-exported handler become routes).
+ *
+ * Sends via Resend (Amazon SES backend) from the verified vero.photography
+ * domain. Auto-replies and the welcome email share one sender identity so all
+ * their engagement reputation compounds onto the same address Veronika uses to
+ * email clients personally.
  */
 
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 export interface ContactPayload {
   name: string;
@@ -64,15 +69,15 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
 <p style="border-left:3px solid #d8d8d8;margin:6px 0 20px;padding:6px 0 6px 14px;color:#5a5a5a;font-style:italic;font-size:14px;">${escapeHtml(trimmedMessage).replace(/\n/g, '<br>')}</p>`
     : '';
 
-  // Slim layout: no nested tables, minimal inline styles. Targets ~1.5KB so
-  // ImprovMX's body-side scanning (DKIM, spam, link reputation) is fast.
+  // Slim layout: no nested tables, minimal inline styles, few links. Keeps the
+  // body lightweight and avoids the link-heavy, spam-trigger patterns that hurt
+  // inbox placement from a young sending domain.
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
 <p>Hi ${safeFirst},</p>
 <p>Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.</p>
 ${detailsBlock}${messageBlock}
-<p style="background:#fef9e6;border-left:3px solid #c9a96e;padding:12px 16px;font-size:14px;">If this email landed in your <strong>Spam</strong> or <strong>Promotions</strong> folder, please mark it as <strong>Not Spam</strong> — it'll help my future replies reach your inbox.</p>
 <p>Need a faster reply? You can also reach me on:</p>
 <p>Instagram: <a href="${INSTAGRAM_URL}" style="color:#c9a96e">@vero.art.photo</a><br>WhatsApp: <a href="${WHATSAPP_URL}" style="color:#c9a96e">${escapeHtml(WHATSAPP_PHONE)}</a></p>
 <p>Warmly,<br><em>Veronika</em></p>
@@ -100,8 +105,6 @@ export function buildAutoReplyText(data: ContactPayload): string {
 
 Thank you for reaching out${shootBlurb}. I just received your message and I'll personally get back to you within 24 hours.${detailsBlock}${messageBlock}
 
-If this email landed in your Spam or Promotions folder, please mark it as Not Spam — it'll help my future replies reach your inbox.
-
 Need a faster reply? You can also reach me on:
   Instagram: ${INSTAGRAM_URL}
   WhatsApp: ${WHATSAPP_PHONE} (${WHATSAPP_URL})
@@ -112,104 +115,58 @@ Vero Photography
 `;
 }
 
-/**
- * Builds the SMTP transporter with hardened settings for serverless use:
- *  - Aggressive timeouts so we fail within Vercel's 10s function budget
- *  - requireTLS so we fail loudly if STARTTLS isn't available
- */
-export function buildTransporter(opts: { debug?: boolean } = {}): nodemailer.Transporter {
-  const host = process.env.IMPROVMX_SMTP_HOST;
-  const port = Number(process.env.IMPROVMX_SMTP_PORT || 587);
-  const user = process.env.IMPROVMX_SMTP_USER;
-  const pass = process.env.IMPROVMX_SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    throw new Error('Missing SMTP env vars (IMPROVMX_SMTP_HOST/USER/PASS)');
+// One shared Resend client, constructed lazily. A missing API key surfaces as a
+// thrown error at send time (caught by callers → 500) rather than crashing the
+// function at import.
+let resendClient: Resend | null = null;
+function getResend(): Resend {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('Missing RESEND_API_KEY env var');
   }
+  if (!resendClient) resendClient = new Resend(apiKey);
+  return resendClient;
+}
 
-  // Port 465 = implicit TLS (no STARTTLS upgrade — saves ~2 SMTP roundtrips).
-  // Port 587 = plain connect then STARTTLS upgrade.
-  // Autodetect from the port number so this works either way.
-  const useImplicitTls = port === 465;
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: useImplicitTls,
-    requireTLS: !useImplicitTls,
-    auth: { user, pass },
-    // Fail fast on connection-level issues (broken backend = retry helps)
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    // Be patient on socket activity. ImprovMX can take 10-20s to respond
-    // at any SMTP step under load (DKIM signing, spam scoring, etc.).
-    // Pushed close to Vercel's 30s function budget so we wait out slow
-    // backends instead of false-failing emails that actually shipped.
-    socketTimeout: 25000,
-    logger: opts.debug ?? false,
-    debug: opts.debug ?? false,
-  });
+interface EmailMessage {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
 }
 
 /**
- * True for connection-level errors that are likely to succeed on retry —
- * typically caused by ImprovMX's DNS round-robin pointing us at an unhealthy
- * backend server. Each retry creates a new transporter (fresh DNS lookup), so
- * we usually land on a different (healthy) IP.
+ * Sends one email via Resend from the studio identity.
  *
- * Auth failures and recipient/sender rejections are NOT retried — they'll fail
- * the same way next time and waste our budget.
+ * Resend resolves with { data, error } instead of throwing on a failed send.
+ * We translate a present `error` into a thrown exception so callers
+ * (api/contact, api/subscribe) can treat a rejected promise as "the email did
+ * not go out" and return a 500.
  */
-function isRetryable(err: unknown): boolean {
-  if (!err) return false;
-  const e = err as { code?: string; responseCode?: number };
-  if (e.code === 'ETIMEDOUT' || e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET' || e.code === 'EDNS') {
-    return true;
+export async function sendEmail(message: EmailMessage): Promise<{ id: string }> {
+  const { data, error } = await getResend().emails.send({
+    from: `${FROM_DISPLAY} <${FROM_ADDRESS}>`,
+    to: message.to,
+    replyTo: FROM_ADDRESS,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+  });
+  if (error) {
+    throw new Error(`Resend send failed: ${error.message}`);
   }
-  if (e.responseCode && e.responseCode >= 400 && e.responseCode < 500) {
-    return false; // client errors (auth, etc.) won't fix themselves
+  if (!data) {
+    throw new Error('Resend send returned no data');
   }
-  if (e.responseCode && e.responseCode >= 500) {
-    return false; // server-side rejections (recipient unknown, etc.)
-  }
-  const msg = String(err);
-  if (msg.includes('Greeting never received')) return true;
-  if (msg.includes('Connection closed unexpectedly')) return true;
-  return false;
+  return data;
 }
 
 /** Send the auto-reply for a contact form submission. */
-export async function sendAutoReply(
-  data: ContactPayload,
-  opts: { debug?: boolean; maxAttempts?: number } = {}
-): Promise<nodemailer.SentMessageInfo> {
-  const maxAttempts = opts.maxAttempts ?? 3;
-  const message = {
-    from: `"${FROM_DISPLAY}" <${FROM_ADDRESS}>`,
+export async function sendAutoReply(data: ContactPayload): Promise<{ id: string }> {
+  return sendEmail({
     to: data.email,
-    replyTo: FROM_ADDRESS,
     subject: `Re: Your ${data.shoot_type || 'Photography'} Inquiry`,
     text: buildAutoReplyText(data),
     html: buildAutoReplyHtml(data),
-  };
-
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const transporter = buildTransporter({ debug: opts.debug });
-      const info = await transporter.sendMail(message);
-      if (attempt > 1) {
-        console.log(`[auto-reply] succeeded on attempt ${attempt}/${maxAttempts}`);
-      }
-      return info;
-    } catch (err) {
-      lastError = err;
-      const retryable = isRetryable(err);
-      console.warn(
-        `[auto-reply] attempt ${attempt}/${maxAttempts} failed (retryable=${retryable}): ${err}`
-      );
-      if (!retryable || attempt === maxAttempts) break;
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  });
 }

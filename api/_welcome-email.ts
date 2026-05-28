@@ -2,16 +2,13 @@
  * Welcome email — fired after an exit-intent popup signup.
  * Warm, short, includes a unique 10%-off code the recipient mentions at booking.
  *
- * Reuses the existing SMTP transport from _auto-reply.ts so we don't duplicate
- * the connection retry / ImprovMX-quirks logic.
+ * Reuses the shared Resend sender from _auto-reply.ts so both transactional
+ * emails go out from one sender identity with one code path.
  */
 
-import type nodemailer from 'nodemailer';
 import {
-  buildTransporter,
+  sendEmail,
   escapeHtml,
-  FROM_DISPLAY,
-  FROM_ADDRESS,
   INSTAGRAM_URL,
   WHATSAPP_URL,
   WHATSAPP_PHONE,
@@ -88,17 +85,11 @@ You received this because you signed up at vero.photography. This is a one-time 
 `;
 }
 
-export async function sendWelcomeEmail(
-  data: WelcomePayload,
-): Promise<nodemailer.SentMessageInfo> {
-  const message = {
-    from: `"${FROM_DISPLAY}" <${FROM_ADDRESS}>`,
+export async function sendWelcomeEmail(data: WelcomePayload): Promise<{ id: string }> {
+  return sendEmail({
     to: data.email,
-    replyTo: FROM_ADDRESS,
     subject: `Your 10% off — a little welcome from Vero Photography`,
     text: buildWelcomeText(data),
     html: buildWelcomeHtml(data),
-  };
-  const transporter = buildTransporter();
-  return transporter.sendMail(message);
+  });
 }

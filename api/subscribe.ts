@@ -71,10 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // displays an error so the user can retry.
     try {
       const info = await sendWelcomeEmail({ email, discountCode });
-      console.log('[subscribe] welcome email sent:', {
-        messageId: info.messageId,
-        to: info.accepted,
-      });
+      console.log('[subscribe] welcome email sent:', { id: info.id });
       return res.status(200).json({ success: true });
     } catch (err) {
       console.error('[subscribe] welcome email failed:', err);
