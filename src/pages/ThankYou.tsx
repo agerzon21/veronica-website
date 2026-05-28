@@ -17,7 +17,11 @@ interface AutoReplyPayload {
   botcheck: string;
 }
 
-type AutoReplyStatus = 'idle' | 'loading' | 'success' | 'failed';
+// sending  → request in flight / waiting on delivery confirmation (spinner)
+// delivered → recipient mail server confirmed receipt (green)
+// pending  → sent OK but delivery not confirmed within our wait window
+// failed   → the send itself failed, or the message bounced
+type AutoReplyStatus = 'idle' | 'sending' | 'delivered' | 'pending' | 'failed';
 
 const ThankYou = () => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -58,7 +62,7 @@ const ThankYou = () => {
   });
 
   const [autoReplyStatus, setAutoReplyStatus] = useState<AutoReplyStatus>(
-    autoReplyPayload ? 'loading' : 'idle'
+    autoReplyPayload ? 'sending' : 'idle'
   );
 
   useEffect(() => {
@@ -71,14 +75,56 @@ const ThankYou = () => {
     }
   }, []);
 
-  // Fire the auto-reply request once on mount if we have a payload
+  // Fire the auto-reply request once on mount if we have a payload, then poll
+  // Resend for the delivery status. We only flip to the green "delivered" state
+  // once the recipient's mail server has actually accepted the message — not
+  // when Resend merely queued it (which lands seconds before real delivery).
   useEffect(() => {
     if (!autoReplyPayload || !submissionId) return;
     // Mark this submission as processed BEFORE the fetch resolves, so a
     // back-navigation that re-mounts the component doesn't re-fire it.
     sessionStorage.setItem(`auto-reply-sent:${submissionId}`, '1');
 
+    const POLL_INTERVAL_MS = 3000;
+    const MAX_WAIT_MS = 60000;
+    // Resend events that mean we're done waiting, one way or the other.
+    const DELIVERED = 'delivered';
+    const TERMINAL_FAILURES = ['bounced', 'complained', 'failed', 'canceled', 'suppressed'];
+
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const startedAt = Date.now();
+
+    const poll = async (emailId: string) => {
+      if (cancelled) return;
+      let status: string | undefined;
+      try {
+        const res = await fetch(`/api/email-status?id=${encodeURIComponent(emailId)}`);
+        const data = await res.json().catch(() => ({ status: 'unknown' }));
+        status = data?.status;
+      } catch {
+        status = 'unknown';
+      }
+      if (cancelled) return;
+
+      if (status === DELIVERED) {
+        setAutoReplyStatus('delivered');
+        return;
+      }
+      if (status && TERMINAL_FAILURES.includes(status)) {
+        setAutoReplyStatus('failed');
+        return;
+      }
+      // queued / sent / delivery_delayed / unknown → still in transit. Give up
+      // waiting after the window and show the soft "on its way" state; the
+      // email was sent, we just haven't seen the delivery confirmation yet.
+      if (Date.now() - startedAt >= MAX_WAIT_MS) {
+        setAutoReplyStatus('pending');
+        return;
+      }
+      timer = setTimeout(() => poll(emailId), POLL_INTERVAL_MS);
+    };
+
     (async () => {
       try {
         const res = await fetch('/api/contact', {
@@ -88,14 +134,24 @@ const ThankYou = () => {
         });
         const data = await res.json().catch(() => ({ success: false }));
         if (cancelled) return;
-        setAutoReplyStatus(data?.success ? 'success' : 'failed');
+        if (data?.success && data?.emailId) {
+          poll(data.emailId);
+        } else if (data?.success) {
+          // Sent, but no id to track delivery against — can't poll, so show the
+          // soft "on its way" state rather than a misleading green.
+          setAutoReplyStatus('pending');
+        } else {
+          setAutoReplyStatus('failed');
+        }
       } catch {
         if (cancelled) return;
         setAutoReplyStatus('failed');
       }
     })();
+
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [autoReplyPayload, submissionId]);
 
@@ -276,7 +332,7 @@ const ContactPill = ({ icon, label, iconSize, onClick }: ContactPillProps) => (
 );
 
 const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
-  if (status === 'loading') {
+  if (status === 'sending') {
     return (
       <Box
         w="100%"
@@ -295,17 +351,17 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
             letterSpacing="0.1em"
             textTransform="uppercase"
           >
-            Sending Confirmation Email…
+            Delivering Confirmation…
           </Text>
         </Flex>
         <Text fontSize="sm" color="whiteAlpha.700" fontWeight="300" lineHeight="1.7">
-          This usually takes a few seconds. Hang tight.
+          Waiting for it to reach your inbox — this usually takes a few seconds. Hang tight.
         </Text>
       </Box>
     );
   }
 
-  if (status === 'success') {
+  if (status === 'delivered') {
     return (
       <MotionDiv
         initial={{ opacity: 0, y: 6 }}
@@ -328,11 +384,45 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
               letterSpacing="0.1em"
               textTransform="uppercase"
             >
-              Confirmation Sent
+              Confirmation Delivered
             </Text>
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Look for an email from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text>. If it's not in your inbox, <Text as="span" color="#c9a96e" fontWeight="400">please check your Spam or Promotions folder</Text> — that's often where it lands. When you find it, mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
+            It just arrived from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text>. If you don't see it in your inbox, <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text> — and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
+          </Text>
+        </Box>
+      </MotionDiv>
+    );
+  }
+
+  if (status === 'pending') {
+    return (
+      <MotionDiv
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+        style={{ width: '100%', maxWidth: '460px' }}
+      >
+        <Box
+          bg="rgba(201, 169, 110, 0.08)"
+          borderLeft="2px solid #c9a96e"
+          px={5}
+          py={4}
+        >
+          <Flex align="center" gap={3} mb={2}>
+            <Icon as={FaRegEnvelope} color="#c9a96e" boxSize={4} />
+            <Text
+              fontSize="xs"
+              color="whiteAlpha.900"
+              fontWeight="500"
+              letterSpacing="0.1em"
+              textTransform="uppercase"
+            >
+              Confirmation On Its Way
+            </Text>
+          </Flex>
+          <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
+            Your confirmation was sent and is taking a little longer than usual to land. Give it a minute or two, and <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text> if it's not in your inbox.
           </Text>
         </Box>
       </MotionDiv>

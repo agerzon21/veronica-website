@@ -170,3 +170,35 @@ export async function sendAutoReply(data: ContactPayload): Promise<{ id: string 
     html: buildAutoReplyHtml(data),
   });
 }
+
+// The lifecycle states Resend reports for a sent email. We surface the raw
+// value so the client can decide what counts as "done" vs "keep waiting".
+export type DeliveryEvent =
+  | 'queued'
+  | 'scheduled'
+  | 'sent'
+  | 'delivery_delayed'
+  | 'delivered'
+  | 'bounced'
+  | 'complained'
+  | 'failed'
+  | 'canceled'
+  | 'suppressed'
+  | 'opened'
+  | 'clicked';
+
+/**
+ * Looks up the current delivery status of a previously sent email. Used by the
+ * Thank-You page to wait for the recipient's mail server to actually confirm
+ * receipt (`delivered`) before telling the user the confirmation went through.
+ */
+export async function getDeliveryStatus(id: string): Promise<DeliveryEvent> {
+  const { data, error } = await getResend().emails.get(id);
+  if (error) {
+    throw new Error(`Resend get failed: ${error.message}`);
+  }
+  if (!data) {
+    throw new Error('Resend get returned no data');
+  }
+  return data.last_event;
+}
