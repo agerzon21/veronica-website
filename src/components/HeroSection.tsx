@@ -535,7 +535,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             }}
           >
             <CameraBody isPortrait={size.isPortrait} width={size.natural}>
-              <ImageCarousel images={images} height="100%" hideDevIndicator />
+              {/* hideDevIndicator intentionally omitted — ImageCarousel gates its
+                  controls on isDevelopment internally, so they only appear in
+                  `npm run dev` (Prev/Next/Pause for testing hero candidates) and
+                  stay completely off in production. */}
+              <ImageCarousel images={images} height="100%" />
             </CameraBody>
           </MotionBox>
         </Box>
