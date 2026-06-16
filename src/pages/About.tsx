@@ -12,8 +12,8 @@ const MotionDiv = motion.div;
 // avatar so the visual idiom is consistent across the site.
 const PORTRAIT_AVATAR = (
   <Box
-    width={{ base: '168px', md: '192px' }}
-    height={{ base: '168px', md: '192px' }}
+    width={{ base: '200px', md: '400px' }}
+    height={{ base: '200px', md: '400px' }}
     borderRadius="full"
     border="2px solid #c9a96e"
     padding="4px"
@@ -23,9 +23,14 @@ const PORTRAIT_AVATAR = (
         src="/assets/photos/site/vero-portrait-tulips.webp"
         alt="Veronika Gerzon"
         objectFit="cover"
-        objectPosition="center 28%"
+        // Crop window centered higher (around her face) and the image is
+        // scaled up inside the round window so less background / more face
+        // is visible. The container's overflow:hidden clips the scaled
+        // overflow back to the circle.
+        objectPosition="center 22%"
         width="100%"
         height="100%"
+        transform="scale(1.8)"
       />
     </Box>
   </Box>
