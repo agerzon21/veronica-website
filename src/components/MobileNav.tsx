@@ -39,22 +39,46 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
       transition={{ duration: 0.3 }}
     >
       <VStack spacing={8}>
-        {menuItems.map((item) => (
-          <Link
-            key={item.path}
-            as={RouterLink}
-            to={item.path}
-            fontSize="2xl"
-            fontWeight="light"
-            color="white"
-            _hover={{ color: 'gray.300' }}
-            textTransform="uppercase"
-            letterSpacing="wide"
-            onClick={onClose}
-          >
-            {item.name}
-          </Link>
-        ))}
+        {menuItems.map((item) =>
+          item.name === 'Contact' ? (
+            // Contact gets the same gold-pill treatment as the desktop nav so
+            // the conversion path is consistent across breakpoints.
+            <Link
+              key={item.path}
+              as={RouterLink}
+              to={item.path}
+              fontSize="2xl"
+              fontWeight="light"
+              color="white"
+              border="1px solid #c9a96e"
+              borderRadius="sm"
+              px={8}
+              py={2}
+              transition="all 0.3s"
+              _hover={{ color: 'gray.900', bg: '#c9a96e' }}
+              textTransform="uppercase"
+              letterSpacing="wide"
+              onClick={onClose}
+            >
+              {item.name}
+            </Link>
+          ) : (
+            <Link
+              key={item.path}
+              as={RouterLink}
+              to={item.path}
+              fontSize="2xl"
+              fontWeight="light"
+              color="white"
+              _hover={{ color: 'gray.300' }}
+              textTransform="uppercase"
+              letterSpacing="wide"
+              onClick={onClose}
+            >
+              {item.name}
+            </Link>
+          ),
+        )}
       </VStack>
     </MotionBox>
   );

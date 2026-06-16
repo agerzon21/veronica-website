@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Box, VStack, HStack, Text, Link, Grid, AspectRatio, Image, Icon } from '@chakra-ui/react';
 import { FaInstagram } from 'react-icons/fa';
 import instagramData from '../data/instagram.json';
@@ -9,15 +10,42 @@ import CTAButton from './ui/CTAButton';
 // over — rendering posts as plain <img> tags eliminates the scroll cost
 // and unlocks every framer-motion animation for the section.
 //
-// Posts AND profile metadata are pulled at build time by
-// scripts/fetch-instagram.mjs hitting the Instagram Graph API. If the
-// fetch hasn't populated the JSON yet (no env vars locally, or first
-// build before the token is set), we fall back to a curated set from her
-// existing gallery so the section never looks broken.
+// Data flow:
+//   1. First paint uses the bundled instagram.json — instant, no network.
+//      In production this typically has working URLs from the build's
+//      Graph API fetch; in dev it's an empty stub.
+//   2. On mount we fetch /api/instagram-feed for FRESH urls. Instagram's
+//      CDN signs media URLs with a short-lived expiry, so the bundled
+//      version goes stale within hours of deploy. The live fetch
+//      guarantees the tiles are never showing expired (403) urls.
+//   3. If the live fetch fails or returns fewer than 6 posts, we keep
+//      whatever we had so the section still looks intentional.
 
 const INSTAGRAM_URL = 'https://www.instagram.com/vero.art.photo';
 
 type Photo = { url: string; alt: string; permalink?: string };
+
+type IgPost = {
+  id?: string;
+  url: string;
+  permalink?: string;
+  caption?: string;
+  timestamp?: string;
+};
+
+type IgProfile = {
+  username?: string | null;
+  name?: string | null;
+  biography?: string | null;
+  profilePictureUrl?: string | null;
+  followersCount?: number | null;
+  mediaCount?: number | null;
+};
+
+type IgData = {
+  profile?: IgProfile;
+  posts?: IgPost[];
+};
 
 const FALLBACK_PHOTOS: Photo[] = [
   { url: '/assets/photos/portraits/sunset-palm-tree-portrait.webp', alt: 'Sunset portrait beneath a palm tree' },
@@ -28,25 +56,6 @@ const FALLBACK_PHOTOS: Photo[] = [
   { url: '/assets/photos/weddings/couple-embracing-greenery.webp', alt: 'Couple embracing in lush greenery' },
 ];
 
-const livePhotos: Photo[] = (instagramData.posts ?? []).map((p: any) => ({
-  url: p.url,
-  alt: p.caption ? p.caption.slice(0, 80) : 'Vero Photography on Instagram',
-  permalink: p.permalink,
-}));
-
-const PHOTOS: Photo[] = livePhotos.length >= 6 ? livePhotos.slice(0, 6) : FALLBACK_PHOTOS;
-
-// Cast through any so TS doesn't narrow these to the literal types from
-// the stub JSON — the runtime values will be real strings once the API
-// fetch runs.
-const profile = (instagramData.profile as any) ?? {};
-const USERNAME: string = profile.username ?? 'vero.art.photo';
-const DISPLAY_NAME: string = profile.name ?? 'Veronika Gerzon';
-const BIO: string = profile.biography ?? 'Wedding & Portrait Photographer';
-const PROFILE_PIC_URL: string | null = profile.profilePictureUrl ?? null;
-const FOLLOWERS_COUNT: number | null = profile.followersCount ?? null;
-const MEDIA_COUNT: number | null = profile.mediaCount ?? null;
-
 // Convert raw counts to "1.2K" / "12.3K" / "1.2M" style.
 const formatCount = (n: number): string => {
   if (n < 1000) return n.toString();
@@ -55,7 +64,49 @@ const formatCount = (n: number): string => {
   return (n / 1000000).toFixed(1).replace('.0', '') + 'M';
 };
 
+const toPhotos = (posts: IgPost[]): Photo[] =>
+  posts.map((p) => ({
+    url: p.url,
+    alt: p.caption ? p.caption.slice(0, 80) : 'Vero Photography on Instagram',
+    permalink: p.permalink,
+  }));
+
 const InstagramFeed = () => {
+  const [data, setData] = useState<IgData>(instagramData as IgData);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/instagram-feed');
+        if (!res.ok) return;
+        const live = (await res.json()) as IgData;
+        if (cancelled) return;
+        // Only swap if we got a usable response — guard against an
+        // unexpected shape silently nuking the working initial render.
+        if (live && Array.isArray(live.posts) && live.posts.length > 0) {
+          setData(live);
+        }
+      } catch {
+        // Network error / endpoint missing — keep the bundled fallback.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const livePhotos = toPhotos(data.posts ?? []);
+  const PHOTOS: Photo[] = livePhotos.length >= 6 ? livePhotos.slice(0, 6) : FALLBACK_PHOTOS;
+
+  const profile = data.profile ?? {};
+  const USERNAME: string = profile.username ?? 'vero.art.photo';
+  const DISPLAY_NAME: string = profile.name ?? 'Veronika Gerzon';
+  const BIO: string = profile.biography ?? 'Wedding & Portrait Photographer';
+  const PROFILE_PIC_URL: string | null = profile.profilePictureUrl ?? null;
+  const FOLLOWERS_COUNT: number | null = profile.followersCount ?? null;
+  const MEDIA_COUNT: number | null = profile.mediaCount ?? null;
+
   return (
     <Box py={{ base: 14, md: 20 }} px={4} bg="white">
       <VStack spacing={5} mb={{ base: 10, md: 12 }}>

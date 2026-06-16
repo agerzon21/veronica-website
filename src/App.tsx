@@ -12,6 +12,7 @@ import NotFound from './pages/NotFound';
 import ThankYou from './pages/ThankYou';
 import Portal from './pages/Portal';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import SEO from './components/SEO';
 import ExitIntentPopup from './components/ExitIntentPopup';
 import { initGA, trackPageView } from './utils/analytics';
@@ -53,6 +54,7 @@ function App() {
             <Route path="/portal" element={<Portal />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <Footer />
           <ExitIntentPopup />
         </Router>
       </ChakraProvider>
