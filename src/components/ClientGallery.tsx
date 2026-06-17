@@ -8,9 +8,14 @@ import {
   SimpleGrid,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
+
+// Same URL used by the homepage GoogleReviewsSection — single source of
+// truth would be nicer, but keeping the duplication local rather than
+// dragging the whole reviews section's data along.
+const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 
 export interface DriveFile {
   id: string;
@@ -303,6 +308,36 @@ const ClientGallery = ({
         <Box mt={6}>
           <CTAButton href={driveUrl} icon={FaExternalLinkAlt} size="sm">
             Download All from Drive
+          </CTAButton>
+        </Box>
+
+        {/* Review prompt — sits below the primary download as a clearly
+            secondary action. Italic personal note + signature signals this
+            is a quiet ask from Veronika, not a marketing CTA. Thin gold
+            divider visually tethers it to the download above so it reads
+            as part of the same "what you can do here" cluster. */}
+        <Box mt={8} maxW="460px" mx="auto">
+          <Box w="24px" h="1px" bg="#c9a96e" mx="auto" mb={5} opacity={0.6} />
+          <Text
+            fontSize="sm"
+            color="gray.500"
+            fontStyle="italic"
+            lineHeight="1.8"
+            textAlign="center"
+            mb={4}
+          >
+            Loved your photos? A few kind words on Google mean the world.
+            <Text as="span" fontStyle="normal" color="gray.600" fontWeight="400">
+              {' — Veronika'}
+            </Text>
+          </Text>
+          <CTAButton
+            href={GOOGLE_WRITE_REVIEW_URL}
+            icon={FaGoogle}
+            variant="outline"
+            size="sm"
+          >
+            Leave a Review
           </CTAButton>
         </Box>
 
