@@ -27,6 +27,12 @@
       "maxDuration": 30
     }
   },
+  "redirects": [
+    { "source": "/portraits", "destination": "/gallery/portraits", "permanent": true },
+    { "source": "/maternity", "destination": "/gallery/maternity", "permanent": true },
+    { "source": "/family", "destination": "/gallery/family", "permanent": true },
+    { "source": "/weddings", "destination": "/gallery/weddings", "permanent": true }
+  ],
   "rewrites": [
     {
       "source": "/photo/:category/:photoId",
