@@ -68,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ success: false, error: 'No signed contract on file.' });
     }
 
-    const blob = await getBlob(portal.contract_signed_pdf_url, {});
+    const blob = await getBlob(portal.contract_signed_pdf_url, { access: 'private' });
     if (!blob || blob.statusCode !== 200 || !blob.stream) {
       console.error('[download-contract] blob fetch returned no stream', {
         url: portal.contract_signed_pdf_url,
@@ -83,7 +83,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const downloadName = `Contract — ${portal.client_display_name ?? portal.client_email} — ${dateLabel}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    // 'inline' so the browser previews in a new tab; the PDF viewer has its
+    // own download button. filename= is the default name when the user
+    // chooses to save from that viewer.
+    res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`);
     res.setHeader('Cache-Control', 'private, no-store');
 
     // Stream the blob body straight through to the response.

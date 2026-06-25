@@ -521,12 +521,12 @@ function SignedContractSection({
   signedAt: string;
   pdfAvailable: boolean;
 }) {
-  const [downloading, setDownloading] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
 
-  const handleDownload = async () => {
+  const handleView = async () => {
     setError('');
-    setDownloading(true);
+    setOpening(true);
     try {
       const res = await fetch('/api/portal/download-contract', {
         method: 'POST',
@@ -536,23 +536,22 @@ function SignedContractSection({
       if (!res.ok) {
         // Error responses are JSON; success is binary.
         const data = await res.json().catch(() => null);
-        setError(data?.error || `Could not download (status ${res.status}).`);
+        setError(data?.error || `Could not open (status ${res.status}).`);
         return;
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Signed Contract.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Open in a new tab. The browser's PDF viewer renders inline and has
+      // its own download button — covers both "view" and "save" from one
+      // action. We hold the object URL for a bit so the new tab has time
+      // to fetch it before we revoke.
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error('[download-contract] network error:', err);
       setError('Could not reach the server. Please try again.');
     } finally {
-      setDownloading(false);
+      setOpening(false);
     }
   };
 
@@ -582,13 +581,13 @@ function SignedContractSection({
         </Text>
         {pdfAvailable && (
           <CTAButton
-            onClick={handleDownload}
+            onClick={handleView}
             variant="outline"
             size="sm"
-            isLoading={downloading}
-            loadingText="Preparing..."
+            isLoading={opening}
+            loadingText="Opening..."
           >
-            Download Signed Copy
+            View Signed Copy
           </CTAButton>
         )}
         {error && (
