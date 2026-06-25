@@ -1,6 +1,6 @@
-import { Box, VStack, HStack, Text, Input, Flex, Icon } from '@chakra-ui/react';
-import { useState } from 'react';
-import { FaArrowLeft } from 'react-icons/fa';
+import { Box, VStack, HStack, Text, Input, Flex, Icon, Textarea } from '@chakra-ui/react';
+import { useMemo, useState } from 'react';
+import { FaArrowLeft, FaCheck, FaCopy } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 
 interface Props {
@@ -9,36 +9,99 @@ interface Props {
   onCreated: () => void;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────
+
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '');
 
-// Auto-generate a sane default password from the display name. Strips
-// non-alphanumerics, capitalizes word starts, appends the year.
-const defaultGalleryPassword = (displayName: string, year: string): string => {
-  if (!displayName) return '';
-  const parts = displayName
-    .split(/[\s&,/-]+/)
-    .filter(Boolean)
-    .map(cap)
-    .join('');
-  return parts + year;
+const firstWord = (fullName: string) => fullName.trim().split(/\s+/)[0] ?? '';
+
+// "Portrait Alex Smith 2026" → "PortraitAlexSmith2026"
+const stripSpaces = (s: string) => s.replace(/\s+/g, '');
+
+// Auto-builds the event/display name from session type + client name + year.
+// e.g. ('portrait', 'Alex Smith', '2026') → 'Portrait Alex Smith 2026'
+const buildDisplayName = (sessionType: string, clientName: string, year: string): string => {
+  const s = cap(sessionType.trim());
+  const c = clientName.trim();
+  if (!s && !c) return '';
+  return [s, c, year].filter(Boolean).join(' ');
 };
+
+// "2026-09-25" → "September 25, 2026"
+const fmtDate = (iso: string): string => {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+};
+
+const buildShareMessage = (
+  firstName: string,
+  expiresIso: string | null,
+  galleryPassword: string,
+): string => {
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
+  const expLine = expiresIso
+    ? `\nThe gallery will stay online until ${fmtDate(expiresIso)}. Please download and back up your favourites before then.\n`
+    : '';
+  return `${greeting}
+
+Your photos are ready ✨
+
+View your gallery here:
+https://vero.photography/portal/pass
+
+Password: ${galleryPassword}
+${expLine}
+If you have any questions or want to order prints, just reply to this message.
+
+Warmly,
+Veronika`;
+};
+
+// ─── Component ─────────────────────────────────────────────────────────
+
+interface SuccessState {
+  displayName: string;
+  galleryPassword: string;
+  firstName: string;
+  driveDelivered: boolean;
+  expiresIso: string | null;
+  emailWasSent: boolean;
+}
 
 const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
   const [sessionType, setSessionType] = useState('portrait');
-  const [displayName, setDisplayName] = useState('');
+  const [clientName, setClientName] = useState('');
   const [eventDateIso, setEventDateIso] = useState('');
+
+  // Auto-derived display name (overridable)
+  const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null);
+  const [galleryPasswordOverride, setGalleryPasswordOverride] = useState<string | null>(null);
+
   const [driveUrl, setDriveUrl] = useState('');
-  const [retentionMonths, setRetentionMonths] = useState('3');
-  const [passwordOverride, setPasswordOverride] = useState<string | null>(null);
   const [clientEmail, setClientEmail] = useState('');
+  const [retentionMonths, setRetentionMonths] = useState('3');
   const [totalAmount, setTotalAmount] = useState('');
   const [retainerAmount, setRetainerAmount] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState<SuccessState | null>(null);
 
+  // Derive year + display name + password from the top inputs.
   const year = eventDateIso ? eventDateIso.slice(0, 4) : new Date().getFullYear().toString();
-  const derivedPassword = defaultGalleryPassword(displayName, year);
-  const galleryPassword = passwordOverride ?? derivedPassword;
+  const derivedDisplayName = useMemo(
+    () => buildDisplayName(sessionType, clientName, year),
+    [sessionType, clientName, year],
+  );
+  const displayName = displayNameOverride ?? derivedDisplayName;
+  const derivedPassword = useMemo(
+    () => (displayName ? stripSpaces(displayName) : ''),
+    [displayName],
+  );
+  const galleryPassword = galleryPasswordOverride ?? derivedPassword;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -48,8 +111,12 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
       setError('Session type is required.');
       return;
     }
+    if (!clientName.trim()) {
+      setError('Client name is required.');
+      return;
+    }
     if (!displayName.trim()) {
-      setError('Client / event name is required.');
+      setError('Display name is required.');
       return;
     }
     if (!galleryPassword.trim()) {
@@ -61,7 +128,6 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
       setError('Retention months must be a positive number.');
       return;
     }
-    // Optional totals — validate if provided. Both empty is fine.
     const totalNum = totalAmount ? Number(totalAmount) : null;
     const retainerNum = retainerAmount ? Number(retainerAmount) : null;
     if (totalNum !== null && (!Number.isFinite(totalNum) || totalNum < 0)) {
@@ -87,6 +153,8 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
           mode: 'simple',
           session_type: sessionType.trim(),
           client_display_name: displayName.trim(),
+          // Reused for greeting-friendly first-name extraction in emails.
+          partner_1_first_name: firstWord(clientName) || null,
           client_email: clientEmail.trim().toLowerCase() || null,
           event_date: eventDateIso || null,
           drive_url: driveUrl.trim() || null,
@@ -98,7 +166,18 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        onCreated();
+        const driveDelivered = !!driveUrl.trim();
+        const expiresIso = driveDelivered
+          ? new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000).toISOString()
+          : null;
+        setSuccess({
+          displayName: displayName.trim(),
+          galleryPassword: galleryPassword.trim(),
+          firstName: firstWord(clientName),
+          driveDelivered,
+          expiresIso,
+          emailWasSent: driveDelivered && !!clientEmail.trim(),
+        });
       } else {
         setError(data.error || `Server error (${res.status}).`);
       }
@@ -109,6 +188,17 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
     }
   };
 
+  // ─── Success screen ────────────────────────────────────────────────
+  if (success) {
+    return (
+      <SuccessScreen
+        state={success}
+        onDone={onCreated}
+      />
+    );
+  }
+
+  // ─── Form ──────────────────────────────────────────────────────────
   return (
     <Box maxW="640px" mx="auto">
       <Flex align="center" mb={8} gap={3}>
@@ -142,7 +232,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
           Share a photo gallery
         </Text>
         <Text fontSize="sm" color="gray.500" fontWeight="300" mt={1}>
-          Use this for any booking that doesn't need a contract — portraits, family sessions, gifted shoots. You can create it as soon as you get the order and fill in the Drive URL later, or paste the URL now to deliver immediately.
+          Use this for any booking that doesn't need a contract — portraits, family sessions, anniversaries, etc. You can create it as soon as you get the order and fill in the Drive URL later, or paste the URL now to deliver immediately.
         </Text>
       </VStack>
 
@@ -157,28 +247,67 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
         py={{ base: 6, md: 8 }}
       >
         <VStack align="stretch" spacing={6}>
-          <Field label="Session Type" helpText='Lowercase keyword, e.g. "portrait", "family", "maternity".'>
+          <Field
+            label="Session Type"
+            helpText='Lowercase keyword: portrait, family, anniversary, engagement, boudoir, newborn, etc. Used in the auto-generated display name.'
+          >
             <FormInput value={sessionType} onChange={(e) => setSessionType(e.target.value)} placeholder="portrait" />
           </Field>
 
           <Field
-            label="Client / Event Name"
-            helpText="Shown in the admin dashboard and used to auto-generate a password. e.g. 'Jay June 2026' or 'Mariana Family'."
+            label="Client Name"
+            helpText="The client's full name (first last, or however they go by). Used to greet them in emails and to build the display name."
           >
             <FormInput
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. Jay June 2026"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              placeholder="e.g. Alex Smith"
             />
           </Field>
 
-          <Field label="Event Date" helpText="Optional — used to sort the dashboard and to derive the year for the password.">
+          <Field
+            label="Event Date"
+            helpText="Optional — used to sort the dashboard and to pick the year for the display name. Defaults to the current year if blank."
+          >
             <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
           </Field>
 
           <Field
+            label="Display Name"
+            helpText={
+              displayNameOverride !== null
+                ? 'Custom — clear the field to go back to the auto-generated name.'
+                : 'Auto-generated as "{Session} {Client Name} {Year}", e.g. "Portrait Alex Smith 2026". Type to override.'
+            }
+          >
+            <FormInput
+              value={displayName}
+              onChange={(e) => setDisplayNameOverride(e.target.value)}
+              placeholder="Portrait Alex Smith 2026"
+            />
+          </Field>
+
+          <Field
+            label="Gallery Password"
+            helpText={
+              galleryPasswordOverride !== null
+                ? 'Custom — clear the field to go back to the auto-generated password.'
+                : 'Auto-generated from the display name (spaces removed). Type to override.'
+            }
+          >
+            <FormInput
+              value={galleryPassword}
+              onChange={(e) => setGalleryPasswordOverride(e.target.value)}
+              placeholder="PortraitAlexSmith2026"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </Field>
+
+          <Field
             label="Google Drive Folder URL"
-            helpText="Paste the share URL of the folder containing the gallery. Make sure the service account has Viewer access on it."
+            helpText="Paste the share URL of the folder containing the gallery. Make sure the service account has Viewer access. Optional — leave blank if you're just creating the booking placeholder now and will attach photos later."
           >
             <FormInput
               type="url"
@@ -190,7 +319,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
 
           <Field
             label="Client Email (optional)"
-            helpText="If you enter an email AND a Drive URL above, the client gets an automatic email with the gallery link and password as soon as you click Create. Leave blank to skip the email."
+            helpText="If you enter an email AND a Drive URL above, the client gets an automatic email with the gallery link and password as soon as you click Create. Leave blank to copy the message manually on the next screen."
           >
             <FormInput
               type="email"
@@ -200,34 +329,14 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
             />
           </Field>
 
-          <HStack spacing={4} align="flex-start">
-            <Field
-              label="Gallery Password"
-              w="65%"
-              helpText={
-                passwordOverride !== null
-                  ? 'Custom — clear the field to go back to the auto-generated password.'
-                  : 'Auto-generated from the client name + year. Type to override.'
-              }
-            >
-              <FormInput
-                value={galleryPassword}
-                onChange={(e) => setPasswordOverride(e.target.value)}
-                placeholder="JayJune2026"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-            </Field>
-            <Field label="Retention (months)" w="35%" helpText="How long the gallery stays online.">
-              <FormInput
-                type="number"
-                value={retentionMonths}
-                onChange={(e) => setRetentionMonths(e.target.value)}
-                min="1"
-              />
-            </Field>
-          </HStack>
+          <Field label="Retention (months)" helpText="How long the gallery stays online after delivery. Default is 3.">
+            <FormInput
+              type="number"
+              value={retentionMonths}
+              onChange={(e) => setRetentionMonths(e.target.value)}
+              min="1"
+            />
+          </Field>
 
           <Box pt={3} borderTop="1px solid" borderColor="gray.100">
             <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={2}>
@@ -286,6 +395,108 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
     </Box>
   );
 };
+
+// ─── Success screen with copyable share message ─────────────────────────
+
+function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => void }) {
+  const message = buildShareMessage(state.firstName, state.expiresIso, state.galleryPassword);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can fail on insecure origins. Falling back to a
+      // textarea select is more code than it's worth — the message is
+      // selectable in the readonly Textarea below.
+    }
+  };
+
+  return (
+    <Box maxW="640px" mx="auto">
+      <VStack align="flex-start" spacing={1} mb={6}>
+        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+          Done
+        </Text>
+        <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
+          Gallery created ✓
+        </Text>
+        <Text fontSize="sm" color="gray.500" fontWeight="300" mt={1}>
+          {state.displayName} is in the system.
+        </Text>
+      </VStack>
+
+      <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" px={{ base: 5, md: 7 }} py={{ base: 5, md: 6 }} mb={5}>
+        <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
+          <Box>
+            <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500">
+              {state.driveDelivered ? 'Share this with the client' : 'Status'}
+            </Text>
+            {state.emailWasSent ? (
+              <Text fontSize="sm" color="gray.600" fontWeight="300" mt={1}>
+                An email has been sent to the client — this is a copy in case you want to send it via text/WhatsApp too.
+              </Text>
+            ) : state.driveDelivered ? (
+              <Text fontSize="sm" color="gray.600" fontWeight="300" mt={1}>
+                No client email on file — copy this message and send it however you're in touch.
+              </Text>
+            ) : (
+              <Text fontSize="sm" color="gray.600" fontWeight="300" mt={1}>
+                The gallery is set up but no Drive URL was provided yet. Open the client's detail view to paste the URL and mark as delivered when ready.
+              </Text>
+            )}
+          </Box>
+          {state.driveDelivered && (
+            <CTAButton onClick={copy} variant={copied ? 'outline' : 'solid'} size="sm">
+              {copied ? (
+                <>
+                  <Icon as={FaCheck} boxSize={3} mr={2} />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Icon as={FaCopy} boxSize={3} mr={2} />
+                  Copy message
+                </>
+              )}
+            </CTAButton>
+          )}
+        </Flex>
+
+        {state.driveDelivered ? (
+          <Textarea
+            value={message}
+            readOnly
+            rows={12}
+            bg="gray.50"
+            fontSize="sm"
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+            color="gray.800"
+            focusBorderColor="#c9a96e"
+            onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
+          />
+        ) : (
+          <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={4} py={5}>
+            <VStack align="flex-start" spacing={2}>
+              <Text fontSize="sm" color="gray.700" fontWeight="500">Password: <Text as="span" fontFamily="monospace">{state.galleryPassword}</Text></Text>
+              <Text fontSize="sm" color="gray.500" fontWeight="300">
+                Save this somewhere — it's how you'll let the client into their gallery once you're ready to deliver.
+              </Text>
+            </VStack>
+          </Box>
+        )}
+      </Box>
+
+      <CTAButton onClick={onDone} variant="outline" size="md" fullWidth>
+        Back to Dashboard
+      </CTAButton>
+    </Box>
+  );
+}
+
+// ─── Form bits ─────────────────────────────────────────────────────────
 
 const Field = ({
   label,

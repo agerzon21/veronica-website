@@ -182,6 +182,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         typeof body.client_display_name === 'string' && body.client_display_name.trim()
           ? body.client_display_name.trim()
           : null;
+      // Reused for the email greeting — "Hi {first_name}," reads better
+      // than parsing the display name (which now is "Portrait Alex 2026"
+      // not "Alex"). Stored in the existing partner_1_first_name column.
+      const simpleClientFirstName =
+        typeof body.partner_1_first_name === 'string' && body.partner_1_first_name.trim()
+          ? body.partner_1_first_name.trim()
+          : null;
       const simpleClientEmail =
         typeof body.client_email === 'string' && body.client_email.trim()
           ? body.client_email.trim().toLowerCase()
@@ -219,6 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const inserted = (await sql`
         insert into client_portals (
           mode, session_type,
+          partner_1_first_name,
           client_display_name, client_email,
           event_date,
           gallery_password, gallery_enabled,
@@ -227,6 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           contract_total_amount, contract_retainer_amount, paid_to_date
         ) values (
           ${mode}, ${sessionType},
+          ${simpleClientFirstName},
           ${simpleDisplayName}, ${simpleClientEmail},
           ${simpleEventDate},
           ${galleryPassword}, true,
@@ -250,8 +259,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await sendEmail({
             to: simpleClientEmail,
             subject: 'Your photos are ready — Vero Photography',
-            text: buildGalleryReadyText(simpleDisplayName, siteOrigin, galleryPassword, expiresAt),
-            html: buildGalleryReadyHtml(simpleDisplayName, siteOrigin, galleryPassword, expiresAt),
+            text: buildGalleryReadyText(simpleClientFirstName, siteOrigin, galleryPassword, expiresAt),
+            html: buildGalleryReadyHtml(simpleClientFirstName, siteOrigin, galleryPassword, expiresAt),
           });
         } catch (err) {
           console.error('[admin/portals-create] gallery-ready email failed:', err);
@@ -320,12 +329,12 @@ function buildInviteHtml(clientLabel: string | null, inviteUrl: string): string 
 }
 
 function buildGalleryReadyText(
-  clientLabel: string | null,
+  firstName: string | null,
   siteOrigin: string,
   galleryPassword: string,
   expiresAt: string,
 ): string {
-  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   return `${greeting}
 
@@ -345,17 +354,17 @@ Veronika`;
 }
 
 function buildGalleryReadyHtml(
-  clientLabel: string | null,
+  firstName: string | null,
   siteOrigin: string,
   galleryPassword: string,
   expiresAt: string,
 ): string {
-  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
+  const name = firstName || 'there';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
-<p>Hi ${firstName},</p>
+<p>Hi ${name},</p>
 <p>Your photos are ready ✨</p>
 <p style="margin:24px 0;"><a href="${siteOrigin}/portal/pass" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open my gallery</a></p>
 <p style="font-size:14px;color:#666;">Password: <strong style="color:#2d2d2d;font-family:monospace;">${galleryPassword}</strong></p>
