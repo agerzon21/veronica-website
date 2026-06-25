@@ -25,6 +25,7 @@ const vars: WeddingContractVariables = {
   balance_due_window: 'TEN (10) Days',
   payment_methods: 'Cash, Venmo, CashApp or Zelle',
   retention_months: '3',
+  additional_notes: '',
 };
 
 const filled = fillTemplate(WEDDING_CONTRACT_TEMPLATE, vars);

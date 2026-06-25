@@ -34,6 +34,7 @@ import { sendEmail } from '../_auto-reply.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
+  pruneEmptyOptionalSections,
 } from '../../src/data/contract-template.js';
 
 function generateToken(): string {
@@ -116,9 +117,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Render the template body now so it's frozen at creation time.
     // Anything in `variables` is interpolated; missing variables render
-    // as [variable_name] so the contract surface a missing field rather
-    // than failing silently.
-    const filled = fillTemplate(spec.template, variables);
+    // as [variable_name] so the contract surfaces a missing field
+    // rather than failing silently. We also drop any "optional" section
+    // (like ADDITIONAL NOTES) whose content came out empty, so the
+    // signed PDF doesn't show a heading with nothing under it.
+    const filled = pruneEmptyOptionalSections(fillTemplate(spec.template, variables));
     contractBody = JSON.stringify(filled);
 
     // Generate the one-time setup token. Expires in 14 days; long enough
@@ -166,15 +169,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `) as Array<{ id: string }>;
       portalId = inserted[0].id;
     } else {
-      // Simple mode: just gallery_password, no contract/client login.
+      // Simple mode: a gallery-only delivery (no contract, no login email,
+      // no setup token). Optional fields can come in: display name,
+      // event date, Drive URL, retention months.
+      //
+      // If a drive_url is provided at creation, the portal is considered
+      // delivered immediately and the gallery hosting countdown starts.
+      // This matches Vero's workflow: she creates these AFTER editing,
+      // for things like portraits where she wants to hand the gallery
+      // straight to the client/guests.
+      const simpleDisplayName =
+        typeof body.client_display_name === 'string' && body.client_display_name.trim()
+          ? body.client_display_name.trim()
+          : null;
+      const simpleEventDate =
+        typeof body.event_date === 'string' && body.event_date.trim()
+          ? body.event_date.trim()
+          : null;
+      const simpleDriveUrl =
+        typeof body.drive_url === 'string' && body.drive_url.trim()
+          ? body.drive_url.trim()
+          : null;
+      const simpleRetentionMonths =
+        Number.isFinite(Number(body.retention_months)) && Number(body.retention_months) > 0
+          ? Number(body.retention_months)
+          : 3;
+
+      const deliveredAt = simpleDriveUrl ? new Date().toISOString() : null;
+      const expiresAt = simpleDriveUrl
+        ? new Date(Date.now() + simpleRetentionMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+
       const inserted = (await sql`
         insert into client_portals (
           mode, session_type,
+          client_display_name,
+          event_date,
           gallery_password, gallery_enabled,
+          drive_url, gallery_delivered_at, gallery_expires_at,
           contract_status
         ) values (
           ${mode}, ${sessionType},
+          ${simpleDisplayName},
+          ${simpleEventDate},
           ${galleryPassword}, true,
+          ${simpleDriveUrl}, ${deliveredAt}, ${expiresAt},
           'none'
         )
         returning id

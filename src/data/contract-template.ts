@@ -28,6 +28,10 @@ export type ContractParagraph =
 export interface ContractSection {
   number?: string; // e.g. 'I', 'II' — optional so headings without roman nums work
   title: string;
+  // If true, the section is dropped post-fill when all of its paragraphs
+  // are empty (after variable substitution). Used for things like the
+  // ADDITIONAL NOTES section, which only appears when there are notes.
+  optional?: boolean;
   paragraphs: ContractParagraph[];
 }
 
@@ -54,6 +58,7 @@ export interface WeddingContractVariables {
   balance_due_window: string;      // e.g. "TEN (10) Days"
   payment_methods: string;         // e.g. "Cash, Venmo, CashApp or Zelle"
   retention_months: string;        // e.g. "3" — how long the gallery stays online
+  additional_notes: string;        // free-text addendum; section is hidden if empty
 }
 
 export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
@@ -219,6 +224,13 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         { kind: 'text', text: 'This Agreement represents the entire understanding between parties.' },
       ],
     },
+    // Unnumbered addendum — only included in the rendered contract when
+    // additional_notes is non-empty (stripped in admin when blank).
+    {
+      title: 'ADDITIONAL NOTES',
+      optional: true,
+      paragraphs: [{ kind: 'text', text: '{{additional_notes}}' }],
+    },
     {
       number: 'XIII',
       title: 'SIGNATURES',
@@ -252,21 +264,61 @@ export interface ContractTemplateSpec {
   fields: ContractTemplateField[];
 }
 
+// Fields that show up in the admin's "Contract Variables" section.
+// Excludes anything the form handles explicitly with its own widget
+// (partner names, event date/time, total, retainer, gallery password,
+// event title, client display name, additional notes — those have
+// custom inputs above this section).
 export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
-  { key: 'photographer_name', label: 'Photographer Name', defaultValue: 'Veronika Polbina' },
-  { key: 'client_names', label: 'Client Names', placeholder: 'e.g. Chrisann Bryan & Rajiv Thomas' },
-  { key: 'event_title', label: 'Event Title', placeholder: "e.g. Chrisann & Rajiv's Wedding" },
-  { key: 'event_location', label: 'Event Location', placeholder: 'Venue name and address' },
-  { key: 'event_date', label: 'Event Date', type: 'date' },
-  { key: 'event_time', label: 'Event Time', placeholder: 'e.g. 5:00 PM to 6:00 PM (1 hour)' },
-  { key: 'effective_date', label: 'Effective Date', type: 'date', helpText: 'Roughly when the contract is signed — gets shown on the contract.' },
-  { key: 'deliverables', label: 'Deliverables', defaultValue: 'Edited digital images with color correction' },
-  { key: 'delivery_timeframe', label: 'Delivery Timeframe', defaultValue: 'Within 5 weeks after event' },
-  { key: 'total_amount', label: 'Total Amount (USD)', type: 'currency', placeholder: '0' },
-  { key: 'retainer_amount', label: 'Retainer Amount (USD)', type: 'currency', placeholder: '0', helpText: 'Non-refundable. Due at signing.' },
-  { key: 'balance_due_window', label: 'Balance Due Window', defaultValue: 'TEN (10) Days', helpText: 'How long after the event the remaining balance is due.' },
-  { key: 'payment_methods', label: 'Payment Methods', defaultValue: 'Cash, Venmo, CashApp or Zelle' },
-  { key: 'retention_months', label: 'Gallery Retention (months)', type: 'number', defaultValue: '3' },
+  {
+    key: 'photographer_name',
+    label: 'Photographer Name',
+    defaultValue: 'Veronika Polbina',
+    helpText: 'Shows on the contract as the Photographer party.',
+  },
+  {
+    key: 'event_location',
+    label: 'Event Location',
+    placeholder: 'Venue name and full address',
+    helpText: 'Where the shoot happens. Include the full address.',
+  },
+  {
+    key: 'effective_date',
+    label: 'Effective Date',
+    type: 'date',
+    helpText: 'The date the contract is meant to take effect. Usually today.',
+  },
+  {
+    key: 'deliverables',
+    label: 'Deliverables',
+    defaultValue: 'Edited digital images with color correction',
+    helpText: 'What the client receives. e.g. "30 edited photos" or "All edited images".',
+  },
+  {
+    key: 'delivery_timeframe',
+    label: 'Delivery Timeframe',
+    defaultValue: 'Within 5 weeks after event',
+    helpText: 'How long after the event the photos will be delivered.',
+  },
+  {
+    key: 'balance_due_window',
+    label: 'Balance Due Window',
+    defaultValue: 'TEN (10) Days',
+    helpText: 'How long after the event date the remaining balance is due.',
+  },
+  {
+    key: 'payment_methods',
+    label: 'Payment Methods',
+    defaultValue: 'Cash, Venmo, CashApp or Zelle',
+    helpText: 'Comma-separated payment methods the client can use.',
+  },
+  {
+    key: 'retention_months',
+    label: 'Gallery Retention (months)',
+    type: 'number',
+    defaultValue: '3',
+    helpText: 'How long the photo gallery stays online after delivery. Default is 3.',
+  },
 ];
 
 export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
@@ -283,6 +335,28 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
  * `{{variable_name}}` tokens replaced. Unknown variables are left as
  * `[variable_name]` placeholders so missing data is obvious.
  */
+/**
+ * After fillTemplate, drop any section marked `optional: true` whose
+ * paragraphs are all effectively empty (no text content, no bullets
+ * with content, no fields with values). Used by the admin endpoint
+ * so the saved contract_body never shows an "ADDITIONAL NOTES"
+ * heading with nothing under it.
+ */
+export function pruneEmptyOptionalSections(template: ContractTemplate): ContractTemplate {
+  return {
+    ...template,
+    sections: template.sections.filter((s) => {
+      if (!s.optional) return true;
+      return s.paragraphs.some((p) => {
+        if (p.kind === 'text') return p.text.trim().length > 0;
+        if (p.kind === 'bullets') return p.items.some((i) => i.trim().length > 0);
+        if (p.kind === 'fields') return p.items.some((f) => f.value.trim().length > 0);
+        return false;
+      });
+    }),
+  };
+}
+
 export function fillTemplate<V extends Record<string, string>>(
   template: ContractTemplate,
   vars: V,
@@ -293,8 +367,9 @@ export function fillTemplate<V extends Record<string, string>>(
   return {
     title: substitute(template.title),
     sections: template.sections.map((section) => ({
-      ...section,
+      number: section.number,
       title: substitute(section.title),
+      optional: section.optional,
       paragraphs: section.paragraphs.map((p) => {
         if (p.kind === 'text') {
           return { kind: 'text', text: substitute(p.text), emphasis: p.emphasis };

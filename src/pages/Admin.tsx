@@ -5,17 +5,25 @@ import { motion } from 'framer-motion';
 import CTAButton from '../components/ui/CTAButton';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import AdminNewClient from '../components/AdminNewClient';
+import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
+import AdminModeChooser from '../components/AdminModeChooser';
+import AdminClientDetail from '../components/AdminClientDetail';
 
 const MotionDiv = motion.div;
 
-type View = 'dashboard' | 'new';
+type View =
+  | { kind: 'dashboard' }
+  | { kind: 'mode-chooser' }
+  | { kind: 'new-full' }
+  | { kind: 'new-gallery' }
+  | { kind: 'detail'; id: string };
 
 const Admin = () => {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [portals, setPortals] = useState<AdminPortalSummary[] | null>(null);
-  const [view, setView] = useState<View>('dashboard');
+  const [view, setView] = useState<View>({ kind: 'dashboard' });
 
   const loadPortals = async (pwd: string): Promise<{ ok: boolean; error?: string }> => {
     try {
@@ -50,11 +58,11 @@ const Admin = () => {
   };
 
   const handleCreated = async () => {
-    setView('dashboard');
+    setView({ kind: 'dashboard' });
     await loadPortals(password);
   };
 
-  // Logged in → dashboard or new-client form
+  // Logged in → dashboard / chooser / new form / detail view
   if (portals) {
     return (
       <>
@@ -63,17 +71,44 @@ const Admin = () => {
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
         <Box bg="gray.50" minH="100vh" pt={{ base: 20, md: 24 }} pb={{ base: 16, md: 20 }} px={{ base: 4, md: 8 }}>
-          {view === 'dashboard' ? (
+          {view.kind === 'dashboard' && (
             <AdminDashboard
               portals={portals}
-              onNewClient={() => setView('new')}
+              onNewClient={() => setView({ kind: 'mode-chooser' })}
+              onOpenPortal={(id) => setView({ kind: 'detail', id })}
               onRefresh={handleRefresh}
             />
-          ) : (
+          )}
+          {view.kind === 'mode-chooser' && (
+            <AdminModeChooser
+              onPick={(mode) =>
+                setView(mode === 'full' ? { kind: 'new-full' } : { kind: 'new-gallery' })
+              }
+              onCancel={() => setView({ kind: 'dashboard' })}
+            />
+          )}
+          {view.kind === 'new-full' && (
             <AdminNewClient
               adminPassword={password}
-              onCancel={() => setView('dashboard')}
+              onCancel={() => setView({ kind: 'mode-chooser' })}
               onCreated={handleCreated}
+            />
+          )}
+          {view.kind === 'new-gallery' && (
+            <AdminNewGalleryOnly
+              adminPassword={password}
+              onCancel={() => setView({ kind: 'mode-chooser' })}
+              onCreated={handleCreated}
+            />
+          )}
+          {view.kind === 'detail' && (
+            <AdminClientDetail
+              portalId={view.id}
+              adminPassword={password}
+              onBack={async () => {
+                setView({ kind: 'dashboard' });
+                await loadPortals(password);
+              }}
             />
           )}
         </Box>

@@ -1,5 +1,5 @@
 import { Box, VStack, HStack, Text, Input, Select, Textarea, Flex, Icon } from '@chakra-ui/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FaArrowLeft } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import {
@@ -13,60 +13,156 @@ interface Props {
   onCreated: () => void;
 }
 
-// Pretty-print a number as currency text for storage in the contract variables.
+// ─── Small formatting helpers ──────────────────────────────────────────
+
+const cap = (s: string): string =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+
+const firstWord = (fullName: string): string => fullName.trim().split(/\s+/)[0] ?? '';
+
 const fmtCurrency = (n: number): string =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-// Pretty-print a YYYY-MM-DD date as "August 9, 2026" for the contract.
+// "2026-08-09" → "August 9, 2026"
 const fmtDate = (iso: string): string => {
   if (!iso) return '';
-  // Use UTC parts to avoid the off-by-one-day issue on -05:00 timezones.
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 };
 
-// Generate a default gallery password from the partners + year.
-// e.g. "Chrisann" + "Rajiv" + "2026" → "ChrisannRajiv2026"
-const defaultGalleryPassword = (p1: string, p2: string, year: string): string => {
-  const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '');
-  return `${cap(p1)}${cap(p2)}${year}`;
+// "17:00" → "5:00 PM"
+const fmtTime12h = (hhmm: string): string => {
+  if (!hhmm) return '';
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return '';
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
 };
+
+// Returns hours as a float, e.g. 1.5 for an hour and a half. 0 if invalid.
+const hoursBetween = (startHhmm: string, endHhmm: string): number => {
+  if (!startHhmm || !endHhmm) return 0;
+  const [sH, sM] = startHhmm.split(':').map(Number);
+  const [eH, eM] = endHhmm.split(':').map(Number);
+  const startMin = sH * 60 + sM;
+  const endMin = eH * 60 + eM;
+  const diff = endMin - startMin;
+  return diff > 0 ? diff / 60 : 0;
+};
+
+const formatEventTime = (startHhmm: string, endHhmm: string): string => {
+  if (!startHhmm || !endHhmm) return '';
+  const hours = hoursBetween(startHhmm, endHhmm);
+  const label = (() => {
+    if (hours === 0) return '';
+    const rounded = Math.round(hours * 100) / 100;
+    if (rounded === 1) return '1 hour';
+    if (Number.isInteger(rounded)) return `${rounded} hours`;
+    return `${rounded} hours`;
+  })();
+  return label
+    ? `${fmtTime12h(startHhmm)} to ${fmtTime12h(endHhmm)} (approximately ${label})`
+    : `${fmtTime12h(startHhmm)} to ${fmtTime12h(endHhmm)}`;
+};
+
+const defaultGalleryPassword = (p1First: string, p2First: string, year: string): string =>
+  `${cap(p1First)}${cap(p2First)}${year}`;
+
+const defaultDisplayName = (p1First: string, p2First: string): string => {
+  const a = cap(p1First);
+  const b = cap(p2First);
+  if (a && b) return `${a} & ${b}`;
+  return a || b;
+};
+
+const defaultEventTitle = (p1First: string, p2First: string, sessionType: string): string => {
+  const names = defaultDisplayName(p1First, p2First);
+  const type = cap(sessionType);
+  if (!names || !type) return '';
+  return `${names}'s ${type}`;
+};
+
+// Today as YYYY-MM-DD in the user's local time (so the date input picker
+// matches what they'd expect from "today").
+const todayYmd = (): string => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// ─── Component ─────────────────────────────────────────────────────────
 
 const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   const templateKeys = Object.keys(CONTRACT_TEMPLATES);
   const [templateKey, setTemplateKey] = useState<string>(templateKeys[0]);
 
-  // Top-level portal fields
-  const [partner1, setPartner1] = useState('');
-  const [partner2, setPartner2] = useState('');
-  const [clientDisplayName, setClientDisplayName] = useState('');
+  // Partner full names — first names are extracted automatically for
+  // derived fields (display name, gallery password, event title).
+  const [partner1FullName, setPartner1FullName] = useState('');
+  const [partner2FullName, setPartner2FullName] = useState('');
+  const p1First = firstWord(partner1FullName);
+  const p2First = firstWord(partner2FullName);
+
+  // Auto-derived: display name, event title, gallery password.
+  // All overridable — once the user types something into the override
+  // box we stop syncing with the derived value (null means "not yet
+  // overridden, use derived").
+  const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null);
+  const [eventTitleOverride, setEventTitleOverride] = useState<string | null>(null);
+  const [galleryPasswordOverride, setGalleryPasswordOverride] = useState<string | null>(null);
+
   const [clientEmail, setClientEmail] = useState('');
-  const [eventDateIso, setEventDateIso] = useState(''); // YYYY-MM-DD from date input
+  const [eventDateIso, setEventDateIso] = useState('');
+  const [eventStartTime, setEventStartTime] = useState(''); // HH:MM 24h
+  const [eventEndTime, setEventEndTime] = useState('');
+
+  // Session type defaults to the chosen template key. Override if needed
+  // (mostly relevant when we add additional templates).
   const [sessionType, setSessionType] = useState<string>(templateKeys[0]);
+
   const [totalAmount, setTotalAmount] = useState('');
   const [retainerAmount, setRetainerAmount] = useState('');
 
-  // Auto-derived gallery password (user can override)
-  const eventYear = eventDateIso ? eventDateIso.slice(0, 4) : new Date().getFullYear().toString();
-  const derivedGalleryPassword = defaultGalleryPassword(partner1, partner2, eventYear);
-  const [galleryPasswordOverride, setGalleryPasswordOverride] = useState<string | null>(null);
-  const galleryPassword = galleryPasswordOverride ?? derivedGalleryPassword;
+  const [additionalNotes, setAdditionalNotes] = useState('');
 
-  // Template-driven variable form. Initialize each field with its
-  // defaultValue. Sync from the top-level fields where appropriate
-  // (event date, amounts).
+  // Template-driven variable fields (the static ones at the bottom).
   const fields = CONTRACT_TEMPLATES[templateKey]?.fields ?? [];
   const [variables, setVariables] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ''])),
   );
 
+  // Default the effective_date to today on first render.
+  useEffect(() => {
+    setVariables((prev) => ({
+      ...prev,
+      effective_date: prev.effective_date || todayYmd(),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // When the template changes, reset variables to that template's defaults.
   useMemo(() => {
     const f = CONTRACT_TEMPLATES[templateKey]?.fields ?? [];
-    setVariables(Object.fromEntries(f.map((field) => [field.key, field.defaultValue ?? ''])));
+    const next: Record<string, string> = Object.fromEntries(
+      f.map((field) => [field.key, field.defaultValue ?? '']),
+    );
+    if (!next.effective_date) next.effective_date = todayYmd();
+    setVariables(next);
   }, [templateKey]);
+
+  const eventYear = eventDateIso ? eventDateIso.slice(0, 4) : new Date().getFullYear().toString();
+  const derivedDisplayName = defaultDisplayName(p1First, p2First);
+  const derivedGalleryPassword = defaultGalleryPassword(p1First, p2First, eventYear);
+  const derivedEventTitle = defaultEventTitle(p1First, p2First, sessionType);
+
+  const clientDisplayName = displayNameOverride ?? derivedDisplayName;
+  const galleryPassword = galleryPasswordOverride ?? derivedGalleryPassword;
+  const eventTitle = eventTitleOverride ?? derivedEventTitle;
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -79,9 +175,16 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     e.preventDefault();
     setError('');
 
-    // Basic validation
-    if (!clientDisplayName.trim() || !clientEmail.trim() || !eventDateIso || !sessionType.trim()) {
-      setError('Client name, email, event date, and session type are required.');
+    if (!partner1FullName.trim()) {
+      setError('Partner 1 name is required.');
+      return;
+    }
+    if (!clientEmail.trim() || !eventDateIso || !sessionType.trim()) {
+      setError('Client email, event date, and session type are required.');
+      return;
+    }
+    if (!clientDisplayName.trim()) {
+      setError('Display name is required (it auto-fills from partner names).');
       return;
     }
     const total = parseFloat(totalAmount);
@@ -99,19 +202,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       return;
     }
 
-    // Merge derived fields into the variables before submitting:
-    //   event_date  → human-formatted from the date picker
-    //   total_amount / retainer_amount / remaining_balance → formatted $X
+    // Build the variables object the contract template expects. Most
+    // keys come from the dynamic `variables` map; we override the ones
+    // we've collected explicitly above so the rendered contract sees
+    // human-formatted strings.
     const remaining = total - retainer;
     const finalVariables: Record<string, string> = {
       ...variables,
-      event_date: variables.event_date?.trim() || fmtDate(eventDateIso),
-      total_amount: variables.total_amount?.trim() || fmtCurrency(total),
-      retainer_amount: variables.retainer_amount?.trim() || fmtCurrency(retainer),
+      client_names: clientDisplayName,
+      event_title: eventTitle,
+      event_date: fmtDate(eventDateIso),
+      event_time: formatEventTime(eventStartTime, eventEndTime),
+      total_amount: fmtCurrency(total),
+      retainer_amount: fmtCurrency(retainer),
       remaining_balance: fmtCurrency(remaining),
+      additional_notes: additionalNotes.trim(),
     };
-    // For date fields where the user typed an ISO date (from a date input),
-    // convert to friendly form for the contract.
+    // For date fields where the user typed an ISO date (e.g. effective_date
+    // from the date picker), convert to friendly form for the contract.
     fields.forEach((f) => {
       if (f.type === 'date' && finalVariables[f.key]?.match(/^\d{4}-\d{2}-\d{2}$/)) {
         finalVariables[f.key] = fmtDate(finalVariables[f.key]);
@@ -127,8 +235,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           password: adminPassword,
           mode: 'full',
           session_type: sessionType,
-          partner_1_first_name: partner1 || null,
-          partner_2_first_name: partner2 || null,
+          partner_1_first_name: p1First || null,
+          partner_2_first_name: p2First || null,
           client_display_name: clientDisplayName.trim(),
           client_email: clientEmail.trim().toLowerCase(),
           event_date: eventDateIso,
@@ -153,7 +261,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   };
 
   return (
-    <Box maxW="700px" mx="auto">
+    <Box maxW="760px" mx="auto">
       {/* Header */}
       <Flex align="center" mb={8} gap={3}>
         <Box
@@ -187,11 +295,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
         </Text>
       </VStack>
 
-      <Box as="form" onSubmit={handleSubmit} bg="white" borderRadius="md" border="1px solid" borderColor="gray.200" px={{ base: 5, md: 8 }} py={{ base: 6, md: 8 }}>
+      <Box
+        as="form"
+        onSubmit={handleSubmit}
+        bg="white"
+        borderRadius="md"
+        border="1px solid"
+        borderColor="gray.200"
+        px={{ base: 5, md: 8 }}
+        py={{ base: 6, md: 8 }}
+      >
         <VStack align="stretch" spacing={6}>
-          <SectionHeading>Booking</SectionHeading>
+          {/* ─── Contract type ─── */}
+          <SectionHeading>Contract</SectionHeading>
 
-          <Field label="Contract Template">
+          <Field
+            label="Contract Template"
+            helpText="The template shapes which clauses appear in the contract. Pick the one matching this booking."
+          >
             <Select
               value={templateKey}
               onChange={(e) => {
@@ -209,36 +330,84 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             </Select>
           </Field>
 
+          {/* ─── Client ─── */}
+          <SectionHeading>Client</SectionHeading>
+
           <HStack spacing={4} align="flex-start">
-            <Field label="Partner 1 First Name" w="50%">
-              <FormInput value={partner1} onChange={(e) => setPartner1(e.target.value)} placeholder="e.g. Chrisann" />
+            <Field label="Partner 1 Full Name" w="50%" helpText="Their full legal name. First name is used in the portal greeting.">
+              <FormInput value={partner1FullName} onChange={(e) => setPartner1FullName(e.target.value)} placeholder="e.g. Chrisann Bryan" />
             </Field>
-            <Field label="Partner 2 First Name" w="50%">
-              <FormInput value={partner2} onChange={(e) => setPartner2(e.target.value)} placeholder="e.g. Rajiv" />
+            <Field label="Partner 2 Full Name" w="50%" helpText="Optional. Leave blank for solo bookings (portraits, etc.).">
+              <FormInput value={partner2FullName} onChange={(e) => setPartner2FullName(e.target.value)} placeholder="e.g. Rajiv Thomas (optional)" />
             </Field>
           </HStack>
 
-          <Field label="Client Display Name" helpText="What we'll greet them by in the portal. e.g. &quot;Chrisann &amp; Rajiv&quot;.">
-            <FormInput value={clientDisplayName} onChange={(e) => setClientDisplayName(e.target.value)} placeholder="Chrisann & Rajiv" />
+          <Field
+            label="Display Name"
+            helpText={
+              displayNameOverride !== null
+                ? 'Custom — clear the field to go back to the auto-generated name.'
+                : 'Auto-generated from the partner first names. Type to override.'
+            }
+          >
+            <FormInput
+              value={clientDisplayName}
+              onChange={(e) => setDisplayNameOverride(e.target.value)}
+              placeholder="e.g. Chrisann & Rajiv"
+            />
           </Field>
 
-          <Field label="Client Email">
+          <Field label="Client Email" helpText="The invite email goes here. They'll log in with this address.">
             <FormInput type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.com" />
           </Field>
 
+          {/* ─── Event ─── */}
+          <SectionHeading>Event</SectionHeading>
+
+          <Field
+            label="Event Title"
+            helpText={
+              eventTitleOverride !== null
+                ? 'Custom — clear the field to go back to the auto-generated title.'
+                : "Auto-generated from partner names + contract type (e.g. \"Chrisann & Rajiv's Wedding\"). Type to override."
+            }
+          >
+            <FormInput
+              value={eventTitle}
+              onChange={(e) => setEventTitleOverride(e.target.value)}
+              placeholder="e.g. Chrisann & Rajiv's Wedding"
+            />
+          </Field>
+
+          <Field label="Event Date" helpText="The day of the shoot.">
+            <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
+          </Field>
+
           <HStack spacing={4} align="flex-start">
-            <Field label="Event Date" w="50%">
-              <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
+            <Field label="Start Time" w="50%" helpText="When the shoot starts.">
+              <FormInput type="time" value={eventStartTime} onChange={(e) => setEventStartTime(e.target.value)} />
             </Field>
-            <Field label="Session Type" w="50%" helpText="Lowercase keyword, e.g. wedding, portrait.">
-              <FormInput value={sessionType} onChange={(e) => setSessionType(e.target.value)} placeholder="wedding" />
+            <Field label="End Time" w="50%" helpText="When the shoot ends. Duration is auto-calculated.">
+              <FormInput type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
             </Field>
           </HStack>
 
+          {eventStartTime && eventEndTime && (
+            <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={2}>
+              <Text fontSize="xs" color="gray.500" mb={0.5}>On the contract:</Text>
+              <Text fontSize="sm" color="gray.800">{formatEventTime(eventStartTime, eventEndTime)}</Text>
+            </Box>
+          )}
+
+          <Field label="Session Type" helpText='Lowercase keyword used internally and in the contract title (e.g. "wedding", "portrait", "family").'>
+            <FormInput value={sessionType} onChange={(e) => setSessionType(e.target.value)} placeholder="wedding" />
+          </Field>
+
+          {/* ─── Pricing ─── */}
           <SectionHeading>Pricing</SectionHeading>
 
           <HStack spacing={4} align="flex-start">
-            <Field label="Total (USD)" w="50%">
+            <Field label="Total (USD)" w="50%" helpText="Total project cost across the whole booking.">
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -249,7 +418,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 min="0"
               />
             </Field>
-            <Field label="Retainer (USD)" w="50%" helpText="Non-refundable. Due at signing.">
+            <Field label="Retainer (USD)" w="50%" helpText="Non-refundable deposit. Due at signing, reserves the date.">
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -262,9 +431,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             </Field>
           </HStack>
 
+          {/* ─── Gallery Pass ─── */}
           <SectionHeading>Gallery Pass</SectionHeading>
 
-          <Field label="Gallery Password" helpText="Auto-generated from partner names + year. Override below if needed.">
+          <Field
+            label="Gallery Password"
+            helpText={
+              galleryPasswordOverride !== null
+                ? 'Custom — clear the field to go back to the auto-generated password.'
+                : 'Auto-generated from the partner first names + event year (e.g. ChrisannRajiv2026). Type to override.'
+            }
+          >
             <FormInput
               value={galleryPassword}
               onChange={(e) => setGalleryPasswordOverride(e.target.value)}
@@ -275,22 +452,35 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             />
           </Field>
 
-          <SectionHeading>Contract Variables</SectionHeading>
-          <Text fontSize="xs" color="gray.500" mt={-2}>
-            These are the values that get filled into the contract template. Most have sensible defaults.
+          {/* ─── Contract variables ─── */}
+          <SectionHeading>Contract Details</SectionHeading>
+          <Text fontSize="xs" color="gray.500" mt={-3}>
+            Values that get filled into the contract template. Most have sensible defaults — only touch if this booking needs something different.
           </Text>
 
-          {fields
-            // Skip variables we derive from the top-level inputs above
-            .filter((f) => !['total_amount', 'retainer_amount', 'event_date'].includes(f.key))
-            .map((f) => (
-              <FieldRow
-                key={f.key}
-                field={f}
-                value={variables[f.key] ?? ''}
-                onChange={(v) => handleVarChange(f.key, v)}
-              />
-            ))}
+          {fields.map((f) => (
+            <FieldRow
+              key={f.key}
+              field={f}
+              value={variables[f.key] ?? ''}
+              onChange={(v) => handleVarChange(f.key, v)}
+            />
+          ))}
+
+          {/* ─── Additional notes ─── */}
+          <SectionHeading>Additional Notes (optional)</SectionHeading>
+          <Field
+            label="Custom Clauses / Addendums"
+            helpText="Anything specific to this booking — e.g. 'Includes drone footage', 'Second photographer for ceremony only', or any unusual terms. Appears as an addendum at the end of the contract. Leave blank to skip."
+          >
+            <Textarea
+              value={additionalNotes}
+              onChange={(e) => setAdditionalNotes(e.target.value)}
+              placeholder="Leave blank if none."
+              focusBorderColor="#c9a96e"
+              rows={4}
+            />
+          </Field>
 
           {error && (
             <Text fontSize="sm" color="red.500" fontWeight="400">
@@ -335,7 +525,13 @@ function FieldRow({
         />
       ) : (
         <FormInput
-          type={field.type === 'date' ? 'date' : field.type === 'number' || field.type === 'currency' ? 'number' : 'text'}
+          type={
+            field.type === 'date'
+              ? 'date'
+              : field.type === 'number' || field.type === 'currency'
+                ? 'number'
+                : 'text'
+          }
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
@@ -371,7 +567,7 @@ const Field = ({
     </Text>
     {children}
     {helpText && (
-      <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+      <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300" lineHeight="1.5">
         {helpText}
       </Text>
     )}

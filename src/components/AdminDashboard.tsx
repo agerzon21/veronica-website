@@ -25,6 +25,7 @@ export interface AdminPortalSummary {
 interface Props {
   portals: AdminPortalSummary[];
   onNewClient: () => void;
+  onOpenPortal: (id: string) => void;
   onRefresh: () => void;
 }
 
@@ -38,7 +39,7 @@ const formatMoney = (amount: number | null): string => {
   return `$${amount.toFixed(0)}`;
 };
 
-const AdminDashboard = ({ portals, onNewClient, onRefresh }: Props) => {
+const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props) => {
   return (
     <Box maxW="1200px" mx="auto">
       {/* Header row */}
@@ -129,7 +130,7 @@ const AdminDashboard = ({ portals, onNewClient, onRefresh }: Props) => {
 
           {/* Rows */}
           {portals.map((p) => (
-            <PortalRow key={p.id} portal={p} />
+            <PortalRow key={p.id} portal={p} onClick={() => onOpenPortal(p.id)} />
           ))}
         </Box>
       )}
@@ -138,7 +139,7 @@ const AdminDashboard = ({ portals, onNewClient, onRefresh }: Props) => {
       {portals.length > 0 && (
         <VStack spacing={3} align="stretch" display={{ base: 'flex', md: 'none' }}>
           {portals.map((p) => (
-            <PortalCard key={p.id} portal={p} />
+            <PortalCard key={p.id} portal={p} onClick={() => onOpenPortal(p.id)} />
           ))}
         </VStack>
       )}
@@ -146,9 +147,17 @@ const AdminDashboard = ({ portals, onNewClient, onRefresh }: Props) => {
   );
 };
 
-function PortalRow({ portal }: { portal: AdminPortalSummary }) {
+function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: () => void }) {
   return (
     <Flex
+      as="button"
+      type="button"
+      onClick={onClick}
+      w="100%"
+      bg="transparent"
+      border="none"
+      textAlign="left"
+      cursor="pointer"
       px={6}
       py={4}
       borderBottom="1px solid"
@@ -158,6 +167,7 @@ function PortalRow({ portal }: { portal: AdminPortalSummary }) {
       align="center"
       fontSize="sm"
       gap={4}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       <Box flex="2.5">
         <Text fontWeight="500" color="gray.800">
@@ -197,9 +207,24 @@ function PortalRow({ portal }: { portal: AdminPortalSummary }) {
   );
 }
 
-function PortalCard({ portal }: { portal: AdminPortalSummary }) {
+function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: () => void }) {
   return (
-    <Box bg="white" borderRadius="md" border="1px solid" borderColor="gray.200" px={5} py={4}>
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      w="100%"
+      textAlign="left"
+      cursor="pointer"
+      bg="white"
+      borderRadius="md"
+      border="1px solid"
+      borderColor="gray.200"
+      px={5}
+      py={4}
+      _hover={{ borderColor: '#c9a96e' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
       <VStack align="stretch" spacing={3}>
         <Box>
           <Text fontWeight="500" color="gray.800">
@@ -287,10 +312,26 @@ function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
         </Badge>
       );
     }
+    // Compute days remaining for the countdown pill.
+    const daysLeft =
+      portal.gallery_expires_at !== null
+        ? Math.ceil((new Date(portal.gallery_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+        : null;
     return (
-      <Badge colorScheme="green" variant="subtle" fontSize="2xs">
-        Delivered
-      </Badge>
+      <HStack spacing={2}>
+        <Badge colorScheme="green" variant="subtle" fontSize="2xs">
+          Delivered
+        </Badge>
+        {daysLeft !== null && daysLeft >= 0 && (
+          <Text
+            fontSize="2xs"
+            color={daysLeft < 7 ? 'orange.600' : 'gray.500'}
+            fontWeight={daysLeft < 7 ? '500' : '400'}
+          >
+            {daysLeft}d left
+          </Text>
+        )}
+      </HStack>
     );
   }
   if (portal.drive_url) {
