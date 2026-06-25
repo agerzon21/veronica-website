@@ -26,7 +26,7 @@
     "api/contact.ts": {
       "maxDuration": 30
     },
-    "api/portal/sign-contract.ts": {
+    "api/portal/[action].ts": {
       "maxDuration": 60
     }
   },
