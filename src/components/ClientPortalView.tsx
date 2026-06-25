@@ -23,7 +23,7 @@ export interface ClientPortalData {
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
   contract_body: string | null;
-  contract_signed_pdf_drive_id: string | null;
+  contract_signed_pdf_available: boolean;
 
   // Payment — Phase 3
   contract_total_amount: number | null;
@@ -193,40 +193,11 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
         />
       )}
       {data.contract_status === 'signed' && data.contract_signed_at && (
-        <Box
-          bg="gray.50"
-          borderTop="1px solid"
-          borderBottom="1px solid"
-          borderColor="gray.100"
-          py={{ base: 10, md: 12 }}
-          px={6}
-        >
-          <VStack spacing={4} maxW="500px" mx="auto" textAlign="center">
-            <Text
-              fontSize="xs"
-              fontWeight="500"
-              textTransform="uppercase"
-              letterSpacing="0.25em"
-              color="#c9a96e"
-            >
-              Contract
-            </Text>
-            <Box w="30px" h="1px" bg="#c9a96e" />
-            <Icon as={FaCheck} color="green.500" boxSize={6} />
-            <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
-              Signed electronically on {formatDate(data.contract_signed_at)}.
-            </Text>
-            {data.contract_signed_pdf_drive_id && (
-              <CTAButton
-                href={`https://drive.google.com/uc?export=download&id=${data.contract_signed_pdf_drive_id}`}
-                variant="outline"
-                size="sm"
-              >
-                Download Signed Copy
-              </CTAButton>
-            )}
-          </VStack>
-        </Box>
+        <SignedContractSection
+          credentials={credentials}
+          signedAt={data.contract_signed_at}
+          pdfAvailable={data.contract_signed_pdf_available}
+        />
       )}
 
       {/* ─── Payment / Balance section — Phase 3 fills this in fully.
@@ -536,9 +507,104 @@ const BalanceStat = ({
 );
 
 /**
+ * Signed-state display + download. The PDF lives in a private Vercel Blob
+ * store (no direct URL exposed to the browser), so the download button
+ * re-auths via /api/portal/download-contract and streams the binary back,
+ * which we then trigger a file save on via an in-memory object URL.
+ */
+function SignedContractSection({
+  credentials,
+  signedAt,
+  pdfAvailable,
+}: {
+  credentials: { email: string; password: string };
+  signedAt: string;
+  pdfAvailable: boolean;
+}) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDownload = async () => {
+    setError('');
+    setDownloading(true);
+    try {
+      const res = await fetch('/api/portal/download-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      if (!res.ok) {
+        // Error responses are JSON; success is binary.
+        const data = await res.json().catch(() => null);
+        setError(data?.error || `Could not download (status ${res.status}).`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Signed Contract.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[download-contract] network error:', err);
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Box
+      bg="gray.50"
+      borderTop="1px solid"
+      borderBottom="1px solid"
+      borderColor="gray.100"
+      py={{ base: 10, md: 12 }}
+      px={6}
+    >
+      <VStack spacing={4} maxW="500px" mx="auto" textAlign="center">
+        <Text
+          fontSize="xs"
+          fontWeight="500"
+          textTransform="uppercase"
+          letterSpacing="0.25em"
+          color="#c9a96e"
+        >
+          Contract
+        </Text>
+        <Box w="30px" h="1px" bg="#c9a96e" />
+        <Icon as={FaCheck} color="green.500" boxSize={6} />
+        <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
+          Signed electronically on {formatDate(signedAt)}.
+        </Text>
+        {pdfAvailable && (
+          <CTAButton
+            onClick={handleDownload}
+            variant="outline"
+            size="sm"
+            isLoading={downloading}
+            loadingText="Preparing..."
+          >
+            Download Signed Copy
+          </CTAButton>
+        )}
+        {error && (
+          <Text fontSize="xs" color="red.500" fontWeight="400">
+            {error}
+          </Text>
+        )}
+      </VStack>
+    </Box>
+  );
+}
+
+/**
  * Pending-contract signing UI: typed full name + consent checkbox +
  * signature pad. Sends everything to /api/portal/sign-contract which
- * does the heavy lifting (PDF generation, Drive upload, email).
+ * does the heavy lifting (PDF generation, Blob upload, email).
  *
  * Kept as its own component because it owns a fair amount of local state
  * (the signature canvas ref, the typed name, the consent flag, the
@@ -555,7 +621,7 @@ function ContractSignSection({
   onSigned: (updates: {
     contract_status: 'signed';
     contract_signed_at: string;
-    contract_signed_pdf_drive_id: string;
+    contract_signed_pdf_available: boolean;
   }) => void;
 }) {
   const sigPadRef = useRef<SignatureCanvasType | null>(null);
@@ -648,7 +714,7 @@ function ContractSignSection({
       // page). Logging both the status and the raw body to the console
       // makes the failure mode obvious in DevTools.
       const rawBody = await res.text();
-      let data: { success?: boolean; error?: string; contract_signed_at?: string; contract_signed_pdf_drive_id?: string } | null = null;
+      let data: { success?: boolean; error?: string; contract_signed_at?: string } | null = null;
       try {
         data = rawBody ? JSON.parse(rawBody) : null;
       } catch {
@@ -661,7 +727,7 @@ function ContractSignSection({
         onSigned({
           contract_status: 'signed',
           contract_signed_at: data.contract_signed_at!,
-          contract_signed_pdf_drive_id: data.contract_signed_pdf_drive_id!,
+          contract_signed_pdf_available: true,
         });
       } else {
         console.error('[sign-contract] server returned error', { status: res.status, data });

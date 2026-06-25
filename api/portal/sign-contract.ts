@@ -26,8 +26,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac } from 'node:crypto';
+import { put } from '@vercel/blob';
 import { getDb } from '../_db.js';
-import { uploadFile } from '../_drive.js';
 import { sendEmail, FROM_ADDRESS } from '../_auto-reply.js';
 import { renderContractPdf, type AuditRecord } from '../_contract-pdf.js';
 import type { ContractTemplate } from '../../src/data/contract-template.js';
@@ -85,15 +85,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Env-var checks done up front so the user gets a clear error rather
-  // than a half-done sign (e.g. Drive upload succeeded but email failed).
+  // than a half-done sign (e.g. Blob upload succeeded but email failed).
   const auditSecret = process.env.CONTRACT_AUDIT_SECRET;
   if (!auditSecret) {
     console.error('[sign-contract] CONTRACT_AUDIT_SECRET env var is missing');
     return res.status(500).json({ success: false, error: 'Server is not configured to sign contracts. Please contact us.' });
   }
-  const driveFolderId = process.env.SIGNED_CONTRACTS_FOLDER_ID;
-  if (!driveFolderId) {
-    console.error('[sign-contract] SIGNED_CONTRACTS_FOLDER_ID env var is missing');
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error('[sign-contract] BLOB_READ_WRITE_TOKEN env var is missing');
     return res.status(500).json({ success: false, error: 'Server is not configured to sign contracts. Please contact us.' });
   }
 
@@ -204,15 +203,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log('[sign-contract] PDF rendered', { bytes: pdfBuffer.length });
 
-    // 5. Upload to Drive
+    // 5. Upload to Vercel Blob (private store). The returned URL is random
+    //    and requires the blob token to download — clients access signed
+    //    PDFs via /api/portal/download-contract, which re-auths and streams
+    //    the file back. Storing in Blob (rather than Drive) sidesteps the
+    //    "service accounts have no storage quota" issue from a personal
+    //    Google account.
     const pdfFilename = `Contract — ${portal.client_display_name ?? portal.client_email} — ${signedAt.slice(0, 10)}.pdf`;
-    const driveFileId = await uploadFile({
-      folderId: driveFolderId,
-      name: pdfFilename,
-      mimeType: 'application/pdf',
-      content: pdfBuffer,
+    const { url: pdfUrl } = await put(`contracts/${pdfFilename}`, pdfBuffer, {
+      access: 'private',
+      contentType: 'application/pdf',
+      addRandomSuffix: true,
     });
-    console.log('[sign-contract] Drive upload OK', { driveFileId });
+    console.log('[sign-contract] Blob upload OK', { pdfUrl });
 
     // 6. Email both parties with the PDF attached
     try {
@@ -231,11 +234,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       console.log('[sign-contract] email sent');
     } catch (err) {
-      // If the email fails after Drive upload succeeded, the PDF is still
-      // saved in Veronika's Drive — log the issue, but continue to mark the
-      // contract signed in the DB so the client doesn't get stuck. They can
-      // download the signed PDF from the portal directly.
-      console.error('[sign-contract] email send failed (Drive upload OK):', err);
+      // If the email fails after the Blob upload succeeded, the PDF is
+      // still stored — log and continue so the contract is marked signed
+      // in the DB. The client can download from the portal directly.
+      console.error('[sign-contract] email send failed (Blob upload OK):', err);
     }
 
     // 7. Persist signed state
@@ -249,7 +251,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           contract_signer_ip = ${signerIp},
           contract_signer_user_agent = ${signerUserAgent},
           contract_audit_hmac = ${auditHmac},
-          contract_signed_pdf_drive_id = ${driveFileId},
+          contract_signed_pdf_url = ${pdfUrl},
           updated_at = now()
       where id = ${portal.id}
     `;
@@ -259,7 +261,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       contract_status: 'signed',
       contract_signed_at: signedAt,
-      contract_signed_pdf_drive_id: driveFileId,
+      contract_signed_pdf_url: pdfUrl,
     });
   } catch (err) {
     console.error('[sign-contract] handler failed:', err);

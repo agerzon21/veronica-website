@@ -33,7 +33,7 @@ type ClientPortalRow = {
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
   contract_body: string | null;
-  contract_signed_pdf_drive_id: string | null;
+  contract_signed_pdf_url: string | null;
   contract_total_amount: string | null;
   contract_retainer_amount: string | null;
   paid_to_date: string;
@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const rows = (await sql`
       select id, client_display_name, client_email, drive_url,
-             contract_status, contract_signed_at, contract_body, contract_signed_pdf_drive_id,
+             contract_status, contract_signed_at, contract_body, contract_signed_pdf_url,
              contract_total_amount, contract_retainer_amount, paid_to_date, payment_plan_enabled,
              gallery_password, gallery_enabled,
              gallery_delivered_at, gallery_expires_at
@@ -148,7 +148,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contract_status: row.contract_status,
       contract_signed_at: row.contract_signed_at,
       contract_body: row.contract_body,
-      contract_signed_pdf_drive_id: row.contract_signed_pdf_drive_id,
+      // We never return the raw blob URL to the client — it's not directly
+      // accessible without the token. Surface only whether a signed PDF
+      // exists; the UI uses /api/portal/download-contract to fetch it.
+      contract_signed_pdf_available: !!row.contract_signed_pdf_url,
 
       // Payment
       contract_total_amount: row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,

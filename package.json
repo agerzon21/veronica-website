@@ -17,6 +17,7 @@
     "@neondatabase/serverless": "^1.1.0",
     "@react-pdf/renderer": "^4.5.1",
     "@types/react-signature-canvas": "^1.0.7",
+    "@vercel/blob": "^2.4.1",
     "@vercel/node": "^5.7.15",
     "framer-motion": "^10.18.0",
     "googleapis": "^172.0.0",
