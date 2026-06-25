@@ -82,11 +82,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : new Date().toISOString().slice(0, 10);
     const downloadName = `Contract — ${portal.client_display_name ?? portal.client_email} — ${dateLabel}.pdf`;
 
+    // HTTP headers can only contain ASCII. The display name often has
+    // an em dash or other unicode, so we emit two filenames per RFC 5987:
+    // an ASCII fallback in plain `filename=`, plus a UTF-8 percent-encoded
+    // `filename*=` for browsers that understand it (all modern ones do).
+    const asciiFallback = downloadName.replace(/[^\x20-\x7E]/g, '-');
+    const encodedName = encodeURIComponent(downloadName);
+
     res.setHeader('Content-Type', 'application/pdf');
     // 'inline' so the browser previews in a new tab; the PDF viewer has its
     // own download button. filename= is the default name when the user
     // chooses to save from that viewer.
-    res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
+    );
     res.setHeader('Cache-Control', 'private, no-store');
 
     // Stream the blob body straight through to the response.

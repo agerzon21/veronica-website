@@ -38,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, mode, client_display_name, client_email, drive_url, gallery_delivered_at
+      select id, mode, client_display_name, client_email, drive_url, gallery_password, gallery_delivered_at
       from client_portals
       where id = ${id}
       limit 1
@@ -48,6 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       client_display_name: string | null;
       client_email: string | null;
       drive_url: string | null;
+      gallery_password: string;
       gallery_delivered_at: string | null;
     }>;
 
@@ -69,10 +70,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       where id = ${id}
     `;
 
-    // Email the client (full-mode only; simple-mode has no email). We
-    // don't fail the request if the email fails — the gallery IS
-    // delivered in the DB, the email is the notification on top.
-    if (portal.mode === 'full' && portal.client_email) {
+    // Email the client if we have an address. Full-mode clients go to
+    // /portal (email + password login they set up at welcome time);
+    // simple-mode clients go to /portal/pass (password-only), so we
+    // also surface the password in their email. We don't fail the
+    // request if the email send fails — the gallery IS delivered in
+    // the DB, the email is the notification on top.
+    if (portal.client_email) {
       try {
         const siteOrigin =
           process.env.SITE_ORIGIN ||
@@ -80,8 +84,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await sendEmail({
           to: portal.client_email,
           subject: 'Your photos are ready — Vero Photography',
-          text: buildDeliveryText(portal.client_display_name, expiresAt, siteOrigin),
-          html: buildDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin),
+          text:
+            portal.mode === 'full'
+              ? buildFullDeliveryText(portal.client_display_name, expiresAt, siteOrigin)
+              : buildSimpleDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
+          html:
+            portal.mode === 'full'
+              ? buildFullDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin)
+              : buildSimpleDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
         });
       } catch (err) {
         console.error('[admin/portal-deliver] photos-ready email failed:', err);
@@ -99,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-function buildDeliveryText(clientLabel: string | null, expiresAt: string, siteOrigin: string): string {
+function buildFullDeliveryText(clientLabel: string | null, expiresAt: string, siteOrigin: string): string {
   const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   return `${greeting}
@@ -116,7 +126,7 @@ Warmly,
 Veronika`;
 }
 
-function buildDeliveryHtml(clientLabel: string | null, expiresAt: string, siteOrigin: string): string {
+function buildFullDeliveryHtml(clientLabel: string | null, expiresAt: string, siteOrigin: string): string {
   const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   return `<!DOCTYPE html>
@@ -125,6 +135,52 @@ function buildDeliveryHtml(clientLabel: string | null, expiresAt: string, siteOr
 <p>Hi ${firstName},</p>
 <p>Your photos are ready ✨ View them anytime in your portal:</p>
 <p style="margin:24px 0;"><a href="${siteOrigin}/portal" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open My Gallery</a></p>
+<p style="font-size:14px;color:#666;">The gallery will stay online until <strong>${exp}</strong>. Please download and back up your favourites before then.</p>
+<p>If you have any questions or want to order prints, just reply to this email.</p>
+<p>Warmly,<br><em>Veronika</em></p>
+</body></html>`;
+}
+
+function buildSimpleDeliveryText(
+  clientLabel: string | null,
+  expiresAt: string,
+  siteOrigin: string,
+  galleryPassword: string,
+): string {
+  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
+  const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `${greeting}
+
+Your photos are ready ✨
+
+View your gallery here:
+${siteOrigin}/portal/pass
+
+Password: ${galleryPassword}
+
+The gallery will stay online until ${exp}. Please download and back up your favourites before then.
+
+If you have any questions or want to order prints, just reply to this email.
+
+Warmly,
+Veronika`;
+}
+
+function buildSimpleDeliveryHtml(
+  clientLabel: string | null,
+  expiresAt: string,
+  siteOrigin: string,
+  galleryPassword: string,
+): string {
+  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
+  const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
+<p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
+<p>Hi ${firstName},</p>
+<p>Your photos are ready ✨</p>
+<p style="margin:24px 0;"><a href="${siteOrigin}/portal/pass" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open my gallery</a></p>
+<p style="font-size:14px;color:#666;">Password: <strong style="color:#2d2d2d;font-family:monospace;">${galleryPassword}</strong></p>
 <p style="font-size:14px;color:#666;">The gallery will stay online until <strong>${exp}</strong>. Please download and back up your favourites before then.</p>
 <p>If you have any questions or want to order prints, just reply to this email.</p>
 <p>Warmly,<br><em>Veronika</em></p>

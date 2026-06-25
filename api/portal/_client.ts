@@ -115,6 +115,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
     }
 
+    // Fetch the payment-entry log so the client can see itemized
+    // payments their photographer has logged (e.g. "Retainer received
+    // via Zelle — Jun 25"). This is separate from `installments`,
+    // which is for the planned Stripe-managed payment-plan flow.
+    const paymentRows = (await sql`
+      select id, amount, method, note, paid_at
+      from payment_entries
+      where client_portal_id = ${row.id}
+      order by paid_at desc, created_at desc
+    `) as Array<{
+      id: string;
+      amount: string;
+      method: string | null;
+      note: string | null;
+      paid_at: string;
+    }>;
+    const payments = paymentRows.map((p) => ({
+      id: p.id,
+      amount: parseFloat(p.amount),
+      method: p.method,
+      note: p.note,
+      paid_at: p.paid_at,
+    }));
+
     // Try to list Drive files if gallery is ready. Same fall-through pattern
     // as /api/portal/gallery — a Drive listing failure is non-fatal because
     // the portal page can still show the contract / payment / "Open in Drive"
@@ -159,6 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paid_to_date: parseFloat(row.paid_to_date),
       payment_plan_enabled: row.payment_plan_enabled,
       installments,
+      payments,
 
       // Gallery Pass (manageable here)
       gallery_password: row.gallery_password,

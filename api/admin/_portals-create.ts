@@ -182,6 +182,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         typeof body.client_display_name === 'string' && body.client_display_name.trim()
           ? body.client_display_name.trim()
           : null;
+      const simpleClientEmail =
+        typeof body.client_email === 'string' && body.client_email.trim()
+          ? body.client_email.trim().toLowerCase()
+          : null;
       const simpleEventDate =
         typeof body.event_date === 'string' && body.event_date.trim()
           ? body.event_date.trim()
@@ -194,6 +198,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         Number.isFinite(Number(body.retention_months)) && Number(body.retention_months) > 0
           ? Number(body.retention_months)
           : 3;
+      const simpleTotalAmount =
+        body.contract_total_amount !== null &&
+        body.contract_total_amount !== undefined &&
+        Number.isFinite(Number(body.contract_total_amount))
+          ? Number(body.contract_total_amount)
+          : null;
+      const simpleRetainerAmount =
+        body.contract_retainer_amount !== null &&
+        body.contract_retainer_amount !== undefined &&
+        Number.isFinite(Number(body.contract_retainer_amount))
+          ? Number(body.contract_retainer_amount)
+          : null;
 
       const deliveredAt = simpleDriveUrl ? new Date().toISOString() : null;
       const expiresAt = simpleDriveUrl
@@ -203,22 +219,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const inserted = (await sql`
         insert into client_portals (
           mode, session_type,
-          client_display_name,
+          client_display_name, client_email,
           event_date,
           gallery_password, gallery_enabled,
           drive_url, gallery_delivered_at, gallery_expires_at,
-          contract_status
+          contract_status,
+          contract_total_amount, contract_retainer_amount, paid_to_date
         ) values (
           ${mode}, ${sessionType},
-          ${simpleDisplayName},
+          ${simpleDisplayName}, ${simpleClientEmail},
           ${simpleEventDate},
           ${galleryPassword}, true,
           ${simpleDriveUrl}, ${deliveredAt}, ${expiresAt},
-          'none'
+          'none',
+          ${simpleTotalAmount}, ${simpleRetainerAmount}, 0
         )
         returning id
       `) as Array<{ id: string }>;
       portalId = inserted[0].id;
+
+      // Auto-send the gallery-ready email if we have both the Drive URL
+      // (i.e. the gallery is actually viewable) AND a client email. Same
+      // non-blocking semantics as the full-mode invite email below: log
+      // a failure, keep the row.
+      if (simpleClientEmail && simpleDriveUrl && expiresAt) {
+        try {
+          const siteOrigin =
+            process.env.SITE_ORIGIN ||
+            (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
+          await sendEmail({
+            to: simpleClientEmail,
+            subject: 'Your photos are ready — Vero Photography',
+            text: buildGalleryReadyText(simpleDisplayName, siteOrigin, galleryPassword, expiresAt),
+            html: buildGalleryReadyHtml(simpleDisplayName, siteOrigin, galleryPassword, expiresAt),
+          });
+        } catch (err) {
+          console.error('[admin/portals-create] gallery-ready email failed:', err);
+        }
+      }
     }
 
     // Send invite email for full-mode portals. Email is non-blocking-ish —
@@ -278,5 +316,51 @@ function buildInviteHtml(clientLabel: string | null, inviteUrl: string): string 
 <p style="font-size:14px;color:#666;">This link is valid for 14 days. If the button doesn't work, paste this URL into your browser:<br><span style="word-break:break-all;color:#c9a96e;">${inviteUrl}</span></p>
 <p>Inside you'll be able to review and sign your contract, track your balance, and (once it's ready) view your photo gallery.</p>
 <p>Looking forward to working with you,<br><em>Veronika</em></p>
+</body></html>`;
+}
+
+function buildGalleryReadyText(
+  clientLabel: string | null,
+  siteOrigin: string,
+  galleryPassword: string,
+  expiresAt: string,
+): string {
+  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
+  const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `${greeting}
+
+Your photos are ready ✨
+
+View your gallery here:
+${siteOrigin}/portal/pass
+
+Password: ${galleryPassword}
+
+The gallery will stay online until ${exp}. Please download and back up your favourites before then.
+
+If you have any questions or want to order prints, just reply to this email.
+
+Warmly,
+Veronika`;
+}
+
+function buildGalleryReadyHtml(
+  clientLabel: string | null,
+  siteOrigin: string,
+  galleryPassword: string,
+  expiresAt: string,
+): string {
+  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
+  const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
+<p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
+<p>Hi ${firstName},</p>
+<p>Your photos are ready ✨</p>
+<p style="margin:24px 0;"><a href="${siteOrigin}/portal/pass" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open my gallery</a></p>
+<p style="font-size:14px;color:#666;">Password: <strong style="color:#2d2d2d;font-family:monospace;">${galleryPassword}</strong></p>
+<p style="font-size:14px;color:#666;">The gallery will stay online until <strong>${exp}</strong>. Please download and back up your favourites before then.</p>
+<p>If you have any questions or want to order prints, just reply to this email.</p>
+<p>Warmly,<br><em>Veronika</em></p>
 </body></html>`;
 }

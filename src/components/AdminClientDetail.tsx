@@ -286,8 +286,10 @@ const AdminClientDetail = ({ portalId, adminPassword, onBack }: Props) => {
         </Section>
       )}
 
-      {/* ─── Payments section (full-mode only) ─── */}
-      {portal.mode === 'full' && portal.contract_total_amount !== null && (
+      {/* ─── Payments section. Surfaces whenever a total is on the
+            books — full-mode portals always have one; simple-mode rows
+            have one only when Vero entered totals at creation. ─── */}
+      {portal.contract_total_amount !== null && (
         <Section title="Payments">
           <VStack align="stretch" spacing={5}>
             <HStack spacing={6} fontSize="sm">

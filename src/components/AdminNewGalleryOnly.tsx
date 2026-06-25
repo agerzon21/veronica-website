@@ -30,6 +30,9 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
   const [driveUrl, setDriveUrl] = useState('');
   const [retentionMonths, setRetentionMonths] = useState('3');
   const [passwordOverride, setPasswordOverride] = useState<string | null>(null);
+  const [clientEmail, setClientEmail] = useState('');
+  const [totalAmount, setTotalAmount] = useState('');
+  const [retainerAmount, setRetainerAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -58,6 +61,21 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
       setError('Retention months must be a positive number.');
       return;
     }
+    // Optional totals — validate if provided. Both empty is fine.
+    const totalNum = totalAmount ? Number(totalAmount) : null;
+    const retainerNum = retainerAmount ? Number(retainerAmount) : null;
+    if (totalNum !== null && (!Number.isFinite(totalNum) || totalNum < 0)) {
+      setError('Total must be a non-negative number.');
+      return;
+    }
+    if (retainerNum !== null && (!Number.isFinite(retainerNum) || retainerNum < 0)) {
+      setError('Retainer must be a non-negative number.');
+      return;
+    }
+    if (totalNum !== null && retainerNum !== null && retainerNum > totalNum) {
+      setError('Retainer cannot exceed total.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -69,10 +87,13 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
           mode: 'simple',
           session_type: sessionType.trim(),
           client_display_name: displayName.trim(),
+          client_email: clientEmail.trim().toLowerCase() || null,
           event_date: eventDateIso || null,
           drive_url: driveUrl.trim() || null,
           retention_months: months,
           gallery_password: galleryPassword.trim(),
+          contract_total_amount: totalNum,
+          contract_retainer_amount: retainerNum,
         }),
       });
       const data = await res.json();
@@ -121,7 +142,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
           Share a photo gallery
         </Text>
         <Text fontSize="sm" color="gray.500" fontWeight="300" mt={1}>
-          Pasting a Drive URL marks the gallery as delivered immediately and starts the hosting countdown.
+          Use this for any booking that doesn't need a contract — portraits, family sessions, gifted shoots. You can create it as soon as you get the order and fill in the Drive URL later, or paste the URL now to deliver immediately.
         </Text>
       </VStack>
 
@@ -167,6 +188,18 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
             />
           </Field>
 
+          <Field
+            label="Client Email (optional)"
+            helpText="If you enter an email AND a Drive URL above, the client gets an automatic email with the gallery link and password as soon as you click Create. Leave blank to skip the email."
+          >
+            <FormInput
+              type="email"
+              value={clientEmail}
+              onChange={(e) => setClientEmail(e.target.value)}
+              placeholder="client@example.com"
+            />
+          </Field>
+
           <HStack spacing={4} align="flex-start">
             <Field
               label="Gallery Password"
@@ -195,6 +228,42 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
               />
             </Field>
           </HStack>
+
+          <Box pt={3} borderTop="1px solid" borderColor="gray.100">
+            <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={2}>
+              Bookkeeping (optional)
+            </Text>
+            <Text fontSize="xs" color="gray.500" mb={4} fontWeight="300">
+              These are only visible to you in the admin. The client doesn't see them — gallery-only clients only see their photos.
+            </Text>
+            <VStack align="stretch" spacing={4}>
+              <HStack spacing={4} align="flex-start">
+                <Field label="Total (USD)" w="50%" helpText="What you charged for the project. Optional.">
+                  <FormInput
+                    type="number"
+                    inputMode="decimal"
+                    value={totalAmount}
+                    onChange={(e) => setTotalAmount(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                  />
+                </Field>
+                <Field label="Retainer / Deposit (USD)" w="50%" helpText="Amount paid up front to reserve the booking.">
+                  <FormInput
+                    type="number"
+                    inputMode="decimal"
+                    value={retainerAmount}
+                    onChange={(e) => setRetainerAmount(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                  />
+                </Field>
+              </HStack>
+              <Text fontSize="xs" color="gray.500" fontWeight="300">
+                You can log payments later in the client's detail view — Zelle, cash, Venmo, etc. — with notes attached.
+              </Text>
+            </VStack>
+          </Box>
 
           {error && (
             <Text fontSize="sm" color="red.500" fontWeight="400">

@@ -38,6 +38,14 @@ export interface ClientPortalData {
     paid_amount: number | null;
     payment_method: string | null;
   }>;
+  // Itemized log of payments Veronika has recorded against this booking.
+  payments: Array<{
+    id: string;
+    amount: number;
+    method: string | null;
+    note: string | null;
+    paid_at: string;
+  }>;
 
   // Gallery Pass settings — Phase 1c
   gallery_password: string;
@@ -231,6 +239,73 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
                 emphasize={remaining > 0}
               />
             </HStack>
+
+            {/* Itemized payment log — every entry Veronika has recorded
+                (retainer, balance, etc.), with method and notes. Doesn't
+                include in-the-future installment plan rows; those live
+                below in their own section. */}
+            {data.payments.length > 0 && (
+              <Box w="100%" pt={6}>
+                <Text
+                  fontSize="2xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.25em"
+                  color="#c9a96e"
+                  mb={4}
+                >
+                  Payments Received
+                </Text>
+                <VStack spacing={2} align="stretch">
+                  {data.payments.map((p) => (
+                    <Flex
+                      key={p.id}
+                      align="center"
+                      justify="space-between"
+                      bg="white"
+                      border="1px solid"
+                      borderColor="green.100"
+                      borderRadius="sm"
+                      px={4}
+                      py={3}
+                      textAlign="left"
+                      gap={3}
+                    >
+                      <VStack align="start" spacing={0.5} flex="1" minW={0}>
+                        <HStack spacing={2} flexWrap="wrap">
+                          <Text fontSize="sm" color="gray.800" fontWeight="500">
+                            {formatMoney(p.amount)}
+                          </Text>
+                          {p.method && (
+                            <Text fontSize="sm" color="gray.500">
+                              · {p.method}
+                            </Text>
+                          )}
+                          <Text fontSize="sm" color="gray.400">
+                            · {formatDate(p.paid_at)}
+                          </Text>
+                        </HStack>
+                        {p.note && (
+                          <Text fontSize="xs" color="gray.600" fontWeight="300">
+                            {p.note}
+                          </Text>
+                        )}
+                      </VStack>
+                      <Text
+                        fontSize="2xs"
+                        fontWeight="500"
+                        textTransform="uppercase"
+                        letterSpacing="0.15em"
+                        color="green.500"
+                      >
+                        Received
+                      </Text>
+                    </Flex>
+                  ))}
+                </VStack>
+              </Box>
+            )}
+
             {data.payment_plan_enabled && data.installments.length > 0 && (
               <Box w="100%" pt={6}>
                 <Text
