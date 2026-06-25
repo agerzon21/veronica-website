@@ -1,6 +1,6 @@
 import { Box, VStack, HStack, Text, Input, Flex, Icon, Badge, Textarea } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaArrowLeft, FaCheck, FaTrash } from 'react-icons/fa';
+import { FaArrowLeft, FaCheck, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 
 interface Props {
@@ -217,10 +217,26 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             label="Google Drive URL"
             value={portal.drive_url ?? ''}
             placeholder="https://drive.google.com/drive/folders/..."
-            helpText="Paste the share URL of the gallery folder."
+            helpText="Paste the share URL of the gallery folder. After saving, click Open Folder below to verify the link works."
             saving={savingField === 'drive_url'}
             onSave={(v) => patch({ drive_url: v }, 'drive_url')}
           />
+
+          {/* Once a Drive URL is set, give Vero a one-click link to test
+              it. Surfaces the URL outside the InlineField so she can
+              open it without going into edit mode + losing the
+              dirty-state. */}
+          {portal.drive_url && (
+            <Flex align="center" gap={2} wrap="wrap">
+              <CTAButton href={portal.drive_url} variant="outline" size="sm">
+                <Icon as={FaExternalLinkAlt} boxSize={3} mr={2} />
+                Open Folder in Drive
+              </CTAButton>
+              <Text fontSize="xs" color="gray.500" fontWeight="300">
+                Click to test the gallery URL.
+              </Text>
+            </Flex>
+          )}
 
           <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
             <Box>
@@ -314,6 +330,9 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 </Text>
                 <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
               </Box>
+              {portal.contract_status === 'signed' && portal.contract_signed_pdf_available && (
+                <ViewSignedPdfButton portalId={portalId} adminPassword={adminPassword} />
+              )}
             </Flex>
 
             {/* While the contract is pending, expose the same variable
@@ -1137,6 +1156,69 @@ function EditContractVariables({
             Save Contract Changes
           </CTAButton>
         </VStack>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * "View Signed Copy" button for admin. Fetches the signed PDF via the
+ * admin-auth'd /api/admin/portal-pdf endpoint (mirror of the
+ * client's portal/download-contract) and opens it in a new tab.
+ *
+ * Lets Vero pull a contract up without digging through email.
+ */
+function ViewSignedPdfButton({
+  portalId,
+  adminPassword,
+}: {
+  portalId: string;
+  adminPassword: string;
+}) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleView = async () => {
+    setError('');
+    setOpening(true);
+    try {
+      const res = await fetch('/api/admin/portal-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, id: portalId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || `Could not open (status ${res.status}).`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error('[admin-portal-pdf] network error:', err);
+      setError('Could not reach the server.');
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return (
+    <Box>
+      <CTAButton
+        onClick={handleView}
+        variant="outline"
+        size="sm"
+        isLoading={opening}
+        loadingText="Opening..."
+      >
+        View Signed Copy
+      </CTAButton>
+      {error && (
+        <Text fontSize="xs" color="red.500" mt={1}>
+          {error}
+        </Text>
       )}
     </Box>
   );

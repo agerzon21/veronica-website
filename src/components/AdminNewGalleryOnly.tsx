@@ -2,6 +2,7 @@ import { Box, VStack, HStack, Text, Input, Flex, Icon, Textarea } from '@chakra-
 import { useMemo, useState } from 'react';
 import { FaArrowLeft, FaCheck, FaCopy } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import SessionTypePicker from './SessionTypePicker';
 
 interface Props {
   adminPassword: string;
@@ -252,13 +253,15 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
         <VStack align="stretch" spacing={6}>
           <Field
             label="Session Type"
-            helpText='Lowercase keyword: portrait, family, anniversary, engagement, boudoir, newborn, etc. Used in the auto-generated display name.'
+            required
+            helpText="What kind of shoot this is. Click a standard type, or use Custom for anything else."
           >
-            <FormInput value={sessionType} onChange={(e) => setSessionType(e.target.value)} placeholder="portrait" />
+            <SessionTypePicker value={sessionType} onChange={setSessionType} />
           </Field>
 
           <Field
             label="Client Name"
+            required
             helpText="The client's full name (first last, or however they go by). Used to greet them in emails and to build the display name."
           >
             <FormInput
@@ -403,7 +406,9 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
 
 function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => void }) {
   const message = buildShareMessage(state.firstName, state.expiresIso, state.galleryPassword);
+  const directUrl = `https://vero.photography/portal/pass?password=${encodeURIComponent(state.galleryPassword)}`;
   const [copied, setCopied] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const copy = async () => {
     try {
@@ -414,6 +419,16 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
       // Clipboard API can fail on insecure origins. Falling back to a
       // textarea select is more code than it's worth — the message is
       // selectable in the readonly Textarea below.
+    }
+  };
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(directUrl);
+      setUrlCopied(true);
+      setTimeout(() => setUrlCopied(false), 2000);
+    } catch {
+      // Selection fallback in the input.
     }
   };
 
@@ -430,6 +445,50 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
           {state.displayName} is in the system.
         </Text>
       </VStack>
+
+      {/* Quick-access link card — only shown when delivered. The full
+          message below has the same URL, but it's buried in copy; this
+          gives Vero an instant copy-or-click target to verify the link
+          works before she pastes the long message elsewhere. */}
+      {state.driveDelivered && (
+        <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" px={{ base: 5, md: 7 }} py={{ base: 4, md: 5 }} mb={4}>
+          <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={2}>
+            One-click link
+          </Text>
+          <Flex gap={2} align="center" direction={{ base: 'column', sm: 'row' }}>
+            <Input
+              value={directUrl}
+              readOnly
+              h="40px"
+              bg="gray.50"
+              fontSize="sm"
+              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              color="gray.800"
+              onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+              focusBorderColor="#c9a96e"
+            />
+            <Flex gap={2} w={{ base: '100%', sm: 'auto' }}>
+              <CTAButton onClick={copyUrl} variant={urlCopied ? 'outline' : 'solid'} size="sm">
+                {urlCopied ? (
+                  <>
+                    <Icon as={FaCheck} boxSize={3} mr={2} /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Icon as={FaCopy} boxSize={3} mr={2} /> Copy
+                  </>
+                )}
+              </CTAButton>
+              <CTAButton href={directUrl} variant="outline" size="sm">
+                Open
+              </CTAButton>
+            </Flex>
+          </Flex>
+          <Text fontSize="xs" color="gray.500" mt={2} fontWeight="300">
+            Click Open to test the link in a new tab. The full share message is below.
+          </Text>
+        </Box>
+      )}
 
       <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" px={{ base: 5, md: 7 }} py={{ base: 5, md: 6 }} mb={5}>
         <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
@@ -506,16 +565,20 @@ const Field = ({
   helpText,
   children,
   w,
+  required,
 }: {
   label: string;
   helpText?: string;
   children: React.ReactNode;
   w?: string;
+  required?: boolean;
 }) => (
   <Box w={w ?? '100%'}>
     <Text
       as="label"
-      display="block"
+      display="inline-flex"
+      alignItems="center"
+      gap={1.5}
       fontSize="2xs"
       fontWeight="500"
       color="#c9a96e"
@@ -524,6 +587,7 @@ const Field = ({
       mb={2}
     >
       {label}
+      {required && <Box w="6px" h="6px" borderRadius="full" bg="red.400" />}
     </Text>
     {children}
     {helpText && (

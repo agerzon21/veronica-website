@@ -2,6 +2,7 @@ import { Box, VStack, HStack, Text, Input, Select, Textarea, Flex, Icon } from '
 import { useEffect, useMemo, useState } from 'react';
 import { FaArrowLeft } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import SessionTypePicker from './SessionTypePicker';
 import {
   CONTRACT_TEMPLATES,
   type ContractTemplateField,
@@ -118,8 +119,12 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
 
   const [clientEmail, setClientEmail] = useState('');
   const [eventDateIso, setEventDateIso] = useState('');
-  const [eventStartTime, setEventStartTime] = useState(''); // HH:MM 24h
-  const [eventEndTime, setEventEndTime] = useState('');
+  // Defaults: 5:00 PM – 6:00 PM. Most shoots/weddings start in the late
+  // afternoon, and seeding zero-minute values means Vero just adjusts
+  // the hour instead of zeroing out :37 every time she opens the
+  // picker.
+  const [eventStartTime, setEventStartTime] = useState('17:00');
+  const [eventEndTime, setEventEndTime] = useState('18:00');
 
   // Session type defaults to the chosen template key. Override if needed
   // (mostly relevant when we add additional templates).
@@ -344,7 +349,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           <SectionHeading>Client</SectionHeading>
 
           <HStack spacing={4} align="flex-start">
-            <Field label="Partner 1 Full Name" w="50%" helpText="Their full legal name. First name is used in the portal greeting.">
+            <Field label="Partner 1 Full Name" w="50%" required helpText="Their full legal name. First name is used in the portal greeting.">
               <FormInput value={partner1FullName} onChange={(e) => setPartner1FullName(e.target.value)} placeholder="e.g. Chrisann Bryan" />
             </Field>
             <Field label="Partner 2 Full Name" w="50%" helpText="Optional. Leave blank for solo bookings (portraits, etc.).">
@@ -367,7 +372,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             />
           </Field>
 
-          <Field label="Client Email" helpText="The invite email goes here. They'll log in with this address.">
+          <Field label="Client Email" required helpText="The invite email goes here. They'll log in with this address.">
             <FormInput type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.com" />
           </Field>
 
@@ -389,7 +394,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             />
           </Field>
 
-          <Field label="Event Date" helpText="The day of the shoot.">
+          <Field label="Event Date" required helpText="The day of the shoot.">
             <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
           </Field>
 
@@ -409,15 +414,15 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             </Box>
           )}
 
-          <Field label="Session Type" helpText='Lowercase keyword used internally and in the contract title (e.g. "wedding", "portrait", "family").'>
-            <FormInput value={sessionType} onChange={(e) => setSessionType(e.target.value)} placeholder="wedding" />
+          <Field label="Session Type" required helpText="What kind of shoot this is. Click a standard type, or use Custom for anything else.">
+            <SessionTypePicker value={sessionType} onChange={setSessionType} />
           </Field>
 
           {/* ─── Pricing ─── */}
           <SectionHeading>Pricing</SectionHeading>
 
           <HStack spacing={4} align="flex-start">
-            <Field label="Total (USD)" w="50%" helpText="Total project cost across the whole booking.">
+            <Field label="Total (USD)" w="50%" required helpText="Total project cost across the whole booking.">
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -428,7 +433,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 min="0"
               />
             </Field>
-            <Field label="Retainer (USD)" w="50%" helpText="Non-refundable deposit. Due at signing, reserves the date.">
+            <Field label="Retainer (USD)" w="50%" required helpText="Non-refundable deposit. Due at signing, reserves the date.">
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -524,7 +529,7 @@ function FieldRow({
   onChange: (v: string) => void;
 }) {
   return (
-    <Field label={field.label} helpText={field.helpText}>
+    <Field label={field.label} helpText={field.helpText} required={field.required}>
       {field.type === 'textarea' ? (
         <Textarea
           value={value}
@@ -556,16 +561,23 @@ const Field = ({
   helpText,
   children,
   w,
+  required,
 }: {
   label: string;
   helpText?: string;
   children: React.ReactNode;
   w?: string;
+  // Surfaces a red dot next to the label — for fields that don't have
+  // a sensible auto-fill, so Vero can scan the form and spot what's
+  // still missing before submitting.
+  required?: boolean;
 }) => (
   <Box w={w ?? '100%'}>
     <Text
       as="label"
-      display="block"
+      display="inline-flex"
+      alignItems="center"
+      gap={1.5}
       fontSize="2xs"
       fontWeight="500"
       color="#c9a96e"
@@ -574,6 +586,9 @@ const Field = ({
       mb={2}
     >
       {label}
+      {required && (
+        <Box w="6px" h="6px" borderRadius="full" bg="red.400" />
+      )}
     </Text>
     {children}
     {helpText && (

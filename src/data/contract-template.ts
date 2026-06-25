@@ -254,6 +254,9 @@ export interface ContractTemplateField {
   placeholder?: string;
   defaultValue?: string;
   helpText?: string;
+  // Surfaces a red dot in the admin form. Use for fields with no
+  // sensible default that Vero must fill in (e.g. event_location).
+  required?: boolean;
 }
 
 export interface ContractTemplateSpec {
@@ -280,6 +283,7 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     label: 'Event Location',
     placeholder: 'Venue name and full address',
     helpText: 'Where the shoot happens. Include the full address.',
+    required: true,
   },
   {
     key: 'effective_date',

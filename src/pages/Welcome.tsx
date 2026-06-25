@@ -316,7 +316,13 @@ const Welcome = () => {
 };
 
 const fmtDate = (iso: string): string => {
-  const [y, m, d] = iso.split('-').map(Number);
+  if (!iso) return '';
+  // Accept either 'YYYY-MM-DD' or a full ISO timestamp like
+  // '2026-06-30T00:00:00.000Z'. event_date comes back from Postgres as
+  // a Date which gets JSON-serialized to the full timestamp form, so we
+  // need to handle both.
+  const datePart = iso.split('T')[0];
+  const [y, m, d] = datePart.split('-').map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });

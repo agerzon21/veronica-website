@@ -267,6 +267,20 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
         />
       )}
 
+      {/* Next-steps panel: lives between the signed contract status and
+          the balance section. Surfaces what the client owes RIGHT NOW.
+          - Contract signed but retainer not paid → big push to send the
+            retainer (it's the bit that actually reserves the date).
+          - Retainer paid but balance still outstanding → softer
+            reminder about the balance window.
+          - Paid in full → no nudge. */}
+      <NextStepsPanel
+        contractStatus={data.contract_status}
+        total={data.contract_total_amount}
+        retainer={data.contract_retainer_amount}
+        paidToDate={data.paid_to_date}
+      />
+
       {/* ─── Payment / Balance section — Phase 3 fills this in fully.
             For now, surface the totals so it's visible end-to-end. ─── */}
       {data.contract_total_amount !== null && remaining !== null && (
@@ -290,8 +304,15 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
               flexWrap="wrap"
               justify="center"
             >
-              <BalanceStat label="Paid" value={formatMoney(data.paid_to_date)} />
               <BalanceStat label="Total" value={formatMoney(data.contract_total_amount)} />
+              {data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 && (
+                <BalanceStat
+                  label="Retainer"
+                  value={formatMoney(data.contract_retainer_amount)}
+                  note="Part of total"
+                />
+              )}
+              <BalanceStat label="Paid" value={formatMoney(data.paid_to_date)} />
               <BalanceStat
                 label="Remaining"
                 value={formatMoney(remaining)}
@@ -757,10 +778,12 @@ const BalanceStat = ({
   label,
   value,
   emphasize,
+  note,
 }: {
   label: string;
   value: string;
   emphasize?: boolean;
+  note?: string;
 }) => (
   <VStack spacing={1}>
     <Text
@@ -779,8 +802,178 @@ const BalanceStat = ({
     >
       {value}
     </Text>
+    {note && (
+      <Text fontSize="2xs" color="gray.400" fontStyle="italic">
+        {note}
+      </Text>
+    )}
   </VStack>
 );
+
+/**
+ * Post-sign "what's next" panel. Surfaces the most pressing payment
+ * step (retainer or balance) with payment-method links so the client
+ * isn't left wondering what to do after they sign.
+ *
+ * Payment-method handles are hardcoded for now — once Vero wants to
+ * update them or use different ones per booking, we'll move to env
+ * vars (e.g. VERO_VENMO_HANDLE).
+ */
+const PAYMENT_HANDLES = {
+  zelle: 'veronikapolbinaphoto@gmail.com',
+  venmo: '@vero-photography',
+  cashapp: '$VeroPhotography',
+};
+
+function NextStepsPanel({
+  contractStatus,
+  total,
+  retainer,
+  paidToDate,
+}: {
+  contractStatus: 'none' | 'pending' | 'signed' | 'void';
+  total: number | null;
+  retainer: number | null;
+  paidToDate: number;
+}) {
+  // Only show after signing, and only when there's something owed.
+  if (contractStatus !== 'signed' || total === null) return null;
+  if (paidToDate >= total) return null;
+
+  const retainerOutstanding = retainer !== null && retainer > 0 && paidToDate < retainer;
+  const retainerToSend = retainerOutstanding ? retainer - paidToDate : 0;
+  const balanceOutstanding = !retainerOutstanding && paidToDate < total;
+  const balanceToSend = balanceOutstanding ? total - paidToDate : 0;
+
+  return (
+    <Box
+      bg="linear-gradient(180deg, #fefaf2 0%, #fcf6ea 100%)"
+      borderTop="1px solid"
+      borderBottom="1px solid"
+      borderColor="#f0e4b6"
+      py={{ base: 10, md: 12 }}
+      px={6}
+    >
+      <VStack maxW="560px" mx="auto" spacing={5}>
+        <VStack spacing={2}>
+          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+            Next Step
+          </Text>
+          <Box w="30px" h="1px" bg="#c9a96e" />
+        </VStack>
+
+        {retainerOutstanding ? (
+          <VStack spacing={3} textAlign="center">
+            <Text fontSize="lg" color="gray.800" fontWeight="400">
+              Send your retainer of <strong>${retainerToSend.toFixed(0)}</strong> to reserve the date.
+            </Text>
+            <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
+              Your contract is signed, but per the agreement the event date isn't officially booked until the retainer arrives. You can send it through any of the methods below — note "retainer" in the comments so Veronika can match it up.
+            </Text>
+          </VStack>
+        ) : (
+          <VStack spacing={3} textAlign="center">
+            <Text fontSize="lg" color="gray.800" fontWeight="400">
+              Remaining balance: <strong>${balanceToSend.toFixed(0)}</strong>
+            </Text>
+            <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
+              Your retainer's received and your date's reserved. The remaining balance is due per the contract — same methods below.
+            </Text>
+          </VStack>
+        )}
+
+        <VStack spacing={2} w="100%" maxW="380px">
+          <PaymentMethodRow label="Zelle" value={PAYMENT_HANDLES.zelle} />
+          <PaymentMethodRow
+            label="Venmo"
+            value={PAYMENT_HANDLES.venmo}
+            href={`https://venmo.com/${PAYMENT_HANDLES.venmo.replace(/^@/, '')}`}
+          />
+          <PaymentMethodRow
+            label="Cash App"
+            value={PAYMENT_HANDLES.cashapp}
+            href={`https://cash.app/${PAYMENT_HANDLES.cashapp}`}
+          />
+        </VStack>
+
+        <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
+          Once you've sent it, reply to this booking's email or message Veronika so she can confirm receipt and update your portal.
+        </Text>
+      </VStack>
+    </Box>
+  );
+}
+
+function PaymentMethodRow({ label, value, href }: { label: string; value: string; href?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard fallback handled by input selection in a textarea elsewhere */
+    }
+  };
+
+  const body = (
+    <Flex
+      align="center"
+      justify="space-between"
+      bg="white"
+      border="1px solid"
+      borderColor="#f0e4b6"
+      borderRadius="sm"
+      px={3}
+      py={2}
+      gap={3}
+    >
+      <HStack spacing={3}>
+        <Text fontSize="xs" fontWeight="500" letterSpacing="0.15em" textTransform="uppercase" color="#c9a96e" minW="64px">
+          {label}
+        </Text>
+        <Text fontSize="sm" color="gray.700" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
+          {value}
+        </Text>
+      </HStack>
+      <Box
+        as="button"
+        type="button"
+        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+          e.preventDefault();
+          e.stopPropagation();
+          copy();
+        }}
+        aria-label={`Copy ${label}`}
+        p={1.5}
+        borderRadius="sm"
+        color="gray.500"
+        cursor="pointer"
+        _hover={{ color: '#c9a96e', bg: 'gray.50' }}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        <Icon as={copied ? FaCheck : FaCopy} boxSize={3} />
+      </Box>
+    </Flex>
+  );
+
+  if (href) {
+    return (
+      <Box
+        as="a"
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        w="100%"
+        textDecoration="none"
+        _hover={{ textDecoration: 'none' }}
+      >
+        {body}
+      </Box>
+    );
+  }
+  return <Box w="100%">{body}</Box>;
+}
 
 /**
  * Signed-state display + download. The PDF lives in a private Vercel Blob
