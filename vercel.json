@@ -26,7 +26,7 @@
     "api/contact.ts": {
       "maxDuration": 30
     },
-    "api/portal/[action].ts": {
+    "api/portal.ts": {
       "maxDuration": 60
     }
   },
@@ -37,6 +37,14 @@
     { "source": "/weddings", "destination": "/gallery/weddings", "permanent": true }
   ],
   "rewrites": [
+    {
+      "source": "/api/portal/:action",
+      "destination": "/api/portal?action=:action"
+    },
+    {
+      "source": "/api/admin/:action",
+      "destination": "/api/admin?action=:action"
+    },
     {
       "source": "/photo/:category/:photoId",
       "destination": "/photo/:category/:photoId.html"

@@ -1,18 +1,19 @@
 /**
  * Dispatcher for /api/admin/* routes.
  *
- * Same pattern as api/portal/[action].ts — one function fans out to
- * underscore-prefixed handler files to stay under Vercel's Hobby-plan
- * 12-function ceiling.
+ * Same pattern as api/portal.ts — one function fans out to
+ * underscore-prefixed handler files under ./admin/ to stay under
+ * Vercel's Hobby-plan 12-function ceiling. The `vercel.json` rewrite
+ * maps /api/admin/X → /api/admin?action=X.
  *
  * Routes:
- *   POST /api/admin/portals          → _portals.ts          (list)
- *   POST /api/admin/portals-create   → _portals-create.ts   (create + invite)
+ *   POST /api/admin/portals          → ./admin/_portals.ts          (list)
+ *   POST /api/admin/portals-create   → ./admin/_portals-create.ts   (create + invite)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import portalsHandler from './_portals.js';
-import portalsCreateHandler from './_portals-create.js';
+import portalsHandler from './admin/_portals.js';
+import portalsCreateHandler from './admin/_portals-create.js';
 
 const HANDLERS: Record<
   string,
