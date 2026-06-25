@@ -25,6 +25,9 @@
   "functions": {
     "api/contact.ts": {
       "maxDuration": 30
+    },
+    "api/portal/sign-contract.ts": {
+      "maxDuration": 60
     }
   },
   "redirects": [

@@ -102,6 +102,30 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 
+  // Fields (label/value rows)
+  fieldRow: {
+    flexDirection: 'row',
+    marginBottom: 3,
+    paddingLeft: 4,
+  },
+  fieldLabel: {
+    fontSize: 10,
+    fontFamily: 'Helvetica-Bold',
+    width: 150,
+  },
+  fieldValue: {
+    fontSize: 10,
+    flex: 1,
+  },
+
+  // Emphasis variants for plain text
+  paragraphItalic: {
+    fontFamily: 'Helvetica-Oblique',
+  },
+  paragraphBold: {
+    fontFamily: 'Helvetica-Bold',
+  },
+
   // Signature block
   signatureSection: {
     marginTop: 24,
@@ -246,8 +270,14 @@ function SectionParagraphs({ section }: { section: ContractTemplate['sections'][
     <>
       {section.paragraphs.map((p, idx) => {
         if (p.kind === 'text') {
+          const emphasisStyle =
+            p.emphasis === 'italic'
+              ? styles.paragraphItalic
+              : p.emphasis === 'bold'
+                ? styles.paragraphBold
+                : undefined;
           return (
-            <Text key={idx} style={styles.paragraph}>
+            <Text key={idx} style={[styles.paragraph, emphasisStyle].filter(Boolean)}>
               {p.text}
             </Text>
           );
@@ -259,6 +289,18 @@ function SectionParagraphs({ section }: { section: ContractTemplate['sections'][
                 <View key={i} style={styles.bulletRow}>
                   <Text style={styles.bullet}>•</Text>
                   <Text style={styles.bulletText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          );
+        }
+        if (p.kind === 'fields') {
+          return (
+            <View key={idx}>
+              {p.items.map((f, i) => (
+                <View key={i} style={styles.fieldRow}>
+                  <Text style={styles.fieldLabel}>{f.label}:</Text>
+                  <Text style={styles.fieldValue}>{f.value}</Text>
                 </View>
               ))}
             </View>

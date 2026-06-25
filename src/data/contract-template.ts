@@ -20,8 +20,9 @@
  */
 
 export type ContractParagraph =
-  | { kind: 'text'; text: string }
+  | { kind: 'text'; text: string; emphasis?: 'italic' | 'bold' }
   | { kind: 'bullets'; items: string[] }
+  | { kind: 'fields'; items: Array<{ label: string; value: string }> }
   | { kind: 'signature_block' };
 
 export interface ContractSection {
@@ -61,19 +62,30 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       number: 'I',
       title: 'PARTIES',
       paragraphs: [
-        { kind: 'text', text: 'This agreement is entered into on {{effective_date}} ("Effective Date") between:' },
-        { kind: 'text', text: 'Photographer: {{photographer_name}} ("Photographer"), and' },
-        { kind: 'text', text: 'Client: {{client_names}} ("Client(s)")' },
+        { kind: 'text', text: 'This agreement is entered into on the Effective Date between the parties below.' },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Effective Date', value: '{{effective_date}}' },
+            { label: 'Photographer', value: '{{photographer_name}}' },
+            { label: 'Client', value: '{{client_names}}' },
+          ],
+        },
       ],
     },
     {
       number: 'II',
       title: 'EVENT DETAILS',
       paragraphs: [
-        { kind: 'text', text: 'Title: {{event_title}}' },
-        { kind: 'text', text: 'Location: {{event_location}}' },
-        { kind: 'text', text: 'Date: {{event_date}}' },
-        { kind: 'text', text: 'Time: {{event_time}}' },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Title', value: '{{event_title}}' },
+            { label: 'Location', value: '{{event_location}}' },
+            { label: 'Date', value: '{{event_date}}' },
+            { label: 'Time', value: '{{event_time}}' },
+          ],
+        },
       ],
     },
     {
@@ -81,31 +93,46 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       title: 'SERVICES',
       paragraphs: [
         { kind: 'text', text: 'The Photographer agrees to provide wedding photography services for the duration listed above.' },
-        { kind: 'text', text: 'Deliverables: Edited digital images with color correction' },
-        { kind: 'text', text: 'Delivery Timeframe: {{delivery_timeframe}} (AFTER full payment is received)' },
-        { kind: 'text', text: 'Images will be delivered via online gallery (Website Portal + Google Drive).' },
-        { kind: 'text', text: 'Photographer retains full creative control over shooting and editing style.' },
-        { kind: 'text', text: 'RAW/unedited images are not included.' },
-        { kind: 'text', text: 'This is an all-inclusive package; travel to event location included at no additional charge.' },
-        { kind: 'text', text: 'Online gallery will remain hosted for {{retention_months}} months after delivery. After that, retention is at Photographer’s discretion — Client is responsible for downloading and backing up images during the hosting window.' },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Deliverables', value: 'Edited digital images with color correction' },
+            { label: 'Delivery Timeframe', value: '{{delivery_timeframe}} (after full payment is received)' },
+            { label: 'Delivery Method', value: 'Online gallery (Website Portal + Google Drive)' },
+          ],
+        },
+        {
+          kind: 'bullets',
+          items: [
+            'Photographer retains full creative control over shooting and editing style.',
+            'RAW/unedited images are not included.',
+            'Travel to event location is included at no additional charge.',
+          ],
+        },
+        { kind: 'text', text: 'The online gallery will remain hosted for {{retention_months}} months after delivery. After that, retention is at the Photographer’s discretion — the Client is responsible for downloading and backing up images during the hosting window.' },
       ],
     },
     {
       number: 'IV',
       title: 'PAYMENT',
       paragraphs: [
-        { kind: 'text', text: 'Total Payment: {{total_amount}}' },
-        { kind: 'text', text: 'Retainer (Non-Refundable): {{retainer_amount}} (due at signing)' },
-        { kind: 'text', text: 'The event date is not reserved until this contract is signed and retainer is paid.' },
-        { kind: 'text', text: 'Remaining Balance: {{remaining_balance}} (due within {{balance_due_window}} after the event date)' },
-        { kind: 'text', text: 'Full payment must be received BEFORE delivery of any images.' },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Total Payment', value: '{{total_amount}}' },
+            { label: 'Retainer (Non-Refundable)', value: '{{retainer_amount}} (due at signing)' },
+            { label: 'Remaining Balance', value: '{{remaining_balance}} (due within {{balance_due_window}} after the event date)' },
+          ],
+        },
+        { kind: 'text', emphasis: 'italic', text: 'The event date is not reserved until this contract is signed and the retainer is paid.' },
+        { kind: 'text', emphasis: 'italic', text: 'Full payment must be received before delivery of any images.' },
       ],
     },
     {
       number: 'V',
       title: 'PAYMENT METHODS',
       paragraphs: [
-        { kind: 'text', text: 'Accepted Payment Methods:' },
+        { kind: 'text', text: 'Accepted payment methods:' },
         { kind: 'bullets', items: ['{{payment_methods}}'] },
       ],
     },
@@ -113,9 +140,14 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       number: 'VI',
       title: 'CANCELLATION / RESCHEDULING',
       paragraphs: [
-        { kind: 'text', text: 'Retainer is non-refundable.' },
-        { kind: 'text', text: 'If Client cancels, all payments made are non-refundable.' },
-        { kind: 'text', text: 'Rescheduling is allowed at Photographer’s discretion based on availability.' },
+        {
+          kind: 'bullets',
+          items: [
+            'The retainer is non-refundable.',
+            'If the Client cancels, all payments made are non-refundable.',
+            'Rescheduling is allowed at the Photographer’s discretion based on availability.',
+          ],
+        },
       ],
     },
     {
@@ -143,7 +175,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
             'equipment failure (reasonable backup efforts will be made)',
           ],
         },
-        { kind: 'text', text: 'Total liability is limited to the amount paid under this agreement.' },
+        { kind: 'text', emphasis: 'italic', text: 'Total liability is limited to the amount paid under this agreement.' },
       ],
     },
     {
@@ -212,8 +244,19 @@ export function fillTemplate<V extends Record<string, string>>(
       ...section,
       title: substitute(section.title),
       paragraphs: section.paragraphs.map((p) => {
-        if (p.kind === 'text') return { kind: 'text', text: substitute(p.text) };
+        if (p.kind === 'text') {
+          return { kind: 'text', text: substitute(p.text), emphasis: p.emphasis };
+        }
         if (p.kind === 'bullets') return { kind: 'bullets', items: p.items.map(substitute) };
+        if (p.kind === 'fields') {
+          return {
+            kind: 'fields',
+            items: p.items.map((f) => ({
+              label: substitute(f.label),
+              value: substitute(f.value),
+            })),
+          };
+        }
         return p;
       }),
     })),

@@ -1,5 +1,5 @@
 import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, useToast } from '@chakra-ui/react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FaCopy, FaSync, FaCheck, FaUndo } from 'react-icons/fa';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
@@ -577,6 +577,30 @@ function ContractSignSection({
     }
   }, [contractBody]);
 
+  // Size the signature canvas to its rendered CSS size × devicePixelRatio.
+  // Without this, the fixed internal pixel buffer doesn't match the
+  // stretched CSS width — pointer events get coordinate-rounded, and the
+  // bezier smoothing in signature_pad accumulates that error over long
+  // strokes, producing visible drift between cursor and ink.
+  useEffect(() => {
+    if (!contract) return;
+    const pad = sigPadRef.current;
+    if (!pad) return;
+
+    const resize = () => {
+      const canvas = pad.getCanvas();
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = canvas.offsetWidth * ratio;
+      canvas.height = canvas.offsetHeight * ratio;
+      canvas.getContext('2d')?.scale(ratio, ratio);
+      pad.clear();
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [contract]);
+
   const handleClear = () => {
     sigPadRef.current?.clear();
   };
@@ -599,28 +623,50 @@ function ContractSignSection({
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/portal/sign-contract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...credentials,
-          signer_name: signerName.trim(),
-          signer_signature: signatureDataUrl,
-          consent: true,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      let res: Response;
+      try {
+        res = await fetch('/api/portal/sign-contract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...credentials,
+            signer_name: signerName.trim(),
+            signer_signature: signatureDataUrl,
+            consent: true,
+          }),
+        });
+      } catch (err) {
+        // Genuine network failure (offline, DNS, etc). Distinct from a
+        // server response we couldn't parse.
+        console.error('[sign-contract] network error:', err);
+        setError('Could not reach the server. Please check your connection and try again.');
+        return;
+      }
+
+      // Read the response as text first so we can show *something* useful
+      // even if the body isn't JSON (e.g. Vercel returning an HTML error
+      // page). Logging both the status and the raw body to the console
+      // makes the failure mode obvious in DevTools.
+      const rawBody = await res.text();
+      let data: { success?: boolean; error?: string; contract_signed_at?: string; contract_signed_pdf_drive_id?: string } | null = null;
+      try {
+        data = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        console.error('[sign-contract] non-JSON response', { status: res.status, rawBody });
+        setError(`Server returned an unexpected response (status ${res.status}). Open the browser console for details.`);
+        return;
+      }
+
+      if (res.ok && data?.success) {
         onSigned({
           contract_status: 'signed',
-          contract_signed_at: data.contract_signed_at,
-          contract_signed_pdf_drive_id: data.contract_signed_pdf_drive_id,
+          contract_signed_at: data.contract_signed_at!,
+          contract_signed_pdf_drive_id: data.contract_signed_pdf_drive_id!,
         });
       } else {
-        setError(data.error || 'Could not sign the contract. Please try again.');
+        console.error('[sign-contract] server returned error', { status: res.status, data });
+        setError(data?.error || `Could not sign the contract (status ${res.status}). Please try again.`);
       }
-    } catch {
-      setError('Could not reach the server. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -787,9 +833,7 @@ function ContractSignSection({
               ref={sigPadRef}
               penColor="#2d2d2d"
               canvasProps={{
-                width: 600,
-                height: 180,
-                style: { width: '100%', height: '180px' },
+                style: { width: '100%', height: '180px', display: 'block' },
               }}
             />
           </Box>
@@ -877,7 +921,7 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
                 {section.number ? `${section.number}. ` : ''}
                 {section.title}
               </Text>
-              <VStack spacing={2} align="stretch">
+              <VStack spacing={2.5} align="stretch">
                 {section.paragraphs.map((p, i) => {
                   if (p.kind === 'text') {
                     return (
@@ -886,7 +930,8 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
                         fontSize="sm"
                         color="gray.700"
                         lineHeight="1.7"
-                        fontWeight="300"
+                        fontWeight={p.emphasis === 'bold' ? '500' : '300'}
+                        fontStyle={p.emphasis === 'italic' ? 'italic' : 'normal'}
                       >
                         {p.text}
                       </Text>
@@ -909,6 +954,39 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
                               {item}
                             </Text>
                           </HStack>
+                        ))}
+                      </VStack>
+                    );
+                  }
+                  if (p.kind === 'fields') {
+                    return (
+                      <VStack key={i} spacing={1.5} align="stretch" pl={2}>
+                        {p.items.map((f, j) => (
+                          <Flex
+                            key={j}
+                            direction={{ base: 'column', md: 'row' }}
+                            align={{ base: 'flex-start', md: 'baseline' }}
+                            gap={{ base: 0.5, md: 2 }}
+                          >
+                            <Text
+                              fontSize="sm"
+                              color="gray.800"
+                              fontWeight="500"
+                              lineHeight="1.7"
+                              minW={{ md: '170px' }}
+                            >
+                              {f.label}:
+                            </Text>
+                            <Text
+                              fontSize="sm"
+                              color="gray.700"
+                              fontWeight="300"
+                              lineHeight="1.7"
+                              flex="1"
+                            >
+                              {f.value}
+                            </Text>
+                          </Flex>
                         ))}
                       </VStack>
                     );

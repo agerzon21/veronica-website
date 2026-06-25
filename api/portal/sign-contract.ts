@@ -98,6 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    console.log('[sign-contract] start', { email });
     const sql = getDb();
 
     // 1. Auth + load contract body
@@ -187,6 +188,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? sigEnv
         : `data:image/png;base64,${sigEnv}`
       : null;
+    console.log('[sign-contract] rendering PDF', {
+      portal_id: portal.id,
+      has_photographer_sig: !!photographerSignaturePng,
+      sections: filledTemplate.sections.length,
+    });
     const pdfBuffer = await renderContractPdf({
       filled: filledTemplate,
       photographerName: VERONIKA_NAME,
@@ -196,6 +202,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       audit,
     });
 
+    console.log('[sign-contract] PDF rendered', { bytes: pdfBuffer.length });
+
     // 5. Upload to Drive
     const pdfFilename = `Contract — ${portal.client_display_name ?? portal.client_email} — ${signedAt.slice(0, 10)}.pdf`;
     const driveFileId = await uploadFile({
@@ -204,6 +212,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mimeType: 'application/pdf',
       content: pdfBuffer,
     });
+    console.log('[sign-contract] Drive upload OK', { driveFileId });
 
     // 6. Email both parties with the PDF attached
     try {
@@ -220,6 +229,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         ],
       });
+      console.log('[sign-contract] email sent');
     } catch (err) {
       // If the email fails after Drive upload succeeded, the PDF is still
       // saved in Veronika's Drive — log the issue, but continue to mark the
@@ -243,6 +253,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           updated_at = now()
       where id = ${portal.id}
     `;
+    console.log('[sign-contract] DB updated, signing complete');
 
     return res.status(200).json({
       success: true,
