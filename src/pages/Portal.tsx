@@ -46,11 +46,21 @@ const Portal = () => {
   //
   // Email can be prefilled via ?email= so the welcome → portal handoff
   // doesn't make the client retype it.
+  //
+  // On the gallery tab, ?password= ALSO pre-fills and auto-submits — that
+  // lets us send "one-click" gallery links in the delivery email. Same
+  // security model as before: anyone with the URL has access, same as
+  // anyone with the password did. We deliberately do NOT support
+  // ?password= on the client tab (full-portal login) — typing the
+  // password is the friction we want there.
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [clientPassword, setClientPassword] = useState('');
-  const [galleryPassword, setGalleryPassword] = useState('');
+  const [galleryPassword, setGalleryPassword] = useState(
+    () => (tabFromPath(location.pathname) === 'gallery' ? searchParams.get('password') ?? '' : ''),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [autoSubmittedGallery, setAutoSubmittedGallery] = useState(false);
 
   // Post-login state — one of these gets set on a successful auth, which
   // unmounts the form and renders the corresponding view.
@@ -97,8 +107,8 @@ const Portal = () => {
     }
   };
 
-  const handleGallerySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleGallerySubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
     if (!galleryPassword.trim()) return;
     setIsSubmitting(true);
     setError('');
@@ -132,6 +142,21 @@ const Portal = () => {
       setIsSubmitting(false);
     }
   };
+
+  // One-shot auto-submit when the URL carries ?password= on the gallery
+  // tab. We only fire once (autoSubmittedGallery guards re-runs after
+  // failed submits or tab switches) so the user can correct a bad
+  // password without it auto-trying every render.
+  useEffect(() => {
+    if (autoSubmittedGallery) return;
+    if (tab !== 'gallery') return;
+    const pwFromUrl = searchParams.get('password');
+    if (!pwFromUrl) return;
+    if (!galleryPassword.trim()) return;
+    setAutoSubmittedGallery(true);
+    void handleGallerySubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, galleryPassword, autoSubmittedGallery]);
 
   // Logged in as full-portal client → render the full client portal view.
   // Pass the credentials through so child sections (e.g. Gallery Pass

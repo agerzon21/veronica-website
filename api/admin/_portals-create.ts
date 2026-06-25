@@ -336,12 +336,15 @@ function buildGalleryReadyText(
 ): string {
   const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const directUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
   return `${greeting}
 
 Your photos are ready ✨
 
-View your gallery here:
-${siteOrigin}/portal/pass
+Open your gallery (one-click access):
+${directUrl}
+
+If that link doesn't work, you can also go to ${siteOrigin}/portal/pass and enter the password manually:
 
 Password: ${galleryPassword}
 
@@ -361,13 +364,20 @@ function buildGalleryReadyHtml(
 ): string {
   const name = firstName || 'there';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  // Direct link with password encoded into the URL — /portal/pass auto-
+  // submits when it sees ?password=, so this is a true one-click open.
+  // We surface the bare URL too as a fallback (in case the styled button
+  // gets stripped by an email client), and the plain password as a third
+  // fallback (in case the URL itself gets mangled).
+  const directUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
 <p>Hi ${name},</p>
 <p>Your photos are ready ✨</p>
-<p style="margin:24px 0;"><a href="${siteOrigin}/portal/pass" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open my gallery</a></p>
-<p style="font-size:14px;color:#666;">Password: <strong style="color:#2d2d2d;font-family:monospace;">${galleryPassword}</strong></p>
+<p style="margin:24px 0;"><a href="${directUrl}" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open my gallery</a></p>
+<p style="font-size:13px;color:#888;margin-top:-8px;">If the button doesn't work, paste this into your browser:<br><span style="word-break:break-all;color:#c9a96e;font-family:monospace;font-size:12px;">${directUrl}</span></p>
+<p style="font-size:13px;color:#888;">Or, go to <a href="${siteOrigin}/portal/pass" style="color:#c9a96e">${siteOrigin}/portal/pass</a> and enter:<br>Password: <strong style="color:#2d2d2d;font-family:monospace;">${galleryPassword}</strong></p>
 <p style="font-size:14px;color:#666;">The gallery will stay online until <strong>${exp}</strong>. Please download and back up your favourites before then.</p>
 <p>If you have any questions or want to order prints, just reply to this email.</p>
 <p>Warmly,<br><em>Veronika</em></p>

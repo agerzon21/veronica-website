@@ -91,6 +91,65 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
   const [gpError, setGpError] = useState('');
   const [gpCopied, setGpCopied] = useState(false);
 
+  // ─── Sharing state ───
+  // shareUrl is derived from gallery_password (no need to store it, just
+  // recompute below). The copy / invite states live here.
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<
+    { kind: 'error' | 'success'; text: string } | null
+  >(null);
+  const [invitesRemaining, setInvitesRemaining] = useState<number | null>(null);
+
+  const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://vero.photography'}/portal/pass?password=${encodeURIComponent(data.gallery_password)}`;
+
+  const handleCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareLinkCopied(true);
+      setTimeout(() => setShareLinkCopied(false), 2000);
+    } catch {
+      toast({ title: 'Could not copy', status: 'error', duration: 2000 });
+    }
+  };
+
+  const handleSendInvite = async () => {
+    setInviteMessage(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) {
+      setInviteMessage({ kind: 'error', text: 'Enter a valid email address.' });
+      return;
+    }
+    setInviteSending(true);
+    try {
+      const res = await fetch('/api/portal/share-gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...credentials, target_email: inviteEmail.trim() }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        setInviteMessage({
+          kind: 'success',
+          text: `Invite sent to ${inviteEmail.trim()}.`,
+        });
+        setInviteEmail('');
+        if (typeof result.remaining_today === 'number') {
+          setInvitesRemaining(result.remaining_today);
+        }
+      } else {
+        setInviteMessage({
+          kind: 'error',
+          text: result.error || 'Could not send the invite.',
+        });
+      }
+    } catch {
+      setInviteMessage({ kind: 'error', text: 'Could not reach the server.' });
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
   // Single helper for every gallery-pass action — auth + the action are
   // all server-side, this just dispatches and folds the new state back into
   // the parent's clientData so the rest of the view stays in sync.
@@ -545,6 +604,131 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
             <Text fontSize="xs" color="red.500" fontWeight="400" pt={1}>
               {gpError}
             </Text>
+          )}
+
+          {/* ─── Share section ───
+              Two ways to hand the gallery off to someone:
+              1) Copy a one-click direct URL (password embedded). Easiest
+                 path — paste into iMessage / WhatsApp / wherever.
+              2) Type an email and we send the recipient an "invited by you"
+                 message. Rate-limited server-side to 5/24h to keep the
+                 sender domain reputation clean. */}
+          {data.gallery_enabled && (
+            <VStack
+              w="100%"
+              maxW="480px"
+              spacing={5}
+              pt={6}
+              mt={2}
+              borderTop="1px solid"
+              borderColor="gray.200"
+            >
+              <Text
+                fontSize="2xs"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.25em"
+                color="#c9a96e"
+              >
+                Share
+              </Text>
+
+              {/* Direct link with copy button */}
+              <VStack w="100%" spacing={2} align="stretch">
+                <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
+                  One-click link
+                </Text>
+                <Flex
+                  align="center"
+                  gap={2}
+                  bg="white"
+                  border="1px solid"
+                  borderColor="gray.200"
+                  borderRadius="sm"
+                  px={3}
+                  py={2}
+                >
+                  <Text
+                    fontSize="xs"
+                    color="gray.700"
+                    fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+                    flex="1"
+                    minW={0}
+                    noOfLines={1}
+                    textAlign="left"
+                  >
+                    {shareUrl}
+                  </Text>
+                  <Box
+                    as="button"
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    aria-label="Copy share link"
+                    p={1.5}
+                    borderRadius="sm"
+                    color="gray.500"
+                    transition="all 0.2s"
+                    cursor="pointer"
+                    _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    <Icon as={shareLinkCopied ? FaCheck : FaCopy} boxSize={3} />
+                  </Box>
+                </Flex>
+                <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+                  Send via iMessage, WhatsApp, email — whoever opens it goes straight to the gallery, no password to type.
+                </Text>
+              </VStack>
+
+              {/* Email invite */}
+              <VStack w="100%" spacing={2} align="stretch">
+                <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
+                  Or send via email
+                </Text>
+                <Flex
+                  gap={2}
+                  direction={{ base: 'column', sm: 'row' }}
+                >
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="friend@example.com"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    h="40px"
+                    bg="white"
+                    fontSize="sm"
+                    _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                  />
+                  <CTAButton
+                    onClick={handleSendInvite}
+                    variant="solid"
+                    size="sm"
+                    isLoading={inviteSending}
+                    loadingText="Sending..."
+                  >
+                    Send Invite
+                  </CTAButton>
+                </Flex>
+                <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+                  We'll email them a note saying you shared the gallery, with the same one-click link.
+                  {invitesRemaining !== null && (
+                    <> {invitesRemaining} {invitesRemaining === 1 ? 'invite' : 'invites'} left today.</>
+                  )}
+                </Text>
+                {inviteMessage && (
+                  <Text
+                    fontSize="xs"
+                    fontWeight="400"
+                    color={inviteMessage.kind === 'error' ? 'red.500' : 'green.600'}
+                  >
+                    {inviteMessage.text}
+                  </Text>
+                )}
+              </VStack>
+            </VStack>
           )}
         </VStack>
       </Box>

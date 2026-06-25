@@ -28,6 +28,7 @@ import signContractHandler from './portal/_sign-contract.js';
 import downloadContractHandler from './portal/_download-contract.js';
 import welcomeHandler from './portal/_welcome.js';
 import welcomeCompleteHandler from './portal/_welcome-complete.js';
+import shareGalleryHandler from './portal/_share-gallery.js';
 
 const HANDLERS: Record<
   string,
@@ -40,6 +41,7 @@ const HANDLERS: Record<
   'download-contract': downloadContractHandler,
   welcome: welcomeHandler,
   'welcome-complete': welcomeCompleteHandler,
+  'share-gallery': shareGalleryHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

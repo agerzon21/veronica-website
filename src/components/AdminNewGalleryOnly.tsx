@@ -45,12 +45,15 @@ const buildShareMessage = (
   const expLine = expiresIso
     ? `\nThe gallery will stay online until ${fmtDate(expiresIso)}. Please download and back up your favourites before then.\n`
     : '';
+  const directUrl = `https://vero.photography/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
   return `${greeting}
 
 Your photos are ready ✨
 
-View your gallery here:
-https://vero.photography/portal/pass
+Open your gallery (one-click access):
+${directUrl}
+
+If that link doesn't work, you can also go to https://vero.photography/portal/pass and enter the password manually:
 
 Password: ${galleryPassword}
 ${expLine}
