@@ -1,6 +1,8 @@
 import { Box, HStack, VStack, Text, Flex, Badge, Icon } from '@chakra-ui/react';
-import { FaPlus, FaSyncAlt } from 'react-icons/fa';
+import { useState } from 'react';
+import { FaPlus, FaSyncAlt, FaTable, FaCalendarAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import AdminCalendarView from './AdminCalendarView';
 
 export interface AdminPortalSummary {
   id: string;
@@ -39,7 +41,10 @@ const formatMoney = (amount: number | null): string => {
   return `$${amount.toFixed(0)}`;
 };
 
+type ViewMode = 'table' | 'calendar';
+
 const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props) => {
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
   return (
     <Box maxW="1200px" mx="auto">
       {/* Header row */}
@@ -67,7 +72,22 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
             {portals.length} portal{portals.length === 1 ? '' : 's'}
           </Text>
         </VStack>
-        <HStack spacing={3}>
+        <HStack spacing={3} flexWrap="wrap">
+          {/* View toggle */}
+          <HStack spacing={0} border="1px solid" borderColor="gray.200" borderRadius="sm" overflow="hidden">
+            <ViewToggleButton
+              active={viewMode === 'table'}
+              icon={FaTable}
+              label="Table"
+              onClick={() => setViewMode('table')}
+            />
+            <ViewToggleButton
+              active={viewMode === 'calendar'}
+              icon={FaCalendarAlt}
+              label="Calendar"
+              onClick={() => setViewMode('calendar')}
+            />
+          </HStack>
           <Box
             as="button"
             type="button"
@@ -94,6 +114,67 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
           </CTAButton>
         </HStack>
       </Flex>
+
+      {/* Calendar view replaces the table when toggled. The dashboard's
+          empty-state + table-vs-cards stays only in table mode. */}
+      {viewMode === 'calendar' && (
+        <AdminCalendarView portals={portals} onOpenPortal={onOpenPortal} />
+      )}
+      {viewMode === 'table' && (
+        <TableView portals={portals} onOpenPortal={onOpenPortal} />
+      )}
+    </Box>
+  );
+};
+
+function ViewToggleButton({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      bg={active ? '#c9a96e' : 'white'}
+      color={active ? 'white' : 'gray.600'}
+      border="none"
+      px={3}
+      py={2}
+      cursor="pointer"
+      display="inline-flex"
+      alignItems="center"
+      gap={2}
+      fontSize="2xs"
+      fontWeight="500"
+      letterSpacing="0.2em"
+      textTransform="uppercase"
+      _hover={{ bg: active ? '#b89858' : 'gray.50' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Icon as={icon} boxSize={3} />
+      {label}
+    </Box>
+  );
+}
+
+function TableView({
+  portals,
+  onOpenPortal,
+}: {
+  portals: AdminPortalSummary[];
+  onOpenPortal: (id: string) => void;
+}) {
+  return (
+    <>
+
 
       {/* Empty state */}
       {portals.length === 0 && (
@@ -143,9 +224,9 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
           ))}
         </VStack>
       )}
-    </Box>
+    </>
   );
-};
+}
 
 function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: () => void }) {
   return (

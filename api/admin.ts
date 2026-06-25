@@ -17,6 +17,7 @@ import portalsCreateHandler from './admin/_portals-create.js';
 import portalDetailHandler from './admin/_portal-detail.js';
 import portalUpdateHandler from './admin/_portal-update.js';
 import portalDeliverHandler from './admin/_portal-deliver.js';
+import portalDeleteHandler from './admin/_portal-delete.js';
 import paymentLogHandler from './admin/_payment-log.js';
 
 const HANDLERS: Record<
@@ -28,6 +29,7 @@ const HANDLERS: Record<
   'portal-detail': portalDetailHandler,
   'portal-update': portalUpdateHandler,
   'portal-deliver': portalDeliverHandler,
+  'portal-delete': portalDeleteHandler,
   'payment-log': paymentLogHandler,
 };
 

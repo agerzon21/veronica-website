@@ -23,6 +23,7 @@ const Admin = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [portals, setPortals] = useState<AdminPortalSummary[] | null>(null);
+  const [adminLevel, setAdminLevel] = useState<'admin' | 'super'>('admin');
   const [view, setView] = useState<View>({ kind: 'dashboard' });
 
   const loadPortals = async (pwd: string): Promise<{ ok: boolean; error?: string }> => {
@@ -35,6 +36,7 @@ const Admin = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         setPortals(data.portals);
+        if (data.level === 'super' || data.level === 'admin') setAdminLevel(data.level);
         return { ok: true };
       }
       return { ok: false, error: data.error || `Server error (${res.status})` };
@@ -105,6 +107,7 @@ const Admin = () => {
             <AdminClientDetail
               portalId={view.id}
               adminPassword={password}
+              adminLevel={adminLevel}
               onBack={async () => {
                 setView({ kind: 'dashboard' });
                 await loadPortals(password);

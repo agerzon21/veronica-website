@@ -6,6 +6,7 @@ import CTAButton from './ui/CTAButton';
 interface Props {
   portalId: string;
   adminPassword: string;
+  adminLevel: 'admin' | 'super';
   onBack: () => void;
 }
 
@@ -55,7 +56,7 @@ const daysUntil = (iso: string | null): number | null => {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 };
 
-const AdminClientDetail = ({ portalId, adminPassword, onBack }: Props) => {
+const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Props) => {
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -332,14 +333,17 @@ const AdminClientDetail = ({ portalId, adminPassword, onBack }: Props) => {
             saving={savingField === 'client_display_name'}
             onSave={(v) => patch({ client_display_name: v }, 'client_display_name')}
           />
-          {portal.mode === 'full' && (
-            <InlineField
-              label="Client Email"
-              value={portal.client_email ?? ''}
-              saving={savingField === 'client_email'}
-              onSave={(v) => patch({ client_email: v }, 'client_email')}
-            />
-          )}
+          <InlineField
+            label="Client Email"
+            value={portal.client_email ?? ''}
+            helpText={
+              portal.mode === 'simple'
+                ? 'Optional. If you add one, "Mark as Delivered" will email the client.'
+                : undefined
+            }
+            saving={savingField === 'client_email'}
+            onSave={(v) => patch({ client_email: v }, 'client_email')}
+          />
           <InlineField
             label="Event Date"
             type="date"
@@ -353,8 +357,45 @@ const AdminClientDetail = ({ portalId, adminPassword, onBack }: Props) => {
             saving={savingField === 'session_type'}
             onSave={(v) => patch({ session_type: v }, 'session_type')}
           />
+          {/* Total + Retainer let her retro-fit old gallery-only rows
+              with bookkeeping. Once a total is set, the Payments
+              section above starts surfacing. Frozen on signed full
+              contracts (server enforces). */}
+          <InlineField
+            label="Total Amount (USD)"
+            type="text"
+            value={portal.contract_total_amount?.toString() ?? ''}
+            placeholder="0"
+            helpText="What you charged. Editable until the contract is signed (for full-mode rows)."
+            saving={savingField === 'contract_total_amount'}
+            onSave={(v) =>
+              patch(
+                { contract_total_amount: v.trim() === '' ? null : Number(v) },
+                'contract_total_amount',
+              )
+            }
+          />
+          <InlineField
+            label="Retainer / Deposit (USD)"
+            type="text"
+            value={portal.contract_retainer_amount?.toString() ?? ''}
+            placeholder="0"
+            helpText="Non-refundable deposit. Editable until the contract is signed."
+            saving={savingField === 'contract_retainer_amount'}
+            onSave={(v) =>
+              patch(
+                { contract_retainer_amount: v.trim() === '' ? null : Number(v) },
+                'contract_retainer_amount',
+              )
+            }
+          />
         </VStack>
       </Section>
+
+      {/* ─── Danger zone (super-admin only) ─── */}
+      {adminLevel === 'super' && (
+        <DangerZone portalId={portalId} adminPassword={adminPassword} onDeleted={onBack} />
+      )}
     </Box>
   );
 };
@@ -728,6 +769,106 @@ function PaymentRow({
         </Box>
       )}
     </Flex>
+  );
+}
+
+/**
+ * Hard-delete button. Only rendered when the logged-in admin is at
+ * 'super' level (separate password). Two-click confirmation so a
+ * stray click doesn't nuke the row + payment history + signed
+ * contract reference all at once.
+ */
+function DangerZone({
+  portalId,
+  adminPassword,
+  onDeleted,
+}: {
+  portalId: string;
+  adminPassword: string;
+  onDeleted: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const doDelete = async () => {
+    setError('');
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/portal-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, id: portalId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        onDeleted();
+      } else {
+        setError(data.error || `Server error (${res.status}).`);
+      }
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="red.100"
+      borderRadius="md"
+      px={{ base: 5, md: 7 }}
+      py={{ base: 5, md: 6 }}
+      mt={2}
+    >
+      <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="red.500" mb={4}>
+        Danger Zone (Super-Admin)
+      </Text>
+      <Text fontSize="sm" color="gray.600" mb={4} fontWeight="300">
+        Hard-deletes the portal and all logged payments. Cannot be undone. The signed-contract PDF in Blob storage is kept as a historical record.
+      </Text>
+      {!confirming && (
+        <CTAButton onClick={() => setConfirming(true)} variant="outline" size="sm">
+          <Icon as={FaTrash} boxSize={3} mr={2} />
+          Delete this portal
+        </CTAButton>
+      )}
+      {confirming && (
+        <HStack spacing={3}>
+          <CTAButton onClick={() => setConfirming(false)} variant="outline" size="sm">
+            Cancel
+          </CTAButton>
+          <Box
+            as="button"
+            type="button"
+            onClick={doDelete}
+            bg="red.500"
+            color="white"
+            border="none"
+            px={4}
+            py={2}
+            borderRadius="sm"
+            fontSize="xs"
+            fontWeight="500"
+            letterSpacing="0.15em"
+            textTransform="uppercase"
+            cursor="pointer"
+            _hover={{ bg: 'red.600' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            disabled={submitting}
+          >
+            {submitting ? 'Deleting...' : 'Confirm delete'}
+          </Box>
+        </HStack>
+      )}
+      {error && (
+        <Text fontSize="sm" color="red.500" mt={3}>
+          {error}
+        </Text>
+      )}
+    </Box>
   );
 }
 
