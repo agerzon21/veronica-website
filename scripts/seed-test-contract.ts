@@ -17,6 +17,7 @@ const vars: WeddingContractVariables = {
   event_location: 'Malcolm Gross Rose Gardens',
   event_date: 'August 9, 2026',
   event_time: '5:00 PM to 6:00 PM (approximately 1 hour)',
+  deliverables: 'Edited digital images with color correction',
   delivery_timeframe: 'Within 5 weeks after event',
   total_amount: '$230',
   retainer_amount: '$50',

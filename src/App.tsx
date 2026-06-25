@@ -11,6 +11,8 @@ import Pay from './pages/Pay';
 import NotFound from './pages/NotFound';
 import ThankYou from './pages/ThankYou';
 import Portal from './pages/Portal';
+import Welcome from './pages/Welcome';
+import Admin from './pages/Admin';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import SEO from './components/SEO';
@@ -53,6 +55,8 @@ function App() {
             <Route path="/pay" element={<Pay />} />
             <Route path="/portal" element={<Portal />} />
             <Route path="/portal/pass" element={<Portal />} />
+            <Route path="/portal/welcome" element={<Welcome />} />
+            <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />

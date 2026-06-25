@@ -37,7 +37,7 @@ export interface ContractTemplate {
 }
 
 // Variables accepted by the wedding template. Used for type-safety on the
-// admin side (Phase 4) and for sensible defaults in PDF generation.
+// admin side and for sensible defaults in PDF generation.
 export interface WeddingContractVariables {
   effective_date: string;          // e.g. "June 24, 2026"
   photographer_name: string;       // e.g. "Veronika Polbina"
@@ -46,6 +46,7 @@ export interface WeddingContractVariables {
   event_location: string;          // e.g. "Malcolm Gross Rose Gardens, ..."
   event_date: string;              // e.g. "August 9, 2026"
   event_time: string;              // e.g. "5:00 PM to 6:00 PM (approximately 1 hour)"
+  deliverables: string;            // e.g. "Edited digital images with color correction" or "30 edited photos"
   delivery_timeframe: string;      // e.g. "Within 5 weeks after event"
   total_amount: string;            // formatted "$230"
   retainer_amount: string;         // formatted "$50"
@@ -96,7 +97,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         {
           kind: 'fields',
           items: [
-            { label: 'Deliverables', value: 'Edited digital images with color correction' },
+            { label: 'Deliverables', value: '{{deliverables}}' },
             { label: 'Delivery Timeframe', value: '{{delivery_timeframe}} (after full payment is received)' },
             { label: 'Delivery Method', value: 'Online gallery (Website Portal + Google Drive)' },
           ],
@@ -224,6 +225,57 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       paragraphs: [{ kind: 'signature_block' }],
     },
   ],
+};
+
+/**
+ * Field metadata for the admin's "new client" form. Drives label, input
+ * type, placeholder, and default. Keep ordered the way the form should
+ * read top to bottom — the admin renders fields in this order.
+ */
+export interface ContractTemplateField {
+  key: string;
+  label: string;
+  // 'text' is the default. 'date' renders a date picker (we format to
+  // human-readable on save). 'currency' is a number input rendered with
+  // a $ prefix; the variable is stored as "$230". 'number' is a plain
+  // number input.
+  type?: 'text' | 'date' | 'currency' | 'number' | 'textarea';
+  placeholder?: string;
+  defaultValue?: string;
+  helpText?: string;
+}
+
+export interface ContractTemplateSpec {
+  key: string;
+  name: string;          // shown in the admin dropdown
+  template: ContractTemplate;
+  fields: ContractTemplateField[];
+}
+
+export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
+  { key: 'photographer_name', label: 'Photographer Name', defaultValue: 'Veronika Polbina' },
+  { key: 'client_names', label: 'Client Names', placeholder: 'e.g. Chrisann Bryan & Rajiv Thomas' },
+  { key: 'event_title', label: 'Event Title', placeholder: "e.g. Chrisann & Rajiv's Wedding" },
+  { key: 'event_location', label: 'Event Location', placeholder: 'Venue name and address' },
+  { key: 'event_date', label: 'Event Date', type: 'date' },
+  { key: 'event_time', label: 'Event Time', placeholder: 'e.g. 5:00 PM to 6:00 PM (1 hour)' },
+  { key: 'effective_date', label: 'Effective Date', type: 'date', helpText: 'Roughly when the contract is signed — gets shown on the contract.' },
+  { key: 'deliverables', label: 'Deliverables', defaultValue: 'Edited digital images with color correction' },
+  { key: 'delivery_timeframe', label: 'Delivery Timeframe', defaultValue: 'Within 5 weeks after event' },
+  { key: 'total_amount', label: 'Total Amount (USD)', type: 'currency', placeholder: '0' },
+  { key: 'retainer_amount', label: 'Retainer Amount (USD)', type: 'currency', placeholder: '0', helpText: 'Non-refundable. Due at signing.' },
+  { key: 'balance_due_window', label: 'Balance Due Window', defaultValue: 'TEN (10) Days', helpText: 'How long after the event the remaining balance is due.' },
+  { key: 'payment_methods', label: 'Payment Methods', defaultValue: 'Cash, Venmo, CashApp or Zelle' },
+  { key: 'retention_months', label: 'Gallery Retention (months)', type: 'number', defaultValue: '3' },
+];
+
+export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
+  wedding: {
+    key: 'wedding',
+    name: 'Wedding',
+    template: WEDDING_CONTRACT_TEMPLATE,
+    fields: WEDDING_TEMPLATE_FIELDS,
+  },
 };
 
 /**

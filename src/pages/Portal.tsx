@@ -1,6 +1,6 @@
 import { Box, Flex, VStack, Text, Input, HStack } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
 import CTAButton from '../components/ui/CTAButton';
@@ -31,6 +31,7 @@ const pathFromTab = (t: Tab): string => (t === 'gallery' ? '/portal/pass' : '/po
 const Portal = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => tabFromPath(location.pathname));
 
   // Keep the active tab in sync with the URL on browser back/forward so a
@@ -42,7 +43,10 @@ const Portal = () => {
 
   // Form state — shared error/submitting, separate field state per tab
   // so switching tabs doesn't blow away what you typed.
-  const [email, setEmail] = useState('');
+  //
+  // Email can be prefilled via ?email= so the welcome → portal handoff
+  // doesn't make the client retype it.
+  const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [clientPassword, setClientPassword] = useState('');
   const [galleryPassword, setGalleryPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
