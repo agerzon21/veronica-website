@@ -12,8 +12,8 @@ const MotionDiv = motion.div;
 // avatar so the visual idiom is consistent across the site.
 const PORTRAIT_AVATAR = (
   <Box
-    width={{ base: '200px', md: '400px' }}
-    height={{ base: '200px', md: '400px' }}
+    width={{ base: '200px', md: '350px' }}
+    height={{ base: '200px', md: '350px' }}
     borderRadius="full"
     border="2px solid #c9a96e"
     padding="4px"

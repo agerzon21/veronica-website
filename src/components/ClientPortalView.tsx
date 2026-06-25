@@ -1,10 +1,11 @@
 import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, useToast } from '@chakra-ui/react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FaCopy, FaSync, FaCheck, FaUndo } from 'react-icons/fa';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
 import ClientGallery, { type DriveFile, type FolderSection } from './ClientGallery';
 import CTAButton from './ui/CTAButton';
+import type { ContractTemplate } from '../data/contract-template';
 
 // Full client portal payload — mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
@@ -187,6 +188,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
       {data.contract_status === 'pending' && (
         <ContractSignSection
           credentials={credentials}
+          contractBody={data.contract_body}
           onSigned={(updates) => onDataUpdate({ ...data, ...updates })}
         />
       )}
@@ -545,9 +547,11 @@ const BalanceStat = ({
  */
 function ContractSignSection({
   credentials,
+  contractBody,
   onSigned,
 }: {
   credentials: { email: string; password: string };
+  contractBody: string | null;
   onSigned: (updates: {
     contract_status: 'signed';
     contract_signed_at: string;
@@ -559,6 +563,19 @@ function ContractSignSection({
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Parse the frozen contract body. If it's missing or malformed, we show a
+  // friendly "being prepared" message rather than a sign form pointed at
+  // nothing — the endpoint would 409 anyway, but the UI shouldn't promise
+  // signing it can't deliver.
+  const contract = useMemo<ContractTemplate | null>(() => {
+    if (!contractBody) return null;
+    try {
+      return JSON.parse(contractBody) as ContractTemplate;
+    } catch {
+      return null;
+    }
+  }, [contractBody]);
 
   const handleClear = () => {
     sigPadRef.current?.clear();
@@ -609,6 +626,36 @@ function ContractSignSection({
     }
   };
 
+  if (!contract) {
+    return (
+      <Box
+        bg="gray.50"
+        borderTop="1px solid"
+        borderBottom="1px solid"
+        borderColor="gray.100"
+        py={{ base: 12, md: 14 }}
+        px={6}
+      >
+        <VStack spacing={4} maxW="500px" mx="auto" textAlign="center">
+          <Text
+            fontSize="xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.25em"
+            color="#c9a96e"
+          >
+            Contract
+          </Text>
+          <Box w="30px" h="1px" bg="#c9a96e" />
+          <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
+            Your contract is being prepared. We'll let you know as soon as it's
+            ready to sign.
+          </Text>
+        </VStack>
+      </Box>
+    );
+  }
+
   return (
     <Box
       bg="gray.50"
@@ -618,7 +665,7 @@ function ContractSignSection({
       py={{ base: 12, md: 14 }}
       px={6}
     >
-      <VStack spacing={5} maxW="600px" mx="auto">
+      <VStack spacing={6} maxW="640px" mx="auto">
         <VStack spacing={3}>
           <Text
             fontSize="xs"
@@ -627,7 +674,7 @@ function ContractSignSection({
             letterSpacing="0.25em"
             color="#c9a96e"
           >
-            Sign Your Contract
+            Your Contract
           </Text>
           <Box w="35px" h="1px" bg="#c9a96e" />
         </VStack>
@@ -639,10 +686,28 @@ function ContractSignSection({
           fontWeight="300"
           textAlign="center"
         >
-          Your contract is ready. Once you sign, both you and Veronika will
-          receive a copy by email, and the signed PDF will be available here
-          to download any time.
+          Please read the contract below. Once you sign, both you and Veronika
+          will receive a copy by email, and the signed PDF will be available
+          here to download any time.
         </Text>
+
+        {/* Full contract body. The signature section is skipped — the form
+            below replaces it. Page scroll carries the user through; we don't
+            trap scroll inside a small box because that hides the document. */}
+        <ContractBodyView contract={contract} />
+
+        <VStack spacing={2} pt={2}>
+          <Text
+            fontSize="xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.25em"
+            color="#c9a96e"
+          >
+            Sign Below
+          </Text>
+          <Box w="35px" h="1px" bg="#c9a96e" />
+        </VStack>
 
         {/* Typed full name — required for the audit trail */}
         <Box w="100%">
@@ -760,6 +825,100 @@ function ContractSignSection({
         >
           Sign Contract
         </CTAButton>
+      </VStack>
+    </Box>
+  );
+}
+
+/**
+ * Renders the contract body for in-portal reading. Mirrors the look of the
+ * PDF (numbered sections, gold accents, bullets) but in HTML/Chakra so it
+ * flows naturally on mobile. Skips the signature_block paragraph — the
+ * sign form is the in-portal equivalent.
+ */
+function ContractBodyView({ contract }: { contract: ContractTemplate }) {
+  return (
+    <Box
+      w="100%"
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderRadius="sm"
+      px={{ base: 5, md: 8 }}
+      py={{ base: 7, md: 9 }}
+    >
+      <Text
+        fontSize={{ base: 'md', md: 'lg' }}
+        fontWeight="500"
+        letterSpacing="0.05em"
+        textAlign="center"
+        color="gray.800"
+        mb={6}
+      >
+        {contract.title}
+      </Text>
+
+      <VStack spacing={5} align="stretch">
+        {contract.sections.map((section, idx) => {
+          const isSignature = section.paragraphs.some(
+            (p) => p.kind === 'signature_block',
+          );
+          if (isSignature) return null;
+          return (
+            <Box key={idx}>
+              <Text
+                fontSize="xs"
+                fontWeight="600"
+                letterSpacing="0.15em"
+                textTransform="uppercase"
+                color="#c9a96e"
+                mb={2}
+              >
+                {section.number ? `${section.number}. ` : ''}
+                {section.title}
+              </Text>
+              <VStack spacing={2} align="stretch">
+                {section.paragraphs.map((p, i) => {
+                  if (p.kind === 'text') {
+                    return (
+                      <Text
+                        key={i}
+                        fontSize="sm"
+                        color="gray.700"
+                        lineHeight="1.7"
+                        fontWeight="300"
+                      >
+                        {p.text}
+                      </Text>
+                    );
+                  }
+                  if (p.kind === 'bullets') {
+                    return (
+                      <VStack key={i} spacing={1.5} align="stretch" pl={4}>
+                        {p.items.map((item, j) => (
+                          <HStack key={j} align="flex-start" spacing={2.5}>
+                            <Text color="#c9a96e" fontSize="sm" lineHeight="1.7">
+                              •
+                            </Text>
+                            <Text
+                              fontSize="sm"
+                              color="gray.700"
+                              lineHeight="1.7"
+                              fontWeight="300"
+                            >
+                              {item}
+                            </Text>
+                          </HStack>
+                        ))}
+                      </VStack>
+                    );
+                  }
+                  return null;
+                })}
+              </VStack>
+            </Box>
+          );
+        })}
       </VStack>
     </Box>
   );
