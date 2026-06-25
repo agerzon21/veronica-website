@@ -222,18 +222,22 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             onSave={(v) => patch({ drive_url: v }, 'drive_url')}
           />
 
-          {/* Once a Drive URL is set, give Vero a one-click link to test
-              it. Surfaces the URL outside the InlineField so she can
-              open it without going into edit mode + losing the
-              dirty-state. */}
+          {/* Once the gallery URL is set, surface the client-facing
+              delivery link — /portal/pass with the password encoded —
+              so Vero can verify the actual surface her clients see,
+              not the raw Drive folder. */}
           {portal.drive_url && (
             <Flex align="center" gap={2} wrap="wrap">
-              <CTAButton href={portal.drive_url} variant="outline" size="sm">
+              <CTAButton
+                href={`/portal/pass?password=${encodeURIComponent(portal.gallery_password)}`}
+                variant="outline"
+                size="sm"
+              >
                 <Icon as={FaExternalLinkAlt} boxSize={3} mr={2} />
-                Open Folder in Drive
+                Preview Client Gallery
               </CTAButton>
               <Text fontSize="xs" color="gray.500" fontWeight="300">
-                Click to test the gallery URL.
+                Opens what the client sees at /portal/pass.
               </Text>
             </Flex>
           )}

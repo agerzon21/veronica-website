@@ -1,4 +1,4 @@
-import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, useToast } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast } from '@chakra-ui/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FaCopy, FaSync, FaCheck, FaUndo } from 'react-icons/fa';
 import SignatureCanvas from 'react-signature-canvas';
@@ -296,13 +296,16 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
               Balance
             </Text>
             <Box w="30px" h="1px" bg="#c9a96e" />
-            <HStack
-              spacing={{ base: 6, md: 10 }}
-              divider={
-                <Box w="1px" h="36px" bg="gray.200" alignSelf="center" />
-              }
-              flexWrap="wrap"
-              justify="center"
+            {/* Equal-width grid keeps the four stats aligned even when
+                the Retainer column drops out. On mobile we go to 2x2
+                so amounts don't truncate; desktop sits on one row. */}
+            <SimpleGrid
+              columns={{
+                base: 2,
+                md: data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 ? 4 : 3,
+              }}
+              spacing={{ base: 5, md: 8 }}
+              w="100%"
             >
               <BalanceStat label="Total" value={formatMoney(data.contract_total_amount)} />
               {data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 && (
@@ -318,7 +321,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
                 value={formatMoney(remaining)}
                 emphasize={remaining > 0}
               />
-            </HStack>
+            </SimpleGrid>
 
             {/* Itemized payment log — every entry Veronika has recorded
                 (retainer, balance, etc.), with method and notes. Doesn't
@@ -819,10 +822,13 @@ const BalanceStat = ({
  * update them or use different ones per booking, we'll move to env
  * vars (e.g. VERO_VENMO_HANDLE).
  */
+// Zelle is bank-app initiated — no public URL, so we just surface the
+// phone number with a Copy button. Venmo + Cash App both have public
+// /handle URLs that open the in-app payment screen on mobile.
 const PAYMENT_HANDLES = {
-  zelle: 'veronikapolbinaphoto@gmail.com',
-  venmo: '@vero-photography',
-  cashapp: '$VeroPhotography',
+  zelle: '(570) 909-5707',
+  venmo: '@Alex-Gerzon',
+  cashapp: '$AlexGerzon',
 };
 
 function NextStepsPanel({
@@ -887,7 +893,7 @@ function NextStepsPanel({
           <PaymentMethodRow
             label="Venmo"
             value={PAYMENT_HANDLES.venmo}
-            href={`https://venmo.com/${PAYMENT_HANDLES.venmo.replace(/^@/, '')}`}
+            href={`https://venmo.com/u/${PAYMENT_HANDLES.venmo.replace(/^@/, '')}`}
           />
           <PaymentMethodRow
             label="Cash App"
