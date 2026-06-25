@@ -31,10 +31,53 @@ function getDrive(): drive_v3.Drive {
   if (cachedDrive) return cachedDrive;
   const auth = new google.auth.GoogleAuth({
     credentials: parseCredentials() as Record<string, string>,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    // `drive` (full) rather than `drive.readonly` because we also upload
+    // signed contract PDFs to Veronika's "Signed Contracts" folder via
+    // uploadFile() below. The service account only sees folders that have
+    // been shared with it, so this scope doesn't grant access to anything
+    // outside what she's already approved.
+    scopes: ['https://www.googleapis.com/auth/drive'],
   });
   cachedDrive = google.drive({ version: 'v3', auth });
   return cachedDrive;
+}
+
+/**
+ * Uploads a file to a specific Drive folder and returns the new file id.
+ *
+ * Used by the contract-signing flow to drop a signed PDF into Veronika's
+ * "Signed Contracts" folder right after the client signs. The folder id
+ * is configured via the SIGNED_CONTRACTS_FOLDER_ID env var (Vercel
+ * Settings → Environment Variables) — Veronika creates the folder in her
+ * Drive, shares it with the service account (Editor), and copies the id.
+ */
+export async function uploadFile(opts: {
+  folderId: string;
+  name: string;
+  mimeType: string;
+  content: Buffer;
+}): Promise<string> {
+  const drive = getDrive();
+  // googleapis accepts Buffer via Readable.from, but supplying it as a
+  // Readable stream is the documented/most reliable path.
+  const { Readable } = await import('node:stream');
+  const res = await drive.files.create({
+    requestBody: {
+      name: opts.name,
+      parents: [opts.folderId],
+      mimeType: opts.mimeType,
+    },
+    media: {
+      mimeType: opts.mimeType,
+      body: Readable.from(opts.content),
+    },
+    fields: 'id',
+  });
+  const id = res.data.id;
+  if (!id) {
+    throw new Error('Drive upload succeeded but returned no file id');
+  }
+  return id;
 }
 
 export type DriveFile = {

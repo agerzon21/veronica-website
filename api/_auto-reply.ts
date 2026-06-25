@@ -129,10 +129,18 @@ function getResend(): Resend {
 }
 
 interface EmailMessage {
-  to: string;
+  to: string | string[];                     // Resend accepts an array for multi-recipient
+  cc?: string | string[];
   subject: string;
   html: string;
   text: string;
+  // Optional file attachments. Each entry is sent inline via Resend's
+  // attachments API — used by the contract-signing flow to deliver the
+  // signed PDF to both the client and Veronika in one email.
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | string;  // Buffer or base64-encoded string
+  }>;
 }
 
 /**
@@ -147,10 +155,15 @@ export async function sendEmail(message: EmailMessage): Promise<{ id: string }> 
   const { data, error } = await getResend().emails.send({
     from: `${FROM_DISPLAY} <${FROM_ADDRESS}>`,
     to: message.to,
+    cc: message.cc,
     replyTo: FROM_ADDRESS,
     subject: message.subject,
     html: message.html,
     text: message.text,
+    attachments: message.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+    })),
   });
   if (error) {
     throw new Error(`Resend send failed: ${error.message}`);

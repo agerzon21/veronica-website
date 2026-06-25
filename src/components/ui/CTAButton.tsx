@@ -26,6 +26,10 @@ interface CTAButtonProps {
   size?: Size;
   isLoading?: boolean;
   loadingText?: string;
+  // Visually + functionally disable the button (e.g. an action that depends
+  // on some other state being true). isLoading already implies disabled,
+  // so callers don't need to set both.
+  isDisabled?: boolean;
   fullWidth?: boolean;
   // External link target — defaults to _blank for href, _self for `to`
   newTab?: boolean;
@@ -89,10 +93,16 @@ const CTAButton = ({
   size = 'md',
   isLoading = false,
   loadingText,
+  isDisabled = false,
   fullWidth = false,
   newTab,
   download,
 }: CTAButtonProps) => {
+  // Either a pending action or an explicit `isDisabled` should kill clicks
+  // and dim the button. We keep the cursor distinct (`wait` for loading,
+  // `not-allowed` for disabled, `pointer` otherwise) so the reason is
+  // visible on hover.
+  const inactive = isLoading || isDisabled;
   const common = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -100,7 +110,9 @@ const CTAButton = ({
     fontWeight: 400,
     textTransform: 'uppercase' as const,
     transition: 'all 0.4s ease',
-    cursor: isLoading ? 'wait' : 'pointer',
+    cursor: isLoading ? 'wait' : isDisabled ? 'not-allowed' : 'pointer',
+    opacity: isDisabled ? 0.5 : 1,
+    pointerEvents: (isDisabled ? 'none' : 'auto') as 'none' | 'auto',
     borderRadius: 0,
     lineHeight: 1,
     whiteSpace: 'nowrap' as const,
@@ -149,7 +161,7 @@ const CTAButton = ({
   }
 
   return (
-    <Box as="button" type={type} onClick={onClick} disabled={isLoading} {...common}>
+    <Box as="button" type={type} onClick={onClick} disabled={inactive} {...common}>
       {content}
     </Box>
   );

@@ -52,6 +52,7 @@ function App() {
             <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
             <Route path="/pay" element={<Pay />} />
             <Route path="/portal" element={<Portal />} />
+            <Route path="/portal/pass" element={<Portal />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />
