@@ -206,10 +206,18 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     // keys come from the dynamic `variables` map; we override the ones
     // we've collected explicitly above so the rendered contract sees
     // human-formatted strings.
+    //
+    // client_names uses FULL LEGAL NAMES (not the auto-display name).
+    // For a wedding contract this needs to read like "Chrisann Bryan &
+    // Rajiv Thomas" not "Chrisann & Rajiv" — the legal binding is on
+    // the full identities, not the shorthand we use in greetings.
     const remaining = total - retainer;
+    const legalClientNames = partner2FullName.trim()
+      ? `${partner1FullName.trim()} & ${partner2FullName.trim()}`
+      : partner1FullName.trim();
     const finalVariables: Record<string, string> = {
       ...variables,
-      client_names: clientDisplayName,
+      client_names: legalClientNames,
       event_title: eventTitle,
       event_date: fmtDate(eventDateIso),
       event_time: formatEventTime(eventStartTime, eventEndTime),
@@ -237,6 +245,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           session_type: sessionType,
           partner_1_first_name: p1First || null,
           partner_2_first_name: p2First || null,
+          partner_1_full_name: partner1FullName.trim() || null,
+          partner_2_full_name: partner2FullName.trim() || null,
           client_display_name: clientDisplayName.trim(),
           client_email: clientEmail.trim().toLowerCase(),
           event_date: eventDateIso,

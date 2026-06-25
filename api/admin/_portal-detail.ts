@@ -17,8 +17,11 @@ type PortalRow = {
   session_type: string | null;
   partner_1_first_name: string | null;
   partner_2_first_name: string | null;
+  partner_1_full_name: string | null;
+  partner_2_full_name: string | null;
   client_display_name: string | null;
   client_email: string | null;
+  client_password: string | null;
   event_date: string | null;
   gallery_password: string;
   gallery_enabled: boolean;
@@ -28,6 +31,7 @@ type PortalRow = {
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_template_key: string;
   contract_body: string | null;
+  contract_variables: Record<string, string> | null;
   contract_signed_at: string | null;
   contract_signed_pdf_url: string | null;
   contract_total_amount: string | null;
@@ -64,11 +68,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, mode, session_type, partner_1_first_name, partner_2_first_name,
-             client_display_name, client_email, event_date,
+      select id, mode, session_type,
+             partner_1_first_name, partner_2_first_name,
+             partner_1_full_name, partner_2_full_name,
+             client_display_name, client_email, client_password, event_date,
              gallery_password, gallery_enabled, drive_url,
              gallery_delivered_at, gallery_expires_at,
-             contract_status, contract_template_key, contract_body,
+             contract_status, contract_template_key, contract_body, contract_variables,
              contract_signed_at, contract_signed_pdf_url,
              contract_total_amount, contract_retainer_amount, paid_to_date,
              payment_plan_enabled,
@@ -101,6 +107,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,
         contract_signed_pdf_url: undefined,
+        // Onboarding state for the admin Account section. Surfaces
+        // whether the client has finished welcome (set_a_password) vs
+        // is still pending an invite.
+        client_has_password: !!r.client_password,
+        client_password: undefined,
       },
       payments: payments.map((p) => ({
         id: p.id,

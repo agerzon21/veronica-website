@@ -68,11 +68,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let clientEmail: string | null = null;
   let partner1: string | null = null;
   let partner2: string | null = null;
+  let partner1FullName: string | null = null;
+  let partner2FullName: string | null = null;
   let eventDate: string | null = null;
   let templateKey: string | null = null;
   let totalAmount: number | null = null;
   let retainerAmount: number | null = null;
   let contractBody: string | null = null;
+  let contractVariables: Record<string, string> = {};
   let setupToken: string | null = null;
   let setupTokenExpiresAt: string | null = null;
 
@@ -81,6 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clientEmail = typeof body.client_email === 'string' ? body.client_email.trim().toLowerCase() : '';
     partner1 = typeof body.partner_1_first_name === 'string' ? body.partner_1_first_name.trim() : null;
     partner2 = typeof body.partner_2_first_name === 'string' ? body.partner_2_first_name.trim() : null;
+    partner1FullName = typeof body.partner_1_full_name === 'string' ? body.partner_1_full_name.trim() : null;
+    partner2FullName = typeof body.partner_2_full_name === 'string' ? body.partner_2_full_name.trim() : null;
     eventDate = typeof body.event_date === 'string' ? body.event_date.trim() : '';
     templateKey = typeof body.contract_template_key === 'string' ? body.contract_template_key.trim() : '';
 
@@ -99,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: `Unknown contract template '${templateKey}'.` });
     }
 
-    const variables: Record<string, string> =
+    contractVariables =
       body.variables && typeof body.variables === 'object'
         ? Object.fromEntries(
             Object.entries(body.variables as Record<string, unknown>).map(([k, v]) => [k, String(v ?? '')]),
@@ -116,12 +121,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Render the template body now so it's frozen at creation time.
-    // Anything in `variables` is interpolated; missing variables render
-    // as [variable_name] so the contract surfaces a missing field
-    // rather than failing silently. We also drop any "optional" section
-    // (like ADDITIONAL NOTES) whose content came out empty, so the
-    // signed PDF doesn't show a heading with nothing under it.
-    const filled = pruneEmptyOptionalSections(fillTemplate(spec.template, variables));
+    // We also persist the variables JSON so the admin can edit them
+    // later (while contract is still pending) and we can re-render
+    // without losing context.
+    const filled = pruneEmptyOptionalSections(fillTemplate(spec.template, contractVariables));
     contractBody = JSON.stringify(filled);
 
     // Generate the one-time setup token. Expires in 14 days; long enough
@@ -149,19 +152,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         insert into client_portals (
           mode, session_type,
           partner_1_first_name, partner_2_first_name,
+          partner_1_full_name, partner_2_full_name,
           client_display_name, client_email,
           event_date,
           gallery_password, gallery_enabled,
-          contract_status, contract_template_key, contract_body,
+          contract_status, contract_template_key, contract_body, contract_variables,
           contract_total_amount, contract_retainer_amount, paid_to_date,
           setup_token, setup_token_expires_at
         ) values (
           ${mode}, ${sessionType},
           ${partner1}, ${partner2},
+          ${partner1FullName}, ${partner2FullName},
           ${clientDisplayName}, ${clientEmail},
           ${eventDate},
           ${galleryPassword}, true,
-          'pending', ${templateKey}, ${contractBody},
+          'pending', ${templateKey}, ${contractBody}, ${JSON.stringify(contractVariables)},
           ${totalAmount}, ${retainerAmount}, 0,
           ${setupToken}, ${setupTokenExpiresAt}
         )

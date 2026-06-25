@@ -1,8 +1,9 @@
-import { Box, Flex, VStack, Text, Input } from '@chakra-ui/react';
+import { Box, Flex, VStack, Text, Input, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 
 const MotionDiv = motion.div;
@@ -10,7 +11,10 @@ const MotionDiv = motion.div;
 interface WelcomeSummary {
   client_display_name: string | null;
   client_email: string;
+  partner_1_full_name: string | null;
+  partner_2_full_name: string | null;
   session_type: string | null;
+  event_title: string | null;
   event_date: string | null;
   contract_total_amount: number | null;
   contract_retainer_amount: number | null;
@@ -27,6 +31,7 @@ const Welcome = () => {
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [done, setDone] = useState(false);
@@ -187,18 +192,32 @@ const Welcome = () => {
                         Your Booking
                       </Text>
                       <VStack align="stretch" spacing={2}>
+                        {(summary.partner_1_full_name || summary.partner_2_full_name) && (
+                          <SummaryLine
+                            label="Names"
+                            value={[summary.partner_1_full_name, summary.partner_2_full_name].filter(Boolean).join(' & ')}
+                          />
+                        )}
                         <SummaryLine label="Email" value={summary.client_email} />
-                        {summary.session_type && <SummaryLine label="Type" value={summary.session_type} />}
+                        {summary.event_title ? (
+                          <SummaryLine label="Event" value={summary.event_title} />
+                        ) : summary.session_type ? (
+                          <SummaryLine label="Type" value={capitalize(summary.session_type)} />
+                        ) : null}
                         {summary.event_date && <SummaryLine label="Date" value={fmtDate(summary.event_date)} />}
                         {summary.contract_total_amount !== null && (
                           <SummaryLine label="Total" value={`$${summary.contract_total_amount.toFixed(0)}`} />
                         )}
                         {summary.contract_retainer_amount !== null && (
-                          <SummaryLine label="Retainer" value={`$${summary.contract_retainer_amount.toFixed(0)}`} />
+                          <SummaryLine
+                            label="Retainer"
+                            value={`$${summary.contract_retainer_amount.toFixed(0)}`}
+                            note="Paid up front · part of the total above"
+                          />
                         )}
                       </VStack>
                       <Text fontSize="xs" color="whiteAlpha.600" mt={4} fontWeight="300">
-                        If anything looks wrong, reach out to Veronika before continuing.
+                        Please double-check your names and the rest of the details — if anything's wrong, reach out to Veronika before continuing.
                       </Text>
                     </Box>
 
@@ -217,11 +236,12 @@ const Welcome = () => {
                           >
                             Choose a Password
                           </Text>
-                          <WelcomeInput
-                            type="password"
+                          <WelcomePasswordInput
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            onChange={setPassword}
                             placeholder="At least 6 characters"
+                            show={showPassword}
+                            onToggleShow={() => setShowPassword((s) => !s)}
                             autoFocus
                           />
                         </Box>
@@ -238,11 +258,12 @@ const Welcome = () => {
                           >
                             Confirm Password
                           </Text>
-                          <WelcomeInput
-                            type="password"
+                          <WelcomePasswordInput
                             value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            onChange={setConfirmPassword}
                             placeholder="Repeat your password"
+                            show={showPassword}
+                            onToggleShow={() => setShowPassword((s) => !s)}
                           />
                         </Box>
                         {submitError && (
@@ -301,36 +322,85 @@ const fmtDate = (iso: string): string => {
   return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 };
 
-const SummaryLine = ({ label, value }: { label: string; value: string }) => (
-  <Flex justify="space-between" gap={4}>
-    <Text fontSize="xs" color="whiteAlpha.600" letterSpacing="0.15em" textTransform="uppercase">
-      {label}
-    </Text>
-    <Text fontSize="sm" color="white" fontWeight="300" textAlign="right">
-      {value}
-    </Text>
-  </Flex>
+const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+
+const SummaryLine = ({ label, value, note }: { label: string; value: string; note?: string }) => (
+  <Box>
+    <Flex justify="space-between" gap={4}>
+      <Text fontSize="xs" color="whiteAlpha.600" letterSpacing="0.15em" textTransform="uppercase">
+        {label}
+      </Text>
+      <Text fontSize="sm" color="white" fontWeight="300" textAlign="right">
+        {value}
+      </Text>
+    </Flex>
+    {note && (
+      <Text fontSize="2xs" color="whiteAlpha.500" textAlign="right" fontStyle="italic" mt={0.5}>
+        {note}
+      </Text>
+    )}
+  </Box>
 );
 
-const WelcomeInput = (props: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>) => (
-  <Input
-    {...props}
-    h="48px"
-    bg="blackAlpha.500"
-    border="1px solid"
-    borderColor="whiteAlpha.300"
-    color="white"
-    fontSize="sm"
-    fontWeight="300"
-    borderRadius="sm"
-    _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
-    _hover={{ borderColor: 'whiteAlpha.500' }}
-    _focus={{
-      borderColor: '#c9a96e',
-      boxShadow: '0 0 0 1px #c9a96e',
-      bg: 'blackAlpha.600',
-    }}
-  />
-);
+function WelcomePasswordInput({
+  value,
+  onChange,
+  placeholder,
+  show,
+  onToggleShow,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  show: boolean;
+  onToggleShow: () => void;
+  autoFocus?: boolean;
+}) {
+  return (
+    <InputGroup>
+      <Input
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        h="48px"
+        bg="blackAlpha.500"
+        border="1px solid"
+        borderColor="whiteAlpha.300"
+        color="white"
+        fontSize="sm"
+        fontWeight="300"
+        borderRadius="sm"
+        pr="3.2rem"
+        _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
+        _hover={{ borderColor: 'whiteAlpha.500' }}
+        _focus={{
+          borderColor: '#c9a96e',
+          boxShadow: '0 0 0 1px #c9a96e',
+          bg: 'blackAlpha.600',
+        }}
+      />
+      <InputRightElement h="48px" pr={2}>
+        <Box
+          as="button"
+          type="button"
+          onClick={onToggleShow}
+          aria-label={show ? 'Hide password' : 'Show password'}
+          color="whiteAlpha.600"
+          _hover={{ color: '#c9a96e' }}
+          bg="transparent"
+          border="none"
+          cursor="pointer"
+          p={2}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Icon as={show ? FaEyeSlash : FaEye} boxSize={3.5} />
+        </Box>
+      </InputRightElement>
+    </InputGroup>
+  );
+}
 
 export default Welcome;

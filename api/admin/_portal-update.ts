@@ -22,6 +22,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+import {
+  CONTRACT_TEMPLATES,
+  fillTemplate,
+  pruneEmptyOptionalSections,
+} from '../../src/data/contract-template.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -39,8 +44,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const existing = (await sql`
-      select id, contract_status from client_portals where id = ${id} limit 1
-    `) as Array<{ id: string; contract_status: string }>;
+      select id, contract_status, contract_template_key, contract_variables
+      from client_portals where id = ${id} limit 1
+    `) as Array<{
+      id: string;
+      contract_status: string;
+      contract_template_key: string;
+      contract_variables: Record<string, string> | null;
+    }>;
     if (existing.length === 0) return res.status(404).json({ success: false, error: 'Portal not found' });
 
     // Gallery password uniqueness check
@@ -104,6 +115,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (typeof patch.contract_retainer_amount === 'number' && !contractFrozen) {
       await sql`update client_portals set contract_retainer_amount = ${patch.contract_retainer_amount}, updated_at = now() where id = ${id}`;
+    }
+    if (typeof patch.partner_1_full_name === 'string') {
+      const v = patch.partner_1_full_name.trim() || null;
+      await sql`update client_portals set partner_1_full_name = ${v}, updated_at = now() where id = ${id}`;
+    }
+    if (typeof patch.partner_2_full_name === 'string') {
+      const v = patch.partner_2_full_name.trim() || null;
+      await sql`update client_portals set partner_2_full_name = ${v}, updated_at = now() where id = ${id}`;
+    }
+
+    // Admin override of the client's portal password. Used when the
+    // client forgets their password and needs to be unblocked — set a
+    // temporary value and tell them to change it on first login.
+    // Always allowed regardless of contract status; this is the support
+    // hatch.
+    if (typeof patch.client_password === 'string') {
+      const v = patch.client_password.trim();
+      if (v.length < 6) {
+        return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
+      }
+      await sql`
+        update client_portals
+        set client_password = ${v},
+            setup_token = null,
+            setup_token_expires_at = null,
+            updated_at = now()
+        where id = ${id}
+      `;
+    }
+
+    // Editable contract variables (only while pending). When given, we
+    // re-render the contract body from the template + new variables and
+    // store both, so the client sees the updated contract on their next
+    // portal load.
+    if (
+      patch.contract_variables &&
+      typeof patch.contract_variables === 'object' &&
+      !Array.isArray(patch.contract_variables) &&
+      !contractFrozen
+    ) {
+      const spec = CONTRACT_TEMPLATES[existing[0].contract_template_key];
+      if (!spec) {
+        return res.status(400).json({
+          success: false,
+          error: `Unknown contract template '${existing[0].contract_template_key}'.`,
+        });
+      }
+      const newVars = Object.fromEntries(
+        Object.entries(patch.contract_variables as Record<string, unknown>).map(([k, v]) => [
+          k,
+          String(v ?? ''),
+        ]),
+      );
+      const filled = pruneEmptyOptionalSections(fillTemplate(spec.template, newVars));
+      const body = JSON.stringify(filled);
+      await sql`
+        update client_portals
+        set contract_variables = ${JSON.stringify(newVars)},
+            contract_body = ${body},
+            updated_at = now()
+        where id = ${id}
+      `;
     }
 
     return res.status(200).json({ success: true });

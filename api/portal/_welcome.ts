@@ -21,8 +21,11 @@ type Row = {
   id: string;
   client_display_name: string | null;
   client_email: string;
+  partner_1_full_name: string | null;
+  partner_2_full_name: string | null;
   session_type: string | null;
   event_date: string | null;
+  contract_variables: Record<string, string> | null;
   contract_total_amount: string | null;
   contract_retainer_amount: string | null;
   setup_token_expires_at: string | null;
@@ -42,7 +45,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, client_display_name, client_email, session_type, event_date,
+      select id, client_display_name, client_email,
+             partner_1_full_name, partner_2_full_name,
+             session_type, event_date, contract_variables,
              contract_total_amount, contract_retainer_amount, setup_token_expires_at
       from client_portals
       where setup_token = ${token}
@@ -65,11 +70,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // event_title was stored in the contract_variables blob at portal
+    // creation time. Surface it on the welcome page so the client sees
+    // "Chrisann & Rajiv's Wedding" instead of the lowercase keyword
+    // "wedding".
+    const eventTitle = row.contract_variables?.event_title ?? null;
+
     return res.status(200).json({
       success: true,
       client_display_name: row.client_display_name,
       client_email: row.client_email,
+      partner_1_full_name: row.partner_1_full_name,
+      partner_2_full_name: row.partner_2_full_name,
       session_type: row.session_type,
+      event_title: eventTitle,
       event_date: row.event_date,
       contract_total_amount: row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
       contract_retainer_amount: row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,

@@ -453,22 +453,39 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
         </Box>
       )}
 
-      {/* ─── Photos ─── */}
-      {data.drive_url ? (
-        <ClientGallery
-          clientName={data.client_name}
-          driveUrl={data.drive_url}
-          rootFiles={data.rootFiles}
-          sections={data.sections}
-          warning={data.warning}
-        />
-      ) : (
-        <Box py={20} px={6} textAlign="center" bg="white">
-          <Text fontSize="sm" color="gray.500" fontWeight="300">
-            Your photos will appear here once they're ready.
-          </Text>
-        </Box>
-      )}
+      {/* ─── Photos ───
+          Three states, kept mutually exclusive:
+          1) No Drive URL set OR Drive folder empty with no listing error →
+             "photos will appear once they're ready" placeholder. No
+             Drive buttons (nothing to link to yet).
+          2) Drive URL set, listing failed (warning) → render the gallery
+             (the failure-mode UI inside shows the "previews aren't
+             loading" message + a "View in Drive" button so the client
+             still has a path to their photos).
+          3) Drive URL set, files present → normal gallery. */}
+      {(() => {
+        const hasFiles =
+          data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0);
+        const ready = data.drive_url && (hasFiles || data.warning);
+        if (ready) {
+          return (
+            <ClientGallery
+              clientName={data.client_name}
+              driveUrl={data.drive_url!}
+              rootFiles={data.rootFiles}
+              sections={data.sections}
+              warning={data.warning}
+            />
+          );
+        }
+        return (
+          <Box py={20} px={6} textAlign="center" bg="white">
+            <Text fontSize="sm" color="gray.500" fontWeight="300">
+              Your photos will appear here once they're ready.
+            </Text>
+          </Box>
+        );
+      })()}
 
       {/* ─── Gallery Pass management ───
           The client owns this control: rotate, disable entirely, or set a
@@ -1059,6 +1076,17 @@ function ContractSignSection({
           Please read the contract below. Once you sign, both you and Veronika
           will receive a copy by email, and the signed PDF will be available
           here to download any time.
+        </Text>
+        <Text
+          fontSize="xs"
+          color="gray.500"
+          lineHeight="1.7"
+          fontWeight="300"
+          textAlign="center"
+          fontStyle="italic"
+          maxW="540px"
+        >
+          If anything looks wrong with your details, or if there's a clause you'd like to adjust or don't fully understand, please reach out to Veronika before signing so she can update it.
         </Text>
 
         {/* Full contract body. The signature section is skipped — the form

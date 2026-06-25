@@ -1,8 +1,9 @@
-import { Box, Flex, VStack, Text, Input, HStack } from '@chakra-ui/react';
+import { Box, Flex, VStack, Text, Input, HStack, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import ClientGallery, { type DriveFile, type FolderSection } from '../components/ClientGallery';
 import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
@@ -61,6 +62,8 @@ const Portal = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [autoSubmittedGallery, setAutoSubmittedGallery] = useState(false);
+  const [showClientPassword, setShowClientPassword] = useState(false);
+  const [showGalleryPassword, setShowGalleryPassword] = useState(false);
 
   // Post-login state — one of these gets set on a successful auth, which
   // unmounts the form and renders the corresponding view.
@@ -357,17 +360,13 @@ const Portal = () => {
                           />
 
                           <FieldLabel htmlFor="client-password">Password</FieldLabel>
-                          <PortalInput
+                          <PortalPasswordInput
                             id="client-password"
-                            name="password"
-                            type="text"
                             value={clientPassword}
-                            onChange={(e) => setClientPassword(e.target.value)}
+                            onChange={setClientPassword}
                             placeholder="Enter your password"
-                            autoComplete="off"
-                            autoCapitalize="characters"
-                            autoCorrect="off"
-                            spellCheck={false}
+                            show={showClientPassword}
+                            onToggleShow={() => setShowClientPassword((s) => !s)}
                           />
 
                           {error && <ErrorText>{error}</ErrorText>}
@@ -400,17 +399,13 @@ const Portal = () => {
                       <Box as="form" onSubmit={handleGallerySubmit} w="100%">
                         <VStack spacing={4} w="100%">
                           <FieldLabel htmlFor="gallery-password">Password</FieldLabel>
-                          <PortalInput
+                          <PortalPasswordInput
                             id="gallery-password"
-                            name="password"
-                            type="text"
                             value={galleryPassword}
-                            onChange={(e) => setGalleryPassword(e.target.value)}
+                            onChange={setGalleryPassword}
                             placeholder="Enter the gallery password"
-                            autoComplete="off"
-                            autoCapitalize="characters"
-                            autoCorrect="off"
-                            spellCheck={false}
+                            show={showGalleryPassword}
+                            onToggleShow={() => setShowGalleryPassword((s) => !s)}
                             autoFocus
                           />
 
@@ -507,6 +502,76 @@ const PortalInput = (
     }}
   />
 );
+
+// Password input with an eye toggle. We use this for both the client
+// portal login password and the gallery pass, so users can verify what
+// they're typing without exposing it to anyone watching the screen.
+function PortalPasswordInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  show,
+  onToggleShow,
+  autoFocus,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  show: boolean;
+  onToggleShow: () => void;
+  autoFocus?: boolean;
+}) {
+  return (
+    <InputGroup>
+      <Input
+        id={id}
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        h="48px"
+        bg="blackAlpha.500"
+        border="1px solid"
+        borderColor="whiteAlpha.300"
+        color="white"
+        fontSize="sm"
+        fontWeight="300"
+        borderRadius="sm"
+        pr="3.2rem"
+        _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
+        _hover={{ borderColor: 'whiteAlpha.500' }}
+        _focus={{
+          borderColor: '#c9a96e',
+          boxShadow: '0 0 0 1px #c9a96e',
+          bg: 'blackAlpha.600',
+        }}
+      />
+      <InputRightElement h="48px" pr={2}>
+        <Box
+          as="button"
+          type="button"
+          onClick={onToggleShow}
+          aria-label={show ? 'Hide password' : 'Show password'}
+          color="whiteAlpha.600"
+          _hover={{ color: '#c9a96e' }}
+          bg="transparent"
+          border="none"
+          cursor="pointer"
+          p={2}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Icon as={show ? FaEyeSlash : FaEye} boxSize={3.5} />
+        </Box>
+      </InputRightElement>
+    </InputGroup>
+  );
+}
 
 const ErrorText = ({ children }: { children: React.ReactNode }) => (
   <Text fontSize="sm" color="red.300" fontWeight="300" textAlign="center">

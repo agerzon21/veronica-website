@@ -14,6 +14,8 @@ interface PortalDetail {
   id: string;
   mode: 'simple' | 'full';
   session_type: string | null;
+  partner_1_full_name: string | null;
+  partner_2_full_name: string | null;
   client_display_name: string | null;
   client_email: string | null;
   event_date: string | null;
@@ -23,12 +25,15 @@ interface PortalDetail {
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
   contract_status: 'none' | 'pending' | 'signed' | 'void';
+  contract_template_key: string;
+  contract_variables: Record<string, string> | null;
   contract_signed_at: string | null;
   contract_signed_pdf_available: boolean;
   contract_total_amount: number | null;
   contract_retainer_amount: number | null;
   paid_to_date: number;
   setup_token: string | null;
+  client_has_password: boolean;
 }
 
 interface PaymentEntry {
@@ -116,6 +121,22 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   };
 
   const markDelivered = async () => {
+    // Soft guardrail: warn if there's an outstanding balance. We don't
+    // block delivery because there are legitimate edge cases (cash
+    // hand-off at the shoot, comp gifts, payment plans not tracked in
+    // here yet). But she's much more likely to FORGET to log a payment
+    // than to genuinely want to deliver unpaid, so confirm first.
+    if (
+      portal &&
+      portal.contract_total_amount !== null &&
+      portal.paid_to_date < portal.contract_total_amount
+    ) {
+      const remaining = portal.contract_total_amount - portal.paid_to_date;
+      const ok = window.confirm(
+        `Heads up — ${`$${remaining.toFixed(0)}`} is still outstanding (paid $${portal.paid_to_date.toFixed(0)} of $${portal.contract_total_amount.toFixed(0)}).\n\nMake sure you've received the full payment, or that you've logged it in the Payments section above.\n\nDeliver anyway?`,
+      );
+      if (!ok) return;
+    }
     setSavingField('deliver');
     setError('');
     try {
@@ -271,6 +292,17 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
         </VStack>
       </Section>
 
+      {/* ─── Account (full-mode only): onboarding status + tech-support
+            actions. Resend invite if they haven't finished welcome,
+            override password if they have. ─── */}
+      {portal.mode === 'full' && (
+        <AccountSection
+          portal={portal}
+          adminPassword={adminPassword}
+          onChanged={reload}
+        />
+      )}
+
       {/* ─── Contract section (full-mode only) ─── */}
       {portal.mode === 'full' && (
         <Section title="Contract">
@@ -283,6 +315,19 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
               </Box>
             </Flex>
+
+            {/* While the contract is pending, expose the same variable
+                fields that were used at creation. Saving re-renders the
+                contract body. Once signed, the contract is frozen and
+                this block disappears (the signed PDF link lives in the
+                client portal view itself). */}
+            {portal.contract_status === 'pending' && (
+              <EditContractVariables
+                portal={portal}
+                adminPassword={adminPassword}
+                onSaved={reload}
+              />
+            )}
           </VStack>
         </Section>
       )}
@@ -769,6 +814,331 @@ function PaymentRow({
         </Box>
       )}
     </Flex>
+  );
+}
+
+/**
+ * Onboarding status + technical-support actions for full-mode portals.
+ * Shows whether the client has completed welcome (set a password) or
+ * is still pending an invite. Provides:
+ *   - Resend invite (regenerates setup_token, sends a fresh email)
+ *   - Manual password override (for clients who lost their password)
+ */
+function AccountSection({
+  portal,
+  adminPassword,
+  onChanged,
+}: {
+  portal: PortalDetail;
+  adminPassword: string;
+  onChanged: () => void;
+}) {
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const [overridePassword, setOverridePassword] = useState('');
+  const [overriding, setOverriding] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideMessage, setOverrideMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const handleResend = async () => {
+    setResending(true);
+    setResendMessage(null);
+    try {
+      const res = await fetch('/api/admin/resend-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, id: portal.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResendMessage({ kind: 'ok', text: `Invite re-sent to ${portal.client_email}.` });
+        onChanged();
+      } else {
+        setResendMessage({ kind: 'err', text: data.error || `Server error (${res.status}).` });
+      }
+    } catch {
+      setResendMessage({ kind: 'err', text: 'Could not reach the server.' });
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleOverride = async () => {
+    setOverrideMessage(null);
+    if (overridePassword.length < 6) {
+      setOverrideMessage({ kind: 'err', text: 'New password must be at least 6 characters.' });
+      return;
+    }
+    setOverriding(true);
+    try {
+      const res = await fetch('/api/admin/portal-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          id: portal.id,
+          patch: { client_password: overridePassword },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setOverrideMessage({
+          kind: 'ok',
+          text: `Password set. Share it with the client and ask them to change it on first login.`,
+        });
+        setOverridePassword('');
+        setOverrideOpen(false);
+        onChanged();
+      } else {
+        setOverrideMessage({ kind: 'err', text: data.error || `Server error (${res.status}).` });
+      }
+    } catch {
+      setOverrideMessage({ kind: 'err', text: 'Could not reach the server.' });
+    } finally {
+      setOverriding(false);
+    }
+  };
+
+  return (
+    <Section title="Account">
+      <VStack align="stretch" spacing={4}>
+        <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+          <Box>
+            <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+              Status
+            </Text>
+            {portal.client_has_password ? (
+              <Badge colorScheme="green" variant="subtle" fontSize="xs">Account active</Badge>
+            ) : portal.setup_token ? (
+              <Badge colorScheme="orange" variant="subtle" fontSize="xs">Invite pending</Badge>
+            ) : (
+              <Badge colorScheme="gray" variant="subtle" fontSize="xs">No account</Badge>
+            )}
+          </Box>
+          {!portal.client_has_password && (
+            <CTAButton
+              onClick={handleResend}
+              variant="outline"
+              size="sm"
+              isLoading={resending}
+              loadingText="Sending..."
+            >
+              Resend Invite
+            </CTAButton>
+          )}
+        </Flex>
+
+        {resendMessage && (
+          <Text fontSize="xs" color={resendMessage.kind === 'ok' ? 'green.600' : 'red.500'}>
+            {resendMessage.text}
+          </Text>
+        )}
+
+        {/* Password override — for when the client lost their password.
+            Always available (even before they finish onboarding) because
+            we can use it to "complete onboarding on their behalf" too. */}
+        <Box>
+          <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+            <Box>
+              <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+                Password
+              </Text>
+              <Text fontSize="sm" color="gray.600" fontWeight="300">
+                Set a temporary password for the client. Use this if they're locked out or if you need to set them up manually instead of waiting for them to use the welcome link.
+              </Text>
+            </Box>
+            <CTAButton
+              onClick={() => setOverrideOpen((o) => !o)}
+              variant="outline"
+              size="sm"
+            >
+              {overrideOpen ? 'Cancel' : 'Set Password'}
+            </CTAButton>
+          </Flex>
+          {overrideOpen && (
+            <Flex gap={2} mt={3} align="stretch" direction={{ base: 'column', sm: 'row' }}>
+              <Input
+                type="text"
+                value={overridePassword}
+                onChange={(e) => setOverridePassword(e.target.value)}
+                placeholder="At least 6 characters"
+                h="40px"
+                bg="white"
+                fontSize="sm"
+                _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              />
+              <CTAButton
+                onClick={handleOverride}
+                variant="solid"
+                size="sm"
+                isLoading={overriding}
+                loadingText="Saving..."
+              >
+                Save
+              </CTAButton>
+            </Flex>
+          )}
+          {overrideMessage && (
+            <Text fontSize="xs" color={overrideMessage.kind === 'ok' ? 'green.600' : 'red.500'} mt={2}>
+              {overrideMessage.text}
+            </Text>
+          )}
+        </Box>
+      </VStack>
+    </Section>
+  );
+}
+
+/**
+ * Editable form of the same contract variables that were collected at
+ * portal-creation time. Shown only while contract_status === 'pending';
+ * once signed, the contract body is frozen and this disappears.
+ *
+ * Saving re-renders the contract template with the new variables and
+ * persists the new body so the client sees the updated text on their
+ * next portal load.
+ *
+ * Field keys must match the variable names used in the contract
+ * template — they round-trip into and out of contract_variables.
+ */
+function EditContractVariables({
+  portal,
+  adminPassword,
+  onSaved,
+}: {
+  portal: PortalDetail;
+  adminPassword: string;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [vars, setVars] = useState<Record<string, string>>(portal.contract_variables ?? {});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  // Resync local form state if a parent reload pulled in fresh variables.
+  useEffect(() => {
+    setVars(portal.contract_variables ?? {});
+  }, [portal.contract_variables]);
+
+  // The keys we expose. We pull from the existing variables since they
+  // are what the template was rendered with. Variables created by the
+  // creation form (event_date, total/retainer, derived strings) flow
+  // through too — Vero can correct anything that was wrong.
+  const keys = Object.keys(vars).sort();
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/admin/portal-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          id: portal.id,
+          patch: { contract_variables: vars },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ kind: 'ok', text: 'Contract updated. The client will see the changes on next load.' });
+        onSaved();
+      } else {
+        setMessage({ kind: 'err', text: data.error || `Server error (${res.status}).` });
+      }
+    } catch {
+      setMessage({ kind: 'err', text: 'Could not reach the server.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (keys.length === 0) {
+    return (
+      <Box mt={3} p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
+        <Text fontSize="xs" color="yellow.800">
+          This portal predates editable variables. To make changes, void it and create a new one — or just edit the relevant DB columns directly.
+        </Text>
+      </Box>
+    );
+  }
+
+  return (
+    <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.100">
+      <Flex justify="space-between" align="center" mb={2} wrap="wrap" gap={2}>
+        <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em">
+          Edit contract
+        </Text>
+        <Box
+          as="button"
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          fontSize="xs"
+          letterSpacing="0.15em"
+          textTransform="uppercase"
+          color="#c9a96e"
+          bg="transparent"
+          border="none"
+          cursor="pointer"
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          {open ? 'Hide' : 'Edit fields'}
+        </Box>
+      </Flex>
+      <Text fontSize="xs" color="gray.500" mb={3} fontWeight="300">
+        Any change here re-renders the contract the client sees. Once they sign, this section disappears and edits are no longer possible.
+      </Text>
+
+      {open && (
+        <VStack align="stretch" spacing={3}>
+          {keys.map((k) => {
+            const value = vars[k] ?? '';
+            const isLong = value.length > 80 || k === 'additional_notes';
+            return (
+              <Box key={k}>
+                <Text fontSize="2xs" color="#c9a96e" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
+                  {k}
+                </Text>
+                {isLong ? (
+                  <Textarea
+                    value={value}
+                    onChange={(e) => setVars((v) => ({ ...v, [k]: e.target.value }))}
+                    rows={3}
+                    bg="white"
+                    fontSize="sm"
+                    focusBorderColor="#c9a96e"
+                  />
+                ) : (
+                  <Input
+                    value={value}
+                    onChange={(e) => setVars((v) => ({ ...v, [k]: e.target.value }))}
+                    h="38px"
+                    bg="white"
+                    fontSize="sm"
+                    _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                  />
+                )}
+              </Box>
+            );
+          })}
+          {message && (
+            <Text fontSize="xs" color={message.kind === 'ok' ? 'green.600' : 'red.500'}>
+              {message.text}
+            </Text>
+          )}
+          <CTAButton
+            onClick={handleSave}
+            variant="solid"
+            size="sm"
+            isLoading={saving}
+            loadingText="Saving..."
+          >
+            Save Contract Changes
+          </CTAButton>
+        </VStack>
+      )}
+    </Box>
   );
 }
 

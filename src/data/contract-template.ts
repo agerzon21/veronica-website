@@ -68,13 +68,12 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       number: 'I',
       title: 'PARTIES',
       paragraphs: [
-        { kind: 'text', text: 'This agreement is entered into on the Effective Date between the parties below.' },
+        { kind: 'text', text: 'This agreement is entered into on {{effective_date}} ("Effective Date") between:' },
         {
           kind: 'fields',
           items: [
-            { label: 'Effective Date', value: '{{effective_date}}' },
-            { label: 'Photographer', value: '{{photographer_name}}' },
-            { label: 'Client', value: '{{client_names}}' },
+            { label: 'Photographer', value: '{{photographer_name}} ("Photographer")' },
+            { label: 'Client', value: '{{client_names}} ("Client(s)")' },
           ],
         },
       ],
@@ -112,7 +111,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
           items: [
             'Photographer retains full creative control over shooting and editing style.',
             'RAW/unedited images are not included.',
-            'Travel to event location is included at no additional charge.',
+            'Travel to the event location is included in the Total Payment above. Additional travel may be billed separately if discussed in advance.',
           ],
         },
         { kind: 'text', text: 'The online gallery will remain hosted for {{retention_months}} months after delivery. After that, retention is at the Photographer’s discretion — the Client is responsible for downloading and backing up images during the hosting window.' },
