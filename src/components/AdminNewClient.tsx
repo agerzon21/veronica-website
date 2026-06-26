@@ -259,6 +259,22 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       return formatEventTime(eventStartTime, eventEndTime);
     })();
 
+    // When the booking is sold as half-day or full-day, the EVENT DETAILS
+    // Time field gives the short version; we also auto-add a proper
+    // acknowledgement clause to ADDITIONAL NOTES so the contract is
+    // explicit about what the parties agreed to. Vero's own additional
+    // notes (if any) come after, separated by a blank line.
+    const tbaClause = (() => {
+      if (coverage === 'half-day') {
+        return 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 4 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.';
+      }
+      if (coverage === 'full-day') {
+        return 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 8 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.';
+      }
+      return '';
+    })();
+    const mergedAdditionalNotes = [tbaClause, additionalNotes.trim()].filter(Boolean).join('\n\n');
+
     const finalVariables: Record<string, string> = {
       ...variables,
       client_names: legalClientNames,
@@ -268,7 +284,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       total_amount: fmtCurrency(total),
       retainer_amount: fmtCurrency(retainer),
       remaining_balance: fmtCurrency(remaining),
-      additional_notes: additionalNotes.trim(),
+      additional_notes: mergedAdditionalNotes,
       // Responsible party — sent always so the substitute step has a
       // value to swap in. Blank when the toggle is off, which causes
       // pruneEmptyOptionalSections to drop the section server-side.
@@ -551,15 +567,30 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
 
           {(coverage === 'half-day' || coverage === 'full-day') && (
             <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={3}>
-              <Text fontSize="xs" color="gray.500" mb={1}>On the contract:</Text>
-              <Text fontSize="sm" color="gray.800">
+              <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+                Will appear on the contract — Event Details → Time
+              </Text>
+              <Text fontSize="sm" color="gray.800" mb={3}>
                 {coverage === 'half-day'
                   ? 'Half-day coverage (approximately 4 hours, exact times to be confirmed)'
                   : 'Full-day coverage (approximately 8 hours, exact times to be confirmed)'}
               </Text>
-              <Text fontSize="xs" color="gray.500" mt={2} fontStyle="italic">
-                When you know the exact times, edit them in the client's detail view → Contract → Edit fields.
+              <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+                Will appear on the contract — Additional Notes
               </Text>
+              <Text fontSize="xs" color="gray.700" fontStyle="italic" lineHeight="1.6">
+                {coverage === 'half-day'
+                  ? 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 4 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.'
+                  : 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 8 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.'}
+              </Text>
+              <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.200">
+                <Text fontSize="2xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+                  Note for you (not on the contract)
+                </Text>
+                <Text fontSize="xs" color="gray.500" fontStyle="italic">
+                  Once the client confirms the exact times, you can update the event_time variable via Admin → Contract → Edit fields, and remove the clause above from additional_notes.
+                </Text>
+              </Box>
             </Box>
           )}
 
