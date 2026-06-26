@@ -168,7 +168,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           String(v ?? ''),
         ]),
       );
-      const filled = pruneEmptyOptionalSections(fillTemplate(spec.template, newVars));
+      const filled = pruneEmptyOptionalSections(
+        fillTemplate(spec.template, newVars),
+        newVars,
+      );
       const body = JSON.stringify(filled);
       await sql`
         update client_portals

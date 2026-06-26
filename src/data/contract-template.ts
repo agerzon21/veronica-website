@@ -28,10 +28,17 @@ export type ContractParagraph =
 export interface ContractSection {
   number?: string; // e.g. 'I', 'II' — optional so headings without roman nums work
   title: string;
-  // If true, the section is dropped post-fill when all of its paragraphs
-  // are empty (after variable substitution). Used for things like the
-  // ADDITIONAL NOTES section, which only appears when there are notes.
+  // If true, the section is dropped post-fill when its content is
+  // effectively empty — either all paragraphs render empty (the
+  // ADDITIONAL NOTES case) or, if `requireVariables` is set, when any
+  // of those variables is blank.
   optional?: boolean;
+  // For optional sections that contain boilerplate text alongside
+  // variable-driven content, listing the variables here lets the
+  // pruner drop the section when those variables come through empty.
+  // Without this, a section like RESPONSIBLE PARTY would always
+  // render because its instructional copy is always non-empty.
+  requireVariables?: string[];
   paragraphs: ContractParagraph[];
 }
 
@@ -59,6 +66,12 @@ export interface WeddingContractVariables {
   payment_methods: string;         // e.g. "Cash, Venmo, CashApp or Zelle"
   retention_months: string;        // e.g. "3" — how long the gallery stays online
   additional_notes: string;        // free-text addendum; section is hidden if empty
+  // Optional — if a third party is paying and signing on behalf of the
+  // clients (e.g. mother of the bride), name + relationship go here.
+  // The RESPONSIBLE PARTY section in the template is marked optional
+  // and gets pruned when either of these is blank.
+  responsible_party_name: string;
+  responsible_party_relationship: string;
 }
 
 export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
@@ -76,6 +89,26 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
             { label: 'Client', value: '{{client_names}} ("Client(s)")' },
           ],
         },
+      ],
+    },
+    // Optional, unnumbered. Only renders when responsible_party_name +
+    // responsible_party_relationship are both set — otherwise pruned
+    // server-side by pruneEmptyOptionalSections() before the contract
+    // body is frozen.
+    {
+      title: 'RESPONSIBLE PARTY',
+      optional: true,
+      requireVariables: ['responsible_party_name', 'responsible_party_relationship'],
+      paragraphs: [
+        { kind: 'text', text: 'The party signing this agreement and accepting financial responsibility on behalf of the Client(s) is:' },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Name', value: '{{responsible_party_name}} ("Responsible Party")' },
+            { label: 'Relationship to Client(s)', value: '{{responsible_party_relationship}}' },
+          ],
+        },
+        { kind: 'text', emphasis: 'italic', text: 'The Responsible Party accepts all financial obligations described in this agreement and signs on behalf of the Client(s).' },
       ],
     },
     {
@@ -340,16 +373,31 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
  */
 /**
  * After fillTemplate, drop any section marked `optional: true` whose
- * paragraphs are all effectively empty (no text content, no bullets
- * with content, no fields with values). Used by the admin endpoint
- * so the saved contract_body never shows an "ADDITIONAL NOTES"
- * heading with nothing under it.
+ * content is effectively empty.
+ *
+ * - If the section declares `requireVariables`, the section is dropped
+ *   when any of those variables is missing or blank in `vars`.
+ * - Otherwise, the section is dropped when every paragraph is empty
+ *   (the ADDITIONAL NOTES case — a single `{{variable}}` paragraph
+ *   that substitutes to '').
+ *
+ * Used by the admin endpoints so the saved contract_body never shows
+ * an orphan heading with no content under it.
  */
-export function pruneEmptyOptionalSections(template: ContractTemplate): ContractTemplate {
+export function pruneEmptyOptionalSections(
+  template: ContractTemplate,
+  vars?: Record<string, string>,
+): ContractTemplate {
   return {
     ...template,
     sections: template.sections.filter((s) => {
       if (!s.optional) return true;
+      if (s.requireVariables && s.requireVariables.length > 0) {
+        return s.requireVariables.every((k) => {
+          const v = vars?.[k];
+          return typeof v === 'string' && v.trim().length > 0;
+        });
+      }
       return s.paragraphs.some((p) => {
         if (p.kind === 'text') return p.text.trim().length > 0;
         if (p.kind === 'bullets') return p.items.some((i) => i.trim().length > 0);
@@ -373,6 +421,7 @@ export function fillTemplate<V extends Record<string, string>>(
       number: section.number,
       title: substitute(section.title),
       optional: section.optional,
+      requireVariables: section.requireVariables,
       paragraphs: section.paragraphs.map((p) => {
         if (p.kind === 'text') {
           return { kind: 'text', text: substitute(p.text), emphasis: p.emphasis };

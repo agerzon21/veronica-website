@@ -124,7 +124,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // We also persist the variables JSON so the admin can edit them
     // later (while contract is still pending) and we can re-render
     // without losing context.
-    const filled = pruneEmptyOptionalSections(fillTemplate(spec.template, contractVariables));
+    const filled = pruneEmptyOptionalSections(
+      fillTemplate(spec.template, contractVariables),
+      contractVariables,
+    );
     contractBody = JSON.stringify(filled);
 
     // Generate the one-time setup token. Expires in 14 days; long enough

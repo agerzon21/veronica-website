@@ -1,4 +1,4 @@
-import { Box, VStack, HStack, Text, Input, Select, Textarea, Flex, Icon } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text, Input, Select, Textarea, Flex, Icon, Checkbox } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
 import { FaArrowLeft } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -135,6 +135,14 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
 
   const [additionalNotes, setAdditionalNotes] = useState('');
 
+  // Optional: a third party who's signing + paying (e.g. parent of the
+  // bride). When the toggle is off both fields are sent as empty
+  // strings and the RESPONSIBLE PARTY section is pruned out of the
+  // rendered contract.
+  const [responsiblePartyEnabled, setResponsiblePartyEnabled] = useState(false);
+  const [responsiblePartyName, setResponsiblePartyName] = useState('');
+  const [responsiblePartyRelationship, setResponsiblePartyRelationship] = useState('');
+
   // Template-driven variable fields (the static ones at the bottom).
   const fields = CONTRACT_TEMPLATES[templateKey]?.fields ?? [];
   const [variables, setVariables] = useState<Record<string, string>>(() =>
@@ -206,6 +214,12 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       setError('Gallery password is required.');
       return;
     }
+    if (responsiblePartyEnabled) {
+      if (!responsiblePartyName.trim() || !responsiblePartyRelationship.trim()) {
+        setError('Responsible Party needs both a name and a relationship — or untoggle that option.');
+        return;
+      }
+    }
 
     // Build the variables object the contract template expects. Most
     // keys come from the dynamic `variables` map; we override the ones
@@ -230,6 +244,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       retainer_amount: fmtCurrency(retainer),
       remaining_balance: fmtCurrency(remaining),
       additional_notes: additionalNotes.trim(),
+      // Responsible party — sent always so the substitute step has a
+      // value to swap in. Blank when the toggle is off, which causes
+      // pruneEmptyOptionalSections to drop the section server-side.
+      responsible_party_name: responsiblePartyEnabled ? responsiblePartyName.trim() : '',
+      responsible_party_relationship: responsiblePartyEnabled ? responsiblePartyRelationship.trim() : '',
     };
     // For date fields where the user typed an ISO date (e.g. effective_date
     // from the date picker), convert to friendly form for the contract.
@@ -375,6 +394,54 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           <Field label="Client Email" required helpText="The invite email goes here. They'll log in with this address.">
             <FormInput type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.com" />
           </Field>
+
+          {/* ─── Responsible Party (optional) ───
+              When someone other than the partners is paying + signing
+              (e.g. mother of the bride). When the toggle is off both
+              variables go through as empty strings and the section is
+              pruned out of the rendered contract. */}
+          <Box pt={3} borderTop="1px solid" borderColor="gray.100">
+            <Flex align="center" gap={3}>
+              <Checkbox
+                isChecked={responsiblePartyEnabled}
+                onChange={(e) => setResponsiblePartyEnabled(e.target.checked)}
+                colorScheme="yellow"
+              >
+                <Text fontSize="sm" color="gray.700" fontWeight="400">
+                  Different person is paying & signing
+                </Text>
+              </Checkbox>
+            </Flex>
+            <Text fontSize="xs" color="gray.500" mt={1} ml={6} fontWeight="300" lineHeight="1.5">
+              Use this when a third party (e.g. mother of the bride) is the one financially responsible for the booking and will be signing the contract. Adds a "Responsible Party" section to the contract.
+            </Text>
+            {responsiblePartyEnabled && (
+              <VStack align="stretch" spacing={4} mt={4}>
+                <Field
+                  label="Responsible Party Full Name"
+                  required
+                  helpText="Their full legal name. They'll be the one signing the contract."
+                >
+                  <FormInput
+                    value={responsiblePartyName}
+                    onChange={(e) => setResponsiblePartyName(e.target.value)}
+                    placeholder="e.g. Patricia Bryan"
+                  />
+                </Field>
+                <Field
+                  label="Relationship to Client(s)"
+                  required
+                  helpText='e.g. "Mother of the Bride", "Father of the Groom", "Family Friend".'
+                >
+                  <FormInput
+                    value={responsiblePartyRelationship}
+                    onChange={(e) => setResponsiblePartyRelationship(e.target.value)}
+                    placeholder="Mother of the Bride"
+                  />
+                </Field>
+              </VStack>
+            )}
+          </Box>
 
           {/* ─── Event ─── */}
           <SectionHeading>Event</SectionHeading>

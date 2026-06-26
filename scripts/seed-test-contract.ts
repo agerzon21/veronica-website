@@ -26,6 +26,8 @@ const vars: WeddingContractVariables = {
   payment_methods: 'Cash, Venmo, CashApp or Zelle',
   retention_months: '3',
   additional_notes: '',
+  responsible_party_name: '',
+  responsible_party_relationship: '',
 };
 
 const filled = fillTemplate(WEDDING_CONTRACT_TEMPLATE, vars);
