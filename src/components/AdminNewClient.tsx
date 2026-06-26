@@ -151,6 +151,13 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   const [responsiblePartyName, setResponsiblePartyName] = useState('');
   const [responsiblePartyRelationship, setResponsiblePartyRelationship] = useState('');
 
+  // Optional service clauses. Each is a checkbox that drives a single
+  // 'yes' / '' flag variable. Both sections in the template are marked
+  // optional with requireVariables, so flipping the checkbox off prunes
+  // them out of the rendered contract.
+  const [twoCameraEnabled, setTwoCameraEnabled] = useState(false);
+  const [additionalRetouchingEnabled, setAdditionalRetouchingEnabled] = useState(false);
+
   // Template-driven variable fields (the static ones at the bottom).
   const fields = CONTRACT_TEMPLATES[templateKey]?.fields ?? [];
   const [variables, setVariables] = useState<Record<string, string>>(() =>
@@ -290,6 +297,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       // pruneEmptyOptionalSections to drop the section server-side.
       responsible_party_name: responsiblePartyEnabled ? responsiblePartyName.trim() : '',
       responsible_party_relationship: responsiblePartyEnabled ? responsiblePartyRelationship.trim() : '',
+      // Optional service-clause flags — 'yes' includes the section,
+      // empty string prunes it.
+      two_camera_enabled: twoCameraEnabled ? 'yes' : '',
+      additional_retouching_enabled: additionalRetouchingEnabled ? 'yes' : '',
     };
     // For date fields where the user typed an ISO date (e.g. effective_date
     // from the date picker), convert to friendly form for the contract.
@@ -677,6 +688,48 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               onChange={(v) => handleVarChange(f.key, v)}
             />
           ))}
+
+          {/* ─── Optional service clauses ─── */}
+          <SectionHeading>Optional Clauses</SectionHeading>
+          <Text fontSize="xs" color="gray.500" mt={-3} mb={-1} fontWeight="300" lineHeight="1.5">
+            Toggle these on only when they apply to this booking. Each adds a clearly-titled section to the contract.
+          </Text>
+
+          <Box pt={2}>
+            <Checkbox
+              isChecked={twoCameraEnabled}
+              onChange={(e) => setTwoCameraEnabled(e.target.checked)}
+              colorScheme="yellow"
+              alignItems="flex-start"
+            >
+              <Box>
+                <Text fontSize="sm" color="gray.700" fontWeight="500">
+                  Two-camera coverage (lead + second camera operator)
+                </Text>
+                <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
+                  Adds a clause describing two-camera coverage for key moments, with the Second Camera Operator acting in an assistant capacity (not as an independent professional). Use this when you're working with an assistant covering supplemental angles.
+                </Text>
+              </Box>
+            </Checkbox>
+          </Box>
+
+          <Box>
+            <Checkbox
+              isChecked={additionalRetouchingEnabled}
+              onChange={(e) => setAdditionalRetouchingEnabled(e.target.checked)}
+              colorScheme="yellow"
+              alignItems="flex-start"
+            >
+              <Box>
+                <Text fontSize="sm" color="gray.700" fontWeight="500">
+                  Option for additional retouching after delivery
+                </Text>
+                <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
+                  Adds a clause noting that the Client can request additional retouching (skin smoothing, advanced color, object removal, etc.) beyond the standard edits, with scope and price negotiated separately.
+                </Text>
+              </Box>
+            </Checkbox>
+          </Box>
 
           {/* ─── Additional notes ─── */}
           <SectionHeading>Additional Notes (optional)</SectionHeading>

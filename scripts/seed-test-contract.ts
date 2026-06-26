@@ -28,6 +28,8 @@ const vars: WeddingContractVariables = {
   additional_notes: '',
   responsible_party_name: '',
   responsible_party_relationship: '',
+  two_camera_enabled: '',
+  additional_retouching_enabled: '',
 };
 
 const filled = fillTemplate(WEDDING_CONTRACT_TEMPLATE, vars);

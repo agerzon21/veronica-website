@@ -72,6 +72,13 @@ export interface WeddingContractVariables {
   // and gets pruned when either of these is blank.
   responsible_party_name: string;
   responsible_party_relationship: string;
+  // Toggle flags for optional service-clause sections. Set to 'yes' to
+  // include the corresponding section in the rendered contract, empty
+  // string to omit. The clause boilerplate itself is hardcoded in the
+  // template; these are just include/exclude signals checked by
+  // pruneEmptyOptionalSections via requireVariables.
+  two_camera_enabled: string;
+  additional_retouching_enabled: string;
 }
 
 export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
@@ -148,6 +155,46 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
           ],
         },
         { kind: 'text', text: 'The online gallery will remain hosted for {{retention_months}} months after delivery. After that, retention is at the Photographer’s discretion — the Client is responsible for downloading and backing up images during the hosting window.' },
+      ],
+    },
+    // Optional, unnumbered. Included when two_camera_enabled is 'yes'.
+    // The clause clarifies that the second camera is an assistant
+    // capacity, not an independent professional photographer — protects
+    // the Photographer from being held to "two pros" expectations.
+    {
+      title: 'TWO-CAMERA COVERAGE',
+      optional: true,
+      requireVariables: ['two_camera_enabled'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'This booking includes two-camera coverage for key moments of the event. The Photographer will operate as Lead Photographer; a Second Camera Operator (acting in an assistant capacity) will provide supplemental angles and supporting coverage during designated portions of the event.',
+        },
+        {
+          kind: 'text',
+          emphasis: 'italic',
+          text: 'The Second Camera Operator is not engaged as an independent professional photographer. Final editing, image selection, and creative direction across both camera sources remain solely with the Photographer.',
+        },
+      ],
+    },
+    // Optional, unnumbered. Included when additional_retouching_enabled
+    // is 'yes'. Makes clear that advanced retouching is an add-on, not
+    // part of the base package — and that scope/price is negotiated
+    // case-by-case.
+    {
+      title: 'OPTION FOR ADDITIONAL RETOUCHING',
+      optional: true,
+      requireVariables: ['additional_retouching_enabled'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'Following delivery of the initial gallery, the Client may select images from the gallery for advanced retouching beyond the standard color correction included in this package. Examples include, but are not limited to, skin smoothing, blemish removal, advanced color grading, and object removal.',
+        },
+        {
+          kind: 'text',
+          emphasis: 'italic',
+          text: 'The number of images, turnaround time, and any associated additional fees will be agreed upon separately between the Client and Photographer prior to the additional work being performed.',
+        },
       ],
     },
     {
