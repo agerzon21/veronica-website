@@ -1,7 +1,10 @@
 User-agent: *
 Allow: /
 Disallow: /private/
+Disallow: /admin
 Disallow: /admin/
+Disallow: /portal
+Disallow: /portal/
 Disallow: /api/
 
 # Sitemap

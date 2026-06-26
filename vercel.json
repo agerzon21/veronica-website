@@ -17,6 +17,18 @@
           "value": "no-cache, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/admin(/(.*))?",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" }
+      ]
+    },
+    {
+      "source": "/portal(/(.*))?",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" }
+      ]
     }
   ],
   "buildCommand": "npm run build",
