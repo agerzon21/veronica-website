@@ -126,6 +126,14 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   const [eventStartTime, setEventStartTime] = useState('17:00');
   const [eventEndTime, setEventEndTime] = useState('18:00');
 
+  // Coverage type covers the case where the booking is sold as a
+  // package (half-day, full-day) and exact times aren't known yet —
+  // common for weddings booked months out where the timeline gets
+  // finalized closer to the event.
+  type Coverage = 'specific' | 'half-day' | 'full-day' | 'custom';
+  const [coverage, setCoverage] = useState<Coverage>('specific');
+  const [customCoverage, setCustomCoverage] = useState('');
+
   // Session type defaults to the chosen template key. Override if needed
   // (mostly relevant when we add additional templates).
   const [sessionType, setSessionType] = useState<string>(templateKeys[0]);
@@ -214,6 +222,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       setError('Gallery password is required.');
       return;
     }
+    if (coverage === 'custom' && !customCoverage.trim()) {
+      setError('Custom coverage needs a description (or pick Specific Times / Half Day / Full Day).');
+      return;
+    }
     if (responsiblePartyEnabled) {
       if (!responsiblePartyName.trim() || !responsiblePartyRelationship.trim()) {
         setError('Responsible Party needs both a name and a relationship — or untoggle that option.');
@@ -234,12 +246,25 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     const legalClientNames = partner2FullName.trim()
       ? `${partner1FullName.trim()} & ${partner2FullName.trim()}`
       : partner1FullName.trim();
+    const eventTimeString = (() => {
+      if (coverage === 'half-day') {
+        return 'Half-day coverage (approximately 4 hours, exact times to be confirmed)';
+      }
+      if (coverage === 'full-day') {
+        return 'Full-day coverage (approximately 8 hours, exact times to be confirmed)';
+      }
+      if (coverage === 'custom') {
+        return customCoverage.trim();
+      }
+      return formatEventTime(eventStartTime, eventEndTime);
+    })();
+
     const finalVariables: Record<string, string> = {
       ...variables,
       client_names: legalClientNames,
       event_title: eventTitle,
       event_date: fmtDate(eventDateIso),
-      event_time: formatEventTime(eventStartTime, eventEndTime),
+      event_time: eventTimeString,
       total_amount: fmtCurrency(total),
       retainer_amount: fmtCurrency(retainer),
       remaining_balance: fmtCurrency(remaining),
@@ -465,20 +490,93 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
           </Field>
 
-          <HStack spacing={4} align="flex-start">
-            <Field label="Start Time" w="50%" helpText="When the shoot starts.">
-              <FormInput type="time" value={eventStartTime} onChange={(e) => setEventStartTime(e.target.value)} />
-            </Field>
-            <Field label="End Time" w="50%" helpText="When the shoot ends. Duration is auto-calculated.">
-              <FormInput type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
-            </Field>
-          </HStack>
+          <Field
+            label="Coverage"
+            required
+            helpText="Specific Times for known hours. Half/Full Day for packages where the schedule will be locked in later."
+          >
+            <Flex gap={2} wrap="wrap">
+              {(
+                [
+                  { key: 'specific', label: 'Specific Times' },
+                  { key: 'half-day', label: 'Half Day' },
+                  { key: 'full-day', label: 'Full Day' },
+                  { key: 'custom', label: 'Custom' },
+                ] as const
+              ).map((opt) => (
+                <Box
+                  key={opt.key}
+                  as="button"
+                  type="button"
+                  onClick={() => setCoverage(opt.key)}
+                  px={3}
+                  py={1.5}
+                  bg={coverage === opt.key ? '#c9a96e' : 'white'}
+                  color={coverage === opt.key ? 'white' : 'gray.700'}
+                  border="1px solid"
+                  borderColor={coverage === opt.key ? '#c9a96e' : 'gray.300'}
+                  borderRadius="sm"
+                  fontSize="xs"
+                  fontWeight="500"
+                  letterSpacing="0.05em"
+                  cursor="pointer"
+                  _hover={{ borderColor: '#c9a96e' }}
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  {opt.label}
+                </Box>
+              ))}
+            </Flex>
+          </Field>
 
-          {eventStartTime && eventEndTime && (
-            <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={2}>
-              <Text fontSize="xs" color="gray.500" mb={0.5}>On the contract:</Text>
-              <Text fontSize="sm" color="gray.800">{formatEventTime(eventStartTime, eventEndTime)}</Text>
+          {coverage === 'specific' && (
+            <>
+              <HStack spacing={4} align="flex-start">
+                <Field label="Start Time" w="50%" required helpText="When the shoot starts.">
+                  <FormInput type="time" value={eventStartTime} onChange={(e) => setEventStartTime(e.target.value)} />
+                </Field>
+                <Field label="End Time" w="50%" required helpText="When the shoot ends. Duration is auto-calculated.">
+                  <FormInput type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
+                </Field>
+              </HStack>
+
+              {eventStartTime && eventEndTime && (
+                <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={2}>
+                  <Text fontSize="xs" color="gray.500" mb={0.5}>On the contract:</Text>
+                  <Text fontSize="sm" color="gray.800">{formatEventTime(eventStartTime, eventEndTime)}</Text>
+                </Box>
+              )}
+            </>
+          )}
+
+          {(coverage === 'half-day' || coverage === 'full-day') && (
+            <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={3}>
+              <Text fontSize="xs" color="gray.500" mb={1}>On the contract:</Text>
+              <Text fontSize="sm" color="gray.800">
+                {coverage === 'half-day'
+                  ? 'Half-day coverage (approximately 4 hours, exact times to be confirmed)'
+                  : 'Full-day coverage (approximately 8 hours, exact times to be confirmed)'}
+              </Text>
+              <Text fontSize="xs" color="gray.500" mt={2} fontStyle="italic">
+                When you know the exact times, edit them in the client's detail view → Contract → Edit fields.
+              </Text>
             </Box>
+          )}
+
+          {coverage === 'custom' && (
+            <Field
+              label="Custom Coverage Description"
+              required
+              helpText='Free text — appears on the contract as the Time. e.g. "Ceremony coverage only, exact times TBD" or "Approximately 3 hours, schedule TBD".'
+            >
+              <Textarea
+                value={customCoverage}
+                onChange={(e) => setCustomCoverage(e.target.value)}
+                placeholder="e.g. Approximately 3 hours, exact times to be confirmed"
+                rows={2}
+                focusBorderColor="#c9a96e"
+              />
+            </Field>
           )}
 
           <Field label="Session Type" required helpText="What kind of shoot this is. Click a standard type, or use Custom for anything else.">
