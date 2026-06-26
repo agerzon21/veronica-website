@@ -258,7 +258,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
         return 'Half-day coverage (approximately 4 hours, exact times to be confirmed)';
       }
       if (coverage === 'full-day') {
-        return 'Full-day coverage (approximately 8 hours, exact times to be confirmed)';
+        return 'Full-day coverage (exact schedule to be confirmed)';
       }
       if (coverage === 'custom') {
         return customCoverage.trim();
@@ -271,12 +271,18 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     // acknowledgement clause to ADDITIONAL NOTES so the contract is
     // explicit about what the parties agreed to. Vero's own additional
     // notes (if any) come after, separated by a blank line.
+    //
+    // Full-day phrasing deliberately doesn't pin an hour count because
+    // it's the top-tier package — "major moments of the day from start
+    // to finish" gives the same bounding implication (i.e. the contract
+    // covers the wedding-day arc, not a 14-hour open-ended request)
+    // without numerically capping what's included.
     const tbaClause = (() => {
       if (coverage === 'half-day') {
         return 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 4 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.';
       }
       if (coverage === 'full-day') {
-        return 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 8 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.';
+        return 'At the time of signing, the exact event schedule is still being finalized. This is a full-day coverage booking — the Photographer will be present for the major moments of the Client’s day from start to finish, with the specific schedule to be confirmed by the Client in writing (email or text) prior to the event date.';
       }
       return '';
     })();
@@ -584,7 +590,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               <Text fontSize="sm" color="gray.800" mb={3}>
                 {coverage === 'half-day'
                   ? 'Half-day coverage (approximately 4 hours, exact times to be confirmed)'
-                  : 'Full-day coverage (approximately 8 hours, exact times to be confirmed)'}
+                  : 'Full-day coverage (exact schedule to be confirmed)'}
               </Text>
               <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                 Will appear on the contract — Additional Notes
@@ -592,7 +598,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               <Text fontSize="xs" color="gray.700" fontStyle="italic" lineHeight="1.6">
                 {coverage === 'half-day'
                   ? 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 4 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.'
-                  : 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 8 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.'}
+                  : 'At the time of signing, the exact event schedule is still being finalized. This is a full-day coverage booking — the Photographer will be present for the major moments of the Client’s day from start to finish, with the specific schedule to be confirmed by the Client in writing (email or text) prior to the event date.'}
               </Text>
               <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.200">
                 <Text fontSize="2xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
