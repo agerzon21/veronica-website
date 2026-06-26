@@ -105,6 +105,31 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
   const [gpError, setGpError] = useState('');
   const [gpCopied, setGpCopied] = useState(false);
 
+  // ─── Refresh ───
+  // Page reload would log them out (credentials live in state), so a
+  // soft refresh button is genuinely useful — most relevant right
+  // after they've sent a payment and want to see Vero's "Payment
+  // Received" entry show up without losing the session.
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch('/api/portal/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      const fresh = await res.json();
+      if (res.ok && fresh.success) {
+        onDataUpdate(fresh as ClientPortalData);
+      }
+    } catch {
+      // Swallow — user can just click again. No toast clutter.
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // ─── Sharing state ───
   // shareUrl is derived from gallery_password (no need to store it, just
   // recompute below). The copy / invite states live here.
@@ -258,7 +283,44 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
         <Text fontSize="sm" color="gray.500" fontWeight="300" mt={2}>
           {data.client_email}
         </Text>
+        <Box
+          as="button"
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          mt={3}
+          display="inline-flex"
+          alignItems="center"
+          gap={1.5}
+          fontSize="xs"
+          letterSpacing="0.2em"
+          textTransform="uppercase"
+          color="gray.500"
+          bg="transparent"
+          border="none"
+          cursor={refreshing ? 'wait' : 'pointer'}
+          _hover={{ color: '#c9a96e' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Icon
+            as={FaSync}
+            boxSize={2.5}
+            sx={
+              refreshing
+                ? { animation: 'spin 1s linear infinite' }
+                : undefined
+            }
+          />
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </Box>
       </Box>
+      {/* Keyframes for the refresh spinner */}
+      <Box
+        as="style"
+        dangerouslySetInnerHTML={{
+          __html: '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }',
+        }}
+      />
 
       {/* ─── Contract section ───
           Pending: shows the consent checkbox + signature pad + sign button.
