@@ -408,6 +408,39 @@ export function pruneEmptyOptionalSections(
   };
 }
 
+/**
+ * Walks every string in the template and pulls out the set of
+ * `{{variable_name}}` keys referenced. Used by the admin "Edit fields"
+ * form so a customer whose portal was created before a new variable
+ * existed still gets the new field surfaced (otherwise the form would
+ * silently omit anything not already in their saved variables map).
+ */
+export function extractVariableKeys(template: ContractTemplate): string[] {
+  const keys = new Set<string>();
+  const scan = (s: string) => {
+    const re = /\{\{(\w+)\}\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s)) !== null) {
+      keys.add(m[1]);
+    }
+  };
+  scan(template.title);
+  for (const section of template.sections) {
+    scan(section.title);
+    for (const p of section.paragraphs) {
+      if (p.kind === 'text') scan(p.text);
+      else if (p.kind === 'bullets') p.items.forEach(scan);
+      else if (p.kind === 'fields') {
+        p.items.forEach((f) => {
+          scan(f.label);
+          scan(f.value);
+        });
+      }
+    }
+  }
+  return Array.from(keys).sort();
+}
+
 export function fillTemplate<V extends Record<string, string>>(
   template: ContractTemplate,
   vars: V,

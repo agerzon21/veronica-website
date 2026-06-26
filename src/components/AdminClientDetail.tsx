@@ -2,6 +2,7 @@ import { Box, VStack, HStack, Text, Input, Flex, Icon, Badge, Textarea } from '@
 import { useEffect, useState } from 'react';
 import { FaArrowLeft, FaCheck, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import { CONTRACT_TEMPLATES, extractVariableKeys } from '../data/contract-template';
 
 interface Props {
   portalId: string;
@@ -1044,11 +1045,15 @@ function EditContractVariables({
     setVars(portal.contract_variables ?? {});
   }, [portal.contract_variables]);
 
-  // The keys we expose. We pull from the existing variables since they
-  // are what the template was rendered with. Variables created by the
-  // creation form (event_date, total/retainer, derived strings) flow
-  // through too — Vero can correct anything that was wrong.
-  const keys = Object.keys(vars).sort();
+  // Combine the variables already saved on the portal with every
+  // {{var}} reference in the current template. That way:
+  //  - Existing variables show up populated (so she can edit typos).
+  //  - Variables added to the template AFTER this portal was created
+  //    (e.g. responsible_party_name) show up as empty fields so she
+  //    can fill them in without having to recreate the portal.
+  const templateSpec = CONTRACT_TEMPLATES[portal.contract_template_key];
+  const templateKeys = templateSpec ? extractVariableKeys(templateSpec.template) : [];
+  const keys = Array.from(new Set([...Object.keys(vars), ...templateKeys])).sort();
 
   const handleSave = async () => {
     setSaving(true);
@@ -1078,10 +1083,12 @@ function EditContractVariables({
   };
 
   if (keys.length === 0) {
+    // No keys in vars AND no template keys (would only happen if the
+    // template key on this portal is unknown). Direct edit fallback.
     return (
       <Box mt={3} p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
         <Text fontSize="xs" color="yellow.800">
-          This portal predates editable variables. To make changes, void it and create a new one — or just edit the relevant DB columns directly.
+          Couldn't determine which template this portal uses. To make changes, void it and create a new one — or edit the relevant DB columns directly.
         </Text>
       </Box>
     );
