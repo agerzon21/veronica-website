@@ -16,8 +16,22 @@ interface Props {
 
 // ─── Small formatting helpers ──────────────────────────────────────────
 
-const cap = (s: string): string =>
-  s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+// Titlecase a name, but preserve internal capitalization. Handles
+// McKenna, DeAndre, MacDonald, etc. — typing "McKenna" stays as
+// "McKenna" instead of being flattened to "Mckenna". Pure all-lower
+// or all-upper still gets normalized to "Capitalized".
+const cap = (s: string): string => {
+  if (!s) return '';
+  const tail = s.slice(1);
+  const hasInternalUpper = /[A-Z]/.test(tail);
+  const hasInternalLower = /[a-z]/.test(tail);
+  if (hasInternalUpper && hasInternalLower) {
+    // Mixed case → assume intentional, just enforce the leading cap.
+    return s.charAt(0).toUpperCase() + tail;
+  }
+  // All-lower or all-upper → normalize to Titlecase.
+  return s.charAt(0).toUpperCase() + tail.toLowerCase();
+};
 
 const firstWord = (fullName: string): string => fullName.trim().split(/\s+/)[0] ?? '';
 
