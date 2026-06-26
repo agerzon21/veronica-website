@@ -33,7 +33,22 @@ interface Props {
 
 const formatDate = (iso: string | null): string => {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  // event_date is a DATE column — comes back as 'YYYY-MM-DD' or a full
+  // ISO timestamp at midnight UTC. Parsing with `new Date(...)` then
+  // formatting without timeZone='UTC' converts to the viewer's local
+  // timezone, which slides date-only values back a day in any negative
+  // offset. Force UTC formatting so the date that gets typed is the
+  // date that gets shown.
+  const datePart = iso.split('T')[0];
+  const [y, m, d] = datePart.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 };
 
 const formatMoney = (amount: number | null): string => {

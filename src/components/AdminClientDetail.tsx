@@ -47,7 +47,17 @@ interface PaymentEntry {
 
 const formatDate = (iso: string | null): string => {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  // Treat the date part as UTC so a 'YYYY-MM-DD' (or midnight-UTC ISO)
+  // doesn't slide back a day in the viewer's local timezone.
+  const datePart = iso.split('T')[0];
+  const [y, m, d] = datePart.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 };
 
 const formatMoney = (amount: number | null): string => {

@@ -70,12 +70,26 @@ interface ClientPortalViewProps {
 const formatMoney = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', {
+const formatDate = (iso: string) => {
+  // event_date, due_date, and similar date-only fields come back from
+  // Postgres as midnight-UTC timestamps. Without timeZone='UTC' the
+  // formatter would render them in the viewer's local timezone, sliding
+  // dates back a day in any negative UTC offset. Using UTC consistently
+  // here means typed-date matches displayed-date everywhere. The trade-
+  // off is that timestamps within an hour or two of UTC midnight may
+  // appear as the "next" day relative to the viewer's local clock; for
+  // date-level display (payments, signed-at, expires) that's a fair
+  // call.
+  const datePart = iso.split('T')[0];
+  const [y, m, d] = datePart.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: 'UTC',
   });
+};
 
 const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewProps) => {
   const remaining =
