@@ -5,10 +5,11 @@ import {
   VStack,
   Image,
   Icon,
+  Input,
   SimpleGrid,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
@@ -44,6 +45,13 @@ interface ClientGalleryProps {
   // delivered as a flat folder.
   sections: FolderSection[];
   warning?: string;
+  // When set, render a "Share this gallery" section at the bottom with
+  // a copyable one-click link + an email-invite form. Used on the
+  // /portal/pass route (gallery-only) where the viewer has no portal
+  // account — the password they typed is the auth. Full-mode portals
+  // get a richer share UI inside the Gallery Pass section instead, so
+  // we leave this prop unset for them.
+  galleryPassword?: string;
 }
 
 interface GridTileProps {
@@ -212,6 +220,7 @@ const ClientGallery = ({
   rootFiles,
   sections,
   warning,
+  galleryPassword,
 }: ClientGalleryProps) => {
   // Flatten everything into one ordered array. The lightbox navigates by
   // index into this array, so prev/next walks across all sections in
@@ -564,8 +573,230 @@ const ClientGallery = ({
           </VStack>
         </Box>
       )}
+
+      {/* Share section — only rendered when the parent route passes a
+          gallery password, i.e. /portal/pass (gallery-only access).
+          Full-mode portals have a richer share UI in their Gallery Pass
+          section already. */}
+      {galleryPassword && <GalleryShareSection galleryPassword={galleryPassword} />}
     </Box>
   );
 };
+
+/**
+ * Share section for gallery-only access (the /portal/pass route).
+ * Three paths: copy the one-click URL, copy just the password, or have
+ * us email an invite. The email path is rate-limited server-side at
+ * 5/24h per gallery — same limit the full-portal share uses — so
+ * "anyone with the password can share" doesn't turn into a spam
+ * vector.
+ */
+function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
+  const directUrl =
+    (typeof window !== 'undefined' ? window.location.origin : 'https://vero.photography') +
+    `/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
+
+  const [urlCopied, setUrlCopied] = useState(false);
+  const [pwCopied, setPwCopied] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<
+    { kind: 'ok' | 'err'; text: string } | null
+  >(null);
+  const [remainingToday, setRemainingToday] = useState<number | null>(null);
+
+  const copy = async (text: string, set: (b: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      set(true);
+      setTimeout(() => set(false), 2000);
+    } catch {
+      // Fallback: nothing. Users can long-press the visible string.
+    }
+  };
+
+  const sendInvite = async () => {
+    setInviteMessage(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) {
+      setInviteMessage({ kind: 'err', text: 'Enter a valid email address.' });
+      return;
+    }
+    setInviteSending(true);
+    try {
+      const res = await fetch('/api/portal/share-gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gallery_password: galleryPassword,
+          target_email: inviteEmail.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setInviteMessage({ kind: 'ok', text: `Invite sent to ${inviteEmail.trim()}.` });
+        setInviteEmail('');
+        if (typeof data.remaining_today === 'number') {
+          setRemainingToday(data.remaining_today);
+        }
+      } else {
+        setInviteMessage({ kind: 'err', text: data.error || `Could not send (status ${res.status}).` });
+      }
+    } catch {
+      setInviteMessage({ kind: 'err', text: 'Could not reach the server.' });
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
+  return (
+    <Box bg="white" borderTop="1px solid" borderColor="gray.100" py={12} px={6}>
+      <VStack maxW="520px" mx="auto" spacing={6}>
+        <VStack spacing={2}>
+          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+            Share these photos
+          </Text>
+          <Box w="30px" h="1px" bg="#c9a96e" />
+        </VStack>
+
+        <Text fontSize="sm" color="gray.600" fontWeight="300" textAlign="center" lineHeight="1.7">
+          Want to share these with family or friends? Anyone with the link below can view the gallery — no account needed.
+        </Text>
+
+        {/* One-click link */}
+        <VStack w="100%" spacing={2} align="stretch">
+          <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
+            One-click link
+          </Text>
+          <Flex
+            align="center"
+            gap={2}
+            bg="gray.50"
+            border="1px solid"
+            borderColor="gray.200"
+            borderRadius="sm"
+            px={3}
+            py={2}
+          >
+            <Text
+              fontSize="xs"
+              color="gray.700"
+              fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+              flex="1"
+              minW={0}
+              noOfLines={1}
+              textAlign="left"
+            >
+              {directUrl}
+            </Text>
+            <Box
+              as="button"
+              type="button"
+              onClick={() => copy(directUrl, setUrlCopied)}
+              aria-label="Copy link"
+              p={1.5}
+              borderRadius="sm"
+              color="gray.500"
+              cursor="pointer"
+              _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Icon as={urlCopied ? FaCheck : FaCopy} boxSize={3} />
+            </Box>
+          </Flex>
+        </VStack>
+
+        {/* Plain password as fallback */}
+        <VStack w="100%" spacing={2} align="stretch">
+          <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
+            Or — go to vero.photography/portal/pass and use this password
+          </Text>
+          <Flex
+            align="center"
+            gap={2}
+            bg="gray.50"
+            border="1px solid"
+            borderColor="gray.200"
+            borderRadius="sm"
+            px={3}
+            py={2}
+          >
+            <Text
+              fontSize="md"
+              color="gray.800"
+              fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+              fontWeight="500"
+              flex="1"
+              minW={0}
+              textAlign="left"
+              letterSpacing="0.05em"
+            >
+              {galleryPassword}
+            </Text>
+            <Box
+              as="button"
+              type="button"
+              onClick={() => copy(galleryPassword, setPwCopied)}
+              aria-label="Copy password"
+              p={1.5}
+              borderRadius="sm"
+              color="gray.500"
+              cursor="pointer"
+              _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Icon as={pwCopied ? FaCheck : FaCopy} boxSize={3} />
+            </Box>
+          </Flex>
+        </VStack>
+
+        {/* Email invite */}
+        <VStack w="100%" spacing={2} align="stretch">
+          <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
+            Or send via email
+          </Text>
+          <Flex gap={2} direction={{ base: 'column', sm: 'row' }}>
+            <Input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="friend@example.com"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              h="40px"
+              bg="white"
+              fontSize="sm"
+              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+            />
+            <CTAButton
+              onClick={sendInvite}
+              variant="solid"
+              size="sm"
+              isLoading={inviteSending}
+              loadingText="Sending..."
+            >
+              Send Invite
+            </CTAButton>
+          </Flex>
+          <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+            We'll email them with the same one-click link. To keep things from getting spammy, this gallery can send up to 5 invites in any 24-hour period.
+            {remainingToday !== null && (
+              <> ({remainingToday} {remainingToday === 1 ? 'left' : 'left'} today.)</>
+            )}
+          </Text>
+          {inviteMessage && (
+            <Text
+              fontSize="xs"
+              fontWeight="400"
+              color={inviteMessage.kind === 'err' ? 'red.500' : 'green.600'}
+            >
+              {inviteMessage.text}
+            </Text>
+          )}
+        </VStack>
+      </VStack>
+    </Box>
+  );
+}
 
 export default ClientGallery;

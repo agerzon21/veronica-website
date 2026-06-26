@@ -116,6 +116,14 @@ function isMediaFile(f: { mimeType?: string | null }): boolean {
   );
 }
 
+// Natural-sort compare: "photo-2.jpg" < "photo-10.jpg". Drive's
+// orderBy='name' is purely lexical, so something like "20June2026-10.jpg"
+// ends up between "-1.jpg" and "-2.jpg". Vero numbers her deliveries
+// chronologically (1, 2, 3 … 10, 11) so a lexical sort scrambles the
+// timeline. localeCompare with numeric:true is the standard fix.
+const naturalNameCompare = (a: { name: string }, b: { name: string }) =>
+  a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
 async function listMediaInFolder(
   drive: drive_v3.Drive,
   folderId: string,
@@ -130,6 +138,7 @@ async function listMediaInFolder(
     .filter((f): f is { id: string; name: string; mimeType: string; size?: string | null } =>
       Boolean(f.id && f.name && f.mimeType),
     )
+    .sort(naturalNameCompare)
     .map(toDriveFile);
 }
 
@@ -157,15 +166,20 @@ export async function listFolderTree(parentFolderId: string): Promise<FolderTree
   });
   const items = rootRes.data.files ?? [];
 
-  const subFolders = items.filter((f) => f.mimeType === FOLDER_MIME);
-  const rootFiles = items.filter(isMediaFile).map((f) =>
-    toDriveFile({
-      id: f.id!,
-      name: f.name!,
-      mimeType: f.mimeType!,
-      size: f.size,
-    }),
-  );
+  const subFolders = items
+    .filter((f) => f.mimeType === FOLDER_MIME)
+    .sort((a, b) => naturalNameCompare({ name: a.name ?? '' }, { name: b.name ?? '' }));
+  const rootFiles = items
+    .filter(isMediaFile)
+    .sort((a, b) => naturalNameCompare({ name: a.name ?? '' }, { name: b.name ?? '' }))
+    .map((f) =>
+      toDriveFile({
+        id: f.id!,
+        name: f.name!,
+        mimeType: f.mimeType!,
+        size: f.size,
+      }),
+    );
 
   // 2. For each subfolder, fetch its media in parallel. Bounded fanout —
   //    typical weddings have <20 subfolders, well under Drive's quota.

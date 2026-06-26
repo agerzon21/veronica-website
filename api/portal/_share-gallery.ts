@@ -43,13 +43,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
+  // Two auth modes:
+  //   - email + password (full-portal client sharing their own gallery)
+  //   - gallery_password only (someone using /portal/pass — they don't
+  //     have an account, they just have the password)
+  // Either way, the rate limit is per-portal so abuse is bounded
+  // regardless of how widely the password gets shared.
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+  const galleryPassword =
+    typeof req.body?.gallery_password === 'string' ? req.body.gallery_password.trim() : '';
   const targetEmail = typeof req.body?.target_email === 'string' ? req.body.target_email.trim().toLowerCase() : '';
 
-  if (!email || !password) {
+  if (!(email && password) && !galleryPassword) {
     await sleep(WRONG_AUTH_DELAY_MS);
-    return res.status(401).json({ success: false, error: 'Email and password required' });
+    return res.status(401).json({ success: false, error: 'Authentication required' });
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
     return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
@@ -57,18 +65,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
-    const rows = (await sql`
-      select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at
-      from client_portals
-      where mode = 'full'
-        and lower(client_email) = ${email}
-        and client_password = ${password}
-      limit 1
-    `) as PortalRow[];
+    const rows = galleryPassword
+      ? ((await sql`
+          select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at
+          from client_portals
+          where gallery_password = ${galleryPassword}
+          limit 1
+        `) as PortalRow[])
+      : ((await sql`
+          select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at
+          from client_portals
+          where mode = 'full'
+            and lower(client_email) = ${email}
+            and client_password = ${password}
+          limit 1
+        `) as PortalRow[]);
 
     if (rows.length === 0) {
       await sleep(WRONG_AUTH_DELAY_MS);
-      return res.status(401).json({ success: false, error: 'Incorrect email or password' });
+      return res.status(401).json({
+        success: false,
+        error: galleryPassword ? 'Gallery password is incorrect' : 'Incorrect email or password',
+      });
     }
     const portal = rows[0];
 

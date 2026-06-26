@@ -195,6 +195,7 @@ const Portal = () => {
           rootFiles={galleryData.rootFiles}
           sections={galleryData.sections}
           warning={galleryData.warning}
+          galleryPassword={galleryPassword.trim()}
         />
       </>
     );
