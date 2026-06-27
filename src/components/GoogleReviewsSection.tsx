@@ -9,7 +9,7 @@ const MotionDiv = motion.div;
 const GOOGLE_PROFILE_URL = 'https://g.page/r/CSNq8ccyWt_wEAE';
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 const RATING = '5.0';
-const REVIEW_COUNT = 16;
+const REVIEW_COUNT = 15;
 
 const TESTIMONIAL_POOL = [
   {
@@ -51,6 +51,11 @@ const TESTIMONIAL_POOL = [
     name: 'Tali Kipnis',
     quote:
       'Veronica is the best!! Thank you so much for capturing such beautiful moments of my special day. The guests also came up to me commenting how nice she is! Highly recommend.',
+  },
+  {
+    name: 'Anahy Diaz',
+    quote:
+      'The result exceeded our expectations. We are delighted with Veronica’s work — she captured the essence of our wedding in an incredible way. Veronica is very kind and always open to your ideas. Plus, she is very creative — we have photos with fireworks! 100% recommended.',
   },
 ];
 
