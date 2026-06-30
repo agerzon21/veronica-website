@@ -550,19 +550,42 @@ const ImageModal = ({
                 )}
               </Flex>
             ) : downloadUrl ? (
-              // Desktop path: anchor with download attribute triggers the
-              // browser's Save As dialog so the user picks a location.
-              // Works fine for any file size since downloads stream
-              // straight to disk (no memory pressure).
-              <CTAButton
-                href={downloadUrl}
-                download={downloadFilename ?? true}
-                icon={FaDownload}
-                tone="dark"
-                size="sm"
-              >
-                Download
-              </CTAButton>
+              // Desktop path: downloadUrl points at our /api/photo proxy
+              // which serves a 2400px webp with Content-Disposition:
+              // attachment. The browser shows an in-page Save dialog —
+              // no Drive virus-scan interstitial, no tab navigation.
+              // The small "Open original" link below is the escape hatch
+              // for clients who need the full-res file for print.
+              <Flex direction="column" align="flex-end" gap={2}>
+                <CTAButton
+                  href={downloadUrl}
+                  download={downloadFilename ?? true}
+                  icon={FaDownload}
+                  tone="dark"
+                  size="sm"
+                >
+                  Download
+                </CTAButton>
+                {driveViewUrl && (
+                  <Text
+                    as="a"
+                    href={driveViewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    fontSize="11px"
+                    fontWeight="300"
+                    color="whiteAlpha.700"
+                    letterSpacing="0.04em"
+                    textDecoration="underline"
+                    textUnderlineOffset="3px"
+                    textDecorationColor="whiteAlpha.400"
+                    _hover={{ color: 'white', textDecorationColor: 'whiteAlpha.700' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Need print quality? Open original →
+                  </Text>
+                )}
+              </Flex>
             ) : (
               <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
                 View Photo Page →

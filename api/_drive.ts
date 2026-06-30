@@ -93,6 +93,13 @@ function toDriveFile(f: {
   mimeType: string;
   size?: string | null;
 }): DriveFile {
+  // For the optimized download path, the file is served as webp so the
+  // filename should reflect that — strip the original extension and
+  // append .webp. The user-facing "Open original" link still gets them
+  // to the unmodified file via Drive's viewer.
+  const baseName = f.name.replace(/\.[^.]+$/, '');
+  const optimizedFilename = `${baseName}.webp`;
+
   return {
     id: f.id,
     name: f.name,
@@ -102,12 +109,12 @@ function toDriveFile(f: {
     size: f.size ? parseInt(f.size, 10) : null,
     thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
     viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
-    // Route downloads through our proxy with `?full=1` + a filename hint so
-    // the browser sees `Content-Disposition: attachment` and triggers a
-    // native Save dialog. Going direct to Drive's `uc?export=download` URL
-    // for files >25MB lands on Drive's virus-scan interstitial, which yanks
-    // the user out of the gallery — bad UX, no way around it on Drive's end.
-    downloadUrl: `/api/photo?id=${f.id}&full=1&filename=${encodeURIComponent(f.name)}`,
+    // Download = optimized 2400px webp via our proxy. ~1-2MB, in-page Save
+    // dialog (Content-Disposition: attachment), no virus-scan interstitial.
+    // Print-quality originals are available via the "Open original" link
+    // (driveViewUrl) — that path goes straight to Drive and doesn't count
+    // against our Vercel Origin Transfer quota.
+    downloadUrl: `/api/photo?id=${f.id}&filename=${encodeURIComponent(optimizedFilename)}`,
     // Same-origin proxy so the browser can fetch() the bytes without
     // hitting Drive's CORS block. Required for the Web Share API path.
     originalUrl: `/api/photo?id=${f.id}`,

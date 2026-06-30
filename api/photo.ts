@@ -1,36 +1,38 @@
 /**
  * Photo proxy — fetches a Drive file through our origin so the browser can
- * fetch() it without hitting CORS. Used by the client-portal lightbox to
- * pre-fetch the image for the Web Share API (which requires a File object,
- * which requires fetch(), which requires no CORS block).
+ * fetch() it without hitting CORS, AND so downloads can use a smaller
+ * resized version instead of the 10-25MB originals.
  *
- * This is the ONLY path that streams Drive bytes through our Vercel origin:
- *   - Desktop gallery thumbnails use drive.google.com/thumbnail directly.
- *   - Desktop "Download" uses drive.google.com/uc?export=download directly.
- *   - Only the mobile "Save to Photos" share flow goes through here.
+ * This is the ONLY path that streams Drive bytes through our Vercel origin.
+ * Gallery thumbnails go to drive.google.com/thumbnail directly. The "Open
+ * original" escape hatch in the modal points at Drive's viewer (driveViewUrl)
+ * so users who genuinely need full-res don't hit our quota.
  *
- * Why resize: Veronika's originals are 10-25MB each. A client browsing
- * their gallery on mobile pre-fetches every tapped photo through this
- * endpoint — a 50-photo gallery view at full res = ~750MB origin transfer.
- * That blew our Vercel Hobby quota in two days. A 2400px webp is visually
- * indistinguishable on any phone screen (iPhone 15 Pro Max is 2796px wide)
- * but ~10x smaller.
+ * Response modes (driven by query params):
  *
- * Clients who want the full-res original use the "Open original" link in
- * the modal — that points straight at Drive's viewer (driveViewUrl), no
- * proxy involvement.
+ *   /api/photo?id=X
+ *     → resized webp (~2400px, q82). Buffered, ~1-2MB, served with
+ *       `immutable` cache so Vercel's CDN + the browser both cache it.
+ *       Used by the mobile share pre-fetch (Web Share API).
  *
- * Two response modes:
- *   default               — resized webp (~2400px, q82). Buffered, ~1-2MB,
- *                           served with `immutable` cache so Vercel's CDN +
- *                           the browser both cache it. Used for gallery
- *                           viewing + mobile share pre-fetch.
- *   ?full=1&filename=...  — original file, streamed with
- *                           `Content-Disposition: attachment`. Used by the
- *                           desktop download button. Going through our
- *                           proxy avoids Drive's >25MB virus-scan
- *                           interstitial (which would otherwise navigate
- *                           the user out of the gallery).
+ *   /api/photo?id=X&filename=foo.webp
+ *     → resized webp + Content-Disposition: attachment. Triggers an
+ *       in-page Save dialog. Used by the desktop "Download" button so
+ *       clients get a share-friendly file without leaving the gallery.
+ *
+ *   /api/photo?id=X&full=1
+ *     → original file, streamed inline. No caller uses this today.
+ *
+ *   /api/photo?id=X&full=1&filename=foo.jpg
+ *     → original file, streamed with attachment disposition. Reserved
+ *       for a future "download full-res via proxy" button if we ever
+ *       want one — for now full-res downloads go to Drive directly.
+ *
+ * Why resize for the default path: Veronika's originals are 10-25MB.
+ * Serving full-res to every gallery view + every mobile share pre-fetch
+ * burned ~750MB per gallery visit and blew our Vercel Hobby quota in
+ * two days. A 2400px webp is visually indistinguishable on phone screens
+ * (iPhone 15 Pro Max is 2796px wide) and ~10x smaller.
  *
  * Trust model: the file IDs we serve are already publicly accessible via
  * Drive's "anyone with link" sharing (set by Veronika on the parent folder).
@@ -67,9 +69,19 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+// RFC 5987 dual encoding for Content-Disposition filenames. Non-ASCII
+// characters in photo names (em dashes, accents, etc) would otherwise
+// crash the response header on some HTTP stacks.
+function attachmentHeader(filename: string): string {
+  const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+  const utf8Encoded = encodeURIComponent(filename);
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fileId = typeof req.query.id === 'string' ? req.query.id : '';
   const wantFull = req.query.full === '1';
+  const filename = typeof req.query.filename === 'string' ? req.query.filename : '';
 
   // Drive file IDs are 28-44 chars of [A-Za-z0-9_-]. Reject anything else
   // to avoid using this endpoint as an open redirect / SSRF vector.
@@ -86,35 +98,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     res.setHeader('Access-Control-Allow-Origin', '*');
+    if (filename) res.setHeader('Content-Disposition', attachmentHeader(filename));
 
     if (wantFull) {
-      // Originals path — stream through unchanged. Used for downloads,
-      // where the client explicitly wants the full-res file. We don't
-      // try to cache these (large + rare).
+      // Originals path — stream through unchanged. No caller uses this
+      // today; kept as a hook in case we ever want "download full-res
+      // via proxy" instead of sending users to Drive.
       const contentType = (file.headers['content-type'] as string) || 'image/jpeg';
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=3600');
-
-      // When a filename is supplied, force a Save As dialog instead of
-      // letting the browser render the image inline. RFC 5987 dual
-      // encoding (ASCII fallback + UTF-8 percent-encoded) so non-ASCII
-      // characters in photo names — em dashes, accents, etc — don't
-      // crash the response header.
-      const filename = typeof req.query.filename === 'string' ? req.query.filename : '';
-      if (filename) {
-        const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
-        const utf8Encoded = encodeURIComponent(filename);
-        res.setHeader(
-          'Content-Disposition',
-          `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`,
-        );
-      }
-
       (file.data as NodeJS.ReadableStream).pipe(res);
       return;
     }
 
-    // Display path — resize + buffer + cache aggressively.
+    // Resized path — buffer + cache aggressively. Same bytes whether
+    // we serve inline or as attachment, so cache headers are identical.
     const original = await streamToBuffer(file.data as NodeJS.ReadableStream);
     const resized = await sharp(original)
       .rotate() // honor EXIF orientation
