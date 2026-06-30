@@ -81,6 +81,33 @@ const SEO = () => {
   const canonical = `${SITE_URL}${normalized === '/' ? '' : normalized}`;
   const image = resolved.image ?? DEFAULT_IMAGE;
 
+  // Per-page WebPage + primaryImageOfPage. This is the missing signal
+  // that lets Google pick the right SERP thumbnail per route — the
+  // existing static ProfessionalService schema in index.html covers
+  // the business entity, but doesn't declare which image is the page's
+  // primary one. Without this, Google falls back to its automated
+  // picker and on /, the hero camera image wins on visual prominence.
+  //
+  // Per Google's official Image SEO docs, og:image and primaryImageOfPage
+  // are the only two confirmed methods to influence thumbnail selection
+  // (alt text is for understanding, not selection). After deploying,
+  // re-index via Search Console (URL Inspection → Request Indexing) to
+  // skip the multi-week crawl delay.
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    url: canonical,
+    name: resolved.title,
+    description: resolved.description,
+    inLanguage: 'en-US',
+    primaryImageOfPage: {
+      '@type': 'ImageObject',
+      url: image,
+      width: 1200,
+      height: 630,
+    },
+  };
+
   return (
     <Helmet>
       <title>{resolved.title}</title>
@@ -115,6 +142,10 @@ const SEO = () => {
       <meta name="twitter:title" content={resolved.title} />
       <meta name="twitter:description" content={resolved.description} />
       <meta name="twitter:image" content={image} />
+
+      {/* Structured data — primaryImageOfPage is the canonical signal
+          Google uses (alongside og:image) to choose the SERP thumbnail. */}
+      <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
     </Helmet>
   );
 };
