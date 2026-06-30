@@ -2,8 +2,13 @@ import {
   Box,
   Text,
   Flex,
+  Icon,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
 } from '@chakra-ui/react';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
 import { FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import React from 'react';
@@ -66,6 +71,134 @@ interface ImageModalProps {
 // for ~95% of real photos and gracefully degrades the rest to Drive's
 // native viewer where size isn't a problem.
 const LARGE_FILE_THRESHOLD = 40 * 1024 * 1024;
+
+function formatFileSize(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
+}
+
+// Split-button dropdown used on both desktop and mobile flows. Two
+// equally-weighted options so users see both paths up front, instead of
+// the "Need print quality?" disclaimer link reading as a caveat.
+//
+// Primary option is platform-specific (anchor download on desktop,
+// Web Share API call on mobile) so the caller passes either
+// `primaryHref` or `onPrimary`. Secondary option is always Drive's
+// viewer for the full-res original — same link in both contexts.
+interface DownloadMenuProps {
+  triggerLabel: string;
+  primaryTitle: string;
+  primaryDesc: string;
+  primaryHref?: string;
+  primaryDownload?: string | boolean;
+  onPrimary?: () => void;
+  driveViewUrl?: string;
+  fileSize?: number;
+}
+
+const DownloadMenu = ({
+  triggerLabel,
+  primaryTitle,
+  primaryDesc,
+  primaryHref,
+  primaryDownload,
+  onPrimary,
+  driveViewUrl,
+  fileSize,
+}: DownloadMenuProps) => {
+  const GOLD = '#c9a96e';
+  const triggerStyles = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    px: { base: 4, md: 5 },
+    py: 2,
+    fontSize: '2xs',
+    fontWeight: 400,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.18em',
+    lineHeight: 1,
+    borderRadius: 0,
+    border: '1px solid',
+    borderColor: GOLD,
+    color: GOLD,
+    bg: 'transparent',
+    cursor: 'pointer',
+    transition: 'all 0.4s ease',
+    whiteSpace: 'nowrap' as const,
+    _hover: { bg: GOLD, color: 'white', transform: 'translateY(-2px)' },
+    _active: { bg: '#b8964f', transform: 'translateY(0)' },
+    _expanded: { bg: GOLD, color: 'white' },
+    sx: { WebkitTapHighlightColor: 'transparent' },
+  };
+  const listStyles = {
+    bg: 'rgba(15, 15, 15, 0.96)',
+    border: '1px solid',
+    borderColor: 'whiteAlpha.200',
+    borderRadius: 0,
+    minW: '260px',
+    py: 1,
+    zIndex: 1600,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+  };
+  const itemStyles = {
+    bg: 'transparent',
+    py: 3,
+    px: 4,
+    _hover: { bg: 'whiteAlpha.100' },
+    _focus: { bg: 'whiteAlpha.100' },
+  };
+
+  return (
+    <Menu placement="top-end" gutter={8}>
+      <MenuButton as={Box} {...triggerStyles}>
+        <Icon as={FaDownload} boxSize={3.5} />
+        <Box as="span">{triggerLabel}</Box>
+        <ChevronDownIcon boxSize={3.5} />
+      </MenuButton>
+      <MenuList {...listStyles}>
+        <MenuItem
+          {...(primaryHref
+            ? {
+                as: 'a',
+                href: primaryHref,
+                download: primaryDownload,
+              }
+            : { onClick: onPrimary })}
+          {...itemStyles}
+        >
+          <Box>
+            <Text color="white" fontSize="sm" fontWeight="400" mb={0.5}>
+              {primaryTitle}
+            </Text>
+            <Text color="whiteAlpha.600" fontSize="xs">
+              {primaryDesc}
+            </Text>
+          </Box>
+        </MenuItem>
+        {driveViewUrl && (
+          <MenuItem
+            as="a"
+            href={driveViewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            {...itemStyles}
+          >
+            <Box>
+              <Text color="white" fontSize="sm" fontWeight="400" mb={0.5}>
+                Original
+              </Text>
+              <Text color="whiteAlpha.600" fontSize="xs">
+                Full quality{fileSize ? ` · ${formatFileSize(fileSize)}` : ''}
+              </Text>
+            </Box>
+          </MenuItem>
+        )}
+      </MenuList>
+    </Menu>
+  );
+};
 
 const ImageModal = ({
   isOpen,
@@ -508,84 +641,42 @@ const ImageModal = ({
                 Open in Drive
               </CTAButton>
             ) : useMobileSaveFlow ? (
-              // Mobile path (small files): photo is pre-fetched on modal
-              // open. Click calls navigator.share() synchronously inside
-              // the user gesture → native share sheet with "Save to
-              // Photos" as the first option. If pre-fetch failed (CORS,
-              // network), falls back to opening the URL so user can
-              // long-press to save.
+              // Mobile path (small files): dropdown with two options.
               //
-              // We serve a 2400px webp through /api/photo to keep our
-              // Vercel Origin Transfer in budget — visually identical on
-              // any phone screen but ~10x smaller. The "Open original"
-              // link below is the escape hatch for clients who want the
-              // full-res file (links straight to Drive, doesn't proxy).
-              <Flex direction="column" align="flex-end" gap={2}>
-                <CTAButton
-                  onClick={handleMobileSave}
-                  icon={FaDownload}
-                  tone="dark"
-                  size="sm"
-                >
-                  Save to Photos
-                </CTAButton>
-                {driveViewUrl && (
-                  <Text
-                    as="a"
-                    href={driveViewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    fontSize="11px"
-                    fontWeight="300"
-                    color="whiteAlpha.700"
-                    letterSpacing="0.04em"
-                    textDecoration="underline"
-                    textUnderlineOffset="3px"
-                    textDecorationColor="whiteAlpha.400"
-                    _hover={{ color: 'white', textDecorationColor: 'whiteAlpha.700' }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Need print quality? Open original →
-                  </Text>
-                )}
-              </Flex>
+              //   Save to Photos → handleMobileSave runs the Web Share
+              //     API on the pre-fetched (resized) blob. iOS's share
+              //     sheet shows "Save to Photos" as the first option.
+              //   Open original → opens Drive's viewer in a new tab;
+              //     client can grab the full-res file from Drive's UI.
+              //
+              // Web Share API needs a synchronous user gesture, which the
+              // MenuItem onClick provides — Chakra fires onClick inline
+              // before closing the menu, so the gesture isn't consumed.
+              <DownloadMenu
+                fileSize={fileSize}
+                onPrimary={handleMobileSave}
+                primaryTitle="Save to Photos"
+                primaryDesc="Quick save to camera roll"
+                driveViewUrl={driveViewUrl}
+                triggerLabel="Save"
+              />
             ) : downloadUrl ? (
-              // Desktop path: downloadUrl points at our /api/photo proxy
-              // which serves a 2400px webp with Content-Disposition:
-              // attachment. The browser shows an in-page Save dialog —
-              // no Drive virus-scan interstitial, no tab navigation.
-              // The small "Open original" link below is the escape hatch
-              // for clients who need the full-res file for print.
-              <Flex direction="column" align="flex-end" gap={2}>
-                <CTAButton
-                  href={downloadUrl}
-                  download={downloadFilename ?? true}
-                  icon={FaDownload}
-                  tone="dark"
-                  size="sm"
-                >
-                  Download
-                </CTAButton>
-                {driveViewUrl && (
-                  <Text
-                    as="a"
-                    href={driveViewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    fontSize="11px"
-                    fontWeight="300"
-                    color="whiteAlpha.700"
-                    letterSpacing="0.04em"
-                    textDecoration="underline"
-                    textUnderlineOffset="3px"
-                    textDecorationColor="whiteAlpha.400"
-                    _hover={{ color: 'white', textDecorationColor: 'whiteAlpha.700' }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Need print quality? Open original →
-                  </Text>
-                )}
-              </Flex>
+              // Desktop path: dropdown with two options.
+              //
+              //   Optimized → downloadUrl points at our /api/photo proxy
+              //     which serves a 2400px webp with Content-Disposition:
+              //     attachment. In-page Save dialog, no Drive interstitial.
+              //   Original → Drive's viewer in a new tab for the full-res
+              //     file. Doesn't count against our Origin Transfer quota.
+              <DownloadMenu
+                fileSize={fileSize}
+                primaryHref={downloadUrl}
+                primaryDownload={downloadFilename ?? true}
+                primaryTitle="Optimized"
+                primaryDesc="Smaller file, fast download"
+                driveViewUrl={driveViewUrl}
+                triggerLabel="Download"
+              />
             ) : (
               <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
                 View Photo Page →
