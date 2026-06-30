@@ -514,14 +514,41 @@ const ImageModal = ({
               // Photos" as the first option. If pre-fetch failed (CORS,
               // network), falls back to opening the URL so user can
               // long-press to save.
-              <CTAButton
-                onClick={handleMobileSave}
-                icon={FaDownload}
-                tone="dark"
-                size="sm"
-              >
-                Save to Photos
-              </CTAButton>
+              //
+              // We serve a 2400px webp through /api/photo to keep our
+              // Vercel Origin Transfer in budget — visually identical on
+              // any phone screen but ~10x smaller. The "Open original"
+              // link below is the escape hatch for clients who want the
+              // full-res file (links straight to Drive, doesn't proxy).
+              <Flex direction="column" align="flex-end" gap={2}>
+                <CTAButton
+                  onClick={handleMobileSave}
+                  icon={FaDownload}
+                  tone="dark"
+                  size="sm"
+                >
+                  Save to Photos
+                </CTAButton>
+                {driveViewUrl && (
+                  <Text
+                    as="a"
+                    href={driveViewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    fontSize="11px"
+                    fontWeight="300"
+                    color="whiteAlpha.700"
+                    letterSpacing="0.04em"
+                    textDecoration="underline"
+                    textUnderlineOffset="3px"
+                    textDecorationColor="whiteAlpha.400"
+                    _hover={{ color: 'white', textDecorationColor: 'whiteAlpha.700' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Need print quality? Open original →
+                  </Text>
+                )}
+              </Flex>
             ) : downloadUrl ? (
               // Desktop path: anchor with download attribute triggers the
               // browser's Save As dialog so the user picks a location.
