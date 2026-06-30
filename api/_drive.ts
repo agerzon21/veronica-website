@@ -102,7 +102,12 @@ function toDriveFile(f: {
     size: f.size ? parseInt(f.size, 10) : null,
     thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
     viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
-    downloadUrl: `https://drive.google.com/uc?export=download&id=${f.id}`,
+    // Route downloads through our proxy with `?full=1` + a filename hint so
+    // the browser sees `Content-Disposition: attachment` and triggers a
+    // native Save dialog. Going direct to Drive's `uc?export=download` URL
+    // for files >25MB lands on Drive's virus-scan interstitial, which yanks
+    // the user out of the gallery — bad UX, no way around it on Drive's end.
+    downloadUrl: `/api/photo?id=${f.id}&full=1&filename=${encodeURIComponent(f.name)}`,
     // Same-origin proxy so the browser can fetch() the bytes without
     // hitting Drive's CORS block. Required for the Web Share API path.
     originalUrl: `/api/photo?id=${f.id}`,

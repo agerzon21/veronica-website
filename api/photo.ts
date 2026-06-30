@@ -21,10 +21,16 @@
  * proxy involvement.
  *
  * Two response modes:
- *   default  — resized webp (~2400px, q82). Buffered, ~1-2MB, served with
- *              `immutable` cache so Vercel's CDN + the browser both cache it.
- *   ?full=1  — original file, streamed. No caller uses this today; kept as
- *              a hook for future "download original via proxy" needs.
+ *   default               — resized webp (~2400px, q82). Buffered, ~1-2MB,
+ *                           served with `immutable` cache so Vercel's CDN +
+ *                           the browser both cache it. Used for gallery
+ *                           viewing + mobile share pre-fetch.
+ *   ?full=1&filename=...  — original file, streamed with
+ *                           `Content-Disposition: attachment`. Used by the
+ *                           desktop download button. Going through our
+ *                           proxy avoids Drive's >25MB virus-scan
+ *                           interstitial (which would otherwise navigate
+ *                           the user out of the gallery).
  *
  * Trust model: the file IDs we serve are already publicly accessible via
  * Drive's "anyone with link" sharing (set by Veronika on the parent folder).
@@ -88,6 +94,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const contentType = (file.headers['content-type'] as string) || 'image/jpeg';
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=3600');
+
+      // When a filename is supplied, force a Save As dialog instead of
+      // letting the browser render the image inline. RFC 5987 dual
+      // encoding (ASCII fallback + UTF-8 percent-encoded) so non-ASCII
+      // characters in photo names — em dashes, accents, etc — don't
+      // crash the response header.
+      const filename = typeof req.query.filename === 'string' ? req.query.filename : '';
+      if (filename) {
+        const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+        const utf8Encoded = encodeURIComponent(filename);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`,
+        );
+      }
+
       (file.data as NodeJS.ReadableStream).pipe(res);
       return;
     }
