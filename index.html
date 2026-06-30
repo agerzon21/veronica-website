@@ -9,6 +9,18 @@
     <title>Vero Photography | Scranton Wedding & Portrait Photographer</title>
     <meta name="description" content="Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide." />
 
+    <!-- Search engines:
+         - `index, follow` is the default but explicit here so it's not lost
+           if some crawler reads a default-deny.
+         - `max-image-preview:large` is one of Google's two officially
+           documented levers for SERP thumbnail behavior — it doesn't pick
+           the image but ensures whatever Google picks gets rendered at
+           full size (vs the smaller default). Per Google's own case
+           studies this can lift CTR substantially.
+         React Helmet renders a duplicate per-route at runtime, but having
+         the signal in static HTML guarantees first-pass indexing sees it. -->
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
     <!-- Preload the hero camera image so LCP starts the network fetch before JS parses -->
     <link rel="preload" as="image" href="/assets/images/eos_r6_mark_ii_body_v2.webp" fetchpriority="high" />
 
@@ -24,6 +36,31 @@
       content="https://vero.photography/assets/photos/site/contact-bg.webp"
     />
     <meta property="og:image:alt" content="Vero Photography - Professional Photographer" />
+
+    <!-- Structured Data: WebPage with primaryImageOfPage is the canonical
+         signal Google uses (alongside og:image) to choose the SERP
+         thumbnail. Static placement ensures Google sees it on first crawl
+         instead of waiting for the second-pass JS render that picks up
+         the React-Helmet-rendered version. The homepage's hero camera
+         image was winning Google's automated picker on visual prominence
+         alone — this gives Google an explicit pointer to contact-bg.webp
+         as the page's representative image. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "url": "https://vero.photography/",
+      "name": "Vero Photography | Scranton Wedding & Portrait Photographer",
+      "description": "Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide.",
+      "inLanguage": "en-US",
+      "primaryImageOfPage": {
+        "@type": "ImageObject",
+        "url": "https://vero.photography/assets/photos/site/contact-bg.webp",
+        "width": 1200,
+        "height": 630
+      }
+    }
+    </script>
 
     <!-- Structured Data: ProfessionalService is the correct schema.org type
          for a service business — "Photographer" was not a valid @type and
