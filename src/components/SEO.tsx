@@ -115,7 +115,12 @@ const SEO = () => {
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       <meta charSet="utf-8" />
       <meta name="language" content="English" />
-      <meta name="robots" content="index, follow" />
+      {/* max-image-preview:large lets Google show the chosen thumbnail at
+          its full SERP size instead of a tiny 50x50 — doesn't decide
+          *which* image, but ensures whatever Google picks is shown big.
+          Google's own case studies cite up to 333% click increase from
+          this directive. */}
+      <meta name="robots" content="index, follow, max-image-preview:large" />
       <link rel="canonical" href={canonical} />
 
       {/* Mobile */}
