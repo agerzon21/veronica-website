@@ -92,6 +92,13 @@ interface DownloadMenuProps {
   primaryHref?: string;
   primaryDownload?: string | boolean;
   onPrimary?: () => void;
+  // When true, the primary item is greyed out + non-clickable. Used on the
+  // mobile flow while the photo blob is still being pre-fetched — the
+  // share API needs the blob in hand at click time.
+  primaryDisabled?: boolean;
+  // Called when the dropdown opens. The mobile flow uses this to kick off
+  // the pre-fetch lazily, instead of fetching every modal-opened photo.
+  onMenuOpen?: () => void;
   driveViewUrl?: string;
   fileSize?: number;
 }
@@ -103,6 +110,8 @@ const DownloadMenu = ({
   primaryHref,
   primaryDownload,
   onPrimary,
+  primaryDisabled,
+  onMenuOpen,
   driveViewUrl,
   fileSize,
 }: DownloadMenuProps) => {
@@ -151,7 +160,7 @@ const DownloadMenu = ({
   };
 
   return (
-    <Menu placement="top-end" gutter={8}>
+    <Menu placement="top-end" gutter={8} onOpen={onMenuOpen}>
       <MenuButton as={Box} {...triggerStyles}>
         {/* MenuButton wraps children in an inner span, so flex `gap` on
             the trigger doesn't propagate down to the icon/label/chevron.
@@ -171,6 +180,8 @@ const DownloadMenu = ({
                 download: primaryDownload,
               }
             : { onClick: onPrimary })}
+          isDisabled={primaryDisabled}
+          closeOnSelect={!primaryDisabled}
           {...itemStyles}
         >
           <Box>
@@ -241,35 +252,63 @@ const ImageModal = ({
   const useMobileDriveFlow =
     isTouchDevice && isLargeFile && Boolean(driveViewUrl);
 
-  // Pre-fetch the photo file when the modal opens (and whenever the selected
-  // photo changes via prev/next). Two reasons:
+  // Pre-fetch the photo file lazily, only when the user opens the share
+  // dropdown. Previously we fetched on every modal open — wasteful, since
+  // most modal opens never trigger a share, and each fetch is ~1.5MB of
+  // Vercel Origin Transfer we don't get back.
   //
-  // 1. iOS Safari's `navigator.share()` requires "transient activation" —
-  //    the user gesture must still be valid when share() is called. After
-  //    an `await fetch(...)`, the gesture is consumed and share silently
-  //    fails. Pre-fetching means the click handler can call share
-  //    synchronously from inside the user gesture, no await needed.
+  // Why pre-fetch at all (vs fetching inside the share click):
+  //   iOS Safari's `navigator.share()` requires "transient activation" —
+  //   the user gesture must still be valid when share() is called. After
+  //   an `await fetch(...)`, the gesture is consumed and share silently
+  //   fails. So we fetch ahead of time, and the share button just calls
+  //   share() synchronously on the buffered blob.
   //
-  // 2. /api/photo is our own origin (same-origin proxy through the service
-  //    account), so fetch isn't blocked by Drive's CORS policy.
+  // Why the dropdown is a good prefetch trigger:
+  //   The dropdown takes a click to open. Reading the two options + tapping
+  //   takes another ~400-700ms typically. That window is plenty of time for
+  //   the fetch to complete on any reasonable connection. If the user is
+  //   on a slow link or super-fast, the menu item shows "Preparing…" and
+  //   stays disabled until the blob lands.
+  //
+  // The inFlightUrl ref guards against navigation races: if the user opens
+  // the menu on photo A (starts fetch), then arrows to photo B before the
+  // fetch lands, we don't want photo A's blob to clobber photo B's state.
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [isFetchingBlob, setIsFetchingBlob] = useState(false);
+  const inFlightUrl = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!useMobileSaveFlow || !mobileSaveUrl || !isOpen) return;
-    let cancelled = false;
+    // Reset blob state whenever the selected photo changes. Any in-flight
+    // fetch is invalidated by clearing the ref.
     setPhotoBlob(null);
-    fetch(mobileSaveUrl)
+    setIsFetchingBlob(false);
+    inFlightUrl.current = null;
+  }, [mobileSaveUrl]);
+
+  const triggerPrefetch = useCallback(() => {
+    if (!useMobileSaveFlow || !mobileSaveUrl) return;
+    if (photoBlob || isFetchingBlob) return;
+    const targetUrl = mobileSaveUrl;
+    inFlightUrl.current = targetUrl;
+    setIsFetchingBlob(true);
+    fetch(targetUrl)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((blob) => {
-        if (!cancelled) setPhotoBlob(blob);
+        if (inFlightUrl.current === targetUrl) setPhotoBlob(blob);
       })
       .catch((err) => {
         console.warn('[ImageModal] pre-fetch failed:', err);
-        // photoBlob stays null → click handler falls back to opening URL
+        // photoBlob stays null → menu item stays disabled, user can retry
+        // by closing and reopening the menu.
+      })
+      .finally(() => {
+        if (inFlightUrl.current === targetUrl) {
+          setIsFetchingBlob(false);
+          inFlightUrl.current = null;
+        }
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [useMobileSaveFlow, mobileSaveUrl, isOpen]);
+  }, [useMobileSaveFlow, mobileSaveUrl, photoBlob, isFetchingBlob]);
 
   const handleMobileSave = useCallback(() => {
     // Inside the click handler — must stay synchronous up to the point where
@@ -660,8 +699,10 @@ const ImageModal = ({
               <DownloadMenu
                 fileSize={fileSize}
                 onPrimary={handleMobileSave}
+                onMenuOpen={triggerPrefetch}
                 primaryTitle="Optimized"
-                primaryDesc="Smaller file, quick save"
+                primaryDesc={photoBlob ? 'Smaller file, quick save' : 'Preparing…'}
+                primaryDisabled={!photoBlob}
                 driveViewUrl={driveViewUrl}
                 triggerLabel="Save"
               />
