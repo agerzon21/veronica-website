@@ -153,9 +153,14 @@ const DownloadMenu = ({
   return (
     <Menu placement="top-end" gutter={8}>
       <MenuButton as={Box} {...triggerStyles}>
-        <Icon as={FaDownload} boxSize={3.5} />
-        <Box as="span">{triggerLabel}</Box>
-        <ChevronDownIcon boxSize={3.5} />
+        {/* MenuButton wraps children in an inner span, so flex `gap` on
+            the trigger doesn't propagate down to the icon/label/chevron.
+            Wrap in our own Flex so the gap actually applies. */}
+        <Flex as="span" align="center" gap={2.5}>
+          <Icon as={FaDownload} boxSize={3.5} />
+          <Box as="span">{triggerLabel}</Box>
+          <ChevronDownIcon boxSize={3.5} />
+        </Flex>
       </MenuButton>
       <MenuList {...listStyles}>
         <MenuItem
@@ -655,8 +660,8 @@ const ImageModal = ({
               <DownloadMenu
                 fileSize={fileSize}
                 onPrimary={handleMobileSave}
-                primaryTitle="Save to Photos"
-                primaryDesc="Quick save to camera roll"
+                primaryTitle="Optimized"
+                primaryDesc="Smaller file, quick save"
                 driveViewUrl={driveViewUrl}
                 triggerLabel="Save"
               />
