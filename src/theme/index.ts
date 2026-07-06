@@ -24,19 +24,13 @@ const theme = extendTheme({
         touchAction: 'pan-y',
         overscrollBehaviorX: 'none',
       },
-      // iOS Safari auto-zooms whenever the user focuses a form input
-      // whose computed font-size is under 16px, and doesn't zoom back
-      // out after submit — so a client logging into the portal on
-      // iPhone would land on the authenticated view still zoomed in,
-      // needing to pinch out to see the whole layout. Forcing 16px on
-      // mobile prevents the trigger. Restored to inherit-from-Chakra
-      // sizing on larger viewports where auto-zoom isn't a factor.
-      '@media (max-width: 768px)': {
-        'input[type=email], input[type=password], input[type=text], input[type=tel], input[type=search], input[type=number], textarea, select':
-          {
-            fontSize: '16px !important',
-          },
-      },
+      // NOTE: the iOS-input-auto-zoom fix (font-size 16px on inputs at
+      // mobile widths) lives in a <style> block in index.html, NOT here.
+      // Chakra's global-style compiler was silently stripping the
+      // `@media (max-width: 768px)` block with the input[type=...] selectors
+      // when we tried this from the theme — the selectors never landed in
+      // the built bundle. Raw CSS in the HTML head bypasses that entirely
+      // and applies before Chakra even hydrates.
     },
   },
   components: {

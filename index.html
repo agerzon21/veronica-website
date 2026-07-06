@@ -6,6 +6,32 @@
     <link rel="icon" type="image/x-icon" href="https://vero.photography/assets/images/favicon.ico" />
     <link rel="apple-touch-icon" href="https://vero.photography/assets/images/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- Prevent iOS Safari's focus-auto-zoom on form inputs. Safari zooms
+         in whenever a focused input's computed font-size is under 16px,
+         and never zooms back out after submit. So a client logging into
+         the portal on iPhone would land on the authenticated view still
+         zoomed in, having to pinch out. Enforcing 16px at mobile widths
+         only kills the trigger without affecting the design at desktop
+         sizes. Lives in the HTML head (not the Chakra theme) because
+         Chakra's global-style compiler was silently dropping the
+         input[type=...] selectors when we tried this from the theme. -->
+    <style>
+      @media (max-width: 768px) {
+        input[type="email"],
+        input[type="password"],
+        input[type="text"],
+        input[type="tel"],
+        input[type="search"],
+        input[type="number"],
+        input[type="url"],
+        textarea,
+        select {
+          font-size: 16px !important;
+        }
+      }
+    </style>
+
     <title>Vero Photography | Scranton Wedding & Portrait Photographer</title>
     <meta name="description" content="Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide." />
 
