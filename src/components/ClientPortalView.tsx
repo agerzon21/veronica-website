@@ -98,6 +98,47 @@ const formatDate = (iso: string) => {
   });
 };
 
+// Detect whether Vercel has deployed a new build since this page loaded.
+//
+// How: Vite writes the main JS bundle with a content-hashed filename
+// (e.g. /assets/index.BcH27ukN.js). Every deploy changes the hash and
+// updates the <script src> in index.html. So if we fetch the current
+// index.html and its script src differs from the one WE loaded, a new
+// deploy has landed.
+//
+// Called from the portal's Refresh button — if this returns true we do
+// a full window.location.reload() to pick up the new bundle. Falls
+// through silently (returns false) on any failure so a network hiccup
+// never breaks the normal data-refresh path.
+async function hasNewerDeploy(): Promise<boolean> {
+  try {
+    const currentBundle = Array.from(
+      document.querySelectorAll<HTMLScriptElement>('script[src]'),
+    )
+      .map((s) => s.getAttribute('src') ?? '')
+      .find((src) => src.includes('/assets/index.') && src.endsWith('.js'));
+    if (!currentBundle) return false;
+
+    // Fetch the live index.html for this route. cache: 'no-store' is
+    // belt-and-suspenders on top of the vercel.json no-cache header —
+    // guarantees we're seeing what the CDN would serve fresh, not
+    // some proxy cache in between.
+    const res = await fetch(window.location.pathname, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return false;
+    const html = await res.text();
+    const match = html.match(
+      /src=["']([^"']*\/assets\/index\.[^"']+\.js)["']/,
+    );
+    if (!match) return false;
+    return match[1] !== currentBundle;
+  } catch {
+    return false;
+  }
+}
+
 const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }: ClientPortalViewProps) => {
   const remaining =
     data.contract_total_amount !== null
@@ -118,14 +159,28 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
   // after they've sent a payment and want to see Vero's "Payment
   // Received" entry show up without losing the session.
   const [refreshing, setRefreshing] = useState(false);
+  // When Vercel has deployed a newer build since this page loaded, we
+  // surface a small notice under the Refresh button with a "Reload" CTA.
+  // We don't force-reload — that would log the client out mid-task,
+  // which is much more annoying than briefly missing a new feature.
+  // The client decides when to reload (e.g. after they finish signing
+  // the contract or sharing a gallery link).
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const res = await fetch('/api/portal/client', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
+      // Check for a new build in parallel with the data fetch. If one
+      // landed, we just flag it — the client keeps their session and
+      // sees the notice when they're ready to act on it.
+      const [newer, res] = await Promise.all([
+        hasNewerDeploy(),
+        fetch('/api/portal/client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials),
+        }),
+      ]);
+      if (newer) setUpdateAvailable(true);
       const fresh = await res.json();
       if (res.ok && fresh.success) {
         onDataUpdate(fresh as ClientPortalData);
@@ -320,6 +375,48 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           />
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </Box>
+        {/* Update-available notice — surfaces when Refresh detected a
+            newer build. Non-blocking; the client keeps their session
+            and can reload when they're ready. Signing back in is a
+            fine cost for seeing the latest UI. */}
+        {updateAvailable && (
+          <Flex
+            direction={{ base: 'column', sm: 'row' }}
+            align="center"
+            justify="center"
+            gap={2}
+            mt={3}
+            px={4}
+            py={2}
+            bg="#fff8e6"
+            borderTop="1px solid"
+            borderBottom="1px solid"
+            borderColor="#e8d9a8"
+            maxW="fit-content"
+            mx="auto"
+          >
+            <Text fontSize="xs" color="gray.700" fontWeight="300">
+              A newer version of the portal is available.
+            </Text>
+            <Box
+              as="button"
+              type="button"
+              onClick={() => window.location.reload()}
+              fontSize="xs"
+              fontWeight="500"
+              textTransform="uppercase"
+              letterSpacing="0.15em"
+              color="#c9a96e"
+              bg="transparent"
+              border="none"
+              cursor="pointer"
+              _hover={{ color: '#b8964f' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              Reload →
+            </Box>
+          </Flex>
+        )}
       </Box>
       {/* Keyframes for the refresh spinner */}
       <Box
