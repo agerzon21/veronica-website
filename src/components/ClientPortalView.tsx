@@ -1,4 +1,4 @@
-import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast, Collapse } from '@chakra-ui/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FaCopy, FaSync, FaCheck, FaUndo } from 'react-icons/fa';
 import SignatureCanvas from 'react-signature-canvas';
@@ -1869,8 +1869,12 @@ function ChangePasswordSection({
           {open ? 'Cancel' : 'Change login password'}
         </CTAButton>
 
-        {open && (
-          <VStack spacing={3} w="100%" maxW="360px" pt={2}>
+        {/* Collapse animates the height + fade in/out instead of an
+            instant show/hide. On iOS this matters not just for polish
+            — an instant collapse used to snap the page shorter mid-scroll,
+            which triggered the rubber-band overscroll past the footer. */}
+        <Collapse in={open} animateOpacity>
+          <VStack spacing={3} w="100%" maxW="360px" pt={2} mx="auto">
             <Input
               type="password"
               value={current}
@@ -1915,7 +1919,7 @@ function ChangePasswordSection({
               Save
             </CTAButton>
           </VStack>
-        )}
+        </Collapse>
 
         {message && (
           <Text
