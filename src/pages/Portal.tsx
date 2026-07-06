@@ -176,6 +176,11 @@ const Portal = () => {
           data={clientData}
           credentials={{ email: email.trim(), password: clientPassword.trim() }}
           onDataUpdate={setClientData}
+          // Keep the cached credentials in sync when the client changes
+          // their password from the Account section. Without this, the
+          // next mutating API call (rotate gallery pass, sign contract,
+          // etc.) would 401 because we'd still be sending the old one.
+          onPasswordChanged={(newPassword) => setClientPassword(newPassword)}
         />
       </>
     );

@@ -18,6 +18,7 @@
  *   POST /api/portal/download-contract  → ./portal/_download-contract.ts
  *   POST /api/portal/welcome            → ./portal/_welcome.ts
  *   POST /api/portal/welcome-complete   → ./portal/_welcome-complete.ts
+ *   POST /api/portal/change-password    → ./portal/_change-password.ts
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -29,6 +30,7 @@ import downloadContractHandler from './portal/_download-contract.js';
 import welcomeHandler from './portal/_welcome.js';
 import welcomeCompleteHandler from './portal/_welcome-complete.js';
 import shareGalleryHandler from './portal/_share-gallery.js';
+import changePasswordHandler from './portal/_change-password.js';
 
 const HANDLERS: Record<
   string,
@@ -42,6 +44,7 @@ const HANDLERS: Record<
   welcome: welcomeHandler,
   'welcome-complete': welcomeCompleteHandler,
   'share-gallery': shareGalleryHandler,
+  'change-password': changePasswordHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

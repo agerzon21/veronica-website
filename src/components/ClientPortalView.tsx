@@ -65,6 +65,13 @@ interface ClientPortalViewProps {
   // this MVP; sessions can come later.
   credentials: { email: string; password: string };
   onDataUpdate: (data: ClientPortalData) => void;
+  // Fired after the client changes their password from the Account
+  // section. Parent (Portal.tsx) uses this to keep its cached
+  // credentials.password in sync — without it, the next mutating
+  // request (rotate gallery pass, sign contract, etc.) would fail
+  // authentication because the parent would still be sending the old
+  // password.
+  onPasswordChanged?: (newPassword: string) => void;
 }
 
 const formatMoney = (n: number) =>
@@ -91,7 +98,7 @@ const formatDate = (iso: string) => {
   });
 };
 
-const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewProps) => {
+const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }: ClientPortalViewProps) => {
   const remaining =
     data.contract_total_amount !== null
       ? data.contract_total_amount - data.paid_to_date
@@ -849,6 +856,18 @@ const ClientPortalView = ({ data, credentials, onDataUpdate }: ClientPortalViewP
           )}
         </VStack>
       </Box>
+
+      {/* ─── Login password management ───
+          Lets the client swap the temp password Vero handed them for one
+          they'll actually remember. Collapsed by default; most clients
+          only touch this once. Ordered after Gallery Pass so the
+          "different from your Gallery Pass above" cue makes sense
+          visually — the two are easy to conflate and we should not
+          leave any ambiguity about which is which. */}
+      <ChangePasswordSection
+        credentials={credentials}
+        onChanged={onPasswordChanged}
+      />
     </Box>
   );
 };
@@ -1624,6 +1643,192 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
             </Box>
           );
         })}
+      </VStack>
+    </Box>
+  );
+}
+
+/**
+ * Change-password section. Collapsed by default (small "Change password"
+ * link on the right); expands to reveal current / new / confirm inputs.
+ *
+ * We ask for the current password (not just email) so someone with a
+ * hijacked but unlocked browser tab can't silently take over the
+ * account. Same lightweight re-auth pattern the mutating gallery-pass
+ * endpoints use.
+ *
+ * On success, we call `onChanged(newPassword)` so the parent Portal
+ * page can update the cached credentials — otherwise the next mutating
+ * API call would still be sending the old password.
+ */
+function ChangePasswordSection({
+  credentials,
+  onChanged,
+}: {
+  credentials: { email: string; password: string };
+  onChanged?: (newPassword: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const reset = () => {
+    setCurrent('');
+    setNext('');
+    setConfirm('');
+    setMessage(null);
+  };
+
+  const handleToggle = () => {
+    if (open) {
+      // Closing — wipe any in-flight edits + banner so reopening is clean.
+      reset();
+    }
+    setOpen((o) => !o);
+  };
+
+  const handleSave = async () => {
+    setMessage(null);
+    if (!current) {
+      setMessage({ kind: 'err', text: 'Enter your current password.' });
+      return;
+    }
+    if (next.length < 6) {
+      setMessage({ kind: 'err', text: 'New password must be at least 6 characters.' });
+      return;
+    }
+    if (next !== confirm) {
+      setMessage({ kind: 'err', text: 'New password and confirmation don’t match.' });
+      return;
+    }
+    if (next === current) {
+      setMessage({ kind: 'err', text: 'New password must be different from the current one.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/portal/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: credentials.email,
+          current_password: current,
+          new_password: next,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Bubble the new password up so the parent's cached credentials
+        // stay in sync. Without this the next mutating call (rotate
+        // gallery pass, sign contract) would 401.
+        onChanged?.(next);
+        setMessage({ kind: 'ok', text: 'Password updated.' });
+        setCurrent('');
+        setNext('');
+        setConfirm('');
+        // Collapse after a beat so the success banner is visible first.
+        setTimeout(() => {
+          setOpen(false);
+          setMessage(null);
+        }, 2500);
+      } else {
+        setMessage({ kind: 'err', text: data.error || `Server error (${res.status}).` });
+      }
+    } catch {
+      setMessage({ kind: 'err', text: 'Could not reach the server. Try again.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Box bg="white" py={{ base: 10, md: 12 }} px={6} borderTop="1px solid" borderColor="gray.100">
+      <VStack spacing={4} maxW="520px" mx="auto" textAlign="center">
+        <Text
+          fontSize="xs"
+          fontWeight="500"
+          textTransform="uppercase"
+          letterSpacing="0.25em"
+          color="#c9a96e"
+        >
+          Login Password
+        </Text>
+        <Box w="30px" h="1px" bg="#c9a96e" />
+        <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
+          The password you use to sign in to this portal.
+          {' '}
+          <Text as="span" color="gray.500">
+            (This is separate from the Gallery Pass above, which is what you share with guests.)
+          </Text>
+        </Text>
+        <CTAButton
+          onClick={handleToggle}
+          variant="outline"
+          size="sm"
+        >
+          {open ? 'Cancel' : 'Change login password'}
+        </CTAButton>
+
+        {open && (
+          <VStack spacing={3} w="100%" maxW="360px" pt={2}>
+            <Input
+              type="password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              placeholder="Current login password"
+              autoComplete="current-password"
+              h="42px"
+              bg="white"
+              fontSize="sm"
+              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+            />
+            <Input
+              type="password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              placeholder="New login password (min. 6 characters)"
+              autoComplete="new-password"
+              h="42px"
+              bg="white"
+              fontSize="sm"
+              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+            />
+            <Input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Confirm new login password"
+              autoComplete="new-password"
+              h="42px"
+              bg="white"
+              fontSize="sm"
+              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+            />
+            <CTAButton
+              onClick={handleSave}
+              variant="solid"
+              size="sm"
+              isLoading={saving}
+              loadingText="Saving..."
+              fullWidth
+            >
+              Save
+            </CTAButton>
+          </VStack>
+        )}
+
+        {message && (
+          <Text
+            fontSize="xs"
+            color={message.kind === 'ok' ? 'green.600' : 'red.500'}
+            fontWeight="400"
+          >
+            {message.text}
+          </Text>
+        )}
       </VStack>
     </Box>
   );
