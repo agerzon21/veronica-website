@@ -19,7 +19,6 @@
       ]
     },
     {
-      "//": "SPA shell routes — Vercel rewrites these to /index.html internally, but the Cache-Control header rule above (/(.*).html) matches the REQUEST path, not the served file. So without the entries below, /portal etc get default long-lived cache, the browser hangs on to a stale index.html that points at an old JS bundle, and users don't see new deploys until they hard-refresh (which end users don't know how to do). Explicit no-cache on the SPA-served paths fixes that.",
       "source": "/",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
