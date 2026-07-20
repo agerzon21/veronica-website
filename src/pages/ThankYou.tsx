@@ -5,7 +5,7 @@ import { motion, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactGA from 'react-ga4';
-import { trackContactSubmission } from '../utils/analytics';
+import { trackAdsLeadConversion, trackContactSubmission } from '../utils/analytics';
 
 const MotionDiv = motion.div;
 
@@ -66,14 +66,24 @@ const ThankYou = () => {
   );
 
   useEffect(() => {
+    // Only fire conversion signals on an actual fresh submission.
+    // autoReplyPayload is null for direct visits, back-navigations, and
+    // page refreshes (guarded by the sessionStorage dedup in the useState
+    // initializer above), so this check prevents inflating Google Ads
+    // conversion counts with people just landing on the URL.
+    if (!autoReplyPayload) return;
     ReactGA.event('generate_lead', {
       event_category: 'Contact',
       event_label: 'Contact Form',
     });
+    // Kept the older generic event alongside the new attributed one in
+    // case any existing GA4 report keys off the custom name.
     if (typeof window !== 'undefined' && (window as any).gtag) {
       (window as any).gtag('event', 'conversion_event_submit_lead_form_1', {});
     }
-  }, []);
+    // Google Ads lead-form conversion. Reports to AW-18082198928.
+    trackAdsLeadConversion();
+  }, [autoReplyPayload]);
 
   // Fire the auto-reply request once on mount if we have a payload.
   //

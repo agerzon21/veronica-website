@@ -17,13 +17,14 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import SEO from './components/SEO';
 import ExitIntentPopup from './components/ExitIntentPopup';
-import { initGA, trackPageView } from './utils/analytics';
+import { initGA, initGoogleAds, trackPageView } from './utils/analytics';
 
-// Initialize Google Analytics
-// TODO: Replace 'G-XXXXXXXXXX' with your actual GA4 Measurement ID
-// You can find this in your Google Analytics account under:
-// Admin > Data Streams > Web > Measurement ID
+// Initialize Google Analytics (GA4)
 initGA('G-T769KRMR0E');
+// Register the Google Ads account against the same gtag instance so
+// conversion events attributed to this account (e.g. the lead-form
+// conversion fired from /contact/thank-you) can report correctly.
+initGoogleAds('AW-18082198928');
 
 function ScrollToTop() {
   const { pathname } = useLocation();
