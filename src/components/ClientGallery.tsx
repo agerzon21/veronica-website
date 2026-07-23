@@ -393,12 +393,32 @@ const ClientGallery = ({
         </Box>
       </Box>
 
-      {/* The old top sticky section-nav bar was removed — the desktop
-          right-rail timeline + the mobile "Jump" button in the sticky
-          bottom bar cover the same "jump between sections" need without
-          the redundant top strip. As a bonus, its borderBottom no longer
-          crowds the first section's SECTION label with a tight extra
-          horizontal line. */}
+      {/* Top sticky section-nav — restored on desktop after trying the
+          right-side rail: the rail took up too much of the photo area
+          and hid a lot of content. A slim horizontal strip at the top
+          is a much smaller footprint. Mobile still has the sticky
+          bottom bar's "Jump" drawer, but the top strip appears there
+          too as an at-a-glance list.
+
+          Active-section tracking + auto-scroll-into-view + edge fade
+          masks all live inside TopSectionNav (defined below). Fade
+          masks are the visual cue that there's more when the folder
+          list overflows the viewport — the borderBottom is gone since
+          it was crowding the first section's header. */}
+      {sections.length > 1 && (
+        <TopSectionNav
+          sections={sections}
+          sectionRefs={sectionRefs}
+          onSectionClick={scrollToSection}
+          scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          scrollToBottom={() =>
+            window.scrollTo({
+              top: document.body.scrollHeight,
+              behavior: 'smooth',
+            })
+          }
+        />
+      )}
 
       {/* Grid */}
       {totalCount > 0 ? (
@@ -561,40 +581,25 @@ const ClientGallery = ({
         </Box>
       )}
 
-      {/* Sticky bottom action bar + desktop right-rail timeline.
-          Both auto-hide while the photo modal is open (selectedIndex
-          non-null) so they don't visually fight the modal's controls. */}
+      {/* Sticky bottom action bar. Auto-hides while the photo modal is
+          open (selectedIndex non-null) so it doesn't float over the
+          modal's controls. Desktop no longer has a right-side rail
+          timeline — the top sticky section nav (above) is the desktop
+          navigation. Mobile still gets the "Jump" drawer via this bar. */}
       {selectedIndex === null && totalCount > 0 && (
-        <>
-          <GalleryActionBar
-            driveUrl={driveUrl}
-            sections={sections}
-            hasSections={sections.length > 0}
-            scrollToSection={scrollToSection}
-            scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            scrollToBottom={() =>
-              window.scrollTo({
-                top: document.body.scrollHeight,
-                behavior: 'smooth',
-              })
-            }
-          />
-          {sections.length > 0 && (
-            <SectionTimelineRail
-              sections={sections}
-              sectionRefs={sectionRefs}
-              rootFilesLabel={rootFiles.length > 0 ? 'Top' : null}
-              scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              scrollToBottom={() =>
-                window.scrollTo({
-                  top: document.body.scrollHeight,
-                  behavior: 'smooth',
-                })
-              }
-              scrollToSection={scrollToSection}
-            />
-          )}
-        </>
+        <GalleryActionBar
+          driveUrl={driveUrl}
+          sections={sections}
+          hasSections={sections.length > 0}
+          scrollToSection={scrollToSection}
+          scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          scrollToBottom={() =>
+            window.scrollTo({
+              top: document.body.scrollHeight,
+              behavior: 'smooth',
+            })
+          }
+        />
       )}
     </Box>
   );
@@ -857,43 +862,97 @@ function DrawerRow({
 }
 
 /**
- * Desktop-only right-rail timeline. Persistent orientation aid + fast
- * jump navigation for large galleries where scrolling to a specific
- * section (or back to the top) is otherwise a chore.
+ * Sticky top section-nav bar. Horizontal strip of pill buttons under the
+ * fixed Navbar (top: 72px). Each pill scrolls to its section on click,
+ * and the currently-visible section auto-highlights via
+ * IntersectionObserver. If the pill list overflows the viewport width
+ * (long section names or lots of them), we fade the edges as a scroll-
+ * ability cue and auto-scroll the active pill into view when the user
+ * scrolls the page to it.
  *
- * Each section header is observed via IntersectionObserver, and the
- * rail highlights whichever section is currently at the top of the
- * viewport. Click any label to smooth-scroll there. Hidden on mobile
- * (`display={{ base: 'none', md: 'flex' }}`) because a slim right-edge
- * strip is too cramped on phones — the sticky bar's Jump button opens
- * a bottom-sheet drawer with the same list instead.
+ * Chose this over a right-side rail after user testing: the rail ate
+ * too much of the photo grid area on desktop. A thin top strip is a
+ * much smaller footprint for the same navigation.
  */
-interface SectionTimelineRailProps {
+interface TopSectionNavProps {
   sections: FolderSection[];
   sectionRefs: React.MutableRefObject<{ [id: string]: HTMLDivElement | null }>;
-  rootFilesLabel: string | null;
+  onSectionClick: (id: string) => void;
   scrollToTop: () => void;
   scrollToBottom: () => void;
-  scrollToSection: (id: string) => void;
 }
 
-function SectionTimelineRail({
+// Sentinel activeId values for the Top and Bottom pills. Kept as string
+// literals (not enum) so they can share the same activeId state as
+// section IDs and be referenced from pillRefs by the same key.
+const TOP_ID = '__top__';
+const BOTTOM_ID = '__bottom__';
+
+// Distance from the top/bottom of the page where we consider the user
+// to have "arrived" there. Top threshold has to be larger than the
+// scrollMarginTop for section headers (~92px) + the sticky nav's height,
+// otherwise the very first section immediately steals the highlight
+// the moment the user starts scrolling down from a fresh page load.
+const AT_TOP_THRESHOLD = 200;
+const AT_BOTTOM_THRESHOLD = 80;
+
+function TopSectionNav({
   sections,
   sectionRefs,
+  onSectionClick,
   scrollToTop,
   scrollToBottom,
-  scrollToSection,
-}: SectionTimelineRailProps) {
+}: TopSectionNavProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
 
-  // Observe every section header via a rootMargin trick: entries are
-  // "intersecting" only when they're in the top 40% of the viewport,
-  // so the highlight tracks what's actually near the top rather than
-  // whatever happens to overlap the middle. The topmost intersecting
-  // entry wins.
+  // Bookkeeping ref that mirrors scroll position, used inside the
+  // IntersectionObserver callback to know whether to defer to
+  // Top/Bottom rather than picking a section. A ref (not state) so
+  // the observer callback always sees the freshest value without
+  // needing to re-subscribe on every scroll tick.
+  const isAtExtremeRef = useRef<null | 'top' | 'bottom'>(null);
+
+  // Watch scroll position for the "am I at the top / bottom of the
+  // page?" cases. Those override the section observation because when
+  // the user explicitly clicks Top/Bottom (or scrolls all the way
+  // there), we want the corresponding pill to light up — not the
+  // nearest section, which is what happened with the old right-rail.
+  useEffect(() => {
+    const updateExtremes = () => {
+      const y = window.scrollY;
+      const winH = window.innerHeight;
+      const docH = document.documentElement.scrollHeight;
+      if (y <= AT_TOP_THRESHOLD) {
+        isAtExtremeRef.current = 'top';
+        setActiveId(TOP_ID);
+      } else if (y + winH >= docH - AT_BOTTOM_THRESHOLD) {
+        isAtExtremeRef.current = 'bottom';
+        setActiveId(BOTTOM_ID);
+      } else {
+        isAtExtremeRef.current = null;
+        // Don't clear activeId here — leave whatever section the
+        // observer picked. Only take over when the user genuinely
+        // reaches an extreme.
+      }
+    };
+    updateExtremes();
+    window.addEventListener('scroll', updateExtremes, { passive: true });
+    window.addEventListener('resize', updateExtremes);
+    return () => {
+      window.removeEventListener('scroll', updateExtremes);
+      window.removeEventListener('resize', updateExtremes);
+    };
+  }, []);
+
+  // Section observation. Skipped whenever the user is at either
+  // extreme so Top/Bottom stays highlighted instead of being
+  // overwritten by "the first section is technically in view."
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
+        if (isAtExtremeRef.current !== null) return;
         const visible = entries.filter((e) => e.isIntersecting);
         if (visible.length === 0) return;
         const topmost = visible.reduce((best, e) =>
@@ -914,119 +973,155 @@ function SectionTimelineRail({
     return () => observer.disconnect();
   }, [sections, sectionRefs]);
 
+  // Whenever the active pill changes, scroll it into view within the
+  // horizontal strip so it stays visible even when the section list
+  // overflows the viewport. `inline: 'center'` keeps it roughly
+  // centered; `block: 'nearest'` prevents the strip from moving the
+  // whole page vertically.
+  useEffect(() => {
+    if (!activeId) return;
+    const pill = pillRefs.current[activeId];
+    if (pill && 'scrollIntoView' in pill) {
+      pill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [activeId]);
+
   return (
     <Box
-      position="fixed"
-      right={4}
-      top="50%"
-      transform="translateY(-50%)"
-      zIndex={30}
-      display={{ base: 'none', md: 'flex' }}
-      flexDirection="column"
-      bg="rgba(255, 255, 255, 0.92)"
+      // Desktop-only. Mobile navigates via the sticky bottom bar's
+      // "Jump" drawer instead — the top strip's horizontal scroll is
+      // less nice on phone screens than a full-height bottom-sheet
+      // list, and we don't need both.
+      display={{ base: 'none', md: 'block' }}
+      position="sticky"
+      top="72px"
+      zIndex={10}
+      bg="rgba(255, 255, 255, 0.94)"
       backdropFilter="blur(10px)"
-      border="1px solid"
-      borderColor="rgba(201, 169, 110, 0.35)"
-      borderRadius="lg"
-      boxShadow="0 8px 24px rgba(0, 0, 0, 0.08)"
-      py={2}
-      minW="140px"
-      maxW="180px"
-      maxH="70vh"
-      overflowY="auto"
+      py={3}
     >
-      <RailButton icon={FaChevronUp} label="Top" onClick={scrollToTop} />
-      <RailDivider />
-      {sections.map((s) => (
-        <RailSectionLabel
-          key={s.id}
-          label={s.name}
-          active={activeId === s.id}
-          onClick={() => scrollToSection(s.id)}
-        />
-      ))}
-      <RailDivider />
-      <RailButton icon={FaChevronDown} label="Bottom" onClick={scrollToBottom} />
+      <Box
+        ref={scrollRef}
+        overflowX="auto"
+        // Edge fade masks signal "scroll for more" when the pill list
+        // overflows. Applied always (looks polished either way); when
+        // content fits, the fade barely touches anything visible.
+        sx={{
+          maskImage:
+            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+          WebkitMaskImage:
+            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+          '&::-webkit-scrollbar': { display: 'none' },
+          scrollbarWidth: 'none',
+        }}
+      >
+        <Flex
+          gap={2}
+          // Generous horizontal padding so first/last pills sit within
+          // the "solid" (unfaded) part of the mask and never look cut
+          // off. Also centers the pill list on wide screens when the
+          // content is narrower than the viewport.
+          px={12}
+          justify="center"
+          minW="max-content"
+          align="center"
+        >
+          <NavPill
+            pillRef={(el) => {
+              pillRefs.current[TOP_ID] = el;
+            }}
+            icon={FaChevronUp}
+            label="Top"
+            active={activeId === TOP_ID}
+            onClick={scrollToTop}
+          />
+          <NavStripDivider />
+          {sections.map((section) => (
+            <NavPill
+              key={section.id}
+              pillRef={(el) => {
+                pillRefs.current[section.id] = el;
+              }}
+              label={section.name}
+              active={activeId === section.id}
+              onClick={() => onSectionClick(section.id)}
+            />
+          ))}
+          <NavStripDivider />
+          <NavPill
+            pillRef={(el) => {
+              pillRefs.current[BOTTOM_ID] = el;
+            }}
+            icon={FaChevronDown}
+            label="Bottom"
+            active={activeId === BOTTOM_ID}
+            onClick={scrollToBottom}
+          />
+        </Flex>
+      </Box>
     </Box>
   );
 }
 
-function RailButton({
+// A single pill in the top nav strip. Handles active-vs-inactive
+// styling and (optionally) leading icon for the Top/Bottom pills.
+function NavPill({
+  pillRef,
   icon,
-  label,
-  onClick,
-}: {
-  icon: typeof FaChevronUp;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Box
-      as="button"
-      type="button"
-      onClick={onClick}
-      display="flex"
-      alignItems="center"
-      gap={2}
-      w="100%"
-      px={4}
-      py={2}
-      fontSize="2xs"
-      fontWeight="500"
-      letterSpacing="0.15em"
-      textTransform="uppercase"
-      color="gray.500"
-      bg="transparent"
-      border="none"
-      cursor="pointer"
-      transition="all 0.2s"
-      _hover={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      <Icon as={icon} boxSize={2.5} />
-      <Box as="span">{label}</Box>
-    </Box>
-  );
-}
-
-function RailSectionLabel({
   label,
   active,
   onClick,
 }: {
+  pillRef: (el: HTMLDivElement | null) => void;
+  icon?: typeof FaChevronUp;
   label: string;
   active: boolean;
   onClick: () => void;
 }) {
   return (
     <Box
+      ref={pillRef}
       as="button"
       type="button"
       onClick={onClick}
-      w="100%"
-      textAlign="left"
-      px={4}
+      flexShrink={0}
+      display="inline-flex"
+      alignItems="center"
+      gap={1.5}
+      px={{ base: 4, md: 5 }}
       py={2}
-      fontSize="xs"
-      fontWeight={active ? 500 : 400}
-      color={active ? '#c9a96e' : 'gray.600'}
-      bg={active ? 'rgba(201, 169, 110, 0.08)' : 'transparent'}
-      border="none"
-      borderLeft="2px solid"
-      borderLeftColor={active ? '#c9a96e' : 'transparent'}
+      fontSize="2xs"
+      fontWeight="500"
+      letterSpacing="0.2em"
+      textTransform="uppercase"
+      color={active ? 'white' : 'gray.700'}
+      bg={active ? '#c9a96e' : 'transparent'}
+      border="1px solid"
+      borderColor={active ? '#c9a96e' : 'gray.200'}
+      borderRadius="full"
+      transition="all 0.25s ease"
       cursor="pointer"
-      transition="all 0.2s"
-      _hover={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
+      _hover={
+        active
+          ? { bg: '#b8964f', borderColor: '#b8964f' }
+          : {
+              borderColor: '#c9a96e',
+              color: '#c9a96e',
+              bg: 'rgba(201, 169, 110, 0.06)',
+            }
+      }
       sx={{ WebkitTapHighlightColor: 'transparent' }}
-      noOfLines={1}
     >
-      {label}
+      {icon && <Icon as={icon} boxSize={2.5} />}
+      <Box as="span">{label}</Box>
     </Box>
   );
 }
 
-function RailDivider() {
-  return <Box h="1px" bg="gray.100" mx={4} my={1} />;
+// Slim vertical divider between the Top/Bottom pills and the section
+// pills, so they read as "page-level" vs "section-level" controls.
+function NavStripDivider() {
+  return <Box w="1px" h="20px" bg="gray.200" flexShrink={0} mx={1} />;
 }
 
 /**
@@ -1108,138 +1203,164 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
           Want to share these with family or friends? Anyone with the link below can view the gallery — no account needed.
         </Text>
 
-        {/* One-click link */}
-        <VStack w="100%" spacing={2} align="stretch">
-          <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
-            One-click link
-          </Text>
-          <Flex
-            align="center"
-            gap={2}
-            bg="gray.50"
-            border="1px solid"
-            borderColor="gray.200"
-            borderRadius="sm"
-            px={3}
-            py={2}
+        {/* One-click link — HERO action. The primary way we want people
+            to share; big centered "Copy Link" button with the URL as
+            a visible-but-secondary preview underneath. Password + email
+            paths still exist below as clearly-labeled alternatives, but
+            visually demoted so nobody wonders which to pick. */}
+        <Box
+          w="100%"
+          bg="#fdf9f0"
+          border="1px solid"
+          borderColor="#e8d9a8"
+          borderRadius="md"
+          px={{ base: 5, md: 7 }}
+          py={{ base: 6, md: 7 }}
+          textAlign="center"
+        >
+          <Text
+            fontSize="2xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.25em"
+            color="#c9a96e"
+            mb={4}
           >
-            <Text
-              fontSize="xs"
-              color="gray.700"
-              fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
-              flex="1"
-              minW={0}
-              noOfLines={1}
-              textAlign="left"
-            >
-              {directUrl}
-            </Text>
-            <Box
-              as="button"
-              type="button"
-              onClick={() => copy(directUrl, setUrlCopied)}
-              aria-label="Copy link"
-              p={1.5}
-              borderRadius="sm"
-              color="gray.500"
-              cursor="pointer"
-              _hover={{ color: '#c9a96e', bg: 'gray.100' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <Icon as={urlCopied ? FaCheck : FaCopy} boxSize={3} />
-            </Box>
-          </Flex>
-        </VStack>
+            Easiest — one-click link
+          </Text>
+          <CTAButton
+            onClick={() => copy(directUrl, setUrlCopied)}
+            icon={urlCopied ? FaCheck : FaCopy}
+            variant="solid"
+            size="md"
+            fullWidth
+          >
+            {urlCopied ? 'Link Copied!' : 'Copy Link'}
+          </CTAButton>
+          <Text
+            mt={4}
+            fontSize="xs"
+            color="gray.500"
+            fontWeight="300"
+            fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+            noOfLines={1}
+            wordBreak="break-all"
+          >
+            {directUrl}
+          </Text>
+          <Text mt={2} fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6">
+            Paste anywhere — text, email, WhatsApp. Opens the gallery instantly, no password to type.
+          </Text>
+        </Box>
 
-        {/* Plain password as fallback */}
-        <VStack w="100%" spacing={2} align="stretch">
-          <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
-            Or — go to vero.photography/portal/pass and use this password
-          </Text>
-          <Flex
-            align="center"
-            gap={2}
-            bg="gray.50"
-            border="1px solid"
-            borderColor="gray.200"
-            borderRadius="sm"
-            px={3}
-            py={2}
-          >
+        {/* Secondary paths — visually demoted so they read as "in case
+            you need it," not as equal alternatives. */}
+        <Box w="100%" pt={2}>
+          <Flex align="center" gap={3} mb={5}>
+            <Box flex={1} h="1px" bg="gray.200" />
             <Text
-              fontSize="md"
-              color="gray.800"
-              fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+              fontSize="2xs"
               fontWeight="500"
-              flex="1"
-              minW={0}
-              textAlign="left"
-              letterSpacing="0.05em"
+              textTransform="uppercase"
+              letterSpacing="0.2em"
+              color="gray.400"
+              whiteSpace="nowrap"
             >
-              {galleryPassword}
+              Or, more ways
             </Text>
-            <Box
-              as="button"
-              type="button"
-              onClick={() => copy(galleryPassword, setPwCopied)}
-              aria-label="Copy password"
-              p={1.5}
-              borderRadius="sm"
-              color="gray.500"
-              cursor="pointer"
-              _hover={{ color: '#c9a96e', bg: 'gray.100' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <Icon as={pwCopied ? FaCheck : FaCopy} boxSize={3} />
-            </Box>
+            <Box flex={1} h="1px" bg="gray.200" />
           </Flex>
-        </VStack>
 
-        {/* Email invite */}
-        <VStack w="100%" spacing={2} align="stretch">
-          <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
-            Or send via email
-          </Text>
-          <Flex gap={2} direction={{ base: 'column', sm: 'row' }}>
-            <Input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="friend@example.com"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              h="40px"
-              bg="white"
-              fontSize="sm"
-              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
-            />
-            <CTAButton
-              onClick={sendInvite}
-              variant="solid"
-              size="sm"
-              isLoading={inviteSending}
-              loadingText="Sending..."
-            >
-              Send Invite
-            </CTAButton>
-          </Flex>
-          <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
-            We'll email them with the same one-click link. To keep things from getting spammy, this gallery can send up to 5 invites in any 24-hour period.
-            {remainingToday !== null && (
-              <> ({remainingToday} {remainingToday === 1 ? 'left' : 'left'} today.)</>
-            )}
-          </Text>
-          {inviteMessage && (
-            <Text
-              fontSize="xs"
-              fontWeight="400"
-              color={inviteMessage.kind === 'err' ? 'red.500' : 'green.600'}
-            >
-              {inviteMessage.text}
+          {/* Plain password fallback */}
+          <VStack w="100%" spacing={2} align="stretch" mb={6}>
+            <Text fontSize="xs" color="gray.500" fontWeight="400" lineHeight="1.6">
+              Go to <Text as="span" fontWeight="500" color="gray.700">vero.photography/portal/pass</Text> and enter this password:
             </Text>
-          )}
-        </VStack>
+            <Flex
+              align="center"
+              gap={2}
+              bg="gray.50"
+              border="1px solid"
+              borderColor="gray.200"
+              borderRadius="sm"
+              px={3}
+              py={2}
+            >
+              <Text
+                fontSize="sm"
+                color="gray.800"
+                fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+                fontWeight="500"
+                flex="1"
+                minW={0}
+                textAlign="left"
+                letterSpacing="0.05em"
+              >
+                {galleryPassword}
+              </Text>
+              <Box
+                as="button"
+                type="button"
+                onClick={() => copy(galleryPassword, setPwCopied)}
+                aria-label="Copy password"
+                p={1.5}
+                borderRadius="sm"
+                color="gray.500"
+                cursor="pointer"
+                _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <Icon as={pwCopied ? FaCheck : FaCopy} boxSize={3} />
+              </Box>
+            </Flex>
+          </VStack>
+
+          {/* Email invite */}
+          <VStack w="100%" spacing={2} align="stretch">
+            <Text fontSize="xs" color="gray.500" fontWeight="400" lineHeight="1.6">
+              Or have us email the one-click link:
+            </Text>
+            <Flex gap={2} direction={{ base: 'column', sm: 'row' }}>
+              <Input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="friend@example.com"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                h="40px"
+                bg="white"
+                fontSize="sm"
+                _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              />
+              <CTAButton
+                onClick={sendInvite}
+                variant="outline"
+                size="sm"
+                isLoading={inviteSending}
+                loadingText="Sending..."
+              >
+                Send Invite
+              </CTAButton>
+            </Flex>
+            <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+              Up to 5 invites per 24-hour period so nothing gets spammy.
+              {remainingToday !== null && (
+                <> ({remainingToday} left today.)</>
+              )}
+            </Text>
+            {inviteMessage && (
+              <Text
+                fontSize="xs"
+                fontWeight="400"
+                color={inviteMessage.kind === 'err' ? 'red.500' : 'green.600'}
+              >
+                {inviteMessage.text}
+              </Text>
+            )}
+          </VStack>
+        </Box>
       </VStack>
     </Box>
   );
