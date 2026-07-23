@@ -695,8 +695,13 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           The client owns this control: rotate, disable entirely, or set a
           custom password. All server-side via /api/portal/gallery-pass,
           re-authenticated each call with the credentials passed down from
-          the Portal page. */}
-      <Box bg="gray.50" py={{ base: 12, md: 14 }} px={6} mt={6}>
+          the Portal page.
+          id="gallery-share-section" is the smooth-scroll target for the
+          gallery's sticky Share widget — same id is used on the
+          /portal/pass route so the widget doesn't need to know its
+          context, it just scrolls to whichever element exists. */}
+      <Box id="gallery-share-section" bg="gray.50" py={{ base: 12, md: 14 }} px={6} mt={6}
+        sx={{ scrollMarginTop: '80px' }}>
         <VStack spacing={4} maxW="520px" mx="auto" textAlign="center">
           <Text
             fontSize="xs"

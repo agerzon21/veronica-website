@@ -7,9 +7,16 @@ import {
   Icon,
   Input,
   SimpleGrid,
+  Drawer,
+  DrawerOverlay,
+  DrawerContent,
+  DrawerHeader,
+  DrawerBody,
+  DrawerCloseButton,
+  useDisclosure,
 } from '@chakra-ui/react';
-import { useState, useRef, useCallback } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck } from 'react-icons/fa';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronDown, FaListUl } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
@@ -313,27 +320,62 @@ const ClientGallery = ({
           </Text>
         )}
 
-        {/* Download All link */}
-        <Box mt={6}>
-          <CTAButton href={driveUrl} icon={FaExternalLinkAlt} size="sm">
-            Download All from Drive
-          </CTAButton>
-        </Box>
+        {/* Save-tips disclaimer — subtle info line, sets expectation for
+            the per-photo Save button and points people at the sticky
+            Download All widget for print-quality originals. Long-press
+            is genuinely the fastest mobile save (uses zero of our
+            bandwidth, saves instantly), so we lead with that. */}
+        <Text
+          mt={5}
+          fontSize="xs"
+          color="gray.500"
+          fontWeight="300"
+          lineHeight="1.9"
+          maxW="540px"
+          mx="auto"
+          px={4}
+        >
+          On phone, <Text as="span" fontWeight="500" color="gray.700">press &amp; hold</Text> any photo to save it instantly. Or use the{' '}
+          <Text as="span" fontWeight="500" color="gray.700">Save</Text> button after opening one. For print-quality originals of the whole set, use{' '}
+          <Text as="span" fontWeight="500" color="gray.700">Download All</Text> at the bottom of the page.
+        </Text>
 
-        {/* Review prompt — sits below the primary download as a clearly
-            secondary action. Italic personal note + signature signals this
-            is a quiet ask from Veronika, not a marketing CTA. Thin gold
-            divider visually tethers it to the download above so it reads
-            as part of the same "what you can do here" cluster. */}
-        <Box mt={8} maxW="460px" mx="auto">
-          <Box w="24px" h="1px" bg="#c9a96e" mx="auto" mb={5} opacity={0.6} />
+        {warning && (
+          <Text mt={4} fontSize="sm" color="orange.500" fontWeight="300" maxW="500px" mx="auto">
+            {warning}
+          </Text>
+        )}
+      </Box>
+
+      {/* Review CTA — warm gold-tinted card, elevated visual weight so
+          this doesn't get lost like the outline-only version did.
+          Sits right below the header so it's the first thing after the
+          welcome, before the photo grid. Personal italic note stays —
+          it's the emotional anchor. Five gold stars evoke the ask
+          without saying "please review" out loud. */}
+      <Box px={6} pb={{ base: 8, md: 10 }}>
+        <Box
+          maxW="520px"
+          mx="auto"
+          bg="#fdf9f0"
+          border="1px solid"
+          borderColor="#e8d9a8"
+          borderRadius="md"
+          px={{ base: 6, md: 8 }}
+          py={{ base: 6, md: 7 }}
+          textAlign="center"
+        >
+          <Flex justify="center" gap={1} mb={4} color="#c9a96e">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Icon key={i} as={FaStar} boxSize={4} />
+            ))}
+          </Flex>
           <Text
             fontSize="sm"
-            color="gray.500"
+            color="gray.700"
             fontStyle="italic"
             lineHeight="1.8"
-            textAlign="center"
-            mb={4}
+            mb={5}
           >
             Loved your photos? A few kind words on Google mean the world.
             <Text as="span" fontStyle="normal" color="gray.600" fontWeight="400">
@@ -343,82 +385,20 @@ const ClientGallery = ({
           <CTAButton
             href={GOOGLE_WRITE_REVIEW_URL}
             icon={FaGoogle}
-            variant="outline"
+            variant="solid"
             size="sm"
           >
             Leave a Review
           </CTAButton>
         </Box>
-
-        {warning && (
-          <Text mt={4} fontSize="sm" color="orange.500" fontWeight="300" maxW="500px" mx="auto">
-            {warning}
-          </Text>
-        )}
       </Box>
 
-      {/* Section navigation — sticky bar of section buttons so the client
-          can jump between Bride / Groom / Ceremony / etc. without scrolling
-          through every photo. Only renders when there are 2+ sections;
-          single section galleries don't need a nav. Sits just under the
-          fixed Navbar (top: 72px) and uses a thin border + light blur so
-          it doesn't dominate. */}
-      {sections.length > 1 && (
-        <Box
-          position="sticky"
-          top="72px"
-          zIndex={10}
-          bg="rgba(255, 255, 255, 0.92)"
-          borderBottom="1px solid"
-          borderColor="gray.100"
-          backdropFilter="blur(8px)"
-          py={3}
-        >
-          <Flex
-            gap={2}
-            px={{ base: 3, md: 6 }}
-            overflowX="auto"
-            justify={{ base: 'flex-start', md: 'center' }}
-            sx={{
-              // Hide scrollbar for cleanliness — users still get touch/swipe
-              // scrolling on overflow, just no visible bar.
-              '&::-webkit-scrollbar': { display: 'none' },
-              scrollbarWidth: 'none',
-            }}
-          >
-            {sections.map((section) => (
-              <Box
-                key={section.id}
-                as="button"
-                type="button"
-                onClick={() => scrollToSection(section.id)}
-                flexShrink={0}
-                px={{ base: 4, md: 5 }}
-                py={2}
-                fontSize="2xs"
-                fontWeight="500"
-                letterSpacing="0.2em"
-                textTransform="uppercase"
-                color="gray.700"
-                bg="transparent"
-                border="1px solid"
-                borderColor="gray.200"
-                borderRadius="full"
-                transition="all 0.25s ease"
-                cursor="pointer"
-                _hover={{
-                  borderColor: '#c9a96e',
-                  color: '#c9a96e',
-                  bg: 'rgba(201, 169, 110, 0.06)',
-                }}
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                {section.name}
-              </Box>
-            ))}
-          </Flex>
-        </Box>
-      )}
+      {/* The old top sticky section-nav bar was removed — the desktop
+          right-rail timeline + the mobile "Jump" button in the sticky
+          bottom bar cover the same "jump between sections" need without
+          the redundant top strip. As a bonus, its borderBottom no longer
+          crowds the first section's SECTION label with a tight extra
+          horizontal line. */}
 
       {/* Grid */}
       {totalCount > 0 ? (
@@ -456,11 +436,15 @@ const ClientGallery = ({
                 ref={(el: HTMLDivElement | null) => {
                   sectionRefs.current[section.id] = el;
                 }}
-                mt={rootFiles.length > 0 || sIdx > 0 ? { base: 10, md: 14 } : 0}
-                // scroll-margin-top so scrollIntoView lands the section
-                // header below the fixed Navbar (72px) + sticky section
-                // nav (~52px) + a little breathing room.
-                sx={{ scrollMarginTop: '140px' }}
+                // Consistent breathing room above every section header —
+                // even the first one — now that the sticky top nav bar
+                // is gone. (Previously the first section had mt=0 so it
+                // could sit tight against that nav bar's bottom edge.)
+                mt={{ base: 8, md: 12 }}
+                // scroll-margin-top so smooth-scroll lands the section
+                // header below the fixed Navbar (72px) with a little
+                // breathing room, not flush against it.
+                sx={{ scrollMarginTop: '92px' }}
               >
                 {/* Section header — matches the gallery's main header
                     treatment but scaled down: small gold uppercase label,
@@ -553,35 +537,497 @@ const ClientGallery = ({
           fileSize={selected.size ?? undefined}
           driveViewUrl={selected.driveViewUrl}
           hideShare
+          // Lets the modal preload ±10 photos around the current one so
+          // arrow-key nav in either direction lands on a warm browser
+          // cache. Returns undefined for out-of-range indexes; modal
+          // treats that as "skip".
+          getViewUrl={(i) => allFiles[i]?.viewUrl}
         />
       )}
 
-      {/* Bottom secondary CTA — Download All */}
-      {totalCount > 0 && (
-        <Box bg="gray.50" py={12} px={6} textAlign="center">
-          <VStack spacing={4}>
-            <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.2em" color="#c9a96e">
-              Want everything?
-            </Text>
-            <Box w="30px" h="1px" bg="#c9a96e" />
-            <Text fontSize="sm" color="gray.600" fontWeight="300" maxW="420px" lineHeight="1.8">
-              Download all photos in one go via Drive. Large galleries may split into multiple ZIP files — that's normal.
-            </Text>
-            <CTAButton href={driveUrl} icon={FaExternalLinkAlt}>
-              Open Drive Folder
-            </CTAButton>
-          </VStack>
-        </Box>
-      )}
+      {/* The old "Want everything?" bottom section was removed — Download
+          All now lives in the sticky action bar (rendered below), always
+          reachable regardless of scroll position. No point duplicating. */}
 
       {/* Share section — only rendered when the parent route passes a
           gallery password, i.e. /portal/pass (gallery-only access).
           Full-mode portals have a richer share UI in their Gallery Pass
-          section already. */}
-      {galleryPassword && <GalleryShareSection galleryPassword={galleryPassword} />}
+          section already. The id is the scroll-target the sticky bar's
+          Share button jumps to; the equivalent Gallery Pass section
+          inside ClientPortalView uses the same id for the same reason. */}
+      {galleryPassword && (
+        <Box id="gallery-share-section">
+          <GalleryShareSection galleryPassword={galleryPassword} />
+        </Box>
+      )}
+
+      {/* Sticky bottom action bar + desktop right-rail timeline.
+          Both auto-hide while the photo modal is open (selectedIndex
+          non-null) so they don't visually fight the modal's controls. */}
+      {selectedIndex === null && totalCount > 0 && (
+        <>
+          <GalleryActionBar
+            driveUrl={driveUrl}
+            sections={sections}
+            hasSections={sections.length > 0}
+            scrollToSection={scrollToSection}
+            scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            scrollToBottom={() =>
+              window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: 'smooth',
+              })
+            }
+          />
+          {sections.length > 0 && (
+            <SectionTimelineRail
+              sections={sections}
+              sectionRefs={sectionRefs}
+              rootFilesLabel={rootFiles.length > 0 ? 'Top' : null}
+              scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              scrollToBottom={() =>
+                window.scrollTo({
+                  top: document.body.scrollHeight,
+                  behavior: 'smooth',
+                })
+              }
+              scrollToSection={scrollToSection}
+            />
+          )}
+        </>
+      )}
     </Box>
   );
 };
+
+/**
+ * Sticky bottom action bar. Always visible while the user is browsing the
+ * gallery grid (auto-hides when the photo modal opens — see caller).
+ * Contains the two things clients most often reach for:
+ *   1. Download All → opens the Drive folder for the full-quality set
+ *   2. Share → smooth-scrolls to the share section (present on both
+ *      /portal/pass and inside ClientPortalView via #gallery-share-section)
+ * On mobile, a third "Jump to" button appears when there are sections,
+ * opening a bottom-sheet drawer of the section list — the mobile
+ * equivalent of the desktop right-rail timeline (which is too narrow
+ * to work well on phone screens).
+ */
+interface GalleryActionBarProps {
+  driveUrl: string;
+  sections: FolderSection[];
+  hasSections: boolean;
+  scrollToSection: (id: string) => void;
+  scrollToTop: () => void;
+  scrollToBottom: () => void;
+}
+
+function GalleryActionBar({
+  driveUrl,
+  sections,
+  hasSections,
+  scrollToSection,
+  scrollToTop,
+  scrollToBottom,
+}: GalleryActionBarProps) {
+  const jumpDrawer = useDisclosure();
+
+  const handleShareClick = useCallback(() => {
+    // The share target has id="gallery-share-section" on both routes:
+    // /portal/pass → GalleryShareSection below; full-portal →
+    // ClientPortalView Gallery Pass section. Fall back to scrolling to
+    // the very bottom of the page if neither is present (defensive).
+    const el = document.getElementById('gallery-share-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+  }, []);
+
+  const jumpAndClose = useCallback(
+    (fn: () => void) => {
+      fn();
+      jumpDrawer.onClose();
+    },
+    [jumpDrawer],
+  );
+
+  return (
+    <>
+      <Box
+        position="fixed"
+        bottom={{ base: 3, md: 5 }}
+        left="50%"
+        transform="translateX(-50%)"
+        zIndex={40}
+        bg="rgba(255, 255, 255, 0.92)"
+        backdropFilter="blur(10px)"
+        border="1px solid"
+        borderColor="rgba(201, 169, 110, 0.35)"
+        borderRadius="full"
+        boxShadow="0 10px 30px rgba(0, 0, 0, 0.12)"
+        px={{ base: 2, md: 3 }}
+        py={{ base: 1.5, md: 2 }}
+      >
+        <Flex gap={{ base: 1, md: 2 }} align="center">
+          <ActionBarButton
+            href={driveUrl}
+            newTab
+            icon={FaDownload}
+            label="Download All"
+          />
+          <ActionBarDivider />
+          <ActionBarButton
+            onClick={handleShareClick}
+            icon={FaShareAlt}
+            label="Share"
+          />
+          {hasSections && (
+            <>
+              <ActionBarDivider display={{ base: 'block', md: 'none' }} />
+              <ActionBarButton
+                onClick={jumpDrawer.onOpen}
+                icon={FaListUl}
+                label="Jump"
+                display={{ base: 'inline-flex', md: 'none' }}
+              />
+            </>
+          )}
+        </Flex>
+      </Box>
+
+      {/* Mobile-only jump drawer. Section list + Top/Bottom.
+          Desktop uses the right-rail timeline instead. */}
+      <Drawer
+        isOpen={jumpDrawer.isOpen}
+        onClose={jumpDrawer.onClose}
+        placement="bottom"
+        size="sm"
+      >
+        <DrawerOverlay bg="blackAlpha.500" />
+        <DrawerContent
+          borderTopRadius="xl"
+          maxH="70vh"
+          bg="white"
+        >
+          <DrawerCloseButton mt={1} />
+          <DrawerHeader
+            fontSize="sm"
+            fontWeight="500"
+            letterSpacing="0.15em"
+            textTransform="uppercase"
+            color="#c9a96e"
+            borderBottom="1px solid"
+            borderColor="gray.100"
+          >
+            Jump to
+          </DrawerHeader>
+          <DrawerBody py={2} px={0}>
+            <VStack align="stretch" spacing={0}>
+              <DrawerRow
+                label="Top"
+                icon={FaChevronUp}
+                onClick={() => jumpAndClose(scrollToTop)}
+              />
+              {sections.map((s) => (
+                <DrawerRow
+                  key={s.id}
+                  label={s.name}
+                  onClick={() => jumpAndClose(() => scrollToSection(s.id))}
+                />
+              ))}
+              <DrawerRow
+                label="Bottom"
+                icon={FaChevronDown}
+                onClick={() => jumpAndClose(scrollToBottom)}
+              />
+            </VStack>
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
+    </>
+  );
+}
+
+interface ActionBarButtonProps {
+  href?: string;
+  newTab?: boolean;
+  onClick?: () => void;
+  icon: typeof FaDownload;
+  label: string;
+  display?: any;
+}
+
+function ActionBarButton({ href, newTab, onClick, icon, label, display }: ActionBarButtonProps) {
+  const common = {
+    display: display ?? 'inline-flex',
+    alignItems: 'center',
+    gap: 2,
+    px: { base: 3, md: 4 },
+    py: 2,
+    fontSize: '2xs',
+    fontWeight: 500,
+    letterSpacing: '0.15em',
+    textTransform: 'uppercase' as const,
+    color: 'gray.700',
+    bg: 'transparent',
+    border: 'none',
+    borderRadius: 'full',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    _hover: { color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.08)' },
+    sx: { WebkitTapHighlightColor: 'transparent' },
+    whiteSpace: 'nowrap' as const,
+  };
+  const content = (
+    <>
+      <Icon as={icon} boxSize={3} />
+      <Box as="span">{label}</Box>
+    </>
+  );
+  if (href) {
+    return (
+      <Box
+        as="a"
+        href={href}
+        {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        {...common}
+      >
+        {content}
+      </Box>
+    );
+  }
+  return (
+    <Box as="button" type="button" onClick={onClick} {...common}>
+      {content}
+    </Box>
+  );
+}
+
+function ActionBarDivider({ display }: { display?: any }) {
+  return (
+    <Box
+      w="1px"
+      h="18px"
+      bg="rgba(201, 169, 110, 0.35)"
+      display={display ?? 'block'}
+      flexShrink={0}
+    />
+  );
+}
+
+function DrawerRow({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon?: typeof FaChevronUp;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      w="100%"
+      textAlign="left"
+      px={6}
+      py={4}
+      fontSize="sm"
+      fontWeight="400"
+      color="gray.800"
+      bg="transparent"
+      border="none"
+      borderBottom="1px solid"
+      borderColor="gray.100"
+      cursor="pointer"
+      display="flex"
+      alignItems="center"
+      gap={3}
+      transition="background 0.15s"
+      _hover={{ bg: 'gray.50' }}
+      _active={{ bg: 'gray.100' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      {icon && <Icon as={icon} boxSize={3} color="gray.400" />}
+      <Box as="span">{label}</Box>
+    </Box>
+  );
+}
+
+/**
+ * Desktop-only right-rail timeline. Persistent orientation aid + fast
+ * jump navigation for large galleries where scrolling to a specific
+ * section (or back to the top) is otherwise a chore.
+ *
+ * Each section header is observed via IntersectionObserver, and the
+ * rail highlights whichever section is currently at the top of the
+ * viewport. Click any label to smooth-scroll there. Hidden on mobile
+ * (`display={{ base: 'none', md: 'flex' }}`) because a slim right-edge
+ * strip is too cramped on phones — the sticky bar's Jump button opens
+ * a bottom-sheet drawer with the same list instead.
+ */
+interface SectionTimelineRailProps {
+  sections: FolderSection[];
+  sectionRefs: React.MutableRefObject<{ [id: string]: HTMLDivElement | null }>;
+  rootFilesLabel: string | null;
+  scrollToTop: () => void;
+  scrollToBottom: () => void;
+  scrollToSection: (id: string) => void;
+}
+
+function SectionTimelineRail({
+  sections,
+  sectionRefs,
+  scrollToTop,
+  scrollToBottom,
+  scrollToSection,
+}: SectionTimelineRailProps) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Observe every section header via a rootMargin trick: entries are
+  // "intersecting" only when they're in the top 40% of the viewport,
+  // so the highlight tracks what's actually near the top rather than
+  // whatever happens to overlap the middle. The topmost intersecting
+  // entry wins.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length === 0) return;
+        const topmost = visible.reduce((best, e) =>
+          e.boundingClientRect.top < best.boundingClientRect.top ? e : best,
+        );
+        const id = topmost.target.getAttribute('data-section-id');
+        if (id) setActiveId(id);
+      },
+      { rootMargin: '-140px 0px -60% 0px', threshold: 0 },
+    );
+    const refs = sectionRefs.current;
+    Object.entries(refs).forEach(([id, el]) => {
+      if (el) {
+        el.setAttribute('data-section-id', id);
+        observer.observe(el);
+      }
+    });
+    return () => observer.disconnect();
+  }, [sections, sectionRefs]);
+
+  return (
+    <Box
+      position="fixed"
+      right={4}
+      top="50%"
+      transform="translateY(-50%)"
+      zIndex={30}
+      display={{ base: 'none', md: 'flex' }}
+      flexDirection="column"
+      bg="rgba(255, 255, 255, 0.92)"
+      backdropFilter="blur(10px)"
+      border="1px solid"
+      borderColor="rgba(201, 169, 110, 0.35)"
+      borderRadius="lg"
+      boxShadow="0 8px 24px rgba(0, 0, 0, 0.08)"
+      py={2}
+      minW="140px"
+      maxW="180px"
+      maxH="70vh"
+      overflowY="auto"
+    >
+      <RailButton icon={FaChevronUp} label="Top" onClick={scrollToTop} />
+      <RailDivider />
+      {sections.map((s) => (
+        <RailSectionLabel
+          key={s.id}
+          label={s.name}
+          active={activeId === s.id}
+          onClick={() => scrollToSection(s.id)}
+        />
+      ))}
+      <RailDivider />
+      <RailButton icon={FaChevronDown} label="Bottom" onClick={scrollToBottom} />
+    </Box>
+  );
+}
+
+function RailButton({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: typeof FaChevronUp;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      display="flex"
+      alignItems="center"
+      gap={2}
+      w="100%"
+      px={4}
+      py={2}
+      fontSize="2xs"
+      fontWeight="500"
+      letterSpacing="0.15em"
+      textTransform="uppercase"
+      color="gray.500"
+      bg="transparent"
+      border="none"
+      cursor="pointer"
+      transition="all 0.2s"
+      _hover={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Icon as={icon} boxSize={2.5} />
+      <Box as="span">{label}</Box>
+    </Box>
+  );
+}
+
+function RailSectionLabel({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      w="100%"
+      textAlign="left"
+      px={4}
+      py={2}
+      fontSize="xs"
+      fontWeight={active ? 500 : 400}
+      color={active ? '#c9a96e' : 'gray.600'}
+      bg={active ? 'rgba(201, 169, 110, 0.08)' : 'transparent'}
+      border="none"
+      borderLeft="2px solid"
+      borderLeftColor={active ? '#c9a96e' : 'transparent'}
+      cursor="pointer"
+      transition="all 0.2s"
+      _hover={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+      noOfLines={1}
+    >
+      {label}
+    </Box>
+  );
+}
+
+function RailDivider() {
+  return <Box h="1px" bg="gray.100" mx={4} my={1} />;
+}
 
 /**
  * Share section for gallery-only access (the /portal/pass route).

@@ -7,6 +7,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Spinner,
 } from '@chakra-ui/react';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
 import { FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
@@ -63,6 +64,12 @@ interface ImageModalProps {
   driveViewUrl?: string;
   // Hide the share icon in the top bar (client portal galleries don't share).
   hideShare?: boolean;
+  // Optional: returns the display URL for the photo at any index. When
+  // provided, the modal preloads a sliding window of adjacent photos so
+  // arrow-key navigation feels instant (browser cache stays warm ahead
+  // of the user). These URLs go direct to Drive (not our proxy), so
+  // preloading costs nothing on our origin. Silently no-ops if omitted.
+  getViewUrl?: (index: number) => string | null | undefined;
 }
 
 // 40 MB. Reasoning: typical wedding/portrait JPEGs are 5–25 MB (well
@@ -72,10 +79,15 @@ interface ImageModalProps {
 // native viewer where size isn't a problem.
 const LARGE_FILE_THRESHOLD = 40 * 1024 * 1024;
 
-function formatFileSize(bytes: number): string {
-  const mb = bytes / (1024 * 1024);
-  return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
-}
+// How many photos to preload on either side of the currently-viewed one.
+// Symmetric (forward = back) so arrow-key nav in either direction feels
+// the same. Preloads go direct to Drive (viewUrl → drive.google.com/
+// thumbnail), so they cost us nothing — the trade-off is a bit of the
+// client's own bandwidth for photos they're about to see anyway.
+const PRELOAD_RADIUS = 10;
+
+// formatFileSize was used by the removed "Original · XX MB" menu item;
+// keeping the definition would be dead code, so it's been removed.
 
 // Split-button dropdown used on both desktop and mobile flows. Two
 // equally-weighted options so users see both paths up front, instead of
@@ -99,6 +111,9 @@ interface DownloadMenuProps {
   // Called when the dropdown opens. The mobile flow uses this to kick off
   // the pre-fetch lazily, instead of fetching every modal-opened photo.
   onMenuOpen?: () => void;
+  // Retained on the interface for backwards compat with call sites that
+  // still pass it; no longer rendered (the secondary "Original" option
+  // was removed — full-quality lives at the gallery level now).
   driveViewUrl?: string;
   fileSize?: number;
 }
@@ -112,8 +127,6 @@ const DownloadMenu = ({
   onPrimary,
   primaryDisabled,
   onMenuOpen,
-  driveViewUrl,
-  fileSize,
 }: DownloadMenuProps) => {
   const GOLD = '#c9a96e';
   const triggerStyles = {
@@ -193,24 +206,11 @@ const DownloadMenu = ({
             </Text>
           </Box>
         </MenuItem>
-        {driveViewUrl && (
-          <MenuItem
-            as="a"
-            href={driveViewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            {...itemStyles}
-          >
-            <Box>
-              <Text color="white" fontSize="sm" fontWeight="400" mb={0.5}>
-                Original
-              </Text>
-              <Text color="whiteAlpha.600" fontSize="xs">
-                Full quality{fileSize ? ` · ${formatFileSize(fileSize)}` : ''}
-              </Text>
-            </Box>
-          </MenuItem>
-        )}
+        {/* "Original" full-quality option removed. Full quality is now
+            surfaced only at the gallery level via the sticky Download All
+            widget (which goes to Drive). Per-photo, users get one thing:
+            the optimized save. This kills the per-photo Optimized-vs-
+            Original decision that made every click feel weighty. */}
       </MenuList>
     </Menu>
   );
@@ -235,6 +235,7 @@ const ImageModal = ({
   fileSize,
   driveViewUrl,
   hideShare,
+  getViewUrl,
 }: ImageModalProps) => {
   // Touch-device detection. Captured once on mount via useEffect so SSR/
   // prerender stays consistent (no `window` access during render).
@@ -285,6 +286,41 @@ const ImageModal = ({
     setIsFetchingBlob(false);
     inFlightUrl.current = null;
   }, [mobileSaveUrl]);
+
+  // Track whether the currently-displayed photo has finished loading, so
+  // we can show a spinner overlay when arrow-key navigation lands on a
+  // photo that isn't in the browser cache yet. We reset to true whenever
+  // the imageUrl changes (new photo → assume not loaded), then flip to
+  // false in the img's onLoad. Prevents the confused "did my click even
+  // work?" state when Drive takes a couple seconds to serve a fresh one.
+  const [currentImageLoading, setCurrentImageLoading] = useState(true);
+  useEffect(() => {
+    setCurrentImageLoading(true);
+  }, [imageUrl]);
+
+  // Preload a sliding window of ±PRELOAD_RADIUS photos around the current
+  // index. Cheap for us (viewUrl → Drive direct, not our proxy) and huge
+  // for perceived speed — arrow-key mashing hits pre-warmed browser cache
+  // instead of triggering fresh Drive fetches per click.
+  //
+  // Each preload uses `new Image()`; the browser dedupes identical URLs
+  // via its HTTP cache, so if a URL was already loaded (either by earlier
+  // navigation or a previous preload), calling this again is a no-op.
+  useEffect(() => {
+    if (typeof currentIndex !== 'number' || !getViewUrl) return;
+    const preloaders: HTMLImageElement[] = [];
+    for (let offset = -PRELOAD_RADIUS; offset <= PRELOAD_RADIUS; offset++) {
+      if (offset === 0) continue; // current photo is the <img src> below
+      const url = getViewUrl(currentIndex + offset);
+      if (!url) continue;
+      const img = new Image();
+      img.src = url;
+      preloaders.push(img);
+    }
+    // No cleanup needed — the Image instances get GC'd naturally when
+    // out of scope. Cancelling in-flight requests isn't worth the effort
+    // (browser will just abandon them if we navigate away).
+  }, [currentIndex, getViewUrl]);
 
   const triggerPrefetch = useCallback(() => {
     if (!useMobileSaveFlow || !mobileSaveUrl) return;
@@ -685,42 +721,37 @@ const ImageModal = ({
                 Open in Drive
               </CTAButton>
             ) : useMobileSaveFlow ? (
-              // Mobile path (small files): dropdown with two options.
-              //
-              //   Save to Photos → handleMobileSave runs the Web Share
-              //     API on the pre-fetched (resized) blob. iOS's share
-              //     sheet shows "Save to Photos" as the first option.
-              //   Open original → opens Drive's viewer in a new tab;
-              //     client can grab the full-res file from Drive's UI.
-              //
-              // Web Share API needs a synchronous user gesture, which the
-              // MenuItem onClick provides — Chakra fires onClick inline
-              // before closing the menu, so the gesture isn't consumed.
+              // Mobile path: single-option menu. The dropdown mechanic
+              // is still required by iOS — Web Share needs a *synchronous*
+              // user gesture, which we get from the MenuItem click; the
+              // prefetch fires when the menu opens, so by the time the
+              // user taps the item the blob is usually ready. If it's
+              // not, the item shows "Preparing…" and stays disabled.
+              // (The old "Original / full-quality" second option was
+              // removed — full-quality lives at the gallery level via
+              // the sticky Download-All widget now.)
               <DownloadMenu
                 fileSize={fileSize}
                 onPrimary={handleMobileSave}
                 onMenuOpen={triggerPrefetch}
-                primaryTitle="Optimized"
-                primaryDesc={photoBlob ? 'Smaller file, quick save' : 'Preparing…'}
+                primaryTitle="Save to Photos"
+                primaryDesc={photoBlob ? 'Ready to save' : 'Preparing…'}
                 primaryDisabled={!photoBlob}
-                driveViewUrl={driveViewUrl}
+                driveViewUrl={undefined}
                 triggerLabel="Save"
               />
             ) : downloadUrl ? (
-              // Desktop path: dropdown with two options.
-              //
-              //   Optimized → downloadUrl points at our /api/photo proxy
-              //     which serves a 2400px webp with Content-Disposition:
-              //     attachment. In-page Save dialog, no Drive interstitial.
-              //   Original → Drive's viewer in a new tab for the full-res
-              //     file. Doesn't count against our Origin Transfer quota.
+              // Desktop path: single-option menu. Kept identical to mobile
+              // for consistency (and so users on both platforms see one
+              // Save action rather than a "Optimized vs Original" split
+              // that made every per-photo save feel like a decision).
               <DownloadMenu
                 fileSize={fileSize}
                 primaryHref={downloadUrl}
                 primaryDownload={downloadFilename ?? true}
-                primaryTitle="Optimized"
-                primaryDesc="Smaller file, fast download"
-                driveViewUrl={driveViewUrl}
+                primaryTitle="Download"
+                primaryDesc="Optimized for sharing"
+                driveViewUrl={undefined}
                 triggerLabel="Download"
               />
             ) : (
@@ -817,6 +848,8 @@ const ImageModal = ({
           alt={imageAlt}
           draggable={false}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          onLoad={() => setCurrentImageLoading(false)}
+          onError={() => setCurrentImageLoading(false)}
           style={{
             maxHeight: '100%',
             maxWidth: '100%',
@@ -825,6 +858,28 @@ const ImageModal = ({
             pointerEvents: 'auto',
           }}
         />
+        {/* Spinner overlay for the case where arrow-key nav landed on a
+            photo the browser hasn't cached yet. Sits above the image so
+            the user sees SOMETHING happening (rather than a blank void
+            that gets them mashing the arrow key again). Auto-hides on
+            img onLoad / onError. */}
+        {currentImageLoading && (
+          <Box
+            position="absolute"
+            top="50%"
+            left="50%"
+            transform="translate(-50%, -50%)"
+            pointerEvents="none"
+          >
+            <Spinner
+              size="lg"
+              color="whiteAlpha.800"
+              thickness="2px"
+              speed="0.9s"
+              emptyColor="whiteAlpha.200"
+            />
+          </Box>
+        )}
       </motion.div>
       <CopyNotification />
     </Box>
