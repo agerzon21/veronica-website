@@ -93,6 +93,43 @@ const PRELOAD_RADIUS = 10;
 // equally-weighted options so users see both paths up front, instead of
 // the "Need print quality?" disclaimer link reading as a caveat.
 //
+// Wraps a primary Save/Download action with a small subordinate
+// "View original in Drive →" link underneath, when a driveViewUrl
+// exists. This is the print-quality escape hatch: the button gets
+// visual dominance (no per-photo decision friction), the link
+// preserves access to the untouched original for clients who
+// actually want print or album prep for that specific photo.
+function PrimaryPlusOriginalLink({
+  driveViewUrl,
+  children,
+}: {
+  driveViewUrl?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Flex direction="column" align="flex-end" gap={1.5}>
+      {children}
+      {driveViewUrl && (
+        <Text
+          as="a"
+          href={driveViewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          fontSize="10px"
+          fontWeight="300"
+          letterSpacing="0.08em"
+          color="whiteAlpha.600"
+          _hover={{ color: 'whiteAlpha.900', textDecoration: 'underline' }}
+          onClick={(e) => e.stopPropagation()}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          View original in Drive →
+        </Text>
+      )}
+    </Flex>
+  );
+}
+
 // Primary option is platform-specific (anchor download on desktop,
 // Web Share API call on mobile) so the caller passes either
 // `primaryHref` or `onPrimary`. Secondary option is always Drive's
@@ -727,33 +764,40 @@ const ImageModal = ({
               // prefetch fires when the menu opens, so by the time the
               // user taps the item the blob is usually ready. If it's
               // not, the item shows "Preparing…" and stays disabled.
-              // (The old "Original / full-quality" second option was
-              // removed — full-quality lives at the gallery level via
-              // the sticky Download-All widget now.)
-              <DownloadMenu
-                fileSize={fileSize}
-                onPrimary={handleMobileSave}
-                onMenuOpen={triggerPrefetch}
-                primaryTitle="Save to Photos"
-                primaryDesc={photoBlob ? 'Ready to save' : 'Preparing…'}
-                primaryDisabled={!photoBlob}
-                driveViewUrl={undefined}
-                triggerLabel="Save"
-              />
+              //
+              // Small "View original in Drive" link sits below as a
+              // discreet escape hatch — restores per-photo access to
+              // the full-quality file we lost when we removed the
+              // two-option dropdown. Visual hierarchy (button + link)
+              // gives users the "which do I want" clarity that the old
+              // equal-weight menu items didn't, without amputating
+              // the print-quality path entirely.
+              <PrimaryPlusOriginalLink driveViewUrl={driveViewUrl}>
+                <DownloadMenu
+                  fileSize={fileSize}
+                  onPrimary={handleMobileSave}
+                  onMenuOpen={triggerPrefetch}
+                  primaryTitle="Save to Photos"
+                  primaryDesc={photoBlob ? 'Ready to save' : 'Preparing…'}
+                  primaryDisabled={!photoBlob}
+                  driveViewUrl={undefined}
+                  triggerLabel="Save"
+                />
+              </PrimaryPlusOriginalLink>
             ) : downloadUrl ? (
-              // Desktop path: single-option menu. Kept identical to mobile
-              // for consistency (and so users on both platforms see one
-              // Save action rather than a "Optimized vs Original" split
-              // that made every per-photo save feel like a decision).
-              <DownloadMenu
-                fileSize={fileSize}
-                primaryHref={downloadUrl}
-                primaryDownload={downloadFilename ?? true}
-                primaryTitle="Download"
-                primaryDesc="Optimized for sharing"
-                driveViewUrl={undefined}
-                triggerLabel="Download"
-              />
+              // Desktop path: single-option menu, same escape-hatch link
+              // below (see comment on mobile path above).
+              <PrimaryPlusOriginalLink driveViewUrl={driveViewUrl}>
+                <DownloadMenu
+                  fileSize={fileSize}
+                  primaryHref={downloadUrl}
+                  primaryDownload={downloadFilename ?? true}
+                  primaryTitle="Download"
+                  primaryDesc="Optimized for sharing"
+                  driveViewUrl={undefined}
+                  triggerLabel="Download"
+                />
+              </PrimaryPlusOriginalLink>
             ) : (
               <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
                 View Photo Page →
