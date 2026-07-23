@@ -701,7 +701,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           /portal/pass route so the widget doesn't need to know its
           context, it just scrolls to whichever element exists. */}
       <Box id="gallery-share-section" bg="gray.50" py={{ base: 12, md: 14 }} px={6} mt={6}
-        sx={{ scrollMarginTop: '80px' }}>
+        sx={{ scrollMarginTop: '90px' }}>
         <VStack spacing={4} maxW="520px" mx="auto" textAlign="center">
           <Text
             fontSize="xs"

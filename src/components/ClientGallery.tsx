@@ -576,7 +576,14 @@ const ClientGallery = ({
           Share button jumps to; the equivalent Gallery Pass section
           inside ClientPortalView uses the same id for the same reason. */}
       {galleryPassword && (
-        <Box id="gallery-share-section">
+        <Box
+          id="gallery-share-section"
+          // Scroll offset accounts for the fixed Navbar (72px) plus,
+          // on desktop, the sticky section nav (~52px). Without this,
+          // smooth-scroll from the sticky Share button lands the
+          // section under those bars and clips its header + intro.
+          sx={{ scrollMarginTop: { base: '90px', md: '140px' } }}
+        >
           <GalleryShareSection galleryPassword={galleryPassword} />
         </Box>
       )}
