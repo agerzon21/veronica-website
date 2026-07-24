@@ -149,6 +149,41 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       ? data.contract_total_amount - data.paid_to_date
       : null;
 
+  // Whether the NextStepsPanel will render anything — same conditions
+  // it uses internally, mirrored here so PortalTopNav can decide
+  // whether to add a "Next Steps" pill AND so we know where to
+  // auto-scroll after signing.
+  const hasNextStep =
+    data.contract_status === 'signed' &&
+    data.contract_total_amount !== null &&
+    data.paid_to_date < data.contract_total_amount;
+
+  // Auto-scroll to Next Steps immediately after the client signs the
+  // contract. Without this, the page just re-renders in place — but
+  // the ContractSignSection (big signature-pad UI) collapses into a
+  // tiny SignedContractSection, which leaves the user's viewport
+  // stranded somewhere down in the Share section, missing the whole
+  // reason we made them sign (send the retainer). Watching the
+  // status transition pending → signed catches the moment.
+  const prevContractStatus = useRef(data.contract_status);
+  useEffect(() => {
+    if (
+      prevContractStatus.current === 'pending' &&
+      data.contract_status === 'signed'
+    ) {
+      // requestAnimationFrame gives React a chance to render the new
+      // SignedContractSection + NextStepsPanel before we scroll to it,
+      // otherwise the element we're targeting might not exist yet.
+      requestAnimationFrame(() => {
+        const target =
+          document.getElementById('next-steps-section') ||
+          document.getElementById('balance-section');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+    prevContractStatus.current = data.contract_status;
+  }, [data.contract_status]);
+
   // Portal-nav / gallery-nav coordination. When the user is INSIDE
   // the photos section, the portal-level top nav hides on desktop so
   // the gallery's own sticky section-nav can take over that space
@@ -536,6 +571,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       <PortalTopNav
         hasContract={data.contract_status !== 'none' && data.contract_status !== 'void'}
         hasBalance={data.contract_total_amount !== null}
+        hasNextStep={hasNextStep}
         isPhotosInView={isPhotosInView}
       />
 
@@ -577,13 +613,22 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
             retainer (it's the bit that actually reserves the date).
           - Retainer paid but balance still outstanding → softer
             reminder about the balance window.
-          - Paid in full → no nudge. */}
-      <NextStepsPanel
-        contractStatus={data.contract_status}
-        total={data.contract_total_amount}
-        retainer={data.contract_retainer_amount}
-        paidToDate={data.paid_to_date}
-      />
+          - Paid in full → no nudge (panel returns null).
+
+          Wrapped with id + scroll-margin so the portal top nav can
+          jump to it — critical since after signing the contract the
+          user is auto-scrolled here to see what to do next. */}
+      <Box
+        id="next-steps-section"
+        sx={{ scrollMarginTop: '140px' }}
+      >
+        <NextStepsPanel
+          contractStatus={data.contract_status}
+          total={data.contract_total_amount}
+          retainer={data.contract_retainer_amount}
+          paidToDate={data.paid_to_date}
+        />
+      </Box>
 
       {/* ─── Payment / Balance section — Phase 3 fills this in fully.
             For now, surface the totals so it's visible end-to-end. ─── */}
@@ -2182,10 +2227,15 @@ function ChangePasswordSection({
 interface PortalTopNavProps {
   hasContract: boolean;
   hasBalance: boolean;
+  // True when there's an outstanding retainer or balance after the
+  // contract's signed. When true, an emphasized "Next Steps" pill
+  // appears between Contract and Balance to draw the eye to the
+  // action the client needs to take. Disappears once fully paid.
+  hasNextStep: boolean;
   isPhotosInView: boolean;
 }
 
-function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavProps) {
+function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: PortalTopNavProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
@@ -2218,10 +2268,13 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
   };
 
   // Build the list of sections that actually exist on this portal.
-  // Photos, Share, and Password always exist; Contract and Balance
-  // are conditional.
-  const pills: { id: string; label: string }[] = [];
+  // Photos, Share, and Password always exist; Contract, Balance, and
+  // Next Steps are conditional. The `emphasized` flag marks pills
+  // that should stand out visually (always gold-filled) — used for
+  // Next Steps to signal urgency about an unpaid balance/retainer.
+  const pills: { id: string; label: string; emphasized?: boolean }[] = [];
   if (hasContract) pills.push({ id: 'contract-section', label: 'Contract' });
+  if (hasNextStep) pills.push({ id: 'next-steps-section', label: 'Next Steps', emphasized: true });
   if (hasBalance) pills.push({ id: 'balance-section', label: 'Balance' });
   pills.push({ id: 'photos-section', label: 'Photos' });
   pills.push({ id: 'gallery-share-section', label: 'Share' });
@@ -2371,6 +2424,12 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
           >
           {pills.map((p) => {
             const active = activeId === p.id;
+            // Emphasized pills (Next Steps) are always gold-filled to
+            // draw the eye — signals urgency about an unpaid retainer
+            // or balance. When emphasized AND active, we keep the
+            // solid gold but darken slightly on hover to still give
+            // click feedback.
+            const emphasized = p.emphasized;
             return (
               <Box
                 key={p.id}
@@ -2384,18 +2443,21 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
                 px={{ base: 4, md: 5 }}
                 py={2}
                 fontSize="2xs"
-                fontWeight="500"
+                fontWeight={emphasized ? '600' : '500'}
                 letterSpacing="0.2em"
                 textTransform="uppercase"
-                color={active ? 'white' : 'gray.700'}
-                bg={active ? '#c9a96e' : 'transparent'}
+                color={active || emphasized ? 'white' : 'gray.700'}
+                bg={active || emphasized ? '#c9a96e' : 'transparent'}
                 border="1px solid"
-                borderColor={active ? '#c9a96e' : 'gray.200'}
+                borderColor={active || emphasized ? '#c9a96e' : 'gray.200'}
                 borderRadius="full"
                 transition="all 0.25s ease"
                 cursor="pointer"
+                boxShadow={
+                  emphasized ? '0 2px 8px rgba(201, 169, 110, 0.35)' : 'none'
+                }
                 _hover={
-                  active
+                  active || emphasized
                     ? { bg: '#b8964f', borderColor: '#b8964f' }
                     : {
                         borderColor: '#c9a96e',
