@@ -702,259 +702,275 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           context, it just scrolls to whichever element exists. */}
       <Box id="gallery-share-section" bg="gray.50" py={{ base: 12, md: 14 }} px={6} mt={6}
         sx={{ scrollMarginTop: '90px' }}>
-        <VStack spacing={4} maxW="520px" mx="auto" textAlign="center">
-          <Text
-            fontSize="xs"
-            fontWeight="500"
-            textTransform="uppercase"
-            letterSpacing="0.25em"
-            color="#c9a96e"
-          >
-            Gallery Pass
-          </Text>
-          <Box w="30px" h="1px" bg="#c9a96e" />
-          <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
-            {data.gallery_enabled
-              ? 'Share this password with guests so they can view your photos without your full Client Portal login.'
-              : 'Gallery sharing is currently disabled. No one can view your photos with the password below.'}
-          </Text>
-
-          {/* Password chip with inline copy button */}
-          <Flex
-            align="center"
-            justify="center"
-            gap={3}
-            bg="white"
-            border="1px solid"
-            borderColor="gray.200"
-            borderRadius="sm"
-            px={5}
-            py={3}
-            opacity={data.gallery_enabled ? 1 : 0.6}
-            transition="opacity 0.2s"
-          >
+        <VStack maxW="520px" mx="auto" spacing={6}>
+          {/* Section header */}
+          <VStack spacing={2}>
             <Text
-              fontSize="md"
+              fontSize="xs"
               fontWeight="500"
-              color="gray.800"
-              fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
-              letterSpacing="0.05em"
+              textTransform="uppercase"
+              letterSpacing="0.25em"
+              color="#c9a96e"
             >
-              {data.gallery_password}
+              Share these photos
             </Text>
-            <Box
-              as="button"
-              type="button"
-              onClick={handleCopy}
-              aria-label="Copy password"
-              p={2}
-              borderRadius="sm"
-              color="gray.500"
-              transition="all 0.2s"
-              cursor="pointer"
-              _hover={{ color: '#c9a96e', bg: 'gray.100' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <Icon as={gpCopied ? FaCheck : FaCopy} boxSize={3.5} />
-            </Box>
-          </Flex>
+            <Box w="30px" h="1px" bg="#c9a96e" />
+          </VStack>
 
-          {/* Action row — rotate / toggle / custom */}
-          <HStack spacing={3} pt={2} flexWrap="wrap" justify="center">
-            <CTAButton
-              onClick={() => callGalleryPass({ action: 'rotate' })}
-              variant="outline"
-              size="sm"
-              icon={FaSync}
-              isLoading={gpUpdating}
-              isDisabled={!data.gallery_enabled}
-            >
-              Rotate
-            </CTAButton>
-            <CTAButton
-              onClick={() =>
-                callGalleryPass({ action: data.gallery_enabled ? 'disable' : 'enable' })
-              }
-              variant="outline"
-              size="sm"
-              isLoading={gpUpdating}
-            >
-              {data.gallery_enabled ? 'Disable sharing' : 'Enable sharing'}
-            </CTAButton>
-            <CTAButton
-              onClick={() => setGpCustomOpen((open) => !open)}
-              variant="outline"
-              size="sm"
-              isDisabled={!data.gallery_enabled || gpUpdating}
-            >
-              {gpCustomOpen ? 'Cancel' : 'Set custom'}
-            </CTAButton>
-          </HStack>
-
-          {/* Custom-password input — collapses in when "Set custom" is open */}
-          {gpCustomOpen && (
-            <Flex
-              gap={2}
-              w="100%"
-              maxW="420px"
-              direction={{ base: 'column', sm: 'row' }}
-              pt={3}
-            >
-              <Input
-                value={gpCustomValue}
-                onChange={(e) => setGpCustomValue(e.target.value.toUpperCase())}
-                placeholder="ABCD1234"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-                h="40px"
-                bg="white"
-                fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
-                fontSize="sm"
-                letterSpacing="0.05em"
-                _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
-              />
+          {!data.gallery_enabled ? (
+            /* Disabled state — one clear "enable to share" CTA. No point
+               showing password/link/email UI when nothing will work. */
+            <VStack spacing={4} textAlign="center">
+              <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
+                Gallery sharing is currently <Text as="span" fontWeight="500" color="gray.700">disabled</Text>. Enable it to share these photos with family or friends.
+              </Text>
               <CTAButton
-                onClick={handleSetCustom}
+                onClick={() => callGalleryPass({ action: 'enable' })}
                 variant="solid"
                 size="sm"
                 isLoading={gpUpdating}
-                loadingText="Saving..."
+                loadingText="Enabling..."
               >
-                Save
+                Enable sharing
               </CTAButton>
-            </Flex>
-          )}
-
-          {gpError && (
-            <Text fontSize="xs" color="red.500" fontWeight="400" pt={1}>
-              {gpError}
-            </Text>
-          )}
-
-          {/* ─── Share section ───
-              Two ways to hand the gallery off to someone:
-              1) Copy a one-click direct URL (password embedded). Easiest
-                 path — paste into iMessage / WhatsApp / wherever.
-              2) Type an email and we send the recipient an "invited by you"
-                 message. Rate-limited server-side to 5/24h to keep the
-                 sender domain reputation clean. */}
-          {data.gallery_enabled && (
-            <VStack
-              w="100%"
-              maxW="480px"
-              spacing={5}
-              pt={6}
-              mt={2}
-              borderTop="1px solid"
-              borderColor="gray.200"
-            >
-              <Text
-                fontSize="2xs"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.25em"
-                color="#c9a96e"
-              >
-                Share
+              {gpError && (
+                <Text fontSize="xs" color="red.500" fontWeight="400">
+                  {gpError}
+                </Text>
+              )}
+            </VStack>
+          ) : (
+            <>
+              <Text fontSize="sm" color="gray.600" fontWeight="300" textAlign="center" lineHeight="1.7">
+                Want to share these with family or friends? Anyone with the link below can view the gallery — no account needed.
               </Text>
 
-              {/* Direct link with copy button */}
-              <VStack w="100%" spacing={2} align="stretch">
-                <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
-                  One-click link
-                </Text>
-                <Flex
-                  align="center"
-                  gap={2}
-                  bg="white"
-                  border="1px solid"
-                  borderColor="gray.200"
-                  borderRadius="sm"
-                  px={3}
-                  py={2}
+              {/* HERO — one-click link with big Copy button */}
+              <Box
+                w="100%"
+                bg="#fdf9f0"
+                border="1px solid"
+                borderColor="#e8d9a8"
+                borderRadius="md"
+                px={{ base: 5, md: 7 }}
+                py={{ base: 6, md: 7 }}
+                textAlign="center"
+              >
+                <Text
+                  fontSize="2xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.25em"
+                  color="#c9a96e"
+                  mb={4}
                 >
-                  <Text
-                    fontSize="xs"
-                    color="gray.700"
-                    fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
-                    flex="1"
-                    minW={0}
-                    noOfLines={1}
-                    textAlign="left"
-                  >
-                    {shareUrl}
-                  </Text>
-                  <Box
-                    as="button"
-                    type="button"
-                    onClick={handleCopyShareLink}
-                    aria-label="Copy share link"
-                    p={1.5}
-                    borderRadius="sm"
-                    color="gray.500"
-                    transition="all 0.2s"
-                    cursor="pointer"
-                    _hover={{ color: '#c9a96e', bg: 'gray.100' }}
-                    sx={{ WebkitTapHighlightColor: 'transparent' }}
-                  >
-                    <Icon as={shareLinkCopied ? FaCheck : FaCopy} boxSize={3} />
-                  </Box>
-                </Flex>
-                <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
-                  Send via iMessage, WhatsApp, email — whoever opens it goes straight to the gallery, no password to type.
+                  Easiest — one-click link
                 </Text>
-              </VStack>
+                <CTAButton
+                  onClick={handleCopyShareLink}
+                  icon={shareLinkCopied ? FaCheck : FaCopy}
+                  variant="solid"
+                  size="md"
+                  fullWidth
+                >
+                  {shareLinkCopied ? 'Link Copied!' : 'Copy Link'}
+                </CTAButton>
+                <Text
+                  mt={4}
+                  fontSize="xs"
+                  color="gray.500"
+                  fontWeight="300"
+                  fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+                  noOfLines={1}
+                  wordBreak="break-all"
+                >
+                  {shareUrl}
+                </Text>
+                <Text mt={2} fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6">
+                  Paste anywhere — text, email, WhatsApp. Opens the gallery instantly, no password to type.
+                </Text>
+              </Box>
 
-              {/* Email invite */}
-              <VStack w="100%" spacing={2} align="stretch">
-                <Text fontSize="xs" color="gray.500" fontWeight="500" letterSpacing="0.05em">
-                  Or send via email
-                </Text>
-                <Flex
-                  gap={2}
-                  direction={{ base: 'column', sm: 'row' }}
-                >
-                  <Input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="friend@example.com"
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    h="40px"
-                    bg="white"
-                    fontSize="sm"
-                    _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
-                  />
-                  <CTAButton
-                    onClick={handleSendInvite}
-                    variant="solid"
-                    size="sm"
-                    isLoading={inviteSending}
-                    loadingText="Sending..."
-                  >
-                    Send Invite
-                  </CTAButton>
-                </Flex>
-                <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
-                  We'll email them a note saying you shared the gallery, with the same one-click link.
-                  {invitesRemaining !== null && (
-                    <> {invitesRemaining} {invitesRemaining === 1 ? 'invite' : 'invites'} left today.</>
-                  )}
-                </Text>
-                {inviteMessage && (
+              {/* Secondary: email + password. "Or, more ways" divider to
+                  visually demote these from equal-weight alternatives. */}
+              <Box w="100%" pt={2}>
+                <Flex align="center" gap={3} mb={5}>
+                  <Box flex={1} h="1px" bg="gray.200" />
                   <Text
-                    fontSize="xs"
-                    fontWeight="400"
-                    color={inviteMessage.kind === 'error' ? 'red.500' : 'green.600'}
+                    fontSize="2xs"
+                    fontWeight="500"
+                    textTransform="uppercase"
+                    letterSpacing="0.2em"
+                    color="gray.400"
+                    whiteSpace="nowrap"
                   >
-                    {inviteMessage.text}
+                    Or, more ways
                   </Text>
-                )}
-              </VStack>
-            </VStack>
+                  <Box flex={1} h="1px" bg="gray.200" />
+                </Flex>
+
+                {/* Email invite */}
+                <VStack w="100%" spacing={2} align="stretch" mb={6}>
+                  <Text fontSize="xs" color="gray.500" fontWeight="400" lineHeight="1.6">
+                    Have us email the one-click link:
+                  </Text>
+                  <Flex gap={2} direction={{ base: 'column', sm: 'row' }}>
+                    <Input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="friend@example.com"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      h="40px"
+                      bg="white"
+                      fontSize="sm"
+                      _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                    />
+                    <CTAButton
+                      onClick={handleSendInvite}
+                      variant="outline"
+                      size="sm"
+                      isLoading={inviteSending}
+                      loadingText="Sending..."
+                    >
+                      Send Invite
+                    </CTAButton>
+                  </Flex>
+                  <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+                    Up to 5 invites per 24-hour period so nothing gets spammy.
+                    {invitesRemaining !== null && (
+                      <> ({invitesRemaining} left today.)</>
+                    )}
+                  </Text>
+                  {inviteMessage && (
+                    <Text
+                      fontSize="xs"
+                      fontWeight="400"
+                      color={inviteMessage.kind === 'error' ? 'red.500' : 'green.600'}
+                    >
+                      {inviteMessage.text}
+                    </Text>
+                  )}
+                </VStack>
+
+                {/* Manual password + management controls. The controls
+                    (rotate, disable, set custom) live here — attached
+                    to the password itself — instead of being their own
+                    prominent block at the top of the section, so the
+                    share-flow reads as the primary purpose. */}
+                <VStack w="100%" spacing={2} align="stretch">
+                  <Text fontSize="xs" color="gray.500" fontWeight="400" lineHeight="1.6">
+                    Or go to <Text as="span" fontWeight="500" color="gray.700">vero.photography/portal/pass</Text> and enter this password:
+                  </Text>
+                  <Flex
+                    align="center"
+                    gap={2}
+                    bg="white"
+                    border="1px solid"
+                    borderColor="gray.200"
+                    borderRadius="sm"
+                    px={3}
+                    py={2}
+                  >
+                    <Text
+                      fontSize="sm"
+                      color="gray.800"
+                      fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+                      fontWeight="500"
+                      flex="1"
+                      minW={0}
+                      textAlign="left"
+                      letterSpacing="0.05em"
+                    >
+                      {data.gallery_password}
+                    </Text>
+                    <Box
+                      as="button"
+                      type="button"
+                      onClick={handleCopy}
+                      aria-label="Copy password"
+                      p={1.5}
+                      borderRadius="sm"
+                      color="gray.500"
+                      cursor="pointer"
+                      _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+                      sx={{ WebkitTapHighlightColor: 'transparent' }}
+                    >
+                      <Icon as={gpCopied ? FaCheck : FaCopy} boxSize={3} />
+                    </Box>
+                  </Flex>
+
+                  {/* Password management row */}
+                  <HStack spacing={2} pt={2} flexWrap="wrap" justify="flex-start">
+                    <CTAButton
+                      onClick={() => callGalleryPass({ action: 'rotate' })}
+                      variant="outline"
+                      size="sm"
+                      icon={FaSync}
+                      isLoading={gpUpdating}
+                    >
+                      Rotate
+                    </CTAButton>
+                    <CTAButton
+                      onClick={() => setGpCustomOpen((open) => !open)}
+                      variant="outline"
+                      size="sm"
+                      isDisabled={gpUpdating}
+                    >
+                      {gpCustomOpen ? 'Cancel' : 'Set custom'}
+                    </CTAButton>
+                    <CTAButton
+                      onClick={() => callGalleryPass({ action: 'disable' })}
+                      variant="outline"
+                      size="sm"
+                      isLoading={gpUpdating}
+                    >
+                      Disable sharing
+                    </CTAButton>
+                  </HStack>
+
+                  {gpCustomOpen && (
+                    <Flex
+                      gap={2}
+                      pt={3}
+                      direction={{ base: 'column', sm: 'row' }}
+                    >
+                      <Input
+                        value={gpCustomValue}
+                        onChange={(e) => setGpCustomValue(e.target.value.toUpperCase())}
+                        placeholder="ABCD1234"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        h="40px"
+                        bg="white"
+                        fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+                        fontSize="sm"
+                        letterSpacing="0.05em"
+                        _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                      />
+                      <CTAButton
+                        onClick={handleSetCustom}
+                        variant="solid"
+                        size="sm"
+                        isLoading={gpUpdating}
+                        loadingText="Saving..."
+                      >
+                        Save
+                      </CTAButton>
+                    </Flex>
+                  )}
+
+                  {gpError && (
+                    <Text fontSize="xs" color="red.500" fontWeight="400" pt={2}>
+                      {gpError}
+                    </Text>
+                  )}
+                </VStack>
+              </Box>
+            </>
           )}
         </VStack>
       </Box>

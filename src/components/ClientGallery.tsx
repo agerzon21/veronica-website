@@ -1261,7 +1261,9 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
         </Box>
 
         {/* Secondary paths — visually demoted so they read as "in case
-            you need it," not as equal alternatives. */}
+            you need it," not as equal alternatives. Email above manual
+            password because "send them the link" is a much more common
+            path than "read a password to someone over the phone." */}
         <Box w="100%" pt={2}>
           <Flex align="center" gap={3} mb={5}>
             <Box flex={1} h="1px" bg="gray.200" />
@@ -1278,54 +1280,10 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
             <Box flex={1} h="1px" bg="gray.200" />
           </Flex>
 
-          {/* Plain password fallback */}
+          {/* Email invite */}
           <VStack w="100%" spacing={2} align="stretch" mb={6}>
             <Text fontSize="xs" color="gray.500" fontWeight="400" lineHeight="1.6">
-              Go to <Text as="span" fontWeight="500" color="gray.700">vero.photography/portal/pass</Text> and enter this password:
-            </Text>
-            <Flex
-              align="center"
-              gap={2}
-              bg="gray.50"
-              border="1px solid"
-              borderColor="gray.200"
-              borderRadius="sm"
-              px={3}
-              py={2}
-            >
-              <Text
-                fontSize="sm"
-                color="gray.800"
-                fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
-                fontWeight="500"
-                flex="1"
-                minW={0}
-                textAlign="left"
-                letterSpacing="0.05em"
-              >
-                {galleryPassword}
-              </Text>
-              <Box
-                as="button"
-                type="button"
-                onClick={() => copy(galleryPassword, setPwCopied)}
-                aria-label="Copy password"
-                p={1.5}
-                borderRadius="sm"
-                color="gray.500"
-                cursor="pointer"
-                _hover={{ color: '#c9a96e', bg: 'gray.100' }}
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <Icon as={pwCopied ? FaCheck : FaCopy} boxSize={3} />
-              </Box>
-            </Flex>
-          </VStack>
-
-          {/* Email invite */}
-          <VStack w="100%" spacing={2} align="stretch">
-            <Text fontSize="xs" color="gray.500" fontWeight="400" lineHeight="1.6">
-              Or have us email the one-click link:
+              Have us email the one-click link:
             </Text>
             <Flex gap={2} direction={{ base: 'column', sm: 'row' }}>
               <Input
@@ -1366,6 +1324,52 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
                 {inviteMessage.text}
               </Text>
             )}
+          </VStack>
+
+          {/* Plain password fallback — last, least-common path (used
+              when someone can't click the link but can type a password
+              read aloud over a call). */}
+          <VStack w="100%" spacing={2} align="stretch">
+            <Text fontSize="xs" color="gray.500" fontWeight="400" lineHeight="1.6">
+              Or go to <Text as="span" fontWeight="500" color="gray.700">vero.photography/portal/pass</Text> and enter this password:
+            </Text>
+            <Flex
+              align="center"
+              gap={2}
+              bg="gray.50"
+              border="1px solid"
+              borderColor="gray.200"
+              borderRadius="sm"
+              px={3}
+              py={2}
+            >
+              <Text
+                fontSize="sm"
+                color="gray.800"
+                fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+                fontWeight="500"
+                flex="1"
+                minW={0}
+                textAlign="left"
+                letterSpacing="0.05em"
+              >
+                {galleryPassword}
+              </Text>
+              <Box
+                as="button"
+                type="button"
+                onClick={() => copy(galleryPassword, setPwCopied)}
+                aria-label="Copy password"
+                p={1.5}
+                borderRadius="sm"
+                color="gray.500"
+                cursor="pointer"
+                _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <Icon as={pwCopied ? FaCheck : FaCopy} boxSize={3} />
+              </Box>
+            </Flex>
           </VStack>
         </Box>
       </VStack>
