@@ -145,6 +145,30 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       ? data.contract_total_amount - data.paid_to_date
       : null;
 
+  // Portal-nav / gallery-nav coordination. When the photos section
+  // enters the viewport, the portal-level top nav hides on desktop so
+  // the gallery's own sticky section-nav can take over that space
+  // without stacking. The ref is attached to the photos section
+  // wrapper below, and IntersectionObserver flips the state.
+  const photosSectionRef = useRef<HTMLDivElement | null>(null);
+  const [isPhotosInView, setIsPhotosInView] = useState(false);
+  useEffect(() => {
+    const el = photosSectionRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsPhotosInView(entry.isIntersecting),
+      {
+        // Trigger when the section's top has scrolled past the sticky
+        // nav zone (Navbar 72px + portal nav ~48px = ~120px). Below
+        // that means "user is now looking at photos."
+        rootMargin: '-120px 0px -20% 0px',
+        threshold: 0,
+      },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // ─── Gallery Pass management state ───
   const toast = useToast();
   const [gpUpdating, setGpUpdating] = useState(false);
@@ -426,26 +450,46 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         }}
       />
 
+      {/* Portal-level top sticky nav (jump between Contract / Balance /
+          Photos / Share / Password). Auto-hides on desktop when the
+          user scrolls into the photos section — the gallery's own
+          section-nav (also sticky top:72px) takes over that space so
+          the two don't stack. On mobile, this stays visible even in
+          photos since the gallery doesn't have its own top nav there
+          (the sticky bottom bar's Jump drawer handles gallery-section
+          navigation on mobile). */}
+      <PortalTopNav
+        hasContract={data.contract_status !== 'none' && data.contract_status !== 'void'}
+        hasBalance={data.contract_total_amount !== null}
+        isPhotosInView={isPhotosInView}
+      />
+
       {/* ─── Contract section ───
           Pending: shows the consent checkbox + signature pad + sign button.
           Signed: shows the date + a download link to the signed PDF (served
           via Drive's standard download endpoint).
           Other (none/void): empty.
+
+          Wrapped with id + scroll-margin so the portal top nav can
+          smooth-scroll here and land below the fixed Navbar (72px) +
+          the sticky portal-nav (~48px).
       */}
-      {data.contract_status === 'pending' && (
-        <ContractSignSection
-          credentials={credentials}
-          contractBody={data.contract_body}
-          onSigned={(updates) => onDataUpdate({ ...data, ...updates })}
-        />
-      )}
-      {data.contract_status === 'signed' && data.contract_signed_at && (
-        <SignedContractSection
-          credentials={credentials}
-          signedAt={data.contract_signed_at}
-          pdfAvailable={data.contract_signed_pdf_available}
-        />
-      )}
+      <Box id="contract-section" sx={{ scrollMarginTop: '130px' }}>
+        {data.contract_status === 'pending' && (
+          <ContractSignSection
+            credentials={credentials}
+            contractBody={data.contract_body}
+            onSigned={(updates) => onDataUpdate({ ...data, ...updates })}
+          />
+        )}
+        {data.contract_status === 'signed' && data.contract_signed_at && (
+          <SignedContractSection
+            credentials={credentials}
+            signedAt={data.contract_signed_at}
+            pdfAvailable={data.contract_signed_pdf_available}
+          />
+        )}
+      </Box>
 
       {/* Next-steps panel: lives between the signed contract status and
           the balance section. Surfaces what the client owes RIGHT NOW.
@@ -464,7 +508,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       {/* ─── Payment / Balance section — Phase 3 fills this in fully.
             For now, surface the totals so it's visible end-to-end. ─── */}
       {data.contract_total_amount !== null && remaining !== null && (
-        <Box py={{ base: 10, md: 12 }} px={6}>
+        <Box id="balance-section" py={{ base: 10, md: 12 }} px={6} sx={{ scrollMarginTop: '130px' }}>
           <VStack spacing={4} maxW="540px" mx="auto" textAlign="center">
             <Text
               fontSize="xs"
@@ -660,36 +704,61 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       {/* ─── Photos ───
           Three states, kept mutually exclusive:
           1) No Drive URL set OR Drive folder empty with no listing error →
-             "photos will appear once they're ready" placeholder. No
-             Drive buttons (nothing to link to yet).
+             "photos will appear once they're ready" placeholder with a
+             proper section header so it doesn't look like empty space
+             the client can't identify.
           2) Drive URL set, listing failed (warning) → render the gallery
              (the failure-mode UI inside shows the "previews aren't
              loading" message + a "View in Drive" button so the client
              still has a path to their photos).
-          3) Drive URL set, files present → normal gallery. */}
-      {(() => {
-        const hasFiles =
-          data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0);
-        const ready = data.drive_url && (hasFiles || data.warning);
-        if (ready) {
+          3) Drive URL set, files present → normal gallery.
+
+          Wrapped with id + ref so:
+            - the portal top nav can smooth-scroll here (id)
+            - an IntersectionObserver knows when the user is inside this
+              section, which controls (a) hiding the portal top nav on
+              desktop and (b) whether the gallery's own sticky bottom bar
+              is visible (only when photos are actually in view). */}
+      <Box
+        id="photos-section"
+        ref={photosSectionRef}
+        sx={{ scrollMarginTop: '90px' }}
+      >
+        {(() => {
+          const hasFiles =
+            data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0);
+          const ready = data.drive_url && (hasFiles || data.warning);
+          if (ready) {
+            return (
+              <ClientGallery
+                clientName={data.client_name}
+                driveUrl={data.drive_url!}
+                rootFiles={data.rootFiles}
+                sections={data.sections}
+                warning={data.warning}
+              />
+            );
+          }
           return (
-            <ClientGallery
-              clientName={data.client_name}
-              driveUrl={data.drive_url!}
-              rootFiles={data.rootFiles}
-              sections={data.sections}
-              warning={data.warning}
-            />
+            <Box py={{ base: 14, md: 20 }} px={6} textAlign="center" bg="white">
+              <Text
+                fontSize="xs"
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing="0.25em"
+                color="#c9a96e"
+                mb={3}
+              >
+                Your Photos
+              </Text>
+              <Box w="30px" h="1px" bg="#c9a96e" mx="auto" mb={5} />
+              <Text fontSize="sm" color="gray.500" fontWeight="300" lineHeight="1.7">
+                Your gallery will appear here once Veronika delivers your photos.
+              </Text>
+            </Box>
           );
-        }
-        return (
-          <Box py={20} px={6} textAlign="center" bg="white">
-            <Text fontSize="sm" color="gray.500" fontWeight="300">
-              Your photos will appear here once they're ready.
-            </Text>
-          </Box>
-        );
-      })()}
+        })()}
+      </Box>
 
       {/* ─── Gallery Pass management ───
           The client owns this control: rotate, disable entirely, or set a
@@ -981,11 +1050,14 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           only touch this once. Ordered after Gallery Pass so the
           "different from your Gallery Pass above" cue makes sense
           visually — the two are easy to conflate and we should not
-          leave any ambiguity about which is which. */}
-      <ChangePasswordSection
-        credentials={credentials}
-        onChanged={onPasswordChanged}
-      />
+          leave any ambiguity about which is which.
+          id wrapper is the portal top nav's scroll target. */}
+      <Box id="password-section" sx={{ scrollMarginTop: '130px' }}>
+        <ChangePasswordSection
+          credentials={credentials}
+          onChanged={onPasswordChanged}
+        />
+      </Box>
     </Box>
   );
 };
@@ -1952,6 +2024,160 @@ function ChangePasswordSection({
           </Text>
         )}
       </VStack>
+    </Box>
+  );
+}
+
+/**
+ * Portal-level top sticky nav. Horizontal pill bar under the fixed
+ * Navbar (72px). Jumps between the major portal sections (Contract /
+ * Balance / Photos / Share / Password), highlighting whichever is
+ * currently at the top of the viewport via IntersectionObserver.
+ *
+ * Coordination with the gallery's own section-nav (which is desktop-
+ * only, position: sticky top:72px): when the user scrolls into the
+ * Photos section, this portal-nav hides on desktop so the two nav
+ * strips don't stack. Mobile keeps this visible even in Photos
+ * because the gallery has no top nav there — its Jump drawer handles
+ * gallery-section navigation instead.
+ */
+interface PortalTopNavProps {
+  hasContract: boolean;
+  hasBalance: boolean;
+  isPhotosInView: boolean;
+}
+
+function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavProps) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
+
+  // Build the list of sections that actually exist on this portal.
+  // Photos, Share, and Password always exist; Contract and Balance
+  // are conditional.
+  const pills: { id: string; label: string }[] = [];
+  if (hasContract) pills.push({ id: 'contract-section', label: 'Contract' });
+  if (hasBalance) pills.push({ id: 'balance-section', label: 'Balance' });
+  pills.push({ id: 'photos-section', label: 'Photos' });
+  pills.push({ id: 'gallery-share-section', label: 'Share' });
+  pills.push({ id: 'password-section', label: 'Password' });
+
+  // Track which portal section is currently at the top. Same
+  // IntersectionObserver pattern as the gallery's TopSectionNav —
+  // topmost intersecting entry wins.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length === 0) return;
+        const topmost = visible.reduce((best, e) =>
+          e.boundingClientRect.top < best.boundingClientRect.top ? e : best,
+        );
+        setActiveId(topmost.target.id);
+      },
+      { rootMargin: '-140px 0px -55% 0px', threshold: 0 },
+    );
+    pills.forEach((p) => {
+      const el = document.getElementById(p.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [pills.length]);
+
+  // Keep the active pill visually in view within the horizontal strip.
+  useEffect(() => {
+    if (!activeId) return;
+    const pill = pillRefs.current[activeId];
+    if (pill && 'scrollIntoView' in pill) {
+      pill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [activeId]);
+
+  const handleClick = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Fewer than 2 pills = no navigation needed (can't "jump between"
+  // one section). Skip render entirely rather than showing a strip
+  // with a single dead pill.
+  if (pills.length < 2) return null;
+
+  return (
+    <Box
+      // Hide on desktop when user is inside the photos section — the
+      // gallery's own section-nav (position: sticky top:72px, desktop-
+      // only) takes over that same visual slot. Mobile keeps this
+      // visible even in Photos since there's no gallery top nav there.
+      display={{ base: 'block', md: isPhotosInView ? 'none' : 'block' }}
+      position="sticky"
+      top="72px"
+      zIndex={10}
+      bg="rgba(255, 255, 255, 0.94)"
+      backdropFilter="blur(10px)"
+      py={3}
+    >
+      <Box
+        ref={scrollRef}
+        overflowX="auto"
+        sx={{
+          maskImage:
+            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+          WebkitMaskImage:
+            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+          '&::-webkit-scrollbar': { display: 'none' },
+          scrollbarWidth: 'none',
+        }}
+      >
+        <Flex
+          gap={2}
+          px={{ base: 8, md: 12 }}
+          justify={{ base: 'flex-start', md: 'center' }}
+          minW="max-content"
+          align="center"
+        >
+          {pills.map((p) => {
+            const active = activeId === p.id;
+            return (
+              <Box
+                key={p.id}
+                ref={(el: HTMLDivElement | null) => {
+                  pillRefs.current[p.id] = el;
+                }}
+                as="button"
+                type="button"
+                onClick={() => handleClick(p.id)}
+                flexShrink={0}
+                px={{ base: 4, md: 5 }}
+                py={2}
+                fontSize="2xs"
+                fontWeight="500"
+                letterSpacing="0.2em"
+                textTransform="uppercase"
+                color={active ? 'white' : 'gray.700'}
+                bg={active ? '#c9a96e' : 'transparent'}
+                border="1px solid"
+                borderColor={active ? '#c9a96e' : 'gray.200'}
+                borderRadius="full"
+                transition="all 0.25s ease"
+                cursor="pointer"
+                _hover={
+                  active
+                    ? { bg: '#b8964f', borderColor: '#b8964f' }
+                    : {
+                        borderColor: '#c9a96e',
+                        color: '#c9a96e',
+                        bg: 'rgba(201, 169, 110, 0.06)',
+                      }
+                }
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                {p.label}
+              </Box>
+            );
+          })}
+        </Flex>
+      </Box>
     </Box>
   );
 }

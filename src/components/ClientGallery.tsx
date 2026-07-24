@@ -246,6 +246,25 @@ const ClientGallery = ({
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
 
+  // Watch whether ANY part of the gallery is in the viewport. Used to
+  // gate the sticky bottom action bar (Download All + Share): it only
+  // shows when the client is actually looking at the gallery, not when
+  // they're up reading their contract or down at the login-password
+  // section in the full portal. On /portal/pass the whole page is the
+  // gallery so this is always true — no visible change there.
+  const galleryRootRef = useRef<HTMLDivElement | null>(null);
+  const [isGalleryVisible, setIsGalleryVisible] = useState(false);
+  useEffect(() => {
+    const el = galleryRootRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsGalleryVisible(entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const scrollToSection = useCallback((id: string) => {
     const el = sectionRefs.current[id];
     if (el) {
@@ -283,7 +302,7 @@ const ClientGallery = ({
   const selected = selectedIndex !== null ? allFiles[selectedIndex] : null;
 
   return (
-    <Box bg="white" minH="100vh" pt="72px">
+    <Box ref={galleryRootRef} bg="white" minH="100vh" pt="72px">
       {/* Header */}
       <Box px={{ base: 4, md: 8 }} py={{ base: 8, md: 12 }} textAlign="center">
         <Text
@@ -590,10 +609,14 @@ const ClientGallery = ({
 
       {/* Sticky bottom action bar. Auto-hides while the photo modal is
           open (selectedIndex non-null) so it doesn't float over the
-          modal's controls. Desktop no longer has a right-side rail
-          timeline — the top sticky section nav (above) is the desktop
-          navigation. Mobile still gets the "Jump" drawer via this bar. */}
-      {selectedIndex === null && totalCount > 0 && (
+          modal's controls. Also hides when the gallery is scrolled out
+          of view — matters in the full portal, where without this the
+          bar would linger over the contract / balance / password
+          sections and look out of context. Desktop no longer has a
+          right-side rail timeline — the top sticky section nav (above)
+          is the desktop navigation. Mobile still gets the "Jump"
+          drawer via this bar. */}
+      {selectedIndex === null && totalCount > 0 && isGalleryVisible && (
         <GalleryActionBar
           driveUrl={driveUrl}
           sections={sections}
