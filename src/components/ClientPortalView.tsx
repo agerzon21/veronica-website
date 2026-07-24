@@ -479,35 +479,45 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         <Text fontSize="sm" color="gray.500" fontWeight="300" mt={2}>
           {data.client_email}
         </Text>
+        {/* Refresh button — outlined pill (was a subtle text link, but
+            clients missed it entirely). Draws the eye enough that
+            "tap this after Veronika confirms a payment" is a
+            discoverable next action, without shouting. */}
         <Box
           as="button"
           type="button"
           onClick={handleRefresh}
           disabled={refreshing}
-          mt={3}
+          mt={4}
           display="inline-flex"
           alignItems="center"
-          gap={1.5}
+          gap={2}
           fontSize="xs"
+          fontWeight="500"
           letterSpacing="0.2em"
           textTransform="uppercase"
-          color="gray.500"
+          px={4}
+          py={2}
+          color="gray.600"
           bg="transparent"
-          border="none"
+          border="1px solid"
+          borderColor="gray.300"
+          borderRadius="full"
           cursor={refreshing ? 'wait' : 'pointer'}
-          _hover={{ color: '#c9a96e' }}
+          transition="all 0.2s"
+          _hover={{ color: '#c9a96e', borderColor: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
           <Icon
             as={FaSync}
-            boxSize={2.5}
+            boxSize={3}
             sx={
               refreshing
                 ? { animation: 'spin 1s linear infinite' }
                 : undefined
             }
           />
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {refreshing ? 'Refreshing…' : 'Refresh Portal'}
         </Box>
         {/* Update-available notice — surfaces when Refresh detected a
             newer build. Non-blocking; the client keeps their session
@@ -552,11 +562,19 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           </Flex>
         )}
       </Box>
-      {/* Keyframes for the refresh spinner */}
+      {/* Keyframes for the refresh spinner + the "Next Steps" pill's
+          urgency dot pulse. Both are page-global animations that need
+          to exist somewhere in the DOM. */}
       <Box
         as="style"
         dangerouslySetInnerHTML={{
-          __html: '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }',
+          __html: `
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            @keyframes pulseUrgent {
+              0%, 100% { opacity: 1; transform: scale(1); }
+              50% { opacity: 0.55; transform: scale(1.25); }
+            }
+          `,
         }}
       />
 
@@ -1306,14 +1324,18 @@ function NextStepsPanel({
   retainer: number | null;
   paidToDate: number;
 }) {
-  // Only show after signing, and only when there's something owed.
+  // Only meaningful after the contract is signed. Before that,
+  // "next step" IS the contract itself and there's already a
+  // dedicated section for it.
   if (contractStatus !== 'signed' || total === null) return null;
-  if (paidToDate >= total) return null;
 
   const retainerOutstanding = retainer !== null && retainer > 0 && paidToDate < retainer;
   const retainerToSend = retainerOutstanding ? retainer - paidToDate : 0;
   const balanceOutstanding = !retainerOutstanding && paidToDate < total;
   const balanceToSend = balanceOutstanding ? total - paidToDate : 0;
+  const fullyPaid = !retainerOutstanding && !balanceOutstanding;
+
+  const sectionLabel = fullyPaid ? 'All Set' : 'Next Step';
 
   return (
     <Box
@@ -1327,50 +1349,159 @@ function NextStepsPanel({
       <VStack maxW="560px" mx="auto" spacing={5}>
         <VStack spacing={2}>
           <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
-            Next Step
+            {sectionLabel}
           </Text>
           <Box w="30px" h="1px" bg="#c9a96e" />
         </VStack>
 
         {retainerOutstanding ? (
-          <VStack spacing={3} textAlign="center">
-            <Text fontSize="lg" color="gray.800" fontWeight="400">
-              Send your retainer of <strong>${retainerToSend.toFixed(0)}</strong> to reserve the date.
+          <>
+            <VStack spacing={3} textAlign="center">
+              <Text fontSize="lg" color="gray.800" fontWeight="400">
+                Send your retainer of <strong>${retainerToSend.toFixed(0)}</strong> to reserve the date.
+              </Text>
+              <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
+                Your contract is signed, but per the agreement the event date isn't officially booked until the retainer arrives. Send it through any of the methods below — note "retainer" in the comments so Veronika can match it up.
+              </Text>
+            </VStack>
+
+            <PaymentMethodsStack />
+
+            <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
+              Once you've sent it, reply to this booking's email or message Veronika so she can confirm receipt. <Text as="span" fontWeight="500" color="gray.700">If she's already confirmed and this page hasn't updated, tap "Refresh Portal" up top.</Text>
             </Text>
-            <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
-              Your contract is signed, but per the agreement the event date isn't officially booked until the retainer arrives. You can send it through any of the methods below — note "retainer" in the comments so Veronika can match it up.
-            </Text>
-          </VStack>
+          </>
+        ) : balanceOutstanding ? (
+          <>
+            {/* Celebrate the retainer being received — this section
+                exists specifically because the "you already did the
+                urgent thing" moment was previously invisible; users
+                saw "next step: pay balance" and thought they were
+                behind on everything. Green + checkmark makes clear
+                the urgent step is DONE. */}
+            <Flex
+              w="100%"
+              align="center"
+              gap={3}
+              bg="green.50"
+              border="1px solid"
+              borderColor="green.200"
+              borderRadius="md"
+              px={4}
+              py={3}
+            >
+              <Text fontSize="lg" role="img" aria-hidden>✅</Text>
+              <Text fontSize="sm" color="green.700" fontWeight="500" lineHeight="1.5">
+                Retainer received — your date is reserved. The rest can wait until closer to the event.
+              </Text>
+            </Flex>
+
+            <VStack spacing={2} textAlign="center">
+              <Text fontSize="lg" color="gray.800" fontWeight="400">
+                Remaining balance: <strong>${balanceToSend.toFixed(0)}</strong>
+              </Text>
+            </VStack>
+
+            {/* The actual clause from the contract, restated here so
+                clients don't have to dig back into the signed PDF to
+                figure out when the balance is due. */}
+            <Box
+              w="100%"
+              bg="white"
+              border="1px solid"
+              borderColor="#e8d9a8"
+              borderRadius="md"
+              px={5}
+              py={4}
+            >
+              <Text fontSize="2xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.2em" color="#c9a96e" mb={2}>
+                Per your contract
+              </Text>
+              <Text fontSize="sm" color="gray.700" lineHeight="1.7" fontStyle="italic">
+                The remaining balance is due within the payment window specified in your contract (after the event date). Full payment must be received before delivery of any images.
+              </Text>
+            </Box>
+
+            <PaymentMethodsStack />
+
+            <VStack spacing={2} maxW="440px" textAlign="center">
+              <Text fontSize="xs" color="gray.600" fontWeight="400" lineHeight="1.7">
+                <Text as="span" fontWeight="500" color="gray.700">Cash</Text> is also accepted on the day of the event.
+              </Text>
+              <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.7">
+                If your contract's Additional Notes section specifies different payment terms for this booking, those take precedence over the standard schedule above.
+              </Text>
+              <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.7">
+                Once you've sent payment, message Veronika so she can confirm. <Text as="span" fontWeight="500" color="gray.700">If she's already confirmed and this page hasn't updated, tap "Refresh Portal" up top.</Text>
+              </Text>
+            </VStack>
+          </>
         ) : (
-          <VStack spacing={3} textAlign="center">
-            <Text fontSize="lg" color="gray.800" fontWeight="400">
-              Remaining balance: <strong>${balanceToSend.toFixed(0)}</strong>
-            </Text>
-            <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
-              Your retainer's received and your date's reserved. The remaining balance is due per the contract — same methods below.
-            </Text>
-          </VStack>
+          /* Fully paid — this whole section becomes an informational
+             "here's what happens next" panel instead of a to-do.
+             Signals warmly that everything on the client's side is
+             done and photos are on the way, so the empty Photos
+             placeholder below doesn't read as "did I miss a step?" */
+          <>
+            <Flex
+              w="100%"
+              align="center"
+              gap={3}
+              bg="green.50"
+              border="1px solid"
+              borderColor="green.200"
+              borderRadius="md"
+              px={4}
+              py={4}
+            >
+              <Text fontSize="xl" role="img" aria-hidden>🎉</Text>
+              <VStack align="start" spacing={0.5}>
+                <Text fontSize="sm" color="green.700" fontWeight="600" lineHeight="1.4">
+                  You're fully paid up — thank you!
+                </Text>
+                <Text fontSize="xs" color="green.700" fontWeight="400" lineHeight="1.5">
+                  Nothing else to do on your end.
+                </Text>
+              </VStack>
+            </Flex>
+
+            <VStack spacing={3} textAlign="center" maxW="440px">
+              <Text fontSize="sm" color="gray.700" fontWeight="400" lineHeight="1.7">
+                Your gallery will be delivered per your contract's timeline — typically within a few weeks after the event.
+              </Text>
+              <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
+                Keep an eye on your email — you'll get a note from Veronika the moment it's ready, and the Photos section below will fill in with your images.
+              </Text>
+              <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" pt={2}>
+                Delivery already happened but photos aren't showing here yet? Tap <Text as="span" fontWeight="500" color="gray.700">"Refresh Portal"</Text> up top.
+              </Text>
+            </VStack>
+          </>
         )}
-
-        <VStack spacing={2} w="100%" maxW="380px">
-          <PaymentMethodRow label="Zelle" value={PAYMENT_HANDLES.zelle} />
-          <PaymentMethodRow
-            label="Venmo"
-            value={PAYMENT_HANDLES.venmo}
-            href={`https://venmo.com/u/${PAYMENT_HANDLES.venmo.replace(/^@/, '')}`}
-          />
-          <PaymentMethodRow
-            label="Cash App"
-            value={PAYMENT_HANDLES.cashapp}
-            href={`https://cash.app/${PAYMENT_HANDLES.cashapp}`}
-          />
-        </VStack>
-
-        <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
-          Once you've sent it, reply to this booking's email or message Veronika so she can confirm receipt and update your portal.
-        </Text>
       </VStack>
     </Box>
+  );
+}
+
+// Small helper — the three payment-method rows show up in both the
+// retainer and balance flows, and were duplicated inline. Extracted
+// so future tweaks (adding a method, changing handles, etc) live in
+// one place instead of two.
+function PaymentMethodsStack() {
+  return (
+    <VStack spacing={2} w="100%" maxW="380px">
+      <PaymentMethodRow label="Zelle" value={PAYMENT_HANDLES.zelle} />
+      <PaymentMethodRow
+        label="Venmo"
+        value={PAYMENT_HANDLES.venmo}
+        href={`https://venmo.com/u/${PAYMENT_HANDLES.venmo.replace(/^@/, '')}`}
+      />
+      <PaymentMethodRow
+        label="Cash App"
+        value={PAYMENT_HANDLES.cashapp}
+        href={`https://cash.app/${PAYMENT_HANDLES.cashapp}`}
+      />
+    </VStack>
   );
 }
 
@@ -2424,12 +2555,18 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
           >
           {pills.map((p) => {
             const active = activeId === p.id;
-            // Emphasized pills (Next Steps) are always gold-filled to
-            // draw the eye — signals urgency about an unpaid retainer
-            // or balance. When emphasized AND active, we keep the
-            // solid gold but darken slightly on hover to still give
-            // click feedback.
-            const emphasized = p.emphasized;
+            // Emphasized pills (Next Steps) get an outlined-with-red-
+            // border treatment + a small pulsing red dot before the
+            // label. This signals urgency without pretending to be
+            // "selected" (which is what always-solid-gold did — made
+            // the portal look broken to users who saw the pill lit
+            // even before they'd scrolled anywhere).
+            //
+            // When emphasized AND active: fills solid gold like all
+            // other active pills. So "active" is one consistent look
+            // regardless of pill type — users can trust that if any
+            // pill is filled gold, it's the current section.
+            const emphasized = p.emphasized && !active;
             return (
               <Box
                 key={p.id}
@@ -2440,25 +2577,36 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
                 type="button"
                 onClick={() => handleClick(p.id)}
                 flexShrink={0}
+                display="inline-flex"
+                alignItems="center"
+                gap={2}
                 px={{ base: 4, md: 5 }}
                 py={2}
                 fontSize="2xs"
                 fontWeight={emphasized ? '600' : '500'}
                 letterSpacing="0.2em"
                 textTransform="uppercase"
-                color={active || emphasized ? 'white' : 'gray.700'}
-                bg={active || emphasized ? '#c9a96e' : 'transparent'}
+                color={active ? 'white' : emphasized ? 'red.500' : 'gray.700'}
+                bg={active ? '#c9a96e' : 'transparent'}
                 border="1px solid"
-                borderColor={active || emphasized ? '#c9a96e' : 'gray.200'}
+                borderColor={
+                  active
+                    ? '#c9a96e'
+                    : emphasized
+                    ? 'red.400'
+                    : 'gray.200'
+                }
                 borderRadius="full"
                 transition="all 0.25s ease"
                 cursor="pointer"
-                boxShadow={
-                  emphasized ? '0 2px 8px rgba(201, 169, 110, 0.35)' : 'none'
-                }
                 _hover={
-                  active || emphasized
+                  active
                     ? { bg: '#b8964f', borderColor: '#b8964f' }
+                    : emphasized
+                    ? {
+                        borderColor: 'red.500',
+                        bg: 'rgba(229, 62, 62, 0.06)',
+                      }
                     : {
                         borderColor: '#c9a96e',
                         color: '#c9a96e',
@@ -2467,6 +2615,18 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
                 }
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
+                {emphasized && (
+                  <Box
+                    as="span"
+                    w="6px"
+                    h="6px"
+                    borderRadius="full"
+                    bg="red.500"
+                    // Subtle pulse to draw the eye without being obnoxious.
+                    // Uses keyframes defined at the top of ClientPortalView.
+                    sx={{ animation: 'pulseUrgent 1.8s ease-in-out infinite' }}
+                  />
+                )}
                 {p.label}
               </Box>
             );
