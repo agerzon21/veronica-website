@@ -1,6 +1,6 @@
 import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast, Collapse } from '@chakra-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FaCopy, FaSync, FaCheck, FaUndo } from 'react-icons/fa';
+import { FaCopy, FaSync, FaCheck, FaUndo, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
 import ClientGallery, { type DriveFile, type FolderSection } from './ClientGallery';
@@ -809,6 +809,12 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       <Box
         id="photos-section"
         ref={photosSectionRef}
+        // gray.50 to keep the alternating-stripe rhythm going:
+        //   Contract (gray) → Balance (white) → Photos (gray)
+        //   → Share (white) → Password (gray)
+        // ClientGallery's own root bg was changed to transparent so
+        // the wrapper controls the color here without conflict.
+        bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
         sx={{ scrollMarginTop: '90px' }}
@@ -835,7 +841,9 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
             );
           }
           return (
-            <Box py={{ base: 14, md: 20 }} px={6} textAlign="center" bg="gray.50">
+            /* Placeholder inherits gray.50 from the photos-section
+               wrapper — no explicit bg needed here. */
+            <Box py={{ base: 14, md: 20 }} px={6} textAlign="center">
               <Text
                 fontSize="xs"
                 fontWeight="500"
@@ -1157,6 +1165,10 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           id wrapper is the portal top nav's scroll target. */}
       <Box
         id="password-section"
+        // Alternation partner to Share (white) — this lands gray.
+        // ChangePasswordSection's own inner bg was removed so the
+        // wrapper's color shows through.
+        bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
         sx={{ scrollMarginTop: '130px' }}
@@ -2042,10 +2054,12 @@ function ChangePasswordSection({
     }
   };
 
-  // NOTE: borderTop lives on the section wrapper in the parent tree
-  // now (id="password-section"), so we don't double-border it here.
+  // NOTE: borderTop AND bg live on the section wrapper in the parent
+  // tree now (id="password-section"), so we don't double-border it
+  // here and we don't force white — inherits gray.50 from the
+  // wrapper for the alternating-stripe rhythm.
   return (
-    <Box bg="white" py={{ base: 10, md: 12 }} px={6}>
+    <Box py={{ base: 10, md: 12 }} px={6}>
       <VStack spacing={4} maxW="520px" mx="auto" textAlign="center">
         <Text
           fontSize="xs"
@@ -2162,6 +2176,33 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
 
+  // Overflow indicators. When the pill list is wider than the visible
+  // strip (common on mobile with 4-5 pills), users don't intuit that
+  // they can scroll horizontally. Fade masks alone weren't obvious
+  // enough — so we also show subtle tappable chevrons on whichever
+  // side has more content, and hide the one on the side you've
+  // scrolled all the way to.
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => {
+      setCanScrollLeft(el.scrollLeft > 4);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    };
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => {
+      el.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+    };
+  }, []);
+  const scrollBy = (delta: number) => {
+    scrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
+  };
+
   // Build the list of sections that actually exist on this portal.
   // Photos, Share, and Password always exist; Contract and Balance
   // are conditional.
@@ -2247,25 +2288,42 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
       backdropFilter="blur(10px)"
       py={3}
     >
-      <Box
-        ref={scrollRef}
-        overflowX="auto"
-        sx={{
-          maskImage:
-            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
-          WebkitMaskImage:
-            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
-          '&::-webkit-scrollbar': { display: 'none' },
-          scrollbarWidth: 'none',
-        }}
-      >
-        <Flex
-          gap={2}
-          px={{ base: 8, md: 12 }}
-          justify={{ base: 'flex-start', md: 'center' }}
-          minW="max-content"
-          align="center"
+      <Box position="relative">
+        {/* Overflow indicators — subtle tappable chevrons on each
+            side, visible only when there's content to scroll to that
+            side. Combined with the wider (44px) fade masks below,
+            makes the scrollability obvious on narrow phones where
+            the fade alone was too subtle to read as a "there's more"
+            cue. */}
+        <ScrollChevron
+          direction="left"
+          visible={canScrollLeft}
+          onClick={() => scrollBy(-200)}
+        />
+        <ScrollChevron
+          direction="right"
+          visible={canScrollRight}
+          onClick={() => scrollBy(200)}
+        />
+        <Box
+          ref={scrollRef}
+          overflowX="auto"
+          sx={{
+            maskImage:
+              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
+            WebkitMaskImage:
+              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
+            '&::-webkit-scrollbar': { display: 'none' },
+            scrollbarWidth: 'none',
+          }}
         >
+          <Flex
+            gap={2}
+            px={{ base: 8, md: 12 }}
+            justify={{ base: 'flex-start', md: 'center' }}
+            minW="max-content"
+            align="center"
+          >
           {pills.map((p) => {
             const active = activeId === p.id;
             return (
@@ -2306,8 +2364,60 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
               </Box>
             );
           })}
-        </Flex>
+          </Flex>
+        </Box>
       </Box>
+    </Box>
+  );
+}
+
+// Overflow scroll indicator for horizontal nav strips. Positioned
+// absolutely over the strip's left/right edges; shown only when
+// there's content in that direction. Tap-to-scroll for accessibility
+// (200px per tap covers roughly one pill on any screen size).
+function ScrollChevron({
+  direction,
+  visible,
+  onClick,
+}: {
+  direction: 'left' | 'right';
+  visible: boolean;
+  onClick: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      aria-label={direction === 'left' ? 'Scroll left' : 'Scroll right'}
+      position="absolute"
+      top="50%"
+      transform="translateY(-50%)"
+      {...(direction === 'left' ? { left: 1 } : { right: 1 })}
+      zIndex={2}
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      w="28px"
+      h="28px"
+      borderRadius="full"
+      bg="rgba(255, 255, 255, 0.9)"
+      backdropFilter="blur(6px)"
+      color="#c9a96e"
+      border="1px solid"
+      borderColor="rgba(201, 169, 110, 0.35)"
+      boxShadow="0 2px 6px rgba(0, 0, 0, 0.08)"
+      cursor="pointer"
+      transition="all 0.2s"
+      _hover={{
+        bg: '#c9a96e',
+        color: 'white',
+        borderColor: '#c9a96e',
+      }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Icon as={direction === 'left' ? FaChevronLeft : FaChevronRight} boxSize={2.5} />
     </Box>
   );
 }

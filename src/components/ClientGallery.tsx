@@ -16,7 +16,7 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronDown, FaListUl, FaHeart, FaRegHeart } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronDown, FaChevronLeft, FaChevronRight, FaListUl, FaHeart, FaRegHeart } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
@@ -389,7 +389,11 @@ const ClientGallery = ({
   const selected = selectedIndex !== null ? allFiles[selectedIndex] : null;
 
   return (
-    <Box ref={galleryRootRef} bg="white" minH="100vh" pt="72px">
+    // No explicit bg — the parent controls it. Inside ClientPortalView
+    // the photos-section wrapper is gray.50 for alternation. On the
+    // standalone /portal/pass route, the html/body theme default
+    // (white) shows through. Both look correct without hard-coding.
+    <Box ref={galleryRootRef} minH="100vh" pt="72px">
       {/* Header */}
       <Box px={{ base: 4, md: 8 }} py={{ base: 8, md: 12 }} textAlign="center">
         <Text
@@ -1157,6 +1161,32 @@ function TopSectionNav({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
 
+  // Overflow indicators — same pattern as PortalTopNav. Tappable
+  // chevrons on each side, visible only when there's content to
+  // scroll to that side. Combined with the fade masks below, makes
+  // horizontal scrollability obvious on galleries with many or
+  // long section names.
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => {
+      setCanScrollLeft(el.scrollLeft > 4);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    };
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => {
+      el.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+    };
+  }, [sections]);
+  const scrollBy = (delta: number) => {
+    scrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
+  };
+
   // Bookkeeping ref that mirrors scroll position, used inside the
   // IntersectionObserver callback to know whether to defer to
   // Top/Bottom rather than picking a section. A ref (not state) so
@@ -1255,31 +1285,44 @@ function TopSectionNav({
       backdropFilter="blur(10px)"
       py={3}
     >
-      <Box
-        ref={scrollRef}
-        overflowX="auto"
-        // Edge fade masks signal "scroll for more" when the pill list
-        // overflows. Applied always (looks polished either way); when
-        // content fits, the fade barely touches anything visible.
-        sx={{
-          maskImage:
-            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
-          WebkitMaskImage:
-            'linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
-          '&::-webkit-scrollbar': { display: 'none' },
-          scrollbarWidth: 'none',
-        }}
-      >
-        <Flex
-          gap={2}
-          // Generous horizontal padding so first/last pills sit within
-          // the "solid" (unfaded) part of the mask and never look cut
-          // off. Also centers the pill list on wide screens when the
-          // content is narrower than the viewport.
-          px={12}
-          justify="center"
-          minW="max-content"
-          align="center"
+      <Box position="relative">
+        {/* Overflow indicators — subtle tappable chevrons that appear
+            on whichever side has more content to scroll to. Combined
+            with the wider (44px) fade masks below, makes the strip
+            readably scrollable on narrow phones + long section-name
+            lists. */}
+        <ScrollChevron
+          direction="left"
+          visible={canScrollLeft}
+          onClick={() => scrollBy(-200)}
+        />
+        <ScrollChevron
+          direction="right"
+          visible={canScrollRight}
+          onClick={() => scrollBy(200)}
+        />
+        <Box
+          ref={scrollRef}
+          overflowX="auto"
+          sx={{
+            maskImage:
+              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
+            WebkitMaskImage:
+              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
+            '&::-webkit-scrollbar': { display: 'none' },
+            scrollbarWidth: 'none',
+          }}
+        >
+          <Flex
+            gap={2}
+            // Generous horizontal padding so first/last pills sit within
+            // the "solid" (unfaded) part of the mask and never look cut
+            // off. Also centers the pill list on wide screens when the
+            // content is narrower than the viewport.
+            px={12}
+            justify="center"
+            minW="max-content"
+            align="center"
         >
           <NavPill
             pillRef={(el) => {
@@ -1319,8 +1362,60 @@ function TopSectionNav({
             active={activeId === BOTTOM_ID}
             onClick={scrollToBottom}
           />
-        </Flex>
+          </Flex>
+        </Box>
       </Box>
+    </Box>
+  );
+}
+
+// Overflow scroll indicator. Shown on horizontal scroll strips
+// (TopSectionNav, PortalTopNav in ClientPortalView) only when the
+// content overflows in the given direction. Tap-to-scroll for
+// accessibility (200px per tap ≈ one pill on any screen).
+function ScrollChevron({
+  direction,
+  visible,
+  onClick,
+}: {
+  direction: 'left' | 'right';
+  visible: boolean;
+  onClick: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      aria-label={direction === 'left' ? 'Scroll left' : 'Scroll right'}
+      position="absolute"
+      top="50%"
+      transform="translateY(-50%)"
+      {...(direction === 'left' ? { left: 1 } : { right: 1 })}
+      zIndex={2}
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      w="28px"
+      h="28px"
+      borderRadius="full"
+      bg="rgba(255, 255, 255, 0.9)"
+      backdropFilter="blur(6px)"
+      color="#c9a96e"
+      border="1px solid"
+      borderColor="rgba(201, 169, 110, 0.35)"
+      boxShadow="0 2px 6px rgba(0, 0, 0, 0.08)"
+      cursor="pointer"
+      transition="all 0.2s"
+      _hover={{
+        bg: '#c9a96e',
+        color: 'white',
+        borderColor: '#c9a96e',
+      }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Icon as={direction === 'left' ? FaChevronLeft : FaChevronRight} boxSize={2.5} />
     </Box>
   );
 }
