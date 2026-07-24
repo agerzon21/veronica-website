@@ -199,15 +199,22 @@ const Portal = () => {
           <title>{galleryData.clientName ? `${galleryData.clientName} — Gallery` : 'Gallery'} | Vero Photography</title>
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
-        <ClientGallery
-          clientName={galleryData.clientName}
-          driveUrl={galleryData.driveUrl}
-          rootFiles={galleryData.rootFiles}
-          sections={galleryData.sections}
-          warning={galleryData.warning}
-          galleryPassword={galleryPassword.trim()}
-          expiresAt={galleryData.expiresAt}
-        />
+        {/* pt="72px" clears the fixed site Navbar on this standalone
+            route. ClientGallery itself no longer pads for Navbar so
+            it can also be embedded inside ClientPortalView (where the
+            portal wrapper already handles Navbar clearance) without
+            double-padding the photos section. */}
+        <Box pt="72px">
+          <ClientGallery
+            clientName={galleryData.clientName}
+            driveUrl={galleryData.driveUrl}
+            rootFiles={galleryData.rootFiles}
+            sections={galleryData.sections}
+            warning={galleryData.warning}
+            galleryPassword={galleryPassword.trim()}
+            expiresAt={galleryData.expiresAt}
+          />
+        </Box>
       </>
     );
   }

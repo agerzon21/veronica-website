@@ -19,6 +19,16 @@ export interface ClientPortalData {
   sections: FolderSection[];
   warning?: string;
 
+  // Session metadata — surfaced in the portal header so clients see
+  // what they booked without having to open the contract. Every field
+  // is nullable because older portals were created before we started
+  // storing them.
+  event_date: string | null;
+  session_type: string | null;
+  event_title: string | null;
+  event_location: string | null;
+  delivery_timeframe: string | null;
+
   // Contract — Phase 2
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
@@ -493,12 +503,19 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           id="portal-top-section" is the scroll target for the Top
           pill in the nav above. scrollMarginTop keeps the header
           from being clipped by the fixed site Navbar (72px) + the
-          sticky PortalTopNav (~48px). */}
+          sticky PortalTopNav (~48px).
+
+          Content: title + welcome + labeled session-info rows
+          (Email / Event / Type / Location / Delivery). Every info
+          row is conditional — clients booked before we started
+          storing a field just skip that row rather than showing an
+          empty label. Refresh button uses the canonical CTAButton
+          so it matches every other button on the site. */}
       <Box
         id="portal-top-section"
         sx={{ scrollMarginTop: '140px' }}
         px={{ base: 4, md: 8 }}
-        py={{ base: 8, md: 12 }}
+        py={{ base: 8, md: 10 }}
         textAlign="center"
       >
         <Text
@@ -522,60 +539,65 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         >
           {data.client_name ? `Welcome, ${data.client_name}` : 'Welcome'}
         </Text>
-        <Text fontSize="sm" color="gray.500" fontWeight="300" mt={2}>
-          {data.client_email}
-        </Text>
-        {/* Refresh button — outlined pill (was a subtle text link, but
-            clients missed it entirely). Draws the eye enough that
-            "tap this after Veronika confirms a payment" is a
-            discoverable next action, without shouting. */}
-        <Box
-          as="button"
-          type="button"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          mt={4}
-          display="inline-flex"
-          alignItems="center"
-          gap={2}
-          fontSize="xs"
-          fontWeight="500"
-          letterSpacing="0.2em"
-          textTransform="uppercase"
-          px={4}
-          py={2}
-          color="gray.600"
-          bg="transparent"
-          border="1px solid"
-          borderColor="gray.300"
-          borderRadius="full"
-          cursor={refreshing ? 'wait' : 'pointer'}
-          transition="all 0.2s"
-          _hover={{ color: '#c9a96e', borderColor: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
+
+        {/* Session summary — labeled two-column rows so it reads as a
+            "here's what we booked" card, not a random floating email.
+            Each row: uppercase gold label on the left, dark value on
+            the right. Aligned on their center so the whole block reads
+            balanced even when rows have very different value lengths.
+            Stacks vertically on mobile since two-column at that width
+            gets cramped. */}
+        <VStack
+          spacing={{ base: 2, md: 2.5 }}
+          mt={5}
+          mx="auto"
+          maxW="440px"
+          w="100%"
+          align="stretch"
         >
-          <Icon
-            as={FaSync}
-            boxSize={3}
-            sx={
-              refreshing
-                ? { animation: 'spin 1s linear infinite' }
-                : undefined
-            }
-          />
-          {refreshing ? 'Refreshing…' : 'Refresh Portal'}
+          <InfoRow label="Email" value={data.client_email} />
+          {data.event_date && (
+            <InfoRow label="Event Date" value={formatDate(data.event_date)} />
+          )}
+          {data.session_type && (
+            <InfoRow label="Session" value={data.session_type} />
+          )}
+          {data.event_location && (
+            <InfoRow label="Location" value={data.event_location} />
+          )}
+          {data.delivery_timeframe && (
+            <InfoRow label="Delivery" value={data.delivery_timeframe} />
+          )}
+        </VStack>
+
+        {/* Refresh — canonical CTAButton (outline, small). Same look
+            as every other outline button on the site so it doesn't
+            read as a random one-off. */}
+        <Box mt={6}>
+          <CTAButton
+            onClick={handleRefresh}
+            icon={FaSync}
+            variant="outline"
+            size="sm"
+            isLoading={refreshing}
+            loadingText="Refreshing..."
+          >
+            Refresh Portal
+          </CTAButton>
         </Box>
+
         {/* Update-available notice — surfaces when Refresh detected a
             newer build. Non-blocking; the client keeps their session
-            and can reload when they're ready. Signing back in is a
-            fine cost for seeing the latest UI. */}
+            and can reload when they're ready. Reload uses a text-link
+            treatment rather than another button because it visually
+            sits INSIDE the notice card. */}
         {updateAvailable && (
           <Flex
             direction={{ base: 'column', sm: 'row' }}
             align="center"
             justify="center"
-            gap={2}
-            mt={3}
+            gap={3}
+            mt={4}
             px={4}
             py={2}
             bg="#fff8e6"
@@ -588,23 +610,13 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
             <Text fontSize="xs" color="gray.700" fontWeight="300">
               A newer version of the portal is available.
             </Text>
-            <Box
-              as="button"
-              type="button"
+            <CTAButton
               onClick={() => window.location.reload()}
-              fontSize="xs"
-              fontWeight="500"
-              textTransform="uppercase"
-              letterSpacing="0.15em"
-              color="#c9a96e"
-              bg="transparent"
-              border="none"
-              cursor="pointer"
-              _hover={{ color: '#b8964f' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
+              variant="solid"
+              size="sm"
             >
-              Reload →
-            </Box>
+              Reload
+            </CTAButton>
           </Flex>
         )}
       </Box>
@@ -638,9 +650,13 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           Signed: shows the date + a download link to the signed PDF (served
           via Drive's standard download endpoint).
           Other (none/void): empty.
+          Gray in the new alternation (Header/NextSteps sit above; Balance
+          white below). Inner ContractSignSection / SignedContractSection
+          are transparent so this wrapper's bg shows through.
       */}
       <Box
         id="contract-section"
+        bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
         sx={{ scrollMarginTop: '140px' }}
@@ -666,7 +682,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       {data.contract_total_amount !== null && remaining !== null && (
         <Box
           id="balance-section"
-          bg="gray.50"
+          bg="white"
           py={{ base: 10, md: 12 }}
           px={6}
           borderTop="1px solid"
@@ -844,6 +860,28 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         </Box>
       )}
 
+      {/* ─── Login password management ───
+          Moved above Photos so the section alternation lands with the
+          gallery block on white (which lets the gallery's own white
+          header sit flush with its container). Order is now:
+          Balance → Password → Photos → Share. The "Gallery Pass vs
+          login password" ambiguity that motivated the old ordering
+          isn't a real problem in the new IA — Gallery Pass has moved
+          into Share, so the two are far apart.
+          id wrapper is the portal top nav's scroll target. */}
+      <Box
+        id="password-section"
+        bg="gray.50"
+        borderTop="1px solid"
+        borderColor="gray.100"
+        sx={{ scrollMarginTop: '140px' }}
+      >
+        <ChangePasswordSection
+          credentials={credentials}
+          onChanged={onPasswordChanged}
+        />
+      </Box>
+
       {/* ─── Photos ───
           Three states, kept mutually exclusive:
           1) No Drive URL set OR Drive folder empty with no listing error →
@@ -868,9 +906,11 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         // Photos is WHITE so the gallery's own white header (Private
         // Gallery, client name, disclaimer, review card) sits flush
         // with its section rather than looking like a bright rectangle
-        // stuck inside a gray container. New alternation:
-        //   Contract (white) → Balance (gray) → Photos (white)
-        //   → Share (gray) → Password (white)
+        // stuck inside a gray container. New alternation (with
+        // Password moved up):
+        //   Header (white) → Next Steps (warm) → Contract (gray)
+        //   → Balance (white) → Password (gray) → Photos (white)
+        //   → Share (gray).
         // Empty-placeholder version below also uses white to match.
         bg="white"
         borderTop="1px solid"
@@ -1228,33 +1268,45 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         </VStack>
       </Box>
 
-      {/* ─── Login password management ───
-          Lets the client swap the temp password Vero handed them for one
-          they'll actually remember. Collapsed by default; most clients
-          only touch this once. Ordered after Gallery Pass so the
-          "different from your Gallery Pass above" cue makes sense
-          visually — the two are easy to conflate and we should not
-          leave any ambiguity about which is which.
-          id wrapper is the portal top nav's scroll target. */}
-      <Box
-        id="password-section"
-        // White in the new alternation (Share is gray above,
-        // Password lands white as the natural next). ChangePassword-
-        // Section's inner Box is already transparent so this shows
-        // through.
-        bg="white"
-        borderTop="1px solid"
-        borderColor="gray.100"
-        sx={{ scrollMarginTop: '140px' }}
-      >
-        <ChangePasswordSection
-          credentials={credentials}
-          onChanged={onPasswordChanged}
-        />
-      </Box>
     </Box>
   );
 };
+
+/**
+ * One labeled row in the portal-header session summary. Kept as a
+ * component so every row shares the exact same layout, alignment,
+ * type scale, and gold label treatment. Keep new header info coming
+ * through this — do NOT hand-roll another Flex-label-value pair.
+ */
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <Flex
+    direction={{ base: 'column', sm: 'row' }}
+    align={{ base: 'center', sm: 'baseline' }}
+    justify={{ base: 'center', sm: 'flex-start' }}
+    gap={{ base: 0.5, sm: 4 }}
+    textAlign={{ base: 'center', sm: 'left' }}
+  >
+    <Text
+      fontSize="2xs"
+      fontWeight="500"
+      textTransform="uppercase"
+      letterSpacing="0.22em"
+      color="#c9a96e"
+      w={{ sm: '110px' }}
+      flexShrink={0}
+    >
+      {label}
+    </Text>
+    <Text
+      fontSize="sm"
+      fontWeight="400"
+      color="gray.700"
+      lineHeight="1.5"
+    >
+      {value}
+    </Text>
+  </Flex>
+);
 
 const BalanceStat = ({
   label,
@@ -1634,14 +1686,10 @@ function SignedContractSection({
   };
 
   return (
-    // White in the alternation — the section wrapper in the parent
-    // tree also uses white; setting it explicitly here just prevents
-    // any inherited gray from leaking through.
+    // Transparent — the section wrapper in the parent tree owns the
+    // background (gray.50 in the new alternation) so we let it show
+    // through here rather than repainting a color inside.
     <Box
-      bg="white"
-      borderTop="1px solid"
-      borderBottom="1px solid"
-      borderColor="gray.100"
       py={{ base: 10, md: 12 }}
       px={6}
     >
@@ -1821,10 +1869,6 @@ function ContractSignSection({
   if (!contract) {
     return (
       <Box
-        bg="white"
-        borderTop="1px solid"
-        borderBottom="1px solid"
-        borderColor="gray.100"
         py={{ base: 12, md: 14 }}
         px={6}
       >
@@ -1849,12 +1893,9 @@ function ContractSignSection({
   }
 
   return (
-    // Main sign-flow view — white background per the alternation.
+    // Transparent — the section wrapper (contract-section) owns the
+    // background (gray.50 in the new alternation).
     <Box
-      bg="white"
-      borderTop="1px solid"
-      borderBottom="1px solid"
-      borderColor="gray.100"
       py={{ base: 12, md: 14 }}
       px={6}
     >
@@ -2427,9 +2468,9 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
   if (hasNextStep) pills.push({ id: 'next-steps-section', label: 'Next Steps', emphasized: true });
   if (hasContract) pills.push({ id: 'contract-section', label: 'Contract' });
   if (hasBalance) pills.push({ id: 'balance-section', label: 'Balance' });
+  pills.push({ id: 'password-section', label: 'Password' });
   pills.push({ id: 'photos-section', label: 'Photos' });
   pills.push({ id: 'gallery-share-section', label: 'Share' });
-  pills.push({ id: 'password-section', label: 'Password' });
 
   // Active-section tracking via a rAF-throttled scroll listener.
   // Every animation frame, we look at ALL sections' positions and

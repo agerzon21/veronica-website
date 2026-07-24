@@ -30,6 +30,16 @@ type ClientPortalRow = {
   client_display_name: string | null;
   client_email: string | null;
   drive_url: string | null;
+  // Session metadata — shown in the portal header so the client sees
+  // what they booked at a glance (Wedding on {date} at {location},
+  // delivery within {timeframe}). event_date + session_type live as
+  // top-level columns; the more descriptive event_title,
+  // event_location, and delivery_timeframe are stored inside the
+  // contract_variables JSONB blob populated when Vero creates the
+  // portal.
+  event_date: string | null;
+  session_type: string | null;
+  contract_variables: Record<string, string> | null;
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
   contract_body: string | null;
@@ -69,6 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const rows = (await sql`
       select id, client_display_name, client_email, drive_url,
+             event_date, session_type, contract_variables,
              contract_status, contract_signed_at, contract_body, contract_signed_pdf_url,
              contract_total_amount, contract_retainer_amount, paid_to_date, payment_plan_enabled,
              gallery_password, gallery_enabled,
@@ -164,6 +175,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Session-metadata fields for the portal header. contract_variables
+    // is a JSONB blob with contract-template placeholders — we surface
+    // the human-readable ones (title, location, delivery window). Kept
+    // permissive: if the blob doesn't have a field or the whole thing
+    // is null (older portals created before we started storing it),
+    // the client just doesn't render that line.
+    const vars = row.contract_variables ?? {};
+
     return res.status(200).json({
       success: true,
       mode: 'full',
@@ -173,6 +192,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       rootFiles: tree.rootFiles,
       sections: tree.sections,
       warning,
+
+      // Session metadata — shown in the portal header
+      event_date: row.event_date,
+      session_type: row.session_type,
+      event_title: typeof vars.event_title === 'string' ? vars.event_title : null,
+      event_location: typeof vars.event_location === 'string' ? vars.event_location : null,
+      delivery_timeframe:
+        typeof vars.delivery_timeframe === 'string' ? vars.delivery_timeframe : null,
 
       // Contract
       contract_status: row.contract_status,

@@ -97,99 +97,6 @@ const PRELOAD_RADIUS = 10;
 
 // Split-button dropdown used on both desktop and mobile flows. Two
 // equally-weighted options so users see both paths up front, instead of
-// the "Need print quality?" disclaimer link reading as a caveat.
-//
-// Wraps a primary Save/Download action with a small subordinate
-// "View original in Drive →" link underneath, when a driveViewUrl
-// exists. This is the print-quality escape hatch: the button gets
-// visual dominance (no per-photo decision friction), the link
-// preserves access to the untouched original for clients who
-// actually want print or album prep for that specific photo.
-function PrimaryPlusOriginalLink({
-  driveViewUrl,
-  children,
-}: {
-  driveViewUrl?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Flex direction="column" align="flex-end" gap={1.5}>
-      {children}
-      {driveViewUrl && (
-        <Text
-          as="a"
-          href={driveViewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          fontSize="10px"
-          fontWeight="300"
-          letterSpacing="0.08em"
-          color="whiteAlpha.600"
-          _hover={{ color: 'whiteAlpha.900', textDecoration: 'underline' }}
-          onClick={(e) => e.stopPropagation()}
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          View original in Drive →
-        </Text>
-      )}
-    </Flex>
-  );
-}
-
-// Labeled Favorite / Favorited pill for the modal's bottom-right
-// action cluster. Sits directly beside the Save/Download button so
-// clients read the two as peer choices ("keep this one" vs "save
-// this one"). Replaces the old top-right heart icon that everyone
-// missed. Visually a Save-style outlined pill on dark; flips to a
-// solid red-pink pill with a filled heart when favorited so it
-// reads as a stateful toggle rather than a static button.
-function FavoriteButton({
-  isFavorite,
-  onClick,
-}: {
-  isFavorite: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Box
-      as="button"
-      type="button"
-      onClick={(e: React.MouseEvent) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-      aria-pressed={isFavorite}
-      display="inline-flex"
-      alignItems="center"
-      gap={2}
-      px={{ base: 3.5, md: 4 }}
-      py={{ base: 2, md: 2.5 }}
-      fontSize={{ base: '11px', md: 'xs' }}
-      fontWeight="500"
-      letterSpacing="0.15em"
-      textTransform="uppercase"
-      borderRadius="full"
-      border="1px solid"
-      transition="all 0.2s ease"
-      cursor="pointer"
-      color={isFavorite ? 'white' : 'whiteAlpha.900'}
-      bg={isFavorite ? '#ff4c68' : 'transparent'}
-      borderColor={isFavorite ? '#ff4c68' : 'whiteAlpha.500'}
-      _hover={
-        isFavorite
-          ? { bg: '#e83e5a', borderColor: '#e83e5a' }
-          : { borderColor: 'white', bg: 'whiteAlpha.100' }
-      }
-      _active={{ transform: 'scale(0.96)' }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      <Box as={isFavorite ? FaHeart : FaRegHeart} fontSize="12px" />
-      <Box as="span">{isFavorite ? 'Favorited' : 'Favorite'}</Box>
-    </Box>
-  );
-}
-
 // Primary option is platform-specific (anchor download on desktop,
 // Web Share API call on mobile) so the caller passes either
 // `primaryHref` or `onPrimary`. Secondary option is always Drive's
@@ -208,9 +115,10 @@ interface DownloadMenuProps {
   // Called when the dropdown opens. The mobile flow uses this to kick off
   // the pre-fetch lazily, instead of fetching every modal-opened photo.
   onMenuOpen?: () => void;
-  // Retained on the interface for backwards compat with call sites that
-  // still pass it; no longer rendered (the secondary "Original" option
-  // was removed — full-quality lives at the gallery level now).
+  // When provided, adds a second menu item "View original in Drive"
+  // that opens the full-res original in Drive's viewer. Absent for
+  // the public portfolio (no per-photo Drive URL there); present for
+  // all client-portal galleries.
   driveViewUrl?: string;
   fileSize?: number;
 }
@@ -224,6 +132,7 @@ const DownloadMenu = ({
   onPrimary,
   primaryDisabled,
   onMenuOpen,
+  driveViewUrl,
 }: DownloadMenuProps) => {
   const GOLD = '#c9a96e';
   const triggerStyles = {
@@ -303,11 +212,31 @@ const DownloadMenu = ({
             </Text>
           </Box>
         </MenuItem>
-        {/* "Original" full-quality option removed. Full quality is now
-            surfaced only at the gallery level via the sticky Download All
-            widget (which goes to Drive). Per-photo, users get one thing:
-            the optimized save. This kills the per-photo Optimized-vs-
-            Original decision that made every click feel weighty. */}
+        {/* Second option: full-res original via Drive's viewer. The
+            per-photo optimize-vs-original decision that used to make
+            every click feel weighty is now framed as "save now" vs
+            "see original in Drive" — different-shaped choices instead
+            of two-download-formats. Only renders when the caller
+            passes a driveViewUrl (i.e. gallery contexts, not the
+            public portfolio). */}
+        {driveViewUrl && (
+          <MenuItem
+            as="a"
+            href={driveViewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            {...itemStyles}
+          >
+            <Box>
+              <Text color="white" fontSize="sm" fontWeight="400" mb={0.5}>
+                View original in Drive
+              </Text>
+              <Text color="whiteAlpha.600" fontSize="xs">
+                Print-quality — opens Google Drive
+              </Text>
+            </Box>
+          </MenuItem>
+        )}
       </MenuList>
     </Menu>
   );
@@ -817,10 +746,18 @@ const ImageModal = ({
               is the fix. */}
           <Flex gap={2} align="center" flexShrink={0}>
           {onToggleFavorite && (
-            <FavoriteButton
-              isFavorite={Boolean(isFavorite)}
-              onClick={onToggleFavorite}
-            />
+            <CTAButton
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite();
+              }}
+              icon={isFavorite ? FaHeart : FaRegHeart}
+              variant={isFavorite ? 'solid' : 'outline'}
+              tone="dark"
+              size="sm"
+            >
+              {isFavorite ? 'Favorited' : 'Favorite'}
+            </CTAButton>
           )}
           {downloadUrl || mobileSaveUrl || driveViewUrl ? (
             useMobileDriveFlow ? (
@@ -839,46 +776,41 @@ const ImageModal = ({
                 Open in Drive
               </CTAButton>
             ) : useMobileSaveFlow ? (
-              // Mobile path: single-option menu. The dropdown mechanic
+              // Mobile path: two-option menu. The dropdown mechanic
               // is still required by iOS — Web Share needs a *synchronous*
               // user gesture, which we get from the MenuItem click; the
               // prefetch fires when the menu opens, so by the time the
               // user taps the item the blob is usually ready. If it's
               // not, the item shows "Preparing…" and stays disabled.
               //
-              // Small "View original in Drive" link sits below as a
-              // discreet escape hatch — restores per-photo access to
-              // the full-quality file we lost when we removed the
-              // two-option dropdown. Visual hierarchy (button + link)
-              // gives users the "which do I want" clarity that the old
-              // equal-weight menu items didn't, without amputating
-              // the print-quality path entirely.
-              <PrimaryPlusOriginalLink driveViewUrl={driveViewUrl}>
-                <DownloadMenu
-                  fileSize={fileSize}
-                  onPrimary={handleMobileSave}
-                  onMenuOpen={triggerPrefetch}
-                  primaryTitle="Save to Photos"
-                  primaryDesc={photoBlob ? 'Ready to save' : 'Preparing…'}
-                  primaryDisabled={!photoBlob}
-                  driveViewUrl={undefined}
-                  triggerLabel="Save"
-                />
-              </PrimaryPlusOriginalLink>
+              // Second option: "View original in Drive" — full-res escape
+              // hatch. Framed as a different kind of action (see in Drive)
+              // rather than a second download format so users don't have
+              // to make an image-quality decision every time.
+              <DownloadMenu
+                fileSize={fileSize}
+                onPrimary={handleMobileSave}
+                onMenuOpen={triggerPrefetch}
+                primaryTitle="Save to Photos"
+                primaryDesc={photoBlob ? 'Ready to save' : 'Preparing…'}
+                primaryDisabled={!photoBlob}
+                driveViewUrl={driveViewUrl}
+                triggerLabel="Save"
+              />
             ) : downloadUrl ? (
-              // Desktop path: single-option menu, same escape-hatch link
-              // below (see comment on mobile path above).
-              <PrimaryPlusOriginalLink driveViewUrl={driveViewUrl}>
-                <DownloadMenu
-                  fileSize={fileSize}
-                  primaryHref={downloadUrl}
-                  primaryDownload={downloadFilename ?? true}
-                  primaryTitle="Download"
-                  primaryDesc="Optimized for sharing"
-                  driveViewUrl={undefined}
-                  triggerLabel="Download"
-                />
-              </PrimaryPlusOriginalLink>
+              // Desktop path: same two-option menu shape as mobile so
+              // the two feel like one component. Primary is an anchor
+              // download rather than a share-blob call, since desktop
+              // browsers just save the file straight from the link.
+              <DownloadMenu
+                fileSize={fileSize}
+                primaryHref={downloadUrl}
+                primaryDownload={downloadFilename ?? true}
+                primaryTitle="Download"
+                primaryDesc="Save to this device"
+                driveViewUrl={driveViewUrl}
+                triggerLabel="Download"
+              />
             ) : (
               <CTAButton onClick={handleViewPhotoPage} tone="dark" size="sm">
                 View Photo Page →

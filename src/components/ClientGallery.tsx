@@ -16,7 +16,7 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronLeft, FaChevronRight, FaListUl, FaHeart, FaRegHeart, FaMobileAlt, FaInfoCircle, FaClock } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronLeft, FaChevronRight, FaListUl, FaHeart, FaRegHeart, FaMobileAlt, FaInfoCircle, FaClock, FaEye, FaEyeSlash } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
@@ -306,16 +306,40 @@ const ClientGallery = ({
   const favoritesSet = new Set(favorites ?? []);
   const favoritesCount = favoritesSet.size;
 
-  // Flatten everything into one ordered array. The lightbox navigates by
-  // index into this array, so prev/next walks across all sections in
-  // delivery order. Section headers are purely visual — they don't gate
-  // navigation. This matches photographer-platform convention (Pixieset,
-  // ShootProof) where you scroll through the full set seamlessly.
-  const allFiles = [...rootFiles, ...sections.flatMap((s) => s.files)];
+  // "Show only favorites" filter — toggled from the Favorites info
+  // card at the bottom of the gallery. When active, the whole grid
+  // collapses to just hearted photos in their original section
+  // context (not a separate grid), the sections without any
+  // favorites get greyed out in the top nav, and a prominent
+  // banner explains the filter state so users can't get "stuck"
+  // wondering where all their photos went.
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const filterActive = favoritesEnabled && showFavoritesOnly && favoritesCount > 0;
+
+  const displayRootFiles = filterActive
+    ? rootFiles.filter((f) => favoritesSet.has(f.id))
+    : rootFiles;
+  const displaySections = filterActive
+    ? sections
+        .map((s) => ({ ...s, files: s.files.filter((f) => favoritesSet.has(f.id)) }))
+        .filter((s) => s.files.length > 0)
+    : sections;
+
+  // Which section IDs contain at least one favorite? Used by the top
+  // nav to grey out (and disable) pills for sections that would be
+  // empty in the filtered view. Always computed against the full
+  // sections, not the filtered ones, so the set stays stable across
+  // filter toggling.
+  const sectionsWithFavorites = new Set(
+    sections.filter((s) => s.files.some((f) => favoritesSet.has(f.id))).map((s) => s.id),
+  );
+
+  // Flatten the CURRENT display set into one ordered array. When the
+  // filter is on, this walks only the visible photos so arrow-key
+  // navigation in the lightbox stays within favorites too. Modal
+  // photo index maps into THIS array.
+  const allFiles = [...displayRootFiles, ...displaySections.flatMap((s) => s.files)];
   const totalCount = allFiles.length;
-  // Favorites in delivery order, used by the dedicated Favorites
-  // section at the bottom of the gallery.
-  const favoriteFiles = allFiles.filter((f) => favoritesSet.has(f.id));
 
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   // Refs per thumbnail (indexed against the flat allFiles array) so
@@ -362,18 +386,6 @@ const ClientGallery = ({
     }
     setSelectedIndex(i);
   };
-  // Variant used by the Favorites section tiles — same photo can live
-  // in two places in the DOM (its original section AND the Favorites
-  // section grid), so the caller passes the rect for whichever tile
-  // the user actually tapped. Falls back to null (fade-in) if the
-  // caller didn't compute one.
-  const handleOpenFromRect = useCallback(
-    (i: number, rect: { top: number; left: number; width: number; height: number } | null) => {
-      setOriginRect(rect);
-      setSelectedIndex(i);
-    },
-    [],
-  );
   const handleClose = useCallback(() => {
     setSelectedIndex(null);
     setOriginRect(null);
@@ -396,19 +408,57 @@ const ClientGallery = ({
   return (
     // No explicit bg — the parent controls it. Inside ClientPortalView
     // the photos-section wrapper is white for alternation. On the
-    // standalone /portal/pass route, the html/body theme default
-    // (white) shows through. Both look correct without hard-coding.
-    <Box ref={galleryRootRef} minH="100vh" pt="72px">
+    // standalone /portal/pass route, Portal.tsx wraps ClientGallery
+    // in a Box with the necessary Navbar clearance so both routes
+    // reach here without double-padding.
+    <Box ref={galleryRootRef} minH="100vh">
+      {/* Top nav MOVED ABOVE the header so it mirrors the portal-level
+          nav (which also sits above the portal header). Desktop-only
+          (mobile navigates via the sticky bottom bar's Jump drawer).
+          Renders whenever we have >1 section OR the favorites feature
+          is on (Info + Favorites are useful even without multiple
+          sections). */}
+      {(sections.length > 1 || favoritesEnabled) && (
+        <TopSectionNav
+          sections={sections}
+          sectionRefs={sectionRefs}
+          onSectionClick={scrollToSection}
+          sectionsWithFavorites={sectionsWithFavorites}
+          filterActive={filterActive}
+          scrollToInfo={() => {
+            const el = document.getElementById('gallery-info-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            else window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          scrollToFavorites={
+            favoritesEnabled
+              ? () => {
+                  const el = document.getElementById('gallery-favorites-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  else
+                    window.scrollTo({
+                      top: document.body.scrollHeight,
+                      behavior: 'smooth',
+                    });
+                }
+              : null
+          }
+        />
+      )}
+
       {/* Header — id lets the Info pill in the top nav scroll back
           here. All the top-of-gallery orientation lives inside: title,
-          count (with favorite total in parens), expiration, save-tips
-          card. The scrollMarginTop accounts for the fixed site Navbar
-          (72px) + the sticky TopSectionNav (~52px on desktop). */}
+          count (with favorite total in parens), expiration ribbon,
+          save-tips card. Padding matches other portal sections
+          (was thicker before; Alex correctly flagged it as visually
+          heavier than its neighbors). scrollMarginTop accounts for
+          the fixed site Navbar (72px) + sticky TopSectionNav
+          (~52px on desktop). */}
       <Box
         id="gallery-info-section"
         sx={{ scrollMarginTop: { base: '90px', md: '140px' } }}
         px={{ base: 4, md: 8 }}
-        pt={{ base: 8, md: 12 }}
+        pt={{ base: 6, md: 8 }}
         pb={{ base: 6, md: 8 }}
         textAlign="center"
       >
@@ -456,42 +506,28 @@ const ClientGallery = ({
           </Text>
         )}
 
-        {/* Available-until notice — folded into the header info block
-            rather than living in its own big banner above. Text differs
-            slightly between the guest gallery route (contact Veronika
-            to extend) and the full portal (download by then). Both use
-            the same subtle gray-caption treatment so it reads as
-            metadata, not an alarm. */}
+        {/* Available-until ribbon — actual visible banner with notched
+            ends so it doesn't blend into the header metadata like the
+            old subtle line did. Bold date sits inside the ribbon; the
+            "contact Veronika / download by" note lives below it as a
+            small footnote so the two read as one grouped object. */}
         {expiresAt && (
-          <Flex
-            justify="center"
-            align="center"
-            gap={1.5}
-            mt={2}
-            fontSize="xs"
-            color="gray.500"
-            fontWeight="300"
-          >
-            <Icon as={FaClock} boxSize={2.5} color="gray.400" />
-            <Box as="span">
-              Available until{' '}
-              <Text as="span" fontWeight="500" color="gray.700">
-                {formatGalleryExpiry(expiresAt)}
-              </Text>
-              {galleryPassword
-                ? ' · Contact Veronika if you need it extended.'
-                : ' · Download what you want to keep by then.'}
-            </Box>
-          </Flex>
+          <ExpiryRibbon
+            expiresAt={expiresAt}
+            footnote={
+              galleryPassword
+                ? 'Contact Veronika if you need it extended.'
+                : 'Download what you want to keep by then.'
+            }
+          />
         )}
 
-        {/* Save-tips card — replaces the plain-text disclaimer. Warm
-            gold-tinted card so it reads as helpful info rather than a
-            legal footnote. Three-icon layout stacks vertically on
-            mobile (readable at any width) and horizontally on wider
-            screens. Long-press first since it's the fastest and
-            cheapest path for the client (zero bandwidth on our end,
-            instant on theirs). */}
+        {/* Save-tips card — warm gold-tinted card so it reads as
+            helpful info rather than a legal footnote. Horizontal
+            three-column on desktop; on mobile we go with a compact
+            single-line-per-tip layout (icon + tight two-line copy)
+            so the card doesn't take up half the viewport. Order
+            leads with long-press because it's the fastest path. */}
         <Box
           mt={{ base: 6, md: 8 }}
           maxW="720px"
@@ -500,8 +536,8 @@ const ClientGallery = ({
           border="1px solid"
           borderColor="#e8d9a8"
           borderRadius="md"
-          px={{ base: 5, md: 6 }}
-          py={{ base: 5, md: 5 }}
+          px={{ base: 4, md: 6 }}
+          py={{ base: 4, md: 5 }}
           textAlign="left"
         >
           <Text
@@ -511,24 +547,24 @@ const ClientGallery = ({
             letterSpacing="0.25em"
             color="#c9a96e"
             textAlign="center"
-            mb={4}
+            mb={{ base: 3, md: 4 }}
           >
             How to save your photos
           </Text>
           <Flex
             direction={{ base: 'column', md: 'row' }}
-            gap={{ base: 3, md: 5 }}
+            gap={{ base: 2.5, md: 5 }}
             align="stretch"
           >
             <SaveTip
               icon={FaMobileAlt}
-              title="Press &amp; hold"
-              body="On phone, long-press any photo to save it instantly to your camera roll."
+              title="Long-press &amp; Save"
+              body="On phone, hold any photo and pick Save to send it to your camera roll."
             />
             <SaveTip
               icon={FaImage}
-              title="Tap, then Save"
-              body="Tap a photo to open it, then use the Save button at the bottom."
+              title="Or tap, then Save"
+              body="Tap a photo to open it, then use the Save button. Print quality lives under View original in Drive."
             />
             <SaveTip
               icon={FaDownload}
@@ -591,59 +627,35 @@ const ClientGallery = ({
         </Box>
       </Box>
 
-      {/* Top sticky section-nav — restored on desktop after trying the
-          right-side rail: the rail took up too much of the photo area
-          and hid a lot of content. A slim horizontal strip at the top
-          is a much smaller footprint. Mobile still has the sticky
-          bottom bar's "Jump" drawer, but the top strip appears there
-          too as an at-a-glance list.
-
-          Active-section tracking + auto-scroll-into-view + edge fade
-          masks all live inside TopSectionNav (defined below). Fade
-          masks are the visual cue that there's more when the folder
-          list overflows the viewport — the borderBottom is gone since
-          it was crowding the first section's header. */}
-      {(sections.length > 1 || favoritesEnabled) && (
-        <TopSectionNav
-          sections={sections}
-          sectionRefs={sectionRefs}
-          onSectionClick={scrollToSection}
-          scrollToInfo={() => {
-            const el = document.getElementById('gallery-info-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            else window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          scrollToFavorites={
-            favoritesEnabled
-              ? () => {
-                  const el = document.getElementById('gallery-favorites-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  else
-                    window.scrollTo({
-                      top: document.body.scrollHeight,
-                      behavior: 'smooth',
-                    });
-                }
-              : null
+      {/* Filter-on banner — appears only when the favorites filter is
+          engaged. Warm gold-tinted card matching the rest of the
+          treatment; canonical CTAButton for "Show all photos" so it
+          matches every other outline button on the site. */}
+      {filterActive && (
+        <FilterActiveBanner
+          shownCount={
+            displayRootFiles.length + displaySections.reduce((n, s) => n + s.files.length, 0)
           }
+          totalCount={rootFiles.length + sections.reduce((n, s) => n + s.files.length, 0)}
+          onClear={() => setShowFavoritesOnly(false)}
         />
       )}
 
-      {/* Grid — renders the full gallery. The dedicated Favorites
-          section further down replaces the previous "show favorites
-          only" filter chip; users hop there via the Favorites pill
-          in the top nav or by scrolling. */}
+      {/* Grid — renders the current display set (filtered or not).
+          When the favorites filter is on, sections with 0 hearts
+          drop out entirely and the flat allFiles array walks only
+          the visible photos, so modal arrow-nav stays consistent. */}
       {totalCount > 0 ? (
         <Box px={{ base: 2, md: 6 }} pb={20}>
           {/* Root-level files (no subfolder). Show first, no header — these
               are the files Veronika placed directly in the gallery root. If
               she delivered everything in subfolders, this is empty. */}
-          {rootFiles.length > 0 && (
+          {displayRootFiles.length > 0 && (
             <SimpleGrid
               columns={{ base: 2, md: 3, lg: 4 }}
               spacing={{ base: 1, md: 2 }}
             >
-              {rootFiles.map((file, i) => (
+              {displayRootFiles.map((file, i) => (
                 <GridTile
                   key={file.id}
                   file={file}
@@ -660,10 +672,10 @@ const ClientGallery = ({
           {/* Sections — one per subfolder. Each gets its own labeled grid.
               Index offset accumulates so itemRefs[i] always maps to
               allFiles[i] (the same array the lightbox navigates by). */}
-          {sections.map((section, sIdx) => {
+          {displaySections.map((section, sIdx) => {
             const offset =
-              rootFiles.length +
-              sections.slice(0, sIdx).reduce((acc, s) => acc + s.files.length, 0);
+              displayRootFiles.length +
+              displaySections.slice(0, sIdx).reduce((acc, s) => acc + s.files.length, 0);
             return (
               <Box
                 key={section.id}
@@ -737,20 +749,36 @@ const ClientGallery = ({
             );
           })}
 
-          {/* Favorites section — a dedicated "here are the ones you
-              picked out" grid at the bottom of the photo list. Only
-              rendered for full-portal users (favoritesEnabled).
-              Reachable via the Favorites pill in the top nav.
-              Tiles here share the same photo IDs as the ones above,
-              so tapping opens the same modal at the same flat index. */}
+          {/* Favorites info + filter section — informational card
+              (not a duplicate grid). Explains how favorites work,
+              exposes the filter toggle, and reserves space for the
+              future "request an album" flow. Only rendered for full-
+              portal users (favoritesEnabled). Reachable via the
+              Favorites pill in the top nav. */}
           {favoritesEnabled && (
-            <FavoritesSection
-              favoriteFiles={favoriteFiles}
-              allFiles={allFiles}
-              onOpen={handleOpenFromRect}
-              onToggleFavorite={onToggleFavorite}
+            <FavoritesInfoSection
+              count={favoritesCount}
+              filterActive={filterActive}
+              onToggleFilter={() => setShowFavoritesOnly((v) => !v)}
             />
           )}
+        </Box>
+      ) : filterActive ? (
+        // Filter is on and somehow returned zero — defensive edge
+        // case (favorites list out of sync with the gallery, or
+        // Vero removed a photo the client had hearted). Give a
+        // clear way out.
+        <Box textAlign="center" py={16} px={6}>
+          <Text color="gray.500" fontWeight="300" mb={4}>
+            No favorited photos in the current view.
+          </Text>
+          <CTAButton
+            onClick={() => setShowFavoritesOnly(false)}
+            variant="outline"
+            size="sm"
+          >
+            Show all photos
+          </CTAButton>
         </Box>
       ) : (
         <Box textAlign="center" py={20} px={6}>
@@ -1161,30 +1189,31 @@ function SaveTip({
       direction={{ base: 'row', md: 'column' }}
       align={{ base: 'flex-start', md: 'center' }}
       textAlign={{ base: 'left', md: 'center' }}
-      gap={3}
+      gap={{ base: 2.5, md: 3 }}
       flex={1}
     >
       <Flex
         flexShrink={0}
-        w="36px"
-        h="36px"
+        w={{ base: '28px', md: '36px' }}
+        h={{ base: '28px', md: '36px' }}
         borderRadius="full"
         bg="#f3e6bf"
         align="center"
         justify="center"
         color="#8a6e35"
+        mt={{ base: 0.5, md: 0 }}
       >
-        <Icon as={icon} boxSize={4} />
+        <Icon as={icon} boxSize={{ base: 3, md: 4 }} />
       </Flex>
       <Box>
         <Text
-          fontSize="sm"
+          fontSize={{ base: 'xs', md: 'sm' }}
           fontWeight="500"
           color="gray.800"
           mb={0.5}
           dangerouslySetInnerHTML={{ __html: title }}
         />
-        <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.6">
+        <Text fontSize={{ base: '2xs', md: 'xs' }} color="gray.600" fontWeight="300" lineHeight="1.5">
           {body}
         </Text>
       </Box>
@@ -1193,34 +1222,94 @@ function SaveTip({
 }
 
 /**
- * Dedicated "Favorites" section rendered at the bottom of the gallery
- * grid. Shows favorited photos as their own labeled block and doubles
- * as the scroll target for the Favorites pill in the top nav. When
- * empty, renders a friendly hint instead of an empty grid.
+ * Ribbon-style banner for the gallery-expiry callout. Renders as a
+ * warm gold ribbon with chevron-notched ends so it visually reads as
+ * an actual banner (not just a text line). The date is bolded inside
+ * the ribbon; a small footnote sits below (contact-Veronika / download-
+ * by) so the two feel like one grouped object.
  *
- * Tapping a favorited tile opens the modal at that photo's index in
- * the flat allFiles array (so arrow-key nav still walks the entire
- * gallery, not just favorites). We compute the animation origin from
- * the favorite-section tile's own bounding rect, so the modal opens
- * from where the user actually tapped rather than from the "canonical"
- * tile elsewhere in the grid.
+ * Kept as its own component so if we ever want to reuse this ribbon
+ * treatment elsewhere (e.g. contract-signed banner) we can just call
+ * it — please don't duplicate the clip-path values by hand.
  */
-function FavoritesSection({
-  favoriteFiles,
-  allFiles,
-  onOpen,
-  onToggleFavorite,
+function ExpiryRibbon({
+  expiresAt,
+  footnote,
 }: {
-  favoriteFiles: DriveFile[];
-  allFiles: DriveFile[];
-  onOpen: (indexInAllFiles: number, originRect: { top: number; left: number; width: number; height: number } | null) => void;
-  onToggleFavorite?: (photoId: string, currentlyFavorite: boolean) => void;
+  expiresAt: string;
+  footnote: string;
 }) {
-  // Own ref map so the section-nav's rect lookups don't get confused
-  // by these duplicate tiles (each favorite exists in BOTH its original
-  // section grid and here). Keyed by photo ID.
-  const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  return (
+    <Box mt={5} textAlign="center">
+      <Flex
+        as="span"
+        display="inline-flex"
+        align="center"
+        justify="center"
+        gap={2}
+        bgGradient="linear(to-r, #f3e6bf, #ecd8a3)"
+        color="#5f4a12"
+        // Chevron-notched ends. 10px points give a subtle ribbon feel
+        // without looking like a Christmas ornament. The extra outer
+        // padding compensates for the visual "eating" the notches do.
+        px={{ base: 8, md: 12 }}
+        py={2}
+        fontSize={{ base: 'xs', md: 'sm' }}
+        fontWeight="400"
+        letterSpacing="0.04em"
+        sx={{
+          clipPath:
+            'polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%)',
+          WebkitClipPath:
+            'polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%)',
+        }}
+      >
+        <Icon as={FaClock} boxSize={3} />
+        <Box as="span">
+          Available until{' '}
+          <Text as="span" fontWeight="700">
+            {formatGalleryExpiry(expiresAt)}
+          </Text>
+        </Box>
+      </Flex>
+      <Text
+        mt={1.5}
+        fontSize="2xs"
+        color="gray.500"
+        fontWeight="300"
+        lineHeight="1.5"
+      >
+        {footnote}
+      </Text>
+    </Box>
+  );
+}
 
+/**
+ * Favorites info section at the bottom of the gallery grid. NOT a
+ * duplicate photo grid — it's an informational + control card that:
+ *   - explains how favorites work (mirrors the save-tips card format)
+ *   - exposes the "Show only favorites" filter toggle
+ *   - reserves space for the future "Request an album" flow
+ *
+ * When the filter is toggled ON, the gallery grid above collapses
+ * to favorited photos in their original sections (see ClientGallery
+ * root for filter state + rendering). Section pills in the top nav
+ * grey out for sections with zero favorites. A prominent filter-
+ * active banner appears above the grid so users can't miss the
+ * filter state.
+ *
+ * ID is the scroll target for the Favorites pill in the top nav.
+ */
+function FavoritesInfoSection({
+  count,
+  filterActive,
+  onToggleFilter,
+}: {
+  count: number;
+  filterActive: boolean;
+  onToggleFilter: () => void;
+}) {
   return (
     <Box
       id="gallery-favorites-section"
@@ -1230,19 +1319,19 @@ function FavoritesSection({
       borderTop="1px solid"
       borderColor="gray.100"
     >
+      {/* Section header — matches the gallery's Info header treatment
+          so the two feel like siblings. */}
       <Box textAlign="center" mb={{ base: 6, md: 8 }} px={4}>
-        <Flex justify="center" align="center" gap={2} mb={2}>
-          <Icon as={FaHeart} boxSize={3} color="#ff4c68" />
-          <Text
-            fontSize="2xs"
-            fontWeight="500"
-            textTransform="uppercase"
-            letterSpacing="0.25em"
-            color="#c9a96e"
-          >
-            Favorites
-          </Text>
-        </Flex>
+        <Text
+          fontSize="2xs"
+          fontWeight="500"
+          textTransform="uppercase"
+          letterSpacing="0.25em"
+          color="#c9a96e"
+          mb={2}
+        >
+          Favorites
+        </Text>
         <Text
           as="h2"
           fontSize={{ base: 'xl', md: '2xl' }}
@@ -1252,66 +1341,178 @@ function FavoritesSection({
           m={0}
           mb={2}
         >
-          {favoriteFiles.length > 0
-            ? `${favoriteFiles.length} ${favoriteFiles.length === 1 ? 'photo you’ve saved' : 'photos you’ve saved'}`
-            : 'Save your favorites here'}
+          {count === 0
+            ? 'Save your favorite photos'
+            : `${count} ${count === 1 ? 'photo' : 'photos'} saved`}
         </Text>
         <Box w="30px" h="1px" bg="#c9a96e" mx="auto" mb={2} />
         <Text fontSize="xs" color="gray.500" fontWeight="300" maxW="440px" mx="auto" lineHeight="1.7">
-          Tap the{' '}
-          <Box as="span" color="#ff4c68" display="inline-block" verticalAlign="middle" mx={0.5}>
-            <Icon as={FaHeart} boxSize={2.5} />
-          </Box>{' '}
-          on any photo to pin it here — handy for keeping track of the ones you love while browsing.
+          A quick way to keep track of the photos you love — for
+          picking prints, sharing with family, or building an album.
         </Text>
       </Box>
 
-      {favoriteFiles.length > 0 ? (
-        <SimpleGrid columns={{ base: 2, md: 3, lg: 4 }} spacing={{ base: 1, md: 2 }}>
-          {favoriteFiles.map((file) => (
-            <GridTile
-              key={file.id}
-              file={file}
-              // Index is unused here — GridTile only reads it to pass
-              // back into onSelect; we ignore it and look up the file's
-              // real position in allFiles at click time.
-              index={0}
-              onSelect={() => {
-                const flatIdx = allFiles.findIndex((f) => f.id === file.id);
-                if (flatIdx < 0) return;
-                const el = tileRefs.current[file.id];
-                let rect: { top: number; left: number; width: number; height: number } | null = null;
-                if (el) {
-                  const r = el.getBoundingClientRect();
-                  rect = { top: r.top, left: r.left, width: r.width, height: r.height };
-                }
-                onOpen(flatIdx, rect);
-              }}
-              setRef={(el) => {
-                tileRefs.current[file.id] = el;
-              }}
-              isFavorite={true}
-              onToggleFavorite={onToggleFavorite}
-            />
-          ))}
-        </SimpleGrid>
-      ) : (
+      {/* Info + filter toggle card — warm gold-tinted, same treatment
+          as the save-tips card at the top of the gallery so both read
+          as informational callouts. */}
+      <Box px={{ base: 4, md: 6 }} pb={{ base: 10, md: 14 }}>
         <Box
-          maxW="440px"
+          maxW="720px"
           mx="auto"
-          bg="gray.50"
+          bg="#fdf9f0"
+          border="1px solid"
+          borderColor="#e8d9a8"
+          borderRadius="md"
+          px={{ base: 5, md: 7 }}
+          py={{ base: 5, md: 6 }}
+        >
+          <Flex
+            direction={{ base: 'column', md: 'row' }}
+            gap={{ base: 4, md: 6 }}
+            align={{ base: 'stretch', md: 'center' }}
+          >
+            <Flex flex={1} direction="column" gap={2}>
+              <Flex align="center" gap={2}>
+                <Icon as={FaHeart} boxSize={3.5} color="#ff4c68" />
+                <Text
+                  fontSize="sm"
+                  fontWeight="500"
+                  color="gray.800"
+                  letterSpacing="0.02em"
+                >
+                  How favorites work
+                </Text>
+              </Flex>
+              <Text fontSize="xs" color="gray.700" fontWeight="300" lineHeight="1.7">
+                Tap the heart on any photo — in the grid or in the lightbox —
+                to mark it as a favorite. Use the toggle here to show only
+                your favorites across every section, then toggle back off to
+                see the whole gallery again.
+              </Text>
+            </Flex>
+            <Box flexShrink={0} textAlign={{ base: 'left', md: 'right' }}>
+              <CTAButton
+                onClick={onToggleFilter}
+                icon={filterActive ? FaEyeSlash : FaEye}
+                variant={filterActive ? 'solid' : 'outline'}
+                size="sm"
+                isDisabled={!filterActive && count === 0}
+              >
+                {filterActive
+                  ? 'Show all photos'
+                  : count === 0
+                  ? 'Filter (need favorites)'
+                  : `Show only favorites (${count})`}
+              </CTAButton>
+            </Box>
+          </Flex>
+        </Box>
+
+        {/* Album placeholder — reserves space in the design for the
+            future request-an-album flow. For now it's a plain-text
+            "coming soon" note with a Contact CTA (canonical CTAButton
+            → /contact) so users have a path if they want an album
+            done today. */}
+        <Box
+          maxW="720px"
+          mx="auto"
+          mt={{ base: 4, md: 5 }}
+          bg="white"
           border="1px dashed"
           borderColor="gray.200"
           borderRadius="md"
-          px={6}
-          py={8}
+          px={{ base: 5, md: 7 }}
+          py={{ base: 5, md: 6 }}
           textAlign="center"
         >
-          <Text fontSize="sm" color="gray.500" fontWeight="300" lineHeight="1.7">
-            You haven&rsquo;t saved any favorites yet.
+          <Text
+            fontSize="2xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.22em"
+            color="gray.500"
+            mb={2}
+          >
+            Coming soon
           </Text>
+          <Text
+            fontSize="sm"
+            fontWeight="400"
+            color="gray.800"
+            mb={2}
+            lineHeight="1.5"
+          >
+            Request a printed album from your favorites
+          </Text>
+          <Text
+            fontSize="xs"
+            color="gray.500"
+            fontWeight="300"
+            maxW="440px"
+            mx="auto"
+            lineHeight="1.7"
+            mb={4}
+          >
+            Right here, you&rsquo;ll soon be able to send Veronika your
+            favorite selections and get a quote back for a printed album.
+            For now, reach out and she can put one together the classic way.
+          </Text>
+          <CTAButton to="/contact" variant="outline" size="sm">
+            Contact Veronika
+          </CTAButton>
         </Box>
-      )}
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * Prominent banner shown above the photo grid when the favorites
+ * filter is active. Warm gold-tinted card, canonical CTAButton for
+ * "Show all photos" so it visually matches every other outline
+ * button on the site. Copy tells the user exactly what they're
+ * seeing so nobody thinks the gallery got smaller.
+ */
+function FilterActiveBanner({
+  shownCount,
+  totalCount,
+  onClear,
+}: {
+  shownCount: number;
+  totalCount: number;
+  onClear: () => void;
+}) {
+  return (
+    <Box px={{ base: 4, md: 6 }} pb={{ base: 4, md: 5 }}>
+      <Flex
+        maxW="720px"
+        mx="auto"
+        direction={{ base: 'column', md: 'row' }}
+        align={{ base: 'stretch', md: 'center' }}
+        justify="space-between"
+        gap={{ base: 3, md: 4 }}
+        bg="#fdf9f0"
+        border="1px solid"
+        borderColor="#e8d9a8"
+        borderRadius="md"
+        px={{ base: 4, md: 5 }}
+        py={{ base: 3, md: 3 }}
+      >
+        <Flex align="center" gap={2.5}>
+          <Icon as={FaHeart} boxSize={3.5} color="#ff4c68" flexShrink={0} />
+          <Text fontSize={{ base: 'xs', md: 'sm' }} color="gray.700" fontWeight="400">
+            Filtering by favorites —{' '}
+            <Text as="span" fontWeight="600">
+              showing {shownCount} of {totalCount} photos
+            </Text>
+          </Text>
+        </Flex>
+        <Box flexShrink={0}>
+          <CTAButton onClick={onClear} variant="outline" size="sm">
+            Show all photos
+          </CTAButton>
+        </Box>
+      </Flex>
     </Box>
   );
 }
@@ -1333,6 +1534,14 @@ interface TopSectionNavProps {
   sections: FolderSection[];
   sectionRefs: React.MutableRefObject<{ [id: string]: HTMLDivElement | null }>;
   onSectionClick: (id: string) => void;
+  // Section IDs that contain at least one favorited photo. Used to
+  // grey out (and disable) pills whose sections would be empty in
+  // the filtered view.
+  sectionsWithFavorites: Set<string>;
+  // When true, the favorites filter is active — pills for sections
+  // in `sectionsWithFavorites` render normally; all other section
+  // pills render greyed + non-interactive.
+  filterActive: boolean;
   scrollToInfo: () => void;
   // Null when favorites feature is disabled (guests on /portal/pass)
   // — pill is omitted entirely from the nav rather than shown as an
@@ -1358,6 +1567,8 @@ function TopSectionNav({
   sections,
   sectionRefs,
   onSectionClick,
+  sectionsWithFavorites,
+  filterActive,
   scrollToInfo,
   scrollToFavorites,
 }: TopSectionNavProps) {
@@ -1437,13 +1648,12 @@ function TopSectionNav({
   // Same approach as PortalTopNav: on every scroll frame, pick the
   // section with the largest top value that's still ≤ 150 (just
   // below the sticky nav bottom). That's the section the user has
-  // most recently scrolled INTO. Skips entirely when the user is
-  // at a page extreme so Top/Bottom stays highlighted there.
+  // most recently scrolled INTO.
   //
-  // Replaces the previous IntersectionObserver approach which fired
-  // on threshold changes and could miss transitions — was the cause
-  // of "click Photos, Share lights up" and "scroll up, skip Contract"
-  // symptoms in the portal, and slightly wonky Password highlighting.
+  // Includes gallery-info-section and gallery-favorites-section in
+  // the scan (via document.getElementById) — without them, the Info
+  // and Favorites pills only ever lit up via the "at page extreme"
+  // special case, which didn't fire on regular scroll-back-to-top.
   useEffect(() => {
     const ACTIVATION_LINE = 150;
     let raf: number | null = null;
@@ -1452,15 +1662,23 @@ function TopSectionNav({
       if (isAtExtremeRef.current !== null) return;
       let currentId: string | null = null;
       let bestTop = -Infinity;
-      const refs = sectionRefs.current;
-      Object.entries(refs).forEach(([id, el]) => {
+
+      // Walk every candidate id: Info + section refs + Favorites.
+      // Info first so we don't drop it, and Favorites separately
+      // because it lives in its own DOM subtree (not sectionRefs).
+      const consider = (id: string, el: HTMLElement | null) => {
         if (!el) return;
         const top = el.getBoundingClientRect().top;
         if (top <= ACTIVATION_LINE && top > bestTop) {
           bestTop = top;
           currentId = id;
         }
-      });
+      };
+
+      consider(INFO_ID, document.getElementById(INFO_ID));
+      Object.entries(sectionRefs.current).forEach(([id, el]) => consider(id, el));
+      consider(FAVORITES_ID, document.getElementById(FAVORITES_ID));
+
       if (currentId) setActiveId(currentId);
     };
     const onScroll = () => {
@@ -1561,24 +1779,34 @@ function TopSectionNav({
             }}
           />
           <NavStripDivider />
-          {sections.map((section) => (
-            <NavPill
-              key={section.id}
-              pillRef={(el) => {
-                pillRefs.current[section.id] = el;
-              }}
-              label={section.name}
-              active={activeId === section.id}
-              onClick={() => {
-                // Optimistic highlight: flip active immediately so the
-                // pill lights up on tap even before smooth-scroll +
-                // scroll-scan settle. The scan will correct any drift
-                // as the scroll lands.
-                setActiveId(section.id);
-                onSectionClick(section.id);
-              }}
-            />
-          ))}
+          {sections.map((section) => {
+            // Grey + disable the pill when the favorites filter is
+            // on and this section has zero favorited photos. Users
+            // still see the section name (so the nav layout doesn't
+            // shift when they toggle the filter), just clearly can't
+            // navigate to it.
+            const disabled = filterActive && !sectionsWithFavorites.has(section.id);
+            return (
+              <NavPill
+                key={section.id}
+                pillRef={(el) => {
+                  pillRefs.current[section.id] = el;
+                }}
+                label={section.name}
+                active={activeId === section.id}
+                disabled={disabled}
+                onClick={() => {
+                  if (disabled) return;
+                  // Optimistic highlight: flip active immediately so
+                  // the pill lights up on tap even before smooth-
+                  // scroll + scroll-scan settle. The scan will correct
+                  // any drift as the scroll lands.
+                  setActiveId(section.id);
+                  onSectionClick(section.id);
+                }}
+              />
+            );
+          })}
           {scrollToFavorites && (
             <>
               <NavStripDivider />
@@ -1661,12 +1889,18 @@ function NavPill({
   icon,
   label,
   active,
+  disabled = false,
   onClick,
 }: {
   pillRef: (el: HTMLDivElement | null) => void;
   icon?: typeof FaChevronUp;
   label: string;
   active: boolean;
+  // When true, pill renders greyed + non-interactive. Used by
+  // section pills when the favorites filter is on and the section
+  // has zero favorited photos, so users see clearly which sections
+  // still have content in the filtered view.
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -1674,7 +1908,8 @@ function NavPill({
       ref={pillRef}
       as="button"
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       flexShrink={0}
       display="inline-flex"
       alignItems="center"
@@ -1685,15 +1920,18 @@ function NavPill({
       fontWeight="500"
       letterSpacing="0.2em"
       textTransform="uppercase"
-      color={active ? 'white' : 'gray.700'}
-      bg={active ? '#c9a96e' : 'transparent'}
+      color={disabled ? 'gray.300' : active ? 'white' : 'gray.700'}
+      bg={active && !disabled ? '#c9a96e' : 'transparent'}
       border="1px solid"
-      borderColor={active ? '#c9a96e' : 'gray.200'}
+      borderColor={disabled ? 'gray.200' : active ? '#c9a96e' : 'gray.200'}
       borderRadius="full"
       transition="all 0.25s ease"
-      cursor="pointer"
+      cursor={disabled ? 'not-allowed' : 'pointer'}
+      opacity={disabled ? 0.5 : 1}
       _hover={
-        active
+        disabled
+          ? {}
+          : active
           ? { bg: '#b8964f', borderColor: '#b8964f' }
           : {
               borderColor: '#c9a96e',
