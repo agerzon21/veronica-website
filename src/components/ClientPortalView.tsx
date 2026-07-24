@@ -593,15 +593,35 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         isPhotosInView={isPhotosInView}
       />
 
+      {/* Next-steps panel — hoisted to the top of the section list so
+          the very first thing signed clients see is what they still
+          need to do (retainer / balance) or an "all set" confirmation,
+          before the collapsed signed contract or any other section.
+          Before signing this returns null and the section takes no
+          space, so it's a no-op for pending/no-contract flows. */}
+      <Box
+        id="next-steps-section"
+        sx={{ scrollMarginTop: '140px' }}
+      >
+        <NextStepsPanel
+          contractStatus={data.contract_status}
+          total={data.contract_total_amount}
+          retainer={data.contract_retainer_amount}
+          paidToDate={data.paid_to_date}
+          // Once photos land, the "All Set / awaiting delivery" state
+          // is no longer relevant — client isn't waiting anymore.
+          // Panel returns null in that case (fully-paid + delivered).
+          photosDelivered={
+            data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0)
+          }
+        />
+      </Box>
+
       {/* ─── Contract section ───
           Pending: shows the consent checkbox + signature pad + sign button.
           Signed: shows the date + a download link to the signed PDF (served
           via Drive's standard download endpoint).
           Other (none/void): empty.
-
-          Wrapped with id + scroll-margin so the portal top nav can
-          smooth-scroll here and land below the fixed Navbar (72px) +
-          the sticky portal-nav (~48px).
       */}
       <Box
         id="contract-section"
@@ -625,34 +645,12 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         )}
       </Box>
 
-      {/* Next-steps panel: lives between the signed contract status and
-          the balance section. Surfaces what the client owes RIGHT NOW.
-          - Contract signed but retainer not paid → big push to send the
-            retainer (it's the bit that actually reserves the date).
-          - Retainer paid but balance still outstanding → softer
-            reminder about the balance window.
-          - Paid in full → no nudge (panel returns null).
-
-          Wrapped with id + scroll-margin so the portal top nav can
-          jump to it — critical since after signing the contract the
-          user is auto-scrolled here to see what to do next. */}
-      <Box
-        id="next-steps-section"
-        sx={{ scrollMarginTop: '140px' }}
-      >
-        <NextStepsPanel
-          contractStatus={data.contract_status}
-          total={data.contract_total_amount}
-          retainer={data.contract_retainer_amount}
-          paidToDate={data.paid_to_date}
-        />
-      </Box>
-
       {/* ─── Payment / Balance section — Phase 3 fills this in fully.
             For now, surface the totals so it's visible end-to-end. ─── */}
       {data.contract_total_amount !== null && remaining !== null && (
         <Box
           id="balance-section"
+          bg="gray.50"
           py={{ base: 10, md: 12 }}
           px={6}
           borderTop="1px solid"
@@ -872,12 +870,14 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       <Box
         id="photos-section"
         ref={photosSectionRef}
-        // gray.50 to keep the alternating-stripe rhythm going:
-        //   Contract (gray) → Balance (white) → Photos (gray)
-        //   → Share (white) → Password (gray)
-        // ClientGallery's own root bg was changed to transparent so
-        // the wrapper controls the color here without conflict.
-        bg="gray.50"
+        // Photos is WHITE so the gallery's own white header (Private
+        // Gallery, client name, disclaimer, review card) sits flush
+        // with its section rather than looking like a bright rectangle
+        // stuck inside a gray container. New alternation:
+        //   Contract (white) → Balance (gray) → Photos (white)
+        //   → Share (gray) → Password (white)
+        // Empty-placeholder version below also uses white to match.
+        bg="white"
         borderTop="1px solid"
         borderColor="gray.100"
         sx={{ scrollMarginTop: '140px' }}
@@ -937,7 +937,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           context, it just scrolls to whichever element exists. */}
       <Box
         id="gallery-share-section"
-        bg="white"
+        bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
         py={{ base: 12, md: 14 }}
@@ -1242,10 +1242,11 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           id wrapper is the portal top nav's scroll target. */}
       <Box
         id="password-section"
-        // Alternation partner to Share (white) — this lands gray.
-        // ChangePasswordSection's own inner bg was removed so the
-        // wrapper's color shows through.
-        bg="gray.50"
+        // White in the new alternation (Share is gray above,
+        // Password lands white as the natural next). ChangePassword-
+        // Section's inner Box is already transparent so this shows
+        // through.
+        bg="white"
         borderTop="1px solid"
         borderColor="gray.100"
         sx={{ scrollMarginTop: '140px' }}
@@ -1318,11 +1319,18 @@ function NextStepsPanel({
   total,
   retainer,
   paidToDate,
+  photosDelivered,
 }: {
   contractStatus: 'none' | 'pending' | 'signed' | 'void';
   total: number | null;
   retainer: number | null;
   paidToDate: number;
+  // When true, the "All Set / awaiting delivery" state stops
+  // rendering entirely — the client isn't awaiting anything, the
+  // photos are already there. Retainer/balance states still show
+  // if somehow relevant (rare — normally payments finish before
+  // delivery, but be defensive about the state).
+  photosDelivered: boolean;
 }) {
   // Only meaningful after the contract is signed. Before that,
   // "next step" IS the contract itself and there's already a
@@ -1334,6 +1342,10 @@ function NextStepsPanel({
   const balanceOutstanding = !retainerOutstanding && paidToDate < total;
   const balanceToSend = balanceOutstanding ? total - paidToDate : 0;
   const fullyPaid = !retainerOutstanding && !balanceOutstanding;
+
+  // Fully paid AND photos delivered → nothing to say. The Photos
+  // section itself is the celebration.
+  if (fullyPaid && photosDelivered) return null;
 
   const sectionLabel = fullyPaid ? 'All Set' : 'Next Step';
 
@@ -1626,8 +1638,11 @@ function SignedContractSection({
   };
 
   return (
+    // White in the alternation — the section wrapper in the parent
+    // tree also uses white; setting it explicitly here just prevents
+    // any inherited gray from leaking through.
     <Box
-      bg="gray.50"
+      bg="white"
       borderTop="1px solid"
       borderBottom="1px solid"
       borderColor="gray.100"
@@ -1810,7 +1825,7 @@ function ContractSignSection({
   if (!contract) {
     return (
       <Box
-        bg="gray.50"
+        bg="white"
         borderTop="1px solid"
         borderBottom="1px solid"
         borderColor="gray.100"
@@ -1838,8 +1853,9 @@ function ContractSignSection({
   }
 
   return (
+    // Main sign-flow view — white background per the alternation.
     <Box
-      bg="gray.50"
+      bg="white"
       borderTop="1px solid"
       borderBottom="1px solid"
       borderColor="gray.100"
@@ -2404,8 +2420,11 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
   // that should stand out visually (always gold-filled) — used for
   // Next Steps to signal urgency about an unpaid balance/retainer.
   const pills: { id: string; label: string; emphasized?: boolean }[] = [];
-  if (hasContract) pills.push({ id: 'contract-section', label: 'Contract' });
+  // Next Steps first — matches the DOM order (we moved the panel to
+  // the top of the section list) and puts the "what do I need to
+  // do?" pill left of the more informational Contract/Balance pills.
   if (hasNextStep) pills.push({ id: 'next-steps-section', label: 'Next Steps', emphasized: true });
+  if (hasContract) pills.push({ id: 'contract-section', label: 'Contract' });
   if (hasBalance) pills.push({ id: 'balance-section', label: 'Balance' });
   pills.push({ id: 'photos-section', label: 'Photos' });
   pills.push({ id: 'gallery-share-section', label: 'Share' });
@@ -2477,12 +2496,24 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
   }, [pills.length]);
 
   // Keep the active pill visually in view within the horizontal strip.
+  //
+  // Scrolls the strip container directly instead of using pill.
+  // scrollIntoView() — the latter treats `block: 'nearest'` as
+  // "scroll the page to bring the element into view" when the whole
+  // sticky nav container is off-screen (which happens on tall pages
+  // when the user is far past the section it points at). That was
+  // causing the mysterious "click Bottom → page scrolls to true
+  // bottom, then springs back up" behavior. Direct container scroll
+  // touches only the strip's own scrollLeft and can never move the
+  // main window scroll.
   useEffect(() => {
     if (!activeId) return;
     const pill = pillRefs.current[activeId];
-    if (pill && 'scrollIntoView' in pill) {
-      pill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
+    const container = scrollRef.current;
+    if (!pill || !container) return;
+    const targetLeft =
+      pill.offsetLeft - container.clientWidth / 2 + pill.offsetWidth / 2;
+    container.scrollTo({ left: targetLeft, behavior: 'smooth' });
   }, [activeId]);
 
   const handleClick = (id: string) => {

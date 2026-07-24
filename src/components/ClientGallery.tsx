@@ -1275,15 +1275,20 @@ function TopSectionNav({
 
   // Whenever the active pill changes, scroll it into view within the
   // horizontal strip so it stays visible even when the section list
-  // overflows the viewport. `inline: 'center'` keeps it roughly
-  // centered; `block: 'nearest'` prevents the strip from moving the
-  // whole page vertically.
+  // overflows the viewport. Scrolls the container directly rather
+  // than using pill.scrollIntoView() — the latter would move the
+  // page vertically when the sticky nav is out of view (block:
+  // 'nearest' has an escape hatch to page-scroll when the element
+  // isn't reachable within its scroll containers). That was
+  // producing the "click Bottom → page springs back up" bounce.
   useEffect(() => {
     if (!activeId) return;
     const pill = pillRefs.current[activeId];
-    if (pill && 'scrollIntoView' in pill) {
-      pill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
+    const container = scrollRef.current;
+    if (!pill || !container) return;
+    const targetLeft =
+      pill.offsetLeft - container.clientWidth / 2 + pill.offsetWidth / 2;
+    container.scrollTo({ left: targetLeft, behavior: 'smooth' });
   }, [activeId]);
 
   return (
