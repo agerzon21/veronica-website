@@ -591,9 +591,12 @@ const ClientGallery = ({
                 // could sit tight against that nav bar's bottom edge.)
                 mt={{ base: 8, md: 12 }}
                 // scroll-margin-top so smooth-scroll lands the section
-                // header below the fixed Navbar (72px) with a little
-                // breathing room, not flush against it.
-                sx={{ scrollMarginTop: '92px' }}
+                // header below the fixed Navbar (72px) + the sticky
+                // TopSectionNav strip (~52px on desktop). 140px = the
+                // sum plus a bit of breathing room. Mobile doesn't
+                // have the top strip so it's slightly excessive there,
+                // which is fine — just lands a touch lower, no bug.
+                sx={{ scrollMarginTop: '140px' }}
               >
                 {/* Section header — matches the gallery's main header
                     treatment but scaled down: small gold uppercase label,
@@ -1226,36 +1229,48 @@ function TopSectionNav({
     };
   }, []);
 
-  // Section observation. Skipped whenever the user is at either
-  // extreme so Top/Bottom stays highlighted instead of being
-  // overwritten by "the first section is technically in view."
+  // Active-section tracking via a rAF-throttled scroll listener.
+  // Same approach as PortalTopNav: on every scroll frame, pick the
+  // section with the largest top value that's still ≤ 150 (just
+  // below the sticky nav bottom). That's the section the user has
+  // most recently scrolled INTO. Skips entirely when the user is
+  // at a page extreme so Top/Bottom stays highlighted there.
   //
-  // Picks the entry with the LARGEST top value (not smallest) — that
-  // one is the section the user has most recently entered from the
-  // bottom, i.e., their current focus. Picking smallest-top would
-  // favor sections the user has already scrolled deep past.
+  // Replaces the previous IntersectionObserver approach which fired
+  // on threshold changes and could miss transitions — was the cause
+  // of "click Photos, Share lights up" and "scroll up, skip Contract"
+  // symptoms in the portal, and slightly wonky Password highlighting.
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (isAtExtremeRef.current !== null) return;
-        const visible = entries.filter((e) => e.isIntersecting);
-        if (visible.length === 0) return;
-        const current = visible.reduce((best, e) =>
-          e.boundingClientRect.top > best.boundingClientRect.top ? e : best,
-        );
-        const id = current.target.getAttribute('data-section-id');
-        if (id) setActiveId(id);
-      },
-      { rootMargin: '-140px 0px -60% 0px', threshold: 0 },
-    );
-    const refs = sectionRefs.current;
-    Object.entries(refs).forEach(([id, el]) => {
-      if (el) {
-        el.setAttribute('data-section-id', id);
-        observer.observe(el);
-      }
-    });
-    return () => observer.disconnect();
+    const ACTIVATION_LINE = 150;
+    let raf: number | null = null;
+    const update = () => {
+      raf = null;
+      if (isAtExtremeRef.current !== null) return;
+      let currentId: string | null = null;
+      let bestTop = -Infinity;
+      const refs = sectionRefs.current;
+      Object.entries(refs).forEach(([id, el]) => {
+        if (!el) return;
+        const top = el.getBoundingClientRect().top;
+        if (top <= ACTIVATION_LINE && top > bestTop) {
+          bestTop = top;
+          currentId = id;
+        }
+      });
+      if (currentId) setActiveId(currentId);
+    };
+    const onScroll = () => {
+      if (raf !== null) return;
+      raf = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (raf !== null) cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
   }, [sections, sectionRefs]);
 
   // Whenever the active pill changes, scroll it into view within the

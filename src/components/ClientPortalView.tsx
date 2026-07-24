@@ -553,7 +553,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         id="contract-section"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: '130px' }}
+        sx={{ scrollMarginTop: '140px' }}
       >
         {data.contract_status === 'pending' && (
           <ContractSignSection
@@ -594,7 +594,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           px={6}
           borderTop="1px solid"
           borderColor="gray.100"
-          sx={{ scrollMarginTop: '130px' }}
+          sx={{ scrollMarginTop: '140px' }}
         >
           <VStack spacing={4} maxW="540px" mx="auto" textAlign="center">
             <Text
@@ -817,7 +817,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: '90px' }}
+        sx={{ scrollMarginTop: '140px' }}
       >
         {(() => {
           const hasFiles =
@@ -880,7 +880,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         py={{ base: 12, md: 14 }}
         px={6}
         mt={6}
-        sx={{ scrollMarginTop: '90px' }}
+        sx={{ scrollMarginTop: '140px' }}
       >
         <VStack maxW="520px" mx="auto" spacing={6}>
           {/* Section header */}
@@ -1171,7 +1171,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: '130px' }}
+        sx={{ scrollMarginTop: '140px' }}
       >
         <ChangePasswordSection
           credentials={credentials}
@@ -2213,38 +2213,54 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
   pills.push({ id: 'gallery-share-section', label: 'Share' });
   pills.push({ id: 'password-section', label: 'Password' });
 
-  // Track which portal section is currently at the top of the
-  // observation zone. When multiple sections intersect the zone at
-  // once — normal case for a large section spanning past the zone
-  // AND a small section just entered from below — we want the one
-  // the user is looking AT (most recently entered from the bottom),
-  // NOT the one they've already scrolled past.
+  // Active-section tracking via a rAF-throttled scroll listener.
+  // Every animation frame, we look at ALL sections' positions and
+  // pick the one whose top has most recently scrolled above the
+  // sticky nav bottom (~150px, giving a little tolerance beyond
+  // the actual 130px). That's the section the user is currently
+  // reading.
   //
-  // For entries whose top has scrolled above the zone, top is
-  // negative. For entries just entering the zone from below, top
-  // is a small positive number. The "user's current section" is the
-  // one with the largest top value among the visible entries.
+  // Rule: the "current" section is the one with the LARGEST top
+  // value that's still ≤ 150. That's whichever section is closest
+  // to (and above) the sticky nav bottom line — the section the
+  // user has most recently scrolled INTO.
   //
-  // (Earlier version picked smallest top, which incorrectly favored
-  // the section the user had scrolled MOST past — this was the
-  // "click Contract, Balance lights up" bug.)
+  // Why this over IntersectionObserver: IO fires on threshold
+  // changes but between fires the state can be stale. And when a
+  // tiny section is fully in the observation zone alongside a big
+  // section poking in from below, IO's "topmost by boundingClient
+  // Rect" can pick the wrong one — this was the "click Photos,
+  // Share lights up" and "scroll up, skip Contract" bugs.
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((e) => e.isIntersecting);
-        if (visible.length === 0) return;
-        const current = visible.reduce((best, e) =>
-          e.boundingClientRect.top > best.boundingClientRect.top ? e : best,
-        );
-        setActiveId(current.target.id);
-      },
-      { rootMargin: '-140px 0px -55% 0px', threshold: 0 },
-    );
-    pills.forEach((p) => {
-      const el = document.getElementById(p.id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+    const ACTIVATION_LINE = 150;
+    let raf: number | null = null;
+    const update = () => {
+      raf = null;
+      let currentId: string | null = null;
+      let bestTop = -Infinity;
+      pills.forEach((p) => {
+        const el = document.getElementById(p.id);
+        if (!el) return;
+        const top = el.getBoundingClientRect().top;
+        if (top <= ACTIVATION_LINE && top > bestTop) {
+          bestTop = top;
+          currentId = p.id;
+        }
+      });
+      setActiveId(currentId);
+    };
+    const onScroll = () => {
+      if (raf !== null) return;
+      raf = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (raf !== null) cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
   }, [pills.length]);
 
   // Keep the active pill visually in view within the horizontal strip.
