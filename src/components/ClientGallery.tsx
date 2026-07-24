@@ -1199,16 +1199,21 @@ function TopSectionNav({
   // Section observation. Skipped whenever the user is at either
   // extreme so Top/Bottom stays highlighted instead of being
   // overwritten by "the first section is technically in view."
+  //
+  // Picks the entry with the LARGEST top value (not smallest) — that
+  // one is the section the user has most recently entered from the
+  // bottom, i.e., their current focus. Picking smallest-top would
+  // favor sections the user has already scrolled deep past.
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (isAtExtremeRef.current !== null) return;
         const visible = entries.filter((e) => e.isIntersecting);
         if (visible.length === 0) return;
-        const topmost = visible.reduce((best, e) =>
-          e.boundingClientRect.top < best.boundingClientRect.top ? e : best,
+        const current = visible.reduce((best, e) =>
+          e.boundingClientRect.top > best.boundingClientRect.top ? e : best,
         );
-        const id = topmost.target.getAttribute('data-section-id');
+        const id = current.target.getAttribute('data-section-id');
         if (id) setActiveId(id);
       },
       { rootMargin: '-140px 0px -60% 0px', threshold: 0 },

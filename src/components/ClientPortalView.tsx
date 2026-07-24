@@ -149,28 +149,35 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       ? data.contract_total_amount - data.paid_to_date
       : null;
 
-  // Portal-nav / gallery-nav coordination. When the photos section
-  // enters the viewport, the portal-level top nav hides on desktop so
+  // Portal-nav / gallery-nav coordination. When the user is INSIDE
+  // the photos section, the portal-level top nav hides on desktop so
   // the gallery's own sticky section-nav can take over that space
-  // without stacking. The ref is attached to the photos section
-  // wrapper below, and IntersectionObserver flips the state.
+  // without stacking.
+  //
+  // Uses scroll position directly instead of IntersectionObserver
+  // because IO fires the moment any pixel of the section enters the
+  // observation zone — which, for a small placeholder positioned
+  // right below the Balance section, incorrectly triggers "in view"
+  // when the user has only scrolled to Balance. Scroll-based check
+  // is definitively "user has scrolled INTO the section" (its top
+  // is above the sticky nav bottom, its bottom is still below it).
   const photosSectionRef = useRef<HTMLDivElement | null>(null);
   const [isPhotosInView, setIsPhotosInView] = useState(false);
   useEffect(() => {
     const el = photosSectionRef.current;
     if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsPhotosInView(entry.isIntersecting),
-      {
-        // Trigger when the section's top has scrolled past the sticky
-        // nav zone (Navbar 72px + portal nav ~48px = ~120px). Below
-        // that means "user is now looking at photos."
-        rootMargin: '-120px 0px -20% 0px',
-        threshold: 0,
-      },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    const stickyNavBottom = 120; // Navbar 72 + portal nav ~48
+    const check = () => {
+      const rect = el.getBoundingClientRect();
+      setIsPhotosInView(rect.top < stickyNavBottom && rect.bottom > stickyNavBottom);
+    };
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => {
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+    };
   }, []);
 
   // ─── Gallery Pass management state ───
@@ -530,7 +537,12 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           smooth-scroll here and land below the fixed Navbar (72px) +
           the sticky portal-nav (~48px).
       */}
-      <Box id="contract-section" sx={{ scrollMarginTop: '130px' }}>
+      <Box
+        id="contract-section"
+        borderTop="1px solid"
+        borderColor="gray.100"
+        sx={{ scrollMarginTop: '130px' }}
+      >
         {data.contract_status === 'pending' && (
           <ContractSignSection
             credentials={credentials}
@@ -564,7 +576,14 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       {/* ─── Payment / Balance section — Phase 3 fills this in fully.
             For now, surface the totals so it's visible end-to-end. ─── */}
       {data.contract_total_amount !== null && remaining !== null && (
-        <Box id="balance-section" py={{ base: 10, md: 12 }} px={6} sx={{ scrollMarginTop: '130px' }}>
+        <Box
+          id="balance-section"
+          py={{ base: 10, md: 12 }}
+          px={6}
+          borderTop="1px solid"
+          borderColor="gray.100"
+          sx={{ scrollMarginTop: '130px' }}
+        >
           <VStack spacing={4} maxW="540px" mx="auto" textAlign="center">
             <Text
               fontSize="xs"
@@ -778,6 +797,8 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       <Box
         id="photos-section"
         ref={photosSectionRef}
+        borderTop="1px solid"
+        borderColor="gray.100"
         sx={{ scrollMarginTop: '90px' }}
       >
         {(() => {
@@ -802,7 +823,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
             );
           }
           return (
-            <Box py={{ base: 14, md: 20 }} px={6} textAlign="center" bg="white">
+            <Box py={{ base: 14, md: 20 }} px={6} textAlign="center" bg="gray.50">
               <Text
                 fontSize="xs"
                 fontWeight="500"
@@ -831,8 +852,16 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           gallery's sticky Share widget — same id is used on the
           /portal/pass route so the widget doesn't need to know its
           context, it just scrolls to whichever element exists. */}
-      <Box id="gallery-share-section" bg="gray.50" py={{ base: 12, md: 14 }} px={6} mt={6}
-        sx={{ scrollMarginTop: '90px' }}>
+      <Box
+        id="gallery-share-section"
+        bg="gray.50"
+        borderTop="1px solid"
+        borderColor="gray.100"
+        py={{ base: 12, md: 14 }}
+        px={6}
+        mt={6}
+        sx={{ scrollMarginTop: '90px' }}
+      >
         <VStack maxW="520px" mx="auto" spacing={6}>
           {/* Section header */}
           <VStack spacing={2}>
@@ -1114,7 +1143,12 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           visually — the two are easy to conflate and we should not
           leave any ambiguity about which is which.
           id wrapper is the portal top nav's scroll target. */}
-      <Box id="password-section" sx={{ scrollMarginTop: '130px' }}>
+      <Box
+        id="password-section"
+        borderTop="1px solid"
+        borderColor="gray.100"
+        sx={{ scrollMarginTop: '130px' }}
+      >
         <ChangePasswordSection
           credentials={credentials}
           onChanged={onPasswordChanged}
@@ -1996,8 +2030,10 @@ function ChangePasswordSection({
     }
   };
 
+  // NOTE: borderTop lives on the section wrapper in the parent tree
+  // now (id="password-section"), so we don't double-border it here.
   return (
-    <Box bg="white" py={{ base: 10, md: 12 }} px={6} borderTop="1px solid" borderColor="gray.100">
+    <Box bg="white" py={{ base: 10, md: 12 }} px={6}>
       <VStack spacing={4} maxW="520px" mx="auto" textAlign="center">
         <Text
           fontSize="xs"
@@ -2124,18 +2160,30 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
   pills.push({ id: 'gallery-share-section', label: 'Share' });
   pills.push({ id: 'password-section', label: 'Password' });
 
-  // Track which portal section is currently at the top. Same
-  // IntersectionObserver pattern as the gallery's TopSectionNav —
-  // topmost intersecting entry wins.
+  // Track which portal section is currently at the top of the
+  // observation zone. When multiple sections intersect the zone at
+  // once — normal case for a large section spanning past the zone
+  // AND a small section just entered from below — we want the one
+  // the user is looking AT (most recently entered from the bottom),
+  // NOT the one they've already scrolled past.
+  //
+  // For entries whose top has scrolled above the zone, top is
+  // negative. For entries just entering the zone from below, top
+  // is a small positive number. The "user's current section" is the
+  // one with the largest top value among the visible entries.
+  //
+  // (Earlier version picked smallest top, which incorrectly favored
+  // the section the user had scrolled MOST past — this was the
+  // "click Contract, Balance lights up" bug.)
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((e) => e.isIntersecting);
         if (visible.length === 0) return;
-        const topmost = visible.reduce((best, e) =>
-          e.boundingClientRect.top < best.boundingClientRect.top ? e : best,
+        const current = visible.reduce((best, e) =>
+          e.boundingClientRect.top > best.boundingClientRect.top ? e : best,
         );
-        setActiveId(topmost.target.id);
+        setActiveId(current.target.id);
       },
       { rootMargin: '-140px 0px -55% 0px', threshold: 0 },
     );
