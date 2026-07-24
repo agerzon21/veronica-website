@@ -10,7 +10,7 @@ import {
   Spinner,
 } from '@chakra-ui/react';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
-import { FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaHeart, FaRegHeart } from 'react-icons/fa';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -70,6 +70,12 @@ interface ImageModalProps {
   // of the user). These URLs go direct to Drive (not our proxy), so
   // preloading costs nothing on our origin. Silently no-ops if omitted.
   getViewUrl?: (index: number) => string | null | undefined;
+  // Favorites — when onToggleFavorite is provided, a heart button
+  // appears in the modal top bar. Reflects isFavorite state and calls
+  // the toggle on click. Only wired up for full-portal users; guests
+  // on /portal/pass leave both props undefined.
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 // 40 MB. Reasoning: typical wedding/portrait JPEGs are 5–25 MB (well
@@ -273,6 +279,8 @@ const ImageModal = ({
   driveViewUrl,
   hideShare,
   getViewUrl,
+  isFavorite,
+  onToggleFavorite,
 }: ImageModalProps) => {
   // Touch-device detection. Captured once on mount via useEffect so SSR/
   // prerender stays consistent (no `window` access during render).
@@ -675,6 +683,30 @@ const ImageModal = ({
         </Text>
 
         <Flex gap={5} align="center" onClick={(e) => e.stopPropagation()}>
+          {/* Favorite heart — only rendered when the parent wired up the
+              callback (full-portal users). Filled + gold-red when
+              favorited, outlined + neutral otherwise. Same photo tap
+              flip that the grid tile does, just from inside the modal
+              so users don't have to close it to toggle. */}
+          {onToggleFavorite && (
+            <Box
+              as="button"
+              type="button"
+              aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              aria-pressed={isFavorite}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onToggleFavorite();
+              }}
+              color={isFavorite ? '#ff4c68' : 'whiteAlpha.600'}
+              transition="color 0.3s, transform 0.15s"
+              _hover={{ color: '#ff4c68', transform: 'scale(1.1)' }}
+              _active={{ transform: 'scale(0.92)' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Box as={isFavorite ? FaHeart : FaRegHeart} fontSize="18px" />
+            </Box>
+          )}
           {photoData && category && !hideShare && (
             <Box
               as="button"

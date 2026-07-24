@@ -42,6 +42,11 @@ type ClientPortalRow = {
   gallery_enabled: boolean;
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
+  // List of Drive file IDs the client has hearted. Postgres TEXT[]
+  // column added in the favorites migration. `coalesce(..., '{}')` on
+  // the select side means older rows without the column populated
+  // come back as an empty array instead of null.
+  favorite_photo_ids: string[] | null;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -67,7 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              contract_status, contract_signed_at, contract_body, contract_signed_pdf_url,
              contract_total_amount, contract_retainer_amount, paid_to_date, payment_plan_enabled,
              gallery_password, gallery_enabled,
-             gallery_delivered_at, gallery_expires_at
+             gallery_delivered_at, gallery_expires_at,
+             coalesce(favorite_photo_ids, '{}') as favorite_photo_ids
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
@@ -192,6 +198,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Gallery hosting
       gallery_delivered_at: row.gallery_delivered_at,
       gallery_expires_at: row.gallery_expires_at,
+
+      // Favorites — list of Drive file IDs the client has hearted.
+      // Empty array if none / column not yet populated.
+      favorite_photo_ids: row.favorite_photo_ids ?? [],
     });
   } catch (err) {
     console.error('[portal/client] handler failed:', err);

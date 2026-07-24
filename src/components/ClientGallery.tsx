@@ -16,7 +16,7 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronDown, FaListUl } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronDown, FaListUl, FaHeart, FaRegHeart } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
@@ -59,6 +59,14 @@ interface ClientGalleryProps {
   // get a richer share UI inside the Gallery Pass section instead, so
   // we leave this prop unset for them.
   galleryPassword?: string;
+  // Favorites — when both are provided, the heart UI is enabled on
+  // every tile + inside the modal, and a filter chip appears above
+  // the grid. Only wired up for full-portal users (guests on
+  // /portal/pass leave these undefined, which disables the whole
+  // feature — guests have no persistent identity to attach favorites
+  // to). See ClientPortalView for the API call + optimistic update.
+  favorites?: string[];
+  onToggleFavorite?: (photoId: string, currentlyFavorite: boolean) => void;
 }
 
 interface GridTileProps {
@@ -66,6 +74,10 @@ interface GridTileProps {
   index: number;
   onSelect: (i: number) => void;
   setRef: (el: HTMLDivElement | null) => void;
+  // Favorites — omitted for guests on /portal/pass (no persistent
+  // identity to attach hearts to); provided for full-portal users.
+  isFavorite?: boolean;
+  onToggleFavorite?: (photoId: string, currentlyFavorite: boolean) => void;
 }
 
 /**
@@ -76,9 +88,15 @@ interface GridTileProps {
  * a broken-image icon. Video files also get a play-icon overlay so it's
  * clear they're not photos before the user even clicks.
  */
-const GridTile = ({ file, index, onSelect, setRef }: GridTileProps) => {
+const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite }: GridTileProps) => {
   const [thumbFailed, setThumbFailed] = useState(false);
   const isVideo = file.mimeType.startsWith('video/');
+  const favoritesEnabled = Boolean(onToggleFavorite);
+
+  const handleHeartClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleFavorite?.(file.id, Boolean(isFavorite));
+  };
 
   return (
     <Box
@@ -217,6 +235,50 @@ const GridTile = ({ file, index, onSelect, setRef }: GridTileProps) => {
       >
         <Icon as={FaDownload} boxSize={3.5} />
       </Box>
+
+      {/* Favorite heart — top-left corner, opposite the download.
+          Always visible when the photo IS favorited (so users see
+          their picks at a glance while scrolling); only appears on
+          hover otherwise. Mobile shows it always since there's no
+          hover — the extra visual weight is worth it for tap
+          discoverability. Only rendered when favorites are enabled
+          (full-portal users). */}
+      {favoritesEnabled && (
+        <Box
+          as="button"
+          type="button"
+          onClick={handleHeartClick}
+          position="absolute"
+          top={2}
+          left={2}
+          bg={isFavorite ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.45)'}
+          color={isFavorite ? '#ff4c68' : 'white'}
+          w="32px"
+          h="32px"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          borderRadius="full"
+          border="none"
+          cursor="pointer"
+          opacity={isFavorite ? 1 : { base: 0.85, md: 0 }}
+          transition="opacity 0.25s ease, background 0.2s ease, color 0.2s ease"
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-pressed={isFavorite}
+          sx={{
+            WebkitTapHighlightColor: 'transparent',
+            // Show on hover for desktop — matches the download-icon
+            // reveal pattern above so the two corner controls feel
+            // consistent.
+            '@media (hover: hover)': {
+              '.chakra-group:hover &, [role="group"]:hover &': { opacity: 1 },
+            },
+          }}
+          _hover={{ bg: 'rgba(0,0,0,0.75)', color: '#ff4c68' }}
+        >
+          <Icon as={isFavorite ? FaHeart : FaRegHeart} boxSize={3.5} />
+        </Box>
+      )}
     </Box>
   );
 };
@@ -228,13 +290,38 @@ const ClientGallery = ({
   sections,
   warning,
   galleryPassword,
+  favorites,
+  onToggleFavorite,
 }: ClientGalleryProps) => {
+  const favoritesEnabled = Boolean(onToggleFavorite);
+  const favoritesSet = new Set(favorites ?? []);
+  const favoritesCount = favoritesSet.size;
+
+  // "Show only favorites" filter — client-side toggle above the grid.
+  // When on, we filter rootFiles + each section's files down to just
+  // hearted photos. Sections with zero favorites drop out entirely so
+  // the section headers don't leave "empty section" boxes.
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const filterActive = favoritesEnabled && showFavoritesOnly && favoritesCount > 0;
+
+  const displayRootFiles = filterActive
+    ? rootFiles.filter((f) => favoritesSet.has(f.id))
+    : rootFiles;
+  const displaySections = filterActive
+    ? sections
+        .map((s) => ({ ...s, files: s.files.filter((f) => favoritesSet.has(f.id)) }))
+        .filter((s) => s.files.length > 0)
+    : sections;
+
   // Flatten everything into one ordered array. The lightbox navigates by
   // index into this array, so prev/next walks across all sections in
   // delivery order. Section headers are purely visual — they don't gate
   // navigation. This matches photographer-platform convention (Pixieset,
   // ShootProof) where you scroll through the full set seamlessly.
-  const allFiles = [...rootFiles, ...sections.flatMap((s) => s.files)];
+  //
+  // When the favorites filter is active, we walk the FILTERED array so
+  // arrow-key nav in the modal stays within favorites too.
+  const allFiles = [...displayRootFiles, ...displaySections.flatMap((s) => s.files)];
   const totalCount = allFiles.length;
 
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -424,9 +511,9 @@ const ClientGallery = ({
           masks are the visual cue that there's more when the folder
           list overflows the viewport — the borderBottom is gone since
           it was crowding the first section's header. */}
-      {sections.length > 1 && (
+      {displaySections.length > 1 && (
         <TopSectionNav
-          sections={sections}
+          sections={displaySections}
           sectionRefs={sectionRefs}
           onSectionClick={scrollToSection}
           scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
@@ -439,24 +526,43 @@ const ClientGallery = ({
         />
       )}
 
-      {/* Grid */}
+      {/* Favorites filter chip — appears above the grid only when
+          favorites feature is active. When user has 0 favorites, shows
+          a soft hint. When 1+, shows count + toggle to filter. When
+          filter is ACTIVE, chip flips to a louder "showing favorites"
+          state with an ✕ so users can't lose track that the view is
+          filtered. */}
+      {favoritesEnabled && (
+        <FavoritesChip
+          count={favoritesCount}
+          filterActive={filterActive}
+          onToggleFilter={() => setShowFavoritesOnly((v) => !v)}
+        />
+      )}
+
+      {/* Grid — renders the filtered set (displayRootFiles /
+          displaySections) so the "show favorites only" toggle above
+          collapses everything else in one shot. Original `rootFiles`
+          / `sections` are still available for count math. */}
       {totalCount > 0 ? (
         <Box px={{ base: 2, md: 6 }} pb={20}>
           {/* Root-level files (no subfolder). Show first, no header — these
               are the files Veronika placed directly in the gallery root. If
               she delivered everything in subfolders, this is empty. */}
-          {rootFiles.length > 0 && (
+          {displayRootFiles.length > 0 && (
             <SimpleGrid
               columns={{ base: 2, md: 3, lg: 4 }}
               spacing={{ base: 1, md: 2 }}
             >
-              {rootFiles.map((file, i) => (
+              {displayRootFiles.map((file, i) => (
                 <GridTile
                   key={file.id}
                   file={file}
                   index={i}
                   onSelect={handleOpen}
                   setRef={(el) => { itemRefs.current[i] = el; }}
+                  isFavorite={favoritesSet.has(file.id)}
+                  onToggleFavorite={onToggleFavorite}
                 />
               ))}
             </SimpleGrid>
@@ -465,10 +571,10 @@ const ClientGallery = ({
           {/* Sections — one per subfolder. Each gets its own labeled grid.
               Index offset accumulates so itemRefs[i] always maps to
               allFiles[i] (the same array the lightbox navigates by). */}
-          {sections.map((section, sIdx) => {
+          {displaySections.map((section, sIdx) => {
             const offset =
-              rootFiles.length +
-              sections.slice(0, sIdx).reduce((acc, s) => acc + s.files.length, 0);
+              displayRootFiles.length +
+              displaySections.slice(0, sIdx).reduce((acc, s) => acc + s.files.length, 0);
             return (
               <Box
                 key={section.id}
@@ -529,6 +635,8 @@ const ClientGallery = ({
                         index={flatIndex}
                         onSelect={handleOpen}
                         setRef={(el) => { itemRefs.current[flatIndex] = el; }}
+                        isFavorite={favoritesSet.has(file.id)}
+                        onToggleFavorite={onToggleFavorite}
                       />
                     );
                   })}
@@ -536,6 +644,22 @@ const ClientGallery = ({
               </Box>
             );
           })}
+        </Box>
+      ) : filterActive ? (
+        /* Filter is on but somehow there are 0 results (edge case, only
+           if favorites list got out of sync with the gallery). Give
+           the user a way back to the unfiltered view. */
+        <Box textAlign="center" py={20} px={6}>
+          <Text color="gray.500" fontWeight="300" mb={4}>
+            No favorites in the current view.
+          </Text>
+          <CTAButton
+            onClick={() => setShowFavoritesOnly(false)}
+            variant="outline"
+            size="sm"
+          >
+            Show all photos
+          </CTAButton>
         </Box>
       ) : (
         <Box textAlign="center" py={20} px={6}>
@@ -581,6 +705,15 @@ const ClientGallery = ({
           // cache. Returns undefined for out-of-range indexes; modal
           // treats that as "skip".
           getViewUrl={(i) => allFiles[i]?.viewUrl}
+          // Favorite state for the currently-open photo + callback.
+          // The heart in the modal top bar is only rendered when
+          // onToggleFavorite is provided (full-portal only).
+          isFavorite={favoritesSet.has(selected.id)}
+          onToggleFavorite={
+            onToggleFavorite
+              ? () => onToggleFavorite(selected.id, favoritesSet.has(selected.id))
+              : undefined
+          }
         />
       )}
 
@@ -888,6 +1021,93 @@ function DrawerRow({
       {icon && <Icon as={icon} boxSize={3} color="gray.400" />}
       <Box as="span">{label}</Box>
     </Box>
+  );
+}
+
+/**
+ * Favorites filter chip. Sits above the gallery grid. Three states:
+ *   - No favorites yet: soft hint "Tap ♥ on any photo to save it here."
+ *   - Some favorites, filter OFF: shows "12 favorites · Show favorites only"
+ *     as a subtle chip.
+ *   - Filter ON: chip flips to loud gold-tinted "Showing 12 favorites · ✕"
+ *     that's impossible to miss, so users can't get "stuck" in a filtered
+ *     view thinking the gallery has fewer photos.
+ *
+ * Rendered only when favorites feature is enabled (full-portal users).
+ */
+function FavoritesChip({
+  count,
+  filterActive,
+  onToggleFilter,
+}: {
+  count: number;
+  filterActive: boolean;
+  onToggleFilter: () => void;
+}) {
+  // Zero-favorite state — soft hint, no toggle to activate.
+  if (count === 0 && !filterActive) {
+    return (
+      <Flex justify="center" px={4} pb={4}>
+        <Flex
+          align="center"
+          gap={2}
+          px={4}
+          py={2}
+          bg="gray.50"
+          border="1px solid"
+          borderColor="gray.200"
+          borderRadius="full"
+          fontSize="xs"
+          color="gray.500"
+          fontWeight="300"
+        >
+          <Icon as={FaRegHeart} boxSize={3} />
+          <Box as="span">Tap the ♥ on any photo to save it as a favorite.</Box>
+        </Flex>
+      </Flex>
+    );
+  }
+
+  return (
+    <Flex justify="center" px={4} pb={4}>
+      <Flex
+        as="button"
+        type="button"
+        onClick={onToggleFilter}
+        align="center"
+        gap={2}
+        px={4}
+        py={2}
+        bg={filterActive ? '#fdf9f0' : 'transparent'}
+        border="1px solid"
+        borderColor={filterActive ? '#c9a96e' : 'gray.200'}
+        borderRadius="full"
+        fontSize="xs"
+        fontWeight="500"
+        letterSpacing="0.05em"
+        color={filterActive ? '#8a6e35' : 'gray.700'}
+        cursor="pointer"
+        transition="all 0.2s"
+        _hover={{
+          borderColor: '#c9a96e',
+          color: '#8a6e35',
+          bg: '#fdf9f0',
+        }}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        <Icon as={FaHeart} boxSize={3} color={filterActive ? '#ff4c68' : '#c9a96e'} />
+        <Box as="span">
+          {filterActive
+            ? `Showing ${count} ${count === 1 ? 'favorite' : 'favorites'}`
+            : `${count} ${count === 1 ? 'favorite' : 'favorites'} · Show only these`}
+        </Box>
+        {filterActive && (
+          <Box as="span" ml={1} fontSize="sm" opacity={0.7}>
+            ✕
+          </Box>
+        )}
+      </Flex>
+    </Flex>
   );
 }
 

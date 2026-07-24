@@ -1,5 +1,5 @@
 import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast, Collapse } from '@chakra-ui/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FaCopy, FaSync, FaCheck, FaUndo } from 'react-icons/fa';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
@@ -54,6 +54,10 @@ export interface ClientPortalData {
   // Gallery hosting — surfaced in the UI as the "available until" line
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
+
+  // Favorites — Drive file IDs the client has hearted. Only populated
+  // for full-mode portals (guests on /portal/pass don't get favorites).
+  favorite_photo_ids: string[];
 }
 
 interface ClientPortalViewProps {
@@ -176,6 +180,58 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
   const [gpCustomValue, setGpCustomValue] = useState('');
   const [gpError, setGpError] = useState('');
   const [gpCopied, setGpCopied] = useState(false);
+
+  // ─── Favorites ───
+  // Optimistic UI: update the local list immediately, fire the API
+  // call in the background, roll back if it fails. Feels instant
+  // even on slow networks; a heart-tap must not visibly lag.
+  const favorites = data.favorite_photo_ids;
+  const handleToggleFavorite = useCallback(
+    (photoId: string, currentlyFavorite: boolean) => {
+      const action = currentlyFavorite ? 'remove' : 'add';
+      // Optimistic update — flip local state first.
+      const nextFavorites = currentlyFavorite
+        ? favorites.filter((id) => id !== photoId)
+        : Array.from(new Set([...favorites, photoId]));
+      onDataUpdate({ ...data, favorite_photo_ids: nextFavorites });
+      // Fire-and-forget API call. On failure we revert and toast so
+      // the client isn't left thinking a favorite was saved when it
+      // wasn't.
+      fetch('/api/portal/favorite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: credentials.email,
+          password: credentials.password,
+          photo_id: photoId,
+          action,
+        }),
+      })
+        .then((res) => res.json())
+        .then((result) => {
+          if (!result?.success) throw new Error(result?.error || 'server error');
+          // Trust the server's list as the source of truth (handles
+          // the case where the local optimistic state raced with
+          // another tab or a stale reload).
+          onDataUpdate({
+            ...data,
+            favorite_photo_ids: result.favorite_photo_ids ?? nextFavorites,
+          });
+        })
+        .catch(() => {
+          // Roll back to previous state + toast.
+          onDataUpdate({ ...data, favorite_photo_ids: favorites });
+          toast({
+            title: `Could not ${action} favorite`,
+            description: 'Check your connection and try again.',
+            status: 'error',
+            duration: 3000,
+            isClosable: true,
+          });
+        });
+    },
+    [credentials.email, credentials.password, data, favorites, onDataUpdate, toast],
+  );
 
   // ─── Refresh ───
   // Page reload would log them out (credentials live in state), so a
@@ -736,6 +792,12 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                 rootFiles={data.rootFiles}
                 sections={data.sections}
                 warning={data.warning}
+                // Favorites are full-portal only. /portal/pass renders
+                // ClientGallery without these props, which disables the
+                // heart UI + filter for guests (they didn't sign in,
+                // there's no place to persist their picks).
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavorite}
               />
             );
           }
