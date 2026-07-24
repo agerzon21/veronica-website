@@ -1299,7 +1299,14 @@ function TopSectionNav({
               }}
               label={section.name}
               active={activeId === section.id}
-              onClick={() => onSectionClick(section.id)}
+              onClick={() => {
+                // Optimistic highlight: flip active immediately so the
+                // pill lights up on tap even before smooth-scroll +
+                // IntersectionObserver settle. The observer will
+                // correct any drift as the scroll lands.
+                setActiveId(section.id);
+                onSectionClick(section.id);
+              }}
             />
           ))}
           <NavStripDivider />

@@ -163,7 +163,19 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
   // is above the sticky nav bottom, its bottom is still below it).
   const photosSectionRef = useRef<HTMLDivElement | null>(null);
   const [isPhotosInView, setIsPhotosInView] = useState(false);
+  // Only meaningful when photos are actually delivered — otherwise
+  // there's no gallery TopSectionNav to swap in, so hiding the portal
+  // nav in the empty-placeholder zone would just leave the user with
+  // no nav at all. Guard the observer with a data-derived hasFiles
+  // check so the swap only kicks in when there's something to swap TO.
+  const galleryHasFiles =
+    data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0);
   useEffect(() => {
+    if (!galleryHasFiles) {
+      // Nothing to swap to → make sure the portal nav stays visible.
+      setIsPhotosInView(false);
+      return;
+    }
     const el = photosSectionRef.current;
     if (!el) return;
     const stickyNavBottom = 120; // Navbar 72 + portal nav ~48
@@ -178,7 +190,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, []);
+  }, [galleryHasFiles]);
 
   // ─── Gallery Pass management state ───
   const toast = useToast();
@@ -854,7 +866,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           context, it just scrolls to whichever element exists. */}
       <Box
         id="gallery-share-section"
-        bg="gray.50"
+        bg="white"
         borderTop="1px solid"
         borderColor="gray.100"
         py={{ base: 12, md: 14 }}
@@ -2205,7 +2217,15 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
 
   const handleClick = (id: string) => {
     const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!el) return;
+    // Optimistic highlight so the clicked pill flips gold immediately.
+    // The IntersectionObserver reads scroll position and can lag a beat
+    // behind smooth-scroll, which was showing up as "click Balance,
+    // Contract stays highlighted for a moment" during testing. The
+    // observer will still correct the state as the scroll settles, so
+    // this is a purely visual head-start.
+    setActiveId(id);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   // Fewer than 2 pills = no navigation needed (can't "jump between"
