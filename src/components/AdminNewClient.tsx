@@ -208,6 +208,19 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Set of field ids that failed the last submit attempt. Drives
+  // per-field red highlighting via <Field hasError={...}> — much
+  // faster to eyeball than reading "these fields are required: X, Y, Z"
+  // and hunting them down manually in a form this long.
+  const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
+  const clearFieldError = (id: string) => {
+    setFieldErrors((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
 
   const handleVarChange = (key: string, value: string) => {
     setVariables((prev) => ({ ...prev, [key]: value }));
@@ -216,42 +229,58 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
+    setFieldErrors(new Set());
 
-    if (!partner1FullName.trim()) {
-      setError('Partner 1 name is required.');
-      return;
+    // Collect ALL missing/invalid fields up front instead of
+    // early-returning on the first one — Vero shouldn't have to fix
+    // → submit → fix → submit → fix through a long form to discover
+    // every missing piece one at a time.
+    const missing: { id: string; label: string }[] = [];
+    if (!partner1FullName.trim())
+      missing.push({ id: 'partner1', label: 'Partner 1 name' });
+    if (!clientEmail.trim())
+      missing.push({ id: 'clientEmail', label: 'Client email' });
+    if (!eventDateIso)
+      missing.push({ id: 'eventDate', label: 'Event date' });
+    if (!sessionType.trim())
+      missing.push({ id: 'sessionType', label: 'Session type' });
+    if (!clientDisplayName.trim())
+      missing.push({ id: 'displayName', label: 'Display name' });
+    if (!galleryPassword.trim())
+      missing.push({ id: 'galleryPassword', label: 'Gallery password' });
+    if (coverage === 'custom' && !customCoverage.trim())
+      missing.push({ id: 'customCoverage', label: 'Custom coverage description' });
+    if (responsiblePartyEnabled) {
+      if (!responsiblePartyName.trim())
+        missing.push({ id: 'responsiblePartyName', label: 'Responsible Party name' });
+      if (!responsiblePartyRelationship.trim())
+        missing.push({ id: 'responsiblePartyRelationship', label: 'Responsible Party relationship' });
     }
-    if (!clientEmail.trim() || !eventDateIso || !sessionType.trim()) {
-      setError('Client email, event date, and session type are required.');
-      return;
-    }
-    if (!clientDisplayName.trim()) {
-      setError('Display name is required (it auto-fills from partner names).');
-      return;
-    }
+
+    // Amount validation is trickier because it's cross-field (retainer
+    // vs total). Do that separately after the "missing fields" check.
     const total = parseFloat(totalAmount);
     const retainer = parseFloat(retainerAmount);
-    if (!Number.isFinite(total) || total < 0 || !Number.isFinite(retainer) || retainer < 0) {
-      setError('Enter valid amounts.');
+    const totalInvalid = !Number.isFinite(total) || total < 0;
+    const retainerInvalid = !Number.isFinite(retainer) || retainer < 0;
+    if (totalInvalid) missing.push({ id: 'total', label: 'Total amount' });
+    if (retainerInvalid) missing.push({ id: 'retainer', label: 'Retainer amount' });
+
+    if (missing.length > 0) {
+      setFieldErrors(new Set(missing.map((m) => m.id)));
+      const labels = missing.map((m) => m.label);
+      setError(
+        labels.length === 1
+          ? `${labels[0]} is required.`
+          : `Missing: ${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}.`,
+      );
       return;
     }
+
     if (retainer > total) {
+      setFieldErrors(new Set(['retainer']));
       setError('Retainer cannot exceed total.');
       return;
-    }
-    if (!galleryPassword.trim()) {
-      setError('Gallery password is required.');
-      return;
-    }
-    if (coverage === 'custom' && !customCoverage.trim()) {
-      setError('Custom coverage needs a description (or pick Specific Times / Half Day / Full Day).');
-      return;
-    }
-    if (responsiblePartyEnabled) {
-      if (!responsiblePartyName.trim() || !responsiblePartyRelationship.trim()) {
-        setError('Responsible Party needs both a name and a relationship — or untoggle that option.');
-        return;
-      }
     }
 
     // Build the variables object the contract template expects. Most
@@ -440,8 +469,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           <SectionHeading>Client</SectionHeading>
 
           <HStack spacing={4} align="flex-start">
-            <Field label="Partner 1 Full Name" w="50%" required helpText="Their full legal name. First name is used in the portal greeting.">
-              <FormInput value={partner1FullName} onChange={(e) => setPartner1FullName(e.target.value)} placeholder="e.g. Chrisann Bryan" />
+            <Field label="Partner 1 Full Name" w="50%" required helpText="Their full legal name. First name is used in the portal greeting." hasError={fieldErrors.has('partner1')}>
+              <FormInput value={partner1FullName} onChange={(e) => { setPartner1FullName(e.target.value); clearFieldError('partner1'); }} placeholder="e.g. Chrisann Bryan" />
             </Field>
             <Field label="Partner 2 Full Name" w="50%" helpText="Optional. Leave blank for solo bookings (portraits, etc.).">
               <FormInput value={partner2FullName} onChange={(e) => setPartner2FullName(e.target.value)} placeholder="e.g. Rajiv Thomas (optional)" />
@@ -455,16 +484,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 ? 'Custom — clear the field to go back to the auto-generated name.'
                 : 'Auto-generated from the partner first names. Type to override.'
             }
+            hasError={fieldErrors.has('displayName')}
           >
             <FormInput
               value={clientDisplayName}
-              onChange={(e) => setDisplayNameOverride(e.target.value)}
+              onChange={(e) => { setDisplayNameOverride(e.target.value); clearFieldError('displayName'); }}
               placeholder="e.g. Chrisann & Rajiv"
             />
           </Field>
 
-          <Field label="Client Email" required helpText="The invite email goes here. They'll log in with this address.">
-            <FormInput type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.com" />
+          <Field label="Client Email" required helpText="The invite email goes here. They'll log in with this address." hasError={fieldErrors.has('clientEmail')}>
+            <FormInput type="email" value={clientEmail} onChange={(e) => { setClientEmail(e.target.value); clearFieldError('clientEmail'); }} placeholder="client@example.com" />
           </Field>
 
           {/* ─── Responsible Party (optional) ───
@@ -493,10 +523,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                   label="Responsible Party Full Name"
                   required
                   helpText="Their full legal name. They'll be the one signing the contract."
+                  hasError={fieldErrors.has('responsiblePartyName')}
                 >
                   <FormInput
                     value={responsiblePartyName}
-                    onChange={(e) => setResponsiblePartyName(e.target.value)}
+                    onChange={(e) => { setResponsiblePartyName(e.target.value); clearFieldError('responsiblePartyName'); }}
                     placeholder="e.g. Patricia Bryan"
                   />
                 </Field>
@@ -504,10 +535,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                   label="Relationship to Client(s)"
                   required
                   helpText='e.g. "Mother of the Bride", "Father of the Groom", "Family Friend".'
+                  hasError={fieldErrors.has('responsiblePartyRelationship')}
                 >
                   <FormInput
                     value={responsiblePartyRelationship}
-                    onChange={(e) => setResponsiblePartyRelationship(e.target.value)}
+                    onChange={(e) => { setResponsiblePartyRelationship(e.target.value); clearFieldError('responsiblePartyRelationship'); }}
                     placeholder="Mother of the Bride"
                   />
                 </Field>
@@ -533,8 +565,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             />
           </Field>
 
-          <Field label="Event Date" required helpText="The day of the shoot.">
-            <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
+          <Field label="Event Date" required helpText="The day of the shoot." hasError={fieldErrors.has('eventDate')}>
+            <FormInput type="date" value={eventDateIso} onChange={(e) => { setEventDateIso(e.target.value); clearFieldError('eventDate'); }} />
           </Field>
 
           <Field
@@ -630,10 +662,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               label="Custom Coverage Description"
               required
               helpText='Free text — appears on the contract as the Time. e.g. "Ceremony coverage only, exact times TBD" or "Approximately 3 hours, schedule TBD".'
+              hasError={fieldErrors.has('customCoverage')}
             >
               <Textarea
                 value={customCoverage}
-                onChange={(e) => setCustomCoverage(e.target.value)}
+                onChange={(e) => { setCustomCoverage(e.target.value); clearFieldError('customCoverage'); }}
                 placeholder="e.g. Approximately 3 hours, exact times to be confirmed"
                 rows={2}
                 focusBorderColor="#c9a96e"
@@ -641,31 +674,31 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             </Field>
           )}
 
-          <Field label="Session Type" required helpText="What kind of shoot this is. Click a standard type, or use Custom for anything else.">
-            <SessionTypePicker value={sessionType} onChange={setSessionType} />
+          <Field label="Session Type" required helpText="What kind of shoot this is. Click a standard type, or use Custom for anything else." hasError={fieldErrors.has('sessionType')}>
+            <SessionTypePicker value={sessionType} onChange={(v) => { setSessionType(v); clearFieldError('sessionType'); }} />
           </Field>
 
           {/* ─── Pricing ─── */}
           <SectionHeading>Pricing</SectionHeading>
 
           <HStack spacing={4} align="flex-start">
-            <Field label="Total (USD)" w="50%" required helpText="Total project cost across the whole booking.">
+            <Field label="Total (USD)" w="50%" required helpText="Total project cost across the whole booking." hasError={fieldErrors.has('total')}>
               <FormInput
                 type="number"
                 inputMode="decimal"
                 value={totalAmount}
-                onChange={(e) => setTotalAmount(e.target.value)}
+                onChange={(e) => { setTotalAmount(e.target.value); clearFieldError('total'); }}
                 placeholder="0"
                 step="1"
                 min="0"
               />
             </Field>
-            <Field label="Retainer (USD)" w="50%" required helpText="Non-refundable deposit. Due at signing, reserves the date.">
+            <Field label="Retainer (USD)" w="50%" required helpText="Non-refundable deposit. Due at signing, reserves the date." hasError={fieldErrors.has('retainer')}>
               <FormInput
                 type="number"
                 inputMode="decimal"
                 value={retainerAmount}
-                onChange={(e) => setRetainerAmount(e.target.value)}
+                onChange={(e) => { setRetainerAmount(e.target.value); clearFieldError('retainer'); }}
                 placeholder="0"
                 step="1"
                 min="0"
@@ -683,10 +716,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 ? 'Custom — clear the field to go back to the auto-generated password.'
                 : 'Auto-generated from the partner first names + event year (e.g. ChrisannRajiv2026). Type to override.'
             }
+            hasError={fieldErrors.has('galleryPassword')}
           >
             <FormInput
               value={galleryPassword}
-              onChange={(e) => setGalleryPasswordOverride(e.target.value)}
+              onChange={(e) => { setGalleryPasswordOverride(e.target.value); clearFieldError('galleryPassword'); }}
               placeholder="ChrisannRajiv2026"
               autoCapitalize="characters"
               autoCorrect="off"
@@ -831,6 +865,7 @@ const Field = ({
   children,
   w,
   required,
+  hasError,
 }: {
   label: string;
   helpText?: string;
@@ -840,6 +875,11 @@ const Field = ({
   // a sensible auto-fill, so Vero can scan the form and spot what's
   // still missing before submitting.
   required?: boolean;
+  // Turns the label red and wraps the children with a red glow when
+  // this specific field failed validation on the last submit attempt.
+  // Complements the summary error message so Vero can spot the exact
+  // fields to fix at a glance instead of hunting through the form.
+  hasError?: boolean;
 }) => (
   <Box w={w ?? '100%'}>
     <Text
@@ -849,19 +889,45 @@ const Field = ({
       gap={1.5}
       fontSize="2xs"
       fontWeight="500"
-      color="#c9a96e"
+      color={hasError ? 'red.500' : '#c9a96e'}
       letterSpacing="0.2em"
       textTransform="uppercase"
       mb={2}
     >
       {label}
       {required && (
-        <Box w="6px" h="6px" borderRadius="full" bg="red.400" />
+        <Box
+          w="6px"
+          h="6px"
+          borderRadius="full"
+          bg={hasError ? 'red.500' : 'red.400'}
+        />
       )}
     </Text>
-    {children}
+    <Box
+      // Red glow around the input(s) when there's an error. Uses
+      // box-shadow so it doesn't push around whatever layout the
+      // caller has set on the children.
+      sx={
+        hasError
+          ? {
+              borderRadius: '4px',
+              boxShadow: '0 0 0 2px rgba(229, 62, 62, 0.35)',
+              transition: 'box-shadow 0.2s',
+            }
+          : undefined
+      }
+    >
+      {children}
+    </Box>
     {helpText && (
-      <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300" lineHeight="1.5">
+      <Text
+        fontSize="xs"
+        color={hasError ? 'red.500' : 'gray.500'}
+        mt={1.5}
+        fontWeight="300"
+        lineHeight="1.5"
+      >
         {helpText}
       </Text>
     )}
