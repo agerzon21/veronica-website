@@ -540,33 +540,24 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           {data.client_name ? `Welcome, ${data.client_name}` : 'Welcome'}
         </Text>
 
-        {/* Session summary — labeled two-column rows so it reads as a
-            "here's what we booked" card, not a random floating email.
-            Each row: uppercase gold label on the left, dark value on
-            the right. Aligned on their center so the whole block reads
-            balanced even when rows have very different value lengths.
-            Stacks vertically on mobile since two-column at that width
-            gets cramped. */}
+        {/* Session summary — each row is a centered label-value pair
+            (no fixed-width label column, so the whole block reads as
+            centered content rather than left-aligned two-column). We
+            keep Email + Event Date + Location; Session and Delivery
+            got dropped as noisy — three feels right for the "at a
+            glance" role this block plays. */}
         <VStack
           spacing={{ base: 2, md: 2.5 }}
           mt={5}
           mx="auto"
-          maxW="440px"
-          w="100%"
-          align="stretch"
+          align="center"
         >
           <InfoRow label="Email" value={data.client_email} />
           {data.event_date && (
             <InfoRow label="Event Date" value={formatDate(data.event_date)} />
           )}
-          {data.session_type && (
-            <InfoRow label="Session" value={data.session_type} />
-          )}
           {data.event_location && (
             <InfoRow label="Location" value={data.event_location} />
-          )}
-          {data.delivery_timeframe && (
-            <InfoRow label="Delivery" value={data.delivery_timeframe} />
           )}
         </VStack>
 
@@ -1281,10 +1272,10 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <Flex
     direction={{ base: 'column', sm: 'row' }}
-    align={{ base: 'center', sm: 'baseline' }}
-    justify={{ base: 'center', sm: 'flex-start' }}
-    gap={{ base: 0.5, sm: 4 }}
-    textAlign={{ base: 'center', sm: 'left' }}
+    align="center"
+    justify="center"
+    gap={{ base: 0.5, sm: 3 }}
+    textAlign="center"
   >
     <Text
       fontSize="2xs"
@@ -1292,7 +1283,6 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
       textTransform="uppercase"
       letterSpacing="0.22em"
       color="#c9a96e"
-      w={{ sm: '110px' }}
       flexShrink={0}
     >
       {label}
