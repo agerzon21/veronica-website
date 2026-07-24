@@ -1082,8 +1082,22 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                     </Box>
                   </Flex>
 
-                  {/* Password management row */}
-                  <HStack spacing={2} pt={2} flexWrap="wrap" justify="flex-start">
+                  {/* Password management row — three buttons centered
+                      below the password itself. Small helper line below
+                      spells out what each does so clients don't have to
+                      guess; "Rotate" and "Set custom" are especially
+                      ambiguous without context. */}
+                  <Text
+                    pt={3}
+                    fontSize="xs"
+                    color="gray.500"
+                    fontWeight="300"
+                    lineHeight="1.6"
+                    textAlign="center"
+                  >
+                    Change the password if it gets shared too widely, or turn sharing off entirely.
+                  </Text>
+                  <HStack spacing={2} pt={1} flexWrap="wrap" justify="center">
                     <CTAButton
                       onClick={() => callGalleryPass({ action: 'rotate' })}
                       variant="outline"
@@ -1091,7 +1105,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                       icon={FaSync}
                       isLoading={gpUpdating}
                     >
-                      Rotate
+                      Generate new
                     </CTAButton>
                     <CTAButton
                       onClick={() => setGpCustomOpen((open) => !open)}
@@ -1099,7 +1113,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                       size="sm"
                       isDisabled={gpUpdating}
                     >
-                      {gpCustomOpen ? 'Cancel' : 'Set custom'}
+                      {gpCustomOpen ? 'Cancel' : 'Pick my own'}
                     </CTAButton>
                     <CTAButton
                       onClick={() => callGalleryPass({ action: 'disable' })}
@@ -1107,7 +1121,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                       size="sm"
                       isLoading={gpUpdating}
                     >
-                      Disable sharing
+                      Turn off sharing
                     </CTAButton>
                   </HStack>
 
@@ -2233,9 +2247,24 @@ function PortalTopNav({ hasContract, hasBalance, isPhotosInView }: PortalTopNavP
   // Share lights up" and "scroll up, skip Contract" bugs.
   useEffect(() => {
     const ACTIVATION_LINE = 150;
+    const AT_BOTTOM_THRESHOLD = 80;
     let raf: number | null = null;
     const update = () => {
       raf = null;
+
+      // Special case: when scrolled to the very bottom of the page,
+      // force-highlight the LAST pill. Otherwise short trailing
+      // sections (Password especially) never satisfy "top ≤ 150"
+      // because there isn't enough content below them for the browser
+      // to push their top up to the activation line.
+      const scrollBottom = window.scrollY + window.innerHeight;
+      const atBottom =
+        scrollBottom >= document.documentElement.scrollHeight - AT_BOTTOM_THRESHOLD;
+      if (atBottom && pills.length > 0) {
+        setActiveId(pills[pills.length - 1].id);
+        return;
+      }
+
       let currentId: string | null = null;
       let bestTop = -Infinity;
       pills.forEach((p) => {
