@@ -18,6 +18,10 @@ type GalleryData = {
   rootFiles: DriveFile[];
   sections: FolderSection[];
   warning?: string;
+  // ISO timestamp for when the gallery access expires. Surfaced in the
+  // gallery-only route as an "available until" notice so guests know
+  // when the link will stop working (and to nudge them to save copies).
+  expiresAt: string | null;
 };
 
 // URL is the source of truth for the active tab — so Veronika can send
@@ -131,6 +135,7 @@ const Portal = () => {
           rootFiles: data.rootFiles ?? [],
           sections: data.sections ?? [],
           warning: data.warning,
+          expiresAt: data.gallery_expires_at ?? null,
         });
       } else if (res.status === 401) {
         setError("That password didn't match. Double-check and try again.");
@@ -201,6 +206,7 @@ const Portal = () => {
           sections={galleryData.sections}
           warning={galleryData.warning}
           galleryPassword={galleryPassword.trim()}
+          expiresAt={galleryData.expiresAt}
         />
       </>
     );

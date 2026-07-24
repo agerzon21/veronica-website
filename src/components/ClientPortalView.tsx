@@ -1,6 +1,6 @@
 import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast, Collapse } from '@chakra-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FaCopy, FaSync, FaCheck, FaUndo, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaCopy, FaSync, FaCheck, FaUndo, FaChevronLeft, FaChevronRight, FaChevronUp } from 'react-icons/fa';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
 import ClientGallery, { type DriveFile, type FolderSection } from './ClientGallery';
@@ -453,8 +453,54 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
 
   return (
     <Box bg="white" minH="100vh" pt="72px">
-      {/* ─── Header ─── */}
-      <Box px={{ base: 4, md: 8 }} py={{ base: 8, md: 12 }} textAlign="center">
+      {/* Keyframes for the refresh spinner + the "Next Steps" pill's
+          urgency dot pulse. Both are page-global animations that need
+          to exist somewhere in the DOM. Hoisted above the sticky nav
+          so activating the nav's pulseUrgent animation on first paint
+          doesn't depend on later DOM. */}
+      <Box
+        as="style"
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            @keyframes pulseUrgent {
+              0%, 100% { opacity: 1; transform: scale(1); }
+              50% { opacity: 0.55; transform: scale(1.25); }
+            }
+          `,
+        }}
+      />
+
+      {/* Portal-level top sticky nav — MOVED ABOVE the header so the
+          "Your Portal / Welcome" block scrolls away naturally and the
+          nav is what stays visible + pinned. Pills: Top (jumps back to
+          header) → conditional Next Steps → conditional Contract /
+          Balance → Photos → Share → Password. Auto-hides on desktop
+          when the user scrolls into the photos section — the gallery's
+          own sticky section-nav (also sticky top:72px) takes over that
+          space so the two don't stack. On mobile, this stays visible
+          even in photos since the gallery doesn't have its own top nav
+          there (the sticky bottom bar's Jump drawer handles gallery-
+          section navigation on mobile). */}
+      <PortalTopNav
+        hasContract={data.contract_status !== 'none' && data.contract_status !== 'void'}
+        hasBalance={data.contract_total_amount !== null}
+        hasNextStep={hasNextStep}
+        isPhotosInView={isPhotosInView}
+      />
+
+      {/* ─── Header ───
+          id="portal-top-section" is the scroll target for the Top
+          pill in the nav above. scrollMarginTop keeps the header
+          from being clipped by the fixed site Navbar (72px) + the
+          sticky PortalTopNav (~48px). */}
+      <Box
+        id="portal-top-section"
+        sx={{ scrollMarginTop: '140px' }}
+        px={{ base: 4, md: 8 }}
+        py={{ base: 8, md: 12 }}
+        textAlign="center"
+      >
         <Text
           fontSize="xs"
           fontWeight="500"
@@ -562,36 +608,6 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           </Flex>
         )}
       </Box>
-      {/* Keyframes for the refresh spinner + the "Next Steps" pill's
-          urgency dot pulse. Both are page-global animations that need
-          to exist somewhere in the DOM. */}
-      <Box
-        as="style"
-        dangerouslySetInnerHTML={{
-          __html: `
-            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            @keyframes pulseUrgent {
-              0%, 100% { opacity: 1; transform: scale(1); }
-              50% { opacity: 0.55; transform: scale(1.25); }
-            }
-          `,
-        }}
-      />
-
-      {/* Portal-level top sticky nav (jump between Contract / Balance /
-          Photos / Share / Password). Auto-hides on desktop when the
-          user scrolls into the photos section — the gallery's own
-          section-nav (also sticky top:72px) takes over that space so
-          the two don't stack. On mobile, this stays visible even in
-          photos since the gallery doesn't have its own top nav there
-          (the sticky bottom bar's Jump drawer handles gallery-section
-          navigation on mobile). */}
-      <PortalTopNav
-        hasContract={data.contract_status !== 'none' && data.contract_status !== 'void'}
-        hasBalance={data.contract_total_amount !== null}
-        hasNextStep={hasNextStep}
-        isPhotosInView={isPhotosInView}
-      />
 
       {/* Next-steps panel — hoisted to the top of the section list so
           the very first thing signed clients see is what they still
@@ -828,27 +844,6 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         </Box>
       )}
 
-      {/* ─── Gallery hosting expiration banner — surfaces the retention
-            window the contract specifies, so the client knows when they
-            need to download by. ─── */}
-      {data.gallery_expires_at && data.drive_url && (
-        <Box bg="#fef9e6" borderTop="1px solid" borderColor="#f0e4b6" py={4} px={6}>
-          <Text
-            fontSize="xs"
-            color="#7a6520"
-            fontWeight="400"
-            textAlign="center"
-            letterSpacing="0.05em"
-          >
-            Your gallery is available until{' '}
-            <Text as="span" fontWeight="600">
-              {formatDate(data.gallery_expires_at)}
-            </Text>
-            . Download what you'd like to keep before then.
-          </Text>
-        </Box>
-      )}
-
       {/* ─── Photos ───
           Three states, kept mutually exclusive:
           1) No Drive URL set OR Drive folder empty with no listing error →
@@ -894,10 +889,11 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                 rootFiles={data.rootFiles}
                 sections={data.sections}
                 warning={data.warning}
+                expiresAt={data.gallery_expires_at}
                 // Favorites are full-portal only. /portal/pass renders
                 // ClientGallery without these props, which disables the
-                // heart UI + filter for guests (they didn't sign in,
-                // there's no place to persist their picks).
+                // heart UI + Favorites section for guests (they didn't
+                // sign in, there's no place to persist their picks).
                 favorites={favorites}
                 onToggleFavorite={handleToggleFavorite}
               />
@@ -2419,8 +2415,13 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
   // Next Steps are conditional. The `emphasized` flag marks pills
   // that should stand out visually (always gold-filled) — used for
   // Next Steps to signal urgency about an unpaid balance/retainer.
-  const pills: { id: string; label: string; emphasized?: boolean }[] = [];
-  // Next Steps first — matches the DOM order (we moved the panel to
+  const pills: { id: string; label: string; emphasized?: boolean; icon?: typeof FaChevronLeft }[] = [];
+  // Top pill first — scrolls back up to the header block
+  // (portal-top-section wrapper). Analogous to the "Info" pill in
+  // ClientGallery's top nav; gives the user a one-tap way back to
+  // the welcome / refresh area after they've scrolled down.
+  pills.push({ id: 'portal-top-section', label: 'Top', icon: FaChevronUp });
+  // Next Steps next — matches the DOM order (we moved the panel to
   // the top of the section list) and puts the "what do I need to
   // do?" pill left of the more informational Contract/Balance pills.
   if (hasNextStep) pills.push({ id: 'next-steps-section', label: 'Next Steps', emphasized: true });
@@ -2658,6 +2659,7 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
                     sx={{ animation: 'pulseUrgent 1.8s ease-in-out infinite' }}
                   />
                 )}
+                {p.icon && <Icon as={p.icon} boxSize={2.5} />}
                 {p.label}
               </Box>
             );

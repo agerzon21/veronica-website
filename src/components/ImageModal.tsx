@@ -136,6 +136,60 @@ function PrimaryPlusOriginalLink({
   );
 }
 
+// Labeled Favorite / Favorited pill for the modal's bottom-right
+// action cluster. Sits directly beside the Save/Download button so
+// clients read the two as peer choices ("keep this one" vs "save
+// this one"). Replaces the old top-right heart icon that everyone
+// missed. Visually a Save-style outlined pill on dark; flips to a
+// solid red-pink pill with a filled heart when favorited so it
+// reads as a stateful toggle rather than a static button.
+function FavoriteButton({
+  isFavorite,
+  onClick,
+}: {
+  isFavorite: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={(e: React.MouseEvent) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      aria-pressed={isFavorite}
+      display="inline-flex"
+      alignItems="center"
+      gap={2}
+      px={{ base: 3.5, md: 4 }}
+      py={{ base: 2, md: 2.5 }}
+      fontSize={{ base: '11px', md: 'xs' }}
+      fontWeight="500"
+      letterSpacing="0.15em"
+      textTransform="uppercase"
+      borderRadius="full"
+      border="1px solid"
+      transition="all 0.2s ease"
+      cursor="pointer"
+      color={isFavorite ? 'white' : 'whiteAlpha.900'}
+      bg={isFavorite ? '#ff4c68' : 'transparent'}
+      borderColor={isFavorite ? '#ff4c68' : 'whiteAlpha.500'}
+      _hover={
+        isFavorite
+          ? { bg: '#e83e5a', borderColor: '#e83e5a' }
+          : { borderColor: 'white', bg: 'whiteAlpha.100' }
+      }
+      _active={{ transform: 'scale(0.96)' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Box as={isFavorite ? FaHeart : FaRegHeart} fontSize="12px" />
+      <Box as="span">{isFavorite ? 'Favorited' : 'Favorite'}</Box>
+    </Box>
+  );
+}
+
 // Primary option is platform-specific (anchor download on desktop,
 // Web Share API call on mobile) so the caller passes either
 // `primaryHref` or `onPrimary`. Secondary option is always Drive's
@@ -683,30 +737,10 @@ const ImageModal = ({
         </Text>
 
         <Flex gap={5} align="center" onClick={(e) => e.stopPropagation()}>
-          {/* Favorite heart — only rendered when the parent wired up the
-              callback (full-portal users). Filled + gold-red when
-              favorited, outlined + neutral otherwise. Same photo tap
-              flip that the grid tile does, just from inside the modal
-              so users don't have to close it to toggle. */}
-          {onToggleFavorite && (
-            <Box
-              as="button"
-              type="button"
-              aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              aria-pressed={isFavorite}
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                onToggleFavorite();
-              }}
-              color={isFavorite ? '#ff4c68' : 'whiteAlpha.600'}
-              transition="color 0.3s, transform 0.15s"
-              _hover={{ color: '#ff4c68', transform: 'scale(1.1)' }}
-              _active={{ transform: 'scale(0.92)' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <Box as={isFavorite ? FaHeart : FaRegHeart} fontSize="18px" />
-            </Box>
-          )}
+          {/* Favorite action moved to the bottom bar as a labeled
+              pill button next to Save — see FavoriteButton usage
+              below. Discoverable there than a tiny top-corner heart
+              that users kept missing. */}
           {photoData && category && !hideShare && (
             <Box
               as="button"
@@ -772,6 +806,21 @@ const ImageModal = ({
             >
               {photoTitle}
             </Text>
+          )}
+          {/* Right-side action cluster — labeled Favorite pill (when
+              the parent wired up onToggleFavorite) sits to the left of
+              the Save/Download/Open action. Same-shape pills side by
+              side so users see them as peer choices: "keep this one"
+              vs "download this one." Previously the favorite was a
+              small heart icon in the top-right of the modal which
+              nobody noticed — the label + peer-with-Save placement
+              is the fix. */}
+          <Flex gap={2} align="center" flexShrink={0}>
+          {onToggleFavorite && (
+            <FavoriteButton
+              isFavorite={Boolean(isFavorite)}
+              onClick={onToggleFavorite}
+            />
           )}
           {downloadUrl || mobileSaveUrl || driveViewUrl ? (
             useMobileDriveFlow ? (
@@ -840,6 +889,7 @@ const ImageModal = ({
               View Photo Page →
             </CTAButton>
           )}
+          </Flex>
         </Flex>
       )}
 

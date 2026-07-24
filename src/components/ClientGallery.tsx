@@ -16,7 +16,7 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronDown, FaChevronLeft, FaChevronRight, FaListUl, FaHeart, FaRegHeart } from 'react-icons/fa';
+import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronLeft, FaChevronRight, FaListUl, FaHeart, FaRegHeart, FaMobileAlt, FaInfoCircle, FaClock } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
@@ -59,12 +59,20 @@ interface ClientGalleryProps {
   // get a richer share UI inside the Gallery Pass section instead, so
   // we leave this prop unset for them.
   galleryPassword?: string;
+  // ISO timestamp for when this gallery stops being accessible.
+  // Surfaced under the header count as an "available until" line so
+  // clients know when to save their photos by. Passed by both routes:
+  // /portal/pass reads it from the gallery-auth response, full portal
+  // reads it from the client-auth response. Null when the gallery
+  // doesn't expire.
+  expiresAt?: string | null;
   // Favorites — when both are provided, the heart UI is enabled on
-  // every tile + inside the modal, and a filter chip appears above
-  // the grid. Only wired up for full-portal users (guests on
-  // /portal/pass leave these undefined, which disables the whole
-  // feature — guests have no persistent identity to attach favorites
-  // to). See ClientPortalView for the API call + optimistic update.
+  // every tile + inside the modal, and a dedicated Favorites section
+  // appears at the bottom. Only wired up for full-portal users
+  // (guests on /portal/pass leave these undefined, which disables the
+  // whole feature — guests have no persistent identity to attach
+  // favorites to). See ClientPortalView for the API call + optimistic
+  // update.
   favorites?: string[];
   onToggleFavorite?: (photoId: string, currentlyFavorite: boolean) => void;
 }
@@ -290,6 +298,7 @@ const ClientGallery = ({
   sections,
   warning,
   galleryPassword,
+  expiresAt,
   favorites,
   onToggleFavorite,
 }: ClientGalleryProps) => {
@@ -297,32 +306,16 @@ const ClientGallery = ({
   const favoritesSet = new Set(favorites ?? []);
   const favoritesCount = favoritesSet.size;
 
-  // "Show only favorites" filter — client-side toggle above the grid.
-  // When on, we filter rootFiles + each section's files down to just
-  // hearted photos. Sections with zero favorites drop out entirely so
-  // the section headers don't leave "empty section" boxes.
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const filterActive = favoritesEnabled && showFavoritesOnly && favoritesCount > 0;
-
-  const displayRootFiles = filterActive
-    ? rootFiles.filter((f) => favoritesSet.has(f.id))
-    : rootFiles;
-  const displaySections = filterActive
-    ? sections
-        .map((s) => ({ ...s, files: s.files.filter((f) => favoritesSet.has(f.id)) }))
-        .filter((s) => s.files.length > 0)
-    : sections;
-
   // Flatten everything into one ordered array. The lightbox navigates by
   // index into this array, so prev/next walks across all sections in
   // delivery order. Section headers are purely visual — they don't gate
   // navigation. This matches photographer-platform convention (Pixieset,
   // ShootProof) where you scroll through the full set seamlessly.
-  //
-  // When the favorites filter is active, we walk the FILTERED array so
-  // arrow-key nav in the modal stays within favorites too.
-  const allFiles = [...displayRootFiles, ...displaySections.flatMap((s) => s.files)];
+  const allFiles = [...rootFiles, ...sections.flatMap((s) => s.files)];
   const totalCount = allFiles.length;
+  // Favorites in delivery order, used by the dedicated Favorites
+  // section at the bottom of the gallery.
+  const favoriteFiles = allFiles.filter((f) => favoritesSet.has(f.id));
 
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   // Refs per thumbnail (indexed against the flat allFiles array) so
@@ -369,6 +362,18 @@ const ClientGallery = ({
     }
     setSelectedIndex(i);
   };
+  // Variant used by the Favorites section tiles — same photo can live
+  // in two places in the DOM (its original section AND the Favorites
+  // section grid), so the caller passes the rect for whichever tile
+  // the user actually tapped. Falls back to null (fade-in) if the
+  // caller didn't compute one.
+  const handleOpenFromRect = useCallback(
+    (i: number, rect: { top: number; left: number; width: number; height: number } | null) => {
+      setOriginRect(rect);
+      setSelectedIndex(i);
+    },
+    [],
+  );
   const handleClose = useCallback(() => {
     setSelectedIndex(null);
     setOriginRect(null);
@@ -390,12 +395,23 @@ const ClientGallery = ({
 
   return (
     // No explicit bg — the parent controls it. Inside ClientPortalView
-    // the photos-section wrapper is gray.50 for alternation. On the
+    // the photos-section wrapper is white for alternation. On the
     // standalone /portal/pass route, the html/body theme default
     // (white) shows through. Both look correct without hard-coding.
     <Box ref={galleryRootRef} minH="100vh" pt="72px">
-      {/* Header */}
-      <Box px={{ base: 4, md: 8 }} py={{ base: 8, md: 12 }} textAlign="center">
+      {/* Header — id lets the Info pill in the top nav scroll back
+          here. All the top-of-gallery orientation lives inside: title,
+          count (with favorite total in parens), expiration, save-tips
+          card. The scrollMarginTop accounts for the fixed site Navbar
+          (72px) + the sticky TopSectionNav (~52px on desktop). */}
+      <Box
+        id="gallery-info-section"
+        sx={{ scrollMarginTop: { base: '90px', md: '140px' } }}
+        px={{ base: 4, md: 8 }}
+        pt={{ base: 8, md: 12 }}
+        pb={{ base: 6, md: 8 }}
+        textAlign="center"
+      >
         <Text
           fontSize="xs"
           fontWeight="500"
@@ -419,8 +435,18 @@ const ClientGallery = ({
           {clientName ? `Welcome, ${clientName}` : 'Your Photos'}
         </Text>
         {totalCount > 0 && (
+          // Count line — always reports the TOTAL number of photos.
+          // When favorites are enabled and non-zero, tacks on the
+          // hearted count in parens so clients see at a glance how
+          // many they've picked out. Sections count follows as a
+          // secondary bullet.
           <Text fontSize="sm" color="gray.500" fontWeight="300" mt={2}>
             {totalCount} {totalCount === 1 ? 'photo' : 'photos'}
+            {favoritesEnabled && favoritesCount > 0 && (
+              <Text as="span" color="#c9a96e" fontWeight="400">
+                {' '}({favoritesCount} favorited)
+              </Text>
+            )}
             {sections.length > 0 && (
               <>
                 {' · '}
@@ -430,25 +456,87 @@ const ClientGallery = ({
           </Text>
         )}
 
-        {/* Save-tips disclaimer — subtle info line, sets expectation for
-            the per-photo Save button and points people at the sticky
-            Download All widget for print-quality originals. Long-press
-            is genuinely the fastest mobile save (uses zero of our
-            bandwidth, saves instantly), so we lead with that. */}
-        <Text
-          mt={5}
-          fontSize="xs"
-          color="gray.500"
-          fontWeight="300"
-          lineHeight="1.9"
-          maxW="540px"
+        {/* Available-until notice — folded into the header info block
+            rather than living in its own big banner above. Text differs
+            slightly between the guest gallery route (contact Veronika
+            to extend) and the full portal (download by then). Both use
+            the same subtle gray-caption treatment so it reads as
+            metadata, not an alarm. */}
+        {expiresAt && (
+          <Flex
+            justify="center"
+            align="center"
+            gap={1.5}
+            mt={2}
+            fontSize="xs"
+            color="gray.500"
+            fontWeight="300"
+          >
+            <Icon as={FaClock} boxSize={2.5} color="gray.400" />
+            <Box as="span">
+              Available until{' '}
+              <Text as="span" fontWeight="500" color="gray.700">
+                {formatGalleryExpiry(expiresAt)}
+              </Text>
+              {galleryPassword
+                ? ' · Contact Veronika if you need it extended.'
+                : ' · Download what you want to keep by then.'}
+            </Box>
+          </Flex>
+        )}
+
+        {/* Save-tips card — replaces the plain-text disclaimer. Warm
+            gold-tinted card so it reads as helpful info rather than a
+            legal footnote. Three-icon layout stacks vertically on
+            mobile (readable at any width) and horizontally on wider
+            screens. Long-press first since it's the fastest and
+            cheapest path for the client (zero bandwidth on our end,
+            instant on theirs). */}
+        <Box
+          mt={{ base: 6, md: 8 }}
+          maxW="720px"
           mx="auto"
-          px={4}
+          bg="#fdf9f0"
+          border="1px solid"
+          borderColor="#e8d9a8"
+          borderRadius="md"
+          px={{ base: 5, md: 6 }}
+          py={{ base: 5, md: 5 }}
+          textAlign="left"
         >
-          On phone, <Text as="span" fontWeight="500" color="gray.700">press &amp; hold</Text> any photo to save it instantly. Or use the{' '}
-          <Text as="span" fontWeight="500" color="gray.700">Save</Text> button after opening one. For print-quality originals of the whole set, use{' '}
-          <Text as="span" fontWeight="500" color="gray.700">Download All</Text> at the bottom of the page.
-        </Text>
+          <Text
+            fontSize="2xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.25em"
+            color="#c9a96e"
+            textAlign="center"
+            mb={4}
+          >
+            How to save your photos
+          </Text>
+          <Flex
+            direction={{ base: 'column', md: 'row' }}
+            gap={{ base: 3, md: 5 }}
+            align="stretch"
+          >
+            <SaveTip
+              icon={FaMobileAlt}
+              title="Press &amp; hold"
+              body="On phone, long-press any photo to save it instantly to your camera roll."
+            />
+            <SaveTip
+              icon={FaImage}
+              title="Tap, then Save"
+              body="Tap a photo to open it, then use the Save button at the bottom."
+            />
+            <SaveTip
+              icon={FaDownload}
+              title="Download All"
+              body="For every photo at print quality, use the Download All button at the bottom of the page."
+            />
+          </Flex>
+        </Box>
 
         {warning && (
           <Text mt={4} fontSize="sm" color="orange.500" fontWeight="300" maxW="500px" mx="auto">
@@ -515,50 +603,47 @@ const ClientGallery = ({
           masks are the visual cue that there's more when the folder
           list overflows the viewport — the borderBottom is gone since
           it was crowding the first section's header. */}
-      {displaySections.length > 1 && (
+      {(sections.length > 1 || favoritesEnabled) && (
         <TopSectionNav
-          sections={displaySections}
+          sections={sections}
           sectionRefs={sectionRefs}
           onSectionClick={scrollToSection}
-          scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          scrollToBottom={() =>
-            window.scrollTo({
-              top: document.body.scrollHeight,
-              behavior: 'smooth',
-            })
+          scrollToInfo={() => {
+            const el = document.getElementById('gallery-info-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            else window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          scrollToFavorites={
+            favoritesEnabled
+              ? () => {
+                  const el = document.getElementById('gallery-favorites-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  else
+                    window.scrollTo({
+                      top: document.body.scrollHeight,
+                      behavior: 'smooth',
+                    });
+                }
+              : null
           }
         />
       )}
 
-      {/* Favorites filter chip — appears above the grid only when
-          favorites feature is active. When user has 0 favorites, shows
-          a soft hint. When 1+, shows count + toggle to filter. When
-          filter is ACTIVE, chip flips to a louder "showing favorites"
-          state with an ✕ so users can't lose track that the view is
-          filtered. */}
-      {favoritesEnabled && (
-        <FavoritesChip
-          count={favoritesCount}
-          filterActive={filterActive}
-          onToggleFilter={() => setShowFavoritesOnly((v) => !v)}
-        />
-      )}
-
-      {/* Grid — renders the filtered set (displayRootFiles /
-          displaySections) so the "show favorites only" toggle above
-          collapses everything else in one shot. Original `rootFiles`
-          / `sections` are still available for count math. */}
+      {/* Grid — renders the full gallery. The dedicated Favorites
+          section further down replaces the previous "show favorites
+          only" filter chip; users hop there via the Favorites pill
+          in the top nav or by scrolling. */}
       {totalCount > 0 ? (
         <Box px={{ base: 2, md: 6 }} pb={20}>
           {/* Root-level files (no subfolder). Show first, no header — these
               are the files Veronika placed directly in the gallery root. If
               she delivered everything in subfolders, this is empty. */}
-          {displayRootFiles.length > 0 && (
+          {rootFiles.length > 0 && (
             <SimpleGrid
               columns={{ base: 2, md: 3, lg: 4 }}
               spacing={{ base: 1, md: 2 }}
             >
-              {displayRootFiles.map((file, i) => (
+              {rootFiles.map((file, i) => (
                 <GridTile
                   key={file.id}
                   file={file}
@@ -575,10 +660,10 @@ const ClientGallery = ({
           {/* Sections — one per subfolder. Each gets its own labeled grid.
               Index offset accumulates so itemRefs[i] always maps to
               allFiles[i] (the same array the lightbox navigates by). */}
-          {displaySections.map((section, sIdx) => {
+          {sections.map((section, sIdx) => {
             const offset =
-              displayRootFiles.length +
-              displaySections.slice(0, sIdx).reduce((acc, s) => acc + s.files.length, 0);
+              rootFiles.length +
+              sections.slice(0, sIdx).reduce((acc, s) => acc + s.files.length, 0);
             return (
               <Box
                 key={section.id}
@@ -651,22 +736,21 @@ const ClientGallery = ({
               </Box>
             );
           })}
-        </Box>
-      ) : filterActive ? (
-        /* Filter is on but somehow there are 0 results (edge case, only
-           if favorites list got out of sync with the gallery). Give
-           the user a way back to the unfiltered view. */
-        <Box textAlign="center" py={20} px={6}>
-          <Text color="gray.500" fontWeight="300" mb={4}>
-            No favorites in the current view.
-          </Text>
-          <CTAButton
-            onClick={() => setShowFavoritesOnly(false)}
-            variant="outline"
-            size="sm"
-          >
-            Show all photos
-          </CTAButton>
+
+          {/* Favorites section — a dedicated "here are the ones you
+              picked out" grid at the bottom of the photo list. Only
+              rendered for full-portal users (favoritesEnabled).
+              Reachable via the Favorites pill in the top nav.
+              Tiles here share the same photo IDs as the ones above,
+              so tapping opens the same modal at the same flat index. */}
+          {favoritesEnabled && (
+            <FavoritesSection
+              favoriteFiles={favoriteFiles}
+              allFiles={allFiles}
+              onOpen={handleOpenFromRect}
+              onToggleFavorite={onToggleFavorite}
+            />
+          )}
         </Box>
       ) : (
         <Box textAlign="center" py={20} px={6}>
@@ -762,13 +846,17 @@ const ClientGallery = ({
           sections={sections}
           hasSections={sections.length > 0}
           scrollToSection={scrollToSection}
-          scrollToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          scrollToBottom={() =>
-            window.scrollTo({
-              top: document.body.scrollHeight,
-              behavior: 'smooth',
-            })
-          }
+          favoritesEnabled={favoritesEnabled}
+          scrollToInfo={() => {
+            const el = document.getElementById('gallery-info-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            else window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          scrollToFavorites={() => {
+            const el = document.getElementById('gallery-favorites-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            else window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          }}
         />
       )}
     </Box>
@@ -792,8 +880,9 @@ interface GalleryActionBarProps {
   sections: FolderSection[];
   hasSections: boolean;
   scrollToSection: (id: string) => void;
-  scrollToTop: () => void;
-  scrollToBottom: () => void;
+  favoritesEnabled: boolean;
+  scrollToInfo: () => void;
+  scrollToFavorites: () => void;
 }
 
 function GalleryActionBar({
@@ -801,8 +890,9 @@ function GalleryActionBar({
   sections,
   hasSections,
   scrollToSection,
-  scrollToTop,
-  scrollToBottom,
+  favoritesEnabled,
+  scrollToInfo,
+  scrollToFavorites,
 }: GalleryActionBarProps) {
   const jumpDrawer = useDisclosure();
 
@@ -900,9 +990,9 @@ function GalleryActionBar({
           <DrawerBody py={2} px={0}>
             <VStack align="stretch" spacing={0}>
               <DrawerRow
-                label="Top"
-                icon={FaChevronUp}
-                onClick={() => jumpAndClose(scrollToTop)}
+                label="Info"
+                icon={FaInfoCircle}
+                onClick={() => jumpAndClose(scrollToInfo)}
               />
               {sections.map((s) => (
                 <DrawerRow
@@ -911,11 +1001,13 @@ function GalleryActionBar({
                   onClick={() => jumpAndClose(() => scrollToSection(s.id))}
                 />
               ))}
-              <DrawerRow
-                label="Bottom"
-                icon={FaChevronDown}
-                onClick={() => jumpAndClose(scrollToBottom)}
-              />
+              {favoritesEnabled && (
+                <DrawerRow
+                  label="Favorites"
+                  icon={FaHeart}
+                  onClick={() => jumpAndClose(scrollToFavorites)}
+                />
+              )}
             </VStack>
           </DrawerBody>
         </DrawerContent>
@@ -1032,89 +1124,195 @@ function DrawerRow({
 }
 
 /**
- * Favorites filter chip. Sits above the gallery grid. Three states:
- *   - No favorites yet: soft hint "Tap ♥ on any photo to save it here."
- *   - Some favorites, filter OFF: shows "12 favorites · Show favorites only"
- *     as a subtle chip.
- *   - Filter ON: chip flips to loud gold-tinted "Showing 12 favorites · ✕"
- *     that's impossible to miss, so users can't get "stuck" in a filtered
- *     view thinking the gallery has fewer photos.
- *
- * Rendered only when favorites feature is enabled (full-portal users).
+ * Format the gallery expiration date. Same UTC-safe idiom used
+ * elsewhere in the app (see ClientPortalView.formatDate) so the
+ * displayed day matches what Veronika typed regardless of the
+ * viewer's timezone.
  */
-function FavoritesChip({
-  count,
-  filterActive,
-  onToggleFilter,
+function formatGalleryExpiry(iso: string): string {
+  const datePart = iso.split('T')[0];
+  const [y, m, d] = datePart.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * One item in the "How to save your photos" card. Renders as a
+ * three-across row on desktop and a stacked list on mobile. The
+ * icon sits inside a soft gold circle so the card reads as friendly
+ * info, not a warning.
+ */
+function SaveTip({
+  icon,
+  title,
+  body,
 }: {
-  count: number;
-  filterActive: boolean;
-  onToggleFilter: () => void;
+  icon: typeof FaMobileAlt;
+  title: string;
+  body: string;
 }) {
-  // Zero-favorite state — soft hint, no toggle to activate.
-  if (count === 0 && !filterActive) {
-    return (
-      <Flex justify="center" px={4} pb={4}>
-        <Flex
-          align="center"
-          gap={2}
-          px={4}
-          py={2}
-          bg="gray.50"
-          border="1px solid"
-          borderColor="gray.200"
-          borderRadius="full"
-          fontSize="xs"
-          color="gray.500"
-          fontWeight="300"
-        >
-          <Icon as={FaRegHeart} boxSize={3} />
-          <Box as="span">Tap the ♥ on any photo to save it as a favorite.</Box>
-        </Flex>
+  return (
+    <Flex
+      direction={{ base: 'row', md: 'column' }}
+      align={{ base: 'flex-start', md: 'center' }}
+      textAlign={{ base: 'left', md: 'center' }}
+      gap={3}
+      flex={1}
+    >
+      <Flex
+        flexShrink={0}
+        w="36px"
+        h="36px"
+        borderRadius="full"
+        bg="#f3e6bf"
+        align="center"
+        justify="center"
+        color="#8a6e35"
+      >
+        <Icon as={icon} boxSize={4} />
       </Flex>
-    );
-  }
+      <Box>
+        <Text
+          fontSize="sm"
+          fontWeight="500"
+          color="gray.800"
+          mb={0.5}
+          dangerouslySetInnerHTML={{ __html: title }}
+        />
+        <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.6">
+          {body}
+        </Text>
+      </Box>
+    </Flex>
+  );
+}
+
+/**
+ * Dedicated "Favorites" section rendered at the bottom of the gallery
+ * grid. Shows favorited photos as their own labeled block and doubles
+ * as the scroll target for the Favorites pill in the top nav. When
+ * empty, renders a friendly hint instead of an empty grid.
+ *
+ * Tapping a favorited tile opens the modal at that photo's index in
+ * the flat allFiles array (so arrow-key nav still walks the entire
+ * gallery, not just favorites). We compute the animation origin from
+ * the favorite-section tile's own bounding rect, so the modal opens
+ * from where the user actually tapped rather than from the "canonical"
+ * tile elsewhere in the grid.
+ */
+function FavoritesSection({
+  favoriteFiles,
+  allFiles,
+  onOpen,
+  onToggleFavorite,
+}: {
+  favoriteFiles: DriveFile[];
+  allFiles: DriveFile[];
+  onOpen: (indexInAllFiles: number, originRect: { top: number; left: number; width: number; height: number } | null) => void;
+  onToggleFavorite?: (photoId: string, currentlyFavorite: boolean) => void;
+}) {
+  // Own ref map so the section-nav's rect lookups don't get confused
+  // by these duplicate tiles (each favorite exists in BOTH its original
+  // section grid and here). Keyed by photo ID.
+  const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   return (
-    <Flex justify="center" px={4} pb={4}>
-      <Flex
-        as="button"
-        type="button"
-        onClick={onToggleFilter}
-        align="center"
-        gap={2}
-        px={4}
-        py={2}
-        bg={filterActive ? '#fdf9f0' : 'transparent'}
-        border="1px solid"
-        borderColor={filterActive ? '#c9a96e' : 'gray.200'}
-        borderRadius="full"
-        fontSize="xs"
-        fontWeight="500"
-        letterSpacing="0.05em"
-        color={filterActive ? '#8a6e35' : 'gray.700'}
-        cursor="pointer"
-        transition="all 0.2s"
-        _hover={{
-          borderColor: '#c9a96e',
-          color: '#8a6e35',
-          bg: '#fdf9f0',
-        }}
-        sx={{ WebkitTapHighlightColor: 'transparent' }}
-      >
-        <Icon as={FaHeart} boxSize={3} color={filterActive ? '#ff4c68' : '#c9a96e'} />
-        <Box as="span">
-          {filterActive
-            ? `Showing ${count} ${count === 1 ? 'favorite' : 'favorites'}`
-            : `${count} ${count === 1 ? 'favorite' : 'favorites'} · Show only these`}
+    <Box
+      id="gallery-favorites-section"
+      sx={{ scrollMarginTop: { base: '90px', md: '140px' } }}
+      mt={{ base: 10, md: 14 }}
+      pt={{ base: 8, md: 10 }}
+      borderTop="1px solid"
+      borderColor="gray.100"
+    >
+      <Box textAlign="center" mb={{ base: 6, md: 8 }} px={4}>
+        <Flex justify="center" align="center" gap={2} mb={2}>
+          <Icon as={FaHeart} boxSize={3} color="#ff4c68" />
+          <Text
+            fontSize="2xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.25em"
+            color="#c9a96e"
+          >
+            Favorites
+          </Text>
+        </Flex>
+        <Text
+          as="h2"
+          fontSize={{ base: 'xl', md: '2xl' }}
+          fontWeight="200"
+          color="gray.800"
+          letterSpacing="0.02em"
+          m={0}
+          mb={2}
+        >
+          {favoriteFiles.length > 0
+            ? `${favoriteFiles.length} ${favoriteFiles.length === 1 ? 'photo you’ve saved' : 'photos you’ve saved'}`
+            : 'Save your favorites here'}
+        </Text>
+        <Box w="30px" h="1px" bg="#c9a96e" mx="auto" mb={2} />
+        <Text fontSize="xs" color="gray.500" fontWeight="300" maxW="440px" mx="auto" lineHeight="1.7">
+          Tap the{' '}
+          <Box as="span" color="#ff4c68" display="inline-block" verticalAlign="middle" mx={0.5}>
+            <Icon as={FaHeart} boxSize={2.5} />
+          </Box>{' '}
+          on any photo to pin it here — handy for keeping track of the ones you love while browsing.
+        </Text>
+      </Box>
+
+      {favoriteFiles.length > 0 ? (
+        <SimpleGrid columns={{ base: 2, md: 3, lg: 4 }} spacing={{ base: 1, md: 2 }}>
+          {favoriteFiles.map((file) => (
+            <GridTile
+              key={file.id}
+              file={file}
+              // Index is unused here — GridTile only reads it to pass
+              // back into onSelect; we ignore it and look up the file's
+              // real position in allFiles at click time.
+              index={0}
+              onSelect={() => {
+                const flatIdx = allFiles.findIndex((f) => f.id === file.id);
+                if (flatIdx < 0) return;
+                const el = tileRefs.current[file.id];
+                let rect: { top: number; left: number; width: number; height: number } | null = null;
+                if (el) {
+                  const r = el.getBoundingClientRect();
+                  rect = { top: r.top, left: r.left, width: r.width, height: r.height };
+                }
+                onOpen(flatIdx, rect);
+              }}
+              setRef={(el) => {
+                tileRefs.current[file.id] = el;
+              }}
+              isFavorite={true}
+              onToggleFavorite={onToggleFavorite}
+            />
+          ))}
+        </SimpleGrid>
+      ) : (
+        <Box
+          maxW="440px"
+          mx="auto"
+          bg="gray.50"
+          border="1px dashed"
+          borderColor="gray.200"
+          borderRadius="md"
+          px={6}
+          py={8}
+          textAlign="center"
+        >
+          <Text fontSize="sm" color="gray.500" fontWeight="300" lineHeight="1.7">
+            You haven&rsquo;t saved any favorites yet.
+          </Text>
         </Box>
-        {filterActive && (
-          <Box as="span" ml={1} fontSize="sm" opacity={0.7}>
-            ✕
-          </Box>
-        )}
-      </Flex>
-    </Flex>
+      )}
+    </Box>
   );
 }
 
@@ -1135,15 +1333,18 @@ interface TopSectionNavProps {
   sections: FolderSection[];
   sectionRefs: React.MutableRefObject<{ [id: string]: HTMLDivElement | null }>;
   onSectionClick: (id: string) => void;
-  scrollToTop: () => void;
-  scrollToBottom: () => void;
+  scrollToInfo: () => void;
+  // Null when favorites feature is disabled (guests on /portal/pass)
+  // — pill is omitted entirely from the nav rather than shown as an
+  // inactive control.
+  scrollToFavorites: (() => void) | null;
 }
 
-// Sentinel activeId values for the Top and Bottom pills. Kept as string
-// literals (not enum) so they can share the same activeId state as
-// section IDs and be referenced from pillRefs by the same key.
-const TOP_ID = '__top__';
-const BOTTOM_ID = '__bottom__';
+// Sentinel activeId values for the Info + Favorites bookend pills.
+// Kept as string literals so they share the same activeId state as
+// section IDs and pillRefs keys.
+const INFO_ID = 'gallery-info-section';
+const FAVORITES_ID = 'gallery-favorites-section';
 
 // Distance from the top/bottom of the page where we consider the user
 // to have "arrived" there. Top threshold has to be larger than the
@@ -1157,8 +1358,8 @@ function TopSectionNav({
   sections,
   sectionRefs,
   onSectionClick,
-  scrollToTop,
-  scrollToBottom,
+  scrollToInfo,
+  scrollToFavorites,
 }: TopSectionNavProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -1191,17 +1392,17 @@ function TopSectionNav({
   };
 
   // Bookkeeping ref that mirrors scroll position, used inside the
-  // IntersectionObserver callback to know whether to defer to
-  // Top/Bottom rather than picking a section. A ref (not state) so
-  // the observer callback always sees the freshest value without
-  // needing to re-subscribe on every scroll tick.
+  // active-section scan to know whether to defer to Info/Favorites
+  // rather than picking a section. A ref (not state) so the callback
+  // always sees the freshest value without needing to re-subscribe.
   const isAtExtremeRef = useRef<null | 'top' | 'bottom'>(null);
 
   // Watch scroll position for the "am I at the top / bottom of the
-  // page?" cases. Those override the section observation because when
-  // the user explicitly clicks Top/Bottom (or scrolls all the way
-  // there), we want the corresponding pill to light up — not the
-  // nearest section, which is what happened with the old right-rail.
+  // page?" cases. At the very top, Info lights up; at the very
+  // bottom, Favorites lights up (if enabled) — matching where those
+  // targets sit in the DOM. Without these overrides, short trailing
+  // sections would never satisfy the section-scan's activation
+  // threshold and the last pill would never light.
   useEffect(() => {
     const updateExtremes = () => {
       const y = window.scrollY;
@@ -1209,14 +1410,17 @@ function TopSectionNav({
       const docH = document.documentElement.scrollHeight;
       if (y <= AT_TOP_THRESHOLD) {
         isAtExtremeRef.current = 'top';
-        setActiveId(TOP_ID);
+        setActiveId(INFO_ID);
       } else if (y + winH >= docH - AT_BOTTOM_THRESHOLD) {
         isAtExtremeRef.current = 'bottom';
-        setActiveId(BOTTOM_ID);
+        // Favorites is the last pill only when the feature's enabled.
+        // Otherwise let the section-scan pick whatever section is
+        // closest to the bottom.
+        if (scrollToFavorites) setActiveId(FAVORITES_ID);
       } else {
         isAtExtremeRef.current = null;
         // Don't clear activeId here — leave whatever section the
-        // observer picked. Only take over when the user genuinely
+        // scan picked. Only take over when the user genuinely
         // reaches an extreme.
       }
     };
@@ -1227,7 +1431,7 @@ function TopSectionNav({
       window.removeEventListener('scroll', updateExtremes);
       window.removeEventListener('resize', updateExtremes);
     };
-  }, []);
+  }, [scrollToFavorites]);
 
   // Active-section tracking via a rAF-throttled scroll listener.
   // Same approach as PortalTopNav: on every scroll frame, pick the
@@ -1346,12 +1550,15 @@ function TopSectionNav({
         >
           <NavPill
             pillRef={(el) => {
-              pillRefs.current[TOP_ID] = el;
+              pillRefs.current[INFO_ID] = el;
             }}
-            icon={FaChevronUp}
-            label="Top"
-            active={activeId === TOP_ID}
-            onClick={scrollToTop}
+            icon={FaInfoCircle}
+            label="Info"
+            active={activeId === INFO_ID}
+            onClick={() => {
+              setActiveId(INFO_ID);
+              scrollToInfo();
+            }}
           />
           <NavStripDivider />
           {sections.map((section) => (
@@ -1365,23 +1572,30 @@ function TopSectionNav({
               onClick={() => {
                 // Optimistic highlight: flip active immediately so the
                 // pill lights up on tap even before smooth-scroll +
-                // IntersectionObserver settle. The observer will
-                // correct any drift as the scroll lands.
+                // scroll-scan settle. The scan will correct any drift
+                // as the scroll lands.
                 setActiveId(section.id);
                 onSectionClick(section.id);
               }}
             />
           ))}
-          <NavStripDivider />
-          <NavPill
-            pillRef={(el) => {
-              pillRefs.current[BOTTOM_ID] = el;
-            }}
-            icon={FaChevronDown}
-            label="Bottom"
-            active={activeId === BOTTOM_ID}
-            onClick={scrollToBottom}
-          />
+          {scrollToFavorites && (
+            <>
+              <NavStripDivider />
+              <NavPill
+                pillRef={(el) => {
+                  pillRefs.current[FAVORITES_ID] = el;
+                }}
+                icon={FaHeart}
+                label="Favorites"
+                active={activeId === FAVORITES_ID}
+                onClick={() => {
+                  setActiveId(FAVORITES_ID);
+                  scrollToFavorites();
+                }}
+              />
+            </>
+          )}
           </Flex>
         </Box>
       </Box>

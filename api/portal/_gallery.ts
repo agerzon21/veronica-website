@@ -2,7 +2,7 @@
  * Gallery Pass auth — password-only access for read-only photo viewing.
  *
  * POST { password }
- *   → 200 { success, client_name, drive_url, rootFiles, sections }   on hit
+ *   → 200 { success, client_name, drive_url, rootFiles, sections, gallery_expires_at }   on hit
  *   → 200 { success, warning: 'Photos coming soon' }                 if gallery isn't ready yet
  *   → 401                                                            on wrong/disabled password
  *   → 405                                                            non-POST
@@ -84,6 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         drive_url: null,
         rootFiles: [],
         sections: [],
+        gallery_expires_at,
         warning: 'Your photos are not ready yet. Check back soon!',
       });
     }
@@ -105,6 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         drive_url,
         rootFiles: [],
         sections: [],
+        gallery_expires_at,
         warning: 'Could not load photo previews — use "View in Drive" below.',
       });
     }
@@ -115,6 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       drive_url,
       rootFiles: tree.rootFiles,
       sections: tree.sections,
+      gallery_expires_at,
     });
   } catch (err) {
     console.error('[portal/gallery] handler failed:', err);
