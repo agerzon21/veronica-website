@@ -21,6 +21,8 @@ import portalDeleteHandler from './admin/_portal-delete.js';
 import paymentLogHandler from './admin/_payment-log.js';
 import resendInviteHandler from './admin/_resend-invite.js';
 import portalPdfHandler from './admin/_portal-pdf.js';
+import instagramStatusHandler from './admin/_instagram-status.js';
+import instagramRefreshHandler from './admin/_instagram-refresh.js';
 
 const HANDLERS: Record<
   string,
@@ -35,6 +37,8 @@ const HANDLERS: Record<
   'payment-log': paymentLogHandler,
   'resend-invite': resendInviteHandler,
   'portal-pdf': portalPdfHandler,
+  'instagram-status': instagramStatusHandler,
+  'instagram-refresh': instagramRefreshHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -1,15 +1,22 @@
-import { Box, Flex, VStack, Text, Input } from '@chakra-ui/react';
+import { Box, Flex, HStack, VStack, Text, Input, Icon } from '@chakra-ui/react';
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
+import { FaUsers, FaPlug } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import AdminNewClient from '../components/AdminNewClient';
 import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
 import AdminModeChooser from '../components/AdminModeChooser';
 import AdminClientDetail from '../components/AdminClientDetail';
+import AdminIntegrations from '../components/AdminIntegrations';
 
 const MotionDiv = motion.div;
+
+// Which top-level dashboard tab is active. Only relevant when
+// view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
+// live outside the tab shell for now — they're modal-ish flows.
+type DashTab = 'clients' | 'integrations';
 
 type View =
   | { kind: 'dashboard' }
@@ -25,6 +32,7 @@ const Admin = () => {
   const [portals, setPortals] = useState<AdminPortalSummary[] | null>(null);
   const [adminLevel, setAdminLevel] = useState<'admin' | 'super'>('admin');
   const [view, setView] = useState<View>({ kind: 'dashboard' });
+  const [dashTab, setDashTab] = useState<DashTab>('clients');
 
   const loadPortals = async (pwd: string): Promise<{ ok: boolean; error?: string }> => {
     try {
@@ -74,12 +82,28 @@ const Admin = () => {
         </Helmet>
         <Box bg="gray.50" minH="100vh" pt={{ base: 20, md: 24 }} pb={{ base: 16, md: 20 }} px={{ base: 4, md: 8 }}>
           {view.kind === 'dashboard' && (
-            <AdminDashboard
-              portals={portals}
-              onNewClient={() => setView({ kind: 'mode-chooser' })}
-              onOpenPortal={(id) => setView({ kind: 'detail', id })}
-              onRefresh={handleRefresh}
-            />
+            <>
+              {/* Top-level tab strip. Sits above whichever tab body is
+                  active. Integrations tab is superadmin-only — Veronika
+                  never sees it, so she can't get confused (or worse,
+                  accidentally paste something into a token box). */}
+              <AdminTabStrip
+                active={dashTab}
+                onChange={setDashTab}
+                showIntegrations={adminLevel === 'super'}
+              />
+              {dashTab === 'clients' && (
+                <AdminDashboard
+                  portals={portals}
+                  onNewClient={() => setView({ kind: 'mode-chooser' })}
+                  onOpenPortal={(id) => setView({ kind: 'detail', id })}
+                  onRefresh={handleRefresh}
+                />
+              )}
+              {dashTab === 'integrations' && adminLevel === 'super' && (
+                <AdminIntegrations adminPassword={password} />
+              )}
+            </>
           )}
           {view.kind === 'mode-chooser' && (
             <AdminModeChooser
@@ -253,5 +277,77 @@ const Admin = () => {
     </Box>
   );
 };
+
+/**
+ * Top-level tab strip for the admin dashboard. Sits above the active
+ * tab's body. Uses the same pill-with-icon shape as PortalTopNav /
+ * gallery TopSectionNav so it feels of a piece with the rest of the
+ * site's chrome. Integrations tab conditionally rendered based on
+ * admin level — hidden entirely for the 'admin' level (Vero).
+ */
+function AdminTabStrip({
+  active,
+  onChange,
+  showIntegrations,
+}: {
+  active: DashTab;
+  onChange: (t: DashTab) => void;
+  showIntegrations: boolean;
+}) {
+  const tabs: { id: DashTab; label: string; icon: typeof FaUsers }[] = [
+    { id: 'clients', label: 'Clients', icon: FaUsers },
+  ];
+  if (showIntegrations) {
+    tabs.push({ id: 'integrations', label: 'Integrations', icon: FaPlug });
+  }
+  if (tabs.length < 2) return null;
+
+  return (
+    <Box maxW="1200px" mx="auto" mb={6}>
+      <HStack spacing={2}>
+        {tabs.map((t) => {
+          const isActive = active === t.id;
+          return (
+            <Box
+              key={t.id}
+              as="button"
+              type="button"
+              onClick={() => onChange(t.id)}
+              display="inline-flex"
+              alignItems="center"
+              gap={2}
+              px={{ base: 4, md: 5 }}
+              py={2}
+              fontSize="2xs"
+              fontWeight="500"
+              letterSpacing="0.2em"
+              textTransform="uppercase"
+              color={isActive ? 'white' : 'gray.700'}
+              bg={isActive ? '#c9a96e' : 'transparent'}
+              border="1px solid"
+              borderColor={isActive ? '#c9a96e' : 'gray.200'}
+              borderRadius="full"
+              transition="all 0.2s ease"
+              cursor="pointer"
+              _hover={
+                isActive
+                  ? { bg: '#b8964f', borderColor: '#b8964f' }
+                  : {
+                      borderColor: '#c9a96e',
+                      color: '#c9a96e',
+                      bg: 'rgba(201, 169, 110, 0.06)',
+                    }
+              }
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Icon as={t.icon} boxSize={3} />
+              <Box as="span">{t.label}</Box>
+            </Box>
+          );
+        })}
+      </HStack>
+    </Box>
+  );
+}
 
 export default Admin;

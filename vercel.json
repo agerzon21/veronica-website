@@ -110,12 +110,22 @@
       "destination": "/api/admin?action=:action"
     },
     {
+      "source": "/api/cron/:job",
+      "destination": "/api/cron?job=:job"
+    },
+    {
       "source": "/photo/:category/:photoId",
       "destination": "/photo/:category/:photoId.html"
     },
     {
       "source": "/(.*)",
       "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/instagram-check",
+      "schedule": "0 12 * * *"
     }
   ]
 }
