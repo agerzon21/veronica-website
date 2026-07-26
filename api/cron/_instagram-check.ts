@@ -1,186 +1,130 @@
 /**
- * Daily cron: checks the Instagram token's remaining runway and emails
- * Alex a ready-to-paste new token when we're getting close to the
- * 60-day expiration.
+ * Daily reminder cron for the Instagram token rotation.
  *
- * Sequence on each run:
- *   1. Ask Meta's debug_token for the current token's expires_at
- *   2. If daysUntilExpiry > WARN_WINDOW_DAYS → do nothing, exit 200
- *   3. If daysUntilExpiry ≤ WARN_WINDOW_DAYS → run the refresh, get
- *      new 60-day token, email it to Alex with paste-into-Vercel
- *      instructions
- *   4. If the refresh itself fails (usually because the token is
- *      already past its window), email Alex with the re-mint
- *      instructions so he knows the automatic path is dead
+ * Reads `system_state.updated_at` for key='ig_token_refreshed' (upserted
+ * by the "Mark as Refreshed" button in the admin UI). If it's been more
+ * than REMIND_AFTER_DAYS since the last rotation, email Alex with the
+ * exact steps to run the local rotation script + link to Vercel env
+ * vars. If already reminded today, no-op (dedupes via a second
+ * system_state key so a redeploy or manual invocation doesn't re-send).
  *
- * We deliberately don't try to mutate Vercel's env vars ourselves —
- * that path is fragile and would need us to store a Vercel API token
- * on our side. 30 seconds of copy-paste on Alex's phone is fine.
+ * Deliberately does NOT attempt to refresh the token itself. Alex owns
+ * the rotation — runs `scripts/refresh-instagram-token.mjs` locally,
+ * pastes into Vercel, clicks Mark as Refreshed. This cron is a
+ * reminder, not automation.
  *
- * Runs daily (Vercel Hobby cron granularity) at 12:00 UTC — early
- * enough that a caught expiration lands in Alex's morning mailbox.
+ * Runs daily at 12:00 UTC (see vercel.json crons). Vercel Hobby's
+ * minimum granularity is daily, which is fine — we've got a 10-day
+ * buffer built into the alert threshold.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sendEmail } from '../_auto-reply.js';
+import { getDb } from '../_db.js';
 
-// Fire the warning email once daysUntilExpiry hits this number. 12
-// gives us a comfortable buffer over the 60-day refresh window without
-// spamming when the runway is still plenty.
-const WARN_WINDOW_DAYS = 12;
+// Instagram long-lived tokens are 60 days. Alert at day 50 → 10 days
+// of runway to notice + rotate.
+const REMIND_AFTER_DAYS = 50;
+
+// Don't re-remind within this many days of the previous email —
+// prevents the daily cron from re-emailing every single day once a
+// token is overdue and Alex hasn't rotated yet. He'll get one nudge,
+// then silence for a week, then another nudge. Not flood.
+const REMINDER_COOLDOWN_DAYS = 7;
 
 const ALEX_EMAIL = process.env.ALEX_EMAIL ?? 'agerzon21@gmail.com';
 
-// Direct link to the exact env var Alex needs to edit. The Vercel
-// dashboard URL structure is stable; if it ever changes, this string
-// is trivially updated. Env-configurable so we don't hard-code the
-// project slug forever.
 const VERCEL_ENV_LINK =
   process.env.VERCEL_ENV_VAR_LINK ??
   'https://vercel.com/agerzon21/veronica-website/settings/environment-variables';
 
+const ADMIN_LINK =
+  process.env.ADMIN_URL ?? 'https://vero.photography/admin';
+
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
-  const token = process.env.IG_ACCESS_TOKEN;
-  const appId = process.env.IG_APP_ID;
-  const appSecret = process.env.IG_APP_SECRET;
-
-  if (!token) {
-    // No token to check → probably a fresh env; email once so someone
-    // notices, then exit.
-    await notifyOfIssue(
-      'Instagram token is missing',
-      `IG_ACCESS_TOKEN env var is not set. The Instagram feed on the site will not work until this is populated. See scripts/refresh-instagram-token.mjs for the re-mint flow.`,
-    );
-    return res.status(200).json({ ok: true, action: 'notified-missing' });
-  }
-
-  // Step 1 — check current expiry. Requires app credentials for the
-  // proper debug_token call. Falls back to "just try to refresh" if
-  // app creds aren't set.
-  let daysUntilExpiry: number | null = null;
-  if (appId && appSecret) {
-    daysUntilExpiry = await queryDaysUntilExpiry(token, appId, appSecret);
-  }
-
-  // Not close enough to worry yet → done.
-  if (daysUntilExpiry !== null && daysUntilExpiry > WARN_WINDOW_DAYS) {
-    return res.status(200).json({
-      ok: true,
-      action: 'no-op',
-      daysUntilExpiry,
-    });
-  }
-
-  // Step 2 — inside the warn window (or unknown expiry). Try the
-  // refresh; email the new token on success, or the re-mint pointer
-  // on failure.
   try {
-    const refreshRes = await fetch(
-      `https://graph.instagram.com/refresh_access_token` +
-        `?grant_type=ig_refresh_token` +
-        `&access_token=${encodeURIComponent(token)}`,
-    );
+    const sql = getDb();
 
-    if (!refreshRes.ok) {
-      const body = await refreshRes.text();
-      await notifyOfIssue(
-        'Instagram token refresh FAILED — manual re-mint required',
-        `The daily refresh cron tried to renew the Instagram token but Meta rejected the call. This usually means the token is already past its 60-day window and can no longer be auto-refreshed.
+    // Read both keys in a single round-trip. `ig_token_refreshed` is
+    // the rotation clock; `ig_token_reminded_at` is our dedupe stamp.
+    const rows = (await sql`
+      SELECT key, updated_at
+      FROM system_state
+      WHERE key IN ('ig_token_refreshed', 'ig_token_reminded_at')
+    `) as Array<{ key: string; updated_at: string }>;
 
-Meta response (status ${refreshRes.status}):
-${body}
+    const refreshedAt = rows.find((r) => r.key === 'ig_token_refreshed')?.updated_at;
+    const remindedAt = rows.find((r) => r.key === 'ig_token_reminded_at')?.updated_at;
 
-To fix: open the Meta app dashboard (developers.facebook.com → vero-photography-feed → Instagram → Generate access tokens) and mint a fresh token, then paste it into Vercel:
-${VERCEL_ENV_LINK}`,
-      );
-      return res
-        .status(200)
-        .json({ ok: false, action: 'refresh-failed', status: refreshRes.status });
+    if (!refreshedAt) {
+      // Table's empty — no rotation date on record. One-shot alert so
+      // the situation is noticed; then dedupe kicks in.
+      if (recentlyReminded(remindedAt)) {
+        return res.status(200).json({ ok: true, action: 'silent-no-refresh-date' });
+      }
+      await sendReminderEmail(null, null);
+      await markReminded(sql);
+      return res.status(200).json({ ok: true, action: 'alerted-no-refresh-date' });
     }
 
-    const { access_token: newToken, expires_in } = (await refreshRes.json()) as {
-      access_token: string;
-      expires_in: number;
-    };
-    const newExpiryDays = Math.round(expires_in / 86400);
-
-    await sendRotationEmail({
-      newToken,
-      newExpiryDays,
-      currentDaysRemaining: daysUntilExpiry,
-    });
-
-    return res.status(200).json({
-      ok: true,
-      action: 'refreshed-and-emailed',
-      newExpiryDays,
-    });
-  } catch (err) {
-    console.error('[cron/instagram-check] refresh failed:', err);
-    await notifyOfIssue(
-      'Instagram token cron threw an error',
-      `The daily refresh cron threw an unexpected error before it could complete:
-
-${err instanceof Error ? err.stack ?? err.message : String(err)}
-
-You may need to run scripts/refresh-instagram-token.mjs manually to be safe.`,
+    const daysSince = Math.floor(
+      (Date.now() - new Date(refreshedAt).getTime()) / (1000 * 60 * 60 * 24),
     );
-    return res.status(500).json({ ok: false, action: 'threw' });
+
+    if (daysSince < REMIND_AFTER_DAYS) {
+      return res.status(200).json({ ok: true, action: 'no-op', daysSince });
+    }
+
+    if (recentlyReminded(remindedAt)) {
+      return res.status(200).json({ ok: true, action: 'silent-already-reminded', daysSince });
+    }
+
+    await sendReminderEmail(refreshedAt, daysSince);
+    await markReminded(sql);
+    return res.status(200).json({ ok: true, action: 'reminded', daysSince });
+  } catch (err) {
+    console.error('[cron/instagram-check] handler failed:', err);
+    return res.status(500).json({ ok: false, error: 'Cron failed' });
   }
 }
 
-async function queryDaysUntilExpiry(
-  token: string,
-  appId: string,
-  appSecret: string,
-): Promise<number | null> {
-  try {
-    const appAccessToken = `${appId}|${appSecret}`;
-    const url =
-      `https://graph.facebook.com/v21.0/debug_token` +
-      `?input_token=${encodeURIComponent(token)}` +
-      `&access_token=${encodeURIComponent(appAccessToken)}`;
-    const debugRes = await fetch(url);
-    if (!debugRes.ok) return null;
-    const debugJson = (await debugRes.json()) as {
-      data?: { is_valid: boolean; expires_at?: number };
-    };
-    if (!debugJson.data?.is_valid || !debugJson.data?.expires_at) return null;
-    const msUntilExpiry = debugJson.data.expires_at * 1000 - Date.now();
-    return Math.round(msUntilExpiry / (1000 * 60 * 60 * 24));
-  } catch {
-    return null;
-  }
+function recentlyReminded(remindedAt: string | undefined): boolean {
+  if (!remindedAt) return false;
+  const daysSinceReminded =
+    (Date.now() - new Date(remindedAt).getTime()) / (1000 * 60 * 60 * 24);
+  return daysSinceReminded < REMINDER_COOLDOWN_DAYS;
 }
 
-interface RotationEmailArgs {
-  newToken: string;
-  newExpiryDays: number;
-  currentDaysRemaining: number | null;
+async function markReminded(sql: ReturnType<typeof getDb>) {
+  await sql`
+    INSERT INTO system_state (key, updated_at)
+    VALUES ('ig_token_reminded_at', NOW())
+    ON CONFLICT (key) DO UPDATE SET updated_at = NOW()
+  `;
 }
 
-async function sendRotationEmail(args: RotationEmailArgs) {
-  const { newToken, newExpiryDays, currentDaysRemaining } = args;
+async function sendReminderEmail(refreshedAt: string | null, daysSince: number | null) {
   const runwayLine =
-    currentDaysRemaining !== null
-      ? `The current token had ~${currentDaysRemaining} days left; we've refreshed it early so you have plenty of runway.`
-      : `The current token was inside the warning window (${WARN_WINDOW_DAYS} days) so we refreshed it.`;
+    refreshedAt && daysSince !== null
+      ? `The token was last rotated ${daysSince} days ago (${new Date(refreshedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}). Meta's 60-day expiry window is approaching — time to rotate.`
+      : `No token rotation date is on record. Rotate now to establish a baseline, or run the DB migration in db/migrations/002-system-state.sql if you haven't already.`;
 
   const text = `Time to rotate the Instagram token.
 
 ${runwayLine}
 
-The refreshed token is valid for ${newExpiryDays} days. Paste it into Vercel to activate:
+Steps (takes ~2 minutes):
 
-  ${VERCEL_ENV_LINK}
+  1. Open VS Code in the VeronicaWebsite repo
+  2. Terminal → run:
+     IG_ACCESS_TOKEN=<current-token-from-vercel> node scripts/refresh-instagram-token.mjs
+  3. Copy the new token from the script output
+  4. Vercel → Settings → Environment Variables → edit IG_ACCESS_TOKEN → paste → Save
+     ${VERCEL_ENV_LINK}
+  5. Vercel → Deployments → ⋯ on latest → Redeploy
+  6. Come back to ${ADMIN_LINK} → Integrations → click "Mark as Refreshed"
 
-Steps:
-  1. Open the link above
-  2. Edit IG_ACCESS_TOKEN, paste the new value below, save
-  3. Trigger a redeploy (Deployments → ⋯ → Redeploy)
-
-New token:
-${newToken}
+The site keeps working while you rotate — this email is a reminder, not an emergency. But if the token expires (past day 60) auto-refresh no longer works and you'd need a full re-mint via developers.facebook.com.
 `;
 
   const html = `<!DOCTYPE html>
@@ -188,36 +132,33 @@ ${newToken}
 <body style="margin:0;padding:0;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#333;">
   <div style="max-width:560px;margin:32px auto;background:#fff;padding:32px;border:1px solid #eaeaea;">
     <div style="font-size:11px;letter-spacing:0.25em;text-transform:uppercase;color:#c9a96e;font-weight:500;margin-bottom:8px;">
-      Vero Photography · Instagram Integration
+      Vero Photography · Reminder
     </div>
-    <h1 style="font-size:22px;font-weight:300;margin:0 0 16px;color:#222;">Time to rotate the Instagram token</h1>
-    <p style="font-size:14px;line-height:1.6;color:#444;margin:0 0 16px;">
-      ${runwayLine}
-    </p>
+    <h1 style="font-size:22px;font-weight:300;margin:0 0 16px;color:#222;">Rotate the Instagram token</h1>
     <p style="font-size:14px;line-height:1.6;color:#444;margin:0 0 20px;">
-      The refreshed token is valid for <strong>${newExpiryDays} days</strong>.
+      ${runwayLine}
     </p>
 
     <div style="border-left:3px solid #c9a96e;padding:12px 16px;background:#fdf9f0;margin:0 0 20px;">
-      <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8a6e35;font-weight:500;margin-bottom:6px;">
-        New token
+      <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8a6e35;font-weight:500;margin-bottom:8px;">
+        Steps (~2 minutes)
       </div>
-      <code style="display:block;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:12px;color:#333;word-break:break-all;line-height:1.5;">${escapeHtml(
-        newToken,
-      )}</code>
+      <ol style="font-size:13px;line-height:1.7;color:#444;margin:0;padding-left:20px;">
+        <li>Open VS Code in the VeronicaWebsite repo</li>
+        <li>In the terminal, run:
+          <div style="margin:6px 0 4px;background:#1e1e1e;color:#d4d4d4;padding:8px 10px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:11px;border-radius:2px;word-break:break-all;">IG_ACCESS_TOKEN=&lt;current-token&gt; node scripts/refresh-instagram-token.mjs</div>
+        </li>
+        <li>Copy the new token from the output</li>
+        <li>
+          <a href="${VERCEL_ENV_LINK}" style="color:#c9a96e;">Open Vercel env vars</a>, edit <code style="background:#f4f4f4;padding:2px 6px;border-radius:2px;font-size:11px;">IG_ACCESS_TOKEN</code>, paste, save
+        </li>
+        <li>Vercel Deployments → ⋯ on latest → Redeploy</li>
+        <li><a href="${ADMIN_LINK}" style="color:#c9a96e;">Open /admin</a> → Integrations → click <strong>Mark as Refreshed</strong></li>
+      </ol>
     </div>
 
-    <p style="font-size:14px;line-height:1.6;color:#444;margin:0 0 8px;font-weight:500;">Steps:</p>
-    <ol style="font-size:14px;line-height:1.7;color:#444;margin:0 0 24px;padding-left:20px;">
-      <li>Open Vercel env vars: <a href="${VERCEL_ENV_LINK}" style="color:#c9a96e;">${VERCEL_ENV_LINK}</a></li>
-      <li>Edit <code style="background:#f4f4f4;padding:2px 6px;border-radius:2px;font-size:12px;">IG_ACCESS_TOKEN</code>, paste the token above, save</li>
-      <li>Trigger a redeploy (Deployments → ⋯ → Redeploy)</li>
-    </ol>
-
     <p style="font-size:12px;color:#999;line-height:1.5;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px;">
-      This email is sent automatically ~${WARN_WINDOW_DAYS} days before the Instagram token expires so you never
-      have to remember. If you ever want to rotate manually before then, use the "Refresh Token" button in
-      the Integrations tab of /admin.
+      This is an automated reminder from the daily cron in api/cron/_instagram-check.ts. If you've already rotated but not marked it, click "Mark as Refreshed" in /admin to reset this reminder for another ~50 days.
     </p>
   </div>
 </body>
@@ -225,32 +166,8 @@ ${newToken}
 
   await sendEmail({
     to: ALEX_EMAIL,
-    subject: '[Vero Admin] Rotate Instagram token',
+    subject: '[Vero Admin] Time to rotate the Instagram token',
     text,
     html,
   });
-}
-
-async function notifyOfIssue(subject: string, body: string) {
-  try {
-    await sendEmail({
-      to: ALEX_EMAIL,
-      subject: `[Vero Admin] ${subject}`,
-      text: body,
-      html: `<pre style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;color:#333;white-space:pre-wrap;word-break:break-word;">${escapeHtml(
-        body,
-      )}</pre>`,
-    });
-  } catch (err) {
-    console.error('[cron/instagram-check] failed to send notification email:', err);
-  }
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

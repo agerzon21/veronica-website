@@ -22,7 +22,7 @@ import paymentLogHandler from './admin/_payment-log.js';
 import resendInviteHandler from './admin/_resend-invite.js';
 import portalPdfHandler from './admin/_portal-pdf.js';
 import instagramStatusHandler from './admin/_instagram-status.js';
-import instagramRefreshHandler from './admin/_instagram-refresh.js';
+import instagramMarkRefreshedHandler from './admin/_instagram-mark-refreshed.js';
 
 const HANDLERS: Record<
   string,
@@ -38,7 +38,7 @@ const HANDLERS: Record<
   'resend-invite': resendInviteHandler,
   'portal-pdf': portalPdfHandler,
   'instagram-status': instagramStatusHandler,
-  'instagram-refresh': instagramRefreshHandler,
+  'instagram-mark-refreshed': instagramMarkRefreshedHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

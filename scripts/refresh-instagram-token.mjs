@@ -39,4 +39,6 @@ console.log('\n  ── NEW LONG-LIVED TOKEN ──');
 console.log(`  ${access_token}`);
 console.log(`\n  Expires in: ${days} days`);
 console.log('  Paste this into Vercel → Project Settings → Environment Variables → IG_ACCESS_TOKEN');
-console.log('  (overwrite the existing value), then trigger a redeploy.\n');
+console.log('  (overwrite the existing value), then trigger a redeploy.');
+console.log('\n  After the redeploy lands, open https://vero.photography/admin → Integrations');
+console.log('  → click "Mark as Refreshed" to reset the reminder cron for another ~50 days.\n');

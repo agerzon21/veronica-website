@@ -1,35 +1,40 @@
 /**
- * Reports on the current IG_ACCESS_TOKEN — is it valid, when does it
- * expire, how many days until expiry. Powers the "Instagram" card in
- * the admin Integrations tab.
+ * Reports on the last-known Instagram token rotation, derived from the
+ * `system_state` row keyed by 'ig_token_refreshed' (upserted by the
+ * "Mark as Refreshed" button in the admin UI).
  *
  * POST { password }
- *   → 200 { success, status: 'valid'|'expiring'|'expired'|'invalid'|'missing',
- *           expiresAt, daysUntilExpiry, appId, userId }
- *   → 401 on wrong password
+ *   → 200 { success, status, refreshedAt, daysSinceRefresh,
+ *           daysUntilExpiry, userId }
+ *   → 401 wrong password
  *   → 405 non-POST
  *
+ * Deliberately does NOT call Meta's debug_token endpoint — that path
+ * required us to store IG_APP_SECRET in Vercel just so we could check
+ * expiry, and Alex correctly pointed out the simpler path is: assume
+ * every rotation lasts exactly 60 days, track when the last one
+ * happened, count from there. Same accuracy for practical purposes;
+ * one fewer secret on the server.
+ *
  * `status` maps to badge colors in the UI:
- *   valid    → green   (>14 days remaining)
- *   expiring → amber   (3–14 days remaining)
- *   expired  → red     (past expiry, or Meta rejected the token)
- *   invalid  → red     (Meta rejected for a non-expiry reason)
- *   missing  → red     (env var not set at all)
+ *   fresh    → green   (rotated <40 days ago; plenty of runway)
+ *   aging    → amber   (40–50 days; getting close, cron may fire soon)
+ *   overdue  → red     (>50 days; rotate NOW — cron already emailed)
+ *   unknown  → grey    (never marked; run migration or click the button)
  *
- * Uses Meta's Graph API debug_token endpoint — same one Facebook devs
- * use to introspect their own tokens. Requires an app-access-token to
- * call, which is just `{app_id}|{app_secret}` concatenated. Read-only
- * against Meta's side.
- *
- * Accepts any admin level (admin OR super) — read-only visibility, no
- * mutation. The Refresh action (which DOES mutate the token) is
- * separately gated on super in _instagram-refresh.ts.
+ * Accepts either admin OR super — read-only.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
+import { getDb } from '../_db.js';
 
-const EXPIRING_THRESHOLD_DAYS = 14;
+// A long-lived Instagram token is 60 days from the moment it's minted.
+// We alert at day 50 (10 days before expiry) — plenty of runway to
+// notice + rotate.
+const TOKEN_LIFETIME_DAYS = 60;
+const AGING_THRESHOLD_DAYS = 40;
+const OVERDUE_THRESHOLD_DAYS = 50;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -42,149 +47,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(auth.status).json({ success: false, error: auth.error });
   }
 
-  const token = process.env.IG_ACCESS_TOKEN;
-  const appId = process.env.IG_APP_ID;
-  const appSecret = process.env.IG_APP_SECRET;
-  const userId = process.env.IG_USER_ID;
-
-  if (!token) {
-    return res.status(200).json({
-      success: true,
-      status: 'missing',
-      expiresAt: null,
-      daysUntilExpiry: null,
-      appId: appId ?? null,
-      userId: userId ?? null,
-      message: 'IG_ACCESS_TOKEN env var is not set.',
-    });
-  }
-
-  // The debug_token endpoint needs an app-access-token to call. That's
-  // literally {app_id}|{app_secret} — Meta's shortcut for endpoints
-  // that need to be called on behalf of the app itself, not a user.
-  //
-  // If we don't have the app credentials, we fall back to a lighter
-  // "does the token work at all" check by hitting a benign endpoint.
-  // Won't give us expiry, but confirms the token is alive.
-  if (!appId || !appSecret) {
-    return await fallbackTokenCheck(token, res, appId, userId);
-  }
-
-  const appAccessToken = `${appId}|${appSecret}`;
-  const url =
-    `https://graph.facebook.com/v21.0/debug_token` +
-    `?input_token=${encodeURIComponent(token)}` +
-    `&access_token=${encodeURIComponent(appAccessToken)}`;
+  const userId = process.env.IG_USER_ID ?? null;
 
   try {
-    const debugRes = await fetch(url);
-    const debugJson = (await debugRes.json()) as {
-      data?: {
-        is_valid: boolean;
-        expires_at?: number;
-        data_access_expires_at?: number;
-        error?: { message: string; code: number };
-      };
-    };
+    const sql = getDb();
+    const rows = (await sql`
+      SELECT updated_at
+      FROM system_state
+      WHERE key = 'ig_token_refreshed'
+      LIMIT 1
+    `) as Array<{ updated_at: string }>;
 
-    if (!debugRes.ok || !debugJson.data) {
-      console.error('[admin/instagram-status] debug_token failed:', debugJson);
+    if (rows.length === 0) {
       return res.status(200).json({
         success: true,
-        status: 'invalid',
-        expiresAt: null,
+        status: 'unknown',
+        refreshedAt: null,
+        daysSinceRefresh: null,
         daysUntilExpiry: null,
-        appId,
-        userId: userId ?? null,
-        message: 'Meta rejected the token check.',
+        userId,
+        message:
+          'No rotation date on record. Run the DB migration (db/migrations/002-system-state.sql) or rotate + Mark as Refreshed now.',
       });
     }
 
-    const data = debugJson.data;
-    if (!data.is_valid) {
-      return res.status(200).json({
-        success: true,
-        status: 'expired',
-        expiresAt: null,
-        daysUntilExpiry: null,
-        appId,
-        userId: userId ?? null,
-        message: data.error?.message || 'Token is no longer valid.',
-      });
-    }
+    const refreshedAt = rows[0].updated_at;
+    const daysSinceRefresh = Math.floor(
+      (Date.now() - new Date(refreshedAt).getTime()) / (1000 * 60 * 60 * 24),
+    );
+    const daysUntilExpiry = TOKEN_LIFETIME_DAYS - daysSinceRefresh;
 
-    // expires_at is a unix-seconds timestamp; 0 (or missing) means the
-    // token never expires. Long-lived Instagram tokens always have a
-    // non-zero value here — the 60-day thing.
-    const expiresAtUnix = data.expires_at;
-    if (!expiresAtUnix) {
-      return res.status(200).json({
-        success: true,
-        status: 'valid',
-        expiresAt: null,
-        daysUntilExpiry: null,
-        appId,
-        userId: userId ?? null,
-        message: 'Token is valid (no expiration).',
-      });
-    }
-
-    const expiresAt = new Date(expiresAtUnix * 1000);
-    const msUntilExpiry = expiresAt.getTime() - Date.now();
-    const daysUntilExpiry = Math.round(msUntilExpiry / (1000 * 60 * 60 * 24));
-
-    let status: 'valid' | 'expiring' | 'expired';
-    if (daysUntilExpiry <= 0) {
-      status = 'expired';
-    } else if (daysUntilExpiry <= EXPIRING_THRESHOLD_DAYS) {
-      status = 'expiring';
+    let status: 'fresh' | 'aging' | 'overdue';
+    if (daysSinceRefresh >= OVERDUE_THRESHOLD_DAYS) {
+      status = 'overdue';
+    } else if (daysSinceRefresh >= AGING_THRESHOLD_DAYS) {
+      status = 'aging';
     } else {
-      status = 'valid';
+      status = 'fresh';
     }
 
     return res.status(200).json({
       success: true,
       status,
-      expiresAt: expiresAt.toISOString(),
+      refreshedAt,
+      daysSinceRefresh,
       daysUntilExpiry,
-      appId,
-      userId: userId ?? null,
+      userId,
     });
   } catch (err) {
-    console.error('[admin/instagram-status] fetch failed:', err);
-    return res.status(500).json({ success: false, error: 'Meta API unreachable' });
-  }
-}
-
-/**
- * When IG_APP_ID / IG_APP_SECRET aren't set, fall back to a token-alive
- * probe: hit a trivial Graph API endpoint with the token. Gives us
- * valid/invalid but not expiry. Prompts the user to set app creds for
- * the full experience.
- */
-async function fallbackTokenCheck(
-  token: string,
-  res: VercelResponse,
-  appId: string | undefined,
-  userId: string | undefined,
-) {
-  try {
-    const probe = await fetch(
-      `https://graph.instagram.com/me?fields=id&access_token=${encodeURIComponent(token)}`,
-    );
-    const ok = probe.ok;
-    return res.status(200).json({
-      success: true,
-      status: ok ? 'valid' : 'expired',
-      expiresAt: null,
-      daysUntilExpiry: null,
-      appId: appId ?? null,
-      userId: userId ?? null,
-      message: ok
-        ? 'Token is alive. Set IG_APP_ID + IG_APP_SECRET env vars to see expiry countdown.'
-        : 'Token appears rejected by Meta.',
-    });
-  } catch {
-    return res.status(500).json({ success: false, error: 'Meta API unreachable' });
+    console.error('[admin/instagram-status] DB read failed:', err);
+    // If the table doesn't exist yet (migration not run), report that
+    // specifically instead of a generic 500 — the admin UI can prompt
+    // Alex to run the migration.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('system_state') && msg.toLowerCase().includes('does not exist')) {
+      return res.status(200).json({
+        success: true,
+        status: 'unknown',
+        refreshedAt: null,
+        daysSinceRefresh: null,
+        daysUntilExpiry: null,
+        userId,
+        message:
+          'The system_state table has not been created yet. Run db/migrations/002-system-state.sql against production Neon.',
+      });
+    }
+    return res.status(500).json({ success: false, error: 'Database unreachable' });
   }
 }
