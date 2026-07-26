@@ -102,7 +102,7 @@ const Admin = () => {
                 />
               )}
               {dashTab === 'journal' && (
-                <AdminJournal adminPassword={password} />
+                <AdminJournal adminPassword={password} adminLevel={adminLevel} />
               )}
               {dashTab === 'integrations' && adminLevel === 'super' && (
                 <AdminIntegrations adminPassword={password} />

@@ -23,6 +23,11 @@ import resendInviteHandler from './admin/_resend-invite.js';
 import portalPdfHandler from './admin/_portal-pdf.js';
 import instagramStatusHandler from './admin/_instagram-status.js';
 import instagramMarkRefreshedHandler from './admin/_instagram-mark-refreshed.js';
+import journalListHandler from './admin/_journal-list.js';
+import journalDetailHandler from './admin/_journal-detail.js';
+import journalCreateHandler from './admin/_journal-create.js';
+import journalUpdateHandler from './admin/_journal-update.js';
+import journalDeleteHandler from './admin/_journal-delete.js';
 
 const HANDLERS: Record<
   string,
@@ -39,6 +44,11 @@ const HANDLERS: Record<
   'portal-pdf': portalPdfHandler,
   'instagram-status': instagramStatusHandler,
   'instagram-mark-refreshed': instagramMarkRefreshedHandler,
+  'journal-list': journalListHandler,
+  'journal-detail': journalDetailHandler,
+  'journal-create': journalCreateHandler,
+  'journal-update': journalUpdateHandler,
+  'journal-delete': journalDeleteHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
