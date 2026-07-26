@@ -28,6 +28,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
 import { getDb } from '../_db.js';
+import { detectAndMarkRotation } from '../_ig-detect.js';
 
 // A long-lived Instagram token is 60 days from the moment it's minted.
 // We alert at day 50 (10 days before expiry) — plenty of runway to
@@ -50,6 +51,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const userId = process.env.IG_USER_ID ?? null;
 
   try {
+    // Auto-detect: if the current IG_ACCESS_TOKEN env var doesn't
+    // match the hash we stored last time, someone rotated it outside
+    // the admin flow. This call transparently updates the timestamp
+    // + hash so the card below reads "0 days ago" instead of stale
+    // pre-rotation info. Failure is non-fatal — we log and fall
+    // through to the normal read.
+    try {
+      await detectAndMarkRotation();
+    } catch (err) {
+      console.error('[admin/instagram-status] auto-detect failed (non-fatal):', err);
+    }
+
     const sql = getDb();
     const rows = (await sql`
       SELECT updated_at

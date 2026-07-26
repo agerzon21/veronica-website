@@ -19,7 +19,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const POST_LIMIT = 6;
+const POST_LIMIT = 9;
 
 const MEDIA_FIELDS = [
   'id',

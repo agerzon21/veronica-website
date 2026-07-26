@@ -22,6 +22,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin, requireSuper } from '../_admin-auth.js';
 import { getDb } from '../_db.js';
+import { hashToken } from '../_ig-detect.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -39,13 +40,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Also record the current token's hash so the auto-detector in
+    // _ig-detect.ts stays in sync. Without this, the very next status
+    // check would compare current-hash to stale-hash, decide "the
+    // token was rotated!" (because they differ), and update timestamp
+    // AGAIN — harmless but confusing to trace in logs.
+    const currentToken = process.env.IG_ACCESS_TOKEN ?? '';
+    const currentHash = currentToken ? hashToken(currentToken) : null;
+
     const sql = getDb();
     const rows = (await sql`
-      INSERT INTO system_state (key, updated_at)
-      VALUES ('ig_token_refreshed', NOW())
-      ON CONFLICT (key) DO UPDATE SET updated_at = NOW()
+      INSERT INTO system_state (key, updated_at, value)
+      VALUES ('ig_token_refreshed', NOW(), ${currentHash})
+      ON CONFLICT (key) DO UPDATE SET updated_at = NOW(), value = EXCLUDED.value
       RETURNING updated_at
     `) as Array<{ updated_at: string }>;
+
+    // Clear the reminder dedupe so a fresh 60-day cycle starts clean.
+    await sql`DELETE FROM system_state WHERE key = 'ig_token_reminded_at'`;
 
     return res.status(200).json({
       success: true,

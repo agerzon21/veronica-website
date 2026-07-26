@@ -54,6 +54,9 @@ const FALLBACK_PHOTOS: Photo[] = [
   { url: '/assets/photos/maternity/pregnant-friends-colorful-dresses.webp', alt: 'Maternity portrait of friends in flowing dresses' },
   { url: '/assets/photos/portraits/lace-pink-dress-blue-glacier.webp', alt: 'Lace dress portrait at a blue glacier' },
   { url: '/assets/photos/weddings/couple-embracing-greenery.webp', alt: 'Couple embracing in lush greenery' },
+  { url: '/assets/photos/family/four-generations-yellow.webp', alt: 'Four generations of a family in warm yellow tones' },
+  { url: '/assets/photos/maternity/pregnant-family-three-bw.webp', alt: 'Black and white maternity portrait of a family of three' },
+  { url: '/assets/photos/portraits/sisters-cooking-together.webp', alt: 'Sisters cooking together in a warm kitchen' },
 ];
 
 // Convert raw counts to "1.2K" / "12.3K" / "1.2M" style.
@@ -97,7 +100,10 @@ const InstagramFeed = () => {
   }, []);
 
   const livePhotos = toPhotos(data.posts ?? []);
-  const PHOTOS: Photo[] = livePhotos.length >= 6 ? livePhotos.slice(0, 6) : FALLBACK_PHOTOS;
+  // Grid is 3×3 on desktop → prefer 9 live posts. If fewer than 9
+  // came back (rate-limited, private account, etc.) fall back to the
+  // curated 9-tile bundle so the grid never renders half-empty.
+  const PHOTOS: Photo[] = livePhotos.length >= 9 ? livePhotos.slice(0, 9) : FALLBACK_PHOTOS;
 
   const profile = data.profile ?? {};
   const USERNAME: string = profile.username ?? 'vero.art.photo';

@@ -244,7 +244,10 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
             Paste it into Vercel → <Text as="code" bg="gray.100" px={1.5} py={0.5} borderRadius="sm" fontSize="xs">IG_ACCESS_TOKEN</Text> → Save → Redeploy
           </Text>
           <Text as="li" fontSize="sm" color="gray.700" lineHeight="1.7" listStyleType="decimal">
-            Come back here and click <strong>Mark as Refreshed</strong> to reset the reminder clock
+            That&rsquo;s it — the reminder clock resets automatically the
+            next time this page loads or the daily cron runs (the
+            <strong> Mark as Refreshed</strong> button below is just an
+            optional way to reset it right this second)
           </Text>
         </VStack>
       </Box>

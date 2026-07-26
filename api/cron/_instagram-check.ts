@@ -21,6 +21,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sendEmail } from '../_auto-reply.js';
 import { getDb } from '../_db.js';
+import { detectAndMarkRotation } from '../_ig-detect.js';
 
 // Instagram long-lived tokens are 60 days. Alert at day 50 → 10 days
 // of runway to notice + rotate.
@@ -43,6 +44,17 @@ const ADMIN_LINK =
 
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
   try {
+    // Auto-detect first: if the env var changed since last cron, mark
+    // as refreshed transparently before we evaluate whether to remind.
+    // This is what makes the manual "Mark as Refreshed" click optional
+    // for the common flow (rotate → paste → redeploy → we notice on
+    // the next cron and reset the clock silently).
+    try {
+      await detectAndMarkRotation();
+    } catch (err) {
+      console.error('[cron/instagram-check] auto-detect failed (non-fatal):', err);
+    }
+
     const sql = getDb();
 
     // Read both keys in a single round-trip. `ig_token_refreshed` is
