@@ -13,6 +13,7 @@ import ThankYou from './pages/ThankYou';
 import Portal from './pages/Portal';
 import Welcome from './pages/Welcome';
 import Admin from './pages/Admin';
+import Journal from './pages/Journal';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import SEO from './components/SEO';
@@ -58,6 +59,8 @@ function App() {
             <Route path="/portal/pass" element={<Portal />} />
             <Route path="/portal/welcome" element={<Welcome />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/journal" element={<Journal />} />
+            <Route path="/journal/:slug" element={<Journal />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />

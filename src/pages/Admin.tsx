@@ -2,7 +2,7 @@ import { Box, Flex, HStack, VStack, Text, Input, Icon } from '@chakra-ui/react';
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
-import { FaUsers, FaPlug } from 'react-icons/fa';
+import { FaUsers, FaPlug, FaBookOpen } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import AdminNewClient from '../components/AdminNewClient';
@@ -10,13 +10,14 @@ import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
 import AdminModeChooser from '../components/AdminModeChooser';
 import AdminClientDetail from '../components/AdminClientDetail';
 import AdminIntegrations from '../components/AdminIntegrations';
+import AdminJournal from '../components/AdminJournal';
 
 const MotionDiv = motion.div;
 
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
 // live outside the tab shell for now — they're modal-ish flows.
-type DashTab = 'clients' | 'integrations';
+type DashTab = 'clients' | 'journal' | 'integrations';
 
 type View =
   | { kind: 'dashboard' }
@@ -99,6 +100,9 @@ const Admin = () => {
                   onOpenPortal={(id) => setView({ kind: 'detail', id })}
                   onRefresh={handleRefresh}
                 />
+              )}
+              {dashTab === 'journal' && (
+                <AdminJournal adminPassword={password} />
               )}
               {dashTab === 'integrations' && adminLevel === 'super' && (
                 <AdminIntegrations adminPassword={password} />
@@ -296,6 +300,7 @@ function AdminTabStrip({
 }) {
   const tabs: { id: DashTab; label: string; icon: typeof FaUsers }[] = [
     { id: 'clients', label: 'Clients', icon: FaUsers },
+    { id: 'journal', label: 'Journal', icon: FaBookOpen },
   ];
   if (showIntegrations) {
     tabs.push({ id: 'integrations', label: 'Integrations', icon: FaPlug });

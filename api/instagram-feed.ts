@@ -24,11 +24,20 @@ const POST_LIMIT = 9;
 const MEDIA_FIELDS = [
   'id',
   'media_type',
+  // Signals whether this is a REEL vs a normal FEED post — lets us
+  // show a "reel" badge on video tiles instead of a generic play
+  // icon.
+  'media_product_type',
   'media_url',
   'thumbnail_url',
   'permalink',
   'caption',
   'timestamp',
+  // Engagement metrics — available with the same
+  // instagram_business_basic permission we already have. Some posts
+  // (very recent, or comments-off) return null; we tolerate that.
+  'like_count',
+  'comments_count',
 ].join(',');
 
 const PROFILE_FIELDS = [
@@ -44,12 +53,15 @@ const PROFILE_FIELDS = [
 
 type IgMedia = {
   id: string;
-  media_type: string;
+  media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM';
+  media_product_type?: 'FEED' | 'REELS' | 'STORY' | 'AD';
   media_url?: string;
   thumbnail_url?: string;
   permalink: string;
   caption?: string;
   timestamp: string;
+  like_count?: number;
+  comments_count?: number;
 };
 
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
@@ -96,8 +108,16 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         id: p.id,
         url: p.media_type === 'VIDEO' ? p.thumbnail_url! : p.media_url!,
         permalink: p.permalink,
-        caption: (p.caption ?? '').slice(0, 280),
+        // Longer caption cap now that the on-site modal shows the full
+        // text — the old 280-char limit was tuned for a hover overlay.
+        caption: (p.caption ?? '').slice(0, 1400),
         timestamp: p.timestamp,
+        // Video posts include reels; media_product_type disambiguates
+        // so we can badge reels distinctly ("REEL" vs generic play).
+        mediaType: p.media_type,
+        isReel: p.media_product_type === 'REELS',
+        likeCount: typeof p.like_count === 'number' ? p.like_count : null,
+        commentsCount: typeof p.comments_count === 'number' ? p.comments_count : null,
       }));
 
     const profile = {

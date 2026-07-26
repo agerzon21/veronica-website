@@ -123,14 +123,24 @@ the app).
   Documents feature produces PDF-quality scans that Meta rarely
   rejects.
 
-## Questions Alex probably has for Vero before she starts
+## Answers to the "before we start" checklist (2026-07-26)
 
-- Is there a registered business name (LLC/DBA), or is it operated
-  under Vero's personal name?
-- Is there already a Facebook Page for the business, or do we need
-  to create one?
-- What business email should we use — vero@vero.photography (if that
-  mailbox exists), or a personal one?
+- **Registered business name?** No — she's operating as a sole
+  proprietor. Meta accepts individual/sole-proprietor verification
+  with a government photo ID + a utility bill (both showing name
+  + address). Use her legal name ("Veronika Gerzon") on the form.
+  → Register as an LLC is a separate decision (real value for
+  liability + taxes) but NOT required for Meta.
 
-Once we know those, Vero can start step 1 and complete the whole
-thing in one sitting (~30 min of active work + wait time for Meta).
+- **Facebook Page linked?** Yes, already exists. ✓ Nothing to do.
+
+- **Email?** `vero@vero.photography` if that mailbox actually
+  receives email — Meta will send a verification email there. **Test
+  first**: from any other account, send a plain "hi" to
+  vero@vero.photography and confirm Vero gets it. If she doesn't,
+  use her personal Gmail — Meta accepts personal emails, it just
+  looks a hair less business-like to the reviewer.
+
+Once the email is confirmed working, Vero can start at Step 1 above
+and complete the submission in one sitting (~30 min of active work +
+wait time for Meta).
