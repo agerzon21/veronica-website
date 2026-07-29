@@ -120,9 +120,10 @@ async function handleList(_req: VercelRequest, res: VercelResponse) {
       }),
     );
 
-    // 5-minute edge cache. Journal posts change infrequently and even
-    // a brief cache dramatically cuts Drive fanout under a traffic
-    // spike. Vero's edits show up within 5 min without any purge.
+    // 5-minute edge cache. Journal posts change infrequently (weekly
+    // or slower) and even a brief cache dramatically cuts Drive
+    // fanout under a traffic spike. Vero's edits show up within
+    // 5 min without any purge required.
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
     return res.status(200).json({ success: true, posts });
   } catch (err) {

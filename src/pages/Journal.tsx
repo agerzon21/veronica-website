@@ -153,11 +153,15 @@ function JournalIndex() {
  * everything to the right (single column).
  */
 function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
+  // Rail lives at 12px from the container's left edge on mobile and
+  // dead-center on desktop. Children (dots, year markers, cards) all
+  // position against this same origin — so no `pl` on the container,
+  // otherwise absolute-positioned children inside child Flexes end up
+  // shifted right by that padding and drift off the rail.
   return (
-    <Box position="relative" pl={{ base: 8, md: 0 }}>
+    <Box position="relative">
       {/* The rail itself. Absolutely positioned so cards can flow past
-          it without disturbing layout. Left side on mobile, dead
-          center on desktop. */}
+          it without disturbing layout. */}
       <Box
         position="absolute"
         top={0}
@@ -184,6 +188,12 @@ function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
 }
 
 function YearMarker({ year }: { year: number }) {
+  // On mobile the badge sits centered ON the rail (at x=12px) so the
+  // rail visually threads through it. Absolute positioning + a -50%
+  // translate keeps the badge center pinned to the rail even as the
+  // badge width changes with year length ("2026" vs "2025", etc.).
+  // Desktop keeps the older flex-center behavior — the rail is at
+  // 50% and the badge naturally centers over it.
   return (
     <Flex
       position="relative"
@@ -191,6 +201,7 @@ function YearMarker({ year }: { year: number }) {
       mb={{ base: 6, md: 8 }}
       align="center"
       zIndex={1}
+      minH="28px"
     >
       <Box
         bg="white"
@@ -199,7 +210,9 @@ function YearMarker({ year }: { year: number }) {
         px={{ base: 3, md: 5 }}
         py={{ base: 1, md: 1.5 }}
         borderRadius="full"
-        ml={{ base: '-16px', md: 0 }}
+        position={{ base: 'absolute', md: 'static' }}
+        left={{ base: '12px', md: 'auto' }}
+        transform={{ base: 'translateX(-50%)', md: 'none' }}
       >
         <Text
           fontSize={{ base: 'xs', md: 'sm' }}
@@ -259,10 +272,12 @@ function TimelineEntry({ post, side }: { post: PostSummary; side: 'left' | 'righ
         </Text>
       </Flex>
 
-      {/* The card itself */}
+      {/* The card itself. Mobile pl clears the rail (at 12px) with a
+          comfortable gap; desktop pl/pr pushes the card away from the
+          center rail on the appropriate side. */}
       <Box
         w={{ base: '100%', md: '50%' }}
-        pl={{ base: 8, md: side === 'right' ? 12 : 0 }}
+        pl={{ base: '40px', md: side === 'right' ? 12 : 0 }}
         pr={{ base: 0, md: side === 'left' ? 12 : 0 }}
         order={{ base: 0, md: side === 'right' ? 1 : 0 }}
       >
