@@ -67,6 +67,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'node:crypto';
 import getRawBody from 'raw-body';
 import { getDb } from '../_db.js';
+import { processInboundMessage } from '../_ai-reply.js';
 
 // Message events besides plain text (echoes, deleted, reactions, etc.)
 // arrive on the same webhook — we ignore anything without a text body
@@ -229,6 +230,34 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
       `skipped_no_message_field=${persistStats.skippedNoMessageField}`,
   );
 
+  // Trigger the AI reply pipeline for each newly-stored inbound
+  // message. Runs inline (before we return 200) — total budget for
+  // signature verify + persist + AI generation + IG send is ~3-4s,
+  // comfortably under Meta's 5s webhook timeout. If we ever start
+  // exceeding, Meta retries; our dedup logic (checking for an
+  // outbound message after this inbound's sent_at) makes retries
+  // no-op idempotently rather than double-replying.
+  //
+  // The AI reply function never throws; it returns a structured
+  // result we log for observability without crashing the webhook.
+  for (const stored of persistStats.storedMessages) {
+    try {
+      const result = await processInboundMessage({
+        conversationId: stored.conversationId,
+        inboundMessageId: stored.messageId,
+        inboundSentAt: stored.sentAt,
+      });
+      console.log(
+        `[inbox/ig-webhook] ai-reply action=${result.action}` +
+          (result.reason ? ` reason="${result.reason}"` : ''),
+      );
+    } catch (err) {
+      // processInboundMessage shouldn't throw, but belt-and-suspenders
+      // — never let a reply failure break the webhook 200.
+      console.error('[inbox/ig-webhook] ai-reply threw:', err);
+    }
+  }
+
   return res.status(200).json({ ok: true });
 }
 
@@ -258,11 +287,21 @@ function describePayloadShape(payload: IgWebhookPayload): string {
   );
 }
 
+interface StoredMessageRef {
+  conversationId: string;
+  messageId: string;
+  sentAt: string;
+}
+
 interface PersistStats {
   stored: number;
   skippedEcho: number;
   skippedNoText: number;
   skippedNoMessageField: number;
+  // References to the actual DB rows created — used by the caller to
+  // trigger AI reply generation for each new inbound. Empty on
+  // no-op / all-skipped payloads (e.g., only echoes or reactions).
+  storedMessages: StoredMessageRef[];
 }
 
 /**
@@ -282,6 +321,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     skippedEcho: 0,
     skippedNoText: 0,
     skippedNoMessageField: 0,
+    storedMessages: [],
   };
 
   for (const evt of events) {
@@ -332,7 +372,11 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
 
     // Insert the message. The UNIQUE constraint on external_message_id
     // makes this idempotent — Meta's re-deliveries silently no-op.
-    await sql`
+    // RETURNING id lets us capture the actual row so the caller can
+    // trigger AI reply generation for this specific message.
+    // ON CONFLICT ... RETURNING returns NO row on conflict, which is
+    // exactly what we want here: retries don't re-trigger the AI.
+    const inserted = (await sql`
       INSERT INTO messages (
         conversation_id, direction, sender, body,
         external_message_id, sent_at
@@ -342,8 +386,17 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
         ${mid}, ${sentAt}
       )
       ON CONFLICT (external_message_id) DO NOTHING
-    `;
-    stats.stored++;
+      RETURNING id
+    `) as Array<{ id: string }>;
+
+    if (inserted.length > 0) {
+      stats.stored++;
+      stats.storedMessages.push({
+        conversationId,
+        messageId: inserted[0].id,
+        sentAt,
+      });
+    }
   }
 
   return stats;
