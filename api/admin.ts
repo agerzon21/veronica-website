@@ -28,6 +28,12 @@ import journalDetailHandler from './admin/_journal-detail.js';
 import journalCreateHandler from './admin/_journal-create.js';
 import journalUpdateHandler from './admin/_journal-update.js';
 import journalDeleteHandler from './admin/_journal-delete.js';
+import messagesListHandler from './admin/_messages-list.js';
+import messagesDetailHandler from './admin/_messages-detail.js';
+import messagesToggleAiHandler from './admin/_messages-toggle-ai.js';
+import messagesToggleGlobalHandler from './admin/_messages-toggle-global.js';
+import messagesSendHandler from './admin/_messages-send.js';
+import messagesMarkReadHandler from './admin/_messages-mark-read.js';
 
 const HANDLERS: Record<
   string,
@@ -49,6 +55,12 @@ const HANDLERS: Record<
   'journal-create': journalCreateHandler,
   'journal-update': journalUpdateHandler,
   'journal-delete': journalDeleteHandler,
+  'messages-list': messagesListHandler,
+  'messages-detail': messagesDetailHandler,
+  'messages-toggle-ai': messagesToggleAiHandler,
+  'messages-toggle-global': messagesToggleGlobalHandler,
+  'messages-send': messagesSendHandler,
+  'messages-mark-read': messagesMarkReadHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
