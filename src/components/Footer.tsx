@@ -3,14 +3,23 @@ import { Link as RouterLink } from 'react-router-dom';
 import { FaInstagram, FaWhatsapp, FaRegEnvelope } from 'react-icons/fa';
 
 // Light footer using the same logo + gold accent palette as the rest of the
-// site. Three quiet bands — logo → connect → meta — separated by whitespace
-// rather than dark color blocks, so the footer reads as a natural extension
-// of the page above instead of an abrupt dark slab.
+// site. Four quiet bands — logo → connect → legal → meta — separated by
+// whitespace rather than dark color blocks, so the footer reads as a
+// natural extension of the page above instead of an abrupt dark slab.
 
 const SOCIALS = [
   { label: 'Instagram', href: 'https://www.instagram.com/vero.art.photo', icon: FaInstagram, external: true },
   { label: 'WhatsApp', href: 'https://wa.me/15709095707', icon: FaWhatsapp, external: true },
   { label: 'Email', href: 'mailto:vero@vero.photography', icon: FaRegEnvelope, external: false },
+] as const;
+
+// Legal / policy links. Small, quiet, but present — every real business
+// site has these and Meta's app registration requires them (Privacy
+// Policy URL + User Agreement URL fields).
+const LEGAL_LINKS = [
+  { label: 'Privacy Policy', to: '/privacy' },
+  { label: 'Terms of Service', to: '/terms' },
+  { label: 'Contact', to: '/contact' },
 ] as const;
 
 const Footer = () => {
@@ -60,6 +69,44 @@ const Footer = () => {
             ))}
           </HStack>
 
+          {/* Legal / policy links — quiet middle-gray text-only links,
+              separated by dots. Positioned above the copyright line so
+              the copyright reads as the final closing beat of the page. */}
+          <HStack
+            spacing={{ base: 3, md: 4 }}
+            pt={{ base: 1, md: 2 }}
+            wrap="wrap"
+            justify="center"
+            divider={
+              <Box
+                as="span"
+                w="3px"
+                h="3px"
+                borderRadius="full"
+                bg="gray.300"
+                border="none"
+                sx={{ alignSelf: 'center', mx: { base: 3, md: 4 } }}
+              />
+            }
+          >
+            {LEGAL_LINKS.map((l) => (
+              <Link
+                key={l.to}
+                as={RouterLink}
+                to={l.to}
+                fontSize="2xs"
+                fontWeight="400"
+                color="gray.500"
+                letterSpacing="0.15em"
+                textTransform="uppercase"
+                _hover={{ color: '#c9a96e', textDecoration: 'none' }}
+                transition="color 0.3s"
+              >
+                {l.label}
+              </Link>
+            ))}
+          </HStack>
+
           {/* Meta — location + copyright, very quiet typographic weight */}
           <VStack spacing={1.5} pt={{ base: 2, md: 3 }}>
             <Text
@@ -78,7 +125,7 @@ const Footer = () => {
               fontWeight="300"
               letterSpacing="0.1em"
             >
-              © {year} Vero Photography
+              © {year} Vero Photography · Photographs © Veronika Gerzon
             </Text>
           </VStack>
         </VStack>

@@ -14,6 +14,8 @@ import Portal from './pages/Portal';
 import Welcome from './pages/Welcome';
 import Admin from './pages/Admin';
 import Journal from './pages/Journal';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import SEO from './components/SEO';
@@ -61,6 +63,8 @@ function App() {
             <Route path="/admin" element={<Admin />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/journal/:slug" element={<Journal />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Footer />
