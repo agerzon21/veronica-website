@@ -34,6 +34,8 @@ import messagesToggleAiHandler from './admin/_messages-toggle-ai.js';
 import messagesToggleGlobalHandler from './admin/_messages-toggle-global.js';
 import messagesSendHandler from './admin/_messages-send.js';
 import messagesMarkReadHandler from './admin/_messages-mark-read.js';
+import messagesTranslateHandler from './admin/_messages-translate.js';
+import messagesSummaryHandler from './admin/_messages-summary.js';
 import contextListHandler from './admin/_context-list.js';
 import contextCreateHandler from './admin/_context-create.js';
 import contextUpdateHandler from './admin/_context-update.js';
@@ -65,6 +67,8 @@ const HANDLERS: Record<
   'messages-toggle-global': messagesToggleGlobalHandler,
   'messages-send': messagesSendHandler,
   'messages-mark-read': messagesMarkReadHandler,
+  'messages-translate': messagesTranslateHandler,
+  'messages-summary': messagesSummaryHandler,
   'context-list': contextListHandler,
   'context-create': contextCreateHandler,
   'context-update': contextUpdateHandler,

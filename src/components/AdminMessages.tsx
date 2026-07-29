@@ -4,8 +4,15 @@ import {
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle,
+  FaLanguage, FaLightbulb,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+
+// Vero speaks Russian natively — customer messages (usually English)
+// get translated to Russian; her replies get translated to English
+// before sending. If we ever localize this UI properly, flip this to
+// a per-user setting.
+const VERO_LANG = 'ru';
 
 /**
  * "Messages" tab in /admin — the unified inbox for Instagram DMs
@@ -66,6 +73,13 @@ export interface Message {
   external_message_id: string | null;
   sent_at: string;
   ai_model: string | null;
+}
+
+export interface AiSummary {
+  asking: string;
+  gathered: string[];
+  nextStep: string;
+  tone: string;
 }
 
 const POLL_INTERVAL_MS = 30_000;
@@ -509,8 +523,34 @@ function ConversationView({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [aiToggleLoading, setAiToggleLoading] = useState(false);
+  const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
+  const [translateOnSend, setTranslateOnSend] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
+
+  const loadAiSummary = useCallback(async (): Promise<void> => {
+    setAiSummaryLoading(true);
+    setAiSummaryError(null);
+    try {
+      const res = await fetch('/api/admin/messages-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, conversationId: summary.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAiSummary(data.summary);
+      } else {
+        setAiSummaryError(data.error || 'Could not generate summary');
+      }
+    } catch {
+      setAiSummaryError('Could not reach the server');
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  }, [adminPassword, summary.id]);
 
   const loadDetail = useCallback(async (): Promise<void> => {
     try {
@@ -535,9 +575,11 @@ function ConversationView({
   }, [adminPassword, summary.id]);
 
   // Load on mount + when selected conversation changes. Also mark
-  // as read so the unread badge clears.
+  // as read so the unread badge clears, and kick off the AI summary
+  // in parallel so Vero can catch up on the thread at a glance.
   useEffect(() => {
     void loadDetail();
+    void loadAiSummary();
     // Fire-and-forget the read-mark; if it fails the unread stays,
     // no big deal. Reload the sidebar afterwards so the badge clears
     // in the list too.
@@ -591,17 +633,55 @@ function ConversationView({
   };
 
   const handleSend = async () => {
-    const text = replyText.trim();
-    if (!text) return;
+    const raw = replyText.trim();
+    if (!raw) return;
     setSending(true);
     try {
+      // If translate-on-send is on, ask the backend to translate
+      // Vero's Russian text into the customer's language before
+      // sending. We infer target from the last inbound message —
+      // its detected language is more reliable than a guess.
+      let outbound = raw;
+      if (translateOnSend) {
+        const targetLang = await inferCustomerLang(adminPassword, messages);
+        if (targetLang && targetLang !== VERO_LANG) {
+          try {
+            const tRes = await fetch('/api/admin/messages-translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                password: adminPassword,
+                text: raw,
+                targetLang,
+              }),
+            });
+            const tData = await tRes.json();
+            if (tRes.ok && tData.success && typeof tData.translated === 'string') {
+              outbound = tData.translated;
+            } else {
+              toast({
+                title: tData.error || 'Translation failed — sending original text',
+                status: 'warning',
+                duration: 4000,
+              });
+            }
+          } catch {
+            toast({
+              title: 'Translation unreachable — sending original text',
+              status: 'warning',
+              duration: 4000,
+            });
+          }
+        }
+      }
+
       const res = await fetch('/api/admin/messages-send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           password: adminPassword,
           conversationId: summary.id,
-          text,
+          text: outbound,
         }),
       });
       const data = await res.json();
@@ -730,8 +810,14 @@ function ConversationView({
       {/* Message history — scrollable, auto-scrolls to bottom */}
       <Box ref={scrollRef} flex={1} overflowY="auto" p={{ base: 4, md: 6 }} bg="gray.50">
         <VStack spacing={3} align="stretch">
+          <SummaryCard
+            summary={aiSummary}
+            loading={aiSummaryLoading}
+            error={aiSummaryError}
+            onRegenerate={loadAiSummary}
+          />
           {messages.map((m) => (
-            <MessageBubble key={m.id} msg={m} />
+            <MessageBubble key={m.id} msg={m} adminPassword={adminPassword} />
           ))}
         </VStack>
       </Box>
@@ -763,20 +849,34 @@ function ConversationView({
             }
           }}
         />
-        <Flex justify="space-between" align="center" mt={2}>
-          <Text fontSize="2xs" color="gray.400">
-            ⌘/Ctrl + Enter to send · Replies from you sent as human (not AI)
-          </Text>
+        <Flex justify="space-between" align="center" mt={2} gap={3} wrap="wrap">
+          <VStack align="flex-start" spacing={1}>
+            <HStack spacing={2}>
+              <Switch
+                isChecked={translateOnSend}
+                onChange={(e) => setTranslateOnSend(e.target.checked)}
+                colorScheme="yellow"
+                size="sm"
+              />
+              <Icon as={FaLanguage} boxSize={3} color={translateOnSend ? '#c9a96e' : 'gray.400'} />
+              <Text fontSize="2xs" color={translateOnSend ? '#8a6e35' : 'gray.500'} fontWeight="500">
+                Translate before sending
+              </Text>
+            </HStack>
+            <Text fontSize="2xs" color="gray.400">
+              ⌘/Ctrl + Enter to send · Replies from you sent as human (not AI)
+            </Text>
+          </VStack>
           <CTAButton
             onClick={handleSend}
             icon={FaPaperPlane}
             variant="solid"
             size="sm"
             isLoading={sending}
-            loadingText="Sending..."
+            loadingText={translateOnSend ? 'Translating…' : 'Sending…'}
             isDisabled={!replyText.trim()}
           >
-            Send
+            {translateOnSend ? 'Translate & Send' : 'Send'}
           </CTAButton>
         </Flex>
       </Box>
@@ -784,7 +884,7 @@ function ConversationView({
   );
 }
 
-function MessageBubble({ msg }: { msg: Message }) {
+function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: string }) {
   const isInbound = msg.direction === 'inbound';
   const isAi = msg.sender === 'ai';
 
@@ -801,6 +901,39 @@ function MessageBubble({ msg }: { msg: Message }) {
     ? '#8a6e35'
     : '#8a6e35';
   const senderIcon = isInbound ? FaUser : isAi ? FaRobot : FaUser;
+
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [detectedLang, setDetectedLang] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+
+  const handleTranslate = async () => {
+    if (translation || translating) return;
+    setTranslating(true);
+    setTranslateError(null);
+    try {
+      const res = await fetch('/api/admin/messages-translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          text: msg.body,
+          targetLang: VERO_LANG,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTranslation(data.translated);
+        setDetectedLang(data.detectedLang || null);
+      } else {
+        setTranslateError(data.error || 'Translation failed');
+      }
+    } catch {
+      setTranslateError('Could not reach the server');
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   return (
     <Flex justify={isInbound ? 'flex-start' : 'flex-end'}>
@@ -832,15 +965,80 @@ function MessageBubble({ msg }: { msg: Message }) {
         >
           {msg.body}
         </Box>
-        <Text
-          fontSize="2xs"
-          color="gray.400"
+
+        {/* Translation panel — only shown once Vero clicks Translate */}
+        {(translation || translateError) && (
+          <Box
+            mt={1.5}
+            bg="rgba(201, 169, 110, 0.06)"
+            border="1px solid"
+            borderColor="rgba(201, 169, 110, 0.3)"
+            borderRadius="md"
+            px={{ base: 3.5, md: 4 }}
+            py={{ base: 2, md: 2.5 }}
+          >
+            {translation ? (
+              <>
+                <HStack spacing={1.5} mb={0.5} color="#8a6e35">
+                  <Icon as={FaLanguage} boxSize={2.5} />
+                  <Text fontSize="2xs" fontWeight="500" letterSpacing="0.08em" textTransform="uppercase">
+                    Translated{detectedLang && detectedLang !== 'unknown' ? ` from ${detectedLang.toUpperCase()}` : ''}
+                  </Text>
+                </HStack>
+                <Text
+                  fontSize="sm"
+                  color="gray.700"
+                  lineHeight="1.6"
+                  whiteSpace="pre-wrap"
+                  wordBreak="break-word"
+                >
+                  {translation}
+                </Text>
+              </>
+            ) : (
+              <Text fontSize="xs" color="red.600">{translateError}</Text>
+            )}
+          </Box>
+        )}
+
+        <Flex
           mt={1}
-          textAlign={isInbound ? 'left' : 'right'}
+          justify={isInbound ? 'space-between' : 'flex-end'}
+          align="center"
+          gap={2}
         >
-          {formatFullTime(msg.sent_at)}
-          {msg.ai_model && ` · ${msg.ai_model}`}
-        </Text>
+          {isInbound && !translation && (
+            <Box
+              as="button"
+              type="button"
+              onClick={handleTranslate}
+              display="inline-flex"
+              alignItems="center"
+              gap={1}
+              fontSize="2xs"
+              color={translating ? 'gray.400' : '#8a6e35'}
+              _hover={translating ? undefined : { color: '#c9a96e', textDecoration: 'underline' }}
+              cursor={translating ? 'default' : 'pointer'}
+              bg="transparent"
+              border="none"
+              p={0}
+              disabled={translating}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Icon as={FaLanguage} boxSize={2.5} />
+              {translating ? 'Translating…' : 'Translate'}
+            </Box>
+          )}
+          <Text
+            fontSize="2xs"
+            color="gray.400"
+            textAlign={isInbound && !translation ? 'right' : isInbound ? 'left' : 'right'}
+            flex={isInbound && !translation ? undefined : 1}
+          >
+            {formatFullTime(msg.sent_at)}
+            {msg.ai_model && ` · ${msg.ai_model}`}
+          </Text>
+        </Flex>
       </Box>
     </Flex>
   );
@@ -893,6 +1091,172 @@ function EmptyState() {
       </Text>
     </Box>
   );
+}
+
+/**
+ * AI-generated summary of the conversation so far — sits at the top
+ * of the thread so Vero can catch up on what the customer is asking,
+ * what facts they've shared, and what her next step should be.
+ * Regenerates on demand (no caching yet — see api/admin/_messages-summary.ts).
+ */
+function SummaryCard({
+  summary,
+  loading,
+  error,
+  onRegenerate,
+}: {
+  summary: AiSummary | null;
+  loading: boolean;
+  error: string | null;
+  onRegenerate: () => void;
+}) {
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="rgba(201, 169, 110, 0.4)"
+      borderLeft="3px solid"
+      borderLeftColor="#c9a96e"
+      borderRadius="md"
+      p={{ base: 3.5, md: 4 }}
+      mb={2}
+    >
+      <Flex justify="space-between" align="center" mb={2}>
+        <HStack spacing={2} color="#8a6e35">
+          <Icon as={FaLightbulb} boxSize={3} />
+          <Text
+            fontSize="2xs"
+            fontWeight="500"
+            letterSpacing="0.12em"
+            textTransform="uppercase"
+          >
+            Thread summary
+          </Text>
+        </HStack>
+        <Box
+          as="button"
+          type="button"
+          onClick={onRegenerate}
+          display="inline-flex"
+          alignItems="center"
+          gap={1}
+          fontSize="2xs"
+          color={loading ? 'gray.400' : 'gray.500'}
+          _hover={loading ? undefined : { color: '#c9a96e' }}
+          cursor={loading ? 'default' : 'pointer'}
+          bg="transparent"
+          border="none"
+          p={0}
+          disabled={loading}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Icon as={FaSync} boxSize={2.5} />
+          {loading ? 'Generating…' : 'Regenerate'}
+        </Box>
+      </Flex>
+
+      {loading && !summary ? (
+        <Flex align="center" gap={2} py={2}>
+          <Spinner size="xs" color="#c9a96e" />
+          <Text fontSize="xs" color="gray.500">Reading the thread…</Text>
+        </Flex>
+      ) : error && !summary ? (
+        <Text fontSize="xs" color="red.600">{error}</Text>
+      ) : summary ? (
+        <VStack align="stretch" spacing={2.5}>
+          <Box>
+            <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
+              Asking
+            </Text>
+            <Text fontSize="sm" color="gray.800" lineHeight="1.5">
+              {summary.asking}
+            </Text>
+          </Box>
+
+          {summary.gathered.length > 0 && (
+            <Box>
+              <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
+                Gathered
+              </Text>
+              <VStack align="stretch" spacing={0.5}>
+                {summary.gathered.map((fact, i) => (
+                  <Flex key={i} gap={2} align="flex-start">
+                    <Text fontSize="sm" color="#c9a96e" lineHeight="1.5">•</Text>
+                    <Text fontSize="sm" color="gray.700" lineHeight="1.5">{fact}</Text>
+                  </Flex>
+                ))}
+              </VStack>
+            </Box>
+          )}
+
+          <Box>
+            <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
+              Next step
+            </Text>
+            <Text fontSize="sm" color="gray.800" lineHeight="1.5">
+              {summary.nextStep}
+            </Text>
+          </Box>
+
+          {summary.tone && (
+            <HStack spacing={2}>
+              <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase">
+                Tone
+              </Text>
+              <Badge
+                bg="rgba(201, 169, 110, 0.15)"
+                color="#8a6e35"
+                fontSize="2xs"
+                fontWeight="500"
+                letterSpacing="0.05em"
+                textTransform="lowercase"
+                px={2}
+                py={0.5}
+                borderRadius="sm"
+              >
+                {summary.tone}
+              </Badge>
+            </HStack>
+          )}
+        </VStack>
+      ) : (
+        <Text fontSize="xs" color="gray.500">No summary yet.</Text>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Ask the backend to detect the language of the customer's most
+ * recent inbound message. Used by translate-on-send to pick the
+ * target language — more reliable than guessing from prior state
+ * since customers can and do switch languages mid-thread.
+ * Returns null if detection fails or there's no inbound to sample.
+ */
+async function inferCustomerLang(
+  adminPassword: string,
+  messages: Message[],
+): Promise<string | null> {
+  const lastInbound = [...messages].reverse().find((m) => m.direction === 'inbound');
+  if (!lastInbound) return null;
+  try {
+    const res = await fetch('/api/admin/messages-translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: adminPassword,
+        text: lastInbound.body,
+        targetLang: VERO_LANG,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data.success && typeof data.detectedLang === 'string' && data.detectedLang !== 'unknown') {
+      return data.detectedLang;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
 }
 
 // ── Formatters ────────────────────────────────────────────────

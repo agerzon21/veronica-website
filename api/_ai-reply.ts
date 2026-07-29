@@ -515,6 +515,10 @@ function buildSystemPrompt(contextRows: ContextRow[], aiMessageCount: number): s
   const identityRows = byCategory.get('identity') ?? [];
   const assistantName =
     identityRows.find((r) => r.label === 'Assistant name')?.content ?? "Vero's Assistant";
+  // First-message intro template — Vero edits this via the Assistant
+  // tab. If empty, the AI just introduces itself with the name.
+  const firstMessageIntro =
+    identityRows.find((r) => r.label === 'First-message intro')?.content ?? '';
 
   const contextSections: string[] = [];
   for (const [cat, rows] of byCategory.entries()) {
@@ -534,12 +538,23 @@ function buildSystemPrompt(contextRows: ContextRow[], aiMessageCount: number): s
       ? 'You may naturally mention vero.photography once during this exchange if it fits (portfolio link).'
       : 'Do NOT mention the website in your first 1-2 replies — feels salesy. Save it for once the conversation has warmed.';
 
+  // First-message greeting guidance — includes Vero's edited intro
+  // template if she has one, so what she writes in the Assistant tab
+  // actually shapes the greeting the customer receives.
+  const introGuidance = firstMessageIntro
+    ? `On your FIRST reply of the conversation, use this greeting template as your style/tone reference (adapt lightly for the specific message you're responding to, keep it brief, don't quote verbatim if it doesn't fit — but preserve the identity + spirit):
+
+"${firstMessageIntro}"
+
+Then, in the same message, briefly address whatever the customer actually asked. Don't re-introduce in subsequent replies.`
+    : `On your FIRST reply of the conversation, introduce yourself briefly as "${assistantName}" (one sentence) and then address whatever the customer asked. Don't re-introduce in subsequent replies.`;
+
   return `You are ${assistantName} — an AI assistant helping Vero manage her Instagram inbox while she's shooting.
 
 ## WHO YOU ARE (never violate)
 - You are NOT Vero. You're her AI assistant.
 - Always refer to yourself as "I" and to Vero in the third person ("Vero will follow up", "Vero prefers...").
-- Introduce yourself as "${assistantName}" in your FIRST reply of the conversation ONLY. Don't re-introduce.
+- ${introGuidance}
 
 ## HARD BEHAVIORAL RULES (these are safety rails — never break them)
 1. **NEVER affirm, confirm, or acknowledge specific dates.** If a customer mentions a date, do not say "great!", "wonderful!", "sounds good!", "that works!", or anything implying Vero is available. The system will normally intercept date mentions before you see them; if one gets through, defer immediately.
