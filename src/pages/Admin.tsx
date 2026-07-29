@@ -2,7 +2,7 @@ import { Box, Flex, HStack, VStack, Text, Input, Icon } from '@chakra-ui/react';
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
-import { FaUsers, FaPlug, FaBookOpen, FaCommentDots } from 'react-icons/fa';
+import { FaUsers, FaPlug, FaBookOpen, FaCommentDots, FaRobot } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import AdminNewClient from '../components/AdminNewClient';
@@ -12,13 +12,14 @@ import AdminClientDetail from '../components/AdminClientDetail';
 import AdminIntegrations from '../components/AdminIntegrations';
 import AdminJournal from '../components/AdminJournal';
 import AdminMessages from '../components/AdminMessages';
+import AdminAssistant from '../components/AdminAssistant';
 
 const MotionDiv = motion.div;
 
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
 // live outside the tab shell for now — they're modal-ish flows.
-type DashTab = 'clients' | 'messages' | 'journal' | 'integrations';
+type DashTab = 'clients' | 'messages' | 'assistant' | 'journal' | 'integrations';
 
 type View =
   | { kind: 'dashboard' }
@@ -104,6 +105,9 @@ const Admin = () => {
               )}
               {dashTab === 'messages' && (
                 <AdminMessages adminPassword={password} adminLevel={adminLevel} />
+              )}
+              {dashTab === 'assistant' && (
+                <AdminAssistant adminPassword={password} />
               )}
               {dashTab === 'journal' && (
                 <AdminJournal adminPassword={password} adminLevel={adminLevel} />
@@ -305,6 +309,7 @@ function AdminTabStrip({
   const tabs: { id: DashTab; label: string; icon: typeof FaUsers }[] = [
     { id: 'clients', label: 'Clients', icon: FaUsers },
     { id: 'messages', label: 'Messages', icon: FaCommentDots },
+    { id: 'assistant', label: 'Assistant', icon: FaRobot },
     { id: 'journal', label: 'Journal', icon: FaBookOpen },
   ];
   if (showIntegrations) {

@@ -34,6 +34,10 @@ import messagesToggleAiHandler from './admin/_messages-toggle-ai.js';
 import messagesToggleGlobalHandler from './admin/_messages-toggle-global.js';
 import messagesSendHandler from './admin/_messages-send.js';
 import messagesMarkReadHandler from './admin/_messages-mark-read.js';
+import contextListHandler from './admin/_context-list.js';
+import contextCreateHandler from './admin/_context-create.js';
+import contextUpdateHandler from './admin/_context-update.js';
+import contextDeleteHandler from './admin/_context-delete.js';
 
 const HANDLERS: Record<
   string,
@@ -61,6 +65,10 @@ const HANDLERS: Record<
   'messages-toggle-global': messagesToggleGlobalHandler,
   'messages-send': messagesSendHandler,
   'messages-mark-read': messagesMarkReadHandler,
+  'context-list': contextListHandler,
+  'context-create': contextCreateHandler,
+  'context-update': contextUpdateHandler,
+  'context-delete': contextDeleteHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

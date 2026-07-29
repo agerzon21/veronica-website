@@ -99,40 +99,6 @@ const RECOMMENDATION_INTENT_KEYWORDS = [
   'предложите', 'посоветуйте', 'что вы думаете', 'какие идеи', 'помогите выбрать',
 ];
 
-// Business-signal keywords. If NONE of these appear in the last few
-// inbound messages, we treat the conversation as personal/casual
-// (a friend saying hi, someone who DM'd by accident, a "hey how are
-// you") and skip the AI reply entirely. Vero can pick up personal
-// messages herself from her inbox — the AI isn't for those.
-const BUSINESS_SIGNAL_KEYWORDS = [
-  // Service words
-  'photo', 'photos', 'photography', 'photographer', 'photograph',
-  'session', 'sessions', 'shoot', 'shooting', 'shot',
-  'wedding', 'weddings', 'engagement', 'bridal', 'bride', 'groom',
-  'family', 'families', 'portrait', 'portraits', 'headshot', 'headshots',
-  'maternity', 'pregnant', 'newborn', 'baby',
-  'gallery', 'portfolio', 'album',
-  // Inquiry words
-  'interested', 'looking for', 'looking to', 'want to', 'need',
-  'hoping', 'wondering', 'curious', 'question', 'inquire', 'inquiry',
-  'work', 'services', 'available',
-  // Directed "you" patterns
-  'do you', 'can you', 'your work', 'your style', 'your portfolio',
-  'your rates', 'your availability',
-  // Russian
-  'фото', 'фотограф', 'фотосесс', 'съемк', 'снимк', 'снять',
-  'свадьб', 'семейн', 'портрет', 'беременн',
-  'галере', 'портфолио', 'альбом',
-  'интерес', 'хочу', 'нужн', 'ищу', 'вопрос', 'узнать',
-];
-
-// A message is "obviously casual" if it's:
-//   - very short (< 8 chars)
-//   - only emojis/punctuation/whitespace
-//   - only a greeting word with no other substance
-// These almost never come from real prospective clients; they're
-// almost always friends/mistakes/misfires. Skip AI reply entirely.
-const CASUAL_GREETING_ONLY = /^(hi|hey|hello|yo|sup|hola|привет|прив|здорово|ку)\W*$/i;
 
 export interface ReplyResult {
   action:
@@ -145,7 +111,6 @@ export interface ReplyResult {
     | 'skipped-already-replied'
     | 'skipped-rate-limit'
     | 'skipped-casual-message'
-    | 'skipped-no-business-signal'
     | 'error-send-failed'
     | 'error-generation-failed';
   reason?: string;
@@ -266,38 +231,20 @@ export async function processInboundMessage(args: {
     const latestInbound = [...inboundMessages].reverse()[0];
     const latestInboundBody = latestInbound?.body ?? '';
 
-    // ── 6. Casual / personal message filter ──────────────────
-    // Skip AI reply entirely if the message is obviously casual
-    // (a friend saying hi, someone who DM'd by accident). Message
-    // still lands in Vero's inbox; she picks it up herself. Better
-    // to stay silent than to send a robotic "how can I help you?"
-    // to Vero's actual friend.
-    if (isObviouslyCasual(latestInboundBody)) {
+    // ── 6. Truly-empty message filter ────────────────────────
+    // Skip AI reply ONLY if there's genuinely nothing to respond to
+    // (pure emojis, punctuation, or a single-character message).
+    // Loosened from the previous "casual/greeting" filter after
+    // feedback: a "hey" alone might be a real client with a shy
+    // opener, and we shouldn't ghost them. The AI's system prompt
+    // is now conservative enough that a "hi! anything I can help
+    // with?" reply is fine for both real inquiries and Vero's
+    // friends (friends realize they're talking to a bot and move
+    // on; clients engage further).
+    if (isEmptyOrEmojiOnly(latestInboundBody)) {
       return {
         action: 'skipped-casual-message',
-        reason: 'message is emoji-only / greeting-only / very short',
-      };
-    }
-
-    // ── 7. Business-signal check ─────────────────────────────
-    // Look across the last 3 inbound messages — if NONE contain a
-    // service word, inquiry phrasing, or a directed "you" question,
-    // this doesn't look like a prospective-client conversation. Stay
-    // silent and let Vero handle it. False negatives (real customers
-    // who happened to phrase things weirdly) get picked up by Vero
-    // in the inbox; the alternative (auto-replying to friends) is
-    // worse.
-    const recentInboundText = inboundMessages
-      .slice(-3)
-      .map((m) => m.body)
-      .join(' ');
-    if (
-      outboundAiMessages.length === 0 && // only apply to conversations that haven't started yet
-      !hasBusinessSignal(recentInboundText)
-    ) {
-      return {
-        action: 'skipped-no-business-signal',
-        reason: 'no business/service keywords in recent inbounds',
+        reason: 'message has no substantive content',
       };
     }
 
@@ -471,25 +418,22 @@ function matchesRecommendationIntent(text: string): boolean {
   return RECOMMENDATION_INTENT_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-function hasBusinessSignal(text: string): boolean {
-  const lower = text.toLowerCase();
-  return BUSINESS_SIGNAL_KEYWORDS.some((kw) => lower.includes(kw));
-}
-
 /**
- * A message is "obviously casual" if it's very short, contains no
- * substantive content, or is a bare greeting. These almost never
- * represent real prospective clients — they're friends, DM misfires,
- * or a "hey how are you." Skip AI reply entirely.
+ * A message is "truly empty" if it has no substantive content —
+ * pure emojis, punctuation only, whitespace, or a single character.
+ * We stay silent on these because there's genuinely nothing to
+ * respond to, not because we're guessing the sender is a friend.
+ * A short "hey" alone will pass this filter — the AI's conservative
+ * prompt handles it appropriately with a brief opener.
  */
-function isObviouslyCasual(text: string): boolean {
+function isEmptyOrEmojiOnly(text: string): boolean {
   const trimmed = text.trim();
-  // Very short: <8 chars is basically "hi", "hey!!", emojis
-  if (trimmed.length < 8) return true;
-  // No letters at all → emojis / punctuation only
+  // Empty / whitespace only
+  if (trimmed.length === 0) return true;
+  // Single character (probably a typo)
+  if (trimmed.length === 1) return true;
+  // No letters in any of our supported scripts → pure emoji/punct
   if (!/[a-zA-Zа-яА-ЯёЁ]/.test(trimmed)) return true;
-  // Bare greeting with no other substance
-  if (CASUAL_GREETING_ONLY.test(trimmed)) return true;
   return false;
 }
 
