@@ -162,11 +162,19 @@ export async function processInboundMessage(args: {
     }
 
     // ── 4. Rate limit: any outbound within the last N seconds? ──
+    // Compute the cutoff timestamp in JS rather than using a Postgres
+    // INTERVAL literal — the sql-tag driver treats every ${} as a
+    // parameterized bind, but $N placeholders inside quoted strings
+    // like 'INTERVAL "$2 seconds"' are just literal text to Postgres,
+    // so the driver ends up binding more params than the query
+    // recognizes. Passing an ISO timestamp as a plain parameter
+    // sidesteps the whole problem.
+    const rateLimitCutoff = new Date(Date.now() - MIN_GAP_MS_BETWEEN_AI).toISOString();
     const rateRows = (await sql`
       SELECT id, sent_at FROM messages
       WHERE conversation_id = ${args.conversationId}
         AND direction = 'outbound'
-        AND sent_at > NOW() - INTERVAL '${MIN_GAP_MS_BETWEEN_AI / 1000} seconds'
+        AND sent_at > ${rateLimitCutoff}
       LIMIT 1
     `) as Array<{ id: string; sent_at: string }>;
     if (rateRows.length > 0) {
