@@ -65,6 +65,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'node:crypto';
+import getRawBody from 'raw-body';
 import { getDb } from '../_db.js';
 
 // Message events besides plain text (echoes, deleted, reactions, etc.)
@@ -147,13 +148,41 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   // needs the RAW bytes because Meta's HMAC is over the exact string
   // they sent. If we hash the re-serialized JSON, whitespace / key-
   // ordering differences will break the check.
-  const rawBody = await readRawBody(req);
+  let rawBody: Buffer;
+  let bodySource: 'stream' | 'parsed-object' | 'parsed-buffer' | 'parsed-string';
+  try {
+    const result = await readRawBody(req);
+    rawBody = result.body;
+    bodySource = result.source;
+  } catch (err) {
+    console.error('[inbox/ig-webhook] failed to read raw body:', err);
+    return res.status(500).json({ error: 'Body read failed' });
+  }
+
   const providedSig = req.headers['x-hub-signature-256'];
-  if (typeof providedSig !== 'string' || !verifySignature(rawBody, providedSig, appSecret)) {
-    // Return 403 for bad signatures rather than 401 — Meta uses 4xx to
-    // stop retrying, which is what we want here (a bad-signature POST
-    // is almost certainly not from Meta at all).
-    console.warn('[inbox/ig-webhook] signature verification FAILED');
+  if (typeof providedSig !== 'string') {
+    console.warn('[inbox/ig-webhook] missing X-Hub-Signature-256 header');
+    return res.status(403).json({ error: 'Invalid signature' });
+  }
+  const expectedSig = `sha256=${crypto
+    .createHmac('sha256', appSecret)
+    .update(rawBody)
+    .digest('hex')}`;
+  const sigsMatch = safeEqual(providedSig, expectedSig);
+
+  if (!sigsMatch) {
+    // Diagnostic logging — masked so we don't leak secrets into logs.
+    // First 4 chars of both signatures + secret prefix + body-source
+    // + body length is enough to pinpoint mismatches without exposing
+    // sensitive material. Remove after we've confirmed signatures work.
+    console.warn(
+      `[inbox/ig-webhook] signature verification FAILED ` +
+        `bodySource=${bodySource} ` +
+        `bodyLen=${rawBody.length} ` +
+        `secretPrefix=${appSecret.slice(0, 4)}… ` +
+        `expectedPrefix=${expectedSig.slice(7, 15)}… ` +
+        `providedPrefix=${providedSig.slice(7, 15)}…`,
+    );
     return res.status(403).json({ error: 'Invalid signature' });
   }
 
@@ -243,54 +272,72 @@ async function persistEvents(payload: IgWebhookPayload) {
   }
 }
 
-function verifySignature(rawBody: Buffer, providedHeader: string, appSecret: string): boolean {
-  const expected = `sha256=${crypto
-    .createHmac('sha256', appSecret)
-    .update(rawBody)
-    .digest('hex')}`;
-  // Length check first so timingSafeEqual doesn't throw on mismatched
-  // buffer sizes (which happens if someone sends a completely wrong-
-  // format header).
-  if (providedHeader.length !== expected.length) return false;
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(providedHeader),
-      Buffer.from(expected),
-    );
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
   } catch {
     return false;
   }
 }
 
 /**
- * Vercel's Node runtime auto-parses JSON request bodies, which strips
- * the raw bytes we need for signature verification. This helper
- * re-serializes from the parsed body when Vercel already parsed
- * (the common path), and reads from the raw stream as a fallback.
- * Not perfect — the re-serialized version may not byte-match if Meta
- * used a non-canonical JSON formatting — but works for the current
- * Instagram payload shape, which is compact JSON.
+ * Read the exact raw request body bytes for HMAC signature verification.
  *
- * For a fully bulletproof implementation we'd need to disable
- * Vercel's body parser (export config = { api: { bodyParser: false } })
- * and read the raw stream. Doing that now to avoid signature-mismatch
- * surprises later.
+ * Preferred path: `raw-body` package reads the stream directly, giving
+ * us bytes identical to what Meta sent. This is what we WANT.
+ *
+ * Fallback paths (bad news if we hit them): Vercel's Node runtime
+ * sometimes parses the body BEFORE our handler runs, populating
+ * `req.body` and consuming the stream. When that happens `raw-body`
+ * throws "stream already read". We fall back to whatever's in
+ * `req.body`, but the re-serialized JSON almost certainly won't byte-
+ * match Meta's original — signature verification will fail even with
+ * the correct secret. Not much we can do about that at the code
+ * level; it's a runtime quirk.
+ *
+ * We tell the caller which path we took so diagnostic logging can
+ * pinpoint the source when signatures mismatch.
  */
-async function readRawBody(req: VercelRequest): Promise<Buffer> {
-  // If Vercel already parsed the body (which it does by default), we
-  // won't have access to the raw stream. Guard: if `req.body` is
-  // present and is an object/string, re-serialize it. Otherwise stream.
-  if (req.body !== undefined && req.body !== null) {
-    if (Buffer.isBuffer(req.body)) return req.body;
-    if (typeof req.body === 'string') return Buffer.from(req.body, 'utf8');
-    return Buffer.from(JSON.stringify(req.body), 'utf8');
+async function readRawBody(
+  req: VercelRequest,
+): Promise<{ body: Buffer; source: 'stream' | 'parsed-object' | 'parsed-buffer' | 'parsed-string' }> {
+  // Attempt raw stream read first. raw-body handles the stream
+  // lifecycle correctly (length limits, encoding, cleanup) and gives
+  // us exact bytes.
+  try {
+    const body = await getRawBody(req, {
+      // No length cap of our own — Meta's webhook payloads are small.
+      // If they ever balloon we can tighten this to something like 1mb.
+      encoding: null, // return Buffer, not decoded string
+    });
+    return { body, source: 'stream' };
+  } catch (streamErr) {
+    // Stream unavailable (Vercel already consumed it via its own
+    // parser). Fall back to whatever's in req.body.
+    console.warn(
+      `[inbox/ig-webhook] raw-body stream read failed, falling back to req.body: ${
+        (streamErr as Error).message
+      }`,
+    );
   }
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
+
+  if (req.body === undefined || req.body === null) {
+    // Vercel parsed but req.body is empty — weird case, treat as
+    // empty payload.
+    return { body: Buffer.from(''), source: 'parsed-object' };
+  }
+  if (Buffer.isBuffer(req.body)) {
+    return { body: req.body, source: 'parsed-buffer' };
+  }
+  if (typeof req.body === 'string') {
+    return { body: Buffer.from(req.body, 'utf8'), source: 'parsed-string' };
+  }
+  // Object — re-serialize (likely won't byte-match Meta's original).
+  return {
+    body: Buffer.from(JSON.stringify(req.body), 'utf8'),
+    source: 'parsed-object',
+  };
 }
 
 function firstQuery(v: string | string[] | undefined): string | undefined {
