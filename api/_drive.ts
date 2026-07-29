@@ -238,3 +238,41 @@ export function extractFolderId(input: string): string {
   if (/^[a-zA-Z0-9_-]{20,}$/.test(input.trim())) return input.trim();
   return input.trim();
 }
+
+/**
+ * Extract a Drive file id from a Drive file URL. Handles the common
+ * user-facing formats:
+ *   - https://drive.google.com/file/d/<id>/view
+ *   - https://drive.google.com/file/d/<id>/edit
+ *   - https://drive.google.com/open?id=<id>
+ *   - https://drive.google.com/uc?id=<id>
+ * Returns empty string if no id is found.
+ */
+export function extractFileId(input: string): string {
+  if (!input) return '';
+  const s = input.trim();
+  const byPath = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (byPath) return byPath[1];
+  const byQuery = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (byQuery) return byQuery[1];
+  return '';
+}
+
+/**
+ * Convert whatever Vero pasted into a browser-renderable image URL.
+ * Drive file viewer URLs (drive.google.com/file/d/<id>/…) become
+ * thumbnail URLs (drive.google.com/thumbnail?id=<id>&sz=w2000) which
+ * browsers can actually put in an <img src>. Non-Drive URLs (a direct
+ * image URL, a /assets path, etc.) pass through unchanged.
+ */
+export function normalizeImageUrl(input: string | null | undefined): string | null {
+  if (!input) return input ?? null;
+  const s = input.trim();
+  if (!s) return null;
+  // Only rewrite Drive viewer URLs — leave thumbnail URLs, direct
+  // image URLs, and non-Drive URLs alone.
+  if (/drive\.google\.com\/thumbnail\?/.test(s)) return s;
+  const id = extractFileId(s);
+  if (!id) return s;
+  return `https://drive.google.com/thumbnail?id=${id}&sz=w2000`;
+}

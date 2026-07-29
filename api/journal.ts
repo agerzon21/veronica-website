@@ -24,7 +24,9 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
-import { extractFolderId, listFolderMedia, type DriveFile } from './_drive.js';
+import {
+  extractFolderId, listFolderMedia, normalizeImageUrl, type DriveFile,
+} from './_drive.js';
 
 type PostSummary = {
   slug: string;
@@ -74,11 +76,18 @@ async function handleList(_req: VercelRequest, res: VercelResponse) {
       LIMIT 200
     `) as PostSummary[];
 
+    // Normalize the cover URL so timeline cards can render whatever
+    // form of Drive link Vero pasted (viewer URL, bare id, etc.).
+    const posts = rows.map((r) => ({
+      ...r,
+      cover_image_url: normalizeImageUrl(r.cover_image_url),
+    }));
+
     // 5-minute edge cache. Journal posts change infrequently and even
     // a brief cache dramatically cuts DB reads under a traffic spike.
     // Vero's edits show up within 5 min without any purge required.
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-    return res.status(200).json({ success: true, posts: rows });
+    return res.status(200).json({ success: true, posts });
   } catch (err) {
     console.error('[journal/list] failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });
@@ -143,7 +152,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       title: row.title,
       excerpt: row.excerpt,
       body_markdown: row.body_markdown,
-      cover_image_url: row.cover_image_url,
+      cover_image_url: normalizeImageUrl(row.cover_image_url),
       cover_image_alt: row.cover_image_alt,
       photos,
       session_type: row.session_type,

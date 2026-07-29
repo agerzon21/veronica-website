@@ -13,6 +13,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+import { normalizeImageUrl } from '../_drive.js';
 
 type Row = {
   id: string;
@@ -54,10 +55,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at DESC
     `) as Row[];
 
+    // Normalize cover URLs so the admin list can render Drive
+    // viewer URLs — same transform the public API applies.
+    const posts = rows.map((r) => ({
+      ...r,
+      cover_image_url: normalizeImageUrl(r.cover_image_url),
+    }));
+
     return res.status(200).json({
       success: true,
       level: auth.level,
-      posts: rows,
+      posts,
     });
   } catch (err) {
     console.error('[admin/journal-list] handler failed:', err);

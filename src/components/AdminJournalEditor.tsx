@@ -318,11 +318,14 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           />
         </Field>
 
-        <Field label="Cover image URL" help="The featured image (og:image + top of the post page). Usually one of the photos below.">
+        <Field
+          label="Cover image URL"
+          help="The featured image (og:image + top of the post page). Paste the Drive file link (right-click a photo in the folder → Copy link) or any direct image URL. Usually one of the photos from the folder below."
+        >
           <Input
             value={form.cover_image_url}
             onChange={(e) => update('cover_image_url', e.target.value)}
-            placeholder="https://drive.google.com/... or /assets/photos/..."
+            placeholder="https://drive.google.com/file/d/..."
             {...inputStyles}
           />
         </Field>
