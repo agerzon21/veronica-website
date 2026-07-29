@@ -194,17 +194,26 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid JSON' });
   }
 
+  // Diagnostic: log the shape of every payload we receive so we can
+  // trace what Meta is (or isn't) sending. We describe the shape
+  // structurally without dumping user content — enough to know
+  // "this was a messaging_seen from user X" without leaking DM text.
+  const shape = describePayloadShape(payload);
+  console.log(`[inbox/ig-webhook] received ${shape}`);
+
   // Only care about Instagram-object webhooks. Meta may share the
   // endpoint if we ever add other object types (facebook page, etc.).
   if (payload.object !== 'instagram') {
+    console.log(`[inbox/ig-webhook] ignored — object='${payload.object}' (not 'instagram')`);
     return res.status(200).json({ ignored: 'non-instagram object' });
   }
 
   // Persist FIRST, respond FAST. Meta expects a 200 within ~5s or
   // it treats the webhook as failed and retries. Any long work
   // (AI reply generation) MUST happen after we return.
+  let persistStats: PersistStats;
   try {
-    await persistEvents(payload);
+    persistStats = await persistEvents(payload);
   } catch (err) {
     console.error('[inbox/ig-webhook] persist failed:', err);
     // 500 → Meta retries; the UNIQUE constraint on external_message_id
@@ -212,31 +221,96 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Persist failed' });
   }
 
+  console.log(
+    `[inbox/ig-webhook] persist result: ` +
+      `stored=${persistStats.stored} ` +
+      `skipped_echo=${persistStats.skippedEcho} ` +
+      `skipped_no_text=${persistStats.skippedNoText} ` +
+      `skipped_no_message_field=${persistStats.skippedNoMessageField}`,
+  );
+
   return res.status(200).json({ ok: true });
+}
+
+/**
+ * Describe a webhook payload's shape without dumping content.
+ * Instagram DMs are private user messages — logging raw text would
+ * be a privacy leak. Structural description is enough to diagnose
+ * "which subscription field fired + how many events."
+ */
+function describePayloadShape(payload: IgWebhookPayload): string {
+  const objectStr = payload.object ?? '(no object)';
+  const entries = payload.entry ?? [];
+  const entryCount = entries.length;
+  // Meta's Instagram webhook mixes "messaging" events and "changes"
+  // events. Message events go in entry[].messaging[]. Field events
+  // (comments, message_reactions, etc.) go in entry[].changes[] with
+  // a `field` name. We describe both.
+  const messagingCount = entries.reduce((acc, e) => acc + (e.messaging?.length ?? 0), 0);
+  const changesFields = entries.flatMap((e) => {
+    const changes = (e as unknown as { changes?: Array<{ field?: string }> }).changes ?? [];
+    return changes.map((c) => c.field ?? 'unknown');
+  });
+  return (
+    `object=${objectStr} entries=${entryCount} ` +
+    `messaging_events=${messagingCount} ` +
+    `change_fields=[${changesFields.join(',')}]`
+  );
+}
+
+interface PersistStats {
+  stored: number;
+  skippedEcho: number;
+  skippedNoText: number;
+  skippedNoMessageField: number;
 }
 
 /**
  * Walk the payload's nested entries → messaging events, upsert one
  * conversation per unique sender, insert one message per event. All
  * within a single Neon roundtrip loop.
+ *
+ * Returns counters so the caller can log a per-event summary — useful
+ * for tracing "we received 3 events, stored 1, skipped 2 for reason X"
+ * without dumping raw payload content.
  */
-async function persistEvents(payload: IgWebhookPayload) {
+async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
   const sql = getDb();
   const events = (payload.entry ?? []).flatMap((e) => e.messaging ?? []);
+  const stats: PersistStats = {
+    stored: 0,
+    skippedEcho: 0,
+    skippedNoText: 0,
+    skippedNoMessageField: 0,
+  };
 
   for (const evt of events) {
     // Ignore echoes (messages WE sent, which Meta bounces back on the
     // webhook so integrations can display outbound sends). We already
     // know when we send our own replies; storing echoes would cause
     // duplicate rows.
-    if (evt.message?.is_echo) continue;
+    if (evt.message?.is_echo) {
+      stats.skippedEcho++;
+      continue;
+    }
+
+    // If there's no `message` field at all, this is a non-message
+    // event (delivery receipt, seen receipt, postback, etc.) that
+    // slipped through under the `messaging` array. Skip.
+    if (!evt.message) {
+      stats.skippedNoMessageField++;
+      continue;
+    }
 
     // Text-only for MVP. Attachments / reactions / typing indicators
     // arrive on the same webhook and are skipped here.
     const text = evt.message?.text;
     const mid = evt.message?.mid;
     const senderId = evt.sender?.id;
-    if (!text || !mid || !senderId) continue;
+    if (!text || !mid || !senderId) {
+      stats.skippedNoText++;
+      continue;
+    }
 
     const sentAt = evt.timestamp
       ? new Date(evt.timestamp).toISOString()
@@ -269,7 +343,10 @@ async function persistEvents(payload: IgWebhookPayload) {
       )
       ON CONFLICT (external_message_id) DO NOTHING
     `;
+    stats.stored++;
   }
+
+  return stats;
 }
 
 function safeEqual(a: string, b: string): boolean {
