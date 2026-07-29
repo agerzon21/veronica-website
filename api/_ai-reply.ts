@@ -68,6 +68,72 @@ const BOOKING_INTENT_KEYWORDS = [
   'пакет', 'скидк', 'договор', 'оплат',
 ];
 
+// Date pattern regex — catches month names, ISO dates, "the 12th",
+// "next weekend", "this saturday", etc. Any date reference in an
+// inbound message → treat as booking intent (Vero should confirm
+// availability herself, never the AI).
+const DATE_INTENT_PATTERNS: RegExp[] = [
+  // Month names (English + Russian) + optional day
+  /\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\b/i,
+  /\b(январ|феврал|март|апрел|мая|июн|июл|август|сентябр|октябр|ноябр|декабр)/i,
+  // ISO dates (2026-08-12)
+  /\b\d{4}-\d{2}-\d{2}\b/,
+  // Numeric dates (8/12, 8-12-2026, 12.08)
+  /\b\d{1,2}[\/\-.]\d{1,2}([\/\-.]\d{2,4})?\b/,
+  // "12th", "3rd", "1st"
+  /\b\d+(st|nd|rd|th)\b/i,
+  // Relative dates
+  /\b(today|tomorrow|next (week|weekend|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i,
+  /\b(завтра|послезавтра|на выходн|в субботу|в воскресенье|на следующ)/i,
+];
+
+// Words that indicate the customer is asking for RECOMMENDATIONS
+// (style, session type, ideas, etc.). AI should never suggest these
+// itself — style is Vero's craft, she wants to shape those
+// conversations personally.
+const RECOMMENDATION_INTENT_KEYWORDS = [
+  'suggest', 'suggestion', 'recommend', 'recommendation', 'what do you think',
+  'what would you', 'any ideas', 'not sure yet', 'help me decide', 'what should',
+  'idea', 'ideas', 'inspiration',
+  // Russian
+  'предложите', 'посоветуйте', 'что вы думаете', 'какие идеи', 'помогите выбрать',
+];
+
+// Business-signal keywords. If NONE of these appear in the last few
+// inbound messages, we treat the conversation as personal/casual
+// (a friend saying hi, someone who DM'd by accident, a "hey how are
+// you") and skip the AI reply entirely. Vero can pick up personal
+// messages herself from her inbox — the AI isn't for those.
+const BUSINESS_SIGNAL_KEYWORDS = [
+  // Service words
+  'photo', 'photos', 'photography', 'photographer', 'photograph',
+  'session', 'sessions', 'shoot', 'shooting', 'shot',
+  'wedding', 'weddings', 'engagement', 'bridal', 'bride', 'groom',
+  'family', 'families', 'portrait', 'portraits', 'headshot', 'headshots',
+  'maternity', 'pregnant', 'newborn', 'baby',
+  'gallery', 'portfolio', 'album',
+  // Inquiry words
+  'interested', 'looking for', 'looking to', 'want to', 'need',
+  'hoping', 'wondering', 'curious', 'question', 'inquire', 'inquiry',
+  'work', 'services', 'available',
+  // Directed "you" patterns
+  'do you', 'can you', 'your work', 'your style', 'your portfolio',
+  'your rates', 'your availability',
+  // Russian
+  'фото', 'фотограф', 'фотосесс', 'съемк', 'снимк', 'снять',
+  'свадьб', 'семейн', 'портрет', 'беременн',
+  'галере', 'портфолио', 'альбом',
+  'интерес', 'хочу', 'нужн', 'ищу', 'вопрос', 'узнать',
+];
+
+// A message is "obviously casual" if it's:
+//   - very short (< 8 chars)
+//   - only emojis/punctuation/whitespace
+//   - only a greeting word with no other substance
+// These almost never come from real prospective clients; they're
+// almost always friends/mistakes/misfires. Skip AI reply entirely.
+const CASUAL_GREETING_ONLY = /^(hi|hey|hello|yo|sup|hola|привет|прив|здорово|ку)\W*$/i;
+
 export interface ReplyResult {
   action:
     | 'sent-ai-reply'
@@ -78,6 +144,8 @@ export interface ReplyResult {
     | 'skipped-convo-disabled'
     | 'skipped-already-replied'
     | 'skipped-rate-limit'
+    | 'skipped-casual-message'
+    | 'skipped-no-business-signal'
     | 'error-send-failed'
     | 'error-generation-failed';
   reason?: string;
@@ -198,18 +266,60 @@ export async function processInboundMessage(args: {
     const latestInbound = [...inboundMessages].reverse()[0];
     const latestInboundBody = latestInbound?.body ?? '';
 
-    // ── 6. Booking / pricing intent → bridge + disable ───────
-    if (matchesBookingIntent(latestInboundBody)) {
+    // ── 6. Casual / personal message filter ──────────────────
+    // Skip AI reply entirely if the message is obviously casual
+    // (a friend saying hi, someone who DM'd by accident). Message
+    // still lands in Vero's inbox; she picks it up herself. Better
+    // to stay silent than to send a robotic "how can I help you?"
+    // to Vero's actual friend.
+    if (isObviouslyCasual(latestInboundBody)) {
+      return {
+        action: 'skipped-casual-message',
+        reason: 'message is emoji-only / greeting-only / very short',
+      };
+    }
+
+    // ── 7. Business-signal check ─────────────────────────────
+    // Look across the last 3 inbound messages — if NONE contain a
+    // service word, inquiry phrasing, or a directed "you" question,
+    // this doesn't look like a prospective-client conversation. Stay
+    // silent and let Vero handle it. False negatives (real customers
+    // who happened to phrase things weirdly) get picked up by Vero
+    // in the inbox; the alternative (auto-replying to friends) is
+    // worse.
+    const recentInboundText = inboundMessages
+      .slice(-3)
+      .map((m) => m.body)
+      .join(' ');
+    if (
+      outboundAiMessages.length === 0 && // only apply to conversations that haven't started yet
+      !hasBusinessSignal(recentInboundText)
+    ) {
+      return {
+        action: 'skipped-no-business-signal',
+        reason: 'no business/service keywords in recent inbounds',
+      };
+    }
+
+    // ── 8. Booking / pricing / date intent → bridge + disable ──
+    // Broadened to also catch date references and recommendation
+    // requests. Any of these should defer to Vero — she confirms
+    // dates + shapes style conversations personally.
+    if (
+      matchesBookingIntent(latestInboundBody) ||
+      matchesDateIntent(latestInboundBody) ||
+      matchesRecommendationIntent(latestInboundBody)
+    ) {
       return await sendBridgeAndEscalate(
         sql,
         convo,
         'booking_bridge',
         'sent-booking-bridge',
-        'booking-intent keyword match',
+        'booking / date / recommendation intent detected',
       );
     }
 
-    // ── 7. Spam / repeat detection: last 3 inbounds very similar ──
+    // ── 9. Spam / repeat detection: last 3 inbounds very similar ──
     if (looksLikeSpam(inboundMessages)) {
       return await sendBridgeAndEscalate(
         sql,
@@ -220,7 +330,7 @@ export async function processInboundMessage(args: {
       );
     }
 
-    // ── 8. Wrap-up trigger: too many AI replies already ──────
+    // ── 10. Wrap-up trigger: too many AI replies already ─────
     if (outboundAiMessages.length >= MAX_AI_MSGS_PER_CONVO) {
       return await sendBridgeAndEscalate(
         sql,
@@ -352,6 +462,37 @@ function matchesBookingIntent(text: string): boolean {
   return BOOKING_INTENT_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+function matchesDateIntent(text: string): boolean {
+  return DATE_INTENT_PATTERNS.some((re) => re.test(text));
+}
+
+function matchesRecommendationIntent(text: string): boolean {
+  const lower = text.toLowerCase();
+  return RECOMMENDATION_INTENT_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function hasBusinessSignal(text: string): boolean {
+  const lower = text.toLowerCase();
+  return BUSINESS_SIGNAL_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+/**
+ * A message is "obviously casual" if it's very short, contains no
+ * substantive content, or is a bare greeting. These almost never
+ * represent real prospective clients — they're friends, DM misfires,
+ * or a "hey how are you." Skip AI reply entirely.
+ */
+function isObviouslyCasual(text: string): boolean {
+  const trimmed = text.trim();
+  // Very short: <8 chars is basically "hi", "hey!!", emojis
+  if (trimmed.length < 8) return true;
+  // No letters at all → emojis / punctuation only
+  if (!/[a-zA-Zа-яА-ЯёЁ]/.test(trimmed)) return true;
+  // Bare greeting with no other substance
+  if (CASUAL_GREETING_ONLY.test(trimmed)) return true;
+  return false;
+}
+
 /**
  * Basic spam detection: if the last 3+ inbound messages are all
  * substantially the same (Jaccard similarity of word sets), it's
@@ -449,31 +590,40 @@ function buildSystemPrompt(contextRows: ContextRow[], aiMessageCount: number): s
       ? 'You may naturally mention vero.photography once during this exchange if it fits (portfolio link).'
       : 'Do NOT mention the website in your first 1-2 replies — feels salesy. Save it for once the conversation has warmed.';
 
-  return `You are ${assistantName} — an AI assistant helping Vero manage her Instagram inbox while she's busy on photography sessions.
+  return `You are ${assistantName} — an AI assistant helping Vero manage her Instagram inbox while she's shooting.
 
-## YOUR ROLE
-- Respond warmly to inbound messages
-- Gather useful info from prospective clients (session type, date range, location, what they're looking for) that Vero will use to follow up
-- Answer general questions about Vero's work and process
-- Match the customer's language (respond in the SAME language they wrote in — English, Russian, or otherwise)
-- Keep replies short: 1–3 sentences typically. Never wall-of-text.
-- Introduce yourself as "${assistantName}" in your FIRST reply of a conversation. Don't re-introduce in subsequent replies.
+## WHO YOU ARE (never violate)
+- You are NOT Vero. You're her AI assistant.
+- Always refer to yourself as "I" and to Vero in the third person ("Vero will follow up", "Vero prefers...").
+- Introduce yourself as "${assistantName}" in your FIRST reply of the conversation ONLY. Don't re-introduce.
 
+## HARD BEHAVIORAL RULES (these are safety rails — never break them)
+1. **NEVER affirm, confirm, or acknowledge specific dates.** If a customer mentions a date, do not say "great!", "wonderful!", "sounds good!", "that works!", or anything implying Vero is available. The system will normally intercept date mentions before you see them; if one gets through, defer immediately.
+2. **NEVER quote prices, ranges, packages, or dollar figures.** The system handles pricing separately.
+3. **NEVER make style, session-type, or creative recommendations.** If asked "what do you suggest?" or "any ideas?" — defer: "Vero loves shaping session ideas personally — she'll follow up with some options based on what you're looking for." Style is her craft.
+4. **NEVER commit to availability, deliverables, or timing** beyond what's in the KNOWN FACTS below.
+5. When unsure, DEFER TO VERO. A short "let me pass this to Vero and she'll follow up personally" is always better than making things up or being creative.
+
+## KNOWN FACTS (only cite these — never invent details)
 ${contextSections.join('\n\n')}
 
-## HARD RULES (never violate — these are safety rails, not tone)
-- NEVER quote a specific price, hour rate, package cost, or dollar amount
-- NEVER commit to a specific date or availability
-- NEVER claim to BE Vero — you are her assistant
-- If a customer asks about pricing or booking, do NOT try to answer with a range or "starting from" — the system has a separate bridging message for that; you'll never actually be asked to handle those questions
-- If unsure, err on the side of a brief warm reply that gathers more info rather than making things up
-- If the customer's message is empty, incoherent, or clearly not a real inquiry, reply with a short friendly clarifier
+## TONE
+- **Brief.** 1-2 sentences per reply, maximum. Never wall-of-text.
+- Match the customer's energy — brief if brief, thoughtful if they're thoughtful (but still short).
+- Warm and professional but NOT effusive. Avoid "amazing!", "wonderful!", "absolutely!" — those sound robotic AND can imply commitment.
+- Prefer "got it", "thanks for sharing", "noted" as acknowledgments.
+- Emojis sparingly (max one per reply, when it fits naturally). Not required.
+- Use the customer's first name once, if they've shared it. Don't repeat.
+- Match the customer's language (English, Russian, or whatever they wrote in).
 
-## STYLE NOTES
+## STYLE GUIDE
 - ${websiteCtaHint}
-- Emojis are welcome but sparingly (one per message at most, when it fits naturally)
-- Use the customer's first name if they've shared it; otherwise skip greeting-by-name
-- Sound like a warm human colleague, not a corporate bot
+- If someone asks a general question you have a KNOWN FACT for → answer briefly + gather one relevant piece of info for Vero (like session type or general timeframe).
+- If someone asks anything you don't have a KNOWN FACT for → brief acknowledgment + "Vero will follow up personally on that."
+- Prefer to gather info FROM the customer rather than share info WITH them. Vero handles the actual conversation.
 
-Now respond to the most recent customer message using the conversation history for context.`;
+## THE GOAL
+Your job is essentially triage: acknowledge the message warmly, gather info Vero will need (session type, general location, general timeframe as CONTEXT — not confirmed), then hand off to Vero. You're the friendly greeter, not the salesperson or planner.
+
+Now respond to the most recent customer message.`;
 }
