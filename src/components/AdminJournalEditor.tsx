@@ -35,12 +35,18 @@ interface PostForm {
   title: string;
   excerpt: string;
   body_markdown: string;
-  cover_image_url: string;
+  // Alt text for the cover photo — which is now automatically the
+  // first photo in the Drive folder. No separate cover URL field.
   cover_image_alt: string;
   drive_folder_url: string;
   session_type: string;
   tags: string; // comma-separated in the input, split on save
   status: 'draft' | 'published';
+  // Event date as YYYY-MM-DD (native <input type="date"> value).
+  // Backend normalizes this to noon UTC so the calendar day is
+  // consistent across timezones. Empty string means "use publish
+  // default" — NOW on first publish, preserve on subsequent saves.
+  published_at: string;
 }
 
 const EMPTY_FORM: PostForm = {
@@ -48,12 +54,12 @@ const EMPTY_FORM: PostForm = {
   title: '',
   excerpt: '',
   body_markdown: '',
-  cover_image_url: '',
   cover_image_alt: '',
   drive_folder_url: '',
   session_type: '',
   tags: '',
   status: 'draft',
+  published_at: '',
 };
 
 const SESSION_OPTIONS = [
@@ -95,12 +101,14 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             title: p.title ?? '',
             excerpt: p.excerpt ?? '',
             body_markdown: p.body_markdown ?? '',
-            cover_image_url: p.cover_image_url ?? '',
             cover_image_alt: p.cover_image_alt ?? '',
             drive_folder_url: p.drive_folder_url ?? '',
             session_type: p.session_type ?? '',
             tags: Array.isArray(p.tags) ? p.tags.join(', ') : '',
             status: p.status === 'published' ? 'published' : 'draft',
+            // Convert stored ISO timestamp back to YYYY-MM-DD for the
+            // date input. Null / empty means no explicit date yet.
+            published_at: p.published_at ? isoToDateInput(p.published_at) : '',
           });
           setExistingSlug(p.slug ?? null);
         } else {
@@ -128,7 +136,6 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
       title: form.title,
       excerpt: form.excerpt,
       body_markdown: form.body_markdown,
-      cover_image_url: form.cover_image_url,
       cover_image_alt: form.cover_image_alt,
       drive_folder_url: form.drive_folder_url.trim() || null,
       session_type: form.session_type || null,
@@ -137,6 +144,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
         .map((t) => t.trim())
         .filter((t) => t.length > 0),
       status: statusOverride ?? form.status,
+      published_at: form.published_at || null,
     };
     try {
       const endpoint = postId ? '/api/admin/journal-update' : '/api/admin/journal-create';
@@ -296,6 +304,20 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           />
         </Field>
 
+        <Field
+          label="Event date"
+          help="The date this post is anchored to on the timeline. For a shoot, use the day it happened — not today. Leave blank to use the publish date instead."
+        >
+          <Input
+            type="date"
+            value={form.published_at}
+            onChange={(e) => update('published_at', e.target.value)}
+            max={todayDateInput()}
+            maxW="240px"
+            {...inputStyles}
+          />
+        </Field>
+
         <Field label="Excerpt" help="Short teaser shown in card previews and as SEO description (~1–2 sentences)">
           <Textarea
             value={form.excerpt}
@@ -318,37 +340,30 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           />
         </Field>
 
-        <Field
-          label="Cover image URL"
-          help="The featured image (og:image + top of the post page). Paste the Drive file link (right-click a photo in the folder → Copy link) or any direct image URL. Usually one of the photos from the folder below."
-        >
-          <Input
-            value={form.cover_image_url}
-            onChange={(e) => update('cover_image_url', e.target.value)}
-            placeholder="https://drive.google.com/file/d/..."
-            {...inputStyles}
-          />
-        </Field>
-        {form.cover_image_url && (
-          <Field label="Cover image alt text">
-            <Input
-              value={form.cover_image_alt}
-              onChange={(e) => update('cover_image_alt', e.target.value)}
-              placeholder="Bride and groom under an oak tree at sunset"
-              {...inputStyles}
-            />
-          </Field>
-        )}
-
-        {/* Drive folder — the way to bind photos to a post */}
+        {/* Drive folder — the single source of photos for this post.
+            First photo (by filename) becomes the cover; the rest form
+            the gallery. Vero controls order by prefixing filenames
+            (01_, 02_, 03_…) in Drive. */}
         <Field
           label="Google Drive folder"
-          help="Upload the 5–15 photos for this post to a Drive folder (same as client galleries), share it so anyone with the link can view, and paste the link here. Photos display in filename order — prefix names like 01, 02, 03… to control order."
+          help="Upload the 5–15 photos for this post to a Drive folder (same workflow as client galleries), share it so anyone with the link can view, and paste the folder link here. The FIRST photo (by filename) is used as the cover — prefix names like 01, 02, 03… in Drive to control order."
         >
           <Input
             value={form.drive_folder_url}
             onChange={(e) => update('drive_folder_url', e.target.value)}
             placeholder="https://drive.google.com/drive/folders/..."
+            {...inputStyles}
+          />
+        </Field>
+
+        <Field
+          label="Cover photo alt text"
+          help="Alt text for the first photo (used as the post's cover / og:image). Describe what's in it for screen readers and search engines. Optional."
+        >
+          <Input
+            value={form.cover_image_alt}
+            onChange={(e) => update('cover_image_alt', e.target.value)}
+            placeholder="Bride and groom under an oak tree at sunset"
             {...inputStyles}
           />
         </Field>
@@ -469,6 +484,34 @@ function Field({
       )}
     </Box>
   );
+}
+
+/**
+ * Convert a stored ISO timestamp back to the YYYY-MM-DD shape that
+ * <input type="date"> requires. We use the UTC date parts so posts
+ * saved as noon UTC (see api/admin/_journal-shared.ts) round-trip
+ * to the same calendar day the user picked, regardless of the
+ * admin's local timezone.
+ */
+function isoToDateInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Today's date in YYYY-MM-DD (local zone) — used as the max on the
+ * date picker so Vero can't accidentally schedule into the future.
+ */
+function todayDateInput(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export default AdminJournalEditor;

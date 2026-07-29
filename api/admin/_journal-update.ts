@@ -50,12 +50,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ success: false, error: 'Post not found' });
     }
 
-    // Only stamp published_at on the FIRST transition to published.
-    // Subsequent saves preserve it (even if status is 'draft' now).
-    const publishedAt =
-      v.status === 'published' && !existing[0].published_at
-        ? new Date().toISOString()
-        : existing[0].published_at;
+    // Event-date resolution order:
+    //   1. explicit date from the admin picker → always wins
+    //   2. first transition to published → stamp NOW
+    //   3. otherwise → preserve the existing value
+    const publishedAt = v.published_at
+      ? v.published_at
+      : v.status === 'published' && !existing[0].published_at
+      ? new Date().toISOString()
+      : existing[0].published_at;
 
     const rows = (await sql`
       UPDATE journal_posts
@@ -64,13 +67,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         title = ${v.title},
         excerpt = ${v.excerpt},
         body_markdown = ${v.body_markdown},
-        cover_image_url = ${v.cover_image_url},
         cover_image_alt = ${v.cover_image_alt},
         drive_folder_url = ${v.drive_folder_url},
         session_type = ${v.session_type},
         tags = ${v.tags},
         status = ${v.status},
-        published_at = ${publishedAt}
+        published_at = ${publishedAt},
+        cover_image_url = NULL
       WHERE id = ${id}
       RETURNING id, slug, status, updated_at, published_at
     `) as Array<{

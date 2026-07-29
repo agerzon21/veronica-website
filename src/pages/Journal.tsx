@@ -1,5 +1,5 @@
 import {
-  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Collapse,
+  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Collapse, SimpleGrid,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import { useEffect, useState } from 'react';
@@ -25,12 +25,22 @@ import JournalPost from './JournalPost';
  * "Read full post →" link that navigates to /journal/:slug.
  */
 
+interface PreviewPhoto {
+  url: string;
+  fullUrl: string;
+  alt: string;
+}
+
 interface PostSummary {
   slug: string;
   title: string;
   excerpt: string;
   cover_image_url: string | null;
   cover_image_alt: string | null;
+  // Up to 5 photos from the Drive folder. First one is also the
+  // cover (repeated in cover_image_url as a convenience so the
+  // small header thumb doesn't have to reach into the array).
+  photos: PreviewPhoto[];
   session_type: string | null;
   tags: string[];
   published_at: string;
@@ -392,7 +402,9 @@ function TimelineCard({
         </Flex>
       </Flex>
 
-      {/* Expanded body — excerpt + read-full link */}
+      {/* Expanded body — excerpt + preview photo grid + tags + read link.
+          Preview shows up to 4 photos (skipping index 0 which is already
+          the header thumb) so people get a taste without clicking through. */}
       <Collapse in={expanded} animateOpacity>
         <Box
           borderTop="1px solid"
@@ -411,6 +423,39 @@ function TimelineCard({
             >
               {post.excerpt}
             </Text>
+          )}
+
+          {post.photos.length > 1 && (
+            <SimpleGrid
+              columns={{ base: 2, sm: 3, md: 4 }}
+              spacing={{ base: 2, md: 2.5 }}
+              mb={4}
+            >
+              {post.photos.slice(1, 5).map((photo, i) => (
+                <RouterLink key={i} to={`/journal/${post.slug}`}>
+                  <Box
+                    aspectRatio={1}
+                    bg="gray.100"
+                    overflow="hidden"
+                    borderRadius="sm"
+                    position="relative"
+                    sx={{
+                      '& > img': { transition: 'transform 0.4s ease' },
+                    }}
+                    _hover={{ '& > img': { transform: 'scale(1.05)' } }}
+                  >
+                    <Image
+                      src={photo.url}
+                      alt={photo.alt}
+                      w="100%"
+                      h="100%"
+                      objectFit="cover"
+                      loading="lazy"
+                    />
+                  </Box>
+                </RouterLink>
+              ))}
+            </SimpleGrid>
           )}
 
           {post.tags.length > 0 && (
@@ -450,7 +495,7 @@ function TimelineCard({
               _hover={{ color: '#8a6e35' }}
               transition="color 0.15s"
             >
-              Read the full post
+              See the full post
               <Icon as={FaArrowRight} boxSize={2.5} />
             </Box>
           </RouterLink>

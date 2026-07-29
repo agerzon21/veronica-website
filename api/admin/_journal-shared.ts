@@ -12,7 +12,10 @@ export interface JournalInput {
   title: string;
   excerpt: string;
   body_markdown: string;
-  cover_image_url: string | null;
+  // Alt text for the cover photo (which is now automatically the
+  // first photo in the Drive folder). Kept as `cover_image_alt` in
+  // the DB for now — the column just gets repurposed instead of
+  // requiring another migration.
   cover_image_alt: string | null;
   // Photos come from a Google Drive folder — Vero uploads there, shares
   // the link, and pastes it here. The public post endpoint lists the
@@ -21,6 +24,13 @@ export interface JournalInput {
   session_type: string | null;
   tags: string[];
   status: 'draft' | 'published';
+  // The event date — what the timeline sorts + displays on. When
+  // provided (YYYY-MM-DD from a native <input type="date">), we save
+  // as noon UTC so it renders as the same calendar day in every
+  // timezone (midnight UTC would slip a day earlier in the Americas).
+  // Null means "use publish default" — auto NOW on first publish,
+  // preserve existing on subsequent saves.
+  published_at: string | null;
 }
 
 export interface ValidationError {
@@ -76,7 +86,6 @@ export function validateJournalInput(body: unknown): ValidateResult {
     return { ok: false, status: 400, error: 'body too long (max 30000)' };
   }
 
-  const cover_image_url = normalizeOptionalUrl(b.cover_image_url);
   const cover_image_alt =
     typeof b.cover_image_alt === 'string' && b.cover_image_alt.trim()
       ? b.cover_image_alt.trim().slice(0, 200)
@@ -97,6 +106,8 @@ export function validateJournalInput(body: unknown): ValidateResult {
   const status =
     b.status === 'published' || b.status === 'draft' ? b.status : 'draft';
 
+  const published_at = normalizeEventDate(b.published_at);
+
   return {
     ok: true,
     value: {
@@ -104,14 +115,35 @@ export function validateJournalInput(body: unknown): ValidateResult {
       title,
       excerpt,
       body_markdown,
-      cover_image_url,
       cover_image_alt,
       drive_folder_url,
       session_type,
       tags,
       status,
+      published_at,
     },
   };
+}
+
+/**
+ * Accepts a YYYY-MM-DD string (native <input type="date"> value) OR a
+ * full ISO timestamp OR null/empty. Returns a normalized ISO timestamp
+ * at NOON UTC so the calendar day is stable across all timezones. Null
+ * for empty/invalid inputs so downstream logic can decide whether to
+ * fall back to NOW or preserve existing.
+ */
+function normalizeEventDate(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const s = v.trim();
+  if (!s) return null;
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (dateOnly) {
+    // Compose noon UTC so the date renders as the same day everywhere.
+    return `${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}T12:00:00Z`;
+  }
+  const parsed = new Date(s);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
 }
 
 function normalizeOptionalUrl(v: unknown): string | null {
