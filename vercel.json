@@ -118,6 +118,10 @@
       "destination": "/api/inbox?action=:action"
     },
     {
+      "source": "/api/journal/:action",
+      "destination": "/api/journal?action=:action"
+    },
+    {
       "source": "/photo/:category/:photoId",
       "destination": "/photo/:category/:photoId.html"
     },

@@ -15,6 +15,11 @@ export interface JournalInput {
   cover_image_url: string | null;
   cover_image_alt: string | null;
   photos: Array<{ url: string; alt?: string; caption?: string }>;
+  // Preferred way to bind photos to a post — Vero uploads to a Drive
+  // folder and pastes the shareable link. The public endpoint lists
+  // the folder at request time. If set, `photos` above is ignored on
+  // read (kept for legacy posts written before this workflow).
+  drive_folder_url: string | null;
   session_type: string | null;
   tags: string[];
   status: 'draft' | 'published';
@@ -79,6 +84,8 @@ export function validateJournalInput(body: unknown): ValidateResult {
       ? b.cover_image_alt.trim().slice(0, 200)
       : null;
 
+  const drive_folder_url = normalizeOptionalUrl(b.drive_folder_url);
+
   const photosRaw = Array.isArray(b.photos) ? b.photos : [];
   const photos: JournalInput['photos'] = [];
   for (const p of photosRaw) {
@@ -121,6 +128,7 @@ export function validateJournalInput(body: unknown): ValidateResult {
       cover_image_url,
       cover_image_alt,
       photos,
+      drive_folder_url,
       session_type,
       tags,
       status,

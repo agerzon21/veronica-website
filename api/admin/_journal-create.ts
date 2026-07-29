@@ -37,13 +37,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       INSERT INTO journal_posts (
         slug, title, excerpt, body_markdown,
-        cover_image_url, cover_image_alt, photos,
+        cover_image_url, cover_image_alt, photos, drive_folder_url,
         session_type, tags, status, published_at
       )
       VALUES (
         ${v.slug}, ${v.title}, ${v.excerpt}, ${v.body_markdown},
         ${v.cover_image_url}, ${v.cover_image_alt},
-        ${JSON.stringify(v.photos)}::jsonb,
+        ${JSON.stringify(v.photos)}::jsonb, ${v.drive_folder_url},
         ${v.session_type}, ${v.tags}, ${v.status}, ${publishedAt}
       )
       RETURNING id, slug, status, created_at, updated_at, published_at

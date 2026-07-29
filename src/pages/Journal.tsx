@@ -1,39 +1,90 @@
-import { Box, VStack, Text, Icon, Flex } from '@chakra-ui/react';
+import {
+  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Collapse,
+} from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import { FaBookOpen } from 'react-icons/fa';
+import { useEffect, useState } from 'react';
+import { Link as RouterLink, useParams } from 'react-router-dom';
+import { FaBookOpen, FaChevronDown, FaChevronUp, FaArrowRight } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
+import JournalPost from './JournalPost';
 
 /**
- * Journal — Vero's weekly-ish long-form recaps of recent photoshoots
- * (10-15 photos + narrative description). Currently a placeholder;
- * the full implementation will land in follow-up commits. This route
- * exists now so we can:
- *   - Reserve the URL for future SEO
- *   - Give admin a target to publish drafts against
- *   - Show visitors "hey, journal is coming"
+ * Journal — Vero's periodic long-form recaps of recent photoshoots
+ * (5–15 photos + narrative). Two routes share this component:
  *
- * The DB schema is already in place (see db/migrations/004-journal-posts.sql).
- * Once the admin editor + list/detail views land, this page will
- * render the actual published posts.
+ *   /journal          → the timeline index (this file's default)
+ *   /journal/:slug    → the individual post (delegates to JournalPost)
+ *
+ * The timeline is a vertical center-rail on desktop with year markers
+ * and cards alternating left/right off the rail — feels editorial and
+ * distinctive, matches the site's understated gold-on-white palette.
+ * On mobile it collapses to a single-column left-rail so the cards
+ * get the full width instead of trying to squeeze into a half.
+ *
+ * Clicking a card inline-expands to reveal the excerpt + a
+ * "Read full post →" link that navigates to /journal/:slug.
  */
 
+interface PostSummary {
+  slug: string;
+  title: string;
+  excerpt: string;
+  cover_image_url: string | null;
+  cover_image_alt: string | null;
+  session_type: string | null;
+  tags: string[];
+  published_at: string;
+}
+
 const Journal = () => {
+  const { slug } = useParams<{ slug?: string }>();
+
+  // Single component, two behaviors. When a slug is in the URL, defer
+  // entirely to JournalPost — it fetches its own data + owns its SEO.
+  if (slug) {
+    return <JournalPost slug={slug} />;
+  }
+  return <JournalIndex />;
+};
+
+function JournalIndex() {
+  const [posts, setPosts] = useState<PostSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/journal/list');
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setPosts(data.posts);
+        } else {
+          setError(data.error || 'Could not load posts.');
+        }
+      } catch {
+        setError('Could not reach the server.');
+      }
+    })();
+  }, []);
+
+  const grouped = groupByYear(posts ?? []);
+
   return (
     <>
       <Helmet>
         <title>Journal | Vero Photography</title>
         <meta
           name="description"
-          content="Weekly-ish recaps from behind the lens — recent portrait, wedding, family, and maternity sessions with the stories that made them."
+          content="Long-form recaps from behind the lens — recent portrait, wedding, family, and maternity sessions with the stories, favorite frames, and small moments that made them."
         />
-        {/* No index yet — the section is a placeholder. Flip to
-            index once real content is here so Google doesn't
-            surface an empty page. */}
-        <meta name="robots" content="noindex, nofollow" />
+        <meta property="og:title" content="Journal | Vero Photography" />
+        <meta property="og:description" content="Long-form recaps from behind the lens." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
-      <Box bg="white" minH="100vh" pt={{ base: 20, md: 28 }} pb={{ base: 20, md: 28 }} px={4}>
-        <VStack maxW="620px" mx="auto" spacing={6} textAlign="center">
+      <Box bg="white" minH="100vh" pt={{ base: 20, md: 28 }} pb={{ base: 20, md: 24 }} px={4}>
+        {/* Page header */}
+        <VStack maxW="620px" mx="auto" spacing={4} textAlign="center" mb={{ base: 12, md: 20 }}>
           <Text
             fontSize="xs"
             fontWeight="500"
@@ -44,54 +95,445 @@ const Journal = () => {
             Journal
           </Text>
           <Box w="40px" h="1px" bg="#c9a96e" />
-
-          <Flex
-            w="72px"
-            h="72px"
-            borderRadius="full"
-            bg="#fdf9f0"
-            border="1px solid"
-            borderColor="#e8d9a8"
-            align="center"
-            justify="center"
-            color="#c9a96e"
-          >
-            <Icon as={FaBookOpen} boxSize={7} />
-          </Flex>
-
           <Text
             as="h1"
-            fontSize={{ base: '2xl', md: '4xl' }}
+            fontSize={{ base: '3xl', md: '5xl' }}
             fontWeight="200"
             color="gray.800"
             letterSpacing="0.02em"
-            lineHeight="1.2"
+            lineHeight="1.1"
             m={0}
           >
-            The journal is on its way
+            Behind the lens
           </Text>
-
           <Text
             fontSize={{ base: 'sm', md: 'md' }}
             color="gray.600"
             fontWeight="300"
             lineHeight="1.8"
-            maxW="500px"
+            maxW="480px"
           >
-            Weekly recaps from behind the lens — recent sessions with
-            the stories, favorite frames, and small moments that made
-            them. New entries land here soon.
+            Recent sessions with the stories, favorite frames, and small
+            moments that made them.
           </Text>
-
-          <Box pt={4}>
-            <CTAButton to="/gallery" variant="outline" size="md">
-              Browse the Gallery
-            </CTAButton>
-          </Box>
         </VStack>
+
+        {/* Timeline body */}
+        <Box maxW="1000px" mx="auto">
+          {error ? (
+            <ErrorState message={error} />
+          ) : posts === null ? (
+            <Flex justify="center" py={16}>
+              <Spinner color="#c9a96e" />
+            </Flex>
+          ) : posts.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <Timeline grouped={grouped} />
+          )}
+        </Box>
       </Box>
     </>
   );
-};
+}
+
+/**
+ * The vertical center-rail timeline. Desktop: rail down the middle
+ * with cards alternating left/right. Mobile: rail on the left with
+ * everything to the right (single column).
+ */
+function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
+  return (
+    <Box position="relative" pl={{ base: 8, md: 0 }}>
+      {/* The rail itself. Absolutely positioned so cards can flow past
+          it without disturbing layout. Left side on mobile, dead
+          center on desktop. */}
+      <Box
+        position="absolute"
+        top={0}
+        bottom={0}
+        left={{ base: '12px', md: '50%' }}
+        w="1px"
+        bg="rgba(201, 169, 110, 0.35)"
+        transform={{ base: 'none', md: 'translateX(-0.5px)' }}
+        zIndex={0}
+      />
+
+      {grouped.map(([year, yearPosts]) => (
+        <Box key={year} position="relative" pt={{ base: 8, md: 12 }} pb={2}>
+          <YearMarker year={year} />
+          <VStack spacing={{ base: 8, md: 12 }} align="stretch">
+            {yearPosts.map((post, i) => (
+              <TimelineEntry key={post.slug} post={post} side={i % 2 === 0 ? 'right' : 'left'} />
+            ))}
+          </VStack>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+function YearMarker({ year }: { year: number }) {
+  return (
+    <Flex
+      position="relative"
+      justify={{ base: 'flex-start', md: 'center' }}
+      mb={{ base: 6, md: 8 }}
+      align="center"
+      zIndex={1}
+    >
+      <Box
+        bg="white"
+        border="1px solid"
+        borderColor="rgba(201, 169, 110, 0.5)"
+        px={{ base: 3, md: 5 }}
+        py={{ base: 1, md: 1.5 }}
+        borderRadius="full"
+        ml={{ base: '-16px', md: 0 }}
+      >
+        <Text
+          fontSize={{ base: 'xs', md: 'sm' }}
+          fontWeight="500"
+          letterSpacing="0.2em"
+          color="#8a6e35"
+        >
+          {year}
+        </Text>
+      </Box>
+    </Flex>
+  );
+}
+
+function TimelineEntry({ post, side }: { post: PostSummary; side: 'left' | 'right' }) {
+  const [expanded, setExpanded] = useState(false);
+  const dateLabel = formatDate(post.published_at);
+
+  // On mobile, EVERY entry is on the right side of the rail (single
+  // column). On desktop we honor the alternating side.
+  return (
+    <Flex position="relative" align="stretch" zIndex={1}>
+      {/* Dot on the rail — anchors the entry visually */}
+      <Box
+        position="absolute"
+        top={{ base: '18px', md: '24px' }}
+        left={{ base: '12px', md: '50%' }}
+        transform="translateX(-50%)"
+        w="9px"
+        h="9px"
+        borderRadius="full"
+        bg="#c9a96e"
+        border="2px solid white"
+        boxShadow="0 0 0 1px rgba(201, 169, 110, 0.4)"
+        zIndex={2}
+      />
+
+      {/* Date label opposite the card (desktop only) */}
+      <Flex
+        display={{ base: 'none', md: 'flex' }}
+        w="50%"
+        pr={side === 'right' ? 12 : 0}
+        pl={side === 'left' ? 12 : 0}
+        justify={side === 'right' ? 'flex-end' : 'flex-start'}
+        align="flex-start"
+        pt={5}
+        order={side === 'right' ? 0 : 1}
+      >
+        <Text
+          fontSize="xs"
+          fontWeight="500"
+          letterSpacing="0.16em"
+          textTransform="uppercase"
+          color="gray.500"
+        >
+          {dateLabel}
+        </Text>
+      </Flex>
+
+      {/* The card itself */}
+      <Box
+        w={{ base: '100%', md: '50%' }}
+        pl={{ base: 8, md: side === 'right' ? 12 : 0 }}
+        pr={{ base: 0, md: side === 'left' ? 12 : 0 }}
+        order={{ base: 0, md: side === 'right' ? 1 : 0 }}
+      >
+        <TimelineCard
+          post={post}
+          expanded={expanded}
+          onToggle={() => setExpanded((v) => !v)}
+          // On mobile the date lives inside the card since the opposite
+          // side is off-screen.
+          showInlineDate={dateLabel}
+        />
+      </Box>
+    </Flex>
+  );
+}
+
+function TimelineCard({
+  post,
+  expanded,
+  onToggle,
+  showInlineDate,
+}: {
+  post: PostSummary;
+  expanded: boolean;
+  onToggle: () => void;
+  showInlineDate: string;
+}) {
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor={expanded ? 'rgba(201, 169, 110, 0.5)' : 'gray.200'}
+      borderRadius="sm"
+      overflow="hidden"
+      transition="all 0.25s ease"
+      _hover={{ borderColor: 'rgba(201, 169, 110, 0.7)', transform: 'translateY(-1px)' }}
+      boxShadow={expanded ? '0 4px 20px -8px rgba(201, 169, 110, 0.3)' : '0 1px 3px rgba(0,0,0,0.03)'}
+    >
+      {/* Clickable summary strip — cover thumb + title + date + chevron */}
+      <Flex
+        as="button"
+        type="button"
+        onClick={onToggle}
+        w="100%"
+        align="stretch"
+        textAlign="left"
+        bg="transparent"
+        border="none"
+        p={0}
+        cursor="pointer"
+        _hover={{ bg: 'rgba(201, 169, 110, 0.04)' }}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        {/* Cover thumbnail — square, left side */}
+        {post.cover_image_url ? (
+          <Box
+            w={{ base: '90px', md: '140px' }}
+            flexShrink={0}
+            bg="gray.100"
+            overflow="hidden"
+          >
+            <Image
+              src={post.cover_image_url}
+              alt={post.cover_image_alt ?? post.title}
+              w="100%"
+              h="100%"
+              objectFit="cover"
+              loading="lazy"
+            />
+          </Box>
+        ) : (
+          <Flex
+            w={{ base: '90px', md: '140px' }}
+            flexShrink={0}
+            bg="#fdf9f0"
+            align="center"
+            justify="center"
+            color="#c9a96e"
+          >
+            <Icon as={FaBookOpen} boxSize={5} />
+          </Flex>
+        )}
+
+        {/* Title + meta */}
+        <VStack
+          flex={1}
+          align="flex-start"
+          spacing={1.5}
+          p={{ base: 3, md: 4 }}
+          justify="center"
+          minW={0}
+        >
+          <Text
+            display={{ base: 'block', md: 'none' }}
+            fontSize="2xs"
+            fontWeight="500"
+            letterSpacing="0.16em"
+            textTransform="uppercase"
+            color="gray.500"
+          >
+            {showInlineDate}
+          </Text>
+          <Text
+            as="h2"
+            fontSize={{ base: 'md', md: 'lg' }}
+            fontWeight="400"
+            color="gray.800"
+            letterSpacing="0.01em"
+            lineHeight="1.3"
+            m={0}
+            noOfLines={2}
+          >
+            {post.title}
+          </Text>
+          {post.session_type && (
+            <Text
+              fontSize="2xs"
+              fontWeight="500"
+              letterSpacing="0.14em"
+              textTransform="uppercase"
+              color="#8a6e35"
+            >
+              {post.session_type}
+            </Text>
+          )}
+        </VStack>
+
+        {/* Chevron */}
+        <Flex
+          w={{ base: '36px', md: '44px' }}
+          flexShrink={0}
+          align="center"
+          justify="center"
+          color={expanded ? '#c9a96e' : 'gray.400'}
+        >
+          <Icon as={expanded ? FaChevronUp : FaChevronDown} boxSize={3} />
+        </Flex>
+      </Flex>
+
+      {/* Expanded body — excerpt + read-full link */}
+      <Collapse in={expanded} animateOpacity>
+        <Box
+          borderTop="1px solid"
+          borderColor="gray.100"
+          bg="#fdf9f0"
+          px={{ base: 4, md: 5 }}
+          py={{ base: 4, md: 5 }}
+        >
+          {post.excerpt && (
+            <Text
+              fontSize={{ base: 'sm', md: 'md' }}
+              color="gray.700"
+              fontWeight="300"
+              lineHeight="1.8"
+              mb={4}
+            >
+              {post.excerpt}
+            </Text>
+          )}
+
+          {post.tags.length > 0 && (
+            <HStack spacing={2} wrap="wrap" mb={4}>
+              {post.tags.slice(0, 6).map((tag) => (
+                <Text
+                  key={tag}
+                  fontSize="2xs"
+                  fontWeight="500"
+                  letterSpacing="0.08em"
+                  textTransform="lowercase"
+                  color="#8a6e35"
+                  bg="white"
+                  border="1px solid"
+                  borderColor="rgba(201, 169, 110, 0.35)"
+                  px={2}
+                  py={0.5}
+                  borderRadius="sm"
+                >
+                  {tag}
+                </Text>
+              ))}
+            </HStack>
+          )}
+
+          <RouterLink to={`/journal/${post.slug}`}>
+            <Box
+              as="span"
+              display="inline-flex"
+              alignItems="center"
+              gap={2}
+              fontSize="xs"
+              fontWeight="500"
+              letterSpacing="0.14em"
+              textTransform="uppercase"
+              color="#c9a96e"
+              _hover={{ color: '#8a6e35' }}
+              transition="color 0.15s"
+            >
+              Read the full post
+              <Icon as={FaArrowRight} boxSize={2.5} />
+            </Box>
+          </RouterLink>
+        </Box>
+      </Collapse>
+    </Box>
+  );
+}
+
+function EmptyState() {
+  return (
+    <Box
+      bg="white"
+      border="1px dashed"
+      borderColor="gray.300"
+      borderRadius="sm"
+      py={16}
+      px={6}
+      textAlign="center"
+      maxW="500px"
+      mx="auto"
+    >
+      <Flex
+        w="72px"
+        h="72px"
+        mx="auto"
+        borderRadius="full"
+        bg="#fdf9f0"
+        border="1px solid"
+        borderColor="#e8d9a8"
+        align="center"
+        justify="center"
+        color="#c9a96e"
+        mb={5}
+      >
+        <Icon as={FaBookOpen} boxSize={7} />
+      </Flex>
+      <Text as="h2" fontSize="md" fontWeight="500" color="gray.800" mb={2}>
+        The journal is on its way
+      </Text>
+      <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="380px" mx="auto" lineHeight="1.7">
+        Vero is preparing the first recaps. Check back soon, or browse
+        the gallery in the meantime.
+      </Text>
+      <Box pt={5}>
+        <CTAButton to="/gallery" variant="outline" size="sm">
+          Browse the Gallery
+        </CTAButton>
+      </Box>
+    </Box>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <Box maxW="500px" mx="auto" py={12} textAlign="center">
+      <Text color="red.500" fontSize="sm">{message}</Text>
+    </Box>
+  );
+}
+
+// ── helpers ────────────────────────────────────────────────
+
+/**
+ * Group posts by year, preserving newest-first order within each
+ * year (posts come in sorted DESC from the endpoint).
+ */
+function groupByYear(posts: PostSummary[]): Array<[number, PostSummary[]]> {
+  const map = new Map<number, PostSummary[]>();
+  for (const p of posts) {
+    const year = new Date(p.published_at).getFullYear();
+    if (!Number.isFinite(year)) continue;
+    if (!map.has(year)) map.set(year, []);
+    map.get(year)!.push(p);
+  }
+  // Years descending — newest year first.
+  return [...map.entries()].sort((a, b) => b[0] - a[0]);
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 export default Journal;

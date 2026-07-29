@@ -21,6 +21,7 @@ type Row = {
   cover_image_url: string | null;
   cover_image_alt: string | null;
   photos: Array<{ url: string; alt?: string; caption?: string }>;
+  drive_folder_url: string | null;
   session_type: string | null;
   tags: string[];
   status: 'draft' | 'published';
@@ -48,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       SELECT
         id, slug, title, excerpt, body_markdown,
-        cover_image_url, cover_image_alt, photos,
+        cover_image_url, cover_image_alt, photos, drive_folder_url,
         session_type, tags, status, published_at,
         created_at, updated_at
       FROM journal_posts
