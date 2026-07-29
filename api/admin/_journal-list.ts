@@ -6,8 +6,8 @@
  *   → 401 on bad password
  *
  * Returns a summary per post — enough for the admin list view.
- * Full post content (body_markdown, photos array) is fetched on-demand
- * via journal-detail when the editor opens.
+ * Full post content (body_markdown, resolved Drive photos) is
+ * fetched on-demand via journal-detail when the editor opens.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -26,7 +26,7 @@ type Row = {
   published_at: string | null;
   updated_at: string;
   created_at: string;
-  photo_count: number;
+  drive_folder_url: string | null;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -40,15 +40,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
-    // jsonb_array_length gives the photo count without pulling the full
-    // photos array over the wire — the list view only shows "N photos"
-    // in a stat, no need for the payload.
+    // Include drive_folder_url so the row can show a "photos linked"
+    // indicator. We don't count Drive items here — that would mean
+    // a Drive API call per post, expensive for a list view.
     const rows = (await sql`
       SELECT
         id, slug, title, excerpt, cover_image_url,
         session_type, tags, status, published_at,
-        updated_at, created_at,
-        jsonb_array_length(photos) AS photo_count
+        updated_at, created_at, drive_folder_url
       FROM journal_posts
       ORDER BY
         COALESCE(published_at, updated_at) DESC,

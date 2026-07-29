@@ -40,7 +40,7 @@ export interface JournalPostSummary {
   published_at: string | null;
   updated_at: string;
   created_at: string;
-  photo_count: number;
+  drive_folder_url: string | null;
 }
 
 type View =
@@ -271,7 +271,9 @@ function PostRow({
           </Text>
         )}
         <HStack spacing={3} fontSize="2xs" color="gray.500" fontWeight="300">
-          <Text>{post.photo_count} {post.photo_count === 1 ? 'photo' : 'photos'}</Text>
+          <Text color={post.drive_folder_url ? 'gray.500' : 'orange.600'}>
+            {post.drive_folder_url ? 'Photos linked' : 'No photos yet'}
+          </Text>
           <Text>·</Text>
           <Text>
             {post.status === 'published' && post.published_at
