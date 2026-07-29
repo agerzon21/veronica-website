@@ -21,11 +21,22 @@
  *     inline here.
  *
  * Signature verification (POST):
- *   Meta signs the raw request body with our app secret and sends it as
+ *   Meta signs the raw request body with the app secret and sends it as
  *   `X-Hub-Signature-256: sha256=<hex>`. We recompute the HMAC over the
  *   raw body using IG_APP_SECRET and constant-time compare. Never trust
  *   an unsigned or mis-signed payload — the URL is public and anyone
  *   could POST fake messages otherwise.
+ *
+ *   ⚠️  IMPORTANT: IG_APP_SECRET must be the INSTAGRAM App secret, not
+ *   the parent Facebook App secret. Meta creates a nested "Instagram
+ *   App" (with its OWN app ID + secret, e.g. "vero-photography-feed-IG")
+ *   inside the parent Facebook App. Meta signs Instagram webhook payloads
+ *   with the Instagram App's secret. If you paste the Facebook App
+ *   secret here by mistake (they're both under "App Settings → Basic",
+ *   easy to confuse), every webhook returns 403 signature failure. Find
+ *   the Instagram App secret at:
+ *   dashboard → Instagram API use-case setup → top row → "The Secret of
+ *   the Instagram App" → Show.
  *
  * Payload structure (simplified):
  *   {
