@@ -62,81 +62,94 @@ const Navbar = () => {
           />
         </Link>
 
-        {/* Desktop Navigation. Main nav (Home/Gallery/About/Contact) renders
-            first, then a thin gold separator, then Client Portal as a utility
-            link — so it reads as "for existing clients" rather than another
-            nav peer without losing accessibility. Contact gets a subtle gold
-            pill outline to mark it as the conversion path. */}
+        {/* Desktop Navigation. Main nav (everything except Client Portal)
+            renders first, then a thin gold separator, then Client Portal
+            as a utility link — so it reads as "for existing clients"
+            rather than another nav peer without losing accessibility.
+            Contact gets a subtle gold pill outline to mark it as the
+            conversion path. Selection is by NAME (not array index) so
+            reordering / inserting menu items can't accidentally hide the
+            utility link or steal Contact's pill treatment. */}
         <HStack spacing={{ base: 5, md: 6 }} display={{ base: 'none', md: 'flex' }}>
-          {menuItems.slice(0, 4).map((item) =>
-            item.name === 'Contact' ? (
-              <Link
-                key={item.path}
-                as={RouterLink}
-                to={item.path}
-                fontSize="md"
-                fontWeight="light"
-                color="gray.800"
-                textDecoration="none"
-                border="1px solid #c9a96e"
-                borderRadius="sm"
-                px={4}
-                py={1.5}
-                transition="all 0.3s"
-                _hover={{
-                  color: 'white',
-                  bg: '#c9a96e',
-                  textDecoration: 'none',
-                }}
-              >
-                {item.name}
-              </Link>
-            ) : (
-              <Link
-                key={item.path}
-                as={RouterLink}
-                to={item.path}
-                fontSize="md"
-                fontWeight="light"
-                color="gray.800"
-                textDecoration="none"
-                textUnderlineOffset="6px"
-                transition="color 0.3s"
-                _hover={{
-                  color: '#c9a96e',
-                  textDecoration: 'underline',
-                  textDecorationColor: '#c9a96e',
-                  textDecorationThickness: '1px',
-                }}
-              >
-                {item.name}
-              </Link>
-            ),
-          )}
-          <Box
-            w="1px"
-            h="16px"
-            bg="rgba(201, 169, 110, 0.35)"
-            aria-hidden="true"
-          />
-          <Link
-            as={RouterLink}
-            to={menuItems[4].path}
-            fontSize="md"
-            fontWeight="light"
-            color="gray.800"
-            textDecoration="none"
-            textUnderlineOffset="6px"
-            transition="color 0.3s"
-            _hover={{
-              color: '#c9a96e',
-              textDecoration: 'underline',
-              textDecorationColor: '#c9a96e',
-              textDecorationThickness: '1px',
-            }}
-          >
-            {menuItems[4].name}
-          </Link>
+          {menuItems
+            .filter((item) => item.name !== 'Client Portal')
+            .map((item) =>
+              item.name === 'Contact' ? (
+                <Link
+                  key={item.path}
+                  as={RouterLink}
+                  to={item.path}
+                  fontSize="md"
+                  fontWeight="light"
+                  color="gray.800"
+                  textDecoration="none"
+                  border="1px solid #c9a96e"
+                  borderRadius="sm"
+                  px={4}
+                  py={1.5}
+                  transition="all 0.3s"
+                  _hover={{
+                    color: 'white',
+                    bg: '#c9a96e',
+                    textDecoration: 'none',
+                  }}
+                >
+                  {item.name}
+                </Link>
+              ) : (
+                <Link
+                  key={item.path}
+                  as={RouterLink}
+                  to={item.path}
+                  fontSize="md"
+                  fontWeight="light"
+                  color="gray.800"
+                  textDecoration="none"
+                  textUnderlineOffset="6px"
+                  transition="color 0.3s"
+                  _hover={{
+                    color: '#c9a96e',
+                    textDecoration: 'underline',
+                    textDecorationColor: '#c9a96e',
+                    textDecorationThickness: '1px',
+                  }}
+                >
+                  {item.name}
+                </Link>
+              ),
+            )}
+          {(() => {
+            const portal = menuItems.find((i) => i.name === 'Client Portal');
+            if (!portal) return null;
+            return (
+              <>
+                <Box
+                  w="1px"
+                  h="16px"
+                  bg="rgba(201, 169, 110, 0.35)"
+                  aria-hidden="true"
+                />
+                <Link
+                  as={RouterLink}
+                  to={portal.path}
+                  fontSize="md"
+                  fontWeight="light"
+                  color="gray.800"
+                  textDecoration="none"
+                  textUnderlineOffset="6px"
+                  transition="color 0.3s"
+                  _hover={{
+                    color: '#c9a96e',
+                    textDecoration: 'underline',
+                    textDecorationColor: '#c9a96e',
+                    textDecorationThickness: '1px',
+                  }}
+                >
+                  {portal.name}
+                </Link>
+              </>
+            );
+          })()}
         </HStack>
 
         {/* Burger Menu Button */}
