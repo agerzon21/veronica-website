@@ -99,6 +99,54 @@ const RECOMMENDATION_INTENT_KEYWORDS = [
   'предложите', 'посоветуйте', 'что вы думаете', 'какие идеи', 'помогите выбрать',
 ];
 
+// Agency / solicitation / spam patterns. These are the sales pitches
+// that flood every creator's DMs — web design agencies claiming her
+// site is "outdated", SEO shops, marketing services, crypto pitches,
+// bogus "collab" offers with a link. The right response is SILENCE:
+// no reply, no bridge (which would just confirm the account is live
+// and hand them a target). Match is broad-and-generous on purpose —
+// false positives here are extremely cheap (Vero can toggle AI back
+// on and reply manually if she wants) while false negatives are the
+// context-deaf "great! for pricing…" reply that embarrasses her.
+const SPAM_SOLICITATION_PATTERNS: RegExp[] = [
+  // "Your website is outdated / we can modernize"
+  /\b(your|the) (website|site) (is )?(outdated|old|slow|not optimi[sz]ed)/i,
+  /\b(modernize|redesign|revamp|rebuild) (your|the) (website|site)/i,
+  /\bfree (website|site|seo) (audit|review|check)/i,
+
+  // Agency / service selling ("we specialize in", "we help X grow", "we design")
+  /\bwe (specialize|specialise) in\b/i,
+  /\bwe (help|design|build|create|make) (websites?|brands?|logos?|content|videos?|clients?|businesses?|companies)/i,
+  /\bwe (are|are a|are an)\s+\w+\s+(agency|studio|team|company|firm)/i,
+  /\bour (agency|studio|team|portfolio|services|clients?|work)\b/i,
+
+  // "Just reply YES / reply DM for X" — classic mass-DM CTA
+  /\b(just )?reply ["']?(yes|y|dm|info|more|details)["']?\b/i,
+  /\bcomment ["']?(yes|info|more|details)["']?\b/i,
+
+  // SEO / marketing / lead-gen solicitations
+  /\b(seo|search engine optimi[sz]ation|google (ranking|visibility|traffic))\b/i,
+  /\b(lead generation|leads for you|more (leads|clients|bookings|inquiries))\b/i,
+  /\b(digital marketing|social media (management|marketing)|content strategy)/i,
+
+  // Crypto / investment / MLM
+  /\b(crypto|bitcoin|forex|trading|investment opportunity|passive income|financial freedom)\b/i,
+  /\b(earn|make) \$?\d+.*\b(per|a|\/) ?(day|week|month|hour)/i,
+
+  // "We noticed your account / came across your profile" — cold outreach opener
+  /\bwe (noticed|came across|found|discovered) (your|the) (account|profile|website|instagram|page)/i,
+
+  // Bulk collab bait ("we'd love to collaborate", link included)
+  /\b(collab|collaborate|partnership) .*(https?:\/\/|www\.)/i,
+
+  // Russian equivalents
+  /\bваш сайт (устарел|устаревш|не оптимизирован)/i,
+  /\bмы специализируемся\b/i,
+  /\bмы (помогаем|создаём|разрабатываем) (сайт|бренд|логотип|контент)/i,
+  /\bбесплатн(ый|ая|ое) (аудит|анализ) сайт/i,
+  /\bпросто напишите ["']?да["']?/i,
+];
+
 
 export interface ReplyResult {
   action:
@@ -111,6 +159,7 @@ export interface ReplyResult {
     | 'skipped-already-replied'
     | 'skipped-rate-limit'
     | 'skipped-casual-message'
+    | 'skipped-spam-solicitation'
     | 'error-send-failed'
     | 'error-generation-failed';
   reason?: string;
@@ -245,6 +294,25 @@ export async function processInboundMessage(args: {
       return {
         action: 'skipped-casual-message',
         reason: 'message has no substantive content',
+      };
+    }
+
+    // ── 7. Agency / solicitation spam filter ─────────────────
+    // Silent skip — don't reply, don't send a bridge, don't confirm
+    // the account is live. Also flip ai_enabled off so a follow-up
+    // pitch doesn't burn another API call. Vero can regen the
+    // summary in the inbox to see the classification, and if she
+    // decides it's actually legit she can toggle AI back on and
+    // reply manually.
+    if (matchesSpamSolicitation(latestInboundBody)) {
+      await sql`
+        UPDATE conversations
+        SET ai_enabled = FALSE, updated_at = NOW()
+        WHERE id = ${convo.id}
+      `;
+      return {
+        action: 'skipped-spam-solicitation',
+        reason: 'agency / solicitation pattern matched — silent skip',
       };
     }
 
@@ -416,6 +484,18 @@ function matchesDateIntent(text: string): boolean {
 function matchesRecommendationIntent(text: string): boolean {
   const lower = text.toLowerCase();
   return RECOMMENDATION_INTENT_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Detects agency / solicitation / sales-pitch DMs. Bias toward
+ * silence: false positives (a real client whose message vaguely
+ * matches a pattern) cost us "AI didn't reply, Vero handles manually
+ * as usual" — no drama. False negatives cost us a context-deaf reply
+ * that embarrasses Vero (see the "your website is outdated…" example
+ * that triggered this filter).
+ */
+function matchesSpamSolicitation(text: string): boolean {
+  return SPAM_SOLICITATION_PATTERNS.some((re) => re.test(text));
 }
 
 /**

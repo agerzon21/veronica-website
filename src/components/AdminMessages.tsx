@@ -1,10 +1,12 @@
 import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, Textarea, Spinner, useToast, Switch,
+  Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
+  FormControl, FormLabel, Input, Select, InputGroup, InputRightElement, Button,
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle,
-  FaLanguage, FaLightbulb,
+  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 
@@ -75,7 +77,16 @@ export interface Message {
   ai_model: string | null;
 }
 
+export type InquiryClassification =
+  | 'booking-inquiry'
+  | 'existing-client'
+  | 'general-question'
+  | 'collaboration-offer'
+  | 'spam-or-unrelated'
+  | 'unclear';
+
 export interface AiSummary {
+  classification: InquiryClassification;
   asking: string;
   gathered: string[];
   nextStep: string;
@@ -527,6 +538,7 @@ function ConversationView({
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [translateOnSend, setTranslateOnSend] = useState(false);
+  const [createClientOpen, setCreateClientOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -772,6 +784,51 @@ function ConversationView({
         </HStack>
 
         <HStack spacing={3} flexShrink={0}>
+          {detail.linked_client_portal_id ? (
+            <Badge
+              bg="green.50"
+              color="green.700"
+              border="1px solid"
+              borderColor="green.200"
+              fontSize="2xs"
+              fontWeight="600"
+              letterSpacing="0.06em"
+              textTransform="uppercase"
+              px={2}
+              py={1}
+              borderRadius="sm"
+              display="inline-flex"
+              alignItems="center"
+              gap={1.5}
+            >
+              <Icon as={FaExternalLinkAlt} boxSize={2.5} />
+              Linked client
+            </Badge>
+          ) : (
+            <Box
+              as="button"
+              type="button"
+              onClick={() => setCreateClientOpen(true)}
+              display="inline-flex"
+              alignItems="center"
+              gap={1.5}
+              fontSize="xs"
+              fontWeight="500"
+              color="#8a6e35"
+              bg="rgba(201, 169, 110, 0.12)"
+              border="1px solid"
+              borderColor="rgba(201, 169, 110, 0.4)"
+              _hover={{ bg: 'rgba(201, 169, 110, 0.22)', borderColor: '#c9a96e' }}
+              px={3}
+              py={1.5}
+              borderRadius="sm"
+              cursor="pointer"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Icon as={FaUserPlus} boxSize={3} />
+              Create client
+            </Box>
+          )}
           <HStack spacing={2}>
             <Icon as={FaRobot} boxSize={3} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
             <Text fontSize="xs" color="gray.600" fontWeight="500">
@@ -787,6 +844,27 @@ function ConversationView({
           </HStack>
         </HStack>
       </Flex>
+
+      {/* Create-client modal — prefills from IG contact + AI summary */}
+      <CreateClientModal
+        isOpen={createClientOpen}
+        onClose={() => setCreateClientOpen(false)}
+        adminPassword={adminPassword}
+        conversationId={summary.id}
+        defaultDisplayName={displayName}
+        aiSummary={aiSummary}
+        onCreated={async () => {
+          setCreateClientOpen(false);
+          await loadDetail();
+          onRefreshList();
+          toast({
+            title: 'Client portal created and linked to this conversation.',
+            status: 'success',
+            duration: 4000,
+            isClosable: true,
+          });
+        }}
+      />
 
       {/* Not-in-AI notice — small banner when AI is off for this convo */}
       {!detail.ai_enabled && (
@@ -807,15 +885,21 @@ function ConversationView({
         </Flex>
       )}
 
+      {/* Pinned AI summary — sits above the scroll area so it stays
+          visible as Vero scrolls through the thread. Collapsible for
+          when she wants more room to read the messages. */}
+      <Box flexShrink={0} borderBottom="1px solid" borderColor="gray.100" bg="white">
+        <SummaryCard
+          summary={aiSummary}
+          loading={aiSummaryLoading}
+          error={aiSummaryError}
+          onRegenerate={loadAiSummary}
+        />
+      </Box>
+
       {/* Message history — scrollable, auto-scrolls to bottom */}
       <Box ref={scrollRef} flex={1} overflowY="auto" p={{ base: 4, md: 6 }} bg="gray.50">
         <VStack spacing={3} align="stretch">
-          <SummaryCard
-            summary={aiSummary}
-            loading={aiSummaryLoading}
-            error={aiSummaryError}
-            onRegenerate={loadAiSummary}
-          />
           {messages.map((m) => (
             <MessageBubble key={m.id} msg={m} adminPassword={adminPassword} />
           ))}
@@ -1002,38 +1086,46 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
         )}
 
         <Flex
-          mt={1}
+          mt={1.5}
           justify={isInbound ? 'space-between' : 'flex-end'}
           align="center"
           gap={2}
+          direction={isInbound ? 'row' : 'row-reverse'}
         >
-          {isInbound && !translation && (
+          {!translation && (
             <Box
               as="button"
               type="button"
               onClick={handleTranslate}
               display="inline-flex"
               alignItems="center"
-              gap={1}
-              fontSize="2xs"
+              gap={1.5}
+              fontSize="xs"
+              fontWeight="500"
               color={translating ? 'gray.400' : '#8a6e35'}
-              _hover={translating ? undefined : { color: '#c9a96e', textDecoration: 'underline' }}
+              bg={translating ? 'gray.50' : 'rgba(201, 169, 110, 0.12)'}
+              border="1px solid"
+              borderColor={translating ? 'gray.200' : 'rgba(201, 169, 110, 0.4)'}
+              _hover={translating ? undefined : {
+                bg: 'rgba(201, 169, 110, 0.22)',
+                borderColor: '#c9a96e',
+                color: '#6b5424',
+              }}
               cursor={translating ? 'default' : 'pointer'}
-              bg="transparent"
-              border="none"
-              p={0}
+              px={2.5}
+              py={1}
+              borderRadius="sm"
               disabled={translating}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <Icon as={FaLanguage} boxSize={2.5} />
+              <Icon as={FaLanguage} boxSize={3} />
               {translating ? 'Translating…' : 'Translate'}
             </Box>
           )}
           <Text
             fontSize="2xs"
             color="gray.400"
-            textAlign={isInbound && !translation ? 'right' : isInbound ? 'left' : 'right'}
-            flex={isInbound && !translation ? undefined : 1}
+            textAlign={isInbound ? 'left' : 'right'}
           >
             {formatFullTime(msg.sent_at)}
             {msg.ai_model && ` · ${msg.ai_model}`}
@@ -1094,10 +1186,12 @@ function EmptyState() {
 }
 
 /**
- * AI-generated summary of the conversation so far — sits at the top
- * of the thread so Vero can catch up on what the customer is asking,
- * what facts they've shared, and what her next step should be.
- * Regenerates on demand (no caching yet — see api/admin/_messages-summary.ts).
+ * AI-generated summary of the conversation so far — pinned above the
+ * message thread so Vero can see what the customer wants, what
+ * she's gathered, what to do next, and (critically) whether it's
+ * actually worth her time (booking vs. spam solicitation) at a
+ * glance. Collapsible so she can reclaim the vertical space once
+ * she's read it.
  */
 function SummaryCard({
   summary,
@@ -1110,29 +1204,75 @@ function SummaryCard({
   error: string | null;
   onRegenerate: () => void;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const classification = summary?.classification ?? 'unclear';
+  const classMeta = CLASSIFICATION_META[classification] ?? CLASSIFICATION_META.unclear;
+
   return (
     <Box
       bg="white"
-      border="1px solid"
-      borderColor="rgba(201, 169, 110, 0.4)"
       borderLeft="3px solid"
-      borderLeftColor="#c9a96e"
-      borderRadius="md"
-      p={{ base: 3.5, md: 4 }}
-      mb={2}
+      borderLeftColor={classMeta.borderColor}
+      px={{ base: 3.5, md: 4 }}
+      py={{ base: 2.5, md: 3 }}
     >
-      <Flex justify="space-between" align="center" mb={2}>
-        <HStack spacing={2} color="#8a6e35">
-          <Icon as={FaLightbulb} boxSize={3} />
+      {/* Header row — always visible, click to collapse/expand */}
+      <Flex justify="space-between" align="center" gap={3}>
+        <Flex
+          as="button"
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          align="center"
+          gap={2}
+          flex={1}
+          minW={0}
+          bg="transparent"
+          border="none"
+          p={0}
+          textAlign="left"
+          cursor="pointer"
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Icon as={FaLightbulb} boxSize={3} color="#8a6e35" flexShrink={0} />
           <Text
             fontSize="2xs"
-            fontWeight="500"
-            letterSpacing="0.12em"
+            fontWeight="600"
+            letterSpacing="0.14em"
             textTransform="uppercase"
+            color="#8a6e35"
+            flexShrink={0}
           >
             Thread summary
           </Text>
-        </HStack>
+          {summary && (
+            <Badge
+              bg={classMeta.bg}
+              color={classMeta.color}
+              fontSize="2xs"
+              fontWeight="600"
+              letterSpacing="0.08em"
+              textTransform="uppercase"
+              px={2}
+              py={0.5}
+              borderRadius="sm"
+              flexShrink={0}
+            >
+              {classMeta.label}
+            </Badge>
+          )}
+          {collapsed && summary?.asking && (
+            <Text fontSize="xs" color="gray.500" noOfLines={1} minW={0}>
+              — {summary.asking}
+            </Text>
+          )}
+          <Icon
+            as={collapsed ? FaChevronDown : FaChevronUp}
+            boxSize={2.5}
+            color="gray.400"
+            ml="auto"
+            flexShrink={0}
+          />
+        </Flex>
         <Box
           as="button"
           type="button"
@@ -1148,6 +1288,7 @@ function SummaryCard({
           border="none"
           p={0}
           disabled={loading}
+          flexShrink={0}
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
           <Icon as={FaSync} boxSize={2.5} />
@@ -1155,75 +1296,382 @@ function SummaryCard({
         </Box>
       </Flex>
 
-      {loading && !summary ? (
-        <Flex align="center" gap={2} py={2}>
-          <Spinner size="xs" color="#c9a96e" />
-          <Text fontSize="xs" color="gray.500">Reading the thread…</Text>
-        </Flex>
-      ) : error && !summary ? (
-        <Text fontSize="xs" color="red.600">{error}</Text>
-      ) : summary ? (
-        <VStack align="stretch" spacing={2.5}>
-          <Box>
-            <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
-              Asking
-            </Text>
-            <Text fontSize="sm" color="gray.800" lineHeight="1.5">
-              {summary.asking}
-            </Text>
-          </Box>
+      {/* Body — hidden when collapsed */}
+      {!collapsed && (
+        <Box mt={3}>
+          {loading && !summary ? (
+            <Flex align="center" gap={2} py={2}>
+              <Spinner size="xs" color="#c9a96e" />
+              <Text fontSize="xs" color="gray.500">Reading the thread…</Text>
+            </Flex>
+          ) : error && !summary ? (
+            <Text fontSize="xs" color="red.600">{error}</Text>
+          ) : summary ? (
+            <VStack align="stretch" spacing={2.5}>
+              <Box>
+                <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
+                  Asking
+                </Text>
+                <Text fontSize="sm" color="gray.800" lineHeight="1.5">
+                  {summary.asking}
+                </Text>
+              </Box>
 
-          {summary.gathered.length > 0 && (
-            <Box>
-              <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
-                Gathered
-              </Text>
-              <VStack align="stretch" spacing={0.5}>
-                {summary.gathered.map((fact, i) => (
-                  <Flex key={i} gap={2} align="flex-start">
-                    <Text fontSize="sm" color="#c9a96e" lineHeight="1.5">•</Text>
-                    <Text fontSize="sm" color="gray.700" lineHeight="1.5">{fact}</Text>
-                  </Flex>
-                ))}
-              </VStack>
-            </Box>
+              {summary.gathered.length > 0 && (
+                <Box>
+                  <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
+                    Gathered
+                  </Text>
+                  <VStack align="stretch" spacing={0.5}>
+                    {summary.gathered.map((fact, i) => (
+                      <Flex key={i} gap={2} align="flex-start">
+                        <Text fontSize="sm" color="#c9a96e" lineHeight="1.5">•</Text>
+                        <Text fontSize="sm" color="gray.700" lineHeight="1.5">{fact}</Text>
+                      </Flex>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+
+              <Box>
+                <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
+                  Next step
+                </Text>
+                <Text fontSize="sm" color="gray.800" lineHeight="1.5">
+                  {summary.nextStep}
+                </Text>
+              </Box>
+
+              {summary.tone && (
+                <HStack spacing={2}>
+                  <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase">
+                    Tone
+                  </Text>
+                  <Badge
+                    bg="rgba(201, 169, 110, 0.15)"
+                    color="#8a6e35"
+                    fontSize="2xs"
+                    fontWeight="500"
+                    letterSpacing="0.05em"
+                    textTransform="lowercase"
+                    px={2}
+                    py={0.5}
+                    borderRadius="sm"
+                  >
+                    {summary.tone}
+                  </Badge>
+                </HStack>
+              )}
+            </VStack>
+          ) : (
+            <Text fontSize="xs" color="gray.500">No summary yet.</Text>
           )}
-
-          <Box>
-            <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
-              Next step
-            </Text>
-            <Text fontSize="sm" color="gray.800" lineHeight="1.5">
-              {summary.nextStep}
-            </Text>
-          </Box>
-
-          {summary.tone && (
-            <HStack spacing={2}>
-              <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase">
-                Tone
-              </Text>
-              <Badge
-                bg="rgba(201, 169, 110, 0.15)"
-                color="#8a6e35"
-                fontSize="2xs"
-                fontWeight="500"
-                letterSpacing="0.05em"
-                textTransform="lowercase"
-                px={2}
-                py={0.5}
-                borderRadius="sm"
-              >
-                {summary.tone}
-              </Badge>
-            </HStack>
-          )}
-        </VStack>
-      ) : (
-        <Text fontSize="xs" color="gray.500">No summary yet.</Text>
+        </Box>
       )}
     </Box>
   );
+}
+
+// Visual treatment for each inquiry classification. Colors chosen so
+// spam pops red (skip it), booking pops green (Vero should engage),
+// and softer neutrals for everything in between.
+const CLASSIFICATION_META: Record<
+  InquiryClassification,
+  { label: string; bg: string; color: string; borderColor: string }
+> = {
+  'booking-inquiry': {
+    label: 'Booking inquiry',
+    bg: 'green.100',
+    color: 'green.800',
+    borderColor: '#38A169',
+  },
+  'existing-client': {
+    label: 'Existing client',
+    bg: 'purple.100',
+    color: 'purple.800',
+    borderColor: '#805AD5',
+  },
+  'general-question': {
+    label: 'General question',
+    bg: 'blue.50',
+    color: 'blue.700',
+    borderColor: '#4299E1',
+  },
+  'collaboration-offer': {
+    label: 'Collab offer',
+    bg: 'yellow.100',
+    color: 'yellow.800',
+    borderColor: '#D69E2E',
+  },
+  'spam-or-unrelated': {
+    label: 'Spam / unrelated',
+    bg: 'red.100',
+    color: 'red.700',
+    borderColor: '#E53E3E',
+  },
+  unclear: {
+    label: 'Unclear',
+    bg: 'gray.100',
+    color: 'gray.700',
+    borderColor: '#c9a96e',
+  },
+};
+
+/**
+ * Modal for converting an IG DM conversation into a client portal.
+ * Deliberately minimal: just the fields needed to create a simple-mode
+ * portal (session type, display name, gallery password). Vero fills in
+ * the rest — email, event date, contract, drive URL — later from the
+ * Portals tab. This form is optimized for the first-touch moment where
+ * she says "OK this is a real client, let me claim them" without
+ * making her fill out a wall of fields she doesn't have answers to
+ * yet.
+ *
+ * On create, the backend also flips conversations.linked_client_portal_id
+ * so the inbox shows "Linked client" and the "Client" badge in the
+ * sidebar row.
+ */
+function CreateClientModal({
+  isOpen,
+  onClose,
+  adminPassword,
+  conversationId,
+  defaultDisplayName,
+  aiSummary,
+  onCreated,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  adminPassword: string;
+  conversationId: string;
+  defaultDisplayName: string;
+  aiSummary: AiSummary | null;
+  onCreated: () => void | Promise<void>;
+}) {
+  const [sessionType, setSessionType] = useState<string>(
+    () => inferSessionType(aiSummary) ?? 'portrait',
+  );
+  const [displayName, setDisplayName] = useState<string>(defaultDisplayName);
+  const [galleryPassword, setGalleryPassword] = useState<string>(() => generateGalleryPassword());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset the form each time the modal opens — a stale previous entry
+  // (from a different conversation Vero cancelled out of) would be
+  // confusing here.
+  useEffect(() => {
+    if (isOpen) {
+      setSessionType(inferSessionType(aiSummary) ?? 'portrait');
+      setDisplayName(defaultDisplayName);
+      setGalleryPassword(generateGalleryPassword());
+      setError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const canSubmit =
+    !submitting &&
+    sessionType.trim().length > 0 &&
+    displayName.trim().length > 0 &&
+    galleryPassword.trim().length >= 4;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/portals-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          mode: 'simple',
+          session_type: sessionType.trim(),
+          client_display_name: displayName.trim(),
+          gallery_password: galleryPassword.trim(),
+          link_to_conversation_id: conversationId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await onCreated();
+      } else {
+        setError(data.error || `Create failed (${res.status})`);
+      }
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="md" isCentered>
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
+          Convert to client
+        </ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          <VStack spacing={4} align="stretch">
+            <Text fontSize="xs" color="gray.500" lineHeight="1.6">
+              Creates a simple-mode portal (gallery password only) and links it
+              to this conversation. You can fill in email, event date, contract,
+              and gallery URL later from the Portals tab.
+            </Text>
+
+            <FormControl>
+              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
+                Session type
+              </FormLabel>
+              <Select
+                value={sessionType}
+                onChange={(e) => setSessionType(e.target.value)}
+                size="sm"
+                bg="white"
+              >
+                <option value="portrait">Portrait</option>
+                <option value="wedding">Wedding</option>
+                <option value="family">Family</option>
+                <option value="maternity">Maternity</option>
+                <option value="engagement">Engagement</option>
+                <option value="newborn">Newborn</option>
+                <option value="other">Other</option>
+              </Select>
+            </FormControl>
+
+            <FormControl>
+              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
+                Client display name
+              </FormLabel>
+              <Input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="e.g. Anna Petrova"
+                size="sm"
+                bg="white"
+              />
+            </FormControl>
+
+            <FormControl>
+              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
+                Gallery password
+              </FormLabel>
+              <InputGroup size="sm">
+                <Input
+                  value={galleryPassword}
+                  onChange={(e) => setGalleryPassword(e.target.value)}
+                  placeholder="autogenerated"
+                  bg="white"
+                  pr="4.5rem"
+                />
+                <InputRightElement width="4.5rem">
+                  <Button
+                    h="1.5rem"
+                    size="xs"
+                    variant="ghost"
+                    color="#8a6e35"
+                    onClick={() => setGalleryPassword(generateGalleryPassword())}
+                  >
+                    New
+                  </Button>
+                </InputRightElement>
+              </InputGroup>
+              <Text fontSize="2xs" color="gray.400" mt={1}>
+                4+ characters. Client uses this to open their gallery once you deliver it.
+              </Text>
+            </FormControl>
+
+            {aiSummary && aiSummary.gathered.length > 0 && (
+              <Box
+                bg="rgba(201, 169, 110, 0.06)"
+                border="1px solid"
+                borderColor="rgba(201, 169, 110, 0.3)"
+                borderRadius="sm"
+                p={3}
+              >
+                <Text fontSize="2xs" color="#8a6e35" fontWeight="600" letterSpacing="0.08em" textTransform="uppercase" mb={1.5}>
+                  From this conversation
+                </Text>
+                <VStack align="stretch" spacing={0.5}>
+                  {aiSummary.gathered.map((fact, i) => (
+                    <Flex key={i} gap={2} align="flex-start">
+                      <Text fontSize="xs" color="#c9a96e">•</Text>
+                      <Text fontSize="xs" color="gray.700" lineHeight="1.5">{fact}</Text>
+                    </Flex>
+                  ))}
+                </VStack>
+                <Text fontSize="2xs" color="gray.500" mt={2} lineHeight="1.5">
+                  Add these to the portal (event date, email, etc.) from the
+                  Portals tab after creating.
+                </Text>
+              </Box>
+            )}
+
+            {error && (
+              <Text fontSize="xs" color="red.600">{error}</Text>
+            )}
+          </VStack>
+        </ModalBody>
+        <ModalFooter gap={2}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            isDisabled={submitting}
+          >
+            Cancel
+          </Button>
+          <CTAButton
+            onClick={handleSubmit}
+            icon={FaUserPlus}
+            variant="solid"
+            size="sm"
+            isLoading={submitting}
+            loadingText="Creating…"
+            isDisabled={!canSubmit}
+          >
+            Create client
+          </CTAButton>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+/**
+ * Best-effort session-type inference from the AI summary's `gathered`
+ * facts. If the customer mentioned "wedding", "maternity", etc., we
+ * preselect that value in the dropdown so Vero doesn't have to
+ * re-read the thread to pick. Falls back to null → caller defaults
+ * to portrait.
+ */
+function inferSessionType(summary: AiSummary | null): string | null {
+  if (!summary) return null;
+  const blob = [summary.asking, ...summary.gathered].join(' ').toLowerCase();
+  if (/\bwedding|bride|groom|ceremony|reception|свадьб/.test(blob)) return 'wedding';
+  if (/\bmatern|pregnan|belly|беремен/.test(blob)) return 'maternity';
+  if (/\bnewborn|infant|baby (photo|shoot|session)|новорожд/.test(blob)) return 'newborn';
+  if (/\bengagement|proposal|помолвк/.test(blob)) return 'engagement';
+  if (/\bfamily|kids|children|дет|семейн/.test(blob)) return 'family';
+  if (/\bportrait|headshot|individual|портрет/.test(blob)) return 'portrait';
+  return null;
+}
+
+/**
+ * Generate a short, memorable-ish gallery password. Format:
+ *   <adjective><Noun><2 digits>
+ * e.g. "goldenLight42", "warmForest17". Client will get this in the
+ * gallery-ready email later; short enough to type on a phone.
+ */
+function generateGalleryPassword(): string {
+  const adjs = ['golden', 'warm', 'soft', 'quiet', 'gentle', 'bright', 'wild', 'still', 'calm', 'amber'];
+  const nouns = ['Light', 'Forest', 'Ocean', 'Meadow', 'Bloom', 'Dawn', 'Shore', 'Sky', 'Fern', 'Stone'];
+  const adj = adjs[Math.floor(Math.random() * adjs.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const num = Math.floor(Math.random() * 90 + 10);
+  return `${adj}${noun}${num}`;
 }
 
 /**

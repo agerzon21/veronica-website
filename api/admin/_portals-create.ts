@@ -19,6 +19,11 @@
  *
  *   // both modes:
  *   gallery_password: string,      // unique
+ *
+ *   // optional — if this portal is being created from a DM conversation,
+ *   // pass the conversation id and we'll link the two so the inbox
+ *   // shows the "Client" badge and Vero can jump between them.
+ *   link_to_conversation_id?: string,
  * }
  *
  *   → 200 { success, portal_id, setup_token }  invite email is sent to client_email
@@ -292,6 +297,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       } catch (err) {
         console.error('[admin/portals-create] invite email failed (portal was still created):', err);
+      }
+    }
+
+    // Optionally link this portal back to the DM conversation it was
+    // created from — the inbox uses conversations.linked_client_portal_id
+    // to show the "Client" badge and jump into the portal from the
+    // thread. Best-effort: if the FK update fails (bad convo id, race,
+    // etc.), we still return success — the portal itself exists.
+    const linkConvoId =
+      typeof body.link_to_conversation_id === 'string' ? body.link_to_conversation_id.trim() : '';
+    if (linkConvoId) {
+      try {
+        await sql`
+          UPDATE conversations
+          SET linked_client_portal_id = ${portalId}, updated_at = NOW()
+          WHERE id = ${linkConvoId}
+        `;
+      } catch (err) {
+        console.error('[admin/portals-create] failed to link conversation (portal still created):', err);
       }
     }
 

@@ -1,22 +1,27 @@
 /**
  * Admin: generate an AI-powered summary of a conversation so Vero
  * can glance at the top of a thread and immediately know what the
- * customer is asking about, what info's been gathered, and what her
- * next step should be — without reading the full message history.
+ * customer is asking about, what info's been gathered, whether it's
+ * even worth her time, and what her next step should be — without
+ * reading the full message history.
  *
  * POST { password, conversationId }
- *   → 200 { success, summary: { asking, gathered, nextStep, tone } }
+ *   → 200 { success, summary: { classification, asking, gathered, nextStep, tone } }
  *   → 400 missing conversationId
  *   → 401 wrong password
  *   → 404 conversation not found
  *   → 502 upstream OpenAI error
  *
+ * `classification` — one of booking-inquiry, existing-client,
+ *              general-question, collaboration-offer, spam-or-unrelated,
+ *              unclear. Lets Vero see at a glance whether to engage.
  * `asking` — one sentence: what the customer is fundamentally asking for
  * `gathered` — array of specific facts the customer has shared (dates,
  *              locations, session types, headcounts, styles they like,
  *              constraints, etc.) — empty array if nothing specific yet
  * `nextStep` — one sentence: what Vero should do next (confirm date,
- *              send package options, ask a specific missing question)
+ *              send package options, ask a specific missing question,
+ *              or ignore if spam)
  * `tone` — one word describing the customer's energy (enthusiastic,
  *          hesitant, price-sensitive, casual, urgent, formal)
  *
@@ -51,7 +56,25 @@ interface MessageRow {
   sent_at: string;
 }
 
+type Classification =
+  | 'booking-inquiry'
+  | 'existing-client'
+  | 'general-question'
+  | 'collaboration-offer'
+  | 'spam-or-unrelated'
+  | 'unclear';
+
+const VALID_CLASSIFICATIONS: readonly Classification[] = [
+  'booking-inquiry',
+  'existing-client',
+  'general-question',
+  'collaboration-offer',
+  'spam-or-unrelated',
+  'unclear',
+] as const;
+
 interface Summary {
+  classification: Classification;
   asking: string;
   gathered: string[];
   nextStep: string;
@@ -115,13 +138,20 @@ async function generateSummary(messages: MessageRow[]): Promise<Summary> {
     })
     .join('\n\n');
 
-  const systemPrompt = `You are analyzing a conversation between a photography customer and a photographer's inbox (some replies come from the photographer's AI assistant, some from the photographer Vero personally). Produce a compact summary Vero can use to catch up on the thread at a glance.
+  const systemPrompt = `You are analyzing a conversation between a photography customer and a photographer's inbox (some replies come from the photographer's AI assistant, some from the photographer Vero personally). Produce a compact summary Vero can use to catch up on the thread at a glance AND immediately decide whether it's worth her time.
 
 Return a JSON object with EXACTLY these keys:
-- "asking": one sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet."
-- "gathered": array of concrete facts the customer has shared — dates, locations, session types, headcounts, styles they like, constraints, budget mentions, deadlines. Empty array if nothing concrete has been shared yet.
-- "nextStep": one sentence — what should Vero do next. Confirm a date? Send pricing? Ask a specific missing question? Say "Awaiting customer response" if the ball is in their court.
-- "tone": ONE WORD describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, unclear.
+- "classification": one string, EXACTLY one of:
+    * "booking-inquiry" — real photography client asking about pricing/availability/sessions/weddings
+    * "existing-client" — someone Vero is already working with (references a past shoot, a scheduled event, a delivered gallery, or is following up on something Vero personally started)
+    * "general-question" — genuine but non-booking (e.g. asking about her camera gear, admiring her work with no ask)
+    * "collaboration-offer" — a legitimate creative/brand collab proposal (rare — most "collab" DMs are actually spam)
+    * "spam-or-unrelated" — solicitation, sales pitch, agency outreach (web design, SEO, marketing services, "your website is outdated", "we can help you"), crypto/investment, unrelated to photography, or template mass-DM. When in doubt between this and collaboration-offer, prefer this — real collabs are extremely rare.
+    * "unclear" — you genuinely cannot tell (e.g. just "hey" with no prior context)
+- "asking": one sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
+- "gathered": array of concrete facts the customer has shared — dates, locations, session types, headcounts, styles they like, constraints, budget mentions, deadlines. Empty array if nothing concrete has been shared yet OR if it's spam (don't extract "facts" from a pitch).
+- "nextStep": one sentence — what should Vero do next. For real inquiries: confirm a date, send pricing, ask a specific missing question. For existing clients: reference what they're following up on. For spam: "Ignore — solicitation, not a real inquiry." For general questions: a brief, appropriate acknowledgment. Say "Awaiting customer response" if the ball is in their court.
+- "tone": ONE WORD describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.
 
 Reply with ONLY the JSON object — no preamble, no markdown code fences, no explanation.
 
@@ -141,7 +171,14 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
   const raw = response.choices[0]?.message?.content?.trim() ?? '{}';
   const parsed = JSON.parse(raw) as Partial<Summary>;
 
+  const classification: Classification =
+    typeof parsed.classification === 'string' &&
+    (VALID_CLASSIFICATIONS as readonly string[]).includes(parsed.classification)
+      ? (parsed.classification as Classification)
+      : 'unclear';
+
   return {
+    classification,
     asking: typeof parsed.asking === 'string' ? parsed.asking : 'Nothing specific asked yet.',
     gathered: Array.isArray(parsed.gathered)
       ? parsed.gathered.filter((g): g is string => typeof g === 'string')
