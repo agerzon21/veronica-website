@@ -11,13 +11,11 @@ import CTAButton from './ui/CTAButton';
  * set → edit mode (loads via journal-detail on mount, submits to
  * journal-update).
  *
- * Photo management: Vero uploads a post's 5–15 photos to a Google
- * Drive folder (same workflow she already uses for client galleries)
- * and pastes the folder's shareable link. The public post endpoint
- * lists the folder at request time, so she can add/remove photos in
- * Drive without republishing. Legacy posts keep their per-URL photo
- * list as a fallback (read-only in this UI now — new posts should
- * use the folder field).
+ * Photo workflow: Vero uploads a post's 5–15 photos to a Google Drive
+ * folder (same workflow she already uses for client galleries) and
+ * pastes the folder's shareable link. The public post endpoint lists
+ * the folder at request time, so she can add/remove photos in Drive
+ * without republishing.
  *
  * Delete is only shown to superadmin — matches the API's requireSuper
  * gate on journal-delete so the button doesn't appear-but-not-work
@@ -32,12 +30,6 @@ interface Props {
   onSaved: (message?: string) => void;
 }
 
-interface PhotoDraft {
-  url: string;
-  alt: string;
-  caption: string;
-}
-
 interface PostForm {
   slug: string;
   title: string;
@@ -45,8 +37,7 @@ interface PostForm {
   body_markdown: string;
   cover_image_url: string;
   cover_image_alt: string;
-  photos: PhotoDraft[];        // legacy per-URL list — preserved on save
-  drive_folder_url: string;    // preferred way to bind photos
+  drive_folder_url: string;
   session_type: string;
   tags: string; // comma-separated in the input, split on save
   status: 'draft' | 'published';
@@ -59,7 +50,6 @@ const EMPTY_FORM: PostForm = {
   body_markdown: '',
   cover_image_url: '',
   cover_image_alt: '',
-  photos: [],
   drive_folder_url: '',
   session_type: '',
   tags: '',
@@ -107,13 +97,6 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             body_markdown: p.body_markdown ?? '',
             cover_image_url: p.cover_image_url ?? '',
             cover_image_alt: p.cover_image_alt ?? '',
-            photos: Array.isArray(p.photos)
-              ? p.photos.map((ph: { url?: string; alt?: string; caption?: string }) => ({
-                  url: ph.url ?? '',
-                  alt: ph.alt ?? '',
-                  caption: ph.caption ?? '',
-                }))
-              : [],
             drive_folder_url: p.drive_folder_url ?? '',
             session_type: p.session_type ?? '',
             tags: Array.isArray(p.tags) ? p.tags.join(', ') : '',
@@ -147,10 +130,6 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
       body_markdown: form.body_markdown,
       cover_image_url: form.cover_image_url,
       cover_image_alt: form.cover_image_alt,
-      // Keep legacy per-URL photos on save so old posts don't lose
-      // their images. New posts leave this empty and rely on the
-      // Drive folder to populate photos at read time.
-      photos: form.photos.filter((p) => p.url.trim()),
       drive_folder_url: form.drive_folder_url.trim() || null,
       session_type: form.session_type || null,
       tags: form.tags
@@ -370,28 +349,6 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             {...inputStyles}
           />
         </Field>
-
-        {form.photos.length > 0 && (
-          <Box
-            bg="gray.50"
-            border="1px solid"
-            borderColor="gray.200"
-            borderRadius="sm"
-            px={4}
-            py={3}
-          >
-            <Text fontSize="2xs" color="gray.500" fontWeight="500" letterSpacing="0.14em" textTransform="uppercase" mb={1}>
-              Legacy photo list
-            </Text>
-            <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.6">
-              This post has {form.photos.length} photo{form.photos.length === 1 ? '' : 's'} attached
-              from the old per-URL workflow. They'll keep displaying on the
-              live post unless you set a Drive folder above (Drive takes
-              precedence when both are present). If you want to migrate,
-              upload the same images to Drive and set the folder link.
-            </Text>
-          </Box>
-        )}
 
         {/* Session type + tags row */}
         <HStack spacing={4} align="flex-start">

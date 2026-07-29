@@ -14,11 +14,9 @@ export interface JournalInput {
   body_markdown: string;
   cover_image_url: string | null;
   cover_image_alt: string | null;
-  photos: Array<{ url: string; alt?: string; caption?: string }>;
-  // Preferred way to bind photos to a post — Vero uploads to a Drive
-  // folder and pastes the shareable link. The public endpoint lists
-  // the folder at request time. If set, `photos` above is ignored on
-  // read (kept for legacy posts written before this workflow).
+  // Photos come from a Google Drive folder — Vero uploads there, shares
+  // the link, and pastes it here. The public post endpoint lists the
+  // folder at read time (same pattern as client galleries).
   drive_folder_url: string | null;
   session_type: string | null;
   tags: string[];
@@ -86,25 +84,6 @@ export function validateJournalInput(body: unknown): ValidateResult {
 
   const drive_folder_url = normalizeOptionalUrl(b.drive_folder_url);
 
-  const photosRaw = Array.isArray(b.photos) ? b.photos : [];
-  const photos: JournalInput['photos'] = [];
-  for (const p of photosRaw) {
-    if (!p || typeof p !== 'object') continue;
-    const url = typeof (p as any).url === 'string' ? (p as any).url.trim() : '';
-    if (!url) continue;
-    const entry: { url: string; alt?: string; caption?: string } = { url };
-    if (typeof (p as any).alt === 'string' && (p as any).alt.trim()) {
-      entry.alt = (p as any).alt.trim().slice(0, 200);
-    }
-    if (typeof (p as any).caption === 'string' && (p as any).caption.trim()) {
-      entry.caption = (p as any).caption.trim().slice(0, 500);
-    }
-    photos.push(entry);
-  }
-  if (photos.length > 40) {
-    return { ok: false, status: 400, error: 'too many photos (max 40)' };
-  }
-
   const sessionRaw = typeof b.session_type === 'string' ? b.session_type.trim().toLowerCase() : '';
   const session_type = sessionRaw && SESSION_TYPES.has(sessionRaw) ? sessionRaw : null;
 
@@ -127,7 +106,6 @@ export function validateJournalInput(body: unknown): ValidateResult {
       body_markdown,
       cover_image_url,
       cover_image_alt,
-      photos,
       drive_folder_url,
       session_type,
       tags,

@@ -10,10 +10,10 @@
  *
  *   GET /api/journal/post?slug=<slug>
  *     → { success, post: PostFull }
- *     Returns a single post plus its resolved photo list. If the post
- *     has drive_folder_url set, we list the folder from Drive at read
- *     time (same pattern as client galleries — always fresh). Falls
- *     back to the JSONB `photos` array for legacy posts.
+ *     Returns a single post plus its resolved photo list. Photos come
+ *     from the post's Drive folder, listed at request time — same
+ *     pattern as client galleries. Vero adds/removes images in Drive
+ *     and the site picks them up on the next request.
  *
  * Draft posts are 404 from both routes — this endpoint is intentionally
  * public-only. Admin editing goes through /api/admin/journal-*.
@@ -97,8 +97,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       SELECT
         slug, title, excerpt, body_markdown,
-        cover_image_url, cover_image_alt,
-        photos, drive_folder_url,
+        cover_image_url, cover_image_alt, drive_folder_url,
         session_type, tags, published_at, updated_at
       FROM journal_posts
       WHERE slug = ${slug} AND status = 'published' AND published_at IS NOT NULL
@@ -110,7 +109,6 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       body_markdown: string;
       cover_image_url: string | null;
       cover_image_alt: string | null;
-      photos: Array<{ url: string; alt?: string; caption?: string }>;
       drive_folder_url: string | null;
       session_type: string | null;
       tags: string[];
@@ -123,11 +121,10 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ success: false, error: 'Post not found' });
     }
 
-    // If a Drive folder is set, resolve it to a photo list at read
-    // time. This matches the client-gallery workflow — Vero updates
-    // photos by adding/removing files in Drive, no re-publish needed.
-    // We swallow Drive errors (log + fall back to JSONB) so a Drive
-    // outage doesn't 500 the post page.
+    // Resolve the Drive folder to a photo list at request time. If
+    // the folder isn't set or Drive is unreachable, we return an
+    // empty photo list rather than 500 — the post is still viewable
+    // (body + cover image) and Vero can see the missing gallery.
     let photos: PhotoOut[] = [];
     if (row.drive_folder_url) {
       const folderId = extractFolderId(row.drive_folder_url);
@@ -136,17 +133,9 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
           const files = await listFolderMedia(folderId);
           photos = files.map((f) => driveFileToPhoto(f, row.title));
         } catch (err) {
-          console.error('[journal/post] Drive listing failed, falling back to JSONB photos:', err);
+          console.error('[journal/post] Drive listing failed:', err);
         }
       }
-    }
-    if (photos.length === 0 && Array.isArray(row.photos)) {
-      photos = row.photos.map((p) => ({
-        url: p.url,
-        fullUrl: p.url,
-        alt: p.alt ?? row.title,
-        caption: p.caption,
-      }));
     }
 
     const post: PostFull = {

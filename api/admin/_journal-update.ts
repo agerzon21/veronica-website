@@ -66,7 +66,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body_markdown = ${v.body_markdown},
         cover_image_url = ${v.cover_image_url},
         cover_image_alt = ${v.cover_image_alt},
-        photos = ${JSON.stringify(v.photos)}::jsonb,
         drive_folder_url = ${v.drive_folder_url},
         session_type = ${v.session_type},
         tags = ${v.tags},
