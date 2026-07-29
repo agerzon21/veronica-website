@@ -114,6 +114,10 @@
       "destination": "/api/cron?job=:job"
     },
     {
+      "source": "/api/inbox/:action",
+      "destination": "/api/inbox?action=:action"
+    },
+    {
       "source": "/photo/:category/:photoId",
       "destination": "/photo/:category/:photoId.html"
     },
