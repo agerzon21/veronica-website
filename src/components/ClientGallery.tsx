@@ -30,6 +30,11 @@ export interface DriveFile {
   name: string;
   mimeType: string;
   size: number | null;
+  // Natural image dimensions from Drive's imageMediaMetadata. Used
+  // by the justified-layout gallery to size each tile to the photo's
+  // real aspect ratio at first paint — no reflow while thumbs load.
+  width: number | null;
+  height: number | null;
   thumbnailUrl: string;
   viewUrl: string;
   downloadUrl: string;

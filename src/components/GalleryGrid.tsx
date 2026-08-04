@@ -1,21 +1,40 @@
 import { Box } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import ImageModal from './ImageModal';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { justifyLayout } from '../utils/justifyLayout';
+
+interface GalleryImage {
+  id?: string;
+  category?: string;
+  url: string;
+  alt: string;
+  title: string;
+  description: string;
+  // Natural pixel dimensions — provided by src/data/photos.ts from the
+  // build-time dimensions JSON. Falls back to 3:2 if missing (rare —
+  // means a photo was added but the measure-photos script hasn't been
+  // rerun yet).
+  width?: number;
+  height?: number;
+}
 
 interface GalleryGridProps {
-  images: Array<{
-    id?: string;
-    category?: string;
-    url: string;
-    alt: string;
-    title: string;
-    description: string;
-  }>;
+  images: GalleryImage[];
   category?: string;
 }
 
 const MotionBox = motion(Box);
+
+// Justified-layout tuning. Target row height is what each row
+// approaches when items don't have to be squished/stretched — bigger
+// = fewer items per row, each item larger. Gap controls the whitespace
+// between photos. Sized so a typical landscape shows 2-3 per row on
+// desktop (matching the bumagaz reference), portraits fit 3-4.
+const TARGET_ROW_HEIGHT_DESKTOP = 470;
+const TARGET_ROW_HEIGHT_MOBILE = 260;
+const GRID_GAP_DESKTOP = 20;
+const GRID_GAP_MOBILE = 12;
 
 const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
@@ -23,25 +42,23 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [columnCount, setColumnCount] = useState(3);
+  const [containerWidth, setContainerWidth] = useState(0);
   // Tracks whether the modal pushed a history entry. We push ONCE on open and
   // replaceState for prev/next inside the modal, so the back button cleanly
   // closes the modal in a single pop instead of unwinding every photo viewed.
   const urlPushedRef = useRef(false);
 
+  // ResizeObserver for the grid container. Reflows the justified
+  // layout on viewport width changes (both on initial mount and
+  // when the user resizes the browser window).
   useEffect(() => {
-    const updateColumnCount = () => {
-      if (containerRef.current) {
-        const width = containerRef.current.offsetWidth;
-        if (width < 768) setColumnCount(1);
-        else if (width < 1024) setColumnCount(2);
-        else setColumnCount(3);
-      }
-    };
-
-    updateColumnCount();
-    window.addEventListener('resize', updateColumnCount);
-    return () => window.removeEventListener('resize', updateColumnCount);
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
@@ -71,9 +88,7 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     setIsModalOpen(true);
 
     // Sync URL with modal state: pushState so back button cleanly closes the
-    // modal AND restores the gallery URL. React Router isn't re-rendered
-    // because we don't fire popstate ourselves — it only triggers when the
-    // user navigates back.
+    // modal AND restores the gallery URL.
     const url = photoUrlFor(index);
     if (url) {
       window.history.pushState({ veroModal: true }, '', url);
@@ -81,8 +96,6 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     }
   };
 
-  // When the user navigates prev/next inside the open modal, replace (don't
-  // push) the URL so we don't bloat history with one entry per photo viewed.
   useEffect(() => {
     if (!isModalOpen || selectedImageIndex === null || !urlPushedRef.current) return;
     const url = photoUrlFor(selectedImageIndex);
@@ -91,9 +104,6 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     }
   }, [isModalOpen, selectedImageIndex, photoUrlFor]);
 
-  // Back button (mobile gesture, hardware back, browser back) → close modal.
-  // The popstate fires AFTER history has already popped, so the URL is
-  // already restored by the time we close the modal.
   useEffect(() => {
     if (!isModalOpen) return;
     const handlePopState = () => {
@@ -114,13 +124,9 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   }, []);
 
   const handleModalClose = useCallback((_finalIndex: number) => {
-    // Modal already scrolled the page to the right spot before animating closed
     setIsModalOpen(false);
     setSelectedImageIndex(null);
     setOriginRect(null);
-    // Pop the history entry we pushed on open so the gallery URL comes back.
-    // popstate will fire and the listener above will try to close the modal
-    // again — that's fine, the setStates are idempotent.
     if (urlPushedRef.current) {
       urlPushedRef.current = false;
       window.history.back();
@@ -139,62 +145,94 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     }
   };
 
+  const isMobile = containerWidth > 0 && containerWidth < 640;
+  const targetHeight = isMobile ? TARGET_ROW_HEIGHT_MOBILE : TARGET_ROW_HEIGHT_DESKTOP;
+  const gap = isMobile ? GRID_GAP_MOBILE : GRID_GAP_DESKTOP;
+
+  // Compute the justified rows from real photo aspects. Aspects are
+  // known at build time (photos.ts → photo-dims.json), so the layout
+  // is stable from first paint.
+  const rows = useMemo(
+    () =>
+      justifyLayout(
+        images.map((img, i) => ({
+          id: img.id ?? String(i),
+          aspect: img.width && img.height ? img.width / img.height : 3 / 2,
+        })),
+        containerWidth,
+        targetHeight,
+        gap,
+      ),
+    [images, containerWidth, targetHeight, gap],
+  );
+
   return (
-    <Box
-      ref={containerRef}
-      py={8}
-      px={0}
-    >
-      <Box
-        display="grid"
-        gridTemplateColumns={`repeat(${columnCount}, 1fr)`}
-        gap={4}
-      >
-        {images.map((image, index) => {
-          // Render each thumbnail as a real <a href> so Googlebot can crawl
-          // the individual photo pages from the gallery. JS-enabled clicks
-          // are intercepted to open the modal (preserves existing UX);
-          // cmd/ctrl/middle-click falls through to native navigation so
-          // "open in new tab" still works.
-          const photoCategory = image.category || category;
-          const photoId = image.id;
-          const photoHref =
-            photoCategory && photoId ? `/photo/${photoCategory}/${photoId}` : undefined;
-          return (
-            <MotionBox
-              as={photoHref ? ('a' as any) : 'div'}
-              {...(photoHref ? { href: photoHref } : {})}
-              key={photoId || index}
-              ref={(el: HTMLDivElement | null) => { imageRefs.current[index] = el; }}
-              position="relative"
-              overflow="hidden"
-              cursor="pointer"
-              display="block"
-              textDecoration="none"
-              onClick={(e: React.MouseEvent) => {
-                if (e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button !== 0) return;
-                e.preventDefault();
-                handleImageClick(index);
-              }}
-              whileHover={{ scale: 1.01 }}
-              transition={{ duration: 0.3 }}
-            >
-              <img
-                src={image.url}
-                alt={image.alt}
-                title={image.title}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  display: 'block',
+    <Box ref={containerRef} py={8} px={0}>
+      {rows.map((row, ri) => (
+        <Box
+          key={ri}
+          display="flex"
+          gap={`${gap}px`}
+          mb={`${gap}px`}
+          h={`${row.height}px`}
+        >
+          {row.items.map((tile) => {
+            // Look up the original index in `images` so refs, modal
+            // navigation, and URL sync all stay consistent with the
+            // flat images array — regardless of layout row order.
+            const index = images.findIndex(
+              (img, i) => (img.id ?? String(i)) === tile.id,
+            );
+            if (index === -1) return null;
+            const image = images[index];
+            const photoCategory = image.category || category;
+            const photoId = image.id;
+            const photoHref =
+              photoCategory && photoId ? `/photo/${photoCategory}/${photoId}` : undefined;
+            return (
+              <MotionBox
+                as={photoHref ? ('a' as any) : 'div'}
+                {...(photoHref ? { href: photoHref } : {})}
+                key={photoId || index}
+                ref={(el: HTMLDivElement | null) => {
+                  imageRefs.current[index] = el;
                 }}
-                loading="lazy"
-              />
-            </MotionBox>
-          );
-        })}
-      </Box>
+                position="relative"
+                overflow="hidden"
+                cursor="pointer"
+                display="block"
+                textDecoration="none"
+                w={`${tile.width}px`}
+                h="100%"
+                flexShrink={0}
+                onClick={(e: React.MouseEvent) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button !== 0) return;
+                  e.preventDefault();
+                  handleImageClick(index);
+                }}
+                whileHover={{ scale: 1.01 }}
+                transition={{ duration: 0.3 }}
+              >
+                <img
+                  src={image.url}
+                  alt={image.alt}
+                  title={image.title}
+                  style={{
+                    // No cropping — tile is sized to the photo's real
+                    // aspect ratio, so `cover` and `contain` render
+                    // identically. Keeps things simple.
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                  loading="lazy"
+                />
+              </MotionBox>
+            );
+          })}
+        </Box>
+      ))}
 
       {selectedImageIndex !== null && isModalOpen && (
         <ImageModal

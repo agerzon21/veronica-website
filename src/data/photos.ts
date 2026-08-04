@@ -1,4 +1,5 @@
 import csvRaw from './photos.csv?raw';
+import photoDimsRaw from './photo-dims.json';
 
 export type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
 
@@ -14,7 +15,19 @@ export interface Photo {
   description: string;
   keywords: string[];
   status: PhotoStatus;
+  // Natural pixel dimensions of the source file, extracted at build
+  // time by scripts/measure-photos.mjs. Used by the gallery grid to
+  // build a justified/masonry layout — no square-cropping, aspects
+  // known at first paint.
+  width: number;
+  height: number;
 }
+
+const photoDims = photoDimsRaw as Record<string, { width: number; height: number }>;
+// Fallback for photos missing from the dims JSON (e.g. added after last
+// measure-photos run). 3:2 is the most common camera aspect, so
+// mis-sized tiles get corrected once the next build runs the script.
+const FALLBACK_DIMS = { width: 3000, height: 2000 };
 
 export interface SiteAsset {
   id: string;
@@ -92,6 +105,7 @@ const allEntries = dataRows.map((row) => {
     colIndex.status >= 0 ? (row[colIndex.status] ?? '').trim() : 'done';
   const status: PhotoStatus = statusRaw === 'new' ? 'new' : 'done';
 
+  const dims = photoDims[filename] ?? FALLBACK_DIMS;
   return {
     id: filename.replace(/\.webp$/i, ''),
     filename,
@@ -105,6 +119,8 @@ const allEntries = dataRows.map((row) => {
       .map((k) => k.trim())
       .filter(Boolean),
     status,
+    width: dims.width,
+    height: dims.height,
   };
 });
 

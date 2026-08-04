@@ -45,6 +45,13 @@ export type DriveFile = {
   // (rare for images/video — mostly affects Google-native docs). Used on
   // the frontend to route huge files away from the in-app save flow.
   size: number | null;
+  // Natural image dimensions from Drive's imageMediaMetadata (or
+  // videoMediaMetadata for videos). Null when Drive doesn't return them
+  // (rare — mainly non-standard file types). The gallery uses these to
+  // build a justified/masonry layout so aspects are known at first
+  // paint — no reflow as thumbnails load in.
+  width: number | null;
+  height: number | null;
   // Drive's thumbnail endpoint — server-side resized, fast loads in the grid.
   // sz=w800 is plenty for typical thumbnail rendering at any reasonable
   // viewport width.
@@ -92,6 +99,8 @@ function toDriveFile(f: {
   name: string;
   mimeType: string;
   size?: string | null;
+  imageMediaMetadata?: { width?: number | null; height?: number | null } | null;
+  videoMediaMetadata?: { width?: number | null; height?: number | null } | null;
 }): DriveFile {
   // For the optimized download path, the file is served as webp so the
   // filename should reflect that — strip the original extension and
@@ -100,6 +109,13 @@ function toDriveFile(f: {
   const baseName = f.name.replace(/\.[^.]+$/, '');
   const optimizedFilename = `${baseName}.webp`;
 
+  // Natural dims: prefer imageMediaMetadata (photos), fall back to
+  // videoMediaMetadata (videos). Either may be missing for exotic file
+  // types — the frontend has an onLoad-based backup for those cases.
+  const meta = f.imageMediaMetadata ?? f.videoMediaMetadata ?? null;
+  const width = typeof meta?.width === 'number' ? meta.width : null;
+  const height = typeof meta?.height === 'number' ? meta.height : null;
+
   return {
     id: f.id,
     name: f.name,
@@ -107,6 +123,8 @@ function toDriveFile(f: {
     // Drive returns size as a stringified number. Parse to int; null if
     // unreported (rare for media files).
     size: f.size ? parseInt(f.size, 10) : null,
+    width,
+    height,
     thumbnailUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`,
     viewUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w2000`,
     // Download = optimized 2400px webp via our proxy. ~1-2MB, in-page Save
@@ -142,7 +160,7 @@ async function listMediaInFolder(
 ): Promise<DriveFile[]> {
   const res = await drive.files.list({
     q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed = false`,
-    fields: 'files(id, name, mimeType, size)',
+    fields: 'files(id, name, mimeType, size, imageMediaMetadata(width, height), videoMediaMetadata(width, height))',
     pageSize: 1000,
     orderBy: 'name',
   });
@@ -172,7 +190,7 @@ export async function listFolderTree(parentFolderId: string): Promise<FolderTree
   // 1. List immediate children (both folders + media files in one call).
   const rootRes = await drive.files.list({
     q: `'${parentFolderId}' in parents and trashed = false`,
-    fields: 'files(id, name, mimeType, size)',
+    fields: 'files(id, name, mimeType, size, imageMediaMetadata(width, height), videoMediaMetadata(width, height))',
     pageSize: 1000,
     orderBy: 'name',
   });
@@ -190,6 +208,8 @@ export async function listFolderTree(parentFolderId: string): Promise<FolderTree
         name: f.name!,
         mimeType: f.mimeType!,
         size: f.size,
+        imageMediaMetadata: f.imageMediaMetadata,
+        videoMediaMetadata: f.videoMediaMetadata,
       }),
     );
 
