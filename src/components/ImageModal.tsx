@@ -242,19 +242,6 @@ const DownloadMenu = ({
   );
 };
 
-/**
- * Best-effort measurement of the fixed nav header so scroll-centering
- * math can keep the current thumbnail visible in the space BELOW it.
- * Falls back to a conservative default when there's no <nav> or when
- * we're server-rendering.
- */
-function measureHeaderHeight(): number {
-  if (typeof document === 'undefined') return 0;
-  const nav = document.querySelector('nav');
-  if (!nav) return 80;
-  return Math.round(nav.getBoundingClientRect().bottom);
-}
-
 const ImageModal = ({
   isOpen,
   onClose,
@@ -427,13 +414,6 @@ const ImageModal = ({
   const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
   const scrollYRef = useRef(0);
   const scrollLockedRef = useRef(false);
-  // Ref to the actual displayed <img> element so we can measure its
-  // ACTUAL rect at close time. The container is a fixed openPos
-  // rectangle but the img inside is object-fit: contain — so its
-  // displayed rect can be much smaller (e.g., a portrait photo in a
-  // landscape container is letterboxed). Landing math needs the img
-  // rect, not the container rect, to end exactly on the thumbnail.
-  const imgRef = useRef<HTMLImageElement | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [showUI, setShowUI] = useState(false);
   const [backdropOpacity, setBackdropOpacity] = useState(1);
@@ -451,90 +431,46 @@ const ImageModal = ({
     if (photoPageUrl) navigate(photoPageUrl, { replace: true });
   }, [navigate, photoPageUrl]);
 
-  // The motion.div lives at a FIXED base rect (centered in viewport)
-  // and we animate CSS TRANSFORMS on top of it — scaleX/scaleY/x/y —
-  // instead of animating top/left/width/height directly. Transforms
-  // are composited on the GPU and don't trigger layout on each frame;
-  // animating the layout properties on a page with hundreds of grid
-  // thumbnails behind us caused visible frame drops on close.
+  // Open position: centered in viewport
   const openPos = {
     top: window.innerHeight * 0.075,
     left: window.innerWidth * 0.05,
     width: window.innerWidth * 0.9,
     height: window.innerHeight * 0.85,
-  };
-
-  // Convert a viewport-relative Rect to the transform values needed to
-  // make the (openPos-sized, openPos-positioned) motion.div visually
-  // land on that rect. Because transform-origin is set to top-left,
-  // scale shrinks the container from the top-left corner and x/y then
-  // slide it into place.
-  //
-  // We use UNIFORM scale (single factor) instead of non-uniform
-  // scaleX/scaleY so the image inside doesn't distort while the aspect
-  // ratio of the container is changing. That means the shrunk image
-  // sits inside the target rect (letterboxed on one axis if the
-  // aspects differ) rather than filling it — but no distortion is
-  // vastly better than an exact-fit-but-warped animation. With
-  // aspect-matched thumbnails (masonry layout) the image lands
-  // exactly on the thumb; with mismatched aspects there's a tiny
-  // "click" as the modal unmounts and the actual thumb becomes
-  // visible, which reads as natural for a "goes back into its spot"
-  // effect.
-  const rectToTransform = (rect: Rect) => {
-    const scaleX = rect.width / openPos.width;
-    const scaleY = rect.height / openPos.height;
-    const scale = Math.min(scaleX, scaleY);
-    const visualW = openPos.width * scale;
-    const visualH = openPos.height * scale;
-    return {
-      scale,
-      x: rect.left - openPos.left + (rect.width - visualW) / 2,
-      y: rect.top - openPos.top + (rect.height - visualH) / 2,
-      opacity: 1,
-      borderRadius: 0,
-    };
-  };
-
-  const openTransform = {
-    scale: 1,
-    x: 0,
-    y: 0,
     opacity: 1,
     borderRadius: 0,
   };
 
-  // Animation target — starts at the open state, changes to close target
-  const [animTarget, setAnimTarget] = useState(openTransform);
+  // Animation target — starts as open position, changes to close target
+  const [animTarget, setAnimTarget] = useState(openPos);
   const [animTransition, setAnimTransition] = useState({
-    duration: 0.55,
+    duration: 0.4,
     ease: [0.16, 1, 0.3, 1] as number[],
   });
 
-  // Initial state — computed once on mount from the thumbnail rect
-  // the user clicked, so the open animation flies FROM the thumb TO
-  // fullscreen. Lazy useState so the window-dims computation happens
-  // once and the value is stable across renders.
-  const [initialPos] = useState(() => {
-    if (!originRect) {
-      return { ...openTransform, opacity: 0 };
-    }
-    return rectToTransform(originRect);
-  });
+  // Initial position from thumbnail (computed once on mount via ref)
+  const initialPos = useRef(
+    originRect
+      ? {
+          top: originRect.top,
+          left: originRect.left,
+          width: originRect.width,
+          height: originRect.height,
+          opacity: 1,
+          borderRadius: 8,
+        }
+      : { ...openPos, opacity: 0 }
+  );
 
-  // Update the scroll position the page will be restored to on modal
-  // close. Because the scroll lock uses body: fixed; top: -scrollY, we
-  // adjust body.top in lockstep — that way the page VISUALLY tracks
-  // arrow-key nav underneath the backdrop, so by the time the user
-  // closes, the current thumbnail is already centered on screen and
-  // the close animation has a real place to fly back to. Without this,
-  // close had to do a jarring double-scroll (restore to open position,
-  // then jump to current-thumb position), which flashed the underlying
-  // page during the backdrop fade.
-  const scrollLockTo = useCallback((y: number) => {
-    if (!scrollLockedRef.current) return;
-    scrollYRef.current = y;
-    document.body.style.top = `-${y}px`;
+  const unlockScroll = useCallback(() => {
+    if (scrollLockedRef.current) {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      window.scrollTo(0, scrollYRef.current);
+      scrollLockedRef.current = false;
+    }
   }, []);
 
   const handleClose = useCallback(() => {
@@ -542,53 +478,39 @@ const ImageModal = ({
     setIsClosing(true);
     setShowUI(false);
 
-    // Thumbnail is already centered on-screen (the arrow-nav effect
-    // keeps it there while the modal is open) — so we just capture
-    // its rect and animate. No scroll juggling, no double-jump.
-    // The scroll-lock cleanup runs when the modal unmounts and lands
-    // the page cleanly on the last position we tracked.
-    const targetRect = getImageRect?.(currentIndex ?? 0);
-    const imgRect = imgRef.current?.getBoundingClientRect();
+    // 1. Unlock scroll BEHIND the still-visible backdrop
+    unlockScroll();
 
+    // 2. Find where the target thumbnail is and scroll to center it
+    let targetRect = getImageRect?.(currentIndex ?? 0);
+    if (targetRect) {
+      const scrollTarget =
+        window.scrollY +
+        targetRect.top -
+        window.innerHeight / 2 +
+        targetRect.height / 2;
+      window.scrollTo(0, Math.max(0, scrollTarget));
+      // 3. Get FRESH rect now that page is at the right scroll position
+      targetRect = getImageRect?.(currentIndex ?? 0) ?? targetRect;
+    }
+
+    // 4. Animate image to where the thumbnail now is + fade backdrop
     setBackdropOpacity(0);
-    // Slightly longer than the open animation so the close feels
-    // "settled" rather than snappy; ease-out curve mirrors the open.
-    setAnimTransition({ duration: 0.55, ease: [0.16, 1, 0.3, 1] });
+    setAnimTransition({ duration: 0.35, ease: [0.32, 0.72, 0, 1] });
 
-    if (targetRect && imgRect && imgRect.width > 0 && imgRect.height > 0) {
-      // Precise landing: the img (not the container) ends visually
-      // ON the thumbnail rect. Uniform scale so no distortion; the
-      // translate is derived so the img's center lands on the
-      // thumb's center. Opacity stays at 1 the whole way through so
-      // there's no "ghosting" against the underlying grid — when
-      // the animation ends and the modal unmounts, the actual thumb
-      // is at the same spot, so the transition looks seamless.
-      const scale = Math.min(
-        targetRect.width / imgRect.width,
-        targetRect.height / imgRect.height,
-      );
-      const containerX = openPos.left;
-      const containerY = openPos.top;
-      const imgCX = imgRect.left + imgRect.width / 2;
-      const imgCY = imgRect.top + imgRect.height / 2;
-      const targetCX = targetRect.left + targetRect.width / 2;
-      const targetCY = targetRect.top + targetRect.height / 2;
-      // With transform-origin: top-left, a point at container-relative
-      // offset (dx, dy) ends up at (containerX + tx + dx*scale, ...)
-      // after scale+translate. Solve for tx/ty so the img center
-      // lands on the target center.
-      const tx = targetCX - containerX - (imgCX - containerX) * scale;
-      const ty = targetCY - containerY - (imgCY - containerY) * scale;
-      setAnimTarget({ scale, x: tx, y: ty, opacity: 1, borderRadius: 0 });
-    } else if (targetRect) {
-      // Fallback (image not yet measurable) — container-based scale.
-      // Slightly less precise landing but no worse than what we had.
-      setAnimTarget(rectToTransform(targetRect));
+    if (targetRect) {
+      setAnimTarget({
+        top: targetRect.top,
+        left: targetRect.left,
+        width: targetRect.width,
+        height: targetRect.height,
+        opacity: 0,
+        borderRadius: 8,
+      });
     } else {
       setAnimTarget((prev) => ({ ...prev, opacity: 0 }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClosing, getImageRect, currentIndex]);
+  }, [isClosing, getImageRect, currentIndex, unlockScroll]);
 
   const handleAnimComplete = useCallback(() => {
     if (isClosing) {
@@ -637,40 +559,6 @@ const ImageModal = ({
     }
   }, [isOpen, handleKeyDown]);
 
-  // Center the current thumbnail in the viewport whenever the user
-  // arrows to a new photo. Runs UNDER the still-opaque backdrop so
-  // the scroll shift is invisible — the only reason we do it is to
-  // set the page up for a smooth close animation later. Skip the
-  // first render (the user just clicked a thumb they were already
-  // looking at, so it's already in view — scrolling now would create
-  // a visible jump behind the fading-in backdrop).
-  const skipFirstScrollRef = useRef(true);
-  useEffect(() => {
-    if (!isOpen || isClosing) return;
-    if (skipFirstScrollRef.current) {
-      skipFirstScrollRef.current = false;
-      return;
-    }
-    const rect = getImageRect?.(currentIndex ?? 0);
-    if (!rect) return;
-    // Center the thumb in the VIEWABLE area (below the fixed nav
-    // header), not the raw viewport. Without this the close animation
-    // could land the image partially under the sticky header, which
-    // reads as an ugly snap when the modal unmounts and the thumb
-    // clips against the header at its final resting spot.
-    const headerHeight = measureHeaderHeight();
-    const viewableTop = headerHeight;
-    const viewableHeight = Math.max(1, window.innerHeight - headerHeight);
-    const target = Math.max(
-      0,
-      scrollYRef.current +
-        rect.top -
-        (viewableTop + viewableHeight / 2) +
-        rect.height / 2,
-    );
-    scrollLockTo(target);
-  }, [currentIndex, isOpen, isClosing, getImageRect, scrollLockTo]);
-
   // Resize listener — recompute the image's fullscreen rect when the viewport
   // changes. Without this the image stays pinned at the size/position it had
   // when the modal opened, while the rest of the UI (top bar, bottom CTA,
@@ -680,15 +568,18 @@ const ImageModal = ({
   useEffect(() => {
     if (!isOpen || isClosing) return;
     const handleResize = () => {
-      // Base position (openPos) is recomputed via re-render on resize;
-      // just snap the transform back to identity so the image sits
-      // dead-center in the new viewport with no lag.
       setAnimTransition({ duration: 0, ease: [0, 0, 1, 1] });
-      setAnimTarget(openTransform);
+      setAnimTarget({
+        top: window.innerHeight * 0.075,
+        left: window.innerWidth * 0.05,
+        width: window.innerWidth * 0.9,
+        height: window.innerHeight * 0.85,
+        opacity: 1,
+        borderRadius: 0,
+      });
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isClosing]);
 
   const handleShare = () => {
@@ -733,14 +624,11 @@ const ImageModal = ({
 
   return (
     <Box position="fixed" inset="0" zIndex={2100}>
-      {/* Dark backdrop. Fade-out matches the image close animation so
-          the two motions land together — otherwise the backdrop finished
-          fading first and the user could see the still-shrinking image
-          floating over the underlying page, which read as ghostly. */}
+      {/* Dark backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: backdropOpacity }}
-        transition={{ duration: isClosing ? 0.55 : 0.3, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
         style={{
           position: 'absolute',
           inset: 0,
@@ -994,15 +882,9 @@ const ImageModal = ({
         </Flex>
       )}
 
-      {/* Image container — animates between thumbnail rect and centered rect.
-          Base rect is fixed (openPos); scaleX/scaleY/x/y transforms shrink
-          the container to the thumb rect on close. transform-origin: top-left
-          means scaleX shrinks the width from the left edge and x=0 is
-          "aligned to left edge of openPos" — so the transform math is
-          intuitive (see rectToTransform). will-change hints the browser to
-          composite this layer on the GPU. */}
+      {/* Image container — animates between thumbnail rect and centered rect */}
       <motion.div
-        initial={initialPos}
+        initial={initialPos.current}
         animate={animTarget}
         transition={animTransition}
         onAnimationComplete={handleAnimComplete}
@@ -1011,12 +893,6 @@ const ImageModal = ({
         onTouchEnd={handleTouchEnd}
         style={{
           position: 'fixed',
-          top: openPos.top,
-          left: openPos.left,
-          width: openPos.width,
-          height: openPos.height,
-          transformOrigin: 'top left',
-          willChange: 'transform, opacity',
           overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
@@ -1026,7 +902,6 @@ const ImageModal = ({
         }}
       >
         <img
-          ref={imgRef}
           src={imageUrl}
           alt={imageAlt}
           draggable={false}
