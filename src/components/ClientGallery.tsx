@@ -829,6 +829,13 @@ const ClientGallery = ({
           // cache. Returns undefined for out-of-range indexes; modal
           // treats that as "skip".
           getViewUrl={(i) => allFiles[i]?.viewUrl}
+          // Fade the close animation to opacity 0 instead of landing
+          // at full opacity on the thumbnail. Client galleries use a
+          // uniform square grid regardless of photo aspect, so a
+          // full-opacity landing would visibly mismatch the thumb's
+          // aspect at the last frame. Public masonry gallery leaves
+          // this off — its thumbs match photo aspects exactly.
+          fadeOnClose
           // Favorite state for the currently-open photo + callback.
           // The heart in the modal top bar is only rendered when
           // onToggleFavorite is provided (full-portal only).
