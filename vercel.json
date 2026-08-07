@@ -144,7 +144,7 @@
     },
     {
       "path": "/api/cron/gallery-sync",
-      "schedule": "0 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }

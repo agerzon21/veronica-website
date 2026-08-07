@@ -15,10 +15,14 @@
  *                                    (daily; emails Alex if IG token has
  *                                    ≤10 days of runway left)
  *   GET  /api/cron/gallery-sync    → ./cron/_gallery-sync.ts
- *                                    (hourly; reconciles gallery_photos
- *                                    table against the Drive Gallery
- *                                    folder — new photos get AI-drafted
- *                                    metadata, removed ones soft-deleted)
+ *                                    (daily at 2am UTC; reconciles
+ *                                    gallery_photos against the Drive
+ *                                    Gallery folder — new photos get
+ *                                    AI-drafted metadata, removed ones
+ *                                    soft-deleted. Vercel Hobby caps
+ *                                    crons at once-per-day; admin can
+ *                                    also hit /api/admin/gallery-sync-now
+ *                                    for immediate sync any time.)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
