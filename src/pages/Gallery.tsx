@@ -257,8 +257,23 @@ const Gallery = () => {
       {/* Images Grid */}
       <Box py={{ base: 6, md: 10 }} px={{ base: 4, md: 12 }}>
         {images === null ? (
-          <Flex justify="center" py={16}>
-            <Spinner color="#c9a96e" />
+          // Initial fetch — before we know how many tiles there are.
+          // Center a spinner + subtle label so the empty space reads
+          // as intentional loading rather than a broken page. Once
+          // the API responds, GalleryGrid takes over and shows the
+          // cream-placeholder tiles while individual Drive-proxy
+          // images stream in.
+          <Flex justify="center" align="center" direction="column" gap={3} py={20}>
+            <Spinner color="#c9a96e" size="lg" thickness="2px" />
+            <Text
+              fontSize="xs"
+              color="gray.400"
+              fontWeight="300"
+              letterSpacing="0.2em"
+              textTransform="uppercase"
+            >
+              Loading gallery…
+            </Text>
           </Flex>
         ) : loadError && images.length === 0 ? (
           <Flex justify="center" py={16}>

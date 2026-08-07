@@ -204,6 +204,13 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
                 w={`${tile.width}px`}
                 h="100%"
                 flexShrink={0}
+                // Warm cream placeholder that fills the tile's real
+                // aspect while the Drive-proxy request is in flight.
+                // Removes the "white gap then pop" behavior when images
+                // stream in at different speeds. Matches the gold-cream
+                // palette so it reads as intentional loading state,
+                // not blank space.
+                bg="#f5efe4"
                 onClick={(e: React.MouseEvent) => {
                   if (e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button !== 0) return;
                   e.preventDefault();
@@ -212,21 +219,7 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
                 whileHover={{ scale: 1.01 }}
                 transition={{ duration: 0.3 }}
               >
-                <img
-                  src={image.url}
-                  alt={image.alt}
-                  title={image.title}
-                  style={{
-                    // No cropping — tile is sized to the photo's real
-                    // aspect ratio, so `cover` and `contain` render
-                    // identically. Keeps things simple.
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    display: 'block',
-                  }}
-                  loading="lazy"
-                />
+                <GalleryImg src={image.url} alt={image.alt} title={image.title} />
               </MotionBox>
             );
           })}
@@ -252,5 +245,34 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     </Box>
   );
 };
+
+/**
+ * Individual gallery <img> that fades in when loaded. The parent
+ * tile has a warm-cream background so the tile shape is visible
+ * from the moment the layout computes; this img starts invisible
+ * (opacity 0) and eases in once the browser reports it loaded.
+ * Removes the "flash of loaded pixel" jarring when photos arrive
+ * out of order over the Drive proxy.
+ */
+function GalleryImg({ src, alt, title }: { src: string; alt: string; title: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <img
+      src={src}
+      alt={alt}
+      title={title}
+      onLoad={() => setLoaded(true)}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        display: 'block',
+        opacity: loaded ? 1 : 0,
+        transition: 'opacity 0.45s ease',
+      }}
+      loading="lazy"
+    />
+  );
+}
 
 export default GalleryGrid;
