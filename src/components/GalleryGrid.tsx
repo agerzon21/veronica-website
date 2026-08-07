@@ -11,12 +11,11 @@ interface GalleryImage {
   alt: string;
   title: string;
   description: string;
-  // Natural pixel dimensions — provided by src/data/photos.ts from the
-  // build-time dimensions JSON. Falls back to 3:2 if missing (rare —
-  // means a photo was added but the measure-photos script hasn't been
-  // rerun yet).
-  width?: number;
-  height?: number;
+  // Natural pixel dimensions — the DB-backed /api/gallery endpoints
+  // return these from Drive's imageMediaMetadata (nullable when
+  // Drive didn't report them; falls back to 3:2 in the layout).
+  width?: number | null;
+  height?: number | null;
 }
 
 interface GalleryGridProps {

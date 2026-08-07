@@ -1,11 +1,32 @@
-import { Box, Text, Flex, VStack, Image } from '@chakra-ui/react';
+import { Box, Text, Flex, VStack, Image, Spinner } from '@chakra-ui/react';
 import { useParams, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import GalleryCategories from '../components/GalleryCategories';
 import GalleryGrid from '../components/GalleryGrid';
-import { photosByCategory, type Category } from '../data/photos';
+
+// Match the shape /api/gallery returns — kept local here (rather
+// than a shared type file) since the API is the source of truth and
+// the extra fields (originalUrl, driveViewUrl) are optional for
+// consumers that don't need them.
+export type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
+
+interface PublicPhoto {
+  id: string;
+  slug: string;
+  category: Category;
+  url: string;
+  originalUrl?: string;
+  driveViewUrl?: string;
+  alt: string;
+  title: string;
+  description: string;
+  keywords: string[];
+  width: number | null;
+  height: number | null;
+}
 
 const MotionDiv = motion.div;
 
@@ -45,6 +66,43 @@ export const categoryDetails: Record<Category, {
 
 const Gallery = () => {
   const { category } = useParams();
+  const [images, setImages] = useState<PublicPhoto[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Fetch photos for the current category. Runs on category change
+  // (initial mount + navigation between categories). We set the
+  // array to `null` while loading so the JSX below can distinguish
+  // "no data yet" from "loaded but empty".
+  useEffect(() => {
+    if (!category) return;
+    let cancelled = false;
+    setImages(null);
+    setLoadError(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/gallery/list?category=${encodeURIComponent(category)}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.success) {
+          // Randomize order so gallery browsing feels fresh each
+          // visit — matches the previous CSV-based behavior.
+          const shuffled = [...(data.photos as PublicPhoto[])].sort(() => Math.random() - 0.5);
+          setImages(shuffled);
+        } else {
+          setLoadError(data.error || 'Could not load photos.');
+          setImages([]);
+        }
+      } catch {
+        if (!cancelled) {
+          setLoadError('Could not reach the server.');
+          setImages([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [category]);
 
   if (!category) {
     return (
@@ -106,15 +164,11 @@ const Gallery = () => {
     );
   }
 
-  const images = photosByCategory[category as Category] || [];
   const categoryInfo = categoryDetails[category as Category];
 
   if (!categoryInfo) {
     return null;
   }
-
-  // Randomize the order of images
-  const randomizedImages = [...images].sort(() => Math.random() - 0.5);
 
   return (
     <Box minH="100vh" bg="white">
@@ -202,7 +256,17 @@ const Gallery = () => {
 
       {/* Images Grid */}
       <Box py={{ base: 6, md: 10 }} px={{ base: 4, md: 12 }}>
-        <GalleryGrid images={randomizedImages} category={category} />
+        {images === null ? (
+          <Flex justify="center" py={16}>
+            <Spinner color="#c9a96e" />
+          </Flex>
+        ) : loadError && images.length === 0 ? (
+          <Flex justify="center" py={16}>
+            <Text color="red.500" fontSize="sm">{loadError}</Text>
+          </Flex>
+        ) : (
+          <GalleryGrid images={images} category={category} />
+        )}
       </Box>
     </Box>
   );

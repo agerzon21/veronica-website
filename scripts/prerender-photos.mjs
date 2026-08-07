@@ -1,102 +1,70 @@
-/**
- * Pre-render script for individual photo pages.
- * Generates static HTML files with proper meta tags so search engines
- * can index each photo page without executing JavaScript.
- *
- * Run after `vite build` — creates HTML files in dist/photo/...
- */
+// Pre-render script for individual photo pages. Runs at build time
+// (npm build) — generates one static HTML file per published photo
+// with proper meta tags so search engines can index the page
+// without executing JavaScript.
+//
+// Data source is now the gallery_photos DB table (via Neon HTTP).
+// Images URLs point at the /api/photo proxy (WebP-resized-and-cached
+// on demand from Drive) rather than /assets/photos/.../filename.webp
+// as they used to.
+//
+// If DATABASE_URL isn't set (local dev without .env), the script
+// logs a warning and skips prerendering + sitemap generation. The
+// site still builds; individual photo pages fall back to the SPA
+// route. On Vercel, POSTGRES_URL is always available at build.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { neon } from '@neondatabase/serverless';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const templatePath = join(distDir, 'index.html');
-const csvPath = join(__dirname, '..', 'src', 'data', 'photos.csv');
 
 const TITLE_SUFFIX = ' | Vero Photography';
-const GALLERY_CATEGORIES = new Set(['portraits', 'weddings', 'family', 'maternity']);
 
-// Read the built index.html as template
-const template = readFileSync(templatePath, 'utf-8');
-const csvRaw = readFileSync(csvPath, 'utf-8');
-
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ',') {
-      row.push(field);
-      field = '';
-    } else if (c === '\n') {
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = '';
-    } else if (c === '\r') {
-      // skip
-    } else {
-      field += c;
-    }
-  }
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-  return rows.filter((r) => r.some((cell) => cell.trim().length > 0));
+// Neon setup — accepts either POSTGRES_URL (matches api/_db.ts
+// convention) or DATABASE_URL (common in local .env). No URL → skip.
+const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+if (!dbUrl) {
+  console.warn(
+    '[prerender] POSTGRES_URL not set — skipping prerender + sitemap generation.',
+  );
+  process.exit(0);
 }
 
-const rows = parseCsv(csvRaw);
-const header = rows[0];
-const dataRows = rows.slice(1);
+const sql = neon(dbUrl);
+const template = readFileSync(templatePath, 'utf-8');
 
-const idx = {
-  filename: header.indexOf('filename'),
-  category: header.indexOf('category'),
-  alt: header.indexOf('alt'),
-  title: header.indexOf('title'),
-  description: header.indexOf('description'),
-  keywords: header.indexOf('keywords'),
-};
+let rows;
+try {
+  rows = await sql`
+    SELECT slug, category, drive_file_id, title, alt, description, keywords
+    FROM gallery_photos
+    WHERE status = 'published' AND deleted_at IS NULL
+  `;
+} catch (err) {
+  console.error('[prerender] DB query failed:', err.message);
+  console.warn('[prerender] Continuing with empty photo set — SPA route still works.');
+  rows = [];
+}
 
-const photos = dataRows
-  .map((row) => {
-    const filename = (row[idx.filename] ?? '').trim();
-    const category = (row[idx.category] ?? '').trim();
-    const titleRaw = row[idx.title] ?? '';
-    return {
-      id: filename.replace(/\.webp$/i, ''),
-      filename,
-      category,
-      url: `/assets/photos/${category}/${filename}`,
-      alt: row[idx.alt] ?? '',
-      title: titleRaw ? `${titleRaw}${TITLE_SUFFIX}` : '',
-      description: row[idx.description] ?? '',
-      keywords: (row[idx.keywords] ?? '')
-        .split(',')
-        .map((k) => k.trim())
-        .filter(Boolean),
-    };
-  })
-  .filter((p) => GALLERY_CATEGORIES.has(p.category) && p.title.length > 0);
+// Shape each row to match what the rest of the script expected
+// from the old CSV path (id, url, title-with-suffix, etc.). The
+// url now points at the /api/photo proxy since photos live in
+// Drive, not the repo.
+const photos = rows
+  .filter((r) => r.title && r.title.length > 0)
+  .map((r) => ({
+    id: r.slug,
+    category: r.category,
+    url: `/api/photo?id=${r.drive_file_id}`,
+    alt: r.alt || '',
+    title: `${r.title}${TITLE_SUFFIX}`,
+    description: r.description || '',
+    keywords: Array.isArray(r.keywords) ? r.keywords : [],
+  }));
 
 let totalPages = 0;
 
@@ -120,12 +88,12 @@ for (const photo of photos) {
 
   html = html.replace(
     /<title>[^<]*<\/title>/,
-    `<title>${photo.title}</title>`
+    `<title>${photo.title}</title>`,
   );
 
   html = html.replace(
     /<meta name="description" content="[^"]*" \/>/,
-    `<meta name="description" content="${safeDescription}" />`
+    `<meta name="description" content="${safeDescription}" />`,
   );
 
   // Strip existing OG block + any stray og: tags from the template
@@ -203,7 +171,7 @@ for (const photo of photos) {
 
 console.log(`Pre-rendered ${totalPages} individual photo pages.`);
 
-// Regenerate sitemap.xml from the same image data so it never drifts.
+// Regenerate sitemap.xml from the same DB data so it never drifts.
 const SITE = 'https://vero.photography';
 const staticUrls = [
   { loc: '/', changefreq: 'weekly', priority: '1.0' },
@@ -229,7 +197,7 @@ const sitemapXml =
   allUrls
     .map(
       (u) =>
-        `  <url>\n    <loc>${SITE}${u.loc}</loc>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`
+        `  <url>\n    <loc>${SITE}${u.loc}</loc>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`,
     )
     .join('\n') +
   `\n</urlset>\n`;

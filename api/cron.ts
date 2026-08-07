@@ -14,16 +14,23 @@
  *   GET  /api/cron/instagram-check → ./cron/_instagram-check.ts
  *                                    (daily; emails Alex if IG token has
  *                                    ≤10 days of runway left)
+ *   GET  /api/cron/gallery-sync    → ./cron/_gallery-sync.ts
+ *                                    (hourly; reconciles gallery_photos
+ *                                    table against the Drive Gallery
+ *                                    folder — new photos get AI-drafted
+ *                                    metadata, removed ones soft-deleted)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import instagramCheckHandler from './cron/_instagram-check.js';
+import gallerySyncHandler from './cron/_gallery-sync.js';
 
 const HANDLERS: Record<
   string,
   (req: VercelRequest, res: VercelResponse) => Promise<unknown> | unknown
 > = {
   'instagram-check': instagramCheckHandler,
+  'gallery-sync': gallerySyncHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

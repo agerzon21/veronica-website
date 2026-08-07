@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Container,
@@ -17,7 +17,23 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { findPhoto, findRelatedPhotos, type Photo } from '../data/photos';
+// Photo shape mirrors what /api/gallery/post returns. Kept local so
+// this component doesn't need photos.ts at all (which used to
+// import the whole CSV synchronously at module load).
+interface Photo {
+  id: string;
+  slug: string;
+  category: 'portraits' | 'weddings' | 'family' | 'maternity';
+  url: string;
+  originalUrl?: string;
+  driveViewUrl?: string;
+  alt: string;
+  title: string;
+  description: string;
+  keywords: string[];
+  width: number | null;
+  height: number | null;
+}
 
 const MotionDiv = motion.div;
 
@@ -25,6 +41,7 @@ const IndividualPhoto: React.FC = () => {
   const { category, photoId } = useParams<{ category: string; photoId: string }>();
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [relatedPhotos, setRelatedPhotos] = useState<Photo[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -34,11 +51,6 @@ const IndividualPhoto: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { show: showCopied, Notification: CopyNotification } = useCopyNotification();
-
-  const relatedPhotos = useMemo(
-    () => (photo ? findRelatedPhotos(photo, 6) : []),
-    [photo]
-  );
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
@@ -143,12 +155,46 @@ const IndividualPhoto: React.FC = () => {
     }
   };
 
+  // Fetch the main photo and its related photos in parallel from the
+  // gallery API. The related endpoint runs the same keyword-overlap
+  // scoring the old client-side findRelatedPhotos did — just on the
+  // server, so we don't ship the entire photo set to the browser.
   useEffect(() => {
-    if (category && photoId) {
-      const found = findPhoto(category, photoId);
-      setPhoto(found ?? null);
-      setLoading(false);
-    }
+    if (!category || !photoId) return;
+    let cancelled = false;
+    setLoading(true);
+    setPhoto(null);
+    setRelatedPhotos([]);
+    (async () => {
+      try {
+        const [postRes, relatedRes] = await Promise.all([
+          fetch(
+            `/api/gallery/post?category=${encodeURIComponent(category)}&slug=${encodeURIComponent(photoId)}`,
+          ),
+          fetch(`/api/gallery/related?slug=${encodeURIComponent(photoId)}&limit=6`),
+        ]);
+        if (cancelled) return;
+        const postData = await postRes.json();
+        if (postRes.ok && postData.success) {
+          setPhoto(postData.photo);
+        } else {
+          setPhoto(null);
+        }
+        if (relatedRes.ok) {
+          const relatedData = await relatedRes.json();
+          if (relatedData.success) setRelatedPhotos(relatedData.photos);
+        }
+      } catch {
+        // Silent fail — the render below shows a "photo not found"
+        // state when `photo` is null after loading.
+        if (!cancelled) setPhoto(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [category, photoId]);
 
   const handleCopyLink = () => {

@@ -40,6 +40,11 @@ import contextListHandler from './admin/_context-list.js';
 import contextCreateHandler from './admin/_context-create.js';
 import contextUpdateHandler from './admin/_context-update.js';
 import contextDeleteHandler from './admin/_context-delete.js';
+import galleryListHandler from './admin/_gallery-list.js';
+import galleryUpdateHandler from './admin/_gallery-update.js';
+import galleryDeleteHandler from './admin/_gallery-delete.js';
+import gallerySyncNowHandler from './admin/_gallery-sync-now.js';
+import gallerySettingsHandler from './admin/_gallery-settings.js';
 
 const HANDLERS: Record<
   string,
@@ -73,6 +78,11 @@ const HANDLERS: Record<
   'context-create': contextCreateHandler,
   'context-update': contextUpdateHandler,
   'context-delete': contextDeleteHandler,
+  'gallery-list': galleryListHandler,
+  'gallery-update': galleryUpdateHandler,
+  'gallery-delete': galleryDeleteHandler,
+  'gallery-sync-now': gallerySyncNowHandler,
+  'gallery-settings': gallerySettingsHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
