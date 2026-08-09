@@ -1,4 +1,4 @@
-import { Box } from '@chakra-ui/react';
+import { Box, Spinner } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import ImageModal from './ImageModal';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -247,31 +247,53 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
 };
 
 /**
- * Individual gallery <img> that fades in when loaded. The parent
- * tile has a warm-cream background so the tile shape is visible
- * from the moment the layout computes; this img starts invisible
- * (opacity 0) and eases in once the browser reports it loaded.
- * Removes the "flash of loaded pixel" jarring when photos arrive
- * out of order over the Drive proxy.
+ * Individual gallery <img> that fades in when loaded, with a small
+ * gold spinner centered in the tile while the Drive-proxy request
+ * is in flight. Parent tile provides the warm-cream background +
+ * position:relative anchoring; this component adds the spinner and
+ * the img on top. The two cross-fade — spinner opacity 1→0 as img
+ * opacity 0→1 — so the transition reads as intentional loading
+ * rather than a hard pop.
  */
 function GalleryImg({ src, alt, title }: { src: string; alt: string; title: string }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <img
-      src={src}
-      alt={alt}
-      title={title}
-      onLoad={() => setLoaded(true)}
-      style={{
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        display: 'block',
-        opacity: loaded ? 1 : 0,
-        transition: 'opacity 0.45s ease',
-      }}
-      loading="lazy"
-    />
+    <>
+      <Spinner
+        color="#c9a96e"
+        thickness="2px"
+        size="md"
+        speed="0.8s"
+        position="absolute"
+        top="50%"
+        left="50%"
+        transform="translate(-50%, -50%)"
+        opacity={loaded ? 0 : 1}
+        transition="opacity 0.35s ease"
+        pointerEvents="none"
+        // Once the img has loaded the spinner is invisible; setting
+        // aria-hidden keeps it out of the accessibility tree so it
+        // doesn't get announced as "busy" on screen readers.
+        aria-hidden={loaded}
+      />
+      <img
+        src={src}
+        alt={alt}
+        title={title}
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+          position: 'relative',
+          opacity: loaded ? 1 : 0,
+          transition: 'opacity 0.45s ease',
+        }}
+        loading="lazy"
+      />
+    </>
   );
 }
 
