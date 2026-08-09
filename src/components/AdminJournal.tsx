@@ -1,5 +1,5 @@
 import {
-  Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, Stack, Wrap,
+  Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, Wrap, IconButton,
 } from '@chakra-ui/react';
 import { useEffect, useState, type MouseEvent } from 'react';
 import { FaPlus, FaSyncAlt, FaBookOpen, FaExternalLinkAlt, FaEdit } from 'react-icons/fa';
@@ -100,16 +100,12 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
 
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header — stacks vertically on mobile so the New Post CTA gets its
-          own full-width row instead of squeezing into the corner */}
-      <Stack
-        direction={{ base: 'column', md: 'row' }}
-        justify="space-between"
-        align={{ base: 'stretch', md: 'flex-end' }}
-        spacing={{ base: 3, md: 4 }}
-        mb={8}
-      >
-        <VStack align="flex-start" spacing={1}>
+      {/* Header — title on the left with kicker + count, primary CTA
+          (+ New) inline to the right on every breakpoint. Refresh sits
+          as an icon-only round button next to New so both actions stay
+          reachable with a thumb. */}
+      <Flex align="flex-end" justify="space-between" mb={{ base: 5, md: 8 }} gap={3}>
+        <VStack align="flex-start" spacing={1} minW={0}>
           <Text
             fontSize="xs"
             fontWeight="500"
@@ -127,40 +123,30 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
           </Text>
         </VStack>
 
-        <HStack spacing={3} wrap="wrap">
-          <Box
-            as="button"
-            type="button"
+        <HStack spacing={2} flexShrink={0}>
+          <IconButton
+            aria-label="Refresh posts"
+            icon={<Icon as={FaSyncAlt} boxSize={4} />}
             onClick={loadPosts}
-            display="inline-flex"
-            alignItems="center"
-            gap={2}
-            fontSize="xs"
-            letterSpacing="0.2em"
-            textTransform="uppercase"
+            variant="ghost"
+            size="md"
+            minW="44px"
+            minH="44px"
             color="gray.500"
             _hover={{ color: '#c9a96e' }}
-            cursor="pointer"
-            bg="transparent"
-            border="none"
-            px={{ base: 4, md: 2 }}
-            py={{ base: 3, md: 1 }}
-            minH={{ base: '44px', md: 'auto' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            <Icon as={FaSyncAlt} boxSize={3} />
-            Refresh
-          </Box>
+          />
           <CTAButton
             onClick={() => setView({ kind: 'editor', id: null })}
             icon={FaPlus}
             variant="solid"
             size="sm"
           >
-            New Post
+            <Box as="span" display={{ base: 'none', sm: 'inline' }}>New Post</Box>
+            <Box as="span" display={{ base: 'inline', sm: 'none' }}>New</Box>
           </CTAButton>
         </HStack>
-      </Stack>
+      </Flex>
 
       {error && (
         <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">

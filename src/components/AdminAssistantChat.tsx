@@ -185,12 +185,29 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
     };
   }, [adminPassword]);
 
-  // Auto-scroll to bottom on new messages / thinking indicator.
+  // Chat scroll behavior — the first render after history loads
+  // should be scrolled to the TOP of whatever exists (so Vero sees
+  // the greeting / suggested prompts / start of the conversation
+  // instead of the tail end). After that, every new message /
+  // pending indicator scrolls to the BOTTOM the way a chat should.
+  const initialScrollDoneRef = useRef(false);
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!scrollRef.current) return;
+    if (!initialScrollDoneRef.current) {
+      // First load — pin to top so the empty state / oldest messages
+      // are visible and Vero knows there's context to scroll through.
+      scrollRef.current.scrollTop = 0;
+      // Only mark first-scroll "done" once the loading spinner has
+      // finished and we're rendering real content (either messages
+      // or the empty-state prompts). Otherwise a spinner-only paint
+      // would satisfy this and the subsequent history render would
+      // jump to the bottom.
+      if (!loading) initialScrollDoneRef.current = true;
+      return;
     }
-  }, [messages, sending]);
+    // After that: standard "auto-scroll to newest" chat behavior.
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, sending, loading]);
 
   const showAchievementToast = useCallback(
     (write: DbWrite) => {
@@ -359,22 +376,47 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
       }
     };
     recognition.onend = () => setMicActive(false);
-    recognition.onerror = () => setMicActive(false);
+    // Surface real errors instead of swallowing silently — otherwise a
+    // permission-denied / not-allowed / not-supported condition all look
+    // identical to "the button doesn't do anything." `no-speech` and
+    // `aborted` are normal (button released without any words) — swallow
+    // those or Vero would get a toast every time she taps by accident.
+    recognition.onerror = (event: Event & { error?: string }) => {
+      setMicActive(false);
+      const code = (event as { error?: string }).error ?? 'unknown';
+      if (code === 'no-speech' || code === 'aborted') return;
+      toast({
+        title: language === 'ru' ? 'Микрофон не работает' : 'Microphone error',
+        description: code === 'not-allowed'
+          ? (language === 'ru'
+            ? 'Разреши сайту доступ к микрофону в настройках браузера.'
+            : 'Grant microphone permission for this site in your browser settings.')
+          : code,
+        status: 'warning',
+        duration: 4500,
+      });
+    };
     recognitionRef.current = recognition;
     return () => {
-      recognition.abort();
+      try { recognition.abort(); } catch { /* Safari sometimes throws if aborted mid-start */ }
       recognitionRef.current = null;
     };
-  }, [language]);
+  }, [language, toast]);
 
   const startMic = () => {
     if (!recognitionRef.current || micActive) return;
     try {
       recognitionRef.current.start();
       setMicActive(true);
-    } catch {
+    } catch (err) {
       // Some browsers throw if start() is called too quickly after end.
       setMicActive(false);
+      toast({
+        title: language === 'ru' ? 'Не удалось запустить микрофон' : 'Could not start microphone',
+        description: err instanceof Error ? err.message : String(err),
+        status: 'warning',
+        duration: 3500,
+      });
     }
   };
   const stopMic = () => {
@@ -382,7 +424,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
     try {
       recognitionRef.current.stop();
     } catch {
-      // ignore
+      // ignore — stop() can throw if there was nothing to stop
     }
     setMicActive(false);
   };
@@ -511,15 +553,33 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
               <IconButton
                 aria-label={micActive ? t.micStopAria : t.micRecordAria}
                 icon={<Icon as={FaMicrophone} boxSize={{ base: 5, md: 4 }} />}
-                // Pointer events replace the old mouse+touch handler
-                // pair. onPointerCancel handles iOS interruptions
-                // (a call comes in mid-hold) so the mic doesn't get
-                // stuck open. touchAction:none prevents mobile browsers
-                // from treating the long-press as text selection.
-                onPointerDown={startMic}
-                onPointerUp={stopMic}
-                onPointerLeave={stopMic}
-                onPointerCancel={stopMic}
+                // Pointer capture is critical on iOS Safari — without it,
+                // the tiniest finger drift onto a different element
+                // (the SVG child vs the button padding, or a scroll
+                // ancestor grabbing the gesture) fires pointercancel /
+                // pointerleave and stopMic() runs before the user has
+                // said a single syllable. Capturing the pointer to
+                // this button pins the up/cancel events here regardless
+                // of where the finger actually moves. onPointerLeave
+                // is deliberately dropped for the same reason.
+                onPointerDown={(e) => {
+                  try {
+                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                  } catch { /* Safari edge cases */ }
+                  startMic();
+                }}
+                onPointerUp={(e) => {
+                  try {
+                    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                  } catch { /* ignore — already released */ }
+                  stopMic();
+                }}
+                onPointerCancel={(e) => {
+                  try {
+                    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                  } catch { /* ignore */ }
+                  stopMic();
+                }}
                 variant="outline"
                 size="lg"
                 minW={{ base: '48px', md: 'auto' }}

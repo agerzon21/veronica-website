@@ -60,7 +60,7 @@ const AdminAssistant = ({ adminPassword }: Props) => {
         gap={{ base: 3, md: 4 }}
         mb={{ base: 4, md: 4 }}
       >
-        <VStack align="flex-start" spacing={1}>
+        <VStack align="flex-start" spacing={1} minW={0}>
           <Text
             fontSize="xs"
             fontWeight="500"
@@ -73,8 +73,12 @@ const AdminAssistant = ({ adminPassword }: Props) => {
           <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
             Assistant
           </Text>
-          <Text fontSize="sm" color="gray.500" fontWeight="300">
-            Talk to your personal AI, or browse what it knows.
+          {/* Concise subtitle that stays on one line at 375px so the
+              header doesn't eat two extra rows of vertical space on
+              mobile — every pixel matters when the chat + composer
+              need to fit above the bottom nav. */}
+          <Text fontSize={{ base: 'xs', md: 'sm' }} color="gray.500" fontWeight="300" noOfLines={1}>
+            Chat with your AI or browse its data.
           </Text>
         </VStack>
         <LanguageToggle value={language} onChange={setLanguage} />

@@ -87,12 +87,56 @@ export type InquiryClassification =
   | 'spam-or-unrelated'
   | 'unclear';
 
-export interface AiSummary {
-  classification: InquiryClassification;
+interface LocalizedSummary {
   asking: string;
   gathered: string[];
   nextStep: string;
+}
+
+export interface AiSummary {
+  classification: InquiryClassification;
   tone: string;
+  // New bilingual shape — always populated on fresh summaries.
+  en?: LocalizedSummary;
+  ru?: LocalizedSummary;
+  // Legacy flat fields — old cached summaries only have these,
+  // no `en`/`ru`. Kept as fallbacks so old rows still render until
+  // they get regenerated on the next new message.
+  asking?: string;
+  gathered?: string[];
+  nextStep?: string;
+}
+
+type SummaryLang = 'ru' | 'en';
+
+/**
+ * Read the localized asking/gathered/nextStep for a given language,
+ * falling back through: requested lang → other lang → legacy flat.
+ * Never returns undefined fields so the render code doesn't need
+ * a bunch of `?? ''` boilerplate.
+ */
+function readSummaryLocale(s: AiSummary | null, lang: SummaryLang): LocalizedSummary {
+  if (!s) return { asking: '', gathered: [], nextStep: '' };
+  const primary = s[lang];
+  const other = s[lang === 'ru' ? 'en' : 'ru'];
+  return {
+    asking: primary?.asking ?? other?.asking ?? s.asking ?? '',
+    gathered: primary?.gathered ?? other?.gathered ?? s.gathered ?? [],
+    nextStep: primary?.nextStep ?? other?.nextStep ?? s.nextStep ?? '',
+  };
+}
+
+/**
+ * Format US-style phone numbers inside AI-gathered facts. The model is
+ * asked to format these, but if it slips ("Phone: 5595997511") we
+ * still want the display to be readable. Matches 10/11-digit
+ * sequences and rewrites them as (555) 599-7511.
+ */
+function formatPhoneNumbersInText(text: string): string {
+  return text.replace(/\b(\d{10}|1\d{10})\b/g, (match) => {
+    const digits = match.length === 11 ? match.slice(1) : match;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  });
 }
 
 const POLL_INTERVAL_MS = 30_000;
@@ -624,6 +668,26 @@ function ConversationView({
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [translateOnSend, setTranslateOnSend] = useState(false);
   const [createClientOpen, setCreateClientOpen] = useState(false);
+  // Summary is EXPANDED by default when a conversation opens (per
+  // Alex's ask — the summary is the first thing you want to see, not
+  // the chat scroll). Vero taps the collapse chevron to reveal the
+  // chat + composer. On mobile this drives "focus mode": when
+  // expanded, the chat + composer are hidden entirely so the summary
+  // gets the full viewport.
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+  // Summary language toggle. Defaults to Russian since Vero speaks
+  // Russian — but the toggle lets an admin flip to English when
+  // helping her out. Persisted per-browser (localStorage) so the
+  // choice sticks across sessions.
+  const [summaryLang, setSummaryLang] = useState<SummaryLang>(() => {
+    if (typeof window === 'undefined') return 'ru';
+    return (window.localStorage.getItem('vero_summary_lang') as SummaryLang) || 'ru';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('vero_summary_lang', summaryLang);
+    }
+  }, [summaryLang]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -921,16 +985,19 @@ function ConversationView({
           </HStack>
         </Flex>
 
-        {/* Second row: Create-client / Linked-client status. Given its own
-            row on all breakpoints since long usernames + "Linked client"
-            badge would otherwise fight the AI switch for space. */}
+        {/* Second row: Create-client / Linked-client status. Hidden on
+            mobile in focus mode (summary expanded) — nothing should
+            sit between the header and the summary body when Vero is
+            reading. Compact text-icon button so it doesn't dominate
+            the row on mobile the way the old chunky pill did. */}
         <Flex
           px={{ base: 3, md: 4 }}
-          pb={{ base: 3, md: 3 }}
-          pt={{ base: 0, md: 0 }}
+          pb={{ base: 2, md: 3 }}
+          pt={0}
           justify="flex-start"
           align="center"
           gap={2}
+          display={{ base: summaryCollapsed ? 'flex' : 'none', lg: 'flex' }}
         >
           {detail.linked_client_portal_id ? (
             <Badge
@@ -1005,14 +1072,29 @@ function ConversationView({
         </Flex>
       )}
 
-      {/* Pinned AI summary — sits above the scroll area so it stays
-          visible as Vero scrolls through the thread. Collapsible for
-          when she wants more room to read the messages. */}
-      <Box flexShrink={0} borderBottom="1px solid" borderColor="gray.100" bg="white">
+      {/* Pinned AI summary — sits above the scroll area on desktop
+          so it stays visible while Vero reads through the thread. On
+          mobile, when expanded, it enters FOCUS MODE and takes over
+          the viewport (chat + composer render only when collapsed) so
+          Vero can read the summary comfortably without half of it
+          being off-screen. When collapsed, only the header row shows
+          and the chat + composer become visible — a big obvious
+          "Show summary" button doubles as the collapse affordance. */}
+      <Box
+        flex={{ base: summaryCollapsed ? '0 0 auto' : '1 1 auto', lg: '0 0 auto' }}
+        overflowY={{ base: summaryCollapsed ? 'visible' : 'auto', lg: 'visible' }}
+        borderBottom="1px solid"
+        borderColor="gray.100"
+        bg="white"
+      >
         <SummaryCard
           summary={aiSummary}
           loading={aiSummaryLoading}
           error={aiSummaryError}
+          collapsed={summaryCollapsed}
+          onToggleCollapsed={() => setSummaryCollapsed((c) => !c)}
+          language={summaryLang}
+          onChangeLanguage={setSummaryLang}
           // Force=true so the Regenerate button always bypasses
           // the server-side cache. The initial auto-load on
           // conversation open (loadAiSummary() with no args) uses
@@ -1021,8 +1103,16 @@ function ConversationView({
         />
       </Box>
 
-      {/* Message history — scrollable, auto-scrolls to bottom */}
-      <Box ref={scrollRef} flex={1} overflowY="auto" p={{ base: 4, md: 6 }} bg="gray.50">
+      {/* Message history — hidden on mobile when the summary is
+          expanded (focus mode). On desktop it always renders. */}
+      <Box
+        ref={scrollRef}
+        flex={1}
+        overflowY="auto"
+        p={{ base: 4, md: 6 }}
+        bg="gray.50"
+        display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
+      >
         <VStack spacing={3} align="stretch">
           {messages.map((m) => (
             <MessageBubble key={m.id} msg={m} adminPassword={adminPassword} />
@@ -1032,7 +1122,9 @@ function ConversationView({
 
       {/* Composer — sticky at the bottom of the pane on mobile so it
           stays above the OS keyboard. Safe-area padding clears the iOS
-          home indicator. */}
+          home indicator. Hidden on mobile when the summary is expanded
+          (focus mode) — the collapse affordance is Vero's way back to
+          the composer. */}
       <Box
         p={{ base: 3, md: 4 }}
         pb={{ base: 'max(env(safe-area-inset-bottom), 12px)', md: 4 }}
@@ -1040,6 +1132,7 @@ function ConversationView({
         borderColor="gray.100"
         bg="white"
         flexShrink={0}
+        display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
       >
         <Textarea
           value={replyText}
@@ -1345,16 +1438,35 @@ function SummaryCard({
   summary,
   loading,
   error,
+  collapsed,
+  onToggleCollapsed,
+  language,
+  onChangeLanguage,
   onRegenerate,
 }: {
   summary: AiSummary | null;
   loading: boolean;
   error: string | null;
+  // Collapse state is lifted so the parent can react (focus mode).
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  language: SummaryLang;
+  onChangeLanguage: (l: SummaryLang) => void;
   onRegenerate: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
   const classification = summary?.classification ?? 'unclear';
   const classMeta = CLASSIFICATION_META[classification] ?? CLASSIFICATION_META.unclear;
+  const localized = readSummaryLocale(summary, language);
+
+  // Label copy that changes with the language so the affordances read
+  // naturally on both sides of the toggle.
+  const strings = language === 'ru'
+    ? { header: 'Сводка', asking: 'Спрашивает', gathered: 'Собрали', nextStep: 'Далее', tone: 'Тон',
+        expandCta: 'Закрыть сводку — открыть чат', collapseCta: 'Открыть сводку',
+        loadingLabel: 'Читаю переписку…', noSummary: 'Сводки пока нет.' }
+    : { header: 'Thread summary', asking: 'Asking', gathered: 'Gathered', nextStep: 'Next step', tone: 'Tone',
+        expandCta: 'Close summary — open chat', collapseCta: 'Open summary',
+        loadingLabel: 'Reading the thread…', noSummary: 'No summary yet.' };
 
   return (
     <Box
@@ -1363,13 +1475,18 @@ function SummaryCard({
       borderLeftColor={classMeta.borderColor}
       px={{ base: 3.5, md: 4 }}
       py={{ base: 2.5, md: 3 }}
+      // In focus mode (expanded on mobile) the card takes the full
+      // remaining viewport height so the body has room to breathe.
+      minH={{ base: collapsed ? 'auto' : 'auto', lg: 'auto' }}
     >
-      {/* Header row — always visible, click to collapse/expand */}
-      <Flex justify="space-between" align="center" gap={3}>
+      {/* Header row — always visible. Tap anywhere on the row to
+          toggle collapse; the chevron and the label both grow on
+          mobile so the affordance is obvious. */}
+      <Flex justify="space-between" align="center" gap={2}>
         <Flex
           as="button"
           type="button"
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={onToggleCollapsed}
           align="center"
           gap={2}
           flex={1}
@@ -1381,7 +1498,7 @@ function SummaryCard({
           cursor="pointer"
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
-          <Icon as={FaLightbulb} boxSize={3} color="#8a6e35" flexShrink={0} />
+          <Icon as={FaLightbulb} boxSize={3.5} color="#8a6e35" flexShrink={0} />
           <Text
             fontSize={{ base: 'xs', md: '2xs' }}
             fontWeight="600"
@@ -1390,7 +1507,7 @@ function SummaryCard({
             color="#8a6e35"
             flexShrink={0}
           >
-            Thread summary
+            {strings.header}
           </Text>
           {summary && (
             <Badge
@@ -1408,21 +1525,56 @@ function SummaryCard({
               {classMeta.label}
             </Badge>
           )}
-          {collapsed && summary?.asking && (
+          {collapsed && localized.asking && (
             <Text fontSize="xs" color="gray.500" noOfLines={1} minW={0}>
-              — {summary.asking}
+              — {formatPhoneNumbersInText(localized.asking)}
             </Text>
           )}
-          <Icon
-            as={collapsed ? FaChevronDown : FaChevronUp}
-            boxSize={4}
-            color="gray.400"
-            ml="auto"
-            flexShrink={0}
-          />
         </Flex>
-        {/* Regenerate — now a real 44×44 tap target instead of a
-            pixel-thin text link, so Vero can hit it reliably on a phone. */}
+
+        {/* RU/EN pill toggle — only visible when the summary is
+            expanded (in collapsed state the header row needs to stay
+            compact). Small enough to sit inline. */}
+        {!collapsed && (
+          <HStack
+            spacing={0}
+            bg="gray.100"
+            borderRadius="full"
+            p="2px"
+            flexShrink={0}
+            aria-label="Summary language"
+          >
+            {(['ru', 'en'] as const).map((lang) => {
+              const active = language === lang;
+              return (
+                <Box
+                  key={lang}
+                  as="button"
+                  type="button"
+                  onClick={() => onChangeLanguage(lang)}
+                  px={2.5}
+                  py={1}
+                  minH="28px"
+                  minW="34px"
+                  fontSize="2xs"
+                  fontWeight="600"
+                  letterSpacing="0.1em"
+                  color={active ? 'white' : 'gray.500'}
+                  bg={active ? '#c9a96e' : 'transparent'}
+                  borderRadius="full"
+                  border="none"
+                  cursor="pointer"
+                  transition="all 0.15s"
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  {lang.toUpperCase()}
+                </Box>
+              );
+            })}
+          </HStack>
+        )}
+
+        {/* Regenerate — 44×44 tap target. */}
         <IconButton
           aria-label="Regenerate summary"
           icon={<Icon as={FaSync} boxSize={3.5} />}
@@ -1446,7 +1598,7 @@ function SummaryCard({
           {loading && !summary ? (
             <Flex align="center" gap={2} py={2}>
               <Spinner size="xs" color="#c9a96e" />
-              <Text fontSize="xs" color="gray.500">Reading the thread…</Text>
+              <Text fontSize="xs" color="gray.500">{strings.loadingLabel}</Text>
             </Flex>
           ) : error && !summary ? (
             <Text fontSize="xs" color="red.600">{error}</Text>
@@ -1454,23 +1606,25 @@ function SummaryCard({
             <VStack align="stretch" spacing={2.5}>
               <Box>
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
-                  Asking
+                  {strings.asking}
                 </Text>
                 <Text fontSize="sm" color="gray.800" lineHeight="1.5">
-                  {summary.asking}
+                  {formatPhoneNumbersInText(localized.asking)}
                 </Text>
               </Box>
 
-              {summary.gathered.length > 0 && (
+              {localized.gathered.length > 0 && (
                 <Box>
                   <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
-                    Gathered
+                    {strings.gathered}
                   </Text>
                   <VStack align="stretch" spacing={0.5}>
-                    {summary.gathered.map((fact, i) => (
+                    {localized.gathered.map((fact, i) => (
                       <Flex key={i} gap={2} align="flex-start">
                         <Text fontSize="sm" color="#c9a96e" lineHeight="1.5">•</Text>
-                        <Text fontSize="sm" color="gray.700" lineHeight="1.5">{fact}</Text>
+                        <Text fontSize="sm" color="gray.700" lineHeight="1.5">
+                          {formatPhoneNumbersInText(fact)}
+                        </Text>
                       </Flex>
                     ))}
                   </VStack>
@@ -1479,17 +1633,17 @@ function SummaryCard({
 
               <Box>
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
-                  Next step
+                  {strings.nextStep}
                 </Text>
                 <Text fontSize="sm" color="gray.800" lineHeight="1.5">
-                  {summary.nextStep}
+                  {formatPhoneNumbersInText(localized.nextStep)}
                 </Text>
               </Box>
 
               {summary.tone && (
                 <HStack spacing={2}>
                   <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase">
-                    Tone
+                    {strings.tone}
                   </Text>
                   <Badge
                     bg="rgba(201, 169, 110, 0.15)"
@@ -1508,10 +1662,52 @@ function SummaryCard({
               )}
             </VStack>
           ) : (
-            <Text fontSize="xs" color="gray.500">No summary yet.</Text>
+            <Text fontSize="xs" color="gray.500">{strings.noSummary}</Text>
           )}
         </Box>
       )}
+
+      {/* Big obvious toggle CTA — always visible below the body so
+          Vero can never miss the way back to (or into) the chat.
+          When expanded on mobile: "Close summary — open chat".
+          When collapsed: "Open summary".
+          On desktop the summary is a companion above the chat so the
+          "close for chat" affordance would be misleading — hide it
+          there and let the chevron alone drive collapse. */}
+      <Box
+        mt={collapsed ? 2 : 3}
+        display={{ base: 'block', lg: 'none' }}
+      >
+        <Box
+          as="button"
+          type="button"
+          onClick={onToggleCollapsed}
+          w="100%"
+          bg={collapsed ? '#c9a96e' : 'rgba(201, 169, 110, 0.12)'}
+          color={collapsed ? 'white' : '#8a6e35'}
+          border="1px solid"
+          borderColor={collapsed ? '#c9a96e' : 'rgba(201, 169, 110, 0.4)'}
+          borderRadius="sm"
+          px={4}
+          py={3}
+          minH="44px"
+          fontSize="xs"
+          fontWeight="600"
+          letterSpacing="0.12em"
+          textTransform="uppercase"
+          cursor="pointer"
+          transition="all 0.15s"
+          _active={{ bg: collapsed ? '#b8964f' : 'rgba(201, 169, 110, 0.22)' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+          display="inline-flex"
+          alignItems="center"
+          justifyContent="center"
+          gap={2}
+        >
+          <Icon as={collapsed ? FaChevronDown : FaChevronUp} boxSize={3} />
+          {collapsed ? strings.collapseCta : strings.expandCta}
+        </Box>
+      </Box>
     </Box>
   );
 }
@@ -1744,31 +1940,39 @@ function CreateClientModal({
               </Text>
             </FormControl>
 
-            {aiSummary && aiSummary.gathered.length > 0 && (
-              <Box
-                bg="rgba(201, 169, 110, 0.06)"
-                border="1px solid"
-                borderColor="rgba(201, 169, 110, 0.3)"
-                borderRadius="sm"
-                p={3}
-              >
-                <Text fontSize="2xs" color="#8a6e35" fontWeight="600" letterSpacing="0.08em" textTransform="uppercase" mb={1.5}>
-                  From this conversation
-                </Text>
-                <VStack align="stretch" spacing={0.5}>
-                  {aiSummary.gathered.map((fact, i) => (
-                    <Flex key={i} gap={2} align="flex-start">
-                      <Text fontSize="xs" color="#c9a96e">•</Text>
-                      <Text fontSize="xs" color="gray.700" lineHeight="1.5">{fact}</Text>
-                    </Flex>
-                  ))}
-                </VStack>
-                <Text fontSize="2xs" color="gray.500" mt={2} lineHeight="1.5">
-                  Add these to the portal (event date, email, etc.) from the
-                  Portals tab after creating.
-                </Text>
-              </Box>
-            )}
+            {(() => {
+              // Prefer the English gathered facts for admin-facing display
+              // in the CreateClient modal — the labels/copy around it are
+              // English, so keeping them all in one language reads cleaner.
+              const gathered = aiSummary ? readSummaryLocale(aiSummary, 'en').gathered : [];
+              return gathered.length > 0 ? (
+                <Box
+                  bg="rgba(201, 169, 110, 0.06)"
+                  border="1px solid"
+                  borderColor="rgba(201, 169, 110, 0.3)"
+                  borderRadius="sm"
+                  p={3}
+                >
+                  <Text fontSize="2xs" color="#8a6e35" fontWeight="600" letterSpacing="0.08em" textTransform="uppercase" mb={1.5}>
+                    From this conversation
+                  </Text>
+                  <VStack align="stretch" spacing={0.5}>
+                    {gathered.map((fact, i) => (
+                      <Flex key={i} gap={2} align="flex-start">
+                        <Text fontSize="xs" color="#c9a96e">•</Text>
+                        <Text fontSize="xs" color="gray.700" lineHeight="1.5">
+                          {formatPhoneNumbersInText(fact)}
+                        </Text>
+                      </Flex>
+                    ))}
+                  </VStack>
+                  <Text fontSize="2xs" color="gray.500" mt={2} lineHeight="1.5">
+                    Add these to the portal (event date, email, etc.) from the
+                    Portals tab after creating.
+                  </Text>
+                </Box>
+              ) : null;
+            })()}
 
             {error && (
               <Text fontSize="xs" color="red.600">{error}</Text>
@@ -1815,7 +2019,13 @@ function CreateClientModal({
  */
 function inferSessionType(summary: AiSummary | null): string | null {
   if (!summary) return null;
-  const blob = [summary.asking, ...summary.gathered].join(' ').toLowerCase();
+  // Use whichever locale has content — the inference regexes below
+  // cover both English and Russian keywords so either language works.
+  const en = readSummaryLocale(summary, 'en');
+  const ru = readSummaryLocale(summary, 'ru');
+  const blob = [en.asking, ...en.gathered, ru.asking, ...ru.gathered]
+    .join(' ')
+    .toLowerCase();
   if (/\bwedding|bride|groom|ceremony|reception|свадьб/.test(blob)) return 'wedding';
   if (/\bmatern|pregnan|belly|беремен/.test(blob)) return 'maternity';
   if (/\bnewborn|infant|baby (photo|shoot|session)|новорожд/.test(blob)) return 'newborn';

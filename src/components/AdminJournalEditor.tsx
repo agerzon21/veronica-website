@@ -206,17 +206,22 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
       <Flex align="center" justify="space-between" mb={6} wrap="wrap" gap={3}>
         <AdminBackButton onClick={onCancel} label="Back to posts" />
 
-        {/* On mobile the two CTAs stack so both stay a full 44px target
-            each without cramping; on desktop they sit side by side. */}
-        <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+        {/* Both CTAs sit side-by-side on every breakpoint. On mobile
+            the shorter labels ("Draft" / "Publish") fit inside two 44px
+            buttons in a row; on desktop we swap in the full labels
+            for clarity ("Save Draft" / "Save & Republish"). Compact
+            side-by-side reads as a natural primary+secondary pair
+            without the vertical space stacked columns would eat. */}
+        <HStack spacing={2}>
           <CTAButton
             onClick={() => handleSave('draft')}
             variant="outline"
             size="sm"
             isLoading={saving}
-            loadingText="Saving..."
+            loadingText="…"
           >
-            Save Draft
+            <Box as="span" display={{ base: 'inline', md: 'none' }}>Draft</Box>
+            <Box as="span" display={{ base: 'none', md: 'inline' }}>Save Draft</Box>
           </CTAButton>
           <CTAButton
             onClick={() => handleSave('published')}
@@ -224,11 +229,16 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             variant="solid"
             size="sm"
             isLoading={saving}
-            loadingText="Publishing..."
+            loadingText="…"
           >
-            {form.status === 'published' ? 'Save & Republish' : 'Publish'}
+            <Box as="span" display={{ base: 'inline', md: 'none' }}>
+              {form.status === 'published' ? 'Republish' : 'Publish'}
+            </Box>
+            <Box as="span" display={{ base: 'none', md: 'inline' }}>
+              {form.status === 'published' ? 'Save & Republish' : 'Publish'}
+            </Box>
           </CTAButton>
-        </Stack>
+        </HStack>
       </Flex>
 
       <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mb={2}>

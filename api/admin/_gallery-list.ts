@@ -117,12 +117,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `) as Row[];
     }
 
-    // Attach the display URL (through the resizing WebP proxy) so
-    // the admin list can preview thumbs without the frontend having
-    // to know about Drive plumbing.
+    // Attach a thumbnail URL for the admin list. We use Drive's own
+    // ?sz=w600 thumbnail endpoint (cheap JPEG, CDN-cached by Google)
+    // instead of routing through our /api/photo proxy, which returns
+    // the full 2400px display-quality WebP (~1-2MB each, ~15-30MB
+    // decoded in memory). At ~200+ photos, a fast scroll to the bottom
+    // of the admin grid was OOM-ing mobile Safari and dropping the
+    // whole tab to a white "cannot display" page.
+    //
+    // The proxy stays required for the PUBLIC gallery and photo pages
+    // (CORS + WebP + share pre-fetch); the admin grid just needs a
+    // small preview thumbnail, so use Drive's cheapest path.
     const photos = rows.map((r) => ({
       ...r,
-      preview_url: `/api/photo?id=${r.drive_file_id}`,
+      preview_url: `https://drive.google.com/thumbnail?id=${r.drive_file_id}&sz=w600`,
     }));
 
     return res.status(200).json({

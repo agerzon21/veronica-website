@@ -40,35 +40,56 @@ function ScrollToTop() {
   return null;
 }
 
+/**
+ * Inner shell — lives inside <Router> so it can use useLocation() to
+ * gate site-wide chrome (Navbar, Footer, ExitIntentPopup) that shouldn't
+ * render on /admin. Vero owns her business there, doesn't need "Home /
+ * Gallery / Contact" nav or a public-facing footer; keeping them would
+ * eat ~120px of vertical space above and ~200px below the actual admin
+ * content on mobile for zero benefit. Admin brings its own chrome
+ * (top-of-content admin nav + bottom tab bar).
+ */
+function AppShell() {
+  const { pathname } = useLocation();
+  const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
+  return (
+    <>
+      <SEO />
+      <ScrollToTop />
+      {!isAdmin && <Navbar />}
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/contact/thank-you" element={<ThankYou />} />
+        <Route path="/gallery" element={<Gallery />} />
+        <Route path="/gallery/:category" element={<Gallery />} />
+        <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
+        <Route path="/pay" element={<Pay />} />
+        <Route path="/portal" element={<Portal />} />
+        <Route path="/portal/pass" element={<Portal />} />
+        <Route path="/portal/welcome" element={<Welcome />} />
+        <Route path="/admin" element={<Admin />} />
+        <Route path="/journal" element={<Journal />} />
+        <Route path="/journal/:slug" element={<Journal />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      {!isAdmin && <Footer />}
+      {/* ExitIntentPopup is meant for prospects — never fire it in
+          admin where Vero is working. */}
+      {!isAdmin && <ExitIntentPopup />}
+    </>
+  );
+}
+
 function App() {
   return (
     <HelmetProvider>
       <ChakraProvider>
         <Router>
-          <SEO />
-          <ScrollToTop />
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/contact/thank-you" element={<ThankYou />} />
-            <Route path="/gallery" element={<Gallery />} />
-            <Route path="/gallery/:category" element={<Gallery />} />
-            <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
-            <Route path="/pay" element={<Pay />} />
-            <Route path="/portal" element={<Portal />} />
-            <Route path="/portal/pass" element={<Portal />} />
-            <Route path="/portal/welcome" element={<Welcome />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/journal" element={<Journal />} />
-            <Route path="/journal/:slug" element={<Journal />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <Footer />
-          <ExitIntentPopup />
+          <AppShell />
         </Router>
       </ChakraProvider>
     </HelmetProvider>

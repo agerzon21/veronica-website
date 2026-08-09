@@ -196,16 +196,12 @@ const AdminGallery = ({ adminPassword }: Props) => {
 
   return (
     <Box maxW="1400px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Tab header — Settings + Sync buttons stack under the title on
-          mobile so the CTAs never orphan. */}
-      <Stack
-        direction={{ base: 'column', md: 'row' }}
-        align={{ base: 'flex-start', md: 'flex-end' }}
-        justify="space-between"
-        mb={{ base: 4, md: 6 }}
-        spacing={{ base: 3, md: 4 }}
-      >
-        <VStack align="flex-start" spacing={1}>
+      {/* Tab header — title on the left with kicker + count; Settings +
+          Sync inline to the right as compact icon-button pair on
+          mobile, full-labeled on desktop. Keeps the space above the
+          filter/grid tight instead of stacking three chunky rows. */}
+      <Flex align="flex-end" justify="space-between" mb={{ base: 4, md: 6 }} gap={3}>
+        <VStack align="flex-start" spacing={1} minW={0}>
           <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
             Admin
           </Text>
@@ -218,16 +214,17 @@ const AdminGallery = ({ adminPassword }: Props) => {
               : 'Drive-backed photo library.'}
           </Text>
         </VStack>
-
-        <Stack direction="row" spacing={2} w={{ base: '100%', md: 'auto' }}>
+        <HStack spacing={2} flexShrink={0}>
+          {/* Icon-only on mobile so the whole action pair fits inline
+              with the title. Aria-labels preserve semantics. */}
           <CTAButton
             onClick={() => setSettingsOpen(true)}
             icon={FaCog}
             variant="outline"
             size="sm"
-            fullWidth={{ base: true, md: false }}
+            aria-label="Gallery settings"
           >
-            Settings
+            <Box as="span" display={{ base: 'none', md: 'inline' }}>Settings</Box>
           </CTAButton>
           <CTAButton
             onClick={handleSyncNow}
@@ -237,12 +234,12 @@ const AdminGallery = ({ adminPassword }: Props) => {
             isLoading={syncing}
             loadingText="Syncing..."
             isDisabled={settings?.folderIdSource === 'none'}
-            fullWidth={{ base: true, md: false }}
+            aria-label="Sync from Drive"
           >
-            Sync from Drive
+            <Box as="span" display={{ base: 'none', md: 'inline' }}>Sync from Drive</Box>
           </CTAButton>
-        </Stack>
-      </Stack>
+        </HStack>
+      </Flex>
 
       {/* Drive-connection status row. Prominent "Set up" prompt when
           no folder is configured yet, subtle "connected" indicator
@@ -331,15 +328,17 @@ const AdminGallery = ({ adminPassword }: Props) => {
         </Box>
       )}
 
-      {/* Filters — stack on mobile so each Select gets full width and
-          the count drops to its own line rather than orphaning. */}
+      {/* Filters — two Selects side by side on every breakpoint (each
+          takes 50% on mobile, capped width on desktop). Count sits
+          below on its own compact line. */}
       <VStack align="stretch" mb={4} spacing={2}>
-        <Stack direction={{ base: 'column', md: 'row' }} spacing={{ base: 2, md: 3 }}>
+        <HStack spacing={2}>
           <Select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
             size={{ base: 'md', md: 'sm' } as any}
             fontSize={{ base: 'md', md: 'sm' } as any}
+            flex={1}
             maxW={{ base: '100%', md: '200px' }}
             bg="white"
           >
@@ -353,6 +352,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             size={{ base: 'md', md: 'sm' } as any}
             fontSize={{ base: 'md', md: 'sm' } as any}
+            flex={1}
             maxW={{ base: '100%', md: '200px' }}
             bg="white"
           >
@@ -360,8 +360,8 @@ const AdminGallery = ({ adminPassword }: Props) => {
             <option value="draft">Draft (needs review)</option>
             <option value="published">Published (live)</option>
           </Select>
-        </Stack>
-        <Text fontSize={{ base: 'xs', md: 'xs' }} color="gray.500">
+        </HStack>
+        <Text fontSize="xs" color="gray.500">
           {filtered.length} of {photos?.length ?? 0}
         </Text>
       </VStack>

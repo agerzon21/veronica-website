@@ -1,5 +1,4 @@
 import { Box, HStack, VStack, Text, Flex, Badge, Icon, Stack, SimpleGrid } from '@chakra-ui/react';
-import { useState } from 'react';
 import { FaPlus, FaSyncAlt, FaTable, FaCalendarAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminCalendarView from './AdminCalendarView';
@@ -24,11 +23,18 @@ export interface AdminPortalSummary {
   created_at: string;
 }
 
+type ViewMode = 'table' | 'calendar';
+
 interface Props {
   portals: AdminPortalSummary[];
   onNewClient: () => void;
   onOpenPortal: (id: string) => void;
   onRefresh: () => void;
+  // View mode is owned by the shell (Admin.tsx) so the mobile
+  // bottom-nav's sub-tab strip can toggle it in sync. Falls back to
+  // 'table' if unset.
+  viewMode?: ViewMode;
+  onChangeViewMode?: (v: ViewMode) => void;
 }
 
 const formatDate = (iso: string | null): string => {
@@ -56,42 +62,76 @@ const formatMoney = (amount: number | null): string => {
   return `$${amount.toFixed(0)}`;
 };
 
-type ViewMode = 'table' | 'calendar';
-
-const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
+const AdminDashboard = ({
+  portals,
+  onNewClient,
+  onOpenPortal,
+  onRefresh,
+  viewMode = 'table',
+  onChangeViewMode,
+}: Props) => {
+  // Fallback no-op — used only when a caller forgets to wire
+  // onChangeViewMode (shouldn't happen in Admin.tsx, but keeps the
+  // desktop view toggle from crashing if someone imports this in
+  // isolation).
+  const setViewMode = onChangeViewMode ?? (() => {});
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header row — on mobile it collapses to a column so the title,
-          view toggle, refresh, and New Client button each get full width
-          instead of wrapping haphazardly. */}
-      <Stack
-        direction={{ base: 'column', md: 'row' }}
-        justify="space-between"
-        align={{ base: 'stretch', md: 'flex-end' }}
-        spacing={{ base: 3, md: 4 }}
-        mb={8}
-      >
-        <VStack align="flex-start" spacing={1}>
-          <Text
-            fontSize="xs"
-            fontWeight="500"
-            textTransform="uppercase"
-            letterSpacing="0.25em"
-            color="#c9a96e"
+      {/* Header row — title kicker + h1 + count on the left, primary CTA
+          (+ New) inline to the right of the title on mobile, view-toggle
+          and refresh sit on a second row on mobile so they don't compete
+          for space with the title. Desktop keeps everything on one row. */}
+      <Stack direction="column" spacing={3} mb={{ base: 5, md: 8 }}>
+        <Stack
+          direction="row"
+          justify="space-between"
+          align="flex-end"
+          spacing={3}
+          w="100%"
+        >
+          <VStack align="flex-start" spacing={1} minW={0}>
+            <Text
+              fontSize="xs"
+              fontWeight="500"
+              textTransform="uppercase"
+              letterSpacing="0.25em"
+              color="#c9a96e"
+            >
+              Admin
+            </Text>
+            <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
+              Clients
+            </Text>
+            <Text fontSize="sm" color="gray.500" fontWeight="300">
+              {portals.length} portal{portals.length === 1 ? '' : 's'}
+            </Text>
+          </VStack>
+          {/* + New sits inline with the title on every breakpoint. The
+              label is just "+ New" because this flow can create either a
+              full client portal OR a gallery-only portal — the chooser
+              decides, so "New Client" was misleading. */}
+          <CTAButton onClick={onNewClient} icon={FaPlus} variant="solid" size="sm">
+            New
+          </CTAButton>
+        </Stack>
+        {/* Secondary actions row: view toggle + refresh. On mobile the
+            view toggle is redundant (the bottom-nav sub-strip already
+            switches Table ↔ Calendar), so we hide it and only show
+            Refresh. On desktop both live inline. */}
+        <Stack
+          direction="row"
+          justify={{ base: 'flex-end', md: 'flex-end' }}
+          spacing={3}
+          align="center"
+        >
+          <HStack
+            spacing={0}
+            border="1px solid"
+            borderColor="gray.200"
+            borderRadius="sm"
+            overflow="hidden"
+            display={{ base: 'none', md: 'inline-flex' }}
           >
-            Admin
-          </Text>
-          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-            Clients
-          </Text>
-          <Text fontSize="sm" color="gray.500" fontWeight="300">
-            {portals.length} portal{portals.length === 1 ? '' : 's'}
-          </Text>
-        </VStack>
-        <HStack spacing={3} flexWrap="wrap">
-          {/* View toggle */}
-          <HStack spacing={0} border="1px solid" borderColor="gray.200" borderRadius="sm" overflow="hidden">
             <ViewToggleButton
               active={viewMode === 'table'}
               icon={FaTable}
@@ -113,7 +153,7 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
             alignItems="center"
             justifyContent="center"
             gap={2}
-            fontSize="xs"
+            fontSize={{ base: '2xs', md: 'xs' }}
             letterSpacing="0.2em"
             textTransform="uppercase"
             color="gray.500"
@@ -122,9 +162,7 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
             cursor="pointer"
             bg="transparent"
             border="none"
-            // Touch target: 44px min height on mobile with roomier padding
-            // so this text button is easy to tap; keep it compact on desktop.
-            minH={{ base: '44px', md: 'auto' }}
+            minH={{ base: '40px', md: 'auto' }}
             px={{ base: 3, md: 2 }}
             py={{ base: 2, md: 1 }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
@@ -132,11 +170,7 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
             <Icon as={FaSyncAlt} boxSize={3} />
             Refresh
           </Box>
-          <CTAButton onClick={onNewClient} variant="solid" size="md">
-            <Icon as={FaPlus} boxSize={3} mr={2} />
-            New Client
-          </CTAButton>
-        </HStack>
+        </Stack>
       </Stack>
 
       {/* Calendar view replaces the table when toggled. The dashboard's
@@ -208,7 +242,7 @@ function TableView({
       {portals.length === 0 && (
         <Box bg="white" borderRadius="md" border="1px solid" borderColor="gray.200" py={20} textAlign="center">
           <Text fontSize="sm" color="gray.500" fontWeight="300">
-            No portals yet. Click "New Client" to create the first one.
+            No portals yet. Tap "+ New" above to create the first one.
           </Text>
         </Box>
       )}

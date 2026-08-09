@@ -82,12 +82,26 @@ const VALID_CLASSIFICATIONS: readonly Classification[] = [
   'unclear',
 ] as const;
 
-interface Summary {
-  classification: Classification;
+interface LocalizedSummary {
   asking: string;
   gathered: string[];
   nextStep: string;
+}
+
+interface Summary {
+  classification: Classification;
   tone: string;
+  // Bilingual copies. Old cached rows (pre-migration) still contain
+  // flat `asking` / `gathered` / `nextStep` fields — we keep those
+  // as optional so the frontend can fall back if `en`/`ru` are
+  // missing on an old row.
+  en: LocalizedSummary;
+  ru: LocalizedSummary;
+  // Legacy fields — populated on old cache rows, unused on new ones.
+  // Kept in the type so the JSON round-trip stays lossless.
+  asking?: string;
+  gathered?: string[];
+  nextStep?: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -205,6 +219,8 @@ async function generateSummary(messages: MessageRow[]): Promise<Summary> {
 
   const systemPrompt = `You are analyzing a conversation between a photography customer and a photographer's inbox (some replies come from the photographer's AI assistant, some from the photographer Vero personally). Produce a compact summary Vero can use to catch up on the thread at a glance AND immediately decide whether it's worth her time.
 
+Vero speaks Russian natively but the admin panel is bilingual, so return the summary in BOTH English AND Russian. Classification and tone stay as machine-readable keys.
+
 Return a JSON object with EXACTLY these keys:
 - "classification": one string, EXACTLY one of:
     * "booking-inquiry" — real photography client asking about pricing/availability/sessions/weddings
@@ -213,10 +229,12 @@ Return a JSON object with EXACTLY these keys:
     * "collaboration-offer" — a legitimate creative/brand collab proposal (rare — most "collab" DMs are actually spam)
     * "spam-or-unrelated" — solicitation, sales pitch, agency outreach (web design, SEO, marketing services, "your website is outdated", "we can help you"), crypto/investment, unrelated to photography, or template mass-DM. When in doubt between this and collaboration-offer, prefer this — real collabs are extremely rare.
     * "unclear" — you genuinely cannot tell (e.g. just "hey" with no prior context)
-- "asking": one sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
-- "gathered": array of concrete facts the customer has shared — dates, locations, session types, headcounts, styles they like, constraints, budget mentions, deadlines. Empty array if nothing concrete has been shared yet OR if it's spam (don't extract "facts" from a pitch).
-- "nextStep": one sentence — what should Vero do next. For real inquiries: confirm a date, send pricing, ask a specific missing question. For existing clients: reference what they're following up on. For spam: "Ignore — solicitation, not a real inquiry." For general questions: a brief, appropriate acknowledgment. Say "Awaiting customer response" if the ball is in their court.
-- "tone": ONE WORD describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.
+- "tone": ONE WORD (English) describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.
+- "en": an object with:
+    - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
+    - "gathered": array of concrete facts the customer has shared in English — dates, locations, session types, headcounts, styles they like, constraints, budget mentions, deadlines, phone numbers. Empty array if nothing concrete or if it's spam. Format phone numbers with proper grouping like "(555) 123-4567" — never as one long digit string.
+    - "nextStep": one English sentence — what should Vero do next.
+- "ru": an object with the SAME keys ("asking", "gathered", "nextStep") but in RUSSIAN. Preserve phone-number formatting, proper names, and specific dates/times unchanged (e.g. "9:30am" stays "9:30am", "Bushkill Falls" stays "Bushkill Falls").
 
 Reply with ONLY the JSON object — no preamble, no markdown code fences, no explanation.
 
@@ -228,13 +246,16 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
       { role: 'system', content: systemPrompt },
       { role: 'user', content: transcript },
     ],
-    max_tokens: 400,
+    // Bumped from 400 → 700 to accommodate the extra Russian copy
+    // now that we render bilingual summaries. Empirically the model
+    // still keeps under this even for long threads.
+    max_tokens: 700,
     temperature: 0.2,
     response_format: { type: 'json_object' },
   });
 
   const raw = response.choices[0]?.message?.content?.trim() ?? '{}';
-  const parsed = JSON.parse(raw) as Partial<Summary>;
+  const parsed = JSON.parse(raw) as Partial<Summary> & Record<string, any>;
 
   const classification: Classification =
     typeof parsed.classification === 'string' &&
@@ -242,13 +263,38 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
       ? (parsed.classification as Classification)
       : 'unclear';
 
+  // Extract each locale block. Fall back to flat fields if the model
+  // regressed to the old shape (defense-in-depth) so we never render
+  // an empty summary.
+  const readLocale = (
+    src: any,
+    fallbackAsking: string,
+    fallbackNext: string,
+  ): LocalizedSummary => ({
+    asking: typeof src?.asking === 'string' ? src.asking : fallbackAsking,
+    gathered: Array.isArray(src?.gathered)
+      ? src.gathered.filter((g: unknown): g is string => typeof g === 'string')
+      : [],
+    nextStep: typeof src?.nextStep === 'string' ? src.nextStep : fallbackNext,
+  });
+
+  const en = readLocale(
+    parsed.en ?? parsed,
+    'Nothing specific asked yet.',
+    'Awaiting customer response',
+  );
+  const ru = readLocale(
+    parsed.ru,
+    // If the model failed to give us Russian, fall back to the
+    // English copy rather than empty — better than nothing.
+    en.asking,
+    en.nextStep,
+  );
+
   return {
     classification,
-    asking: typeof parsed.asking === 'string' ? parsed.asking : 'Nothing specific asked yet.',
-    gathered: Array.isArray(parsed.gathered)
-      ? parsed.gathered.filter((g): g is string => typeof g === 'string')
-      : [],
-    nextStep: typeof parsed.nextStep === 'string' ? parsed.nextStep : 'Awaiting customer response',
     tone: typeof parsed.tone === 'string' ? parsed.tone : 'unclear',
+    en,
+    ru,
   };
 }
