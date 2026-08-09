@@ -61,7 +61,12 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setEntries(data.entries);
+        // The /api/admin/context-list endpoint returns the row list
+        // under the key `contexts` (matches its original shape from
+        // the old messaging-only UI). Falling back to `entries` in
+        // case anyone ever adds an alias — cheap, keeps this
+        // robust to server-side renames.
+        setEntries(data.contexts ?? data.entries ?? []);
       } else {
         setError(data.error || `Load failed (${res.status})`);
       }
