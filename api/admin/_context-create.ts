@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       INSERT INTO ai_context (category, label, content, active, sort_order)
       VALUES (${category}, ${label}, ${content}, ${active}, ${sortOrder})
-      RETURNING id, category, label, content, active, sort_order, created_at, updated_at
+      RETURNING id, category, label, content, active, source, sort_order, created_at, updated_at
     `) as Array<{
       id: string;
       category: string;

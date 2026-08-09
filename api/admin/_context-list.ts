@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      SELECT id, category, label, content, active, sort_order, created_at, updated_at
+      SELECT id, category, label, content, active, source, sort_order, created_at, updated_at
       FROM ai_context
       ORDER BY category, sort_order, created_at
     `) as ContextRow[];

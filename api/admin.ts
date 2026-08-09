@@ -45,6 +45,7 @@ import galleryUpdateHandler from './admin/_gallery-update.js';
 import galleryDeleteHandler from './admin/_gallery-delete.js';
 import gallerySyncNowHandler from './admin/_gallery-sync-now.js';
 import gallerySettingsHandler from './admin/_gallery-settings.js';
+import assistantChatHandler from './admin/_assistant-chat.js';
 
 const HANDLERS: Record<
   string,
@@ -83,6 +84,7 @@ const HANDLERS: Record<
   'gallery-delete': galleryDeleteHandler,
   'gallery-sync-now': gallerySyncNowHandler,
   'gallery-settings': gallerySettingsHandler,
+  'assistant-chat': assistantChatHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

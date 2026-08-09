@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         active     = COALESCE(${active},     active),
         sort_order = COALESCE(${sortOrder},  sort_order)
       WHERE id = ${id}
-      RETURNING id, category, label, content, active, sort_order, created_at, updated_at
+      RETURNING id, category, label, content, active, source, sort_order, created_at, updated_at
     `) as Array<{
       id: string;
       category: string;
