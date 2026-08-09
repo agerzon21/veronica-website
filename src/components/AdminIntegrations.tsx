@@ -1,6 +1,6 @@
-import { Box, VStack, HStack, Text, Flex, Icon, Badge, useToast } from '@chakra-ui/react';
+import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, useToast } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaInstagram, FaCheck, FaExternalLinkAlt, FaExclamationTriangle, FaTerminal } from 'react-icons/fa';
+import { FaInstagram, FaCheck, FaExternalLinkAlt, FaExclamationTriangle, FaTerminal, FaCopy } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 
 /**
@@ -30,7 +30,7 @@ const VERCEL_ENV_LINK =
 
 const AdminIntegrations = ({ adminPassword }: Props) => {
   return (
-    <Box maxW="1200px" mx="auto">
+    <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
       <VStack align="flex-start" spacing={1} mb={8}>
         <Text
           fontSize="xs"
@@ -69,7 +69,22 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tiny local flag that briefly swaps the copy IconButton's icon to a checkmark
+  // after clipboard write succeeds — pure visual acknowledgement, no toast noise.
+  const [copied, setCopied] = useState(false);
   const toast = useToast();
+
+  const ROTATE_COMMAND =
+    'IG_ACCESS_TOKEN=<current-token-from-vercel> node scripts/refresh-instagram-token.mjs';
+
+  const handleCopyCommand = () => {
+    // Fire-and-forget clipboard write; ignore rejection (e.g. insecure context)
+    // rather than surfacing a toast — the icon-swap is enough feedback.
+    void navigator.clipboard?.writeText(ROTATE_COMMAND).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    });
+  };
 
   const loadStatus = async () => {
     setLoading(true);
@@ -153,10 +168,10 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
           </Flex>
           <VStack align="flex-start" spacing={0}>
             <Text
-              fontSize="2xs"
+              fontSize={{ base: 'xs', md: '2xs' }}
               fontWeight="500"
               textTransform="uppercase"
-              letterSpacing="0.22em"
+              letterSpacing={{ base: '0.15em', md: '0.2em' }}
               color="#c9a96e"
             >
               Integration
@@ -206,54 +221,83 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
         <Flex align="center" gap={2} mb={3}>
           <Icon as={FaTerminal} boxSize={3} color="#c9a96e" />
           <Text
-            fontSize="2xs"
+            fontSize={{ base: 'xs', md: '2xs' }}
             fontWeight="500"
             textTransform="uppercase"
-            letterSpacing="0.22em"
+            letterSpacing={{ base: '0.15em', md: '0.2em' }}
             color="#c9a96e"
           >
             How to rotate
           </Text>
         </Flex>
-        <VStack align="stretch" spacing={3} pl={5}>
-          <Text as="li" fontSize="sm" color="gray.700" lineHeight="1.7" listStyleType="decimal">
+        {/* Real <ol> so browsers render decimal markers — previously a VStack
+            wrapped bare <li> children, which produced no numbers at all. */}
+        <Box as="ol" pl={5} listStyleType="decimal">
+          <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
             Open the VeronicaWebsite repo in VS Code, open a terminal
-          </Text>
-          <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" listStyleType="decimal">
-            Run:{' '}
-            <Text
-              as="code"
-              display="block"
-              mt={1.5}
-              bg="gray.900"
-              color="gray.100"
-              fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
-              fontSize="xs"
-              px={3}
-              py={2}
-              borderRadius="sm"
-              wordBreak="break-all"
-            >
-              IG_ACCESS_TOKEN=&lt;current-token-from-vercel&gt; node scripts/refresh-instagram-token.mjs
-            </Text>
           </Box>
-          <Text as="li" fontSize="sm" color="gray.700" lineHeight="1.7" listStyleType="decimal">
+          <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
+            Run:{' '}
+            {/* The command is longer than a phone viewport. Instead of wrapping
+                mid-token (wordBreak='break-all' looked ragged), let the code
+                pane scroll horizontally, and offer a Copy button so mobile
+                users don't have to select-drag inside the scroll region. */}
+            <Flex mt={1.5} gap={2} align="stretch">
+              <Box
+                flex="1"
+                minW={0}
+                overflowX="auto"
+                bg="gray.900"
+                borderRadius="sm"
+                sx={{ scrollbarWidth: 'thin' }}
+              >
+                <Text
+                  as="code"
+                  display="block"
+                  color="gray.100"
+                  fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
+                  fontSize="xs"
+                  px={3}
+                  py={2}
+                  whiteSpace="nowrap"
+                >
+                  IG_ACCESS_TOKEN=&lt;current-token-from-vercel&gt; node scripts/refresh-instagram-token.mjs
+                </Text>
+              </Box>
+              <IconButton
+                aria-label="Copy command"
+                icon={<Icon as={copied ? FaCheck : FaCopy} boxSize={3.5} />}
+                onClick={handleCopyCommand}
+                variant="outline"
+                borderColor="gray.300"
+                color={copied ? 'green.600' : 'gray.600'}
+                minW={{ base: '44px', md: '32px' }}
+                minH={{ base: '44px', md: '32px' }}
+                h={{ base: '44px', md: '32px' }}
+                w={{ base: '44px', md: '32px' }}
+                borderRadius="sm"
+                flexShrink={0}
+              />
+            </Flex>
+          </Box>
+          <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
             Copy the new long-lived token from the script's output
-          </Text>
-          <Text as="li" fontSize="sm" color="gray.700" lineHeight="1.7" listStyleType="decimal">
+          </Box>
+          <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
             Paste it into Vercel → <Text as="code" bg="gray.100" px={1.5} py={0.5} borderRadius="sm" fontSize="xs">IG_ACCESS_TOKEN</Text> → Save → Redeploy
-          </Text>
-          <Text as="li" fontSize="sm" color="gray.700" lineHeight="1.7" listStyleType="decimal">
+          </Box>
+          <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7">
             That&rsquo;s it — the reminder clock resets automatically the
             next time this page loads or the daily cron runs (the
             <strong> Mark as Refreshed</strong> button below is just an
             optional way to reset it right this second)
-          </Text>
-        </VStack>
+          </Box>
+        </Box>
       </Box>
 
-      {/* Actions row */}
-      <HStack spacing={3} mt={6} wrap="wrap">
+      {/* Actions row — stacks vertically on mobile so full-width tap targets
+          don't sit half-off-viewport when the labels are long. */}
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={2} mt={6}>
         <CTAButton
           onClick={handleMarkRefreshed}
           icon={FaCheck}
@@ -265,6 +309,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
           size="sm"
           isLoading={marking}
           loadingText="Saving..."
+          fullWidth={{ base: true, md: false }}
         >
           Mark as Refreshed
         </CTAButton>
@@ -274,10 +319,11 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
           icon={FaExternalLinkAlt}
           variant="outline"
           size="sm"
+          fullWidth={{ base: true, md: false }}
         >
           Open Vercel env vars
         </CTAButton>
-      </HStack>
+      </Stack>
 
       {/* Reassurance footnote */}
       <Box mt={6} pt={5} borderTop="1px solid" borderColor="gray.100">
@@ -303,9 +349,9 @@ function StatusBadge({ status }: { status: IgStatus['status'] }) {
     <Badge
       bg={c.bg}
       color={c.color}
-      fontSize="2xs"
+      fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
-      letterSpacing="0.1em"
+      letterSpacing={{ base: '0.08em', md: '0.1em' }}
       textTransform="uppercase"
       px={2.5}
       py={1}

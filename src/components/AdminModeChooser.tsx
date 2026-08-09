@@ -1,5 +1,6 @@
 import { Box, VStack, Text, SimpleGrid, Icon, Flex } from '@chakra-ui/react';
-import { FaFileSignature, FaImages, FaArrowLeft } from 'react-icons/fa';
+import { FaFileSignature, FaImages } from 'react-icons/fa';
+import AdminBackButton from './ui/AdminBackButton';
 
 interface Props {
   onPick: (mode: 'full' | 'gallery') => void;
@@ -8,28 +9,11 @@ interface Props {
 
 const AdminModeChooser = ({ onPick, onCancel }: Props) => {
   return (
-    <Box maxW="900px" mx="auto">
+    <Box maxW="900px" mx="auto" px={{ base: 4, md: 6 }} py={{ base: 6, md: 8 }}>
       <Flex align="center" mb={8} gap={3}>
-        <Box
-          as="button"
-          type="button"
-          onClick={onCancel}
-          display="inline-flex"
-          alignItems="center"
-          gap={2}
-          fontSize="xs"
-          letterSpacing="0.2em"
-          textTransform="uppercase"
-          color="gray.500"
-          _hover={{ color: '#c9a96e' }}
-          cursor="pointer"
-          bg="transparent"
-          border="none"
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          <Icon as={FaArrowLeft} boxSize={3} />
-          Back
-        </Box>
+        {/* Standard 44×44 back affordance — replaces the old hand-rolled
+            chevron-with-Back-text link that had a ~20px tap target. */}
+        <AdminBackButton onClick={onCancel} label="Back" />
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={8}>
@@ -84,8 +68,20 @@ function Card({
       textAlign="left"
       cursor="pointer"
       transition="all 0.2s"
-      _hover={{ borderColor: '#c9a96e', transform: 'translateY(-2px)', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
+      // Touch devices trigger `:hover` on tap and get stuck in the lifted
+      // state until the next tap elsewhere — gate the lift behind a real
+      // hover-capable pointer, and pair it with an explicit press state.
+      _active={{ borderColor: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
+      sx={{
+        WebkitTapHighlightColor: 'transparent',
+        '@media (hover: hover)': {
+          '&:hover': {
+            borderColor: '#c9a96e',
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+          },
+        },
+      }}
     >
       <VStack align="flex-start" spacing={3}>
         <Icon as={icon} boxSize={6} color="#c9a96e" />

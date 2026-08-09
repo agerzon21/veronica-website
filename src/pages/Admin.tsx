@@ -84,13 +84,30 @@ const Admin = () => {
           <title>Admin | Vero Photography</title>
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
-        <Box bg="gray.50" minH="100vh" pt={{ base: 20, md: 24 }} pb={{ base: 16, md: 20 }} px={{ base: 4, md: 8 }}>
+        <Box
+          bg="gray.50"
+          minH="100vh"
+          // Extra bottom padding on mobile so the fixed bottom nav
+          // doesn't cover the last row of content. Uses safe-area-inset
+          // for notched iPhones so the nav clears the home indicator.
+          pt={{ base: 20, md: 24 }}
+          pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 20 }}
+          px={{ base: 4, md: 8 }}
+          // Any single overflowing child would give the whole admin panel
+          // a horizontal page scroll — a classic mobile bug. This is a
+          // safety net; individual components should still be responsive.
+          overflowX="hidden"
+        >
           {view.kind === 'dashboard' && (
             <>
-              {/* Top-level tab strip. Sits above whichever tab body is
-                  active. Integrations tab is superadmin-only — Veronika
-                  never sees it, so she can't get confused (or worse,
-                  accidentally paste something into a token box). */}
+              {/* Desktop tab strip. Sits above the active tab body. On
+                  mobile we hide this entirely and use the fixed bottom
+                  nav below instead — the pill row was overflowing 375px
+                  viewports and blowing out the whole page.
+
+                  Integrations tab is superadmin-only — Vero never sees
+                  it, so she can't get confused (or worse, accidentally
+                  paste something into a token box). */}
               <AdminTabStrip
                 active={dashTab}
                 onChange={setDashTab}
@@ -155,6 +172,19 @@ const Admin = () => {
             />
           )}
         </Box>
+        {/* Mobile-only bottom nav. Rendered once here at the shell level
+            (rather than per-view) so it stays visible while Vero is
+            reading a conversation, editing a photo, etc. — the way
+            iOS/Android tab bars work. Hidden during drill-in sub-flows
+            (mode-chooser / new-client / client-detail) since those
+            have their own back navigation. */}
+        {view.kind === 'dashboard' && (
+          <AdminMobileNav
+            active={dashTab}
+            onChange={setDashTab}
+            showIntegrations={adminLevel === 'super'}
+          />
+        )}
       </>
     );
   }
@@ -295,11 +325,29 @@ const Admin = () => {
 };
 
 /**
- * Top-level tab strip for the admin dashboard. Sits above the active
+ * Shared tab definitions — used by both the desktop tab strip and
+ * the mobile bottom nav so the two nav treatments can't drift.
+ */
+const TABS: { id: DashTab; label: string; icon: typeof FaUsers }[] = [
+  { id: 'clients', label: 'Clients', icon: FaUsers },
+  { id: 'messages', label: 'Messages', icon: FaCommentDots },
+  { id: 'assistant', label: 'Assistant', icon: FaRobot },
+  { id: 'journal', label: 'Journal', icon: FaBookOpen },
+  { id: 'gallery', label: 'Gallery', icon: FaImage },
+];
+
+function tabsFor(showIntegrations: boolean) {
+  return showIntegrations
+    ? [...TABS, { id: 'integrations' as DashTab, label: 'Integrations', icon: FaPlug }]
+    : TABS;
+}
+
+/**
+ * DESKTOP tab strip for the admin dashboard. Sits above the active
  * tab's body. Uses the same pill-with-icon shape as PortalTopNav /
  * gallery TopSectionNav so it feels of a piece with the rest of the
- * site's chrome. Integrations tab conditionally rendered based on
- * admin level — hidden entirely for the 'admin' level (Vero).
+ * site's chrome. Hidden on mobile — the bottom nav takes over there.
+ * Integrations tab conditionally rendered based on admin level.
  */
 function AdminTabStrip({
   active,
@@ -310,20 +358,20 @@ function AdminTabStrip({
   onChange: (t: DashTab) => void;
   showIntegrations: boolean;
 }) {
-  const tabs: { id: DashTab; label: string; icon: typeof FaUsers }[] = [
-    { id: 'clients', label: 'Clients', icon: FaUsers },
-    { id: 'messages', label: 'Messages', icon: FaCommentDots },
-    { id: 'assistant', label: 'Assistant', icon: FaRobot },
-    { id: 'journal', label: 'Journal', icon: FaBookOpen },
-    { id: 'gallery', label: 'Gallery', icon: FaImage },
-  ];
-  if (showIntegrations) {
-    tabs.push({ id: 'integrations', label: 'Integrations', icon: FaPlug });
-  }
+  const tabs = tabsFor(showIntegrations);
   if (tabs.length < 2) return null;
 
   return (
-    <Box maxW="1200px" mx="auto" mb={6}>
+    <Box
+      maxW="1200px"
+      mx="auto"
+      mb={6}
+      // Hidden on mobile — the fixed bottom nav takes over that job.
+      // Keeping the desktop pill strip because it doubles as visual
+      // section chrome on wider screens where the bottom nav would
+      // be silly.
+      display={{ base: 'none', md: 'block' }}
+    >
       <HStack spacing={2}>
         {tabs.map((t) => {
           const isActive = active === t.id;
@@ -336,7 +384,7 @@ function AdminTabStrip({
               display="inline-flex"
               alignItems="center"
               gap={2}
-              px={{ base: 4, md: 5 }}
+              px={5}
               py={2}
               fontSize="2xs"
               fontWeight="500"
@@ -366,6 +414,90 @@ function AdminTabStrip({
           );
         })}
       </HStack>
+    </Box>
+  );
+}
+
+/**
+ * MOBILE bottom nav for the admin dashboard. Fixed at the bottom of
+ * the viewport so it's always thumb-reachable regardless of scroll
+ * position. Icon-on-top / label-under, active state = gold everything
+ * + a top border. Respects the iOS safe-area-inset so it clears the
+ * home indicator on notched devices.
+ *
+ * When Alex is a superadmin, six tabs would overflow a 375px width in
+ * one row — so on that view we collapse Integrations into a "More"
+ * cell. But for Vero (5 tabs) they fit exactly with no scroll.
+ */
+function AdminMobileNav({
+  active,
+  onChange,
+  showIntegrations,
+}: {
+  active: DashTab;
+  onChange: (t: DashTab) => void;
+  showIntegrations: boolean;
+}) {
+  const tabs = tabsFor(showIntegrations);
+  return (
+    <Box
+      position="fixed"
+      bottom={0}
+      left={0}
+      right={0}
+      zIndex={30}
+      bg="white"
+      borderTop="1px solid"
+      borderColor="gray.200"
+      pb="env(safe-area-inset-bottom)"
+      display={{ base: 'block', md: 'none' }}
+      boxShadow="0 -2px 12px -6px rgba(0, 0, 0, 0.08)"
+    >
+      <Flex align="stretch" role="tablist">
+        {tabs.map((t) => {
+          const isActive = active === t.id;
+          return (
+            <Box
+              key={t.id}
+              as="button"
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => onChange(t.id)}
+              flex="1"
+              minH="60px"
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              justifyContent="center"
+              gap={1}
+              bg="transparent"
+              border="none"
+              // Top border used as the active indicator — thin gold rule
+              // that reads consistently with the rest of the site.
+              borderTop="2px solid"
+              borderTopColor={isActive ? '#c9a96e' : 'transparent'}
+              color={isActive ? '#c9a96e' : 'gray.500'}
+              cursor="pointer"
+              transition="color 0.15s, background 0.15s"
+              _active={{ bg: 'rgba(201, 169, 110, 0.08)' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Icon as={t.icon} boxSize={5} />
+              <Text
+                as="span"
+                fontSize="10px"
+                fontWeight={isActive ? '600' : '500'}
+                letterSpacing="0.06em"
+                textTransform="uppercase"
+                lineHeight="1"
+              >
+                {t.label}
+              </Text>
+            </Box>
+          );
+        })}
+      </Flex>
     </Box>
   );
 }

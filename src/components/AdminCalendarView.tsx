@@ -69,71 +69,196 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
 
   const today = todayYmd();
 
+  // Agenda list for mobile — chronological list of days IN the visible
+  // month that have events. 6×7 grid cells crushed to ~53px on a 375px
+  // viewport, which meant EventChip labels truncated to 3 chars and
+  // taps were basically impossible. Agenda is honest about the shape
+  // of the data (which is inherently a list, not a grid — a photographer
+  // has 1-2 sessions a week, not 30).
+  const agenda = useMemo(() => {
+    return cells
+      .filter(({ date, inMonth }) => inMonth && portalsByDate.has(sameYmd(date)))
+      .map(({ date }) => ({
+        date,
+        key: sameYmd(date),
+        events: portalsByDate.get(sameYmd(date)) ?? [],
+      }));
+  }, [cells, portalsByDate]);
+
   return (
     <Box>
-      {/* Month nav */}
-      <Flex align="center" justify="space-between" mb={4} wrap="wrap" gap={3}>
-        <HStack spacing={3}>
+      {/* Month nav — bigger nav buttons on mobile so the chevrons are
+          real tap targets, and Today gets a border so it reads as a
+          button rather than orphaned text. */}
+      <Flex align="center" justify="space-between" mb={4} gap={3}>
+        <HStack spacing={{ base: 2, md: 3 }}>
           <NavButton onClick={goPrev}>
-            <Icon as={FaChevronLeft} boxSize={3} />
+            <Icon as={FaChevronLeft} boxSize={{ base: 4, md: 3 }} />
           </NavButton>
-          <Text fontSize="md" fontWeight="500" color="gray.800" minW="140px" textAlign="center">
+          <Text
+            fontSize={{ base: 'sm', md: 'md' }}
+            fontWeight="500"
+            color="gray.800"
+            minW={{ base: '120px', md: '140px' }}
+            textAlign="center"
+          >
             {monthLabel}
           </Text>
           <NavButton onClick={goNext}>
-            <Icon as={FaChevronRight} boxSize={3} />
+            <Icon as={FaChevronRight} boxSize={{ base: 4, md: 3 }} />
           </NavButton>
         </HStack>
         <Box
           as="button"
           type="button"
           onClick={goToday}
-          fontSize="xs"
-          letterSpacing="0.2em"
+          fontSize={{ base: 'xs', md: 'xs' }}
+          letterSpacing={{ base: '0.15em', md: '0.2em' }}
           textTransform="uppercase"
           color="gray.500"
           _hover={{ color: '#c9a96e' }}
+          _active={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
           cursor="pointer"
           bg="transparent"
-          border="none"
+          border={{ base: '1px solid', md: 'none' }}
+          borderColor={{ base: 'gray.200', md: 'transparent' }}
+          borderRadius={{ base: 'sm', md: 'none' }}
+          px={{ base: 3, md: 0 }}
+          py={{ base: 2, md: 0 }}
+          minH={{ base: '40px', md: 'auto' }}
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
           Today
         </Box>
       </Flex>
 
-      {/* Day labels */}
-      <SimpleGrid columns={7} spacing={0} mb={1}>
-        {DAY_LABELS.map((d) => (
-          <Box key={d} px={2} py={2} textAlign="center">
-            <Text fontSize="2xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.400">
-              {d}
-            </Text>
+      {/* Mobile: agenda list (only days with events) */}
+      <Box display={{ base: 'block', md: 'none' }} mb={4}>
+        {agenda.length === 0 ? (
+          <Box
+            bg="white"
+            border="1px dashed"
+            borderColor="gray.300"
+            borderRadius="sm"
+            py={10}
+            textAlign="center"
+            color="gray.400"
+            fontSize="sm"
+          >
+            No sessions scheduled this month.
           </Box>
-        ))}
-      </SimpleGrid>
+        ) : (
+          <VStack spacing={2.5} align="stretch">
+            {agenda.map(({ date, key, events }) => {
+              const isToday = key === today;
+              return (
+                <Box
+                  key={key}
+                  bg="white"
+                  border="1px solid"
+                  borderColor={isToday ? '#c9a96e' : 'gray.200'}
+                  borderRadius="sm"
+                  p={4}
+                >
+                  <HStack spacing={3} align="baseline" mb={2}>
+                    <Text
+                      fontSize="2xl"
+                      fontWeight="300"
+                      color={isToday ? '#c9a96e' : 'gray.800'}
+                      lineHeight="1"
+                    >
+                      {date.getDate()}
+                    </Text>
+                    <VStack spacing={0} align="flex-start">
+                      <Text
+                        fontSize="xs"
+                        fontWeight="500"
+                        letterSpacing="0.12em"
+                        textTransform="uppercase"
+                        color={isToday ? '#c9a96e' : 'gray.500'}
+                      >
+                        {date.toLocaleDateString('en-US', { weekday: 'long' })}
+                        {isToday && ' · Today'}
+                      </Text>
+                      <Text fontSize="2xs" color="gray.400">
+                        {events.length} session{events.length === 1 ? '' : 's'}
+                      </Text>
+                    </VStack>
+                  </HStack>
+                  <VStack align="stretch" spacing={1.5}>
+                    {events.map((p) => (
+                      <Box
+                        key={p.id}
+                        as="button"
+                        type="button"
+                        onClick={() => onOpenPortal(p.id)}
+                        w="100%"
+                        textAlign="left"
+                        bg="#fdf9f0"
+                        border="1px solid"
+                        borderColor="rgba(201, 169, 110, 0.35)"
+                        borderRadius="sm"
+                        px={3}
+                        py={3}
+                        minH="44px"
+                        _active={{ bg: '#f5efe4', borderColor: '#c9a96e' }}
+                        sx={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        <Text fontSize="sm" color="gray.800" fontWeight="500" noOfLines={1}>
+                          {p.client_display_name || 'Unnamed session'}
+                        </Text>
+                        {p.session_type && (
+                          <Text fontSize="xs" color="gray.500" mt={0.5} noOfLines={1}>
+                            {p.session_type}
+                          </Text>
+                        )}
+                      </Box>
+                    ))}
+                  </VStack>
+                </Box>
+              );
+            })}
+          </VStack>
+        )}
+      </Box>
 
-      {/* Day cells */}
-      <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" overflow="hidden">
-        <SimpleGrid columns={7} spacing={0}>
-          {cells.map(({ date, inMonth }, i) => {
-            const key = sameYmd(date);
-            const events = portalsByDate.get(key) ?? [];
-            const isToday = key === today;
-            return (
-              <DayCell
-                key={i}
-                date={date}
-                inMonth={inMonth}
-                isToday={isToday}
-                events={events}
-                onOpenPortal={onOpenPortal}
-                isLastColumn={(i + 1) % 7 === 0}
-                isLastRow={i >= 35}
-              />
-            );
-          })}
+      {/* Desktop: 6×7 month grid — hidden on mobile because 40-53px
+          cells with 10px event labels are actively worse than an
+          agenda. */}
+      <Box display={{ base: 'none', md: 'block' }}>
+        {/* Day labels */}
+        <SimpleGrid columns={7} spacing={0} mb={1}>
+          {DAY_LABELS.map((d) => (
+            <Box key={d} px={2} py={2} textAlign="center">
+              <Text fontSize="2xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.400">
+                {d}
+              </Text>
+            </Box>
+          ))}
         </SimpleGrid>
+
+        {/* Day cells */}
+        <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" overflow="hidden">
+          <SimpleGrid columns={7} spacing={0}>
+            {cells.map(({ date, inMonth }, i) => {
+              const key = sameYmd(date);
+              const events = portalsByDate.get(key) ?? [];
+              const isToday = key === today;
+              return (
+                <DayCell
+                  key={i}
+                  date={date}
+                  inMonth={inMonth}
+                  isToday={isToday}
+                  events={events}
+                  onOpenPortal={onOpenPortal}
+                  isLastColumn={(i + 1) % 7 === 0}
+                  isLastRow={i >= 35}
+                />
+              );
+            })}
+          </SimpleGrid>
+        </Box>
       </Box>
 
       {/* Legend */}
@@ -271,8 +396,8 @@ function NavButton({ onClick, children }: { onClick: () => void; children: React
       as="button"
       type="button"
       onClick={onClick}
-      w="32px"
-      h="32px"
+      w={{ base: '44px', md: '32px' }}
+      h={{ base: '44px', md: '32px' }}
       bg="white"
       border="1px solid"
       borderColor="gray.200"
@@ -283,6 +408,7 @@ function NavButton({ onClick, children }: { onClick: () => void; children: React
       cursor="pointer"
       color="gray.600"
       _hover={{ borderColor: '#c9a96e', color: '#c9a96e' }}
+      _active={{ borderColor: '#c9a96e', color: '#c9a96e', bg: '#fdf9f0' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       {children}

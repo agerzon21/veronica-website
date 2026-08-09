@@ -1,7 +1,8 @@
-import { Box, VStack, HStack, Text, Input, Flex, Icon, Textarea } from '@chakra-ui/react';
+import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
-import { FaArrowLeft, FaCheck, FaCopy } from 'react-icons/fa';
+import { FaCheck, FaCopy } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import AdminBackButton from './ui/AdminBackButton';
 import SessionTypePicker from './SessionTypePicker';
 
 interface Props {
@@ -216,28 +217,9 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
 
   // ─── Form ──────────────────────────────────────────────────────────
   return (
-    <Box maxW="640px" mx="auto">
+    <Box maxW="640px" mx="auto" px={{ base: 0, md: 0 }}>
       <Flex align="center" mb={8} gap={3}>
-        <Box
-          as="button"
-          type="button"
-          onClick={onCancel}
-          display="inline-flex"
-          alignItems="center"
-          gap={2}
-          fontSize="xs"
-          letterSpacing="0.2em"
-          textTransform="uppercase"
-          color="gray.500"
-          _hover={{ color: '#c9a96e' }}
-          cursor="pointer"
-          bg="transparent"
-          border="none"
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          <Icon as={FaArrowLeft} boxSize={3} />
-          Back
-        </Box>
+        <AdminBackButton onClick={onCancel} label="Back" />
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={6}>
@@ -364,8 +346,8 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
               These are only visible to you in the admin. The client doesn't see them — gallery-only clients only see their photos.
             </Text>
             <VStack align="stretch" spacing={4}>
-              <HStack spacing={4} align="flex-start">
-                <Field label="Total (USD)" w="50%" helpText="What you charged for the project. Optional.">
+              <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
+                <Field label="Total (USD)" w={{ base: '100%', md: '50%' }} helpText="What you charged for the project. Optional.">
                   <FormInput
                     type="number"
                     inputMode="decimal"
@@ -375,7 +357,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
                     min="0"
                   />
                 </Field>
-                <Field label="Retainer / Deposit (USD)" w="50%" helpText="Amount paid up front to reserve the booking.">
+                <Field label="Retainer / Deposit (USD)" w={{ base: '100%', md: '50%' }} helpText="Amount paid up front to reserve the booking.">
                   <FormInput
                     type="number"
                     inputMode="decimal"
@@ -385,7 +367,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
                     min="0"
                   />
                 </Field>
-              </HStack>
+              </Stack>
               <Text fontSize="xs" color="gray.500" fontWeight="300">
                 You can log payments later in the client's detail view — Zelle, cash, Venmo, etc. — with notes attached.
               </Text>
@@ -480,7 +462,12 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
               focusBorderColor="#c9a96e"
             />
             <Flex gap={2} w={{ base: '100%', sm: 'auto' }}>
-              <CTAButton onClick={copyUrl} variant={urlCopied ? 'outline' : 'solid'} size="sm">
+              <CTAButton
+                onClick={copyUrl}
+                variant={urlCopied ? 'outline' : 'solid'}
+                size="sm"
+                fullWidth={{ base: true, md: false }}
+              >
                 {urlCopied ? (
                   <>
                     <Icon as={FaCheck} boxSize={3} mr={2} /> Copied
@@ -491,7 +478,12 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
                   </>
                 )}
               </CTAButton>
-              <CTAButton href={directUrl} variant="outline" size="sm">
+              <CTAButton
+                href={directUrl}
+                variant="outline"
+                size="sm"
+                fullWidth={{ base: true, md: false }}
+              >
                 Open
               </CTAButton>
             </Flex>
@@ -554,7 +546,16 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
         ) : (
           <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={4} py={5}>
             <VStack align="flex-start" spacing={2}>
-              <Text fontSize="sm" color="gray.700" fontWeight="500">Password: <Text as="span" fontFamily="monospace">{state.galleryPassword}</Text></Text>
+              <Text
+                fontSize="sm"
+                color="gray.700"
+                fontWeight="500"
+                // Long auto-generated passwords (e.g. "PortraitAlexSmith2026")
+                // can overflow narrow mobile viewports without a break rule.
+                sx={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}
+              >
+                Password: <Text as="span" fontFamily="monospace">{state.galleryPassword}</Text>
+              </Text>
               <Text fontSize="sm" color="gray.500" fontWeight="300">
                 Save this somewhere — it's how you'll let the client into their gallery once you're ready to deliver.
               </Text>
@@ -582,7 +583,10 @@ const Field = ({
   label: string;
   helpText?: string;
   children: React.ReactNode;
-  w?: string;
+  // Accepts Chakra responsive values (e.g. { base: '100%', md: '50%' })
+  // in addition to plain strings, so callers can stack side-by-side
+  // fields on desktop and full-width on mobile.
+  w?: any;
   required?: boolean;
 }) => (
   <Box w={w ?? '100%'}>
@@ -591,10 +595,10 @@ const Field = ({
       display="inline-flex"
       alignItems="center"
       gap={1.5}
-      fontSize="2xs"
+      fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
       color="#c9a96e"
-      letterSpacing="0.2em"
+      letterSpacing={{ base: '0.15em', md: '0.2em' }}
       textTransform="uppercase"
       mb={2}
     >
@@ -618,7 +622,9 @@ const FormInput = (props: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'siz
     border="1px solid"
     borderColor="gray.300"
     color="gray.800"
-    fontSize="sm"
+    // Mobile bumps to `md` (16px) so iOS Safari doesn't auto-zoom on
+    // focus. Desktop stays compact.
+    fontSize={{ base: 'md', md: 'sm' }}
     borderRadius="sm"
     _hover={{ borderColor: 'gray.400' }}
     _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}

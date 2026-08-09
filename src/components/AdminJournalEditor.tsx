@@ -1,9 +1,10 @@
 import {
-  Box, VStack, HStack, Text, Flex, Icon, Input, Textarea, Select, Spinner, useToast,
+  Box, VStack, HStack, Stack, Text, Flex, Icon, Input, Textarea, Select, Spinner, useToast,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaArrowLeft, FaSave, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaSave, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import AdminBackButton from './ui/AdminBackButton';
 
 /**
  * Journal post editor — create + edit share this one form. When
@@ -200,33 +201,14 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
   }
 
   return (
-    <Box maxW="900px" mx="auto">
+    <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
       {/* Top bar — back link + title + save actions */}
       <Flex align="center" justify="space-between" mb={6} wrap="wrap" gap={3}>
-        <Box
-          as="button"
-          type="button"
-          onClick={onCancel}
-          display="inline-flex"
-          alignItems="center"
-          gap={2}
-          fontSize="xs"
-          letterSpacing="0.2em"
-          textTransform="uppercase"
-          color="gray.500"
-          _hover={{ color: '#c9a96e' }}
-          bg="transparent"
-          border="none"
-          cursor="pointer"
-          px={2}
-          py={1}
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          <Icon as={FaArrowLeft} boxSize={3} />
-          Back to posts
-        </Box>
+        <AdminBackButton onClick={onCancel} label="Back to posts" />
 
-        <HStack spacing={3}>
+        {/* On mobile the two CTAs stack so both stay a full 44px target
+            each without cramping; on desktop they sit side by side. */}
+        <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
           <CTAButton
             onClick={() => handleSave('draft')}
             variant="outline"
@@ -246,7 +228,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           >
             {form.status === 'published' ? 'Save & Republish' : 'Publish'}
           </CTAButton>
-        </HStack>
+        </Stack>
       </Flex>
 
       <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mb={2}>
@@ -255,6 +237,9 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
       {existingSlug && form.status === 'published' && (
         <HStack fontSize="xs" color="gray.500" mb={6} spacing={2}>
           <Text>Live at</Text>
+          {/* Long slugs used to blow out the horizontal box on narrow
+              phones; overflowWrap:anywhere lets the link break mid-slug
+              so the row stays inside the viewport. */}
           <Box
             as="a"
             href={`/journal/${existingSlug}`}
@@ -265,6 +250,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             alignItems="center"
             gap={1}
             _hover={{ textDecoration: 'underline' }}
+            sx={{ overflowWrap: 'anywhere', wordBreak: 'break-all' }}
           >
             /journal/{existingSlug}
             <Icon as={FaExternalLinkAlt} boxSize={2.5} />
@@ -336,7 +322,9 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             rows={10}
             {...inputStyles}
             fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
-            fontSize="sm"
+            // Keep monospace, but bump to md on mobile so iOS Safari
+            // doesn't zoom the page when this Textarea gains focus.
+            fontSize={{ base: 'md', md: 'sm' }}
           />
         </Field>
 
@@ -368,8 +356,10 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           />
         </Field>
 
-        {/* Session type + tags row */}
-        <HStack spacing={4} align="flex-start">
+        {/* Session type + tags row — side by side on desktop, stacked on
+            phones so each field gets full width (the tags input in
+            particular gets very cramped at 2/3 of a phone screen). */}
+        <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
           <Field label="Session type" flex={1}>
             <Select
               value={form.session_type}
@@ -390,7 +380,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
               {...inputStyles}
             />
           </Field>
-        </HStack>
+        </Stack>
 
         {/* Danger zone — superadmin-only, mirrors client detail page */}
         {postId && adminLevel === 'super' && (
@@ -403,10 +393,10 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             borderRadius="sm"
           >
             <Text
-              fontSize="2xs"
+              fontSize={{ base: 'xs', md: '2xs' }}
               fontWeight="500"
               textTransform="uppercase"
-              letterSpacing="0.22em"
+              letterSpacing={{ base: '0.15em', md: '0.22em' }}
               color="red.700"
               mb={2}
             >
@@ -436,10 +426,14 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
 
 // Common input styling so all form fields feel of a piece with the
 // rest of admin's cards.
+// Responsive fontSize: 'md' on mobile prevents iOS Safari from zooming
+// the viewport when an input gains focus (Safari only zooms if the
+// field's computed font-size is <16px). On desktop we keep the compact
+// 'sm' so the form doesn't look chunky.
 const inputStyles = {
   bg: 'white',
   borderColor: 'gray.300',
-  fontSize: 'sm',
+  fontSize: { base: 'md', md: 'sm' },
   _hover: { borderColor: 'gray.400' },
   _focus: {
     borderColor: '#c9a96e',
@@ -464,10 +458,10 @@ function Field({
     <Box flex={flex}>
       <Flex align="baseline" gap={2} mb={1.5}>
         <Text
-          fontSize="2xs"
+          fontSize={{ base: 'xs', md: '2xs' }}
           fontWeight="500"
           textTransform="uppercase"
-          letterSpacing="0.22em"
+          letterSpacing={{ base: '0.15em', md: '0.22em' }}
           color="#c9a96e"
         >
           {label}

@@ -2,7 +2,7 @@ import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, Image, Spinner, useToast,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
   FormControl, FormLabel, Input, Textarea, Select, Switch, Button,
-  SimpleGrid,
+  SimpleGrid, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -195,9 +195,16 @@ const AdminGallery = ({ adminPassword }: Props) => {
   const draftCount = (photos ?? []).filter((p) => p.status === 'draft').length;
 
   return (
-    <Box maxW="1400px" mx="auto">
-      {/* Tab header */}
-      <Flex align="flex-end" justify="space-between" mb={6} wrap="wrap" gap={4}>
+    <Box maxW="1400px" mx="auto" px={{ base: 0, md: 0 }}>
+      {/* Tab header — Settings + Sync buttons stack under the title on
+          mobile so the CTAs never orphan. */}
+      <Stack
+        direction={{ base: 'column', md: 'row' }}
+        align={{ base: 'flex-start', md: 'flex-end' }}
+        justify="space-between"
+        mb={{ base: 4, md: 6 }}
+        spacing={{ base: 3, md: 4 }}
+      >
         <VStack align="flex-start" spacing={1}>
           <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
             Admin
@@ -212,12 +219,13 @@ const AdminGallery = ({ adminPassword }: Props) => {
           </Text>
         </VStack>
 
-        <HStack spacing={3}>
+        <Stack direction="row" spacing={2} w={{ base: '100%', md: 'auto' }}>
           <CTAButton
             onClick={() => setSettingsOpen(true)}
             icon={FaCog}
             variant="outline"
             size="sm"
+            fullWidth={{ base: true, md: false }}
           >
             Settings
           </CTAButton>
@@ -229,11 +237,12 @@ const AdminGallery = ({ adminPassword }: Props) => {
             isLoading={syncing}
             loadingText="Syncing..."
             isDisabled={settings?.folderIdSource === 'none'}
+            fullWidth={{ base: true, md: false }}
           >
             Sync from Drive
           </CTAButton>
-        </HStack>
-      </Flex>
+        </Stack>
+      </Stack>
 
       {/* Drive-connection status row. Prominent "Set up" prompt when
           no folder is configured yet, subtle "connected" indicator
@@ -322,35 +331,40 @@ const AdminGallery = ({ adminPassword }: Props) => {
         </Box>
       )}
 
-      {/* Filters */}
-      <Flex gap={3} mb={4} wrap="wrap">
-        <Select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
-          size="sm"
-          maxW="200px"
-          bg="white"
-        >
-          <option value="all">All categories</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-          ))}
-        </Select>
-        <Select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          size="sm"
-          maxW="200px"
-          bg="white"
-        >
-          <option value="all">All status</option>
-          <option value="draft">Draft (needs review)</option>
-          <option value="published">Published (live)</option>
-        </Select>
-        <Text fontSize="xs" color="gray.500" alignSelf="center">
+      {/* Filters — stack on mobile so each Select gets full width and
+          the count drops to its own line rather than orphaning. */}
+      <VStack align="stretch" mb={4} spacing={2}>
+        <Stack direction={{ base: 'column', md: 'row' }} spacing={{ base: 2, md: 3 }}>
+          <Select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
+            size={{ base: 'md', md: 'sm' } as any}
+            fontSize={{ base: 'md', md: 'sm' } as any}
+            maxW={{ base: '100%', md: '200px' }}
+            bg="white"
+          >
+            <option value="all">All categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+            ))}
+          </Select>
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            size={{ base: 'md', md: 'sm' } as any}
+            fontSize={{ base: 'md', md: 'sm' } as any}
+            maxW={{ base: '100%', md: '200px' }}
+            bg="white"
+          >
+            <option value="all">All status</option>
+            <option value="draft">Draft (needs review)</option>
+            <option value="published">Published (live)</option>
+          </Select>
+        </Stack>
+        <Text fontSize={{ base: 'xs', md: 'xs' }} color="gray.500">
           {filtered.length} of {photos?.length ?? 0}
         </Text>
-      </Flex>
+      </VStack>
 
       {error && (
         <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">
@@ -463,13 +477,25 @@ function SettingsModal({
   };
 
   return (
-    <Modal isOpen onClose={onClose} size="lg" isCentered>
+    <Modal
+      isOpen
+      onClose={onClose}
+      size={{ base: 'full', md: 'lg' } as any}
+      isCentered={{ base: false, md: true } as any}
+      motionPreset="slideInBottom"
+      scrollBehavior="inside"
+    >
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent
+        borderRadius={{ base: 0, md: 'md' }}
+        mx={{ base: 0, md: 4 }}
+        my={{ base: 0, md: 'auto' }}
+        maxH={{ base: '100dvh', md: 'auto' }}
+      >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
           Gallery settings
         </ModalHeader>
-        <ModalCloseButton />
+        <ModalCloseButton size={{ base: 'lg', md: 'md' } as any} top={{ base: 3, md: 2 }} right={{ base: 3, md: 2 }} />
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <FormControl>
@@ -480,7 +506,8 @@ function SettingsModal({
                 value={folderInput}
                 onChange={(e) => setFolderInput(e.target.value)}
                 placeholder="https://drive.google.com/drive/folders/..."
-                size="sm"
+                size={{ base: 'md', md: 'sm' } as any}
+                fontSize={{ base: 'md', md: 'sm' } as any}
                 fontFamily="mono"
                 bg="white"
               />
@@ -600,8 +627,9 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
           {row.description || <Text as="span" fontStyle="italic">(no description)</Text>}
         </Text>
 
-        {/* Actions */}
-        <HStack spacing={2} pt={2} mt="auto">
+        {/* Actions — bumped touch targets on mobile so Edit / Open /
+            Delete are 44×44 hits with breathing room between them. */}
+        <HStack spacing={{ base: 3, md: 2 }} pt={2} mt="auto">
           <Box
             as="button"
             type="button"
@@ -611,20 +639,22 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
             alignItems="center"
             justifyContent="center"
             gap={1.5}
-            fontSize="xs"
+            fontSize={{ base: 'sm', md: 'xs' }}
             fontWeight="500"
             color="#8a6e35"
             bg="rgba(201, 169, 110, 0.12)"
             border="1px solid"
             borderColor="rgba(201, 169, 110, 0.4)"
             _hover={{ bg: 'rgba(201, 169, 110, 0.22)', borderColor: '#c9a96e' }}
+            _active={{ bg: 'rgba(201, 169, 110, 0.28)' }}
             px={3}
-            py={1.5}
+            py={{ base: 3, md: 1.5 }}
+            minH={{ base: '44px', md: 'auto' }}
             borderRadius="sm"
             cursor="pointer"
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           >
-            <Icon as={FaEdit} boxSize={2.5} />
+            <Icon as={FaEdit} boxSize={{ base: 3.5, md: 2.5 }} />
             {isDraft ? 'Review' : 'Edit'}
           </Box>
           {row.status === 'published' && (
@@ -636,33 +666,37 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
               display="inline-flex"
               alignItems="center"
               justifyContent="center"
-              w="32px"
-              h="32px"
+              w={{ base: '44px', md: '32px' }}
+              h={{ base: '44px', md: '32px' }}
               color="gray.500"
               _hover={{ color: '#c9a96e' }}
+              _active={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.08)' }}
               cursor="pointer"
               aria-label="Open live page"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <Icon as={FaExternalLinkAlt} boxSize={3} />
+              <Icon as={FaExternalLinkAlt} boxSize={{ base: 4, md: 3 }} />
             </Box>
           )}
           <Box
             as="button"
             type="button"
             onClick={onDelete}
+            aria-label="Delete photo"
             display="inline-flex"
             alignItems="center"
             justifyContent="center"
-            w="32px"
-            h="32px"
+            w={{ base: '44px', md: '32px' }}
+            h={{ base: '44px', md: '32px' }}
             color="gray.400"
             bg="transparent"
             border="none"
             _hover={{ color: 'red.500' }}
+            _active={{ color: 'red.500', bg: 'red.50' }}
             cursor="pointer"
-            aria-label="Delete"
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
           >
-            <Icon as={FaTrash} boxSize={3} />
+            <Icon as={FaTrash} boxSize={{ base: 4, md: 3 }} />
           </Box>
         </HStack>
       </VStack>
@@ -736,13 +770,25 @@ function EditModal({
   };
 
   return (
-    <Modal isOpen onClose={onClose} size="xl" isCentered scrollBehavior="inside">
+    <Modal
+      isOpen
+      onClose={onClose}
+      size={{ base: 'full', md: 'xl' } as any}
+      isCentered={{ base: false, md: true } as any}
+      motionPreset="slideInBottom"
+      scrollBehavior="inside"
+    >
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent
+        borderRadius={{ base: 0, md: 'md' }}
+        mx={{ base: 0, md: 4 }}
+        my={{ base: 0, md: 'auto' }}
+        maxH={{ base: '100dvh', md: 'auto' }}
+      >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
           Edit photo
         </ModalHeader>
-        <ModalCloseButton />
+        <ModalCloseButton size={{ base: 'lg', md: 'md' } as any} top={{ base: 3, md: 2 }} right={{ base: 3, md: 2 }} />
         <ModalBody>
           <VStack spacing={4} align="stretch">
             {/* Preview */}
@@ -758,26 +804,28 @@ function EditModal({
               />
             </Box>
 
-            <HStack spacing={3} align="flex-start">
+            <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
               <FormControl flex={2}>
-                <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Slug</FormLabel>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Slug</FormLabel>
                 <Input
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
-                  size="sm"
+                  size={{ base: 'md', md: 'sm' } as any}
+                  fontSize={{ base: 'md', md: 'sm' } as any}
                   fontFamily="mono"
                   bg="white"
                 />
-                <Text fontSize="2xs" color="gray.500" mt={1}>
+                <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mt={1}>
                   Live URL: /photo/{category}/{slug}
                 </Text>
               </FormControl>
               <FormControl flex={1}>
-                <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Category</FormLabel>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Category</FormLabel>
                 <Select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as Category)}
-                  size="sm"
+                  size={{ base: 'md', md: 'sm' } as any}
+                  fontSize={{ base: 'md', md: 'sm' } as any}
                   bg="white"
                 >
                   {CATEGORIES.map((c) => (
@@ -785,69 +833,72 @@ function EditModal({
                   ))}
                 </Select>
               </FormControl>
-            </HStack>
+            </Stack>
 
             <FormControl>
-              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Title</FormLabel>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} size="sm" bg="white" />
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Title</FormLabel>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} size={{ base: 'md', md: 'sm' } as any} fontSize={{ base: 'md', md: 'sm' } as any} bg="white" />
             </FormControl>
 
             <FormControl>
-              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Alt text</FormLabel>
-              <Input value={alt} onChange={(e) => setAlt(e.target.value)} size="sm" bg="white" />
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Alt text</FormLabel>
+              <Input value={alt} onChange={(e) => setAlt(e.target.value)} size={{ base: 'md', md: 'sm' } as any} fontSize={{ base: 'md', md: 'sm' } as any} bg="white" />
             </FormControl>
 
             <FormControl>
-              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Description</FormLabel>
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Description</FormLabel>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                size="sm"
+                size={{ base: 'md', md: 'sm' } as any}
+                fontSize={{ base: 'md', md: 'sm' } as any}
                 bg="white"
               />
             </FormControl>
 
             <FormControl>
-              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Keywords</FormLabel>
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Keywords</FormLabel>
               <Input
                 value={keywordsText}
                 onChange={(e) => setKeywordsText(e.target.value)}
                 placeholder="weddings, bride, sunset, ..."
-                size="sm"
+                size={{ base: 'md', md: 'sm' } as any}
+                fontSize={{ base: 'md', md: 'sm' } as any}
                 bg="white"
               />
-              <Text fontSize="2xs" color="gray.500" mt={1}>
+              <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mt={1}>
                 Comma-separated. First one is always the category.
               </Text>
             </FormControl>
 
-            <HStack spacing={4}>
+            <Stack direction={{ base: 'column', md: 'row' }} spacing={4}>
               <FormControl>
-                <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Published</FormLabel>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Published</FormLabel>
                 <HStack>
                   <Switch
                     isChecked={status === 'published'}
                     onChange={(e) => setStatus(e.target.checked ? 'published' : 'draft')}
                     colorScheme="yellow"
-                    size="sm"
+                    size={{ base: 'md', md: 'sm' } as any}
                   />
-                  <Text fontSize="xs" color={status === 'published' ? 'green.700' : 'orange.700'}>
+                  <Text fontSize={{ base: 'sm', md: 'xs' }} color={status === 'published' ? 'green.700' : 'orange.700'}>
                     {status === 'published' ? 'Live on site' : 'Draft (hidden)'}
                   </Text>
                 </HStack>
               </FormControl>
-              <FormControl maxW="140px">
-                <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>Sort override</FormLabel>
+              <FormControl maxW={{ base: '100%', md: '140px' }}>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Sort override</FormLabel>
                 <Input
                   type="number"
                   value={sortOrder}
                   onChange={(e) => setSortOrder(Number(e.target.value))}
-                  size="sm"
+                  size={{ base: 'md', md: 'sm' } as any}
+                  fontSize={{ base: 'md', md: 'sm' } as any}
                   bg="white"
                 />
               </FormControl>
-            </HStack>
+            </Stack>
 
             <Box bg="gray.50" borderRadius="sm" px={3} py={2} border="1px solid" borderColor="gray.200">
               <Text fontSize="2xs" color="gray.600" fontWeight="500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
@@ -866,19 +917,39 @@ function EditModal({
             )}
           </VStack>
         </ModalBody>
-        <ModalFooter gap={2}>
-          <Button variant="ghost" size="sm" onClick={onClose} isDisabled={saving}>
-            Cancel
-          </Button>
-          <CTAButton
-            onClick={handleSave}
-            variant="solid"
-            size="sm"
-            isLoading={saving}
-            loadingText="Saving..."
+        <ModalFooter
+          pt={3}
+          pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}
+          borderTop={{ base: '1px solid', md: 'none' }}
+          borderColor={{ base: 'gray.100', md: 'transparent' }}
+        >
+          <Stack
+            direction={{ base: 'column-reverse', md: 'row' }}
+            spacing={2}
+            w="100%"
+            justify={{ base: 'stretch', md: 'flex-end' }}
           >
-            Save
-          </CTAButton>
+            <Button
+              variant="ghost"
+              size={{ base: 'md', md: 'sm' } as any}
+              onClick={onClose}
+              isDisabled={saving}
+              minH={{ base: '44px', md: 'auto' }}
+              w={{ base: '100%', md: 'auto' }}
+            >
+              Cancel
+            </Button>
+            <CTAButton
+              onClick={handleSave}
+              variant="solid"
+              size="sm"
+              isLoading={saving}
+              loadingText="Saving..."
+              fullWidth={{ base: true, md: false }}
+            >
+              Save
+            </CTAButton>
+          </Stack>
         </ModalFooter>
       </ModalContent>
     </Modal>

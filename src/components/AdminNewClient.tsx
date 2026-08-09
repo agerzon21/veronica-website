@@ -1,7 +1,7 @@
-import { Box, VStack, HStack, Text, Input, Select, Textarea, Flex, Icon, Checkbox } from '@chakra-ui/react';
+import { Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
-import { FaArrowLeft } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import AdminBackButton from './ui/AdminBackButton';
 import SessionTypePicker from './SessionTypePicker';
 import {
   CONTRACT_TEMPLATES,
@@ -396,29 +396,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   };
 
   return (
-    <Box maxW="760px" mx="auto">
+    <Box maxW="760px" mx="auto" px={{ base: 0, md: 0 }}>
       {/* Header */}
       <Flex align="center" mb={8} gap={3}>
-        <Box
-          as="button"
-          type="button"
-          onClick={onCancel}
-          display="inline-flex"
-          alignItems="center"
-          gap={2}
-          fontSize="xs"
-          letterSpacing="0.2em"
-          textTransform="uppercase"
-          color="gray.500"
-          _hover={{ color: '#c9a96e' }}
-          cursor="pointer"
-          bg="transparent"
-          border="none"
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          <Icon as={FaArrowLeft} boxSize={3} />
-          Back
-        </Box>
+        <AdminBackButton onClick={onCancel} label="Back" />
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={6}>
@@ -454,7 +435,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 setTemplateKey(e.target.value);
                 setSessionType(e.target.value);
               }}
-              size="md"
+              size={{ base: 'md', md: 'sm' } as any}
+              fontSize={{ base: 'md', md: 'sm' } as any}
               focusBorderColor="#c9a96e"
             >
               {templateKeys.map((k) => (
@@ -468,14 +450,14 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           {/* ─── Client ─── */}
           <SectionHeading>Client</SectionHeading>
 
-          <HStack spacing={4} align="flex-start">
-            <Field label="Partner 1 Full Name" w="50%" required helpText="Their full legal name. First name is used in the portal greeting." hasError={fieldErrors.has('partner1')}>
+          <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
+            <Field label="Partner 1 Full Name" w={{ base: '100%', md: '50%' }} required helpText="Their full legal name. First name is used in the portal greeting." hasError={fieldErrors.has('partner1')}>
               <FormInput value={partner1FullName} onChange={(e) => { setPartner1FullName(e.target.value); clearFieldError('partner1'); }} placeholder="e.g. Chrisann Bryan" />
             </Field>
-            <Field label="Partner 2 Full Name" w="50%" helpText="Optional. Leave blank for solo bookings (portraits, etc.).">
+            <Field label="Partner 2 Full Name" w={{ base: '100%', md: '50%' }} helpText="Optional. Leave blank for solo bookings (portraits, etc.).">
               <FormInput value={partner2FullName} onChange={(e) => setPartner2FullName(e.target.value)} placeholder="e.g. Rajiv Thomas (optional)" />
             </Field>
-          </HStack>
+          </Stack>
 
           <Field
             label="Display Name"
@@ -574,7 +556,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             required
             helpText="Specific Times for known hours. Half/Full Day for packages where the schedule will be locked in later."
           >
-            <Flex gap={2} wrap="wrap">
+            <SimpleGrid columns={{ base: 2, md: 4 }} spacing={2}>
               {(
                 [
                   { key: 'specific', label: 'Specific Times' },
@@ -589,7 +571,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                   type="button"
                   onClick={() => setCoverage(opt.key)}
                   px={3}
-                  py={1.5}
+                  py={{ base: 3, md: 1.5 }}
+                  minH={{ base: '44px', md: 'auto' }}
                   bg={coverage === opt.key ? '#c9a96e' : 'white'}
                   color={coverage === opt.key ? 'white' : 'gray.700'}
                   border="1px solid"
@@ -605,19 +588,19 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                   {opt.label}
                 </Box>
               ))}
-            </Flex>
+            </SimpleGrid>
           </Field>
 
           {coverage === 'specific' && (
             <>
-              <HStack spacing={4} align="flex-start">
-                <Field label="Start Time" w="50%" required helpText="When the shoot starts.">
+              <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
+                <Field label="Start Time" w={{ base: '100%', md: '50%' }} required helpText="When the shoot starts.">
                   <FormInput type="time" value={eventStartTime} onChange={(e) => setEventStartTime(e.target.value)} />
                 </Field>
-                <Field label="End Time" w="50%" required helpText="When the shoot ends. Duration is auto-calculated.">
+                <Field label="End Time" w={{ base: '100%', md: '50%' }} required helpText="When the shoot ends. Duration is auto-calculated.">
                   <FormInput type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
                 </Field>
-              </HStack>
+              </Stack>
 
               {eventStartTime && eventEndTime && (
                 <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={2}>
@@ -630,7 +613,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
 
           {(coverage === 'half-day' || coverage === 'full-day') && (
             <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={3}>
-              <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+              <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                 Will appear on the contract — Event Details → Time
               </Text>
               <Text fontSize="sm" color="gray.800" mb={3}>
@@ -638,7 +621,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                   ? 'Half-day coverage (approximately 4 hours, exact times to be confirmed)'
                   : 'Full-day coverage (exact schedule to be confirmed)'}
               </Text>
-              <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+              <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                 Will appear on the contract — Additional Notes
               </Text>
               <Text fontSize="xs" color="gray.700" fontStyle="italic" lineHeight="1.6">
@@ -647,7 +630,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                   : 'At the time of signing, the exact event schedule is still being finalized. This is a full-day coverage booking — the Photographer will be present for the major moments of the Client’s day from start to finish, with the specific schedule to be confirmed by the Client in writing (email or text) prior to the event date.'}
               </Text>
               <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.200">
-                <Text fontSize="2xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+                <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                   Note for you (not on the contract)
                 </Text>
                 <Text fontSize="xs" color="gray.500" fontStyle="italic">
@@ -670,6 +653,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 placeholder="e.g. Approximately 3 hours, exact times to be confirmed"
                 rows={2}
                 focusBorderColor="#c9a96e"
+                fontSize={{ base: 'md', md: 'sm' }}
               />
             </Field>
           )}
@@ -681,8 +665,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           {/* ─── Pricing ─── */}
           <SectionHeading>Pricing</SectionHeading>
 
-          <HStack spacing={4} align="flex-start">
-            <Field label="Total (USD)" w="50%" required helpText="Total project cost across the whole booking." hasError={fieldErrors.has('total')}>
+          <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
+            <Field label="Total (USD)" w={{ base: '100%', md: '50%' }} required helpText="Total project cost across the whole booking." hasError={fieldErrors.has('total')}>
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -693,7 +677,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 min="0"
               />
             </Field>
-            <Field label="Retainer (USD)" w="50%" required helpText="Non-refundable deposit. Due at signing, reserves the date." hasError={fieldErrors.has('retainer')}>
+            <Field label="Retainer (USD)" w={{ base: '100%', md: '50%' }} required helpText="Non-refundable deposit. Due at signing, reserves the date." hasError={fieldErrors.has('retainer')}>
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -704,7 +688,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 min="0"
               />
             </Field>
-          </HStack>
+          </Stack>
 
           {/* ─── Gallery Pass ─── */}
           <SectionHeading>Gallery Pass</SectionHeading>
@@ -797,6 +781,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               placeholder="Leave blank if none."
               focusBorderColor="#c9a96e"
               rows={4}
+              fontSize={{ base: 'md', md: 'sm' }}
             />
           </Field>
 
@@ -811,6 +796,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             variant="solid"
             size="lg"
             fullWidth
+            wrapText
             isLoading={submitting}
             loadingText="Creating..."
           >
@@ -840,6 +826,7 @@ function FieldRow({
           placeholder={field.placeholder}
           focusBorderColor="#c9a96e"
           rows={3}
+          fontSize={{ base: 'md', md: 'sm' }}
         />
       ) : (
         <FormInput
@@ -870,7 +857,9 @@ const Field = ({
   label: string;
   helpText?: string;
   children: React.ReactNode;
-  w?: string;
+  // Accepts either a plain width string or a responsive object so callers
+  // can stack two-column layouts on mobile (`{ base: '100%', md: '50%' }`).
+  w?: string | { base?: string; md?: string; lg?: string };
   // Surfaces a red dot next to the label — for fields that don't have
   // a sensible auto-fill, so Vero can scan the form and spot what's
   // still missing before submitting.
@@ -887,10 +876,10 @@ const Field = ({
       display="inline-flex"
       alignItems="center"
       gap={1.5}
-      fontSize="2xs"
+      fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
       color={hasError ? 'red.500' : '#c9a96e'}
-      letterSpacing="0.2em"
+      letterSpacing={{ base: '0.15em', md: '0.2em' }}
       textTransform="uppercase"
       mb={2}
     >
@@ -952,7 +941,10 @@ const FormInput = (props: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'siz
     border="1px solid"
     borderColor="gray.300"
     color="gray.800"
-    fontSize="sm"
+    // Mobile bump to `md` (16px) prevents iOS Safari from zooming the
+    // viewport when the input is focused. Desktop keeps `sm` for the
+    // compact form feel.
+    fontSize={{ base: 'md', md: 'sm' }}
     borderRadius="sm"
     _hover={{ borderColor: 'gray.400' }}
     _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}

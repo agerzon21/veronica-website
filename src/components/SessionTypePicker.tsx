@@ -74,7 +74,11 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
       type="button"
       onClick={onClick}
       px={3}
-      py={1.5}
+      // Taller vertical padding on mobile so the chip clears the 44px
+      // tap-target minimum without needing an explicit height that would
+      // fight the 1.5-line desktop rhythm.
+      py={{ base: 3, md: 1.5 }}
+      minH={{ base: '44px', md: 'auto' }}
       bg={selected ? '#c9a96e' : 'white'}
       color={selected ? 'white' : 'gray.700'}
       border="1px solid"
@@ -88,6 +92,10 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
       _hover={{
         borderColor: '#c9a96e',
         color: selected ? 'white' : '#c9a96e',
+      }}
+      _active={{
+        borderColor: '#c9a96e',
+        bg: selected ? '#c9a96e' : 'rgba(201, 169, 110, 0.08)',
       }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >

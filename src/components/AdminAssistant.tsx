@@ -51,8 +51,15 @@ const AdminAssistant = ({ adminPassword }: Props) => {
 
   return (
     <Box maxW="1200px" mx="auto">
-      {/* Tab header — title + language toggle sit on the same row */}
-      <Flex align="flex-start" justify="space-between" gap={4} mb={4} wrap="wrap">
+      {/* Tab header — title + language toggle. Stack on mobile so
+          the toggle doesn't orphan to a second wrapped row. */}
+      <Flex
+        direction={{ base: 'row', md: 'row' }}
+        align={{ base: 'flex-start', md: 'flex-start' }}
+        justify="space-between"
+        gap={{ base: 3, md: 4 }}
+        mb={{ base: 4, md: 4 }}
+      >
         <VStack align="flex-start" spacing={1}>
           <Text
             fontSize="xs"
@@ -73,8 +80,10 @@ const AdminAssistant = ({ adminPassword }: Props) => {
         <LanguageToggle value={language} onChange={setLanguage} />
       </Flex>
 
-      {/* Sub-tab strip */}
-      <Flex borderBottom="1px solid" borderColor="gray.200" mb={6} gap={1}>
+      {/* Sub-tab strip. Full-width flex on mobile so each tab gets an
+          equal (bigger) tap target and thumbs don't need to aim at a
+          text label. */}
+      <Flex borderBottom="1px solid" borderColor="gray.200" mb={{ base: 4, md: 6 }} gap={1}>
         <SubTabButton
           active={subTab === 'chat'}
           icon={FaComments}
@@ -149,9 +158,11 @@ function LangPill({
       as="button"
       type="button"
       onClick={onClick}
-      px={3}
-      py={1}
-      fontSize="2xs"
+      px={{ base: 4, md: 3 }}
+      py={{ base: 2, md: 1 }}
+      minH={{ base: '36px', md: 'auto' }}
+      minW={{ base: '52px', md: 'auto' }}
+      fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="600"
       letterSpacing="0.14em"
       borderRadius="full"
@@ -161,6 +172,7 @@ function LangPill({
       border="none"
       transition="all 0.15s"
       _hover={active ? {} : { color: 'gray.700' }}
+      _active={active ? { bg: '#b8964f' } : { bg: 'rgba(201, 169, 110, 0.08)' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       {children}
@@ -184,8 +196,10 @@ function SubTabButton({
       as="button"
       type="button"
       onClick={onClick}
-      px={4}
-      py={2.5}
+      px={{ base: 5, md: 4 }}
+      py={{ base: 3.5, md: 2.5 }}
+      minH={{ base: '48px', md: 'auto' }}
+      flex={{ base: '1', md: 'none' }}
       mb="-1px"
       bg="transparent"
       border="none"
@@ -195,11 +209,12 @@ function SubTabButton({
       transition="all 0.15s"
       sx={{ WebkitTapHighlightColor: 'transparent' }}
       _hover={{ borderColor: active ? '#c9a96e' : 'gray.300' }}
+      _active={{ bg: 'rgba(201, 169, 110, 0.06)' }}
     >
-      <HStack spacing={2}>
-        <Icon as={icon} boxSize={3} color={active ? '#c9a96e' : 'gray.500'} />
+      <HStack spacing={2} justify="center">
+        <Icon as={icon} boxSize={{ base: 3.5, md: 3 }} color={active ? '#c9a96e' : 'gray.500'} />
         <Text
-          fontSize="xs"
+          fontSize={{ base: 'xs', md: 'xs' }}
           fontWeight="500"
           letterSpacing="0.14em"
           textTransform="uppercase"

@@ -2,7 +2,7 @@ import {
   Box, Flex, VStack, HStack, Text, Icon, Input, Textarea, Select, Spinner,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
   Button, useToast, Switch, FormControl, FormLabel, InputGroup, InputLeftElement,
-  Badge,
+  Badge, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { FaSearch, FaPlus, FaTrash, FaEdit, FaMagic, FaHandPaper, FaLock } from 'react-icons/fa';
@@ -105,29 +105,44 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
   const chatbotCount = (entries ?? []).filter((e) => e.source === 'chatbot').length;
 
   return (
-    <Box maxW="1000px" mx="auto">
+    <Box maxW="1000px" mx="auto" px={{ base: 0, md: 0 }}>
       <BuiltInBehaviorCard />
 
-      {/* Toolbar */}
-      <Flex gap={3} align="center" wrap="wrap" mb={5}>
-        <InputGroup size="md" maxW="360px" flex={1}>
+      {/* Toolbar — stacks on mobile so search gets full width + Add
+          fact becomes a proper full-width primary CTA rather than a
+          tiny pill orphaned to the right. */}
+      <Stack
+        direction={{ base: 'column', md: 'row' }}
+        gap={3}
+        align={{ base: 'stretch', md: 'center' }}
+        mb={5}
+      >
+        <InputGroup size={{ base: 'lg', md: 'md' } as any} maxW={{ base: '100%', md: '360px' }} flex={1}>
           <InputLeftElement pointerEvents="none">
-            <Icon as={FaSearch} color="gray.400" boxSize={3} />
+            <Icon as={FaSearch} color="gray.400" boxSize={3.5} />
           </InputLeftElement>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search facts by keyword…"
             bg="white"
+            // 16px on mobile prevents iOS Safari zoom on focus.
+            fontSize={{ base: 'md', md: 'sm' } as any}
             borderColor="gray.300"
             _hover={{ borderColor: 'gray.400' }}
             _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
           />
         </InputGroup>
-        <CTAButton onClick={() => setEditing('new')} icon={FaPlus} variant="solid" size="sm">
+        <CTAButton
+          onClick={() => setEditing('new')}
+          icon={FaPlus}
+          variant="solid"
+          size="sm"
+          fullWidth={{ base: true, md: false }}
+        >
           Add fact
         </CTAButton>
-      </Flex>
+      </Stack>
 
       {/* Meta strip: total + chatbot count */}
       {entries && entries.length > 0 && (
@@ -166,9 +181,9 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
           {grouped.map(({ category, rows }) => (
             <Box key={category}>
               <Text
-                fontSize="2xs"
+                fontSize={{ base: 'xs', md: '2xs' }}
                 fontWeight="600"
-                letterSpacing="0.2em"
+                letterSpacing={{ base: '0.15em', md: '0.2em' }}
                 textTransform="uppercase"
                 color="#8a6e35"
                 mb={2}
@@ -228,12 +243,23 @@ function FactCard({ entry, onEdit }: { entry: ContextEntry; onEdit: () => void }
         boxShadow: '0 2px 8px -4px rgba(201, 169, 110, 0.35)',
       }}
       opacity={inactive ? 0.6 : 1}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
+      minH={{ base: '72px', md: 'auto' }}
+      _active={{ borderColor: '#c9a96e', bg: '#fdf9f0' }}
+      sx={{
+        WebkitTapHighlightColor: 'transparent',
+        // Hover only on real pointer devices so mobile taps don't stick.
+        '@media (hover: hover)': {
+          _hover: {
+            borderColor: '#c9a96e',
+            boxShadow: '0 2px 8px -4px rgba(201, 169, 110, 0.35)',
+          },
+        },
+      }}
     >
       <Flex justify="space-between" align="flex-start" gap={3}>
         <VStack align="flex-start" spacing={1} flex={1} minW={0}>
           <HStack spacing={2} wrap="wrap">
-            <Text fontSize="xs" fontWeight="500" color="gray.500" textTransform="capitalize">
+            <Text fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.500" textTransform="capitalize">
               {entry.label}
             </Text>
             {entry.source === 'chatbot' && (
@@ -261,11 +287,11 @@ function FactCard({ entry, onEdit }: { entry: ContextEntry; onEdit: () => void }
               </Badge>
             )}
           </HStack>
-          <Text fontSize="md" color="gray.800" lineHeight="1.55" whiteSpace="pre-wrap">
+          <Text fontSize={{ base: 'md', md: 'md' }} color="gray.800" lineHeight="1.55" whiteSpace="pre-wrap">
             {entry.content}
           </Text>
         </VStack>
-        <Icon as={FaEdit} color="gray.300" boxSize={3} mt={1} flexShrink={0} />
+        <Icon as={FaEdit} color="gray.300" boxSize={{ base: 4, md: 3 }} mt={1} flexShrink={0} />
       </Flex>
     </Box>
   );
@@ -351,9 +377,24 @@ function EditModal({
   };
 
   return (
-    <Modal isOpen onClose={onClose} size="lg" isCentered scrollBehavior="inside">
+    <Modal
+      isOpen
+      onClose={onClose}
+      // Full-screen on mobile so the keyboard doesn't cover the Content
+      // textarea and every input hits its 44px+ tap target. Centered
+      // dialog on desktop as before.
+      size={{ base: 'full', md: 'lg' } as any}
+      isCentered={{ base: false, md: true } as any}
+      motionPreset="slideInBottom"
+      scrollBehavior="inside"
+    >
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent
+        borderRadius={{ base: 0, md: 'md' }}
+        mx={{ base: 0, md: 4 }}
+        my={{ base: 0, md: 'auto' }}
+        maxH={{ base: '100dvh', md: 'auto' }}
+      >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
           {isNew ? 'Add a fact' : 'Edit fact'}
           {!isNew && entry?.source === 'chatbot' && (
@@ -373,19 +414,20 @@ function EditModal({
             </Badge>
           )}
         </ModalHeader>
-        <ModalCloseButton />
+        <ModalCloseButton size={{ base: 'lg', md: 'md' } as any} top={{ base: 3, md: 2 }} right={{ base: 3, md: 2 }} />
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
                 Category
               </FormLabel>
-              <HStack>
+              <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
                 {!useCustom ? (
                   <Select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    size="sm"
+                    size={{ base: 'md', md: 'sm' } as any}
+                    fontSize={{ base: 'md', md: 'sm' } as any}
                     bg="white"
                   >
                     {existingCategories.map((c) => (
@@ -397,20 +439,23 @@ function EditModal({
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value)}
                     placeholder="new_category_name"
-                    size="sm"
+                    size={{ base: 'md', md: 'sm' } as any}
+                    fontSize={{ base: 'md', md: 'sm' } as any}
                     bg="white"
                     fontFamily="mono"
                   />
                 )}
                 <Button
-                  size="xs"
+                  size={{ base: 'sm', md: 'xs' } as any}
                   variant="ghost"
                   onClick={() => setUseCustom(!useCustom)}
                   flexShrink={0}
+                  minH={{ base: '44px', md: 'auto' }}
+                  w={{ base: '100%', md: 'auto' }}
                 >
                   {useCustom ? 'Pick existing' : 'New category'}
                 </Button>
-              </HStack>
+              </Stack>
             </FormControl>
 
             <FormControl>
@@ -421,7 +466,8 @@ function EditModal({
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="Short name for this fact"
-                size="sm"
+                size={{ base: 'md', md: 'sm' } as any}
+                fontSize={{ base: 'md', md: 'sm' } as any}
                 bg="white"
               />
             </FormControl>
@@ -435,7 +481,8 @@ function EditModal({
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="The actual fact / rule / info. English."
                 rows={5}
-                size="sm"
+                size={{ base: 'md', md: 'sm' } as any}
+                fontSize={{ base: 'md', md: 'sm' } as any}
                 bg="white"
               />
             </FormControl>
@@ -458,26 +505,60 @@ function EditModal({
             {saveError && <Text fontSize="xs" color="red.600">{saveError}</Text>}
           </VStack>
         </ModalBody>
-        <ModalFooter gap={2}>
-          {!isNew && (
+        <ModalFooter
+          pt={3}
+          pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}
+          borderTop={{ base: '1px solid', md: 'none' }}
+          borderColor={{ base: 'gray.100', md: 'transparent' }}
+        >
+          {/* Buttons: on mobile they stack full-width with Save on top
+              (primary + thumb-reach) → Cancel → Delete. On desktop the
+              old layout (Delete floats left, Cancel + Save right). */}
+          <Stack
+            direction={{ base: 'column-reverse', md: 'row' }}
+            spacing={2}
+            w="100%"
+            align="stretch"
+          >
+            {!isNew && (
+              <Button
+                variant="ghost"
+                size={{ base: 'md', md: 'sm' } as any}
+                onClick={handleDelete}
+                isDisabled={saving}
+                color="red.500"
+                leftIcon={<Icon as={FaTrash} boxSize={3.5} />}
+                mr={{ base: 0, md: 'auto' }}
+                minH={{ base: '44px', md: 'auto' }}
+                w={{ base: '100%', md: 'auto' }}
+              >
+                Delete
+              </Button>
+            )}
+            {/* Spacer that pushes Cancel + Save to the right on desktop,
+                but is inert on mobile (Stack column-reverse handles order). */}
+            <Box flex={{ base: 0, md: 1 }} display={{ base: 'none', md: 'block' }} />
             <Button
               variant="ghost"
-              size="sm"
-              onClick={handleDelete}
+              size={{ base: 'md', md: 'sm' } as any}
+              onClick={onClose}
               isDisabled={saving}
-              color="red.500"
-              leftIcon={<Icon as={FaTrash} boxSize={3} />}
-              mr="auto"
+              minH={{ base: '44px', md: 'auto' }}
+              w={{ base: '100%', md: 'auto' }}
             >
-              Delete
+              Cancel
             </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={onClose} isDisabled={saving}>
-            Cancel
-          </Button>
-          <CTAButton onClick={handleSave} variant="solid" size="sm" isLoading={saving} loadingText="Saving…">
-            Save
-          </CTAButton>
+            <CTAButton
+              onClick={handleSave}
+              variant="solid"
+              size="sm"
+              isLoading={saving}
+              loadingText="Saving…"
+              fullWidth={{ base: true, md: false }}
+            >
+              Save
+            </CTAButton>
+          </Stack>
         </ModalFooter>
       </ModalContent>
     </Modal>

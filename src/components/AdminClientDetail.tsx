@@ -1,7 +1,8 @@
-import { Box, VStack, HStack, Text, Input, Flex, Icon, Badge, Textarea } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text, Input, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaArrowLeft, FaCheck, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaCheck, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import AdminBackButton from './ui/AdminBackButton';
 import { CONTRACT_TEMPLATES, extractVariableKeys } from '../data/contract-template';
 
 interface Props {
@@ -171,7 +172,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
 
   if (loading && !portal) {
     return (
-      <Box maxW="900px" mx="auto" textAlign="center" py={20}>
+      <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }} textAlign="center" py={20}>
         <Text color="gray.500">Loading…</Text>
       </Box>
     );
@@ -179,8 +180,8 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
 
   if (!portal) {
     return (
-      <Box maxW="900px" mx="auto">
-        <BackLink onBack={onBack} />
+      <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
+        <AdminBackButton onClick={onBack} label="Back" />
         <Text color="red.500" mt={6}>{error || 'Could not load this portal.'}</Text>
       </Box>
     );
@@ -193,8 +194,8 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
 
   return (
-    <Box maxW="900px" mx="auto">
-      <BackLink onBack={onBack} />
+    <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
+      <AdminBackButton onClick={onBack} label="Back" />
 
       <VStack align="flex-start" spacing={2} mb={6}>
         <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
@@ -253,7 +254,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             </Flex>
           )}
 
-          <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+          {/* Status label + primary CTA — stacks on mobile so the CTA
+              spans full-width instead of orphaning under a wrapped label. */}
+          <Stack
+            direction={{ base: 'column', md: 'row' }}
+            align={{ base: 'stretch', md: 'center' }}
+            justify={{ base: 'flex-start', md: 'space-between' }}
+            spacing={{ base: 3, md: 4 }}
+          >
             <Box>
               <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                 Delivery Status
@@ -278,17 +286,20 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
               )}
             </Box>
             {!portal.gallery_delivered_at && portal.drive_url && (
-              <CTAButton
-                onClick={markDelivered}
-                variant="solid"
-                size="sm"
-                isLoading={savingField === 'deliver'}
-                loadingText="Delivering..."
-              >
-                Mark as Delivered
-              </CTAButton>
+              <Box w={{ base: '100%', md: 'auto' }}>
+                <CTAButton
+                  onClick={markDelivered}
+                  variant="solid"
+                  size="sm"
+                  isLoading={savingField === 'deliver'}
+                  loadingText="Delivering..."
+                  fullWidth={{ base: true, md: false }}
+                >
+                  Mark as Delivered
+                </CTAButton>
+              </Box>
             )}
-          </Flex>
+          </Stack>
         </VStack>
       </Section>
 
@@ -302,7 +313,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             saving={savingField === 'gallery_password'}
             onSave={(v) => patch({ gallery_password: v }, 'gallery_password')}
           />
-          <Flex align="center" justify="space-between" wrap="wrap" gap={3}>
+          {/* Access label + toggle — stacks on mobile so the toggle CTA
+              takes full row width rather than orphaning. */}
+          <Stack
+            direction={{ base: 'column', md: 'row' }}
+            align={{ base: 'stretch', md: 'center' }}
+            justify={{ base: 'flex-start', md: 'space-between' }}
+            spacing={{ base: 3, md: 4 }}
+          >
             <Box>
               <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                 Access
@@ -311,15 +329,18 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 {portal.gallery_enabled ? 'Enabled' : 'Disabled'}
               </Text>
             </Box>
-            <CTAButton
-              onClick={() => patch({ gallery_enabled: !portal.gallery_enabled }, 'gallery_enabled')}
-              variant="outline"
-              size="sm"
-              isLoading={savingField === 'gallery_enabled'}
-            >
-              {portal.gallery_enabled ? 'Disable' : 'Enable'}
-            </CTAButton>
-          </Flex>
+            <Box w={{ base: '100%', md: 'auto' }}>
+              <CTAButton
+                onClick={() => patch({ gallery_enabled: !portal.gallery_enabled }, 'gallery_enabled')}
+                variant="outline"
+                size="sm"
+                isLoading={savingField === 'gallery_enabled'}
+                fullWidth={{ base: true, md: false }}
+              >
+                {portal.gallery_enabled ? 'Disable' : 'Enable'}
+              </CTAButton>
+            </Box>
+          </Stack>
         </VStack>
       </Section>
 
@@ -338,7 +359,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       {portal.mode === 'full' && (
         <Section title="Contract">
           <VStack align="stretch" spacing={3}>
-            <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+            {/* Status label + signed-PDF CTA — same stacking pattern so
+                the "View Signed Copy" button doesn't orphan below. */}
+            <Stack
+              direction={{ base: 'column', md: 'row' }}
+              align={{ base: 'stretch', md: 'center' }}
+              justify={{ base: 'flex-start', md: 'space-between' }}
+              spacing={{ base: 3, md: 4 }}
+            >
               <Box>
                 <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                   Status
@@ -346,9 +374,11 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
               </Box>
               {portal.contract_status === 'signed' && portal.contract_signed_pdf_available && (
-                <ViewSignedPdfButton portalId={portalId} adminPassword={adminPassword} />
+                <Box w={{ base: '100%', md: 'auto' }}>
+                  <ViewSignedPdfButton portalId={portalId} adminPassword={adminPassword} />
+                </Box>
               )}
-            </Flex>
+            </Stack>
 
             {/* While the contract is pending, expose the same variable
                 fields that were used at creation. Saving re-renders the
@@ -372,11 +402,13 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       {portal.contract_total_amount !== null && (
         <Section title="Payments">
           <VStack align="stretch" spacing={5}>
-            <HStack spacing={6} fontSize="sm">
+            {/* 3-up stat row. On mobile the columns stay side-by-side but
+                spacing shrinks so 3 numbers fit without wrapping. */}
+            <SimpleGrid columns={3} spacing={{ base: 3, md: 6 }} fontSize="sm">
               <Stat label="Total" value={formatMoney(portal.contract_total_amount)} />
               <Stat label="Paid" value={formatMoney(portal.paid_to_date)} />
               <Stat label="Remaining" value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
-            </HStack>
+            </SimpleGrid>
 
             <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
 
@@ -480,33 +512,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
 };
 
 // ─── Sub-components ─────────────────────────────────────────────────────
-
-function BackLink({ onBack }: { onBack: () => void }) {
-  return (
-    <Flex align="center" mb={6} gap={3}>
-      <Box
-        as="button"
-        type="button"
-        onClick={onBack}
-        display="inline-flex"
-        alignItems="center"
-        gap={2}
-        fontSize="xs"
-        letterSpacing="0.2em"
-        textTransform="uppercase"
-        color="gray.500"
-        _hover={{ color: '#c9a96e' }}
-        cursor="pointer"
-        bg="transparent"
-        border="none"
-        sx={{ WebkitTapHighlightColor: 'transparent' }}
-      >
-        <Icon as={FaArrowLeft} boxSize={3} />
-        Back to dashboard
-      </Box>
-    </Flex>
-  );
-}
+// (BackLink removed — replaced by shared <AdminBackButton /> at call sites.)
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -522,10 +528,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Stat({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
   return (
     <VStack align="flex-start" spacing={0.5}>
-      <Text fontSize="2xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em">
+      <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" textTransform="uppercase" letterSpacing={{ base: '0.15em', md: '0.15em' }}>
         {label}
       </Text>
-      <Text fontSize="lg" fontWeight={emphasize ? '500' : '300'} color={emphasize ? 'gray.800' : 'gray.600'}>
+      <Text fontSize={{ base: 'md', md: 'lg' }} fontWeight={emphasize ? '500' : '300'} color={emphasize ? 'gray.800' : 'gray.600'}>
         {value}
       </Text>
     </VStack>
@@ -578,7 +584,7 @@ function InlineField({
 
   return (
     <Box>
-      <Text fontSize="2xs" fontWeight="500" color="#c9a96e" letterSpacing="0.2em" textTransform="uppercase" mb={2}>
+      <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" color="#c9a96e" letterSpacing={{ base: '0.15em', md: '0.2em' }} textTransform="uppercase" mb={2}>
         {label}
       </Text>
       <Flex gap={2} align="stretch">
@@ -595,7 +601,9 @@ function InlineField({
           border="1px solid"
           borderColor={dirty ? '#c9a96e' : 'gray.300'}
           color="gray.800"
-          fontSize="sm"
+          // iOS Safari zooms on focus for any input <16px. Bump to md
+          // (16px) on mobile, keep sm (14px) desktop-side.
+          fontSize={{ base: 'md', sm: 'sm' }}
           borderRadius="sm"
           _hover={{ borderColor: dirty ? '#c9a96e' : 'gray.400' }}
           _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
@@ -689,57 +697,59 @@ function AddPaymentForm({
         Log a Payment
       </Text>
       <VStack align="stretch" spacing={3}>
-        <HStack spacing={3} align="flex-start" flexWrap="wrap">
-          <Box flex="1" minW="100px">
-            <Text fontSize="2xs" color="gray.500" mb={1}>Amount (USD)</Text>
+        {/* Amount / Method / Date stack vertically on phones so labels stay
+            legible and each 44px-tall input has room to breathe. */}
+        <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={3}>
+          <Box>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Amount (USD)</Text>
             <Input
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0"
-              h="36px"
+              h={{ base: '44px', sm: '36px' }}
               bg="white"
-              fontSize="sm"
+              fontSize={{ base: 'md', sm: 'sm' }}
               borderRadius="sm"
               _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
             />
           </Box>
-          <Box flex="1" minW="140px">
-            <Text fontSize="2xs" color="gray.500" mb={1}>Method</Text>
+          <Box>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Method</Text>
             <Input
               value={method}
               onChange={(e) => setMethod(e.target.value)}
               placeholder="Zelle / Cash / Venmo..."
-              h="36px"
+              h={{ base: '44px', sm: '36px' }}
               bg="white"
-              fontSize="sm"
+              fontSize={{ base: 'md', sm: 'sm' }}
               borderRadius="sm"
               _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
             />
           </Box>
-          <Box flex="1" minW="140px">
-            <Text fontSize="2xs" color="gray.500" mb={1}>Date</Text>
+          <Box>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Date</Text>
             <Input
               type="date"
               value={paidAt}
               onChange={(e) => setPaidAt(e.target.value)}
-              h="36px"
+              h={{ base: '44px', sm: '36px' }}
               bg="white"
-              fontSize="sm"
+              fontSize={{ base: 'md', sm: 'sm' }}
               borderRadius="sm"
               _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
             />
           </Box>
-        </HStack>
+        </SimpleGrid>
         <Box>
-          <Text fontSize="2xs" color="gray.500" mb={1}>Note (optional)</Text>
+          <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Note (optional)</Text>
           <Textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. Retainer received"
             rows={2}
             bg="white"
-            fontSize="sm"
+            fontSize={{ base: 'md', sm: 'sm' }}
             focusBorderColor="#c9a96e"
           />
         </Box>
@@ -833,19 +843,20 @@ function PaymentRow({
           </Box>
         </HStack>
       ) : (
-        <Box
-          as="button"
+        // Delete icon needs a real 44×44 tap target on mobile — a bare 12px
+        // icon inside a hair-thin Box was impossible to hit reliably.
+        <IconButton
+          aria-label="Delete payment"
           onClick={() => setConfirming(true)}
-          fontSize="xs"
+          icon={<Icon as={FaTrash} boxSize={3} />}
+          variant="ghost"
+          size="sm"
+          minW={{ base: '44px', md: 'auto' }}
+          minH={{ base: '44px', md: 'auto' }}
           color="gray.400"
-          _hover={{ color: 'red.500' }}
-          cursor="pointer"
-          bg="transparent"
-          border="none"
+          _hover={{ color: 'red.500', bg: 'transparent' }}
           sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          <Icon as={FaTrash} boxSize={3} />
-        </Box>
+        />
       )}
     </Flex>
   );
@@ -937,7 +948,14 @@ function AccountSection({
   return (
     <Section title="Account">
       <VStack align="stretch" spacing={4}>
-        <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+        {/* Account status + Resend Invite — stacks on mobile so the CTA
+            spans full width and doesn't orphan under the badge. */}
+        <Stack
+          direction={{ base: 'column', md: 'row' }}
+          align={{ base: 'stretch', md: 'center' }}
+          justify={{ base: 'flex-start', md: 'space-between' }}
+          spacing={{ base: 3, md: 4 }}
+        >
           <Box>
             <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
               Status
@@ -951,17 +969,20 @@ function AccountSection({
             )}
           </Box>
           {!portal.client_has_password && (
-            <CTAButton
-              onClick={handleResend}
-              variant="outline"
-              size="sm"
-              isLoading={resending}
-              loadingText="Sending..."
-            >
-              Resend Invite
-            </CTAButton>
+            <Box w={{ base: '100%', md: 'auto' }}>
+              <CTAButton
+                onClick={handleResend}
+                variant="outline"
+                size="sm"
+                isLoading={resending}
+                loadingText="Sending..."
+                fullWidth={{ base: true, md: false }}
+              >
+                Resend Invite
+              </CTAButton>
+            </Box>
           )}
-        </Flex>
+        </Stack>
 
         {resendMessage && (
           <Text fontSize="xs" color={resendMessage.kind === 'ok' ? 'green.600' : 'red.500'}>
@@ -973,7 +994,15 @@ function AccountSection({
             Always available (even before they finish onboarding) because
             we can use it to "complete onboarding on their behalf" too. */}
         <Box>
-          <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+          {/* Password label/help + Set-Password toggle — same stacking
+              pattern so the CTA drops below the multi-line copy on
+              mobile rather than getting shoved into an unreadable column. */}
+          <Stack
+            direction={{ base: 'column', md: 'row' }}
+            align={{ base: 'stretch', md: 'center' }}
+            justify={{ base: 'flex-start', md: 'space-between' }}
+            spacing={{ base: 3, md: 4 }}
+          >
             <Box>
               <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                 Password
@@ -982,14 +1011,17 @@ function AccountSection({
                 Set a temporary password for the client. Use this if they're locked out or if you need to set them up manually instead of waiting for them to use the welcome link.
               </Text>
             </Box>
-            <CTAButton
-              onClick={() => setOverrideOpen((o) => !o)}
-              variant="outline"
-              size="sm"
-            >
-              {overrideOpen ? 'Cancel' : 'Set Password'}
-            </CTAButton>
-          </Flex>
+            <Box w={{ base: '100%', md: 'auto' }}>
+              <CTAButton
+                onClick={() => setOverrideOpen((o) => !o)}
+                variant="outline"
+                size="sm"
+                fullWidth={{ base: true, md: false }}
+              >
+                {overrideOpen ? 'Cancel' : 'Set Password'}
+              </CTAButton>
+            </Box>
+          </Stack>
           {overrideOpen && (
             <Flex gap={2} mt={3} align="stretch" direction={{ base: 'column', sm: 'row' }}>
               <Input
@@ -997,9 +1029,9 @@ function AccountSection({
                 value={overridePassword}
                 onChange={(e) => setOverridePassword(e.target.value)}
                 placeholder="At least 6 characters"
-                h="40px"
+                h={{ base: '44px', sm: '40px' }}
                 bg="white"
-                fontSize="sm"
+                fontSize={{ base: 'md', sm: 'sm' }}
                 _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
               />
               <CTAButton
@@ -1137,7 +1169,7 @@ function EditContractVariables({
             const isLong = value.length > 80 || k === 'additional_notes';
             return (
               <Box key={k}>
-                <Text fontSize="2xs" color="#c9a96e" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
+                <Text fontSize={{ base: 'xs', md: '2xs' }} color="#c9a96e" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
                   {k}
                 </Text>
                 {isLong ? (
@@ -1146,16 +1178,16 @@ function EditContractVariables({
                     onChange={(e) => setVars((v) => ({ ...v, [k]: e.target.value }))}
                     rows={3}
                     bg="white"
-                    fontSize="sm"
+                    fontSize={{ base: 'md', sm: 'sm' }}
                     focusBorderColor="#c9a96e"
                   />
                 ) : (
                   <Input
                     value={value}
                     onChange={(e) => setVars((v) => ({ ...v, [k]: e.target.value }))}
-                    h="38px"
+                    h={{ base: '44px', sm: '38px' }}
                     bg="white"
-                    fontSize="sm"
+                    fontSize={{ base: 'md', sm: 'sm' }}
                     _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
                   />
                 )}
@@ -1309,32 +1341,23 @@ function DangerZone({
         </CTAButton>
       )}
       {confirming && (
-        <HStack spacing={3}>
-          <CTAButton onClick={() => setConfirming(false)} variant="outline" size="sm">
+        // column-reverse on mobile keeps the destructive action visually
+        // separate from the safe (Cancel) action — Cancel ends up first
+        // in reading order but Confirm sits on top of the tap zone.
+        <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2}>
+          <CTAButton onClick={() => setConfirming(false)} variant="ghost" size="sm">
             Cancel
           </CTAButton>
-          <Box
-            as="button"
-            type="button"
+          <CTAButton
             onClick={doDelete}
-            bg="red.500"
-            color="white"
-            border="none"
-            px={4}
-            py={2}
-            borderRadius="sm"
-            fontSize="xs"
-            fontWeight="500"
-            letterSpacing="0.15em"
-            textTransform="uppercase"
-            cursor="pointer"
-            _hover={{ bg: 'red.600' }}
-            sx={{ WebkitTapHighlightColor: 'transparent' }}
-            disabled={submitting}
+            variant="danger"
+            size="sm"
+            isLoading={submitting}
+            loadingText="Deleting..."
           >
-            {submitting ? 'Deleting...' : 'Confirm delete'}
-          </Box>
-        </HStack>
+            Confirm delete
+          </CTAButton>
+        </Stack>
       )}
       {error && (
         <Text fontSize="sm" color="red.500" mt={3}>

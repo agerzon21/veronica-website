@@ -1,6 +1,6 @@
 import {
   Box, Flex, Text, HStack, VStack, Textarea, Icon, Spinner, IconButton,
-  useToast,
+  useToast, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
@@ -388,10 +388,21 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
   };
 
   return (
-    <Flex direction="column" h={{ base: '75vh', md: '78vh' }} maxW="900px" mx="auto">
-      {/* Header row */}
-      <Flex align="center" justify="space-between" mb={3} px={1}>
-        <HStack spacing={2}>
+    <Flex
+      direction="column"
+      // dvh (dynamic viewport height) plays nicely with iOS Safari's
+      // collapsing address bar and pop-up keyboard; static `vh` locks
+      // to the initial viewport and the composer ends up scrolled out
+      // of reach when the keyboard opens.
+      h={{ base: 'calc(100dvh - 220px)', md: '78vh' }}
+      minH={{ base: '480px', md: 'auto' }}
+      maxW="900px"
+      mx="auto"
+    >
+      {/* Header row — hint hidden on mobile so the reset button doesn't
+          get pushed off; enough vertical space is at a premium. */}
+      <Flex align="center" justify={{ base: 'flex-end', md: 'space-between' }} mb={3} px={1}>
+        <HStack spacing={2} display={{ base: 'none', md: 'flex' }}>
           <Icon as={FaRegLightbulb} boxSize={3.5} color="#c9a96e" />
           <Text fontSize="xs" color="gray.500" fontWeight="400" letterSpacing="0.06em">
             {t.headerHint}
@@ -405,16 +416,20 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
             display="inline-flex"
             alignItems="center"
             gap={1.5}
-            fontSize="2xs"
+            fontSize={{ base: 'xs', md: '2xs' }}
             color="gray.400"
             _hover={{ color: '#c9a96e' }}
+            _active={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
             bg="transparent"
             border="none"
             cursor="pointer"
-            px={2}
-            py={1}
+            px={{ base: 3, md: 2 }}
+            py={{ base: 2, md: 1 }}
+            minH={{ base: '40px', md: 'auto' }}
+            borderRadius="sm"
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
           >
-            <Icon as={FaRedo} boxSize={2.5} />
+            <Icon as={FaRedo} boxSize={{ base: 3, md: 2.5 }} />
             {t.newConversation}
           </Box>
         )}
@@ -451,16 +466,30 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
         )}
       </Box>
 
-      {/* Composer */}
-      <Box mt={3}>
-        <Flex gap={2} align="flex-end">
+      {/* Composer — textarea gets its own row on mobile so it isn't
+          crushed to ~230px alongside the mic + send buttons. Mic is
+          rendered as icon-only always; Send is icon-only on mobile
+          (to keep the row balanced) and CTA-labeled on desktop. */}
+      <Box
+        mt={3}
+        // Safe-area padding so the composer clears the iOS home
+        // indicator when this pane goes edge-to-edge.
+        pb={{ base: 'max(env(safe-area-inset-bottom), 0px)', md: 0 }}
+      >
+        <Stack
+          direction={{ base: 'column', md: 'row' }}
+          spacing={{ base: 2, md: 2 }}
+          align={{ base: 'stretch', md: 'flex-end' }}
+        >
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.placeholder}
             rows={2}
             resize="none"
-            fontSize="sm"
+            // 16px prevents iOS Safari from zooming the whole page in
+            // when the textarea gets focused; matches the Messages tab.
+            fontSize={{ base: '16px', md: 'sm' }}
             bg="white"
             borderColor="gray.300"
             _hover={{ borderColor: 'gray.400' }}
@@ -474,37 +503,58 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
             flex={1}
             isDisabled={sending}
           />
-          {!micUnavailable && (
-            <IconButton
-              aria-label={micActive ? t.micStopAria : t.micRecordAria}
-              icon={<Icon as={FaMicrophone} boxSize={4} />}
-              onMouseDown={startMic}
-              onMouseUp={stopMic}
-              onMouseLeave={stopMic}
-              onTouchStart={startMic}
-              onTouchEnd={stopMic}
-              variant="outline"
-              size="lg"
-              bg={micActive ? '#c9a96e' : 'white'}
-              color={micActive ? 'white' : '#8a6e35'}
-              borderColor={micActive ? '#c9a96e' : 'gray.300'}
-              _hover={{ bg: micActive ? '#b8964f' : 'gray.50' }}
-              isDisabled={sending}
-            />
-          )}
-          <CTAButton
-            onClick={handleSend}
-            icon={FaPaperPlane}
-            variant="solid"
-            size="md"
-            isLoading={sending}
-            loadingText="…"
-            isDisabled={!input.trim()}
-          >
-            {t.send}
-          </CTAButton>
-        </Flex>
-        <Text fontSize="2xs" color="gray.400" mt={1.5} px={1}>
+          {/* Mic + send row. On mobile they sit under the textarea
+              stretching to fill the width so each button gets ~50%
+              of the row — big, obvious, thumb-safe. */}
+          <Stack direction="row" spacing={2} justify={{ base: 'stretch', md: 'flex-end' }}>
+            {!micUnavailable && (
+              <IconButton
+                aria-label={micActive ? t.micStopAria : t.micRecordAria}
+                icon={<Icon as={FaMicrophone} boxSize={{ base: 5, md: 4 }} />}
+                // Pointer events replace the old mouse+touch handler
+                // pair. onPointerCancel handles iOS interruptions
+                // (a call comes in mid-hold) so the mic doesn't get
+                // stuck open. touchAction:none prevents mobile browsers
+                // from treating the long-press as text selection.
+                onPointerDown={startMic}
+                onPointerUp={stopMic}
+                onPointerLeave={stopMic}
+                onPointerCancel={stopMic}
+                variant="outline"
+                size="lg"
+                minW={{ base: '48px', md: 'auto' }}
+                minH={{ base: '48px', md: 'auto' }}
+                flex={{ base: '0 0 auto', md: '0 0 auto' }}
+                bg={micActive ? '#c9a96e' : 'white'}
+                color={micActive ? 'white' : '#8a6e35'}
+                borderColor={micActive ? '#c9a96e' : 'gray.300'}
+                _hover={{ bg: micActive ? '#b8964f' : 'gray.50' }}
+                isDisabled={sending}
+                sx={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}
+              />
+            )}
+            <CTAButton
+              onClick={handleSend}
+              icon={FaPaperPlane}
+              variant="solid"
+              size="md"
+              // Full-width on mobile so send stretches; hugs on desktop.
+              fullWidth={{ base: true, md: false }}
+              isLoading={sending}
+              loadingText="…"
+              isDisabled={!input.trim()}
+            >
+              {t.send}
+            </CTAButton>
+          </Stack>
+        </Stack>
+        <Text
+          fontSize={{ base: 'xs', md: '2xs' }}
+          color="gray.400"
+          mt={2}
+          px={1}
+          textAlign={{ base: 'center', md: 'left' }}
+        >
           {micActive ? t.micRecordingHint : t.submitHint}
         </Text>
       </Box>
@@ -610,9 +660,11 @@ function EmptyState({
             border="1px solid"
             borderColor="gray.200"
             _hover={{ borderColor: '#c9a96e', bg: '#fdf9f0' }}
+            _active={{ borderColor: '#c9a96e', bg: '#f5efe4' }}
             borderRadius="sm"
-            px={3.5}
-            py={2.5}
+            px={{ base: 4, md: 3.5 }}
+            py={{ base: 3, md: 2.5 }}
+            minH={{ base: '44px', md: 'auto' }}
             textAlign="left"
             cursor="pointer"
             transition="all 0.15s"

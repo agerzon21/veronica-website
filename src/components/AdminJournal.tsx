@@ -1,7 +1,7 @@
 import {
-  Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner,
+  Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, Stack, Wrap,
 } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { FaPlus, FaSyncAlt, FaBookOpen, FaExternalLinkAlt, FaEdit } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminJournalEditor from './AdminJournalEditor';
@@ -99,9 +99,16 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
   }
 
   return (
-    <Box maxW="1200px" mx="auto">
-      {/* Header */}
-      <Flex align="flex-end" justify="space-between" mb={8} wrap="wrap" gap={4}>
+    <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
+      {/* Header — stacks vertically on mobile so the New Post CTA gets its
+          own full-width row instead of squeezing into the corner */}
+      <Stack
+        direction={{ base: 'column', md: 'row' }}
+        justify="space-between"
+        align={{ base: 'stretch', md: 'flex-end' }}
+        spacing={{ base: 3, md: 4 }}
+        mb={8}
+      >
         <VStack align="flex-start" spacing={1}>
           <Text
             fontSize="xs"
@@ -136,8 +143,9 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
             cursor="pointer"
             bg="transparent"
             border="none"
-            px={2}
-            py={1}
+            px={{ base: 4, md: 2 }}
+            py={{ base: 3, md: 1 }}
+            minH={{ base: '44px', md: 'auto' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           >
             <Icon as={FaSyncAlt} boxSize={3} />
@@ -152,7 +160,7 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
             New Post
           </CTAButton>
         </HStack>
-      </Flex>
+      </Stack>
 
       {error && (
         <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">
@@ -196,7 +204,15 @@ function PostRow({
     });
 
   return (
+    // The entire card is a button on every breakpoint — on mobile the Edit
+    // CTA is hidden (redundant tap target on a small screen), so the card
+    // itself must be the tappable surface. textAlign="left" keeps the
+    // multi-line meta reading naturally instead of centered.
     <Flex
+      as="button"
+      onClick={onEdit}
+      textAlign="left"
+      w="100%"
       bg="white"
       border="1px solid"
       borderColor="gray.200"
@@ -206,6 +222,8 @@ function PostRow({
       gap={4}
       _hover={{ borderColor: '#c9a96e', transform: 'translateY(-1px)' }}
       transition="all 0.15s"
+      cursor="pointer"
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       {/* Cover thumb — falls back to a placeholder icon block if
           no cover set yet */}
@@ -244,9 +262,9 @@ function PostRow({
             <Badge
               bg="gray.100"
               color="gray.600"
-              fontSize="2xs"
+              fontSize={{ base: 'xs', md: '2xs' }}
               fontWeight="500"
-              letterSpacing="0.1em"
+              letterSpacing={{ base: '0.15em', md: '0.1em' }}
               textTransform="uppercase"
               px={2}
               py={0.5}
@@ -270,20 +288,25 @@ function PostRow({
             {post.excerpt}
           </Text>
         )}
-        <HStack spacing={3} fontSize="2xs" color="gray.500" fontWeight="300">
-          <Text color={post.drive_folder_url ? 'gray.500' : 'orange.600'}>
+        {/* Wrap (not HStack) so on narrow mobile the "Photos linked · Updated…"
+            bits break to a second line instead of overflowing the card */}
+        <Wrap spacing={3} color="gray.500" fontWeight="300">
+          <Text fontSize={{ base: 'xs', md: '2xs' }} color={post.drive_folder_url ? 'gray.500' : 'orange.600'}>
             {post.drive_folder_url ? 'Photos linked' : 'No photos yet'}
           </Text>
-          <Text>·</Text>
-          <Text>
+          <Text fontSize={{ base: 'xs', md: '2xs' }}>·</Text>
+          <Text fontSize={{ base: 'xs', md: '2xs' }}>
             {post.status === 'published' && post.published_at
               ? `Published ${formatDate(post.published_at)}`
               : `Updated ${formatDate(post.updated_at)}`}
           </Text>
-        </HStack>
+        </Wrap>
       </VStack>
 
-      {/* Actions */}
+      {/* Actions — the whole card triggers Edit, so:
+           - View is an icon-only link with stopPropagation so tapping it
+             opens the live page instead of the editor.
+           - Edit CTA is desktop-only; on mobile the card IS the button. */}
       <HStack spacing={2} flexShrink={0}>
         {post.status === 'published' && (
           <Box
@@ -291,26 +314,27 @@ function PostRow({
             href={`/journal/${post.slug}`}
             target="_blank"
             rel="noopener noreferrer"
-            display={{ base: 'none', md: 'inline-flex' }}
+            aria-label="Open live page"
+            onClick={(e: MouseEvent) => e.stopPropagation()}
+            display="inline-flex"
             alignItems="center"
-            gap={1.5}
-            fontSize="2xs"
-            fontWeight="500"
-            letterSpacing="0.15em"
-            textTransform="uppercase"
+            justifyContent="center"
             color="gray.500"
             _hover={{ color: '#c9a96e' }}
+            minW={{ base: '44px', md: 'auto' }}
+            minH={{ base: '44px', md: 'auto' }}
             px={2}
             py={1}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           >
-            <Icon as={FaExternalLinkAlt} boxSize={2.5} />
-            View
+            <Icon as={FaExternalLinkAlt} boxSize={3.5} />
           </Box>
         )}
-        <CTAButton onClick={onEdit} icon={FaEdit} variant="outline" size="sm">
-          Edit
-        </CTAButton>
+        <Box display={{ base: 'none', md: 'inline-flex' }}>
+          <CTAButton onClick={onEdit} icon={FaEdit} variant="outline" size="sm">
+            Edit
+          </CTAButton>
+        </Box>
       </HStack>
     </Flex>
   );
@@ -325,9 +349,9 @@ function StatusBadge({ status }: { status: 'draft' | 'published' }) {
     <Badge
       bg={config.bg}
       color={config.color}
-      fontSize="2xs"
+      fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
-      letterSpacing="0.1em"
+      letterSpacing={{ base: '0.15em', md: '0.1em' }}
       textTransform="uppercase"
       px={2}
       py={0.5}

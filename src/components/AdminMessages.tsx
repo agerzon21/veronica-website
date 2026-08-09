@@ -1,14 +1,16 @@
 import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, Textarea, Spinner, useToast, Switch,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
-  FormControl, FormLabel, Input, Select, InputGroup, InputRightElement, Button,
+  FormControl, FormLabel, Input, Select, InputGroup, InputRightElement, Button, IconButton,
+  Stack,
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle,
-  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt,
+  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 // Vero speaks Russian natively — customer messages (usually English)
 // get translated to Russian; her replies get translated to English
@@ -101,6 +103,12 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Confirm dialog state for the global AI pause. Replaces the old
+  // window.confirm() call, which on iOS Safari showed a URL host in
+  // the dialog title and truncated the (deliberately long) warning
+  // message ugly.
+  const [globalToggleConfirmOpen, setGlobalToggleConfirmOpen] = useState(false);
+  const [globalToggleLoading, setGlobalToggleLoading] = useState(false);
   const toast = useToast();
 
   const loadList = useCallback(async (): Promise<void> => {
@@ -132,13 +140,13 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
     return () => clearInterval(interval);
   }, [loadList]);
 
-  const handleToggleGlobal = async () => {
+  // Click-handler that just opens the confirm dialog. The actual
+  // network call runs from `doToggleGlobal` when the user confirms.
+  const handleToggleGlobal = () => setGlobalToggleConfirmOpen(true);
+
+  const doToggleGlobal = async () => {
     const next = globalAiState === 'on' ? 'off' : 'on';
-    const confirmMsg =
-      next === 'off'
-        ? 'Silence AI replies for ALL conversations? Real customers won’t get automated replies until you turn it back on.'
-        : 'Re-enable AI replies for all conversations?';
-    if (!confirm(confirmMsg)) return;
+    setGlobalToggleLoading(true);
     try {
       const res = await fetch('/api/admin/messages-toggle-global', {
         method: 'POST',
@@ -159,79 +167,122 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
       }
     } catch {
       toast({ title: 'Could not reach the server', status: 'error', duration: 4000 });
+    } finally {
+      setGlobalToggleLoading(false);
+      setGlobalToggleConfirmOpen(false);
     }
   };
 
   const selected = conversations?.find((c) => c.id === selectedId) ?? null;
+  // Mobile drill-down: when a conversation is selected on a phone, we
+  // want the ConversationView to take over the whole screen (edge-to-
+  // edge, with a back chevron), NOT stack under the conversation list.
+  // The old vertical stack was Alex's #2 complaint — you'd click a
+  // thread and the chat rendered "at the bottom of the screen below
+  // everything" (his words), invisible without scrolling.
+  const showListOnMobile = !selected;
+  const showThreadOnMobile = Boolean(selected);
 
   return (
-    <Box maxW="1400px" mx="auto">
-      {/* Tab header */}
-      <Flex align="flex-end" justify="space-between" mb={6} wrap="wrap" gap={4}>
-        <VStack align="flex-start" spacing={1}>
-          <Text
-            fontSize="xs"
-            fontWeight="500"
-            textTransform="uppercase"
-            letterSpacing="0.25em"
-            color="#c9a96e"
-          >
-            Admin
-          </Text>
-          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-            Messages
-          </Text>
-          <Text fontSize="sm" color="gray.500" fontWeight="300">
-            {conversations
-              ? `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`
-              : 'Unified inbox for Instagram DMs.'}
-          </Text>
-        </VStack>
-
-        <HStack spacing={3} wrap="wrap">
-          <GlobalAiIndicator state={globalAiState} />
-          {adminLevel === 'super' && (
-            <CTAButton
-              onClick={handleToggleGlobal}
-              icon={FaPowerOff}
-              variant={globalAiState === 'off' ? 'solid' : 'outline'}
-              size="sm"
+    <Box maxW="1400px" mx="auto" px={{ base: 0, md: 0 }}>
+      {/* Tab header — hidden on mobile when a conversation is open so
+          the drill-down feels like a real screen switch, not a
+          scrolling chase. Desktop always shows it. */}
+      <Box display={{ base: showThreadOnMobile ? 'none' : 'block', lg: 'block' }}>
+        <Stack
+          direction={{ base: 'column', md: 'row' }}
+          align={{ base: 'flex-start', md: 'flex-end' }}
+          justify="space-between"
+          mb={{ base: 4, md: 6 }}
+          spacing={{ base: 3, md: 4 }}
+        >
+          <VStack align="flex-start" spacing={1}>
+            <Text
+              fontSize="xs"
+              fontWeight="500"
+              textTransform="uppercase"
+              letterSpacing="0.25em"
+              color="#c9a96e"
             >
-              {globalAiState === 'on' ? 'Pause AI globally' : 'Resume AI globally'}
-            </CTAButton>
-          )}
-          <Box
-            as="button"
-            type="button"
-            onClick={loadList}
-            display="inline-flex"
-            alignItems="center"
-            gap={2}
-            fontSize="xs"
-            letterSpacing="0.2em"
-            textTransform="uppercase"
-            color="gray.500"
-            _hover={{ color: '#c9a96e' }}
-            cursor="pointer"
-            bg="transparent"
-            border="none"
-            px={2}
-            py={1}
-            sx={{ WebkitTapHighlightColor: 'transparent' }}
+              Admin
+            </Text>
+            <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
+              Messages
+            </Text>
+            <Text fontSize={{ base: 'sm', md: 'sm' }} color="gray.500" fontWeight="300">
+              {conversations
+                ? `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`
+                : 'Unified inbox for Instagram DMs.'}
+            </Text>
+          </VStack>
+
+          {/* Header actions — stack cleanly on mobile so nothing orphans.
+              GlobalAiIndicator + Pause button flow full-width; Refresh
+              becomes an icon-only round button so it's 44×44 tappable. */}
+          <Stack
+            direction={{ base: 'row', md: 'row' }}
+            spacing={2}
+            align="center"
+            wrap="wrap"
+            w={{ base: '100%', md: 'auto' }}
+            justify={{ base: 'flex-start', md: 'flex-end' }}
           >
-            <Icon as={FaSync} boxSize={3} />
-            Refresh
+            <GlobalAiIndicator state={globalAiState} />
+            {adminLevel === 'super' && (
+              <CTAButton
+                onClick={handleToggleGlobal}
+                icon={FaPowerOff}
+                variant={globalAiState === 'off' ? 'solid' : 'outline'}
+                size="sm"
+              >
+                {/* Shorter label on mobile so it fits next to the pill */}
+                <Box as="span" display={{ base: 'inline', md: 'none' }}>
+                  {globalAiState === 'on' ? 'Pause AI' : 'Resume AI'}
+                </Box>
+                <Box as="span" display={{ base: 'none', md: 'inline' }}>
+                  {globalAiState === 'on' ? 'Pause AI globally' : 'Resume AI globally'}
+                </Box>
+              </CTAButton>
+            )}
+            <IconButton
+              aria-label="Refresh conversations"
+              icon={<Icon as={FaSync} boxSize={4} />}
+              onClick={loadList}
+              variant="ghost"
+              size="md"
+              minW="44px"
+              minH="44px"
+              color="gray.500"
+              _hover={{ color: '#c9a96e' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            />
+          </Stack>
+        </Stack>
+
+        {error && (
+          <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">
+            <Text fontSize="sm" color="red.700">{error}</Text>
           </Box>
-        </HStack>
-      </Flex>
+        )}
+      </Box>
 
-      {error && (
-        <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">
-          <Text fontSize="sm" color="red.700">{error}</Text>
-        </Box>
-      )}
+      {/* Global-AI confirm dialog (used by both Pause and Resume) */}
+      <ConfirmDialog
+        isOpen={globalToggleConfirmOpen}
+        title={globalAiState === 'on' ? 'Pause AI for everyone?' : 'Resume AI for everyone?'}
+        body={
+          globalAiState === 'on'
+            ? 'Silence AI replies for ALL conversations? Real customers won’t get automated replies until you turn it back on.'
+            : 'Re-enable AI replies for all conversations?'
+        }
+        confirmLabel={globalAiState === 'on' ? 'Pause AI' : 'Resume AI'}
+        danger={globalAiState === 'on'}
+        isLoading={globalToggleLoading}
+        onConfirm={doToggleGlobal}
+        onCancel={() => setGlobalToggleConfirmOpen(false)}
+      />
 
-      {/* Two-pane layout */}
+      {/* Two-pane on desktop, drill-down on mobile */}
       {loading ? (
         <Flex justify="center" py={16}>
           <Spinner color="#c9a96e" />
@@ -240,12 +291,14 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
         <EmptyState />
       ) : (
         <Flex
-          gap={4}
+          gap={{ base: 0, lg: 4 }}
           direction={{ base: 'column', lg: 'row' }}
           minH={{ lg: '75vh' }}
           maxH={{ lg: '85vh' }}
         >
-          {/* Left rail — conversation list */}
+          {/* Left rail — conversation list. Hidden on mobile when a
+              thread is open so it doesn't stack awkwardly under the
+              chat view. */}
           <Box
             flex={{ base: '1', lg: '0 0 360px' }}
             bg="white"
@@ -254,6 +307,7 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
             borderRadius="sm"
             overflow={{ base: 'visible', lg: 'auto' }}
             maxH={{ base: 'auto', lg: '100%' }}
+            display={{ base: showListOnMobile ? 'block' : 'none', lg: 'block' }}
           >
             <ConversationList
               conversations={conversations}
@@ -262,23 +316,49 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
             />
           </Box>
 
-          {/* Right pane — selected conversation or empty prompt */}
+          {/* Right pane — selected conversation or empty prompt.
+              On mobile when a thread is open, this Box becomes
+              full-viewport (position fixed, inset 0, above the
+              bottom nav) so the composer never gets buried below
+              anything and the keyboard scrolls the thread, not the
+              whole page. */}
           <Box
             flex="1"
             bg="white"
-            border="1px solid"
+            border={{ base: 'none', lg: '1px solid' }}
             borderColor="gray.200"
-            borderRadius="sm"
-            display="flex"
+            borderRadius={{ base: 0, lg: 'sm' }}
+            display={{
+              base: showThreadOnMobile ? 'flex' : 'none',
+              lg: 'flex',
+            }}
             flexDirection="column"
-            minH={{ base: '60vh', lg: 'auto' }}
+            minH={{ base: 'auto', lg: 'auto' }}
             overflow="hidden"
+            // Mobile drill-down: pin to viewport so the composer stays
+            // at the bottom (above the OS keyboard) and the whole
+            // conversation feels like its own screen. zIndex=25 sits
+            // above page content but below the bottom nav (30) so nav
+            // stays reachable; but nav is also hidden when a chat is
+            // open (we render it above the pane via top: 0 rather than
+            // covering nav) — actually we set top to admin header
+            // start so the composer clears the bottom nav safely.
+            position={{ base: 'fixed', lg: 'static' }}
+            top={{ base: 0, lg: 'auto' }}
+            left={{ base: 0, lg: 'auto' }}
+            right={{ base: 0, lg: 'auto' }}
+            bottom={{ base: 0, lg: 'auto' }}
+            zIndex={{ base: 25, lg: 'auto' }}
+            h={{ base: '100dvh', lg: 'auto' }}
           >
             {selected ? (
               <ConversationView
                 key={selected.id}
                 summary={selected}
                 adminPassword={adminPassword}
+                // Mobile back: unset selection to return to the list.
+                // Desktop-only: unused — SelectPrompt shows when null.
+                onBack={() => setSelectedId(null)}
                 onRefreshList={loadList}
               />
             ) : (
@@ -306,7 +386,7 @@ function GlobalAiIndicator({ state }: { state: 'on' | 'off' }) {
     <Badge
       bg={config.bg}
       color={config.color}
-      fontSize="2xs"
+      fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
       letterSpacing="0.1em"
       textTransform="uppercase"
@@ -396,7 +476,7 @@ function ConversationListRow({
               {displayName}
             </Text>
             {conv.last_message_at && (
-              <Text fontSize="2xs" color="gray.500" fontWeight="300" flexShrink={0}>
+              <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" fontWeight="300" flexShrink={0}>
                 {formatRelative(conv.last_message_at)}
               </Text>
             )}
@@ -417,7 +497,7 @@ function ConversationListRow({
               <Badge
                 bg="orange.100"
                 color="orange.700"
-                fontSize="2xs"
+                fontSize={{ base: 'xs', md: '2xs' }}
                 fontWeight="500"
                 letterSpacing="0.08em"
                 textTransform="uppercase"
@@ -432,7 +512,7 @@ function ConversationListRow({
               <Badge
                 bg="green.100"
                 color="green.700"
-                fontSize="2xs"
+                fontSize={{ base: 'xs', md: '2xs' }}
                 fontWeight="500"
                 letterSpacing="0.08em"
                 textTransform="uppercase"
@@ -447,7 +527,7 @@ function ConversationListRow({
               <Badge
                 bg="#c9a96e"
                 color="white"
-                fontSize="2xs"
+                fontSize={{ base: 'xs', md: '2xs' }}
                 fontWeight="600"
                 px={1.5}
                 py={0}
@@ -522,10 +602,15 @@ function ConversationView({
   summary,
   adminPassword,
   onRefreshList,
+  onBack,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
   onRefreshList: () => void;
+  // Mobile back-navigation. On desktop this is unused (SelectPrompt
+  // handles the "no thread open" state), but on mobile the parent
+  // uses it to close the drill-down.
+  onBack?: () => void;
 }) {
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -752,57 +837,108 @@ function ConversationView({
 
   return (
     <>
-      {/* Thread header — contact identity + per-convo AI toggle */}
-      <Flex
-        p={4}
+      {/* Thread header — contact identity + per-convo AI toggle + Create client.
+          Mobile: back button on the left (drill-down close), identity in the
+          middle, AI switch on the right. Create-client + Linked-client status
+          drops to a second row below so nothing gets squeezed off-screen. */}
+      <VStack
+        spacing={0}
+        align="stretch"
         borderBottom="1px solid"
         borderColor="gray.100"
-        align="center"
-        justify="space-between"
-        gap={3}
         flexShrink={0}
       >
-        <HStack spacing={3} minW={0}>
-          <PlatformAvatar
-            platform={detail.platform}
-            profilePicUrl={detail.contact_profile_pic_url}
-            displayName={displayName}
-          />
-          <VStack align="flex-start" spacing={0} minW={0}>
-            <Text fontSize="sm" fontWeight="500" color="gray.800" noOfLines={1}>
-              {displayName}
-            </Text>
-            <HStack spacing={2}>
-              <Text fontSize="2xs" color="gray.500" textTransform="capitalize">
-                {detail.platform}
+        <Flex
+          p={{ base: 3, md: 4 }}
+          align="center"
+          justify="space-between"
+          gap={2}
+        >
+          {/* Mobile-only back chevron. 44×44 tap target, gold on active. */}
+          {onBack && (
+            <IconButton
+              aria-label="Back to conversations"
+              icon={<Icon as={FaChevronLeft} boxSize={4} />}
+              onClick={onBack}
+              variant="ghost"
+              size="md"
+              minW="44px"
+              minH="44px"
+              color="gray.500"
+              _hover={{ color: '#c9a96e' }}
+              display={{ base: 'inline-flex', lg: 'none' }}
+              flexShrink={0}
+              ml={-2}
+            />
+          )}
+          <HStack spacing={3} minW={0} flex={1}>
+            <PlatformAvatar
+              platform={detail.platform}
+              profilePicUrl={detail.contact_profile_pic_url}
+              displayName={displayName}
+            />
+            <VStack align="flex-start" spacing={0} minW={0} flex={1}>
+              <Text fontSize={{ base: 'sm', md: 'sm' }} fontWeight="500" color="gray.800" noOfLines={1}>
+                {displayName}
               </Text>
-              {detail.linked_client_display_name && (
-                <Badge
-                  bg="green.100"
-                  color="green.700"
-                  fontSize="2xs"
-                  fontWeight="500"
-                  letterSpacing="0.08em"
-                  textTransform="uppercase"
-                  px={1.5}
-                  py={0}
-                  borderRadius="sm"
-                >
-                  Client
-                </Badge>
-              )}
-            </HStack>
-          </VStack>
-        </HStack>
+              <HStack spacing={2}>
+                <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="capitalize">
+                  {detail.platform}
+                </Text>
+                {detail.linked_client_display_name && (
+                  <Badge
+                    bg="green.100"
+                    color="green.700"
+                    fontSize={{ base: 'xs', md: '2xs' }}
+                    fontWeight="500"
+                    letterSpacing="0.08em"
+                    textTransform="uppercase"
+                    px={1.5}
+                    py={0}
+                    borderRadius="sm"
+                  >
+                    Client
+                  </Badge>
+                )}
+              </HStack>
+            </VStack>
+          </HStack>
 
-        <HStack spacing={3} flexShrink={0}>
+          {/* AI toggle stays in the top row on all breakpoints — it's the
+              most-used control in this header. */}
+          <HStack spacing={2} flexShrink={0}>
+            <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
+            <Text fontSize="xs" color="gray.600" fontWeight="500" display={{ base: 'none', sm: 'inline' }}>
+              AI
+            </Text>
+            <Switch
+              isChecked={detail.ai_enabled}
+              onChange={handleToggleAi}
+              isDisabled={aiToggleLoading}
+              colorScheme="yellow"
+              size={{ base: 'md', md: 'sm' } as any}
+            />
+          </HStack>
+        </Flex>
+
+        {/* Second row: Create-client / Linked-client status. Given its own
+            row on all breakpoints since long usernames + "Linked client"
+            badge would otherwise fight the AI switch for space. */}
+        <Flex
+          px={{ base: 3, md: 4 }}
+          pb={{ base: 3, md: 3 }}
+          pt={{ base: 0, md: 0 }}
+          justify="flex-start"
+          align="center"
+          gap={2}
+        >
           {detail.linked_client_portal_id ? (
             <Badge
               bg="green.50"
               color="green.700"
               border="1px solid"
               borderColor="green.200"
-              fontSize="2xs"
+              fontSize={{ base: 'xs', md: '2xs' }}
               fontWeight="600"
               letterSpacing="0.06em"
               textTransform="uppercase"
@@ -817,45 +953,17 @@ function ConversationView({
               Linked client
             </Badge>
           ) : (
-            <Box
-              as="button"
-              type="button"
+            <CTAButton
               onClick={() => setCreateClientOpen(true)}
-              display="inline-flex"
-              alignItems="center"
-              gap={1.5}
-              fontSize="xs"
-              fontWeight="500"
-              color="#8a6e35"
-              bg="rgba(201, 169, 110, 0.12)"
-              border="1px solid"
-              borderColor="rgba(201, 169, 110, 0.4)"
-              _hover={{ bg: 'rgba(201, 169, 110, 0.22)', borderColor: '#c9a96e' }}
-              px={3}
-              py={1.5}
-              borderRadius="sm"
-              cursor="pointer"
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <Icon as={FaUserPlus} boxSize={3} />
-              Create client
-            </Box>
-          )}
-          <HStack spacing={2}>
-            <Icon as={FaRobot} boxSize={3} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
-            <Text fontSize="xs" color="gray.600" fontWeight="500">
-              AI
-            </Text>
-            <Switch
-              isChecked={detail.ai_enabled}
-              onChange={handleToggleAi}
-              isDisabled={aiToggleLoading}
-              colorScheme="yellow"
+              icon={FaUserPlus}
+              variant="outline"
               size="sm"
-            />
-          </HStack>
-        </HStack>
-      </Flex>
+            >
+              Create client
+            </CTAButton>
+          )}
+        </Flex>
+      </VStack>
 
       {/* Create-client modal — prefills from IG contact + AI summary */}
       <CreateClientModal
@@ -922,9 +1030,12 @@ function ConversationView({
         </VStack>
       </Box>
 
-      {/* Composer */}
+      {/* Composer — sticky at the bottom of the pane on mobile so it
+          stays above the OS keyboard. Safe-area padding clears the iOS
+          home indicator. */}
       <Box
-        p={4}
+        p={{ base: 3, md: 4 }}
+        pb={{ base: 'max(env(safe-area-inset-bottom), 12px)', md: 4 }}
         borderTop="1px solid"
         borderColor="gray.100"
         bg="white"
@@ -936,7 +1047,9 @@ function ConversationView({
           placeholder="Type a reply as Vero..."
           rows={3}
           resize="vertical"
-          fontSize="sm"
+          // 16px on mobile prevents iOS Safari from zooming the whole
+          // page in on focus. Regular sm on desktop.
+          fontSize={{ base: '16px', md: 'sm' }}
           bg="white"
           borderColor="gray.300"
           _hover={{ borderColor: 'gray.400' }}
@@ -949,21 +1062,34 @@ function ConversationView({
             }
           }}
         />
-        <Flex justify="space-between" align="center" mt={2} gap={3} wrap="wrap">
-          <VStack align="flex-start" spacing={1}>
+        {/* Footer row: translate toggle + hint on the left, send on the
+            right. Stacks on mobile so nothing gets pushed off the
+            viewport and Send stays a full-width primary action. */}
+        <Stack
+          direction={{ base: 'column', md: 'row' }}
+          justify="space-between"
+          align={{ base: 'stretch', md: 'center' }}
+          mt={3}
+          spacing={3}
+        >
+          <VStack align="flex-start" spacing={1} flex={1} minW={0}>
             <HStack spacing={2}>
               <Switch
                 isChecked={translateOnSend}
                 onChange={(e) => setTranslateOnSend(e.target.checked)}
                 colorScheme="yellow"
-                size="sm"
+                size={{ base: 'md', md: 'sm' } as any}
               />
-              <Icon as={FaLanguage} boxSize={3} color={translateOnSend ? '#c9a96e' : 'gray.400'} />
-              <Text fontSize="2xs" color={translateOnSend ? '#8a6e35' : 'gray.500'} fontWeight="500">
+              <Icon as={FaLanguage} boxSize={3.5} color={translateOnSend ? '#c9a96e' : 'gray.400'} />
+              <Text
+                fontSize={{ base: 'xs', md: '2xs' }}
+                color={translateOnSend ? '#8a6e35' : 'gray.500'}
+                fontWeight="500"
+              >
                 Translate before sending
               </Text>
             </HStack>
-            <Text fontSize="2xs" color="gray.400">
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" display={{ base: 'none', md: 'block' }}>
               ⌘/Ctrl + Enter to send · Replies from you sent as human (not AI)
             </Text>
           </VStack>
@@ -971,14 +1097,17 @@ function ConversationView({
             onClick={handleSend}
             icon={FaPaperPlane}
             variant="solid"
-            size="sm"
+            size="md"
+            // Full-width primary CTA on mobile so the composer's send
+            // action is thumb-obvious; hugs content on desktop.
+            fullWidth={{ base: true, md: false }}
             isLoading={sending}
             loadingText={translateOnSend ? 'Translating…' : 'Sending…'}
             isDisabled={!replyText.trim()}
           >
             {translateOnSend ? 'Translate & Send' : 'Send'}
           </CTAButton>
-        </Flex>
+        </Stack>
       </Box>
     </>
   );
@@ -1046,7 +1175,7 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
           color={senderColor}
         >
           <Icon as={senderIcon} boxSize={2.5} />
-          <Text fontSize="2xs" fontWeight="500" letterSpacing="0.08em" textTransform="uppercase">
+          <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" letterSpacing="0.08em" textTransform="uppercase">
             {senderLabel}
           </Text>
         </Flex>
@@ -1081,7 +1210,7 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
               <>
                 <HStack spacing={1.5} mb={0.5} color="#8a6e35">
                   <Icon as={FaLanguage} boxSize={2.5} />
-                  <Text fontSize="2xs" fontWeight="500" letterSpacing="0.08em" textTransform="uppercase">
+                  <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" letterSpacing="0.08em" textTransform="uppercase">
                     Translated{detectedLang && detectedLang !== 'unknown' ? ` from ${detectedLang.toUpperCase()}` : ''}
                   </Text>
                 </HStack>
@@ -1128,8 +1257,11 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
                 color: '#6b5424',
               }}
               cursor={translating ? 'default' : 'pointer'}
-              px={2.5}
-              py={1}
+              // Mobile: taller + roomier so it actually clears the
+              // 40px tap-target floor without ballooning on desktop.
+              minH={{ base: '40px', md: 'auto' }}
+              px={{ base: 3, md: 2.5 }}
+              py={{ base: 1.5, md: 1 }}
               borderRadius="sm"
               disabled={translating}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
@@ -1139,7 +1271,7 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
             </Box>
           )}
           <Text
-            fontSize="2xs"
+            fontSize={{ base: 'xs', md: '2xs' }}
             color="gray.400"
             textAlign={isInbound ? 'left' : 'right'}
           >
@@ -1251,9 +1383,9 @@ function SummaryCard({
         >
           <Icon as={FaLightbulb} boxSize={3} color="#8a6e35" flexShrink={0} />
           <Text
-            fontSize="2xs"
+            fontSize={{ base: 'xs', md: '2xs' }}
             fontWeight="600"
-            letterSpacing="0.14em"
+            letterSpacing={{ base: '0.12em', md: '0.14em' }}
             textTransform="uppercase"
             color="#8a6e35"
             flexShrink={0}
@@ -1264,7 +1396,7 @@ function SummaryCard({
             <Badge
               bg={classMeta.bg}
               color={classMeta.color}
-              fontSize="2xs"
+              fontSize={{ base: 'xs', md: '2xs' }}
               fontWeight="600"
               letterSpacing="0.08em"
               textTransform="uppercase"
@@ -1283,33 +1415,29 @@ function SummaryCard({
           )}
           <Icon
             as={collapsed ? FaChevronDown : FaChevronUp}
-            boxSize={2.5}
+            boxSize={4}
             color="gray.400"
             ml="auto"
             flexShrink={0}
           />
         </Flex>
-        <Box
-          as="button"
-          type="button"
+        {/* Regenerate — now a real 44×44 tap target instead of a
+            pixel-thin text link, so Vero can hit it reliably on a phone. */}
+        <IconButton
+          aria-label="Regenerate summary"
+          icon={<Icon as={FaSync} boxSize={3.5} />}
           onClick={onRegenerate}
-          display="inline-flex"
-          alignItems="center"
-          gap={1}
-          fontSize="2xs"
-          color={loading ? 'gray.400' : 'gray.500'}
-          _hover={loading ? undefined : { color: '#c9a96e' }}
-          cursor={loading ? 'default' : 'pointer'}
-          bg="transparent"
-          border="none"
-          p={0}
-          disabled={loading}
+          isLoading={loading}
+          variant="ghost"
+          size="sm"
+          minW="44px"
+          minH="44px"
+          color="gray.500"
+          _hover={{ color: '#c9a96e' }}
+          isDisabled={loading}
           flexShrink={0}
           sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          <Icon as={FaSync} boxSize={2.5} />
-          {loading ? 'Generating…' : 'Regenerate'}
-        </Box>
+        />
       </Flex>
 
       {/* Body — hidden when collapsed */}
@@ -1325,7 +1453,7 @@ function SummaryCard({
           ) : summary ? (
             <VStack align="stretch" spacing={2.5}>
               <Box>
-                <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
+                <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
                   Asking
                 </Text>
                 <Text fontSize="sm" color="gray.800" lineHeight="1.5">
@@ -1335,7 +1463,7 @@ function SummaryCard({
 
               {summary.gathered.length > 0 && (
                 <Box>
-                  <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
+                  <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
                     Gathered
                   </Text>
                   <VStack align="stretch" spacing={0.5}>
@@ -1350,7 +1478,7 @@ function SummaryCard({
               )}
 
               <Box>
-                <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
+                <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={0.5}>
                   Next step
                 </Text>
                 <Text fontSize="sm" color="gray.800" lineHeight="1.5">
@@ -1360,13 +1488,13 @@ function SummaryCard({
 
               {summary.tone && (
                 <HStack spacing={2}>
-                  <Text fontSize="2xs" color="gray.500" letterSpacing="0.08em" textTransform="uppercase">
+                  <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase">
                     Tone
                   </Text>
                   <Badge
                     bg="rgba(201, 169, 110, 0.15)"
                     color="#8a6e35"
-                    fontSize="2xs"
+                    fontSize={{ base: 'xs', md: '2xs' }}
                     fontWeight="500"
                     letterSpacing="0.05em"
                     textTransform="lowercase"
@@ -1522,13 +1650,27 @@ function CreateClientModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="md" isCentered>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size={{ base: 'full', md: 'md' } as any}
+      isCentered={{ base: false, md: true } as any}
+      motionPreset="slideInBottom"
+    >
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent
+        borderRadius={{ base: 0, md: 'md' }}
+        maxH={{ base: '100dvh', md: 'auto' }}
+        mx={{ base: 0, md: 4 }}
+      >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
           Convert to client
         </ModalHeader>
-        <ModalCloseButton />
+        <ModalCloseButton
+          size={{ base: 'lg', md: 'md' } as any}
+          top={{ base: 3, md: 2 }}
+          right={{ base: 3, md: 2 }}
+        />
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <Text fontSize="xs" color="gray.500" lineHeight="1.6">
@@ -1544,7 +1686,8 @@ function CreateClientModal({
               <Select
                 value={sessionType}
                 onChange={(e) => setSessionType(e.target.value)}
-                size="sm"
+                size={{ base: 'md', md: 'sm' }}
+                fontSize={{ base: 'md', md: 'sm' }}
                 bg="white"
               >
                 <option value="portrait">Portrait</option>
@@ -1565,7 +1708,8 @@ function CreateClientModal({
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="e.g. Anna Petrova"
-                size="sm"
+                size={{ base: 'md', md: 'sm' }}
+                fontSize={{ base: 'md', md: 'sm' }}
                 bg="white"
               />
             </FormControl>
@@ -1574,11 +1718,12 @@ function CreateClientModal({
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
                 Gallery password
               </FormLabel>
-              <InputGroup size="sm">
+              <InputGroup size={{ base: 'md', md: 'sm' }}>
                 <Input
                   value={galleryPassword}
                   onChange={(e) => setGalleryPassword(e.target.value)}
                   placeholder="autogenerated"
+                  fontSize={{ base: 'md', md: 'sm' }}
                   bg="white"
                   pr="4.5rem"
                 />
@@ -1630,26 +1775,31 @@ function CreateClientModal({
             )}
           </VStack>
         </ModalBody>
-        <ModalFooter gap={2}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            isDisabled={submitting}
-          >
-            Cancel
-          </Button>
-          <CTAButton
-            onClick={handleSubmit}
-            icon={FaUserPlus}
-            variant="solid"
-            size="sm"
-            isLoading={submitting}
-            loadingText="Creating…"
-            isDisabled={!canSubmit}
-          >
-            Create client
-          </CTAButton>
+        <ModalFooter
+          gap={2}
+          pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}
+        >
+          <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} w="100%">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              isDisabled={submitting}
+            >
+              Cancel
+            </Button>
+            <CTAButton
+              onClick={handleSubmit}
+              icon={FaUserPlus}
+              variant="solid"
+              size="sm"
+              isLoading={submitting}
+              loadingText="Creating…"
+              isDisabled={!canSubmit}
+            >
+              Create client
+            </CTAButton>
+          </Stack>
         </ModalFooter>
       </ModalContent>
     </Modal>

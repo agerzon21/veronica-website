@@ -1,4 +1,4 @@
-import { Box, HStack, VStack, Text, Flex, Badge, Icon } from '@chakra-ui/react';
+import { Box, HStack, VStack, Text, Flex, Badge, Icon, Stack, SimpleGrid } from '@chakra-ui/react';
 import { useState } from 'react';
 import { FaPlus, FaSyncAlt, FaTable, FaCalendarAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -61,14 +61,16 @@ type ViewMode = 'table' | 'calendar';
 const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props) => {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   return (
-    <Box maxW="1200px" mx="auto">
-      {/* Header row */}
-      <Flex
-        align="center"
+    <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
+      {/* Header row — on mobile it collapses to a column so the title,
+          view toggle, refresh, and New Client button each get full width
+          instead of wrapping haphazardly. */}
+      <Stack
+        direction={{ base: 'column', md: 'row' }}
         justify="space-between"
+        align={{ base: 'stretch', md: 'flex-end' }}
+        spacing={{ base: 3, md: 4 }}
         mb={8}
-        wrap="wrap"
-        gap={4}
       >
         <VStack align="flex-start" spacing={1}>
           <Text
@@ -109,15 +111,22 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
             onClick={onRefresh}
             display="inline-flex"
             alignItems="center"
+            justifyContent="center"
             gap={2}
             fontSize="xs"
             letterSpacing="0.2em"
             textTransform="uppercase"
             color="gray.500"
             _hover={{ color: '#c9a96e' }}
+            _active={{ color: '#b89858' }}
             cursor="pointer"
             bg="transparent"
             border="none"
+            // Touch target: 44px min height on mobile with roomier padding
+            // so this text button is easy to tap; keep it compact on desktop.
+            minH={{ base: '44px', md: 'auto' }}
+            px={{ base: 3, md: 2 }}
+            py={{ base: 2, md: 1 }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           >
             <Icon as={FaSyncAlt} boxSize={3} />
@@ -128,7 +137,7 @@ const AdminDashboard = ({ portals, onNewClient, onOpenPortal, onRefresh }: Props
             New Client
           </CTAButton>
         </HStack>
-      </Flex>
+      </Stack>
 
       {/* Calendar view replaces the table when toggled. The dashboard's
           empty-state + table-vs-cards stays only in table mode. */}
@@ -166,8 +175,12 @@ function ViewToggleButton({
       cursor="pointer"
       display="inline-flex"
       alignItems="center"
+      justifyContent="center"
       gap={2}
-      fontSize="2xs"
+      // Touch target: 44px on mobile so the segmented toggle is tap-friendly;
+      // slightly larger label text on mobile improves legibility.
+      minH={{ base: '44px', md: 'auto' }}
+      fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
       letterSpacing="0.2em"
       textTransform="uppercase"
@@ -276,12 +289,12 @@ function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
             </Text>
           )}
           {portal.pending_invite && (
-            <Badge fontSize="2xs" colorScheme="orange" variant="subtle">
+            <Badge fontSize={{ base: 'xs', md: '2xs' }} colorScheme="orange" variant="subtle">
               Invite pending
             </Badge>
           )}
           {portal.mode === 'simple' && (
-            <Badge fontSize="2xs" colorScheme="gray" variant="subtle">
+            <Badge fontSize={{ base: 'xs', md: '2xs' }} colorScheme="gray" variant="subtle">
               Gallery-only
             </Badge>
           )}
@@ -318,8 +331,17 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
       borderColor="gray.200"
       px={5}
       py={4}
-      _hover={{ borderColor: '#c9a96e' }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
+      // Only apply the hover treatment on true hover-capable pointers.
+      // On touch devices `_hover` sticks after tap and looks like the card
+      // is stuck "selected", so we gate it behind `hover: hover` and use
+      // an explicit `_active` for the pressed-tap feedback instead.
+      _active={{ borderColor: '#c9a96e', bg: '#fdf9f0' }}
+      sx={{
+        WebkitTapHighlightColor: 'transparent',
+        '@media (hover: hover)': {
+          '&:hover': { borderColor: '#c9a96e' },
+        },
+      }}
     >
       <VStack align="stretch" spacing={3}>
         <Box>
@@ -347,20 +369,25 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
             )}
           </HStack>
         </Box>
-        <HStack spacing={6} fontSize="xs">
-          <VStack align="flex-start" spacing={0.5}>
+        {/* Contract / Balance / Gallery — grid instead of HStack so the
+            three columns don't overflow narrow phones. 2-up on tiny screens,
+            3-up once we clear the `sm` breakpoint. `minW={0}` on each cell
+            lets long badge/balance text truncate rather than push the grid
+            wider than its container. */}
+        <SimpleGrid columns={{ base: 2, sm: 3 }} spacing={{ base: 2, md: 4 }} fontSize="xs">
+          <VStack align="flex-start" spacing={0.5} minW={0}>
             <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">Contract</Text>
             <ContractStatusBadge status={portal.contract_status} />
           </VStack>
-          <VStack align="flex-start" spacing={0.5}>
+          <VStack align="flex-start" spacing={0.5} minW={0}>
             <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">Balance</Text>
             <BalanceLine paid={portal.paid_to_date} total={portal.contract_total_amount} />
           </VStack>
-          <VStack align="flex-start" spacing={0.5}>
+          <VStack align="flex-start" spacing={0.5} minW={0}>
             <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">Gallery</Text>
             <GalleryStatusBadge portal={portal} />
           </VStack>
-        </HStack>
+        </SimpleGrid>
       </VStack>
     </Box>
   );
@@ -375,7 +402,7 @@ function ContractStatusBadge({ status }: { status: AdminPortalSummary['contract_
   } as const;
   const cfg = map[status];
   return (
-    <Badge colorScheme={cfg.color} variant="subtle" fontSize="2xs">
+    <Badge colorScheme={cfg.color} variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
       {cfg.label}
     </Badge>
   );
@@ -386,7 +413,7 @@ function BalanceLine({ paid, total }: { paid: number; total: number | null }) {
   const remaining = total - paid;
   if (remaining <= 0 && total > 0) {
     return (
-      <Badge colorScheme="green" variant="subtle" fontSize="2xs">
+      <Badge colorScheme="green" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
         Paid {formatMoney(total)}
       </Badge>
     );
@@ -403,7 +430,7 @@ function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
   if (portal.gallery_delivered_at) {
     if (portal.gallery_expires_at && new Date(portal.gallery_expires_at).getTime() < Date.now()) {
       return (
-        <Badge colorScheme="gray" variant="subtle" fontSize="2xs">
+        <Badge colorScheme="gray" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
           Expired
         </Badge>
       );
@@ -415,12 +442,12 @@ function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
         : null;
     return (
       <HStack spacing={2}>
-        <Badge colorScheme="green" variant="subtle" fontSize="2xs">
+        <Badge colorScheme="green" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
           Delivered
         </Badge>
         {daysLeft !== null && daysLeft >= 0 && (
           <Text
-            fontSize="2xs"
+            fontSize={{ base: 'xs', md: '2xs' }}
             color={daysLeft < 7 ? 'orange.600' : 'gray.500'}
             fontWeight={daysLeft < 7 ? '500' : '400'}
           >
@@ -432,13 +459,13 @@ function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
   }
   if (portal.drive_url) {
     return (
-      <Badge colorScheme="blue" variant="subtle" fontSize="2xs">
+      <Badge colorScheme="blue" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
         Ready
       </Badge>
     );
   }
   return (
-    <Badge colorScheme="gray" variant="subtle" fontSize="2xs">
+    <Badge colorScheme="gray" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
       Not started
     </Badge>
   );
