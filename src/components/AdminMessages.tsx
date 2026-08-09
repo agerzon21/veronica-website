@@ -6,7 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle,
+  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaCommentDots, FaExclamationTriangle, FaTimes,
   FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -231,16 +231,12 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
     <Box maxW="1400px" mx="auto" px={{ base: 0, md: 0 }}>
       {/* Tab header — hidden on mobile when a conversation is open so
           the drill-down feels like a real screen switch, not a
-          scrolling chase. Desktop always shows it. */}
+          scrolling chase. Desktop always shows it.
+          All actions live on the SAME row as the title (AI toggle pill
+          + refresh icon) so nothing wraps to a second line. */}
       <Box display={{ base: showThreadOnMobile ? 'none' : 'block', lg: 'block' }}>
-        <Stack
-          direction={{ base: 'column', md: 'row' }}
-          align={{ base: 'flex-start', md: 'flex-end' }}
-          justify="space-between"
-          mb={{ base: 4, md: 6 }}
-          spacing={{ base: 3, md: 4 }}
-        >
-          <VStack align="flex-start" spacing={1}>
+        <Flex align="flex-end" justify="space-between" mb={{ base: 4, md: 6 }} gap={2}>
+          <VStack align="flex-start" spacing={1} minW={0}>
             <Text
               fontSize="xs"
               fontWeight="500"
@@ -260,36 +256,17 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
             </Text>
           </VStack>
 
-          {/* Header actions — stack cleanly on mobile so nothing orphans.
-              GlobalAiIndicator + Pause button flow full-width; Refresh
-              becomes an icon-only round button so it's 44×44 tappable. */}
-          <Stack
-            direction={{ base: 'row', md: 'row' }}
-            spacing={2}
-            align="center"
-            wrap="wrap"
-            w={{ base: '100%', md: 'auto' }}
-            justify={{ base: 'flex-start', md: 'flex-end' }}
-          >
-            <GlobalAiIndicator state={globalAiState} />
-            {adminLevel === 'super' && (
-              <CTAButton
-                onClick={handleToggleGlobal}
-                icon={FaPowerOff}
-                variant={globalAiState === 'off' ? 'solid' : 'outline'}
-                size="sm"
-              >
-                {/* Shorter label on mobile so it fits next to the pill */}
-                <Box as="span" display={{ base: 'inline', md: 'none' }}>
-                  {globalAiState === 'on' ? 'Pause AI' : 'Resume AI'}
-                </Box>
-                <Box as="span" display={{ base: 'none', md: 'inline' }}>
-                  {globalAiState === 'on' ? 'Pause AI globally' : 'Resume AI globally'}
-                </Box>
-              </CTAButton>
-            )}
+          {/* Actions row — AI toggle pill (the pill IS the toggle now,
+              not a status label + separate button) + refresh icon.
+              For non-super admins the pill is a read-only status
+              indicator that opens no confirm dialog on tap. */}
+          <HStack spacing={2} flexShrink={0}>
+            <GlobalAiTogglePill
+              state={globalAiState}
+              onClick={adminLevel === 'super' ? handleToggleGlobal : undefined}
+            />
             <IconButton
-              aria-label="Refresh conversations"
+              aria-label="Refresh"
               icon={<Icon as={FaSync} boxSize={4} />}
               onClick={loadList}
               variant="ghost"
@@ -300,8 +277,8 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
               _hover={{ color: '#c9a96e' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
-          </Stack>
-        </Stack>
+          </HStack>
+        </Flex>
 
         {error && (
           <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">
@@ -416,34 +393,75 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
 };
 
 /**
- * Small pill indicator in the header showing the global AI state at
- * a glance. Green for on, amber for off. Redundant with the toggle
- * button below on super-admin, but always visible on admin-level
- * where the toggle button is hidden.
+ * Global-AI pill in the messages header. Doubles as the toggle button
+ * — tap flips AI on/off globally (super-admin only; regular admins
+ * see it as a read-only status indicator). Green when on, orange when
+ * off; a small dot inside pulses when off to signal that auto-replies
+ * are currently silenced.
+ *
+ * Merged from what used to be TWO elements — a green indicator badge
+ * + a separate "Pause AI globally" CTAButton eating a whole row. Alex
+ * flagged the two-element pattern as wasteful; the pill IS the toggle.
  */
-function GlobalAiIndicator({ state }: { state: 'on' | 'off' }) {
+function GlobalAiTogglePill({
+  state,
+  onClick,
+}: {
+  state: 'on' | 'off';
+  onClick?: () => void;
+}) {
+  const interactive = Boolean(onClick);
   const config =
     state === 'on'
-      ? { bg: 'green.100', color: 'green.700', label: 'AI: On' }
-      : { bg: 'orange.100', color: 'orange.700', label: 'AI: Paused' };
+      ? { bg: 'green.100', color: 'green.700', dot: 'green.500', label: 'AI: On', title: 'Tap to pause AI globally' }
+      : { bg: 'orange.100', color: 'orange.700', dot: 'orange.500', label: 'AI: Paused', title: 'Tap to resume AI globally' };
+  // The dynamic `as` swaps between a real <button> and a <div> based
+  // on whether we have an onClick — regular admins get a read-only
+  // pill, super gets a clickable toggle. Chakra's polymorphic `as`
+  // typing can't narrow this so we cast the props bag; behavior is
+  // safe (button-only props are simply ignored on the div path).
+  const ButtonOrDiv: any = interactive ? 'button' : 'div';
   return (
-    <Badge
-      bg={config.bg}
-      color={config.color}
-      fontSize={{ base: 'xs', md: '2xs' }}
-      fontWeight="500"
-      letterSpacing="0.1em"
-      textTransform="uppercase"
-      px={2.5}
-      py={1}
-      borderRadius="sm"
+    <Box
+      as={ButtonOrDiv}
+      {...(interactive ? { type: 'button', 'aria-label': config.title, title: config.title } : {})}
+      onClick={onClick}
       display="inline-flex"
       alignItems="center"
       gap={1.5}
+      px={{ base: 3, md: 2.5 }}
+      py={{ base: 2, md: 1 }}
+      minH={{ base: '40px', md: 'auto' }}
+      bg={config.bg}
+      color={config.color}
+      border="none"
+      borderRadius="full"
+      fontSize={{ base: 'xs', md: '2xs' }}
+      fontWeight="600"
+      letterSpacing="0.1em"
+      textTransform="uppercase"
+      cursor={interactive ? 'pointer' : 'default'}
+      transition="all 0.15s"
+      _hover={interactive ? { filter: 'brightness(0.95)' } : {}}
+      _active={interactive ? { transform: 'scale(0.97)' } : {}}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      <Box as="span" w="6px" h="6px" borderRadius="full" bg={state === 'on' ? 'green.500' : 'orange.500'} />
+      <Box
+        as="span"
+        w="6px"
+        h="6px"
+        borderRadius="full"
+        bg={config.dot}
+        sx={state === 'off' ? {
+          animation: 'veroPulse 1.6s ease-in-out infinite',
+          '@keyframes veroPulse': {
+            '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+            '50%': { opacity: 0.4, transform: 'scale(0.85)' },
+          },
+        } : {}}
+      />
       {config.label}
-    </Badge>
+    </Box>
   );
 }
 
@@ -688,6 +706,12 @@ function ConversationView({
       window.localStorage.setItem('vero_summary_lang', summaryLang);
     }
   }, [summaryLang]);
+  // AI-off banner dismiss state — the banner auto-opens whenever a
+  // conversation with AI disabled is opened, but Vero can dismiss it
+  // for the current session (state resets when the ConversationView
+  // remounts on selecting a different thread) so it stops eating
+  // vertical space once she's acknowledged it.
+  const [aiOffBannerDismissed, setAiOffBannerDismissed] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -968,13 +992,49 @@ function ConversationView({
             </VStack>
           </HStack>
 
-          {/* AI toggle stays in the top row on all breakpoints — it's the
-              most-used control in this header. */}
+          {/* Right side of the header: Create-client icon (or "Linked
+              client" badge if already linked) + AI toggle. Everything
+              lives on the top row now — the old second row was eating
+              vertical space in the drill-down for a single button. */}
           <HStack spacing={2} flexShrink={0}>
+            {detail.linked_client_portal_id ? (
+              <Box
+                title="Linked to a client portal"
+                aria-label="Linked to a client portal"
+                w="32px"
+                h="32px"
+                borderRadius="full"
+                bg="green.100"
+                color="green.700"
+                display="inline-flex"
+                alignItems="center"
+                justifyContent="center"
+                flexShrink={0}
+              >
+                <Icon as={FaExternalLinkAlt} boxSize={3} />
+              </Box>
+            ) : (
+              // Small circular + user icon — replaces the old chunky
+              // "Create Client" pill that took up its own line in the
+              // header. Same click target size (44×44) with a subtle
+              // gold-tinted background so it reads as an action.
+              <IconButton
+                aria-label="Create client from this thread"
+                icon={<Icon as={FaUserPlus} boxSize={4} />}
+                onClick={() => setCreateClientOpen(true)}
+                variant="ghost"
+                size="md"
+                minW="44px"
+                minH="44px"
+                bg="rgba(201, 169, 110, 0.12)"
+                color="#8a6e35"
+                _hover={{ bg: 'rgba(201, 169, 110, 0.22)' }}
+                _active={{ bg: 'rgba(201, 169, 110, 0.28)' }}
+                borderRadius="full"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              />
+            )}
             <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
-            <Text fontSize="xs" color="gray.600" fontWeight="500" display={{ base: 'none', sm: 'inline' }}>
-              AI
-            </Text>
             <Switch
               isChecked={detail.ai_enabled}
               onChange={handleToggleAi}
@@ -985,51 +1045,9 @@ function ConversationView({
           </HStack>
         </Flex>
 
-        {/* Second row: Create-client / Linked-client status. Hidden on
-            mobile in focus mode (summary expanded) — nothing should
-            sit between the header and the summary body when Vero is
-            reading. Compact text-icon button so it doesn't dominate
-            the row on mobile the way the old chunky pill did. */}
-        <Flex
-          px={{ base: 3, md: 4 }}
-          pb={{ base: 2, md: 3 }}
-          pt={0}
-          justify="flex-start"
-          align="center"
-          gap={2}
-          display={{ base: summaryCollapsed ? 'flex' : 'none', lg: 'flex' }}
-        >
-          {detail.linked_client_portal_id ? (
-            <Badge
-              bg="green.50"
-              color="green.700"
-              border="1px solid"
-              borderColor="green.200"
-              fontSize={{ base: 'xs', md: '2xs' }}
-              fontWeight="600"
-              letterSpacing="0.06em"
-              textTransform="uppercase"
-              px={2}
-              py={1}
-              borderRadius="sm"
-              display="inline-flex"
-              alignItems="center"
-              gap={1.5}
-            >
-              <Icon as={FaExternalLinkAlt} boxSize={2.5} />
-              Linked client
-            </Badge>
-          ) : (
-            <CTAButton
-              onClick={() => setCreateClientOpen(true)}
-              icon={FaUserPlus}
-              variant="outline"
-              size="sm"
-            >
-              Create client
-            </CTAButton>
-          )}
-        </Flex>
+        {/* The old second-row Create-client / Linked-client block is
+            gone — those two controls now live in the top header row
+            above, saving a full row of vertical space on mobile. */}
       </VStack>
 
       {/* Create-client modal — prefills from IG contact + AI summary */}
@@ -1053,22 +1071,42 @@ function ConversationView({
         }}
       />
 
-      {/* Not-in-AI notice — small banner when AI is off for this convo */}
-      {!detail.ai_enabled && (
+      {/* Not-in-AI notice — one-line dismissible banner. Auto-opens
+          for any conversation with AI disabled; Vero can close it
+          for the current session (state resets on remount when she
+          picks a different thread) so it stops occupying screen
+          space once she's acknowledged it. */}
+      {!detail.ai_enabled && !aiOffBannerDismissed && (
         <Flex
           bg="orange.50"
           borderBottom="1px solid"
           borderColor="orange.100"
-          px={4}
-          py={2}
+          px={{ base: 3, md: 4 }}
+          py={{ base: 2, md: 2 }}
           gap={2}
           align="center"
+          justify="space-between"
           flexShrink={0}
         >
-          <Icon as={FaExclamationTriangle} color="orange.500" boxSize={3} />
-          <Text fontSize="xs" color="orange.700" fontWeight="400">
-            AI is off for this conversation — replies are 100% you. Toggle above to re-enable.
-          </Text>
+          <Flex align="center" gap={2} minW={0} flex={1}>
+            <Icon as={FaExclamationTriangle} color="orange.500" boxSize={3.5} flexShrink={0} />
+            <Text fontSize="xs" color="orange.700" fontWeight="500" noOfLines={1}>
+              AI is off — replies are 100% you.
+            </Text>
+          </Flex>
+          <IconButton
+            aria-label="Dismiss AI-off notice"
+            icon={<Icon as={FaTimes} boxSize={3} />}
+            onClick={() => setAiOffBannerDismissed(true)}
+            variant="ghost"
+            size="xs"
+            minW="32px"
+            minH="32px"
+            color="orange.600"
+            _hover={{ bg: 'orange.100' }}
+            flexShrink={0}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
         </Flex>
       )}
 

@@ -1,4 +1,4 @@
-import { Box, HStack, VStack, Text, Flex, Badge, Icon, Stack, SimpleGrid } from '@chakra-ui/react';
+import { Box, HStack, VStack, Text, Flex, Badge, Icon, SimpleGrid, IconButton } from '@chakra-ui/react';
 import { FaPlus, FaSyncAlt, FaTable, FaCalendarAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminCalendarView from './AdminCalendarView';
@@ -77,53 +77,31 @@ const AdminDashboard = ({
   const setViewMode = onChangeViewMode ?? (() => {});
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header row — title kicker + h1 + count on the left, primary CTA
-          (+ New) inline to the right of the title on mobile, view-toggle
-          and refresh sit on a second row on mobile so they don't compete
-          for space with the title. Desktop keeps everything on one row. */}
-      <Stack direction="column" spacing={3} mb={{ base: 5, md: 8 }}>
-        <Stack
-          direction="row"
-          justify="space-between"
-          align="flex-end"
-          spacing={3}
-          w="100%"
-        >
-          <VStack align="flex-start" spacing={1} minW={0}>
-            <Text
-              fontSize="xs"
-              fontWeight="500"
-              textTransform="uppercase"
-              letterSpacing="0.25em"
-              color="#c9a96e"
-            >
-              Admin
-            </Text>
-            <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-              Clients
-            </Text>
-            <Text fontSize="sm" color="gray.500" fontWeight="300">
-              {portals.length} portal{portals.length === 1 ? '' : 's'}
-            </Text>
-          </VStack>
-          {/* + New sits inline with the title on every breakpoint. The
-              label is just "+ New" because this flow can create either a
-              full client portal OR a gallery-only portal — the chooser
-              decides, so "New Client" was misleading. */}
-          <CTAButton onClick={onNewClient} icon={FaPlus} variant="solid" size="sm">
-            New
-          </CTAButton>
-        </Stack>
-        {/* Secondary actions row: view toggle + refresh. On mobile the
-            view toggle is redundant (the bottom-nav sub-strip already
-            switches Table ↔ Calendar), so we hide it and only show
-            Refresh. On desktop both live inline. */}
-        <Stack
-          direction="row"
-          justify={{ base: 'flex-end', md: 'flex-end' }}
-          spacing={3}
-          align="center"
-        >
+      {/* Header row — title kicker + h1 + count on the left, refresh
+          icon-button + primary CTA (+ New) on the right, ALL on the same
+          row on every breakpoint. Desktop adds the Table/Calendar
+          view toggle (mobile uses the bottom-nav sub-strip instead). */}
+      <Flex align="flex-end" justify="space-between" mb={{ base: 5, md: 8 }} gap={2}>
+        <VStack align="flex-start" spacing={1} minW={0}>
+          <Text
+            fontSize="xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.25em"
+            color="#c9a96e"
+          >
+            Admin
+          </Text>
+          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
+            Clients
+          </Text>
+          <Text fontSize="sm" color="gray.500" fontWeight="300">
+            {portals.length} portal{portals.length === 1 ? '' : 's'}
+          </Text>
+        </VStack>
+        <HStack spacing={2} flexShrink={0}>
+          {/* Desktop-only view toggle (Table / Calendar). Mobile uses
+              the bottom-nav sub-strip instead — no reason to show both. */}
           <HStack
             spacing={0}
             border="1px solid"
@@ -145,33 +123,28 @@ const AdminDashboard = ({
               onClick={() => setViewMode('calendar')}
             />
           </HStack>
-          <Box
-            as="button"
-            type="button"
+          {/* Refresh is icon-only across every admin tab now (Messages,
+              Journal, Clients) so the label pattern is consistent. */}
+          <IconButton
+            aria-label="Refresh"
+            icon={<Icon as={FaSyncAlt} boxSize={4} />}
             onClick={onRefresh}
-            display="inline-flex"
-            alignItems="center"
-            justifyContent="center"
-            gap={2}
-            fontSize={{ base: '2xs', md: 'xs' }}
-            letterSpacing="0.2em"
-            textTransform="uppercase"
+            variant="ghost"
+            size="md"
+            minW="44px"
+            minH="44px"
             color="gray.500"
             _hover={{ color: '#c9a96e' }}
-            _active={{ color: '#b89858' }}
-            cursor="pointer"
-            bg="transparent"
-            border="none"
-            minH={{ base: '40px', md: 'auto' }}
-            px={{ base: 3, md: 2 }}
-            py={{ base: 2, md: 1 }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            <Icon as={FaSyncAlt} boxSize={3} />
-            Refresh
-          </Box>
-        </Stack>
-      </Stack>
+          />
+          {/* + New — the flow creates either a full client portal OR a
+              gallery-only portal (chooser decides), so "New Client" was
+              misleading. Just "+ New". */}
+          <CTAButton onClick={onNewClient} icon={FaPlus} variant="solid" size="sm">
+            New
+          </CTAButton>
+        </HStack>
+      </Flex>
 
       {/* Calendar view replaces the table when toggled. The dashboard's
           empty-state + table-vs-cards stays only in table mode. */}

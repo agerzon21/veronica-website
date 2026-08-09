@@ -3,7 +3,7 @@ import {
   Drawer, DrawerBody, DrawerContent, DrawerOverlay, DrawerCloseButton,
   useDisclosure,
 } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -49,12 +49,10 @@ const TAB_TO_GROUP: Record<Exclude<DashTab, 'integrations'>, Exclude<NavGroup, '
   gallery: 'studio',
 };
 
-// Which tab each group defaults to when the user first taps it.
-const GROUP_DEFAULT_TAB: Record<Exclude<NavGroup, 'menu'>, DashTab> = {
-  clients: 'clients',
-  inbox: 'messages',
-  studio: 'journal',
-};
+// (GROUP_DEFAULT_TAB was used by the old auto-navigate-on-group-tap
+// behavior. Now that tapping a group only OPENS the sub-menu — the
+// user picks the sub-tab explicitly — no default is needed. Kept as
+// a comment for the archaeology.)
 
 const MotionBox = motion(Box);
 
@@ -539,14 +537,17 @@ function AdminTabStrip({
 }
 
 /**
- * MOBILE bottom nav — 4 groups (Clients / Inbox / Studio / Menu) plus
- * a sub-nav pill strip that appears directly above the bar when the
- * active group has multiple sub-tabs. The pill strip animates in/out
- * per Framer Motion so tapping between groups feels responsive.
+ * MOBILE bottom nav — 4 groups (Clients / Inbox / Studio / Menu). The
+ * sub-nav (Table/Calendar, Messages/Assistant, Journal/Gallery) is
+ * TAP-TO-OPEN and appears above the bar with a spring animation.
+ * Tap anywhere outside the nav to close. Tapping a sub-tab navigates
+ * AND closes the strip.
  *
- * Fixed to the bottom of the viewport, respects safe-area-inset so it
- * clears the iOS home indicator, always thumb-reachable regardless of
- * scroll position.
+ * A small chevron above each group icon signals that tapping opens
+ * a sub-menu, so it doesn't look like a normal one-tap tab.
+ *
+ * Fixed to the bottom of the viewport, respects safe-area-inset so
+ * it clears the iOS home indicator, always thumb-reachable.
  */
 function AdminMobileNav({
   activeTab,
@@ -561,62 +562,75 @@ function AdminMobileNav({
   onChangeClientsView: (v: ClientsView) => void;
   onOpenMenu: () => void;
 }) {
-  // Derive the active group from the active tab. Integrations lives
-  // inside the Menu drawer, so if that's somehow active we treat the
-  // group as 'menu' visually.
+  // Which group's sub-menu is currently open. Null = collapsed.
+  // Tapping a group opens its sub-menu; tapping the same group again
+  // closes it; tapping a sub-tab navigates and closes.
+  const [openGroup, setOpenGroup] = useState<Exclude<NavGroup, 'menu'> | null>(null);
+  const navRef = useRef<HTMLDivElement | null>(null);
+
+  // Close the sub-menu when the user taps anywhere OUTSIDE the nav
+  // (chat, header, sub-tab strip). Sub-tab clicks themselves navigate
+  // + close via their own handler before this fires.
+  useEffect(() => {
+    if (!openGroup) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (!navRef.current) return;
+      if (navRef.current.contains(e.target as Node)) return;
+      setOpenGroup(null);
+    };
+    // pointerdown fires before click, so submenu closes before other
+    // handlers see the tap — feels snappier than click.
+    window.addEventListener('pointerdown', handler);
+    return () => window.removeEventListener('pointerdown', handler);
+  }, [openGroup]);
+
+  // Also close on route change (safety net — if something outside
+  // this component changes activeTab, don't leave a stale panel open).
+  useEffect(() => {
+    setOpenGroup(null);
+  }, [activeTab, clientsView]);
+
+  // Derive the currently-active group purely for visual highlighting
+  // (which tab in the bottom bar looks selected). Independent of
+  // openGroup — the sub-menu can be open on Inbox while the active
+  // group is Studio.
   const activeGroup: NavGroup =
     activeTab === 'integrations' ? 'menu' : TAB_TO_GROUP[activeTab];
 
-  // What sub-tab pills belong under each group. Menu has none (it
-  // opens a drawer instead of switching content).
+  // Sub-nav pill lookup for the open group. Menu never has one
+  // (it opens a drawer instead).
   const subNav: Array<{ id: string; label: string; isActive: boolean; onClick: () => void }> =
-    activeGroup === 'clients'
+    openGroup === 'clients'
       ? [
-          { id: 'table', label: 'Table', isActive: clientsView === 'table', onClick: () => onChangeClientsView('table') },
-          { id: 'calendar', label: 'Calendar', isActive: clientsView === 'calendar', onClick: () => onChangeClientsView('calendar') },
+          { id: 'table', label: 'Table', isActive: clientsView === 'table', onClick: () => { onChangeClientsView('table'); if (activeGroup !== 'clients') onChangeTab('clients'); setOpenGroup(null); } },
+          { id: 'calendar', label: 'Calendar', isActive: clientsView === 'calendar', onClick: () => { onChangeClientsView('calendar'); if (activeGroup !== 'clients') onChangeTab('clients'); setOpenGroup(null); } },
         ]
-      : activeGroup === 'inbox'
+      : openGroup === 'inbox'
       ? [
-          { id: 'messages', label: 'Messages', isActive: activeTab === 'messages', onClick: () => onChangeTab('messages') },
-          { id: 'assistant', label: 'Assistant', isActive: activeTab === 'assistant', onClick: () => onChangeTab('assistant') },
+          { id: 'messages', label: 'Messages', isActive: activeTab === 'messages', onClick: () => { onChangeTab('messages'); setOpenGroup(null); } },
+          { id: 'assistant', label: 'Assistant', isActive: activeTab === 'assistant', onClick: () => { onChangeTab('assistant'); setOpenGroup(null); } },
         ]
-      : activeGroup === 'studio'
+      : openGroup === 'studio'
       ? [
-          { id: 'journal', label: 'Journal', isActive: activeTab === 'journal', onClick: () => onChangeTab('journal') },
-          { id: 'gallery', label: 'Gallery', isActive: activeTab === 'gallery', onClick: () => onChangeTab('gallery') },
+          { id: 'journal', label: 'Journal', isActive: activeTab === 'journal', onClick: () => { onChangeTab('journal'); setOpenGroup(null); } },
+          { id: 'gallery', label: 'Gallery', isActive: activeTab === 'gallery', onClick: () => { onChangeTab('gallery'); setOpenGroup(null); } },
         ]
       : [];
 
-  const groups: Array<{ id: NavGroup; label: string; icon: typeof FaUsers; onClick: () => void }> = [
-    {
-      id: 'clients',
-      label: 'Clients',
-      icon: FaUsers,
-      // Tapping Clients while already in a clients group is a no-op;
-      // tapping from another group jumps to the default clients tab.
-      onClick: () => onChangeTab('clients'),
-    },
-    {
-      id: 'inbox',
-      label: 'Inbox',
-      icon: FaInbox,
-      onClick: () => {
-        if (activeGroup !== 'inbox') onChangeTab(GROUP_DEFAULT_TAB.inbox);
-      },
-    },
-    {
-      id: 'studio',
-      label: 'Studio',
-      icon: FaFolder,
-      onClick: () => {
-        if (activeGroup !== 'studio') onChangeTab(GROUP_DEFAULT_TAB.studio);
-      },
-    },
-    { id: 'menu', label: 'Menu', icon: FaBars, onClick: onOpenMenu },
+  const toggleGroup = (g: Exclude<NavGroup, 'menu'>) => {
+    setOpenGroup((cur) => (cur === g ? null : g));
+  };
+
+  const groups: Array<{ id: NavGroup; label: string; icon: typeof FaUsers; onClick: () => void; hasSubmenu: boolean }> = [
+    { id: 'clients', label: 'Clients', icon: FaUsers, onClick: () => toggleGroup('clients'), hasSubmenu: true },
+    { id: 'inbox', label: 'Inbox', icon: FaInbox, onClick: () => toggleGroup('inbox'), hasSubmenu: true },
+    { id: 'studio', label: 'Studio', icon: FaFolder, onClick: () => toggleGroup('studio'), hasSubmenu: true },
+    { id: 'menu', label: 'Menu', icon: FaBars, onClick: () => { setOpenGroup(null); onOpenMenu(); }, hasSubmenu: false },
   ];
 
   return (
     <Box
+      ref={navRef}
       position="fixed"
       bottom={0}
       left={0}
@@ -625,17 +639,20 @@ function AdminMobileNav({
       display={{ base: 'block', md: 'none' }}
       pointerEvents="none"
     >
-      {/* Sub-nav pill strip — appears ABOVE the bottom bar when the
-          active group has 2+ tabs. Animated in/out per group change.
-          Pointer-events re-enabled here so taps register. */}
+      {/* Sub-nav pill strip — appears ABOVE the bottom bar when a
+          group's sub-menu is open. Cute spring animation (y +12→0
+          with a slight scale bump) so it feels tappable, not just
+          faded in. Pointer-events re-enabled on the pill itself so
+          taps register but the surrounding padding doesn't intercept
+          the outside-click close handler. */}
       <AnimatePresence initial={false} mode="wait">
         {subNav.length > 1 && (
           <MotionBox
-            key={activeGroup}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            key={openGroup}
+            initial={{ opacity: 0, y: 16, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 26, mass: 0.6 }}
             display="flex"
             justifyContent="center"
             px={3}
@@ -646,10 +663,10 @@ function AdminMobileNav({
               spacing={1}
               bg="white"
               border="1px solid"
-              borderColor="gray.200"
+              borderColor="rgba(201, 169, 110, 0.35)"
               borderRadius="full"
               p="4px"
-              boxShadow="0 4px 16px -6px rgba(0, 0, 0, 0.12)"
+              boxShadow="0 8px 24px -8px rgba(201, 169, 110, 0.35), 0 2px 6px -2px rgba(0, 0, 0, 0.08)"
               pointerEvents="auto"
             >
               {subNav.map((s) => (
@@ -683,7 +700,9 @@ function AdminMobileNav({
         )}
       </AnimatePresence>
 
-      {/* Bottom nav bar — 4 groups, always visible. */}
+      {/* Bottom nav bar — 4 groups, always visible. Chevron above the
+          icon signals "tap opens a sub-menu"; the chevron rotates
+          180° when its group's sub-menu is open. */}
       <Box
         bg="white"
         borderTop="1px solid"
@@ -695,6 +714,7 @@ function AdminMobileNav({
         <Flex align="stretch" role="tablist">
           {groups.map((g) => {
             const isActive = activeGroup === g.id;
+            const isOpen = openGroup === g.id;
             return (
               <Box
                 key={g.id}
@@ -702,9 +722,11 @@ function AdminMobileNav({
                 type="button"
                 role="tab"
                 aria-selected={isActive}
+                aria-expanded={g.hasSubmenu ? isOpen : undefined}
                 onClick={g.onClick}
                 flex="1"
                 minH="60px"
+                position="relative"
                 display="flex"
                 flexDirection="column"
                 alignItems="center"
@@ -720,7 +742,26 @@ function AdminMobileNav({
                 _active={{ bg: 'rgba(201, 169, 110, 0.08)' }}
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <Icon as={g.icon} boxSize={5} />
+                {/* Chevron affordance — signals the tab opens a submenu.
+                    Small enough to not compete with the icon; rotates
+                    when the submenu is open. */}
+                {g.hasSubmenu && (
+                  <Box
+                    position="absolute"
+                    top="4px"
+                    left="50%"
+                    transform={`translateX(-50%) rotate(${isOpen ? 180 : 0}deg)`}
+                    transition="transform 0.2s ease"
+                    color={isActive ? '#c9a96e' : 'gray.300'}
+                    fontSize="8px"
+                    lineHeight="1"
+                    pointerEvents="none"
+                    aria-hidden
+                  >
+                    ▲
+                  </Box>
+                )}
+                <Icon as={g.icon} boxSize={5} mt={g.hasSubmenu ? '4px' : 0} />
                 <Text
                   as="span"
                   fontSize="10px"
