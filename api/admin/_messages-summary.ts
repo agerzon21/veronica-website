@@ -5,12 +5,28 @@
  * even worth her time, and what her next step should be — without
  * reading the full message history.
  *
- * POST { password, conversationId }
- *   → 200 { success, summary: { classification, asking, gathered, nextStep, tone } }
+ * POST { password, conversationId, force? }
+ *   → 200 { success, summary, cached }
  *   → 400 missing conversationId
  *   → 401 wrong password
  *   → 404 conversation not found
  *   → 502 upstream OpenAI error
+ *
+ * `cached: true` in the response means we hit the DB cache (no
+ * OpenAI call, instant) — the frontend can use this if it ever
+ * wants to show "cached / regenerated" state; for now it's
+ * informational.
+ *
+ * `force: true` in the body bypasses the cache and always
+ * regenerates. Wired to the Regenerate button in the admin UI so
+ * Vero can force a fresh summary if the AI output was off.
+ *
+ * Cache invalidation strategy: "check at read time" via the message
+ * id of the latest message. Each cache entry records which message
+ * was latest when the summary was made; if a newer message has
+ * arrived since (either an inbound reply from the customer or an
+ * outbound one from Vero / the AI), we regenerate. Same message
+ * id = safe to serve cache.
  *
  * `classification` — one of booking-inquiry, existing-client,
  *              general-question, collaboration-offer, spam-or-unrelated,
@@ -24,13 +40,6 @@
  *              or ignore if spam)
  * `tone` — one word describing the customer's energy (enthusiastic,
  *          hesitant, price-sensitive, casual, urgent, formal)
- *
- * We don't cache summaries in the DB for MVP — regenerated on demand.
- * If Vero regens the summary on every conversation open + we get a
- * lot of traffic this could add up (~$0.005 per summary with GPT-4o-mini),
- * but at expected volume it's negligible. Later we can cache in a new
- * `conversation_summary` column keyed off the latest message's id so
- * we skip regenerating when nothing's changed.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -95,9 +104,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!conversationId) {
     return res.status(400).json({ success: false, error: 'conversationId is required' });
   }
+  const force = Boolean(req.body?.force);
 
   try {
     const sql = getDb();
+
+    // Cache check: fetch the cached summary + the id of the currently
+    // latest message in the conversation in ONE roundtrip. If the
+    // cached summary's message id matches, we can skip the OpenAI
+    // call entirely.
+    const cacheRows = (await sql`
+      SELECT
+        c.summary_json,
+        c.summary_message_id,
+        (
+          SELECT id FROM messages
+          WHERE conversation_id = c.id
+          ORDER BY sent_at DESC
+          LIMIT 1
+        ) AS latest_message_id
+      FROM conversations c
+      WHERE c.id = ${conversationId}
+      LIMIT 1
+    `) as Array<{
+      summary_json: Summary | null;
+      summary_message_id: string | null;
+      latest_message_id: string | null;
+    }>;
+
+    if (cacheRows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+    }
+    const cacheRow = cacheRows[0];
+    if (!cacheRow.latest_message_id) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation has no messages',
+      });
+    }
+
+    // Cache hit — nothing new since the last summary, no force flag.
+    // Skip OpenAI entirely, return instantly.
+    if (
+      !force &&
+      cacheRow.summary_json &&
+      cacheRow.summary_message_id === cacheRow.latest_message_id
+    ) {
+      return res
+        .status(200)
+        .json({ success: true, summary: cacheRow.summary_json, cached: true });
+    }
+
+    // Cache miss (or force). Pull the transcript, generate, save.
     const rows = (await sql`
       SELECT direction, sender, body, sent_at
       FROM messages
@@ -106,15 +164,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       LIMIT 100
     `) as MessageRow[];
 
-    if (rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Conversation has no messages',
-      });
-    }
-
     const summary = await generateSummary(rows);
-    return res.status(200).json({ success: true, summary });
+
+    // Persist so the next request hits cache. If the latest message
+    // id changed BETWEEN the SELECT above and this UPDATE (very
+    // narrow race), we just cache with the older id — the next
+    // request notices and regenerates. Not worth locking.
+    await sql`
+      UPDATE conversations
+      SET
+        summary_json = ${JSON.stringify(summary)}::jsonb,
+        summary_message_id = ${cacheRow.latest_message_id},
+        summary_generated_at = NOW()
+      WHERE id = ${conversationId}
+    `;
+
+    return res.status(200).json({ success: true, summary, cached: false });
   } catch (err) {
     console.error('[admin/messages-summary] handler failed:', err);
     return res.status(502).json({ success: false, error: 'Summary generation failed' });

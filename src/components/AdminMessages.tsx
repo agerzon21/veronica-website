@@ -542,27 +542,39 @@ function ConversationView({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
-  const loadAiSummary = useCallback(async (): Promise<void> => {
-    setAiSummaryLoading(true);
-    setAiSummaryError(null);
-    try {
-      const res = await fetch('/api/admin/messages-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, conversationId: summary.id }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setAiSummary(data.summary);
-      } else {
-        setAiSummaryError(data.error || 'Could not generate summary');
+  const loadAiSummary = useCallback(
+    // Pass force=true from the Regenerate button so the server
+    // bypasses its cache and always makes a fresh OpenAI call.
+    // The default (no arg / force=false) uses the cached summary
+    // whenever no new messages have arrived since it was made —
+    // makes conversation-open snappy instead of a 1-3s wait.
+    async (opts?: { force?: boolean }): Promise<void> => {
+      setAiSummaryLoading(true);
+      setAiSummaryError(null);
+      try {
+        const res = await fetch('/api/admin/messages-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: adminPassword,
+            conversationId: summary.id,
+            force: opts?.force ?? false,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setAiSummary(data.summary);
+        } else {
+          setAiSummaryError(data.error || 'Could not generate summary');
+        }
+      } catch {
+        setAiSummaryError('Could not reach the server');
+      } finally {
+        setAiSummaryLoading(false);
       }
-    } catch {
-      setAiSummaryError('Could not reach the server');
-    } finally {
-      setAiSummaryLoading(false);
-    }
-  }, [adminPassword, summary.id]);
+    },
+    [adminPassword, summary.id],
+  );
 
   const loadDetail = useCallback(async (): Promise<void> => {
     try {
@@ -893,7 +905,11 @@ function ConversationView({
           summary={aiSummary}
           loading={aiSummaryLoading}
           error={aiSummaryError}
-          onRegenerate={loadAiSummary}
+          // Force=true so the Regenerate button always bypasses
+          // the server-side cache. The initial auto-load on
+          // conversation open (loadAiSummary() with no args) uses
+          // the cached summary whenever it's still valid.
+          onRegenerate={() => loadAiSummary({ force: true })}
         />
       </Box>
 

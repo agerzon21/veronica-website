@@ -225,7 +225,7 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   console.log(
     `[inbox/ig-webhook] persist result: ` +
       `stored=${persistStats.stored} ` +
-      `skipped_echo=${persistStats.skippedEcho} ` +
+      `processed_echo=${persistStats.processedEcho} ` +
       `skipped_no_text=${persistStats.skippedNoText} ` +
       `skipped_no_message_field=${persistStats.skippedNoMessageField}`,
   );
@@ -295,7 +295,7 @@ interface StoredMessageRef {
 
 interface PersistStats {
   stored: number;
-  skippedEcho: number;
+  processedEcho: number;
   skippedNoText: number;
   skippedNoMessageField: number;
   // References to the actual DB rows created — used by the caller to
@@ -318,22 +318,13 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
   const events = (payload.entry ?? []).flatMap((e) => e.messaging ?? []);
   const stats: PersistStats = {
     stored: 0,
-    skippedEcho: 0,
+    processedEcho: 0,
     skippedNoText: 0,
     skippedNoMessageField: 0,
     storedMessages: [],
   };
 
   for (const evt of events) {
-    // Ignore echoes (messages WE sent, which Meta bounces back on the
-    // webhook so integrations can display outbound sends). We already
-    // know when we send our own replies; storing echoes would cause
-    // duplicate rows.
-    if (evt.message?.is_echo) {
-      stats.skippedEcho++;
-      continue;
-    }
-
     // If there's no `message` field at all, this is a non-message
     // event (delivery receipt, seen receipt, postback, etc.) that
     // slipped through under the `messaging` array. Skip.
@@ -342,12 +333,26 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
       continue;
     }
 
+    // Echo events fire when Vero (or anyone with access to her IG
+    // account) sends a message from the Instagram app directly,
+    // NOT through our admin panel. We store them as outbound
+    // 'human' messages so the admin thread reflects the full
+    // conversation — otherwise Vero's own replies from her phone
+    // silently vanish from the transcript. Dedup with admin-panel
+    // sends happens automatically via the UNIQUE constraint on
+    // external_message_id (both paths write the same `mid`).
+    const isEcho = Boolean(evt.message.is_echo);
+
     // Text-only for MVP. Attachments / reactions / typing indicators
     // arrive on the same webhook and are skipped here.
-    const text = evt.message?.text;
-    const mid = evt.message?.mid;
-    const senderId = evt.sender?.id;
-    if (!text || !mid || !senderId) {
+    const text = evt.message.text;
+    const mid = evt.message.mid;
+    // For a normal inbound, the customer is the sender. For an echo,
+    // Vero is the sender and the customer is the recipient — so the
+    // customer's IGSID (which keys the conversation) is on
+    // recipient.id for echoes.
+    const customerIgsid = isEcho ? evt.recipient?.id : evt.sender?.id;
+    if (!text || !mid || !customerIgsid) {
       stats.skippedNoText++;
       continue;
     }
@@ -362,7 +367,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     // etc.). If it's new, we insert and get the fresh id.
     const convoRows = (await sql`
       INSERT INTO conversations (platform, external_user_id)
-      VALUES ('instagram', ${senderId})
+      VALUES ('instagram', ${customerIgsid})
       ON CONFLICT (platform, external_user_id) DO UPDATE
         SET external_user_id = EXCLUDED.external_user_id
       RETURNING id
@@ -370,19 +375,22 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     const conversationId = convoRows[0]?.id;
     if (!conversationId) continue;
 
+    const direction = isEcho ? 'outbound' : 'inbound';
+    const sender = isEcho ? 'human' : 'contact';
+
     // Insert the message. The UNIQUE constraint on external_message_id
-    // makes this idempotent — Meta's re-deliveries silently no-op.
-    // RETURNING id lets us capture the actual row so the caller can
-    // trigger AI reply generation for this specific message.
+    // makes this idempotent — Meta's re-deliveries silently no-op AND
+    // admin-panel sends dedup against later echoes for the same mid.
     // ON CONFLICT ... RETURNING returns NO row on conflict, which is
-    // exactly what we want here: retries don't re-trigger the AI.
+    // exactly what we want here: retries + echo-after-admin-send
+    // don't create duplicates.
     const inserted = (await sql`
       INSERT INTO messages (
         conversation_id, direction, sender, body,
         external_message_id, sent_at
       )
       VALUES (
-        ${conversationId}, 'inbound', 'contact', ${text},
+        ${conversationId}, ${direction}, ${sender}, ${text},
         ${mid}, ${sentAt}
       )
       ON CONFLICT (external_message_id) DO NOTHING
@@ -391,11 +399,18 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
 
     if (inserted.length > 0) {
       stats.stored++;
-      stats.storedMessages.push({
-        conversationId,
-        messageId: inserted[0].id,
-        sentAt,
-      });
+      if (isEcho) {
+        // Track echoes separately for observability but NOT for
+        // AI-reply triggering — Vero replying from her phone
+        // shouldn't spawn a bot reply on top of her own.
+        stats.processedEcho++;
+      } else {
+        stats.storedMessages.push({
+          conversationId,
+          messageId: inserted[0].id,
+          sentAt,
+        });
+      }
     }
   }
 
