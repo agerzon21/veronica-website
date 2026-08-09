@@ -1,12 +1,14 @@
 import { Box, Flex, HStack, Text, Icon, VStack } from '@chakra-ui/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FaComments, FaDatabase } from 'react-icons/fa';
 import AdminAssistantChat from './AdminAssistantChat';
 import AdminAssistantData from './AdminAssistantData';
 
 /**
  * "Assistant" tab in /admin — two internal sub-tabs:
- *   1. Chat  — Vero talks to her AI business assistant in Russian.
+ *   1. Chat  — Vero talks to her AI business assistant in her chosen
+ *              language (Russian by default; togglable to English so
+ *              admins helping her can chat in their own language).
  *              The assistant reads + writes the ai_context knowledge
  *              base via tool calls, so shaping the customer-facing
  *              reply engine becomes a conversation instead of a
@@ -17,6 +19,9 @@ import AdminAssistantData from './AdminAssistantData';
  *
  * The chat is the primary experience; data is the escape hatch.
  * Landing on the Chat tab by default is deliberate.
+ *
+ * Language is persisted per-browser via localStorage so Vero's phone
+ * stays RU and an admin's laptop can stay EN independently.
  */
 
 interface Props {
@@ -24,30 +29,49 @@ interface Props {
 }
 
 type SubTab = 'chat' | 'data';
+export type ChatLanguage = 'ru' | 'en';
+
+const LANG_STORAGE_KEY = 'vero_assistant_lang';
+
+function loadInitialLanguage(): ChatLanguage {
+  if (typeof window === 'undefined') return 'ru';
+  const stored = window.localStorage.getItem(LANG_STORAGE_KEY);
+  return stored === 'en' ? 'en' : 'ru';
+}
 
 const AdminAssistant = ({ adminPassword }: Props) => {
   const [subTab, setSubTab] = useState<SubTab>('chat');
+  const [language, setLanguage] = useState<ChatLanguage>(loadInitialLanguage);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(LANG_STORAGE_KEY, language);
+    }
+  }, [language]);
 
   return (
     <Box maxW="1200px" mx="auto">
-      {/* Tab header */}
-      <VStack align="flex-start" spacing={1} mb={4}>
-        <Text
-          fontSize="xs"
-          fontWeight="500"
-          textTransform="uppercase"
-          letterSpacing="0.25em"
-          color="#c9a96e"
-        >
-          Admin
-        </Text>
-        <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          Assistant
-        </Text>
-        <Text fontSize="sm" color="gray.500" fontWeight="300">
-          Talk to your personal AI, or browse what it knows.
-        </Text>
-      </VStack>
+      {/* Tab header — title + language toggle sit on the same row */}
+      <Flex align="flex-start" justify="space-between" gap={4} mb={4} wrap="wrap">
+        <VStack align="flex-start" spacing={1}>
+          <Text
+            fontSize="xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.25em"
+            color="#c9a96e"
+          >
+            Admin
+          </Text>
+          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
+            Assistant
+          </Text>
+          <Text fontSize="sm" color="gray.500" fontWeight="300">
+            Talk to your personal AI, or browse what it knows.
+          </Text>
+        </VStack>
+        <LanguageToggle value={language} onChange={setLanguage} />
+      </Flex>
 
       {/* Sub-tab strip */}
       <Flex borderBottom="1px solid" borderColor="gray.200" mb={6} gap={1}>
@@ -66,13 +90,83 @@ const AdminAssistant = ({ adminPassword }: Props) => {
       </Flex>
 
       {subTab === 'chat' ? (
-        <AdminAssistantChat adminPassword={adminPassword} />
+        <AdminAssistantChat adminPassword={adminPassword} language={language} />
       ) : (
         <AdminAssistantData adminPassword={adminPassword} />
       )}
     </Box>
   );
 };
+
+/**
+ * Two-pill segmented control for the chat language. Sits at the top
+ * of the Assistant tab. Persists per-browser via localStorage.
+ *
+ * Applies to the Chat sub-tab only — Data is admin-facing and stays
+ * English-only for now (the labels + form copy are English; the
+ * *content* of entries can be any language). Vero uses Chat; the
+ * Data view is for admins.
+ */
+function LanguageToggle({
+  value,
+  onChange,
+}: {
+  value: ChatLanguage;
+  onChange: (next: ChatLanguage) => void;
+}) {
+  return (
+    <HStack
+      spacing={0}
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderRadius="full"
+      p="3px"
+      role="group"
+      aria-label="Chat language"
+    >
+      <LangPill active={value === 'ru'} onClick={() => onChange('ru')}>
+        RU
+      </LangPill>
+      <LangPill active={value === 'en'} onClick={() => onChange('en')}>
+        EN
+      </LangPill>
+    </HStack>
+  );
+}
+
+function LangPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      px={3}
+      py={1}
+      fontSize="2xs"
+      fontWeight="600"
+      letterSpacing="0.14em"
+      borderRadius="full"
+      bg={active ? '#c9a96e' : 'transparent'}
+      color={active ? 'white' : 'gray.500'}
+      cursor="pointer"
+      border="none"
+      transition="all 0.15s"
+      _hover={active ? {} : { color: 'gray.700' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      {children}
+    </Box>
+  );
+}
 
 function SubTabButton({
   active,

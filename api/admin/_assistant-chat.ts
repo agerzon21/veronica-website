@@ -52,11 +52,19 @@ interface DbWrite {
   type: 'created' | 'updated' | 'deleted';
   category: string;
   label: string;
-  // content_ru: an already-Russian short paraphrase for the toast.
-  // The model produces this on the tool call — no separate
-  // translation roundtrip needed.
-  content_ru: string;
+  // A short paraphrase for the achievement toast, in whatever
+  // language the chat is currently running in. The model produces
+  // this on the tool call so there's no separate translation
+  // roundtrip. Field is language-agnostic on purpose — it's just
+  // "the toast text."
+  content_summary: string;
 }
+
+type ChatLanguage = 'ru' | 'en';
+const LANGUAGE_NAMES: Record<ChatLanguage, string> = {
+  ru: 'Russian',
+  en: 'English',
+};
 
 interface StoredMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -135,7 +143,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updated_at: string;
     }>;
 
-    const systemPrompt = buildSystemPrompt(contextRows);
+    // Per-turn UI language. Persisted client-side (per browser),
+    // sent through on every send. Falls back to Russian to preserve
+    // Vero's default — she's the primary user of this chat.
+    const requestedLang = typeof req.body?.language === 'string' ? req.body.language : 'ru';
+    const language: ChatLanguage = requestedLang === 'en' ? 'en' : 'ru';
+
+    const systemPrompt = buildSystemPrompt(contextRows, language);
 
     // Assemble the message list we'll send to OpenAI.
     // Always leads with the fresh system prompt (regenerated each
@@ -263,7 +277,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'upsert_knowledge',
       description:
-        'Create a new knowledge base entry, or update an existing one. Content MUST be written in English (this table is consumed by the customer-facing AI reply engine, which is English-normalized). Include a short Russian paraphrase in `content_ru_summary` so the achievement toast Vero sees is in her language. If updating, pass `id`; otherwise omit it and a new row is inserted.',
+        'Create a new knowledge base entry, or update an existing one. Content MUST be written in English (this table is consumed by the customer-facing AI reply engine, which is English-normalized). Include a short paraphrase in `content_summary` (in the SAME language the user is chatting in) so the achievement toast reads naturally to them. If updating, pass `id`; otherwise omit it and a new row is inserted.',
       parameters: {
         type: 'object',
         properties: {
@@ -287,13 +301,13 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description:
               'The actual knowledge, in ENGLISH. E.g. "$3,500 for weddings up to 8 hours; additional hours at $400 each."',
           },
-          content_ru_summary: {
+          content_summary: {
             type: 'string',
             description:
-              'A very short (5-12 word) paraphrase of the change in Russian, for the toast Vero sees. E.g. "Свадебная базовая ставка: $3,500".',
+              'A very short (5-12 word) paraphrase of the change, IN THE SAME LANGUAGE the user is chatting in, for the toast the user sees. E.g. "Свадебная базовая ставка: $3,500" (RU) or "Wedding base rate: $3,500" (EN).',
           },
         },
-        required: ['category', 'label', 'content', 'content_ru_summary'],
+        required: ['category', 'label', 'content', 'content_summary'],
       },
     },
   },
@@ -302,17 +316,17 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'delete_knowledge',
       description:
-        'Delete an entry from the knowledge base. Only do this when the user explicitly asks to remove something. Include a Russian summary of what was deleted for the toast.',
+        'Delete an entry from the knowledge base. Only do this when the user explicitly asks to remove something. Include a short summary of what was deleted, in the user\'s current chat language, for the toast.',
       parameters: {
         type: 'object',
         properties: {
           id: { type: 'string', description: "The entry's UUID (get via search first)." },
-          content_ru_summary: {
+          content_summary: {
             type: 'string',
-            description: 'Short Russian summary of what was deleted, for the toast.',
+            description: "Short summary of what was deleted, in the user's current chat language, for the toast.",
           },
         },
-        required: ['id', 'content_ru_summary'],
+        required: ['id', 'content_summary'],
       },
     },
   },
@@ -362,7 +376,11 @@ async function executeToolCall(
     const category = String(args.category ?? '').trim();
     const label = String(args.label ?? '').trim();
     const content = String(args.content ?? '').trim();
-    const contentRu = String(args.content_ru_summary ?? '').trim() || label;
+    // Prefer the new `content_summary` field, but accept the old
+    // `content_ru_summary` name for backward compat (in-flight tool
+    // calls from older thread history could still reference it).
+    const contentSummary =
+      String(args.content_summary ?? args.content_ru_summary ?? '').trim() || label;
     const providedId = typeof args.id === 'string' ? args.id.trim() : '';
     if (!category || !label || !content) {
       return { error: 'category, label, content are required' };
@@ -377,7 +395,7 @@ async function executeToolCall(
         RETURNING id, category, label, content
       `) as Array<{ id: string; category: string; label: string; content: string }>;
       if (updated.length === 0) return { error: `No entry with id ${providedId}` };
-      dbWrites.push({ type: 'updated', category, label, content_ru: contentRu });
+      dbWrites.push({ type: 'updated', category, label, content_summary: contentSummary });
       return { success: true, action: 'updated', entry: updated[0] };
     }
 
@@ -386,13 +404,14 @@ async function executeToolCall(
       VALUES (${category}, ${label}, ${content}, 'chatbot', TRUE)
       RETURNING id, category, label, content
     `) as Array<{ id: string; category: string; label: string; content: string }>;
-    dbWrites.push({ type: 'created', category, label, content_ru: contentRu });
+    dbWrites.push({ type: 'created', category, label, content_summary: contentSummary });
     return { success: true, action: 'created', entry: created[0] };
   }
 
   if (name === 'delete_knowledge') {
     const id = String(args.id ?? '').trim();
-    const contentRu = String(args.content_ru_summary ?? '').trim() || 'запись удалена';
+    const contentSummary =
+      String(args.content_summary ?? args.content_ru_summary ?? '').trim() || 'entry deleted';
     if (!id) return { error: 'id is required' };
     const deleted = (await sql`
       DELETE FROM ai_context WHERE id = ${id}
@@ -403,7 +422,7 @@ async function executeToolCall(
       type: 'deleted',
       category: deleted[0].category,
       label: deleted[0].label,
-      content_ru: contentRu,
+      content_summary: contentSummary,
     });
     return { success: true, action: 'deleted', entry: deleted[0] };
   }
@@ -447,6 +466,7 @@ function buildSystemPrompt(
     source: 'manual' | 'chatbot';
     active: boolean;
   }>,
+  language: ChatLanguage,
 ): string {
   // Group by category for readable rendering. Include ID so the
   // model can pass it to upsert_knowledge for updates without
@@ -469,17 +489,25 @@ function buildSystemPrompt(
           })
           .join('\n\n');
 
-  return `You are Vero's personal AI business assistant. Vero is a professional photographer (portraits, weddings, families, maternity). Her customer-facing AI reply engine uses a structured "knowledge base" table to answer her Instagram DMs — this is the SAME table you can search + modify via your tools. Your job is to help Vero read, review, and shape that knowledge base through natural conversation.
+  const langName = LANGUAGE_NAMES[language];
+  // Language-specific concrete examples so the model doesn't default
+  // to the wrong tongue when the user's UI has been switched.
+  const exampleConfirm =
+    language === 'ru'
+      ? '"Записал новую цену — $600 для семейных сессий"'
+      : '"Saved new price — $600 for family sessions"';
+
+  return `You are Vero's personal AI business assistant. Vero is a professional photographer (portraits, weddings, families, maternity). Her customer-facing AI reply engine uses a structured "knowledge base" table to answer her Instagram DMs — this is the SAME table you can search + modify via your tools. Your job is to help the user (Vero, or an admin helping her) read, review, and shape that knowledge base through natural conversation.
 
 ## LANGUAGE RULES (critical)
-- Vero speaks Russian. ALWAYS respond in Russian, regardless of what language the user's message was in.
-- The knowledge base itself is stored in ENGLISH (because the customer-facing AI needs English text to reply to customers correctly). When you call upsert_knowledge, the "content" argument MUST be in English — translate what Vero says into clean, concise English before storing.
-- Every upsert/delete call includes a "content_ru_summary" argument — a very short Russian paraphrase (5-12 words) of what changed. This is what Vero sees in the achievement toast, so it needs to be clear + concise + Russian.
+- The user has set their interface language to ${langName}. ALWAYS respond in ${langName}, regardless of what language the incoming message was in. If they message in English but the UI language is Russian, still reply in Russian.
+- The knowledge base itself is stored in ENGLISH (because the customer-facing AI needs English text to reply to customers correctly). When you call upsert_knowledge, the "content" argument MUST be in English — translate whatever the user says into clean, concise English before storing.
+- Every upsert/delete call includes a "content_summary" argument — a very short paraphrase (5-12 words) of what changed, in ${langName} (matching the current UI language). This is what shows up in the achievement toast, so it needs to read naturally in ${langName}.
 
 ## SAFETY RULES for knowledge base writes
 - Before creating a new entry, ALWAYS call search_knowledge_base first to check if one already exists for the same concept — update it instead of duplicating.
 - For price changes: if a new value is more than ~50% different from an existing value (either up or down), briefly double-check in the chat before writing ("You said $50 — should that be $500? Just making sure it's not a typo."). For small tweaks (say $500 → $550), just do it, no confirmation.
-- Never delete an entry without an explicit request from Vero.
+- Never delete an entry without an explicit request from the user.
 - For feedback about how the customer-facing AI is behaving (e.g. "the replies are too formal", "she replies too often"), translate that into concrete style/tone entries in the "tone" category, so the reply engine picks them up.
 
 ## CURRENT KNOWLEDGE BASE
@@ -488,8 +516,8 @@ Here's everything currently in the knowledge base. Reference this before searchi
 ${knowledgeSummary}
 
 ## STYLE
-- Warm and casual, like a smart friend who happens to run her business systems.
-- Concise. She's a working photographer, not a corporate exec — don't over-explain.
-- When you make a change to the knowledge base, mention it briefly in your reply ("Записал новую цену — $600 для семейных сессий"). The toast handles the visual, but a one-line confirmation in the chat closes the loop.
-- If she asks a question you can answer from the current knowledge base above, just answer — no need to call search_knowledge_base for something already visible in the context.`;
+- Warm and casual, like a smart friend who happens to run the business's systems.
+- Concise. Vero's a working photographer, not a corporate exec — don't over-explain.
+- When you make a change to the knowledge base, mention it briefly in your reply (${exampleConfirm}). The toast handles the visual, but a one-line confirmation in the chat closes the loop.
+- If the user asks a question you can answer from the current knowledge base above, just answer — no need to call search_knowledge_base for something already visible in the context.`;
 }

@@ -5,7 +5,7 @@ import {
   Badge,
 } from '@chakra-ui/react';
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { FaSearch, FaPlus, FaTrash, FaEdit, FaMagic, FaHandPaper } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaTrash, FaEdit, FaMagic, FaHandPaper, FaLock } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 
 /**
@@ -101,6 +101,8 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
 
   return (
     <Box maxW="1000px" mx="auto">
+      <BuiltInBehaviorCard />
+
       {/* Toolbar */}
       <Flex gap={3} align="center" wrap="wrap" mb={5}>
         <InputGroup size="md" maxW="360px" flex={1}>
@@ -474,6 +476,84 @@ function EditModal({
         </ModalFooter>
       </ModalContent>
     </Modal>
+  );
+}
+
+/**
+ * Read-only card that surfaces the meta rules baked into the chat
+ * endpoint's system prompt — the stuff that isn't stored in
+ * ai_context but still shapes every reply. Making it visible here
+ * gives Vero a complete picture of what the AI "knows" without her
+ * having to trust that we haven't quietly hardcoded anything weird.
+ *
+ * Not editable because these behaviors live in api/admin/_assistant-
+ * chat.ts (safety + language + tool-calling logic). If we ever want
+ * to make them tweakable, they'll move into ai_context too and this
+ * card goes away.
+ *
+ * Keep this in sync manually with the buildSystemPrompt() rules on
+ * the server — this card lies about behavior if someone edits the
+ * endpoint and forgets to update this list.
+ */
+function BuiltInBehaviorCard() {
+  const facts = [
+    "Assistant is Vero's personal AI, focused on her photography business (portraits, weddings, families, maternity)",
+    'Replies in whichever language you have the toggle set to (Russian or English) — even if you type in the other language',
+    'Stores all knowledge base entries in English underneath, so the customer-facing AI reply engine works correctly regardless of the chat language',
+    'Double-checks big value changes (>50% deviation from existing value) before writing — protects against typos',
+    'Only deletes entries when you ask explicitly — never on its own',
+    'Reads the current knowledge base below on every turn, so you don\'t have to remind it what it knows',
+  ];
+  return (
+    <Box
+      mb={5}
+      p={4}
+      bg="linear-gradient(135deg, #fdf9f0 0%, #f5efe4 100%)"
+      border="1px solid"
+      borderColor="rgba(201, 169, 110, 0.35)"
+      borderRadius="sm"
+    >
+      <HStack spacing={2} mb={2.5}>
+        <Icon as={FaLock} boxSize={2.5} color="#8a6e35" />
+        <Text
+          fontSize="2xs"
+          fontWeight="600"
+          letterSpacing="0.2em"
+          textTransform="uppercase"
+          color="#8a6e35"
+        >
+          Built-in Behavior
+        </Text>
+        <Badge
+          bg="rgba(138, 110, 53, 0.12)"
+          color="#8a6e35"
+          fontSize="2xs"
+          fontWeight="500"
+          textTransform="uppercase"
+          letterSpacing="0.06em"
+          px={1.5}
+          py={0}
+          borderRadius="sm"
+        >
+          Not editable
+        </Badge>
+      </HStack>
+      <VStack align="flex-start" spacing={1.5}>
+        {facts.map((f) => (
+          <HStack key={f} spacing={2} align="flex-start">
+            <Text color="#c9a96e" mt="1px" fontSize="xs" flexShrink={0}>
+              •
+            </Text>
+            <Text fontSize="xs" color="gray.700" lineHeight="1.6">
+              {f}
+            </Text>
+          </HStack>
+        ))}
+      </VStack>
+      <Text fontSize="2xs" color="gray.500" mt={2.5} fontStyle="italic">
+        These behaviors are wired into the code. Everything else the AI knows lives in the editable facts below.
+      </Text>
+    </Box>
   );
 }
 

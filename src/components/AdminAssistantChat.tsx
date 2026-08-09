@@ -7,28 +7,38 @@ import {
   FaPaperPlane, FaMicrophone, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import type { ChatLanguage } from './AdminAssistant';
 
 /**
  * "Chat" panel of the Assistant tab.
  *
- * Vero talks to her AI business assistant in Russian. The assistant:
+ * Vero talks to her AI business assistant in Russian by default; the
+ * language toggle in the parent tab flips this to English so admins
+ * helping her can chat in their own language. The assistant:
  *   - always knows what's in ai_context (loaded server-side each turn
  *     into the system prompt — no history-scrolling required)
  *   - can look up + modify that knowledge base via tool calls
- *   - answers in Russian but stores English underneath for the
- *     customer-facing AI reply engine
+ *   - answers in the current UI language but stores English underneath
+ *     for the customer-facing AI reply engine
  *
  * When a tool call writes to the DB, a golden toast pops corner-right
- * summarizing what changed IN RUSSIAN so Vero sees the effect
- * without leaving the chat.
+ * summarizing what changed in the current UI language so the user
+ * sees the effect without leaving the chat.
  *
- * Voice input: press-and-hold the mic button, speak in Russian,
- * release; the transcript populates the composer. Uses the browser's
- * built-in SpeechRecognition (Chrome/Safari) — no external service.
+ * Voice input: press-and-hold the mic button, speak in the current
+ * language, release; the transcript populates the composer. Uses the
+ * browser's built-in SpeechRecognition (Chrome/Safari) — no external
+ * service. Recognition lang switches with the UI toggle.
+ *
+ * Chat history is intentionally NOT retranslated when the language
+ * flips — previous turns stay in whatever language they were written
+ * in. Only NEW turns switch. Keeps things honest about what actually
+ * happened + avoids a wonky retranslation UX.
  */
 
 interface Props {
   adminPassword: string;
+  language: ChatLanguage;
 }
 
 interface ChatMessage {
@@ -43,10 +53,98 @@ interface DbWrite {
   type: 'created' | 'updated' | 'deleted';
   category: string;
   label: string;
-  content_ru: string;
+  // The summary the server produced in whatever language the chat
+  // was running in when it was made. New backend field name; the
+  // old `content_ru` name is kept as a fallback for old rows.
+  content_summary?: string;
+  content_ru?: string;
 }
 
-const AdminAssistantChat = ({ adminPassword }: Props) => {
+interface Strings {
+  headerHint: string;
+  newConversation: string;
+  resetConfirm: string;
+  resetFailed: string;
+  placeholder: string;
+  send: string;
+  micRecordAria: string;
+  micStopAria: string;
+  micRecordingHint: string;
+  submitHint: string;
+  loadingEmpty: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  suggestedPrompts: string[];
+  toastLabels: { created: string; updated: string; deleted: string };
+  errorReply: (detail: string) => string;
+  serverUnreachable: string;
+  serverError: string;
+  looping: string;
+}
+
+const STRINGS: Record<ChatLanguage, Strings> = {
+  ru: {
+    headerHint: 'Разговор с личным ассистентом. Пиши по-русски.',
+    newConversation: 'Новый разговор',
+    resetConfirm: 'Стереть весь текущий разговор?',
+    resetFailed: 'Не удалось стереть',
+    placeholder: 'Напиши сообщение… (например: «Что ты знаешь о моих ценах?»)',
+    send: 'Отправить',
+    micRecordAria: 'Записать голос',
+    micStopAria: 'Остановить запись',
+    micRecordingHint: '🎙 Говори по-русски… отпусти кнопку, когда закончишь',
+    submitHint: '⌘/Ctrl + Enter чтобы отправить · Удерживай микрофон для голоса',
+    loadingEmpty: '',
+    emptyTitle: 'Твой личный ассистент готов',
+    emptyDescription:
+      'Спрашивай о ценах, стиле, услугах, ответах клиентам — что знаешь, чего не знаешь, что добавить. Всё, что мы обсудим, ассистент запомнит.',
+    suggestedPrompts: [
+      'Что ты знаешь о моих ценах?',
+      'Расскажи, какой у меня стиль общения с клиентами',
+      'Добавь новую услугу: семейная фотосессия в студии за $400',
+      'Ответы AI слишком формальные — сделай их теплее',
+    ],
+    toastLabels: { created: 'Записал', updated: 'Обновил', deleted: 'Удалил' },
+    errorReply: (detail) => `(Что-то пошло не так: ${detail})`,
+    serverUnreachable: '(Не удалось связаться с сервером.)',
+    serverError: 'ошибка сервера',
+    looping: '(Ассистент продолжал вызывать инструменты без ответа. Попробуй перефразировать.)',
+  },
+  en: {
+    headerHint: 'Chatting with your personal assistant. Write in English.',
+    newConversation: 'New conversation',
+    resetConfirm: 'Erase the entire current conversation?',
+    resetFailed: 'Could not reset',
+    placeholder: 'Type a message… (e.g. "What do you know about my pricing?")',
+    send: 'Send',
+    micRecordAria: 'Record voice',
+    micStopAria: 'Stop recording',
+    micRecordingHint: '🎙 Speak in English… release the button when done',
+    submitHint: '⌘/Ctrl + Enter to send · Hold the mic to dictate',
+    loadingEmpty: '',
+    emptyTitle: 'Your personal assistant is ready',
+    emptyDescription:
+      'Ask about pricing, style, services, client replies — what you know, what you don\'t, what to add. Anything we discuss, the assistant will remember.',
+    suggestedPrompts: [
+      'What do you know about my pricing?',
+      'Tell me about my client communication style',
+      'Add a new service: family studio session for $400',
+      'The AI replies feel too formal — make them warmer',
+    ],
+    toastLabels: { created: 'Saved', updated: 'Updated', deleted: 'Deleted' },
+    errorReply: (detail) => `(Something went wrong: ${detail})`,
+    serverUnreachable: '(Could not reach the server.)',
+    serverError: 'server error',
+    looping: '(The assistant kept calling tools without giving a final answer. Try rephrasing.)',
+  },
+};
+
+const SPEECH_LANG: Record<ChatLanguage, string> = {
+  ru: 'ru-RU',
+  en: 'en-US',
+};
+
+const AdminAssistantChat = ({ adminPassword, language }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -56,6 +154,8 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const toast = useToast();
+
+  const t = STRINGS[language];
 
   // Load persisted history on mount so returning to the tab feels
   // continuous. The server returns just the user + assistant text
@@ -95,6 +195,10 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
   const showAchievementToast = useCallback(
     (write: DbWrite) => {
       const meta = TOAST_META[write.type];
+      const label = t.toastLabels[write.type];
+      // Old server rows sent `content_ru`; new ones send
+      // `content_summary`. Accept either.
+      const summary = write.content_summary ?? write.content_ru ?? write.label;
       toast({
         duration: 4200,
         position: 'bottom-right',
@@ -131,10 +235,10 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
                   textTransform="uppercase"
                   color="#8a6e35"
                 >
-                  {meta.label}
+                  {label}
                 </Text>
                 <Text fontSize="sm" color="gray.800" fontWeight="400" lineHeight="1.4">
-                  {write.content_ru}
+                  {summary}
                 </Text>
                 <Text fontSize="2xs" color="gray.500" fontWeight="300">
                   {write.category} · {write.label}
@@ -145,7 +249,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
         ),
       });
     },
-    [toast],
+    [toast, t.toastLabels],
   );
 
   const handleSend = async () => {
@@ -165,7 +269,15 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
       const res = await fetch('/api/admin/assistant-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, action: 'send', message: text }),
+        body: JSON.stringify({
+          password: adminPassword,
+          action: 'send',
+          message: text,
+          // Sent every turn so the server prompt matches whatever
+          // language the toggle is on at send time. Language changes
+          // mid-thread flip the NEXT reply, not old ones.
+          language,
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -191,7 +303,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
           if (next[lastIdx]?.pending) {
             next[lastIdx] = {
               role: 'assistant',
-              content: `(Что-то пошло не так: ${data.error || 'ошибка сервера'})`,
+              content: t.errorReply(data.error || t.serverError),
             };
           }
           return next;
@@ -202,7 +314,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
         const next = [...prev];
         const lastIdx = next.length - 1;
         if (next[lastIdx]?.pending) {
-          next[lastIdx] = { role: 'assistant', content: '(Не удалось связаться с сервером.)' };
+          next[lastIdx] = { role: 'assistant', content: t.serverUnreachable };
         }
         return next;
       });
@@ -212,7 +324,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
   };
 
   const handleReset = async () => {
-    if (!confirm('Стереть весь текущий разговор?')) return;
+    if (!confirm(t.resetConfirm)) return;
     try {
       await fetch('/api/admin/assistant-chat', {
         method: 'POST',
@@ -221,11 +333,13 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
       });
       setMessages([]);
     } catch {
-      toast({ title: 'Не удалось стереть', status: 'error', duration: 3000 });
+      toast({ title: t.resetFailed, status: 'error', duration: 3000 });
     }
   };
 
-  // ── Web Speech API: press-and-hold mic to dictate in Russian ──
+  // ── Web Speech API: press-and-hold mic to dictate ──
+  // Recognition is rebuilt whenever the language changes so the mic
+  // switches between ru-RU and en-US at the moment the toggle flips.
   useEffect(() => {
     const SpeechRecognitionCtor =
       (window as unknown as { SpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
@@ -235,7 +349,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
       return;
     }
     const recognition = new SpeechRecognitionCtor();
-    recognition.lang = 'ru-RU';
+    recognition.lang = SPEECH_LANG[language];
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -249,8 +363,9 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
     recognitionRef.current = recognition;
     return () => {
       recognition.abort();
+      recognitionRef.current = null;
     };
-  }, []);
+  }, [language]);
 
   const startMic = () => {
     if (!recognitionRef.current || micActive) return;
@@ -279,7 +394,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
         <HStack spacing={2}>
           <Icon as={FaRegLightbulb} boxSize={3.5} color="#c9a96e" />
           <Text fontSize="xs" color="gray.500" fontWeight="400" letterSpacing="0.06em">
-            Разговор с личным ассистентом. Пиши по-русски.
+            {t.headerHint}
           </Text>
         </HStack>
         {messages.length > 0 && (
@@ -300,7 +415,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
             py={1}
           >
             <Icon as={FaRedo} boxSize={2.5} />
-            Новый разговор
+            {t.newConversation}
           </Box>
         )}
       </Flex>
@@ -321,7 +436,12 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
             <Spinner size="sm" color="#c9a96e" />
           </Flex>
         ) : messages.length === 0 ? (
-          <EmptyState onSuggest={setInput} />
+          <EmptyState
+            title={t.emptyTitle}
+            description={t.emptyDescription}
+            prompts={t.suggestedPrompts}
+            onSuggest={setInput}
+          />
         ) : (
           <VStack spacing={4} align="stretch">
             {messages.map((m, i) => (
@@ -337,7 +457,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Напиши сообщение… (например: «Что ты знаешь о моих ценах?»)"
+            placeholder={t.placeholder}
             rows={2}
             resize="none"
             fontSize="sm"
@@ -356,7 +476,7 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
           />
           {!micUnavailable && (
             <IconButton
-              aria-label={micActive ? 'Остановить запись' : 'Записать голос'}
+              aria-label={micActive ? t.micStopAria : t.micRecordAria}
               icon={<Icon as={FaMicrophone} boxSize={4} />}
               onMouseDown={startMic}
               onMouseUp={stopMic}
@@ -381,13 +501,11 @@ const AdminAssistantChat = ({ adminPassword }: Props) => {
             loadingText="…"
             isDisabled={!input.trim()}
           >
-            Отправить
+            {t.send}
           </CTAButton>
         </Flex>
         <Text fontSize="2xs" color="gray.400" mt={1.5} px={1}>
-          {micActive
-            ? '🎙 Говори по-русски… отпусти кнопку, когда закончишь'
-            : '⌘/Ctrl + Enter чтобы отправить · Удерживай микрофон для голоса'}
+          {micActive ? t.micRecordingHint : t.submitHint}
         </Text>
       </Box>
     </Flex>
@@ -445,7 +563,17 @@ function TypingDots() {
   );
 }
 
-function EmptyState({ onSuggest }: { onSuggest: (text: string) => void }) {
+function EmptyState({
+  title,
+  description,
+  prompts,
+  onSuggest,
+}: {
+  title: string;
+  description: string;
+  prompts: string[];
+  onSuggest: (text: string) => void;
+}) {
   return (
     <VStack spacing={5} py={{ base: 8, md: 12 }} textAlign="center">
       <Flex
@@ -463,15 +591,14 @@ function EmptyState({ onSuggest }: { onSuggest: (text: string) => void }) {
       </Flex>
       <VStack spacing={1.5}>
         <Text fontSize="md" fontWeight="500" color="gray.800">
-          Твой личный ассистент готов
+          {title}
         </Text>
         <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="380px" lineHeight="1.7">
-          Спрашивай о ценах, стиле, услугах, ответах клиентам — что знаешь, чего
-          не знаешь, что добавить. Всё, что мы обсудим, ассистент запомнит.
+          {description}
         </Text>
       </VStack>
       <VStack spacing={2} pt={2} align="stretch" w="100%" maxW="440px">
-        {SUGGESTED_PROMPTS.map((p) => (
+        {prompts.map((p) => (
           <Box
             key={p}
             as="button"
@@ -499,17 +626,10 @@ function EmptyState({ onSuggest }: { onSuggest: (text: string) => void }) {
   );
 }
 
-const SUGGESTED_PROMPTS = [
-  'Что ты знаешь о моих ценах?',
-  'Расскажи, какой у меня стиль общения с клиентами',
-  'Добавь новую услугу: семейная фотосессия в студии за $400',
-  'Ответы AI слишком формальные — сделай их теплее',
-];
-
-const TOAST_META: Record<DbWrite['type'], { icon: typeof FaPlus; label: string }> = {
-  created: { icon: FaPlus, label: 'Записал' },
-  updated: { icon: FaCheck, label: 'Обновил' },
-  deleted: { icon: FaTrash, label: 'Удалил' },
+const TOAST_META: Record<DbWrite['type'], { icon: typeof FaPlus }> = {
+  created: { icon: FaPlus },
+  updated: { icon: FaCheck },
+  deleted: { icon: FaTrash },
 };
 
 // Minimal type declarations for the browser SpeechRecognition APIs
