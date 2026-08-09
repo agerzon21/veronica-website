@@ -13,6 +13,7 @@ import {
 } from '@chakra-ui/react';
 import { CopyIcon, ExternalLinkIcon, CloseIcon } from '@chakra-ui/icons';
 import { useCopyNotification } from '../components/CopyNotification';
+import LoadingImage from '../components/ui/LoadingImage';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -333,18 +334,33 @@ const IndividualPhoto: React.FC = () => {
           </Flex>
         </Box>
 
-        {/* Hero image — full width */}
-        <Box position="relative" w="100%" bg="white">
-          <Image
+        {/* Hero image — full width. Container uses the photo's real
+            aspect ratio (from DB, via /api/gallery/post) so it has a
+            non-zero height BEFORE the image loads — that's what lets
+            the cream placeholder + gold spinner show up while the
+            Drive proxy warms its cache. Falls back to 3/2 if the
+            aspect isn't known (rare — pre-migration photos might
+            lack dims). */}
+        <Box
+          position="relative"
+          w="100%"
+          bg="white"
+          maxH="80vh"
+          sx={{
+            aspectRatio: photo.width && photo.height ? `${photo.width} / ${photo.height}` : '3 / 2',
+          }}
+        >
+          <LoadingImage
             src={photo.url}
             alt={photo.alt}
+            title={photo.title}
             w="100%"
-            maxH="80vh"
-            objectFit="contain"
-            cursor="pointer"
+            h="100%"
+            imgObjectFit="contain"
+            spinnerSize="lg"
+            loading="eager"
+            imgStyle={{ cursor: 'pointer' }}
             onClick={toggleFullscreen}
-            _hover={{ opacity: 0.95 }}
-            transition="opacity 0.2s"
           />
         </Box>
 
@@ -516,16 +532,27 @@ const IndividualPhoto: React.FC = () => {
                       cursor="pointer"
                       role="group"
                       bg="white"
+                      sx={{
+                        // Scoped hover: only the inner img reacts,
+                        // not the surrounding container. Keeps the
+                        // spinner/placeholder placement stable while
+                        // the hover transform runs on the img.
+                        '&:hover > div > img': {
+                          transform: 'scale(1.03)',
+                          filter: 'brightness(0.85)',
+                        },
+                      }}
                     >
-                      <Image
+                      <LoadingImage
                         src={rp.url}
                         alt={rp.alt}
                         w="100%"
                         h={{ base: '180px', md: '240px' }}
-                        objectFit="cover"
-                        transition="transform 0.5s ease, filter 0.3s ease"
-                        _groupHover={{ transform: 'scale(1.03)', filter: 'brightness(0.85)' }}
-                        loading="lazy"
+                        imgObjectFit="cover"
+                        spinnerSize="sm"
+                        imgStyle={{
+                          transition: 'transform 0.5s ease, filter 0.3s ease',
+                        }}
                       />
                       <Box
                         position="absolute"
