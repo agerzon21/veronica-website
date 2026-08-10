@@ -6,11 +6,12 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaCommentDots, FaExclamationTriangle, FaTimes,
+  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes,
   FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
+import VoiceInput from './ui/VoiceInput';
 
 // Vero speaks Russian natively — customer messages (usually English)
 // get translated to Russian; her replies get translated to English
@@ -428,13 +429,23 @@ function GlobalAiTogglePill({
       onClick={onClick}
       display="inline-flex"
       alignItems="center"
-      gap={1.5}
-      px={{ base: 3, md: 2.5 }}
-      py={{ base: 2, md: 1 }}
+      gap={2}
+      px={{ base: 3, md: 3 }}
+      py={{ base: 2, md: 1.5 }}
       minH={{ base: '40px', md: 'auto' }}
       bg={config.bg}
       color={config.color}
-      border="none"
+      // Interactive pill gets a visible border + shadow so it reads
+      // unambiguously as a BUTTON (Alex flagged that the flat pill
+      // looked like just a label). Non-interactive stays flat.
+      border={interactive ? '1px solid' : 'none'}
+      borderColor={
+        interactive
+          ? state === 'on'
+            ? 'green.300'
+            : 'orange.300'
+          : 'transparent'
+      }
       borderRadius="full"
       fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="600"
@@ -442,8 +453,9 @@ function GlobalAiTogglePill({
       textTransform="uppercase"
       cursor={interactive ? 'pointer' : 'default'}
       transition="all 0.15s"
-      _hover={interactive ? { filter: 'brightness(0.95)' } : {}}
-      _active={interactive ? { transform: 'scale(0.97)' } : {}}
+      _hover={interactive ? { filter: 'brightness(0.95)', transform: 'translateY(-1px)' } : {}}
+      _active={interactive ? { transform: 'scale(0.96)' } : {}}
+      boxShadow={interactive ? '0 1px 3px -1px rgba(0, 0, 0, 0.15)' : 'none'}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       <Box
@@ -461,6 +473,12 @@ function GlobalAiTogglePill({
         } : {}}
       />
       {config.label}
+      {/* Power icon inside the pill so its interactivity is legible
+          at a glance — Alex specifically flagged that the plain
+          pill "still looks like a label." Only shown for super. */}
+      {interactive && (
+        <Icon as={FaPowerOff} boxSize={2.5} opacity={0.75} />
+      )}
     </Box>
   );
 }
@@ -684,7 +702,14 @@ function ConversationView({
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
-  const [translateOnSend, setTranslateOnSend] = useState(false);
+  // Translate-before-sending defaults to ON. Vero speaks Russian
+  // natively; if the toggle were OFF by default and she typed in
+  // Russian, her reply would ship to an English-speaking customer
+  // untranslated — the worst-case failure. With it ON by default,
+  // the worst case is she types in English and the translate step
+  // is a no-op (English → English, ignored server-side). Alex's
+  // ask, explicitly.
+  const [translateOnSend, setTranslateOnSend] = useState(true);
   const [createClientOpen, setCreateClientOpen] = useState(false);
   // Summary is EXPANDED by default when a conversation opens (per
   // Alex's ask — the summary is the first thing you want to see, not
@@ -1224,20 +1249,43 @@ function ConversationView({
               ⌘/Ctrl + Enter to send · Replies from you sent as human (not AI)
             </Text>
           </VStack>
-          <CTAButton
-            onClick={handleSend}
-            icon={FaPaperPlane}
-            variant="solid"
-            size="md"
-            // Full-width primary CTA on mobile so the composer's send
-            // action is thumb-obvious; hugs content on desktop.
-            fullWidth={{ base: true, md: false }}
-            isLoading={sending}
-            loadingText={translateOnSend ? 'Translating…' : 'Sending…'}
-            isDisabled={!replyText.trim()}
-          >
-            {translateOnSend ? 'Translate & Send' : 'Send'}
-          </CTAButton>
+          {/* Mic + send row. Same shared VoiceInput as the Assistant
+              chat — records via MediaRecorder, transcribes with Whisper,
+              appends the result to the current reply text. Vero can
+              dictate a reply in Russian and let the translate-before-
+              sending toggle ship it in English. */}
+          <Stack direction="row" spacing={2} justify={{ base: 'stretch', md: 'flex-end' }}>
+            <VoiceInput
+              adminPassword={adminPassword}
+              // Vero speaks Russian; hint Whisper accordingly. On
+              // English-typing days the translate step still runs.
+              language="ru"
+              onTranscript={(text) => setReplyText((prev) => (prev ? `${prev} ${text}` : text))}
+              ariaLabelIdle="Record voice reply"
+              ariaLabelRecording="Release to stop"
+              ariaLabelUploading="Transcribing…"
+              variant="outline"
+              size="lg"
+              minW={{ base: '48px', md: 'auto' }}
+              minH={{ base: '48px', md: 'auto' }}
+              flex="0 0 auto"
+              isDisabled={sending}
+            />
+            <CTAButton
+              onClick={handleSend}
+              icon={FaPaperPlane}
+              variant="solid"
+              size="md"
+              // Full-width primary CTA on mobile so the composer's send
+              // action is thumb-obvious; hugs content on desktop.
+              fullWidth={{ base: true, md: false }}
+              isLoading={sending}
+              loadingText={translateOnSend ? 'Translating…' : 'Sending…'}
+              isDisabled={!replyText.trim()}
+            >
+              {translateOnSend ? 'Translate & Send' : 'Send'}
+            </CTAButton>
+          </Stack>
         </Stack>
       </Box>
     </>

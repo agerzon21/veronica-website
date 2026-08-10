@@ -64,6 +64,7 @@ type View =
   | { kind: 'detail'; id: string };
 
 const Admin = () => {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -81,12 +82,18 @@ const Admin = () => {
   // integrations for super-admin.
   const menuDisclosure = useDisclosure();
 
-  const loadPortals = async (pwd: string): Promise<{ ok: boolean; error?: string }> => {
+  // Two-form fetcher. On INITIAL login (`credentials` includes email),
+  // the endpoint validates the email+password pair — this is what makes
+  // brute-force so much harder now. On subsequent REFRESH calls we send
+  // password alone (bearer token pattern), no email.
+  const loadPortals = async (
+    credentials: { email?: string; password: string },
+  ): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch('/api/admin/portals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd }),
+        body: JSON.stringify(credentials),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -102,21 +109,21 @@ const Admin = () => {
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!password.trim()) return;
+    if (!email.trim() || !password.trim()) return;
     setSubmitting(true);
     setError('');
-    const r = await loadPortals(password.trim());
+    const r = await loadPortals({ email: email.trim(), password: password.trim() });
     setSubmitting(false);
     if (!r.ok) setError(r.error || 'Sign in failed.');
   };
 
   const handleRefresh = async () => {
-    await loadPortals(password);
+    await loadPortals({ password });
   };
 
   const handleCreated = async () => {
     setView({ kind: 'dashboard' });
-    await loadPortals(password);
+    await loadPortals({ password });
   };
 
   /**
@@ -124,16 +131,23 @@ const Admin = () => {
    * lives in component state until reload — but this gives Vero a
    * clean way to lock the panel back down (e.g. handing her laptop
    * to a client mid-session) without needing to close the browser.
-   * Clears state + returns to the login screen.
+   * Clears state + navigates to the public home page (NOT back to
+   * /admin's login form — Alex flagged that as a security concern
+   * since it advertises the admin URL after logout).
    */
   const handleSignOut = () => {
     setPortals(null);
+    setEmail('');
     setPassword('');
     setError('');
     setView({ kind: 'dashboard' });
     setDashTab('clients');
     setAdminLevel('admin');
     menuDisclosure.onClose();
+    // Bounce to the marketing home. If someone else picks up the
+    // laptop, there's nothing on-screen telling them the URL that
+    // reveals the sign-in form.
+    window.location.href = '/';
   };
 
   // When we transition from the login screen to the dashboard, scroll
@@ -161,12 +175,10 @@ const Admin = () => {
         <Box
           bg="gray.50"
           minH="100vh"
-          // Admin now hides the site-wide Navbar/Footer, so we no longer
-          // need to leave a huge top gap for a fixed navbar. Small top
-          // safe-area on mobile (notch) + generous bottom padding so the
-          // fixed bottom nav doesn't cover the last row of content.
-          pt={{ base: 'calc(env(safe-area-inset-top) + 12px)', md: 8 }}
-          pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 12 }}
+          // Top gap clears the fixed site Navbar (~80px). Bottom gap
+          // clears our fixed bottom-nav bar + iOS home indicator.
+          pt={{ base: 20, md: 24 }}
+          pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 20 }}
           px={{ base: 4, md: 8 }}
           // Any single overflowing child would give the whole admin panel
           // a horizontal page scroll — a classic mobile bug. This is a
@@ -245,7 +257,7 @@ const Admin = () => {
               adminLevel={adminLevel}
               onBack={async () => {
                 setView({ kind: 'dashboard' });
-                await loadPortals(password);
+                await loadPortals({ password });
               }}
             />
           )}
@@ -310,9 +322,7 @@ const Admin = () => {
         align="center"
         justify="center"
         px={6}
-        // Site navbar no longer renders on /admin, so the login card
-        // sits centered without needing to leave room for it.
-        pt={{ base: 'calc(env(safe-area-inset-top) + 24px)', md: 12 }}
+        pt={{ base: 24, md: 20 }}
         pb={{ base: 16, md: 12 }}
       >
         <Box w="100%" maxW="420px">
@@ -361,6 +371,46 @@ const Admin = () => {
                 <VStack spacing={4} w="100%">
                   <Text
                     as="label"
+                    htmlFor="admin-email"
+                    display="block"
+                    w="100%"
+                    fontSize="2xs"
+                    fontWeight="500"
+                    color="#c9a96e"
+                    letterSpacing="0.2em"
+                    textTransform="uppercase"
+                    mb={-2}
+                  >
+                    Email
+                  </Text>
+                  <Input
+                    id="admin-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoFocus
+                    autoComplete="email"
+                    h="48px"
+                    bg="blackAlpha.500"
+                    border="1px solid"
+                    borderColor="whiteAlpha.300"
+                    color="white"
+                    // 16px keeps iOS Safari from zooming the whole page in
+                    // when the field gets focus.
+                    fontSize={{ base: '16px', md: 'sm' }}
+                    fontWeight="300"
+                    borderRadius="sm"
+                    _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
+                    _hover={{ borderColor: 'whiteAlpha.500' }}
+                    _focus={{
+                      borderColor: '#c9a96e',
+                      boxShadow: '0 0 0 1px #c9a96e',
+                      bg: 'blackAlpha.600',
+                    }}
+                  />
+                  <Text
+                    as="label"
                     htmlFor="admin-password"
                     display="block"
                     w="100%"
@@ -378,14 +428,14 @@ const Admin = () => {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter admin password"
-                    autoFocus
+                    placeholder="Enter password"
+                    autoComplete="current-password"
                     h="48px"
                     bg="blackAlpha.500"
                     border="1px solid"
                     borderColor="whiteAlpha.300"
                     color="white"
-                    fontSize="sm"
+                    fontSize={{ base: '16px', md: 'sm' }}
                     fontWeight="300"
                     borderRadius="sm"
                     _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
@@ -584,6 +634,33 @@ function AdminMobileNav({
     return () => window.removeEventListener('pointerdown', handler);
   }, [openGroup]);
 
+  // iOS Safari keeps position:fixed elements pinned to the LAYOUT
+  // viewport, which does NOT shrink when the software keyboard opens.
+  // Result: while a textarea is focused (e.g. the Assistant chat
+  // composer), the entire mobile nav is parked BEHIND the keyboard —
+  // taps on where the nav LOOKS to be actually hit the keyboard and
+  // do nothing. This was the "Assistant page nav is broken" bug.
+  // The visualViewport API measures the visible portion, so we can
+  // translate the nav up by exactly the keyboard's height and it
+  // re-enters the visible viewport.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      if (!navRef.current) return;
+      const bottomInset = window.innerHeight - vv.height - vv.offsetTop;
+      navRef.current.style.transform =
+        bottomInset > 1 ? `translateY(-${bottomInset}px)` : '';
+    };
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    apply();
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+    };
+  }, []);
+
   // Also close on route change (safety net — if something outside
   // this component changes activeTab, don't leave a stale panel open).
   useEffect(() => {
@@ -723,6 +800,14 @@ function AdminMobileNav({
                 role="tab"
                 aria-selected={isActive}
                 aria-expanded={g.hasSubmenu ? isOpen : undefined}
+                // Blur any focused input on pointerdown so the tap
+                // reliably registers on iOS Safari — otherwise the
+                // keyboard dismissal reflow can eat the synthesized
+                // click. Complements the visualViewport translation.
+                onPointerDown={() => {
+                  const el = document.activeElement;
+                  if (el instanceof HTMLElement && el !== document.body) el.blur();
+                }}
                 onClick={g.onClick}
                 flex="1"
                 minH="60px"

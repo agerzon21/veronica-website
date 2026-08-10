@@ -1,14 +1,19 @@
 /**
- * Admin password check — used by every /api/admin/* endpoint.
+ * Admin auth check — used by every /api/admin/* endpoint.
  *
- * Same pattern as the client portal: no sessions. The admin password
- * lives in React state on the /admin page and is sent with every API
- * call. Refreshing the tab boots back to the login screen. Acceptable
- * for an MVP that only has one admin (Veronika); revisit if multiple
- * staff start needing access.
+ * Two-part story:
+ *   - LOGIN: the client sends { email, password }. We check that pair
+ *     matches ONE of the two env-var pairs (Vero = admin, Alex = super).
+ *     Requiring email raises the brute-force cost dramatically — an
+ *     attacker who finds /admin needs to guess both fields.
+ *   - AFTER LOGIN: the password alone is stored in React state and sent
+ *     with every subsequent API call as the "session token." No email
+ *     re-check on those calls — the password itself is the secret.
+ *     Refreshing the tab boots back to the login screen.
  *
- * The 750ms delay on a bad password is the same anti-brute-force
- * pattern used on the client portal endpoints.
+ * The 750ms delay on failure is the same anti-brute-force pattern used
+ * on the client portal endpoints. Prevents a naive script from
+ * churning through the space faster than a human can.
  */
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -23,12 +28,60 @@ export interface AdminAuthFail {
 }
 
 /**
- * Validates the admin password. Two tiers:
+ * Login check — requires BOTH email and password.
+ *   - LOGIN_ADMIN_EMAIL + ADMIN_PASSWORD       → level 'admin' (Vero)
+ *   - LOGIN_SUPER_EMAIL + SUPER_ADMIN_PASSWORD → level 'super' (Alex)
+ *
+ * Called only by the login endpoint. All other admin endpoints use
+ * requireAdmin(password) below, which checks the password alone.
+ *
+ * A wrong email OR wrong password both surface as "Incorrect email or
+ * password" so an attacker can't distinguish "no such account" from
+ * "wrong password."
+ */
+export async function loginAdmin(
+  email: unknown,
+  password: unknown,
+): Promise<{ ok: true; level: AdminLevel } | AdminAuthFail> {
+  const expectedAdminEmail = process.env.LOGIN_ADMIN_EMAIL;
+  const expectedSuperEmail = process.env.LOGIN_SUPER_EMAIL;
+  const expectedAdmin = process.env.ADMIN_PASSWORD;
+  const expectedSuper = process.env.SUPER_ADMIN_PASSWORD;
+  if (!expectedAdmin || !expectedAdminEmail) {
+    console.error('[admin] Login env vars missing (LOGIN_ADMIN_EMAIL, ADMIN_PASSWORD)');
+    return { ok: false, status: 500, error: 'Admin is not configured.' };
+  }
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
+    await sleep(WRONG_AUTH_DELAY_MS);
+    return { ok: false, status: 401, error: 'Email and password required' };
+  }
+  const emailLc = email.trim().toLowerCase();
+  if (
+    expectedSuper &&
+    expectedSuperEmail &&
+    emailLc === expectedSuperEmail.toLowerCase() &&
+    password === expectedSuper
+  ) {
+    return { ok: true, level: 'super' };
+  }
+  if (emailLc === expectedAdminEmail.toLowerCase() && password === expectedAdmin) {
+    return { ok: true, level: 'admin' };
+  }
+  await sleep(WRONG_AUTH_DELAY_MS);
+  return { ok: false, status: 401, error: 'Incorrect email or password' };
+}
+
+/**
+ * Validates the admin password on subsequent API calls (after login).
+ * Two tiers:
  *   - ADMIN_PASSWORD       → level 'admin' (read + edit + non-destructive actions)
  *   - SUPER_ADMIN_PASSWORD → level 'super' (everything 'admin' can do, plus deletes)
  *
  * Endpoints that perform destructive actions (deleting portals) should
  * gate themselves on level === 'super'. Read/edit endpoints accept either.
+ *
+ * NOTE: this is post-login. The email requirement is enforced at login;
+ * once the client has a valid password we treat it as a bearer token.
  */
 export async function requireAdmin(password: unknown): Promise<{ ok: true; level: AdminLevel } | AdminAuthFail> {
   const expectedAdmin = process.env.ADMIN_PASSWORD;

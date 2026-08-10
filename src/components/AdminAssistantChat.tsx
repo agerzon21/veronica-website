@@ -4,9 +4,10 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  FaPaperPlane, FaMicrophone, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb,
+  FaPaperPlane, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import VoiceInput from './ui/VoiceInput';
 import type { ChatLanguage } from './AdminAssistant';
 
 /**
@@ -92,8 +93,8 @@ const STRINGS: Record<ChatLanguage, Strings> = {
     send: 'Отправить',
     micRecordAria: 'Записать голос',
     micStopAria: 'Остановить запись',
-    micRecordingHint: '🎙 Говори по-русски… отпусти кнопку, когда закончишь',
-    submitHint: '⌘/Ctrl + Enter чтобы отправить · Удерживай микрофон для голоса',
+    micRecordingHint: '🎙 Говори… отпусти кнопку, когда закончишь',
+    submitHint: '⌘/Ctrl + Enter — отправить · Микрофон — голос',
     loadingEmpty: '',
     emptyTitle: 'Твой личный ассистент готов',
     emptyDescription:
@@ -119,8 +120,8 @@ const STRINGS: Record<ChatLanguage, Strings> = {
     send: 'Send',
     micRecordAria: 'Record voice',
     micStopAria: 'Stop recording',
-    micRecordingHint: '🎙 Speak in English… release the button when done',
-    submitHint: '⌘/Ctrl + Enter to send · Hold the mic to dictate',
+    micRecordingHint: '🎙 Speaking… release when done',
+    submitHint: '⌘/Ctrl + Enter — send · Mic — dictate',
     loadingEmpty: '',
     emptyTitle: 'Your personal assistant is ready',
     emptyDescription:
@@ -139,20 +140,12 @@ const STRINGS: Record<ChatLanguage, Strings> = {
   },
 };
 
-const SPEECH_LANG: Record<ChatLanguage, string> = {
-  ru: 'ru-RU',
-  en: 'en-US',
-};
-
 const AdminAssistantChat = ({ adminPassword, language }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [micActive, setMicActive] = useState(false);
-  const [micUnavailable, setMicUnavailable] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const toast = useToast();
 
   const t = STRINGS[language];
@@ -354,96 +347,34 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
     }
   };
 
-  // ── Web Speech API: press-and-hold mic to dictate ──
-  // Recognition is rebuilt whenever the language changes so the mic
-  // switches between ru-RU and en-US at the moment the toggle flips.
-  useEffect(() => {
-    const SpeechRecognitionCtor =
-      (window as unknown as { SpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
-      (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) {
-      setMicUnavailable(true);
-      return;
-    }
-    const recognition = new SpeechRecognitionCtor();
-    recognition.lang = SPEECH_LANG[language];
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? '';
-      if (transcript) {
-        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-      }
-    };
-    recognition.onend = () => setMicActive(false);
-    // Surface real errors instead of swallowing silently — otherwise a
-    // permission-denied / not-allowed / not-supported condition all look
-    // identical to "the button doesn't do anything." `no-speech` and
-    // `aborted` are normal (button released without any words) — swallow
-    // those or Vero would get a toast every time she taps by accident.
-    recognition.onerror = (event: Event & { error?: string }) => {
-      setMicActive(false);
-      const code = (event as { error?: string }).error ?? 'unknown';
-      if (code === 'no-speech' || code === 'aborted') return;
-      toast({
-        title: language === 'ru' ? 'Микрофон не работает' : 'Microphone error',
-        description: code === 'not-allowed'
-          ? (language === 'ru'
-            ? 'Разреши сайту доступ к микрофону в настройках браузера.'
-            : 'Grant microphone permission for this site in your browser settings.')
-          : code,
-        status: 'warning',
-        duration: 4500,
-      });
-    };
-    recognitionRef.current = recognition;
-    return () => {
-      try { recognition.abort(); } catch { /* Safari sometimes throws if aborted mid-start */ }
-      recognitionRef.current = null;
-    };
-  }, [language, toast]);
-
-  const startMic = () => {
-    if (!recognitionRef.current || micActive) return;
-    try {
-      recognitionRef.current.start();
-      setMicActive(true);
-    } catch (err) {
-      // Some browsers throw if start() is called too quickly after end.
-      setMicActive(false);
-      toast({
-        title: language === 'ru' ? 'Не удалось запустить микрофон' : 'Could not start microphone',
-        description: err instanceof Error ? err.message : String(err),
-        status: 'warning',
-        duration: 3500,
-      });
-    }
-  };
-  const stopMic = () => {
-    if (!recognitionRef.current) return;
-    try {
-      recognitionRef.current.stop();
-    } catch {
-      // ignore — stop() can throw if there was nothing to stop
-    }
-    setMicActive(false);
-  };
+  // Voice input is now delegated to the shared <VoiceInput> component
+  // (record via MediaRecorder → POST to /api/admin/transcribe →
+  // OpenAI Whisper). The old browser-native SpeechRecognition flow
+  // was fundamentally flaky on iOS Safari (per multiple debugging
+  // sessions) — Whisper is one HTTP round-trip and always works.
+  // Handler just appends the transcript into the composer input.
+  const handleTranscript = useCallback((text: string) => {
+    setInput((prev) => (prev ? `${prev} ${text}` : text));
+  }, []);
 
   return (
     <Flex
       direction="column"
+      // The chat itself is the ONLY thing that scrolls — the outer
+      // flex is fixed-height so header + composer stay put on mobile.
       // dvh (dynamic viewport height) plays nicely with iOS Safari's
-      // collapsing address bar and pop-up keyboard; static `vh` locks
-      // to the initial viewport and the composer ends up scrolled out
-      // of reach when the keyboard opens.
-      h={{ base: 'calc(100dvh - 220px)', md: '78vh' }}
-      minH={{ base: '480px', md: 'auto' }}
+      // collapsing address bar. minH removed so small phones don't
+      // force page-scroll from a mismatched minimum.
+      h={{ base: 'calc(100dvh - 260px)', md: '78vh' }}
       maxW="900px"
       mx="auto"
+      overflow="hidden"
     >
-      {/* Header row — hint hidden on mobile so the reset button doesn't
-          get pushed off; enough vertical space is at a premium. */}
-      <Flex align="center" justify={{ base: 'flex-end', md: 'space-between' }} mb={3} px={1}>
+      {/* Header row — desktop shows the hint text; mobile keeps just
+          the reset icon so vertical space is preserved. Reset button
+          is an icon-only 36×36 button (with tooltip) to save the
+          full-line real estate the old label chip was eating. */}
+      <Flex align="center" justify={{ base: 'flex-end', md: 'space-between' }} mb={2} px={1}>
         <HStack spacing={2} display={{ base: 'none', md: 'flex' }}>
           <Icon as={FaRegLightbulb} boxSize={3.5} color="#c9a96e" />
           <Text fontSize="xs" color="gray.500" fontWeight="400" letterSpacing="0.06em">
@@ -451,29 +382,19 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
           </Text>
         </HStack>
         {messages.length > 0 && (
-          <Box
-            as="button"
-            type="button"
+          <IconButton
+            aria-label={t.newConversation}
+            title={t.newConversation}
+            icon={<Icon as={FaRedo} boxSize={3.5} />}
             onClick={handleReset}
-            display="inline-flex"
-            alignItems="center"
-            gap={1.5}
-            fontSize={{ base: 'xs', md: '2xs' }}
+            variant="ghost"
+            size="sm"
+            minW="36px"
+            minH="36px"
             color="gray.400"
             _hover={{ color: '#c9a96e' }}
-            _active={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
-            bg="transparent"
-            border="none"
-            cursor="pointer"
-            px={{ base: 3, md: 2 }}
-            py={{ base: 2, md: 1 }}
-            minH={{ base: '40px', md: 'auto' }}
-            borderRadius="sm"
             sx={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            <Icon as={FaRedo} boxSize={{ base: 3, md: 2.5 }} />
-            {t.newConversation}
-          </Box>
+          />
         )}
       </Flex>
 
@@ -545,54 +466,24 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
             flex={1}
             isDisabled={sending}
           />
-          {/* Mic + send row. On mobile they sit under the textarea
-              stretching to fill the width so each button gets ~50%
-              of the row — big, obvious, thumb-safe. */}
+          {/* Mic + send row. Mic uses the shared VoiceInput component
+              which records via MediaRecorder and posts to OpenAI
+              Whisper on release — much more reliable than the
+              browser's SpeechRecognition API on iOS Safari. */}
           <Stack direction="row" spacing={2} justify={{ base: 'stretch', md: 'flex-end' }}>
-            {!micUnavailable && (
-              <IconButton
-                aria-label={micActive ? t.micStopAria : t.micRecordAria}
-                icon={<Icon as={FaMicrophone} boxSize={{ base: 5, md: 4 }} />}
-                // Pointer capture is critical on iOS Safari — without it,
-                // the tiniest finger drift onto a different element
-                // (the SVG child vs the button padding, or a scroll
-                // ancestor grabbing the gesture) fires pointercancel /
-                // pointerleave and stopMic() runs before the user has
-                // said a single syllable. Capturing the pointer to
-                // this button pins the up/cancel events here regardless
-                // of where the finger actually moves. onPointerLeave
-                // is deliberately dropped for the same reason.
-                onPointerDown={(e) => {
-                  try {
-                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                  } catch { /* Safari edge cases */ }
-                  startMic();
-                }}
-                onPointerUp={(e) => {
-                  try {
-                    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                  } catch { /* ignore — already released */ }
-                  stopMic();
-                }}
-                onPointerCancel={(e) => {
-                  try {
-                    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                  } catch { /* ignore */ }
-                  stopMic();
-                }}
-                variant="outline"
-                size="lg"
-                minW={{ base: '48px', md: 'auto' }}
-                minH={{ base: '48px', md: 'auto' }}
-                flex={{ base: '0 0 auto', md: '0 0 auto' }}
-                bg={micActive ? '#c9a96e' : 'white'}
-                color={micActive ? 'white' : '#8a6e35'}
-                borderColor={micActive ? '#c9a96e' : 'gray.300'}
-                _hover={{ bg: micActive ? '#b8964f' : 'gray.50' }}
-                isDisabled={sending}
-                sx={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}
-              />
-            )}
+            <VoiceInput
+              adminPassword={adminPassword}
+              language={language}
+              onTranscript={handleTranscript}
+              ariaLabelIdle={t.micRecordAria}
+              ariaLabelRecording={t.micStopAria}
+              ariaLabelUploading={language === 'ru' ? 'Расшифровываю…' : 'Transcribing…'}
+              variant="outline"
+              size="lg"
+              minW={{ base: '48px', md: 'auto' }}
+              minH={{ base: '48px', md: 'auto' }}
+              flex="0 0 auto"
+            />
             <CTAButton
               onClick={handleSend}
               icon={FaPaperPlane}
@@ -609,13 +500,14 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
           </Stack>
         </Stack>
         <Text
-          fontSize={{ base: 'xs', md: '2xs' }}
+          fontSize={{ base: '2xs', md: '2xs' }}
           color="gray.400"
-          mt={2}
+          mt={1.5}
           px={1}
           textAlign={{ base: 'center', md: 'left' }}
+          noOfLines={1}
         >
-          {micActive ? t.micRecordingHint : t.submitHint}
+          {t.submitHint}
         </Text>
       </Box>
     </Flex>
@@ -744,31 +636,7 @@ const TOAST_META: Record<DbWrite['type'], { icon: typeof FaPlus }> = {
   deleted: { icon: FaTrash },
 };
 
-// Minimal type declarations for the browser SpeechRecognition APIs
-// (not in @types/react by default; both prefixed and unprefixed
-// variants exist on Safari + Chromium).
-interface SpeechRecognition extends EventTarget {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
-  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
-  onerror: ((this: SpeechRecognition, ev: Event) => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-interface SpeechRecognitionEvent extends Event {
-  results: {
-    length: number;
-    [index: number]: {
-      [index: number]: { transcript: string };
-    };
-  };
-}
-declare const SpeechRecognition: {
-  prototype: SpeechRecognition;
-  new (): SpeechRecognition;
-};
+// (Old Web Speech API type declarations lived here — no longer
+// needed now that voice input goes through Whisper via <VoiceInput>.)
 
 export default AdminAssistantChat;

@@ -42,12 +42,10 @@ function ScrollToTop() {
 
 /**
  * Inner shell — lives inside <Router> so it can use useLocation() to
- * gate site-wide chrome (Navbar, Footer, ExitIntentPopup) that shouldn't
- * render on /admin. Vero owns her business there, doesn't need "Home /
- * Gallery / Contact" nav or a public-facing footer; keeping them would
- * eat ~120px of vertical space above and ~200px below the actual admin
- * content on mobile for zero benefit. Admin brings its own chrome
- * (top-of-content admin nav + bottom tab bar).
+ * gate site-wide chrome per-route. Navbar + Footer render on admin
+ * too — Alex asked for them back so it's easy to jump around the site
+ * while working. The ExitIntentPopup does NOT fire on admin — that
+ * popup is for prospects, and Vero doesn't need to be sold to.
  */
 function AppShell() {
   const { pathname } = useLocation();
@@ -56,7 +54,7 @@ function AppShell() {
     <>
       <SEO />
       <ScrollToTop />
-      {!isAdmin && <Navbar />}
+      <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
@@ -76,7 +74,7 @@ function AppShell() {
         <Route path="/terms" element={<Terms />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {!isAdmin && <Footer />}
+      <Footer />
       {/* ExitIntentPopup is meant for prospects — never fire it in
           admin where Vero is working. */}
       {!isAdmin && <ExitIntentPopup />}

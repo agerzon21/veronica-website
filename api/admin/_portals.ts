@@ -1,9 +1,18 @@
 /**
- * Admin: list all client portals.
+ * Admin: list all client portals. Also doubles as the LOGIN endpoint —
+ * the admin dashboard calls this on sign-in and again on manual refresh.
  *
- * POST { password }
- *   → 200 { success, portals: [...] }
- *   → 401 on bad password
+ * POST { email?, password }
+ *   → If `email` is present: treated as a LOGIN. We validate the
+ *     email+password pair (loginAdmin) — this is what enforces the
+ *     two-factor secret at sign-in. Correct pair returns 200 with the
+ *     portal list + level; wrong pair returns 401 "Incorrect email or
+ *     password".
+ *   → If `email` is absent: treated as a post-login REFRESH. Password
+ *     alone is validated (requireAdmin) as the bearer token.
+ *
+ *   → 200 { success, level, portals: [...] }
+ *   → 401 on bad credentials
  *
  * Returns a flattened summary per portal — enough for the admin dashboard
  * table to show name, contract status, paid-vs-total, gallery status,
@@ -12,7 +21,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
-import { requireAdmin } from '../_admin-auth.js';
+import { loginAdmin, requireAdmin } from '../_admin-auth.js';
 
 type Row = {
   id: string;
@@ -40,7 +49,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const auth = await requireAdmin(req.body?.password);
+  // If `email` is present in the body, treat this as the LOGIN call
+  // and enforce email+password. Otherwise this is a post-login refresh
+  // and the password alone suffices as the bearer token.
+  const email = typeof req.body?.email === 'string' ? req.body.email : null;
+  const auth = email
+    ? await loginAdmin(email, req.body?.password)
+    : await requireAdmin(req.body?.password);
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
 
   try {
