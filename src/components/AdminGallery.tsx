@@ -10,6 +10,7 @@ import {
   FaGoogleDrive, FaCog,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import { useAdminLang } from '../i18n/admin';
 
 /**
  * "Gallery" tab in /admin — table of every photo in the public
@@ -75,6 +76,7 @@ interface GallerySettings {
 }
 
 const AdminGallery = ({ adminPassword }: Props) => {
+  const { t } = useAdminLang();
   const [photos, setPhotos] = useState<GalleryRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,14 +119,14 @@ const AdminGallery = ({ adminPassword }: Props) => {
       if (res.ok && data.success) {
         setPhotos(data.photos);
       } else {
-        setError(data.error || `Load failed (${res.status})`);
+        setError(data.error || t.gallery.loadFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
     }
-  }, [adminPassword]);
+  }, [adminPassword, t]);
 
   useEffect(() => {
     void loadPhotos();
@@ -145,7 +147,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
       if (res.ok && data.success) {
         setLastSync(data as SyncResult);
         toast({
-          title: `Synced — ${data.inserted} new, ${data.softDeleted} removed`,
+          title: t.gallery.toastSynced(data.inserted, data.softDeleted),
           status: 'success',
           duration: 4000,
           isClosable: true,
@@ -153,21 +155,21 @@ const AdminGallery = ({ adminPassword }: Props) => {
         void loadPhotos();
       } else {
         toast({
-          title: data.error || 'Sync failed',
+          title: data.error || t.gallery.toastSyncFailed,
           status: 'error',
           duration: 5000,
           isClosable: true,
         });
       }
     } catch {
-      toast({ title: 'Could not reach the server', status: 'error', duration: 4000 });
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 4000 });
     } finally {
       setSyncing(false);
     }
   };
 
   const handleDelete = async (row: GalleryRow) => {
-    if (!confirm(`Delete "${row.title || row.slug}"?\n\nIf the file is still in the Drive folder, the next sync will restore it. To permanently remove: delete from Drive first, then delete from here.`)) return;
+    if (!confirm(t.gallery.confirmDelete(row.title || row.slug))) return;
     try {
       const res = await fetch('/api/admin/gallery-delete', {
         method: 'POST',
@@ -176,13 +178,13 @@ const AdminGallery = ({ adminPassword }: Props) => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast({ title: 'Photo removed', status: 'success', duration: 3000 });
+        toast({ title: t.gallery.toastPhotoRemoved, status: 'success', duration: 3000 });
         void loadPhotos();
       } else {
-        toast({ title: data.error || 'Delete failed', status: 'error', duration: 4000 });
+        toast({ title: data.error || t.gallery.toastDeleteFailed, status: 'error', duration: 4000 });
       }
     } catch {
-      toast({ title: 'Could not reach the server', status: 'error', duration: 4000 });
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 4000 });
     }
   };
 
@@ -203,15 +205,15 @@ const AdminGallery = ({ adminPassword }: Props) => {
       <Flex align="flex-end" justify="space-between" mb={{ base: 4, md: 6 }} gap={3}>
         <VStack align="flex-start" spacing={1} minW={0}>
           <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
-            Admin
+            {t.common.adminKicker}
           </Text>
           <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-            Gallery
+            {t.gallery.tabTitle}
           </Text>
           <Text fontSize="sm" color="gray.500" fontWeight="300">
             {photos
-              ? `${photos.length} photo${photos.length === 1 ? '' : 's'}${draftCount > 0 ? ` · ${draftCount} awaiting review` : ''}`
-              : 'Drive-backed photo library.'}
+              ? t.gallery.photoCount(photos.length, draftCount)
+              : t.gallery.subtitleEmpty}
           </Text>
         </VStack>
         <HStack spacing={2} flexShrink={0}>
@@ -222,9 +224,9 @@ const AdminGallery = ({ adminPassword }: Props) => {
             icon={FaCog}
             variant="outline"
             size="sm"
-            aria-label="Gallery settings"
+            aria-label={t.gallery.ariaSettings}
           >
-            <Box as="span" display={{ base: 'none', md: 'inline' }}>Settings</Box>
+            <Box as="span" display={{ base: 'none', md: 'inline' }}>{t.gallery.settings}</Box>
           </CTAButton>
           <CTAButton
             onClick={handleSyncNow}
@@ -232,11 +234,11 @@ const AdminGallery = ({ adminPassword }: Props) => {
             variant="outline"
             size="sm"
             isLoading={syncing}
-            loadingText="Syncing..."
+            loadingText={t.gallery.syncing}
             isDisabled={settings?.folderIdSource === 'none'}
-            aria-label="Sync from Drive"
+            aria-label={t.gallery.ariaSyncFromDrive}
           >
-            <Box as="span" display={{ base: 'none', md: 'inline' }}>Sync from Drive</Box>
+            <Box as="span" display={{ base: 'none', md: 'inline' }}>{t.gallery.syncFromDrive}</Box>
           </CTAButton>
         </HStack>
       </Flex>
@@ -257,12 +259,10 @@ const AdminGallery = ({ adminPassword }: Props) => {
             <Icon as={FaExclamationTriangle} color="orange.500" boxSize={4} mt={0.5} />
             <VStack align="flex-start" spacing={2} flex={1}>
               <Text fontSize="sm" fontWeight="500" color="orange.800">
-                Gallery folder not connected yet
+                {t.gallery.driveNotConnectedTitle}
               </Text>
               <Text fontSize="xs" color="orange.700" lineHeight="1.6">
-                Point this site at your Google Drive gallery folder so new
-                photos can sync automatically. You'll need the folder's
-                shareable link — same format you use for client galleries.
+                {t.gallery.driveNotConnectedBody}
               </Text>
               <CTAButton
                 onClick={() => setSettingsOpen(true)}
@@ -270,7 +270,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
                 variant="solid"
                 size="sm"
               >
-                Set up Drive folder
+                {t.gallery.setUpDrive}
               </CTAButton>
             </VStack>
           </HStack>
@@ -286,8 +286,8 @@ const AdminGallery = ({ adminPassword }: Props) => {
         >
           <Icon as={FaGoogleDrive} boxSize={3} color="#c9a96e" />
           <Text>
-            Connected to Drive
-            {settings.folderIdSource === 'env' && ' (via env var — click Settings to move to admin)'}
+            {t.gallery.connectedToDrive}
+            {settings.folderIdSource === 'env' && t.gallery.connectedViaEnv}
           </Text>
         </Flex>
       )}
@@ -304,18 +304,18 @@ const AdminGallery = ({ adminPassword }: Props) => {
           py={3}
         >
           <Text fontSize="xs" color="green.800" fontWeight="500" lineHeight="1.6">
-            Saw {lastSync.driveFilesSeen} files in Drive · {lastSync.inserted} new
-            {lastSync.restored > 0 && ` · ${lastSync.restored} restored`}
-            {lastSync.softDeleted > 0 && ` · ${lastSync.softDeleted} removed`}
-            {lastSync.remainingNewNextRun > 0 && ` · ${lastSync.remainingNewNextRun} pending next run`}
-            {lastSync.deployTriggered && ' · redeploy triggered'}
+            {t.gallery.syncSummaryHead(lastSync.driveFilesSeen, lastSync.inserted)}
+            {lastSync.restored > 0 && t.gallery.syncSummaryRestored(lastSync.restored)}
+            {lastSync.softDeleted > 0 && t.gallery.syncSummaryRemoved(lastSync.softDeleted)}
+            {lastSync.remainingNewNextRun > 0 && t.gallery.syncSummaryPending(lastSync.remainingNewNextRun)}
+            {lastSync.deployTriggered && t.gallery.syncSummaryRedeploy}
           </Text>
           {lastSync.insertFailures.length > 0 && (
             <VStack align="flex-start" spacing={0.5} mt={2}>
               <HStack spacing={1.5} color="orange.700">
                 <Icon as={FaExclamationTriangle} boxSize={3} />
                 <Text fontSize="xs" fontWeight="500">
-                  {lastSync.insertFailures.length} file{lastSync.insertFailures.length === 1 ? '' : 's'} failed
+                  {t.gallery.filesFailed(lastSync.insertFailures.length)}
                 </Text>
               </HStack>
               {lastSync.insertFailures.slice(0, 5).map((f, i) => (
@@ -342,9 +342,9 @@ const AdminGallery = ({ adminPassword }: Props) => {
             maxW={{ base: '100%', md: '200px' }}
             bg="white"
           >
-            <option value="all">All categories</option>
+            <option value="all">{t.gallery.allCategories}</option>
             {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+              <option key={c} value={c}>{t.gallery.categoryNames[c]}</option>
             ))}
           </Select>
           <Select
@@ -356,13 +356,13 @@ const AdminGallery = ({ adminPassword }: Props) => {
             maxW={{ base: '100%', md: '200px' }}
             bg="white"
           >
-            <option value="all">All status</option>
-            <option value="draft">Draft (needs review)</option>
-            <option value="published">Published (live)</option>
+            <option value="all">{t.gallery.allStatuses}</option>
+            <option value="draft">{t.gallery.statusDraft}</option>
+            <option value="published">{t.gallery.statusPublished}</option>
           </Select>
         </HStack>
         <Text fontSize="xs" color="gray.500">
-          {filtered.length} of {photos?.length ?? 0}
+          {t.gallery.resultsCount(filtered.length, photos?.length ?? 0)}
         </Text>
       </VStack>
 
@@ -440,6 +440,7 @@ function SettingsModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useAdminLang();
   const [folderInput, setFolderInput] = useState(currentFolderId);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -447,7 +448,7 @@ function SettingsModal({
 
   const handleSave = async () => {
     if (!folderInput.trim()) {
-      setSaveError('Paste a Drive folder URL or ID.');
+      setSaveError(t.gallery.pasteFolderError);
       return;
     }
     setSaving(true);
@@ -464,13 +465,13 @@ function SettingsModal({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast({ title: 'Saved', status: 'success', duration: 2000 });
+        toast({ title: t.common.saved, status: 'success', duration: 2000 });
         onSaved();
       } else {
-        setSaveError(data.error || `Save failed (${res.status})`);
+        setSaveError(data.error || t.gallery.saveFailed(res.status));
       }
     } catch {
-      setSaveError('Could not reach the server');
+      setSaveError(t.common.couldNotReach);
     } finally {
       setSaving(false);
     }
@@ -493,14 +494,14 @@ function SettingsModal({
         maxH={{ base: '100dvh', md: 'auto' }}
       >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
-          Gallery settings
+          {t.gallery.settingsModalTitle}
         </ModalHeader>
         <ModalCloseButton size={{ base: 'lg', md: 'md' } as any} top={{ base: 3, md: 2 }} right={{ base: 3, md: 2 }} />
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                Google Drive gallery folder
+                {t.gallery.driveFolderLabel}
               </FormLabel>
               <Input
                 value={folderInput}
@@ -512,11 +513,7 @@ function SettingsModal({
                 bg="white"
               />
               <Text fontSize="2xs" color="gray.500" mt={2} lineHeight="1.6">
-                Paste the shareable link (or just the folder ID) of the
-                parent Drive folder that holds the four category
-                subfolders (portraits, weddings, family, maternity).
-                The service account this site uses must have Viewer
-                access to that folder.
+                {t.gallery.driveFolderHelp}
               </Text>
             </FormControl>
 
@@ -530,9 +527,7 @@ function SettingsModal({
                 py={2}
               >
                 <Text fontSize="xs" color="blue.800" lineHeight="1.6">
-                  Currently loaded from an env var (legacy setup). Saving
-                  here moves it to the database so future edits can happen
-                  from this page without touching Vercel.
+                  {t.gallery.envLegacyNotice}
                 </Text>
               </Box>
             )}
@@ -544,16 +539,16 @@ function SettingsModal({
         </ModalBody>
         <ModalFooter gap={2}>
           <Button variant="ghost" size="sm" onClick={onClose} isDisabled={saving}>
-            Cancel
+            {t.common.cancel}
           </Button>
           <CTAButton
             onClick={handleSave}
             variant="solid"
             size="sm"
             isLoading={saving}
-            loadingText="Saving..."
+            loadingText={t.common.saving}
           >
-            Save
+            {t.common.save}
           </CTAButton>
         </ModalFooter>
       </ModalContent>
@@ -567,6 +562,7 @@ function SettingsModal({
  * highlight so they visually pull for review.
  */
 function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => void; onDelete: () => void }) {
+  const { t } = useAdminLang();
   const isDraft = row.status === 'draft';
   return (
     <Box
@@ -605,7 +601,7 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
             px={2}
             py={0.5}
           >
-            Draft
+            {t.gallery.draft}
           </Badge>
         )}
       </Box>
@@ -613,18 +609,18 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
       {/* Meta */}
       <VStack align="stretch" spacing={2} p={3} flex={1}>
         <HStack spacing={2}>
-          <Badge fontSize="2xs" colorScheme="gray" textTransform="capitalize">
-            {row.category}
+          <Badge fontSize="2xs" colorScheme="gray">
+            {t.gallery.categoryNames[row.category]}
           </Badge>
           <Text fontSize="2xs" color="gray.500" fontFamily="mono" noOfLines={1} flex={1}>
             /{row.slug}
           </Text>
         </HStack>
         <Text fontSize="sm" fontWeight="500" color="gray.800" noOfLines={2}>
-          {row.title || <Text as="span" color="gray.400" fontStyle="italic">(no title yet)</Text>}
+          {row.title || <Text as="span" color="gray.400" fontStyle="italic">{t.gallery.noTitleYet}</Text>}
         </Text>
         <Text fontSize="xs" color="gray.500" fontWeight="300" noOfLines={2}>
-          {row.description || <Text as="span" fontStyle="italic">(no description)</Text>}
+          {row.description || <Text as="span" fontStyle="italic">{t.gallery.noDescription}</Text>}
         </Text>
 
         {/* Actions — bumped touch targets on mobile so Edit / Open /
@@ -655,7 +651,7 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           >
             <Icon as={FaEdit} boxSize={{ base: 3.5, md: 2.5 }} />
-            {isDraft ? 'Review' : 'Edit'}
+            {isDraft ? t.gallery.review : t.common.edit}
           </Box>
           {row.status === 'published' && (
             <Box
@@ -672,7 +668,7 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
               _hover={{ color: '#c9a96e' }}
               _active={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.08)' }}
               cursor="pointer"
-              aria-label="Open live page"
+              aria-label={t.gallery.ariaOpenLive}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <Icon as={FaExternalLinkAlt} boxSize={{ base: 4, md: 3 }} />
@@ -682,7 +678,7 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
             as="button"
             type="button"
             onClick={onDelete}
-            aria-label="Delete photo"
+            aria-label={t.gallery.ariaDelete}
             display="inline-flex"
             alignItems="center"
             justifyContent="center"
@@ -719,6 +715,7 @@ function EditModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useAdminLang();
   const [slug, setSlug] = useState(row.slug);
   const [title, setTitle] = useState(row.title);
   const [alt, setAlt] = useState(row.alt);
@@ -757,13 +754,13 @@ function EditModal({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast({ title: 'Saved', status: 'success', duration: 2000 });
+        toast({ title: t.common.saved, status: 'success', duration: 2000 });
         onSaved();
       } else {
-        setSaveError(data.error || `Save failed (${res.status})`);
+        setSaveError(data.error || t.gallery.saveFailed(res.status));
       }
     } catch {
-      setSaveError('Could not reach the server');
+      setSaveError(t.common.couldNotReach);
     } finally {
       setSaving(false);
     }
@@ -786,7 +783,7 @@ function EditModal({
         maxH={{ base: '100dvh', md: 'auto' }}
       >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
-          Edit photo
+          {t.gallery.editPhoto}
         </ModalHeader>
         <ModalCloseButton size={{ base: 'lg', md: 'md' } as any} top={{ base: 3, md: 2 }} right={{ base: 3, md: 2 }} />
         <ModalBody>
@@ -806,7 +803,7 @@ function EditModal({
 
             <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
               <FormControl flex={2}>
-                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Slug</FormLabel>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.slug}</FormLabel>
                 <Input
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
@@ -816,11 +813,11 @@ function EditModal({
                   bg="white"
                 />
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mt={1}>
-                  Live URL: /photo/{category}/{slug}
+                  {t.gallery.liveUrlPrefix} /photo/{category}/{slug}
                 </Text>
               </FormControl>
               <FormControl flex={1}>
-                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Category</FormLabel>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.category}</FormLabel>
                 <Select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as Category)}
@@ -829,24 +826,24 @@ function EditModal({
                   bg="white"
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                    <option key={c} value={c}>{t.gallery.categoryNames[c]}</option>
                   ))}
                 </Select>
               </FormControl>
             </Stack>
 
             <FormControl>
-              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Title</FormLabel>
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.title}</FormLabel>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} size={{ base: 'md', md: 'sm' } as any} fontSize={{ base: 'md', md: 'sm' } as any} bg="white" />
             </FormControl>
 
             <FormControl>
-              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Alt text</FormLabel>
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.alt}</FormLabel>
               <Input value={alt} onChange={(e) => setAlt(e.target.value)} size={{ base: 'md', md: 'sm' } as any} fontSize={{ base: 'md', md: 'sm' } as any} bg="white" />
             </FormControl>
 
             <FormControl>
-              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Description</FormLabel>
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.description}</FormLabel>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -858,7 +855,7 @@ function EditModal({
             </FormControl>
 
             <FormControl>
-              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Keywords</FormLabel>
+              <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.keywords}</FormLabel>
               <Input
                 value={keywordsText}
                 onChange={(e) => setKeywordsText(e.target.value)}
@@ -868,13 +865,13 @@ function EditModal({
                 bg="white"
               />
               <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mt={1}>
-                Comma-separated. First one is always the category.
+                {t.gallery.keywordsHint}
               </Text>
             </FormControl>
 
             <Stack direction={{ base: 'column', md: 'row' }} spacing={4}>
               <FormControl>
-                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Published</FormLabel>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.published}</FormLabel>
                 <HStack>
                   <Switch
                     isChecked={status === 'published'}
@@ -883,12 +880,12 @@ function EditModal({
                     size={{ base: 'md', md: 'sm' } as any}
                   />
                   <Text fontSize={{ base: 'sm', md: 'xs' }} color={status === 'published' ? 'green.700' : 'orange.700'}>
-                    {status === 'published' ? 'Live on site' : 'Draft (hidden)'}
+                    {status === 'published' ? t.gallery.liveOnSite : t.gallery.draftHidden}
                   </Text>
                 </HStack>
               </FormControl>
               <FormControl maxW={{ base: '100%', md: '140px' }}>
-                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>Sort override</FormLabel>
+                <FormLabel fontSize={{ base: 'sm', md: 'xs' }} fontWeight="500" color="gray.700" mb={1}>{t.gallery.sortOverride}</FormLabel>
                 <Input
                   type="number"
                   value={sortOrder}
@@ -902,13 +899,13 @@ function EditModal({
 
             <Box bg="gray.50" borderRadius="sm" px={3} py={2} border="1px solid" borderColor="gray.200">
               <Text fontSize="2xs" color="gray.600" fontWeight="500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
-                Drive
+                {t.gallery.driveSectionLabel}
               </Text>
               <Text fontSize="xs" color="gray.700" fontFamily="mono" wordBreak="break-all">
                 {row.drive_filename}
               </Text>
               <Text fontSize="2xs" color="gray.500" mt={1}>
-                Rename in the admin panel above — Drive filename stays as-is.
+                {t.gallery.driveRenameHint}
               </Text>
             </Box>
 
@@ -937,17 +934,17 @@ function EditModal({
               minH={{ base: '44px', md: 'auto' }}
               w={{ base: '100%', md: 'auto' }}
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <CTAButton
               onClick={handleSave}
               variant="solid"
               size="sm"
               isLoading={saving}
-              loadingText="Saving..."
+              loadingText={t.common.saving}
               fullWidth={{ base: true, md: false }}
             >
-              Save
+              {t.common.save}
             </CTAButton>
           </Stack>
         </ModalFooter>
@@ -957,6 +954,7 @@ function EditModal({
 }
 
 function EmptyState({ hasAny }: { hasAny: boolean }) {
+  const { t } = useAdminLang();
   return (
     <Box
       bg="white"
@@ -983,12 +981,10 @@ function EmptyState({ hasAny }: { hasAny: boolean }) {
         <Icon as={FaImage} boxSize={7} />
       </Flex>
       <Text as="h2" fontSize="md" fontWeight="500" color="gray.800" mb={2}>
-        {hasAny ? 'No photos match those filters' : 'No photos yet'}
+        {hasAny ? t.gallery.emptyNoMatchTitle : t.gallery.emptyNoPhotosTitle}
       </Text>
       <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="380px" mx="auto" lineHeight="1.7">
-        {hasAny
-          ? 'Change the filters above or click "Sync from Drive" to pull the latest.'
-          : 'Upload photos to the Gallery folder in Drive, then click "Sync from Drive" to bring them in.'}
+        {hasAny ? t.gallery.emptyNoMatchBody : t.gallery.emptyNoPhotosBody}
       </Text>
     </Box>
   );

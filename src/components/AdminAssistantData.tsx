@@ -7,6 +7,7 @@ import {
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { FaSearch, FaPlus, FaTrash, FaEdit, FaMagic, FaHandPaper, FaLock } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import { useAdminLang } from '../i18n/admin';
 
 /**
  * "Data" panel of the Assistant tab — a redesigned view of the
@@ -43,6 +44,7 @@ interface ContextEntry {
 }
 
 const AdminAssistantData = ({ adminPassword }: Props) => {
+  const { t } = useAdminLang();
   const [entries, setEntries] = useState<ContextEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,14 +70,14 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
         // robust to server-side renames.
         setEntries(data.contexts ?? data.entries ?? []);
       } else {
-        setError(data.error || `Load failed (${res.status})`);
+        setError(data.error || t.assistantData.loadFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
     }
-  }, [adminPassword]);
+  }, [adminPassword, t]);
 
   useEffect(() => {
     void load();
@@ -124,7 +126,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search facts by keyword…"
+            placeholder={t.assistantData.searchPlaceholder}
             bg="white"
             // 16px on mobile prevents iOS Safari zoom on focus.
             fontSize={{ base: 'md', md: 'sm' } as any}
@@ -140,20 +142,20 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
           size="sm"
           fullWidth={{ base: true, md: false }}
         >
-          Add fact
+          {t.assistantData.addFact}
         </CTAButton>
       </Stack>
 
       {/* Meta strip: total + chatbot count */}
       {entries && entries.length > 0 && (
         <Flex mb={4} align="center" gap={3} fontSize="xs" color="gray.500" fontWeight="300">
-          <Text>{entries.length} facts</Text>
+          <Text>{t.assistantData.factsCount(entries.length)}</Text>
           {chatbotCount > 0 && (
             <>
               <Text>·</Text>
               <HStack spacing={1.5}>
                 <Icon as={FaMagic} boxSize={2.5} color="#c9a96e" />
-                <Text>{chatbotCount} added by chatbot</Text>
+                <Text>{t.assistantData.chatbotAddedCount(chatbotCount)}</Text>
               </HStack>
             </>
           )}
@@ -174,7 +176,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
         <EmptyState onAdd={() => setEditing('new')} />
       ) : grouped.length === 0 ? (
         <Box textAlign="center" py={12} color="gray.400" fontSize="sm">
-          No facts match "{search}".
+          {t.assistantData.noSearchMatch(search)}
         </Box>
       ) : (
         <VStack align="stretch" spacing={6}>
@@ -208,12 +210,12 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            toast({ title: 'Saved', status: 'success', duration: 1500 });
+            toast({ title: t.common.saved, status: 'success', duration: 1500 });
             void load();
           }}
           onDeleted={() => {
             setEditing(null);
-            toast({ title: 'Deleted', status: 'success', duration: 1500 });
+            toast({ title: t.common.deleted, status: 'success', duration: 1500 });
             void load();
           }}
         />
@@ -223,6 +225,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
 };
 
 function FactCard({ entry, onEdit }: { entry: ContextEntry; onEdit: () => void }) {
+  const { t } = useAdminLang();
   const inactive = !entry.active;
   return (
     <Box
@@ -278,12 +281,12 @@ function FactCard({ entry, onEdit }: { entry: ContextEntry; onEdit: () => void }
                 gap={1}
               >
                 <Icon as={FaMagic} boxSize={2.5} />
-                Chatbot
+                {t.assistantData.chatbotBadge}
               </Badge>
             )}
             {inactive && (
               <Badge fontSize="2xs" colorScheme="gray" textTransform="uppercase" px={1.5}>
-                Inactive
+                {t.assistantData.inactiveBadge}
               </Badge>
             )}
           </HStack>
@@ -312,6 +315,7 @@ function EditModal({
   onSaved: () => void;
   onDeleted: () => void;
 }) {
+  const { t } = useAdminLang();
   const isNew = entry === null;
   const [category, setCategory] = useState(entry?.category ?? existingCategories[0] ?? '');
   const [customCategory, setCustomCategory] = useState('');
@@ -326,7 +330,7 @@ function EditModal({
   const handleSave = async () => {
     const finalCategory = (useCustom ? customCategory : category).trim();
     if (!finalCategory || !label.trim() || !content.trim()) {
-      setSaveError('Category, label, and content are all required.');
+      setSaveError(t.assistantData.allFieldsRequired);
       return;
     }
     setSaving(true);
@@ -345,17 +349,17 @@ function EditModal({
       if (res.ok && data.success) {
         onSaved();
       } else {
-        setSaveError(data.error || `Save failed (${res.status})`);
+        setSaveError(data.error || t.assistantData.saveFailed(res.status));
       }
     } catch {
-      setSaveError('Could not reach the server.');
+      setSaveError(t.common.couldNotReach);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!entry || !confirm(`Delete "${entry.label}"?`)) return;
+    if (!entry || !confirm(t.assistantData.deleteConfirm(entry.label))) return;
     setSaving(true);
     try {
       const res = await fetch('/api/admin/context-delete', {
@@ -367,10 +371,10 @@ function EditModal({
       if (res.ok && data.success) {
         onDeleted();
       } else {
-        toast({ title: data.error || 'Delete failed', status: 'error', duration: 3000 });
+        toast({ title: data.error || t.assistantData.deleteFailed, status: 'error', duration: 3000 });
       }
     } catch {
-      toast({ title: 'Could not reach the server', status: 'error', duration: 3000 });
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
     } finally {
       setSaving(false);
     }
@@ -396,7 +400,7 @@ function EditModal({
         maxH={{ base: '100dvh', md: 'auto' }}
       >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
-          {isNew ? 'Add a fact' : 'Edit fact'}
+          {isNew ? t.assistantData.addFactModalTitle : t.assistantData.editFactModalTitle}
           {!isNew && entry?.source === 'chatbot' && (
             <Badge
               ml={2}
@@ -410,7 +414,7 @@ function EditModal({
               py={0}
             >
               <Icon as={FaMagic} boxSize={2.5} mr={1} />
-              Chatbot
+              {t.assistantData.chatbotBadge}
             </Badge>
           )}
         </ModalHeader>
@@ -419,7 +423,7 @@ function EditModal({
           <VStack spacing={4} align="stretch">
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                Category
+                {t.assistantData.categoryLabel}
               </FormLabel>
               <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
                 {!useCustom ? (
@@ -438,7 +442,7 @@ function EditModal({
                   <Input
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value)}
-                    placeholder="new_category_name"
+                    placeholder={t.assistantData.newCategoryPlaceholder}
                     size={{ base: 'md', md: 'sm' } as any}
                     fontSize={{ base: 'md', md: 'sm' } as any}
                     bg="white"
@@ -453,19 +457,19 @@ function EditModal({
                   minH={{ base: '44px', md: 'auto' }}
                   w={{ base: '100%', md: 'auto' }}
                 >
-                  {useCustom ? 'Pick existing' : 'New category'}
+                  {useCustom ? t.assistantData.pickExisting : t.assistantData.newCategoryButton}
                 </Button>
               </Stack>
             </FormControl>
 
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                Label
+                {t.assistantData.labelLabel}
               </FormLabel>
               <Input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="Short name for this fact"
+                placeholder={t.assistantData.labelPlaceholder}
                 size={{ base: 'md', md: 'sm' } as any}
                 fontSize={{ base: 'md', md: 'sm' } as any}
                 bg="white"
@@ -474,12 +478,12 @@ function EditModal({
 
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                Content
+                {t.assistantData.contentLabel}
               </FormLabel>
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="The actual fact / rule / info. English."
+                placeholder={t.assistantData.contentPlaceholder}
                 rows={5}
                 size={{ base: 'md', md: 'sm' } as any}
                 fontSize={{ base: 'md', md: 'sm' } as any}
@@ -489,7 +493,7 @@ function EditModal({
 
             <FormControl display="flex" alignItems="center">
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={0} mr={2}>
-                Active
+                {t.assistantData.activeLabel}
               </FormLabel>
               <Switch
                 isChecked={active}
@@ -498,7 +502,7 @@ function EditModal({
                 size="sm"
               />
               <Text fontSize="2xs" color="gray.500" ml={2}>
-                {active ? 'Used by customer replies' : 'Hidden from customer replies'}
+                {active ? t.assistantData.usedByReplies : t.assistantData.hiddenFromReplies}
               </Text>
             </FormControl>
 
@@ -532,7 +536,7 @@ function EditModal({
                 minH={{ base: '44px', md: 'auto' }}
                 w={{ base: '100%', md: 'auto' }}
               >
-                Delete
+                {t.common.delete}
               </Button>
             )}
             {/* Spacer that pushes Cancel + Save to the right on desktop,
@@ -546,17 +550,17 @@ function EditModal({
               minH={{ base: '44px', md: 'auto' }}
               w={{ base: '100%', md: 'auto' }}
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <CTAButton
               onClick={handleSave}
               variant="solid"
               size="sm"
               isLoading={saving}
-              loadingText="Saving…"
+              loadingText={t.common.saving}
               fullWidth={{ base: true, md: false }}
             >
-              Save
+              {t.common.save}
             </CTAButton>
           </Stack>
         </ModalFooter>
@@ -582,14 +586,8 @@ function EditModal({
  * endpoint and forgets to update this list.
  */
 function BuiltInBehaviorCard() {
-  const facts = [
-    "Assistant is Vero's personal AI, focused on her photography business (portraits, weddings, families, maternity)",
-    'Replies in whichever language you have the toggle set to (Russian or English) — even if you type in the other language',
-    'Stores all knowledge base entries in English underneath, so the customer-facing AI reply engine works correctly regardless of the chat language',
-    'Double-checks big value changes (>50% deviation from existing value) before writing — protects against typos',
-    'Only deletes entries when you ask explicitly — never on its own',
-    'Reads the current knowledge base below on every turn, so you don\'t have to remind it what it knows',
-  ];
+  const { t } = useAdminLang();
+  const facts = t.assistantData.builtInFacts;
   return (
     <Box
       mb={5}
@@ -608,7 +606,7 @@ function BuiltInBehaviorCard() {
           textTransform="uppercase"
           color="#8a6e35"
         >
-          Built-in Behavior
+          {t.assistantData.builtInBehaviorHeader}
         </Text>
         <Badge
           bg="rgba(138, 110, 53, 0.12)"
@@ -621,7 +619,7 @@ function BuiltInBehaviorCard() {
           py={0}
           borderRadius="sm"
         >
-          Not editable
+          {t.assistantData.notEditable}
         </Badge>
       </HStack>
       <VStack align="flex-start" spacing={1.5}>
@@ -637,13 +635,14 @@ function BuiltInBehaviorCard() {
         ))}
       </VStack>
       <Text fontSize="2xs" color="gray.500" mt={2.5} fontStyle="italic">
-        These behaviors are wired into the code. Everything else the AI knows lives in the editable facts below.
+        {t.assistantData.builtInFooter}
       </Text>
     </Box>
   );
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
+  const { t } = useAdminLang();
   return (
     <Box
       bg="white"
@@ -670,16 +669,14 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <Icon as={FaHandPaper} boxSize={7} />
       </Flex>
       <Text as="h2" fontSize="md" fontWeight="500" color="gray.800" mb={2}>
-        The knowledge base is empty
+        {t.assistantData.emptyTitle}
       </Text>
       <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="380px" mx="auto" lineHeight="1.7">
-        Facts you add here are what the customer-facing AI uses to reply
-        to DMs. Add manually, or head to the Chat tab and let the
-        assistant help you fill it in.
+        {t.assistantData.emptyDescription}
       </Text>
       <Box pt={5}>
         <CTAButton onClick={onAdd} icon={FaPlus} variant="outline" size="sm">
-          Add your first fact
+          {t.assistantData.addYourFirstFact}
         </CTAButton>
       </Box>
     </Box>

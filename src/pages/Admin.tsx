@@ -11,6 +11,8 @@ import {
   FaInbox, FaFolder, FaBars, FaSignOutAlt, FaHome, FaExternalLinkAlt,
 } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import AdminNewClient from '../components/AdminNewClient';
 import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
@@ -21,6 +23,7 @@ import AdminJournal from '../components/AdminJournal';
 import AdminGallery from '../components/AdminGallery';
 import AdminMessages from '../components/AdminMessages';
 import AdminAssistant from '../components/AdminAssistant';
+import { AdminI18nProvider, useAdminLang, readAdminLang, adminDict, type AdminLang } from '../i18n/admin';
 
 const MotionDiv = motion.div;
 
@@ -164,10 +167,15 @@ const Admin = () => {
     window.scrollTo(0, 0);
   }, [dashTab, view.kind]);
 
-  // Logged in → dashboard / chooser / new form / detail view
+  // Logged in → dashboard / chooser / new form / detail view.
+  // Wrap the entire admin surface in the i18n provider so every child
+  // component can read the current translation table via
+  // useAdminLang(). Default language depends on adminLevel: Vero (admin)
+  // gets RU, Alex (super) gets EN; either can override via the toggle
+  // in the Menu drawer.
   if (portals) {
     return (
-      <>
+      <AdminI18nProvider adminLevel={adminLevel}>
         <Helmet>
           <title>Admin | Vero Photography</title>
           <meta name="robots" content="noindex, nofollow" />
@@ -292,17 +300,40 @@ const Admin = () => {
             menuDisclosure.onClose();
           }}
         />
-      </>
+      </AdminI18nProvider>
     );
   }
 
-  // Login screen — matches the Portal dark style
+  // Login screen — matches the Portal dark style. Renders the site
+  // Navbar + Footer inline so anyone hitting /admin unauthenticated
+  // has an obvious way back to the public site (App.tsx hides both
+  // for /admin, so we bring our own here). Once logged in, the admin
+  // panel above uses its own chrome and deliberately does NOT show
+  // these.
+  //
+  // Login runs OUTSIDE the AdminI18nProvider (which only wraps the
+  // logged-in surface), so translated login copy comes from a direct
+  // read of the persisted language preference. Falls back to English
+  // when no preference has been stored yet.
+  const loginLang = readAdminLang('en');
+  const loginT = {
+    signInTitle: adminDict.auth.signInTitle[loginLang],
+    emailLabel: adminDict.auth.emailLabel[loginLang],
+    emailPlaceholder: adminDict.auth.emailPlaceholder[loginLang],
+    passwordLabel: adminDict.auth.passwordLabel[loginLang],
+    passwordPlaceholder: adminDict.auth.passwordPlaceholder[loginLang],
+    signInCta: adminDict.auth.signInCta[loginLang],
+    signingIn: adminDict.auth.signingIn[loginLang],
+    adminKicker: adminDict.common.adminKicker[loginLang],
+  };
   return (
-    <Box position="relative" minH="100vh" overflow="hidden" bg="#0a0a0a">
-      <Helmet>
-        <title>Admin | Vero Photography</title>
-        <meta name="robots" content="noindex, nofollow" />
-      </Helmet>
+    <>
+      <Navbar />
+      <Box position="relative" minH="100vh" overflow="hidden" bg="#0a0a0a">
+        <Helmet>
+          <title>Admin | Vero Photography</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
 
       <Box
         position="absolute"
@@ -340,7 +371,7 @@ const Admin = () => {
                   letterSpacing="0.25em"
                   color="#c9a96e"
                 >
-                  Admin
+                  {loginT.adminKicker}
                 </Text>
                 <Box w="40px" h="1px" bg="#c9a96e" />
                 <Text
@@ -352,7 +383,7 @@ const Admin = () => {
                   letterSpacing="0.02em"
                   m={0}
                 >
-                  Sign In
+                  {loginT.signInTitle}
                 </Text>
               </VStack>
 
@@ -381,14 +412,14 @@ const Admin = () => {
                     textTransform="uppercase"
                     mb={-2}
                   >
-                    Email
+                    {loginT.emailLabel}
                   </Text>
                   <Input
                     id="admin-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    placeholder={loginT.emailPlaceholder}
                     autoFocus
                     autoComplete="email"
                     h="48px"
@@ -421,14 +452,14 @@ const Admin = () => {
                     textTransform="uppercase"
                     mb={-2}
                   >
-                    Password
+                    {loginT.passwordLabel}
                   </Text>
                   <Input
                     id="admin-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password"
+                    placeholder={loginT.passwordPlaceholder}
                     autoComplete="current-password"
                     h="48px"
                     bg="blackAlpha.500"
@@ -457,17 +488,19 @@ const Admin = () => {
                     size="lg"
                     fullWidth
                     isLoading={submitting}
-                    loadingText="Signing in..."
+                    loadingText={loginT.signingIn}
                   >
-                    Sign In
+                    {loginT.signInCta}
                   </CTAButton>
                 </VStack>
               </Box>
             </VStack>
           </MotionDiv>
         </Box>
-      </Flex>
-    </Box>
+        </Flex>
+      </Box>
+      <Footer />
+    </>
   );
 };
 
@@ -475,17 +508,24 @@ const Admin = () => {
  * Shared tab definitions — used by both the desktop tab strip and
  * the mobile bottom nav so the two nav treatments can't drift.
  */
-const TABS: { id: DashTab; label: string; icon: typeof FaUsers }[] = [
-  { id: 'clients', label: 'Clients', icon: FaUsers },
-  { id: 'messages', label: 'Messages', icon: FaCommentDots },
-  { id: 'assistant', label: 'Assistant', icon: FaRobot },
-  { id: 'journal', label: 'Journal', icon: FaBookOpen },
-  { id: 'gallery', label: 'Gallery', icon: FaImage },
+// Language-agnostic tab metadata. Each entry carries a labelKey that
+// maps into t.nav.* — nav components read the current-language label
+// via useAdminLang() at render time, so switching languages doesn't
+// require a re-render of the tab list itself.
+type NavLabelKey = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'integrations';
+type TabDef = { id: DashTab; labelKey: NavLabelKey; icon: typeof FaUsers };
+
+const TABS: TabDef[] = [
+  { id: 'clients', labelKey: 'clients', icon: FaUsers },
+  { id: 'messages', labelKey: 'messages', icon: FaCommentDots },
+  { id: 'assistant', labelKey: 'assistant', icon: FaRobot },
+  { id: 'journal', labelKey: 'journal', icon: FaBookOpen },
+  { id: 'gallery', labelKey: 'gallery', icon: FaImage },
 ];
 
-function tabsFor(showIntegrations: boolean) {
+function tabsFor(showIntegrations: boolean): TabDef[] {
   return showIntegrations
-    ? [...TABS, { id: 'integrations' as DashTab, label: 'Integrations', icon: FaPlug }]
+    ? [...TABS, { id: 'integrations', labelKey: 'integrations', icon: FaPlug }]
     : TABS;
 }
 
@@ -505,6 +545,7 @@ function AdminTabStrip({
   showIntegrations: boolean;
   onOpenMenu: () => void;
 }) {
+  const { t } = useAdminLang();
   const tabs = tabsFor(showIntegrations);
   if (tabs.length < 2) return null;
 
@@ -512,14 +553,14 @@ function AdminTabStrip({
     <Box maxW="1200px" mx="auto" mb={6} display={{ base: 'none', md: 'block' }}>
       <Flex align="center" justify="space-between" gap={4}>
         <HStack spacing={2}>
-          {tabs.map((t) => {
-            const isActive = active === t.id;
+          {tabs.map((tab) => {
+            const isActive = active === tab.id;
             return (
               <Box
-                key={t.id}
+                key={tab.id}
                 as="button"
                 type="button"
-                onClick={() => onChange(t.id)}
+                onClick={() => onChange(tab.id)}
                 display="inline-flex"
                 alignItems="center"
                 gap={2}
@@ -547,8 +588,8 @@ function AdminTabStrip({
                 }
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <Icon as={t.icon} boxSize={3} />
-                <Box as="span">{t.label}</Box>
+                <Icon as={tab.icon} boxSize={3} />
+                <Box as="span">{t.nav[tab.labelKey]}</Box>
               </Box>
             );
           })}
@@ -558,7 +599,7 @@ function AdminTabStrip({
           as="button"
           type="button"
           onClick={onOpenMenu}
-          aria-label="Open menu"
+          aria-label={t.nav.menu}
           display="inline-flex"
           alignItems="center"
           gap={2}
@@ -579,7 +620,7 @@ function AdminTabStrip({
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
           <Icon as={FaBars} boxSize={3} />
-          <Box as="span">Menu</Box>
+          <Box as="span">{t.nav.menu}</Box>
         </Box>
       </Flex>
     </Box>
@@ -612,6 +653,7 @@ function AdminMobileNav({
   onChangeClientsView: (v: ClientsView) => void;
   onOpenMenu: () => void;
 }) {
+  const { t } = useAdminLang();
   // Which group's sub-menu is currently open. Null = collapsed.
   // Tapping a group opens its sub-menu; tapping the same group again
   // closes it; tapping a sub-tab navigates and closes.
@@ -679,18 +721,18 @@ function AdminMobileNav({
   const subNav: Array<{ id: string; label: string; isActive: boolean; onClick: () => void }> =
     openGroup === 'clients'
       ? [
-          { id: 'table', label: 'Table', isActive: clientsView === 'table', onClick: () => { onChangeClientsView('table'); if (activeGroup !== 'clients') onChangeTab('clients'); setOpenGroup(null); } },
-          { id: 'calendar', label: 'Calendar', isActive: clientsView === 'calendar', onClick: () => { onChangeClientsView('calendar'); if (activeGroup !== 'clients') onChangeTab('clients'); setOpenGroup(null); } },
+          { id: 'table', label: t.nav.table, isActive: clientsView === 'table', onClick: () => { onChangeClientsView('table'); if (activeGroup !== 'clients') onChangeTab('clients'); setOpenGroup(null); } },
+          { id: 'calendar', label: t.nav.calendar, isActive: clientsView === 'calendar', onClick: () => { onChangeClientsView('calendar'); if (activeGroup !== 'clients') onChangeTab('clients'); setOpenGroup(null); } },
         ]
       : openGroup === 'inbox'
       ? [
-          { id: 'messages', label: 'Messages', isActive: activeTab === 'messages', onClick: () => { onChangeTab('messages'); setOpenGroup(null); } },
-          { id: 'assistant', label: 'Assistant', isActive: activeTab === 'assistant', onClick: () => { onChangeTab('assistant'); setOpenGroup(null); } },
+          { id: 'messages', label: t.nav.messages, isActive: activeTab === 'messages', onClick: () => { onChangeTab('messages'); setOpenGroup(null); } },
+          { id: 'assistant', label: t.nav.assistant, isActive: activeTab === 'assistant', onClick: () => { onChangeTab('assistant'); setOpenGroup(null); } },
         ]
       : openGroup === 'studio'
       ? [
-          { id: 'journal', label: 'Journal', isActive: activeTab === 'journal', onClick: () => { onChangeTab('journal'); setOpenGroup(null); } },
-          { id: 'gallery', label: 'Gallery', isActive: activeTab === 'gallery', onClick: () => { onChangeTab('gallery'); setOpenGroup(null); } },
+          { id: 'journal', label: t.nav.journal, isActive: activeTab === 'journal', onClick: () => { onChangeTab('journal'); setOpenGroup(null); } },
+          { id: 'gallery', label: t.nav.gallery, isActive: activeTab === 'gallery', onClick: () => { onChangeTab('gallery'); setOpenGroup(null); } },
         ]
       : [];
 
@@ -699,10 +741,10 @@ function AdminMobileNav({
   };
 
   const groups: Array<{ id: NavGroup; label: string; icon: typeof FaUsers; onClick: () => void; hasSubmenu: boolean }> = [
-    { id: 'clients', label: 'Clients', icon: FaUsers, onClick: () => toggleGroup('clients'), hasSubmenu: true },
-    { id: 'inbox', label: 'Inbox', icon: FaInbox, onClick: () => toggleGroup('inbox'), hasSubmenu: true },
-    { id: 'studio', label: 'Studio', icon: FaFolder, onClick: () => toggleGroup('studio'), hasSubmenu: true },
-    { id: 'menu', label: 'Menu', icon: FaBars, onClick: () => { setOpenGroup(null); onOpenMenu(); }, hasSubmenu: false },
+    { id: 'clients', label: t.nav.clients, icon: FaUsers, onClick: () => toggleGroup('clients'), hasSubmenu: true },
+    { id: 'inbox', label: t.nav.inbox, icon: FaInbox, onClick: () => toggleGroup('inbox'), hasSubmenu: true },
+    { id: 'studio', label: t.nav.studio, icon: FaFolder, onClick: () => toggleGroup('studio'), hasSubmenu: true },
+    { id: 'menu', label: t.nav.menu, icon: FaBars, onClick: () => { setOpenGroup(null); onOpenMenu(); }, hasSubmenu: false },
   ];
 
   return (
@@ -889,6 +931,7 @@ function AdminMenuDrawer({
   onSignOut: () => void;
   onGoIntegrations: () => void;
 }) {
+  const { t, lang, setLang } = useAdminLang();
   return (
     <Drawer isOpen={isOpen} onClose={onClose} placement="right" size="xs">
       <DrawerOverlay />
@@ -902,10 +945,10 @@ function AdminMenuDrawer({
             letterSpacing="0.25em"
             color="#c9a96e"
           >
-            Admin
+            {t.common.adminKicker}
           </Text>
           <Text as="h2" fontSize="xl" fontWeight="300" color="gray.800" mt={1}>
-            Menu
+            {t.menuDrawer.title}
           </Text>
         </Box>
         <DrawerBody
@@ -913,28 +956,85 @@ function AdminMenuDrawer({
           px={0}
         >
           <VStack align="stretch" spacing={0} mt={4}>
+            {/* Language toggle — sits at the top of the drawer so Vero
+                can find it fast if the interface came up in the wrong
+                language. Two-pill segmented switch, persists per
+                browser (localStorage) once she picks explicitly. */}
+            <MenuSectionLabel>{t.menuDrawer.language}</MenuSectionLabel>
+            <Box px={6} py={3}>
+              <MenuLanguageToggle value={lang} onChange={setLang} />
+            </Box>
+
             {/* Public site jumps — Vero's own website links so she
                 can preview what she's building. Opens in a new tab
                 so the admin session stays intact. */}
-            <MenuSectionLabel>Public site</MenuSectionLabel>
-            <MenuLink href="/" icon={FaHome} label="Home" newTab />
-            <MenuLink href="/gallery" icon={FaImage} label="Gallery" newTab />
-            <MenuLink href="/journal" icon={FaBookOpen} label="Journal" newTab />
-            <MenuLink href="/portal" icon={FaExternalLinkAlt} label="Client Portal" newTab />
+            <MenuSectionLabel>{t.menuDrawer.publicSite}</MenuSectionLabel>
+            <MenuLink href="/" icon={FaHome} label={t.menuDrawer.home} newTab />
+            <MenuLink href="/gallery" icon={FaImage} label={t.nav.gallery} newTab />
+            <MenuLink href="/journal" icon={FaBookOpen} label={t.nav.journal} newTab />
+            <MenuLink href="/portal" icon={FaExternalLinkAlt} label={t.menuDrawer.clientPortal} newTab />
 
             {adminLevel === 'super' && (
               <>
-                <MenuSectionLabel>Super</MenuSectionLabel>
-                <MenuButton icon={FaPlug} label="Integrations" onClick={onGoIntegrations} />
+                <MenuSectionLabel>{t.menuDrawer.super}</MenuSectionLabel>
+                <MenuButton icon={FaPlug} label={t.nav.integrations} onClick={onGoIntegrations} />
               </>
             )}
 
-            <MenuSectionLabel>Session</MenuSectionLabel>
-            <MenuButton icon={FaSignOutAlt} label="Sign out" onClick={onSignOut} danger />
+            <MenuSectionLabel>{t.menuDrawer.session}</MenuSectionLabel>
+            <MenuButton icon={FaSignOutAlt} label={t.menuDrawer.signOut} onClick={onSignOut} danger />
           </VStack>
         </DrawerBody>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+/** Two-pill RU/EN switcher used in the Menu drawer. */
+function MenuLanguageToggle({
+  value,
+  onChange,
+}: {
+  value: AdminLang;
+  onChange: (l: AdminLang) => void;
+}) {
+  return (
+    <HStack
+      spacing={0}
+      bg="gray.100"
+      borderRadius="full"
+      p="3px"
+      w="fit-content"
+    >
+      {(['ru', 'en'] as const).map((l) => {
+        const active = value === l;
+        return (
+          <Box
+            key={l}
+            as="button"
+            type="button"
+            onClick={() => onChange(l)}
+            aria-pressed={active}
+            px={4}
+            py={2}
+            minH="36px"
+            minW="52px"
+            fontSize="xs"
+            fontWeight="600"
+            letterSpacing="0.12em"
+            color={active ? 'white' : 'gray.500'}
+            bg={active ? '#c9a96e' : 'transparent'}
+            borderRadius="full"
+            border="none"
+            cursor="pointer"
+            transition="all 0.15s"
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            {l.toUpperCase()}
+          </Box>
+        );
+      })}
+    </HStack>
   );
 }
 

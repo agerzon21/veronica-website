@@ -42,10 +42,18 @@ function ScrollToTop() {
 
 /**
  * Inner shell — lives inside <Router> so it can use useLocation() to
- * gate site-wide chrome per-route. Navbar + Footer render on admin
- * too — Alex asked for them back so it's easy to jump around the site
- * while working. The ExitIntentPopup does NOT fire on admin — that
- * popup is for prospects, and Vero doesn't need to be sold to.
+ * gate site-wide chrome per-route.
+ *
+ * Navbar + Footer are HIDDEN on /admin because the logged-in admin
+ * panel provides its own top strip + bottom nav; the public site
+ * chrome would eat vertical space and look confusing next to admin
+ * nav. The admin LOGIN screen (also at /admin) still needs the
+ * site chrome so an unauthenticated visitor has an obvious way
+ * back to the public site — that's handled inside Admin.tsx, which
+ * renders <Navbar /> + <Footer /> inline on the login branch only.
+ *
+ * ExitIntentPopup is also skipped on /admin — that popup targets
+ * prospects, not Vero.
  */
 function AppShell() {
   const { pathname } = useLocation();
@@ -54,7 +62,7 @@ function AppShell() {
     <>
       <SEO />
       <ScrollToTop />
-      <Navbar />
+      {!isAdmin && <Navbar />}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
@@ -74,9 +82,7 @@ function AppShell() {
         <Route path="/terms" element={<Terms />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      <Footer />
-      {/* ExitIntentPopup is meant for prospects — never fire it in
-          admin where Vero is working. */}
+      {!isAdmin && <Footer />}
       {!isAdmin && <ExitIntentPopup />}
     </>
   );

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { FaSave, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
+import { useAdminLang } from '../i18n/admin';
 
 /**
  * Journal post editor — create + edit share this one form. When
@@ -63,16 +64,19 @@ const EMPTY_FORM: PostForm = {
   published_at: '',
 };
 
-const SESSION_OPTIONS = [
-  { value: '',           label: '— (none)' },
-  { value: 'wedding',    label: 'Wedding' },
-  { value: 'portrait',   label: 'Portrait' },
-  { value: 'family',     label: 'Family' },
-  { value: 'maternity',  label: 'Maternity' },
-];
-
 const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSaved }: Props) => {
+  const { t } = useAdminLang();
   const [form, setForm] = useState<PostForm>(EMPTY_FORM);
+
+  // Session-type option list. Values (portrait/wedding/…) stay English
+  // — they're the on-the-wire enum. Only the labels translate.
+  const sessionOptions = [
+    { value: '',           label: t.journalEditor.sessionOptionNone },
+    { value: 'wedding',    label: t.journalEditor.sessionOptionWedding },
+    { value: 'portrait',   label: t.journalEditor.sessionOptionPortrait },
+    { value: 'family',     label: t.journalEditor.sessionOptionFamily },
+    { value: 'maternity',  label: t.journalEditor.sessionOptionMaternity },
+  ];
   const [loading, setLoading] = useState(postId !== null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -113,10 +117,10 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           });
           setExistingSlug(p.slug ?? null);
         } else {
-          setError(data.error || 'Could not load the post.');
+          setError(data.error || t.journalEditor.couldNotLoadPost);
         }
       } catch {
-        setError('Could not reach the server.');
+        setError(t.common.couldNotReach);
       } finally {
         setLoading(false);
       }
@@ -156,12 +160,12 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        onSaved(postId ? 'Post saved' : 'Post created');
+        onSaved(postId ? t.journalEditor.postSaved : t.journalEditor.postCreated);
       } else {
-        setError(data.error || `Save failed (${res.status})`);
+        setError(data.error || t.journalEditor.saveFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setSaving(false);
     }
@@ -169,7 +173,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
 
   const handleDelete = async () => {
     if (!postId) return;
-    if (!confirm('Delete this post? This cannot be undone.')) return;
+    if (!confirm(t.journalEditor.deleteConfirm)) return;
     setDeleting(true);
     setError(null);
     try {
@@ -180,13 +184,13 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast({ title: 'Post deleted', status: 'success', duration: 3000 });
+        toast({ title: t.journalEditor.postDeleted, status: 'success', duration: 3000 });
         onSaved();
       } else {
-        setError(data.error || `Delete failed (${res.status})`);
+        setError(data.error || t.journalEditor.deleteFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setDeleting(false);
     }
@@ -204,7 +208,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
     <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
       {/* Top bar — back link + title + save actions */}
       <Flex align="center" justify="space-between" mb={6} wrap="wrap" gap={3}>
-        <AdminBackButton onClick={onCancel} label="Back to posts" />
+        <AdminBackButton onClick={onCancel} label={t.journal.backToPosts} />
 
         {/* Both CTAs sit side-by-side on every breakpoint. On mobile
             the shorter labels ("Draft" / "Publish") fit inside two 44px
@@ -220,8 +224,8 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             isLoading={saving}
             loadingText="…"
           >
-            <Box as="span" display={{ base: 'inline', md: 'none' }}>Draft</Box>
-            <Box as="span" display={{ base: 'none', md: 'inline' }}>Save Draft</Box>
+            <Box as="span" display={{ base: 'inline', md: 'none' }}>{t.journal.saveDraftShort}</Box>
+            <Box as="span" display={{ base: 'none', md: 'inline' }}>{t.journal.saveDraft}</Box>
           </CTAButton>
           <CTAButton
             onClick={() => handleSave('published')}
@@ -232,21 +236,21 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             loadingText="…"
           >
             <Box as="span" display={{ base: 'inline', md: 'none' }}>
-              {form.status === 'published' ? 'Republish' : 'Publish'}
+              {form.status === 'published' ? t.journalEditor.republishShort : t.journal.publish}
             </Box>
             <Box as="span" display={{ base: 'none', md: 'inline' }}>
-              {form.status === 'published' ? 'Save & Republish' : 'Publish'}
+              {form.status === 'published' ? t.journal.republish : t.journal.publish}
             </Box>
           </CTAButton>
         </HStack>
       </Flex>
 
       <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mb={2}>
-        {postId ? 'Edit post' : 'New post'}
+        {postId ? t.journal.editorEditTitle : t.journal.editorNewTitle}
       </Text>
       {existingSlug && form.status === 'published' && (
         <HStack fontSize="xs" color="gray.500" mb={6} spacing={2}>
-          <Text>Live at</Text>
+          <Text>{t.journal.liveAt}</Text>
           {/* Long slugs used to blow out the horizontal box on narrow
               phones; overflowWrap:anywhere lets the link break mid-slug
               so the row stays inside the viewport. */}
@@ -275,34 +279,34 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
       )}
 
       <VStack spacing={5} align="stretch">
-        <Field label="Title" required>
+        <Field label={t.journalEditor.titleLabel} required>
           <Input
             value={form.title}
             onChange={(e) => update('title', e.target.value)}
-            placeholder="A summer wedding on the north shore"
+            placeholder={t.journalEditor.titlePlaceholder}
             {...inputStyles}
           />
         </Field>
 
         <Field
-          label="Slug"
+          label={t.journalEditor.slugLabel}
           help={
             form.slug
-              ? `URL: vero.photography/journal/${form.slug}`
-              : 'Leave blank to auto-generate from the title'
+              ? t.journalEditor.slugHelpUrl(form.slug)
+              : t.journalEditor.slugHelpAuto
           }
         >
           <Input
             value={form.slug}
             onChange={(e) => update('slug', e.target.value)}
-            placeholder="auto-generated-from-title"
+            placeholder={t.journalEditor.slugPlaceholder}
             {...inputStyles}
           />
         </Field>
 
         <Field
-          label="Event date"
-          help="The date this post is anchored to on the timeline. For a shoot, use the day it happened — not today. Leave blank to use the publish date instead."
+          label={t.journalEditor.eventDateLabel}
+          help={t.journalEditor.eventDateHelp}
         >
           <Input
             type="date"
@@ -314,21 +318,21 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           />
         </Field>
 
-        <Field label="Excerpt" help="Short teaser shown in card previews and as SEO description (~1–2 sentences)">
+        <Field label={t.journalEditor.excerptLabel} help={t.journalEditor.excerptHelp}>
           <Textarea
             value={form.excerpt}
             onChange={(e) => update('excerpt', e.target.value)}
-            placeholder="One or two sentences that pull the reader in."
+            placeholder={t.journalEditor.excerptPlaceholder}
             rows={2}
             {...inputStyles}
           />
         </Field>
 
-        <Field label="Body" help="Full write-up. Markdown supported (rendered in session 3 — displays as-is for now).">
+        <Field label={t.journalEditor.bodyLabel} help={t.journalEditor.bodyHelp}>
           <Textarea
             value={form.body_markdown}
             onChange={(e) => update('body_markdown', e.target.value)}
-            placeholder="Tell the story — how the day unfolded, favorite moments, whatever you want."
+            placeholder={t.journalEditor.bodyPlaceholder}
             rows={10}
             {...inputStyles}
             fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
@@ -343,25 +347,25 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             the gallery. Vero controls order by prefixing filenames
             (01_, 02_, 03_…) in Drive. */}
         <Field
-          label="Google Drive folder"
-          help="Upload the 5–15 photos for this post to a Drive folder (same workflow as client galleries), share it so anyone with the link can view, and paste the folder link here. The FIRST photo (by filename) is used as the cover — prefix names like 01, 02, 03… in Drive to control order."
+          label={t.journalEditor.driveFolderLabel}
+          help={t.journalEditor.driveFolderHelp}
         >
           <Input
             value={form.drive_folder_url}
             onChange={(e) => update('drive_folder_url', e.target.value)}
-            placeholder="https://drive.google.com/drive/folders/..."
+            placeholder={t.journalEditor.driveFolderPlaceholder}
             {...inputStyles}
           />
         </Field>
 
         <Field
-          label="Cover photo alt text"
-          help="Alt text for the first photo (used as the post's cover / og:image). Describe what's in it for screen readers and search engines. Optional."
+          label={t.journalEditor.coverAltLabel}
+          help={t.journalEditor.coverAltHelp}
         >
           <Input
             value={form.cover_image_alt}
             onChange={(e) => update('cover_image_alt', e.target.value)}
-            placeholder="Bride and groom under an oak tree at sunset"
+            placeholder={t.journalEditor.coverAltPlaceholder}
             {...inputStyles}
           />
         </Field>
@@ -370,23 +374,23 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             phones so each field gets full width (the tags input in
             particular gets very cramped at 2/3 of a phone screen). */}
         <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
-          <Field label="Session type" flex={1}>
+          <Field label={t.journalEditor.sessionTypeLabel} flex={1}>
             <Select
               value={form.session_type}
               onChange={(e) => update('session_type', e.target.value)}
               {...inputStyles}
             >
-              {SESSION_OPTIONS.map((o) => (
+              {sessionOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </Select>
           </Field>
 
-          <Field label="Tags" help="Comma-separated" flex={2}>
+          <Field label={t.journalEditor.tagsLabel} help={t.journalEditor.tagsHelp} flex={2}>
             <Input
               value={form.tags}
               onChange={(e) => update('tags', e.target.value)}
-              placeholder="outdoor, sunset, north-shore"
+              placeholder={t.journalEditor.tagsPlaceholder}
               {...inputStyles}
             />
           </Field>
@@ -410,12 +414,10 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
               color="red.700"
               mb={2}
             >
-              Danger zone
+              {t.journalEditor.dangerZone}
             </Text>
             <Text fontSize="xs" color="gray.700" fontWeight="300" mb={4} lineHeight="1.6">
-              Deleting a post removes it permanently. No undo — including
-              the body, tags, and photo URL list. Cover image + photo
-              files themselves are not touched (they live in Drive/etc).
+              {t.journalEditor.dangerZoneBody}
             </Text>
             <CTAButton
               onClick={handleDelete}
@@ -423,9 +425,9 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
               variant="outline"
               size="sm"
               isLoading={deleting}
-              loadingText="Deleting..."
+              loadingText={t.journalEditor.deleting}
             >
-              Delete post
+              {t.journalEditor.deletePost}
             </CTAButton>
           </Box>
         )}

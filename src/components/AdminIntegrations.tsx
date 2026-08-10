@@ -2,6 +2,7 @@ import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, useToa
 import { useEffect, useState } from 'react';
 import { FaInstagram, FaCheck, FaExternalLinkAlt, FaExclamationTriangle, FaTerminal, FaCopy } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import { useAdminLang } from '../i18n/admin';
 
 /**
  * The "Integrations" tab in /admin. Currently just Instagram; will grow
@@ -29,6 +30,7 @@ const VERCEL_ENV_LINK =
   'https://vercel.com/agerzon21/veronica-website/settings/environment-variables';
 
 const AdminIntegrations = ({ adminPassword }: Props) => {
+  const { t } = useAdminLang();
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
       <VStack align="flex-start" spacing={1} mb={8}>
@@ -39,13 +41,13 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
           letterSpacing="0.25em"
           color="#c9a96e"
         >
-          Admin
+          {t.common.adminKicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          Integrations
+          {t.nav.integrations}
         </Text>
         <Text fontSize="sm" color="gray.500" fontWeight="300">
-          Third-party services that power the site.
+          {t.integrations.subtitle}
         </Text>
       </VStack>
 
@@ -65,6 +67,7 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
  * "I did it" acknowledgement, not the rotation itself.
  */
 function InstagramCard({ adminPassword }: { adminPassword: string }) {
+  const { t } = useAdminLang();
   const [status, setStatus] = useState<IgStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
@@ -99,10 +102,10 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
       if (res.ok && data.success) {
         setStatus(data);
       } else {
-        setError(data.error || `Status check failed (${res.status})`);
+        setError(data.error || t.integrations.statusCheckFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
     }
@@ -125,18 +128,18 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
       const data = await res.json();
       if (res.ok && data.success) {
         toast({
-          title: 'Marked as refreshed',
-          description: 'Reminder clock reset. Next nudge in ~50 days.',
+          title: t.integrations.markedRefreshedTitle,
+          description: t.integrations.markedRefreshedBody,
           status: 'success',
           duration: 4000,
           isClosable: true,
         });
         await loadStatus();
       } else {
-        setError(data.error || `Could not save (${res.status})`);
+        setError(data.error || t.integrations.couldNotSaveStatus(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setMarking(false);
     }
@@ -174,10 +177,10 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
               letterSpacing={{ base: '0.15em', md: '0.2em' }}
               color="#c9a96e"
             >
-              Integration
+              {t.integrations.kicker}
             </Text>
             <Text fontSize="md" fontWeight="500" color="gray.800">
-              Instagram feed
+              {t.integrations.instagramTitle}
             </Text>
           </VStack>
         </HStack>
@@ -186,12 +189,12 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
 
       {/* Status detail row */}
       {loading ? (
-        <Text fontSize="sm" color="gray.500" fontWeight="300">Checking rotation status…</Text>
+        <Text fontSize="sm" color="gray.500" fontWeight="300">{t.integrations.checkingStatus}</Text>
       ) : status ? (
         <StatusDetail status={status} />
       ) : (
         <Text fontSize="sm" color="red.500" fontWeight="300">
-          Could not read status.
+          {t.integrations.couldNotReadStatus}
         </Text>
       )}
 
@@ -227,17 +230,17 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
             letterSpacing={{ base: '0.15em', md: '0.2em' }}
             color="#c9a96e"
           >
-            How to rotate
+            {t.integrations.howToRotate}
           </Text>
         </Flex>
         {/* Real <ol> so browsers render decimal markers — previously a VStack
             wrapped bare <li> children, which produced no numbers at all. */}
         <Box as="ol" pl={5} listStyleType="decimal">
           <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
-            Open the VeronicaWebsite repo in VS Code, open a terminal
+            {t.integrations.step1}
           </Box>
           <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
-            Run:{' '}
+            {t.integrations.stepRun}{' '}
             {/* The command is longer than a phone viewport. Instead of wrapping
                 mid-token (wordBreak='break-all' looked ragged), let the code
                 pane scroll horizontally, and offer a Copy button so mobile
@@ -265,7 +268,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
                 </Text>
               </Box>
               <IconButton
-                aria-label="Copy command"
+                aria-label={t.integrations.copyCommandAria}
                 icon={<Icon as={copied ? FaCheck : FaCopy} boxSize={3.5} />}
                 onClick={handleCopyCommand}
                 variant="outline"
@@ -281,16 +284,14 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
             </Flex>
           </Box>
           <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
-            Copy the new long-lived token from the script's output
+            {t.integrations.step3}
           </Box>
           <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
-            Paste it into Vercel → <Text as="code" bg="gray.100" px={1.5} py={0.5} borderRadius="sm" fontSize="xs">IG_ACCESS_TOKEN</Text> → Save → Redeploy
+            {t.integrations.step4Before} <Text as="code" bg="gray.100" px={1.5} py={0.5} borderRadius="sm" fontSize="xs">IG_ACCESS_TOKEN</Text> {t.integrations.step4After}
           </Box>
           <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7">
-            That&rsquo;s it — the reminder clock resets automatically the
-            next time this page loads or the daily cron runs (the
-            <strong> Mark as Refreshed</strong> button below is just an
-            optional way to reset it right this second)
+            {t.integrations.step5Before}
+            <strong> {t.integrations.markAsRefreshed}</strong> {t.integrations.step5After}
           </Box>
         </Box>
       </Box>
@@ -308,10 +309,10 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
           }
           size="sm"
           isLoading={marking}
-          loadingText="Saving..."
+          loadingText={t.common.saving}
           fullWidth={{ base: true, md: false }}
         >
-          Mark as Refreshed
+          {t.integrations.markAsRefreshed}
         </CTAButton>
         <CTAButton
           href={VERCEL_ENV_LINK}
@@ -321,16 +322,14 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
           size="sm"
           fullWidth={{ base: true, md: false }}
         >
-          Open Vercel env vars
+          {t.integrations.openVercelEnv}
         </CTAButton>
       </Stack>
 
       {/* Reassurance footnote */}
       <Box mt={6} pt={5} borderTop="1px solid" borderColor="gray.100">
         <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.7">
-          <strong style={{ color: '#4a5568' }}>Auto-reminder:</strong> A daily cron watches this stamp and emails
-          you at agerzon21@gmail.com when we're ~10 days from the token's 60-day
-          expiry. You should rarely need to open this tab.
+          <strong style={{ color: '#4a5568' }}>{t.integrations.autoReminderLabel}</strong>{t.integrations.autoReminderBody}
         </Text>
       </Box>
     </Box>
@@ -338,11 +337,12 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
 }
 
 function StatusBadge({ status }: { status: IgStatus['status'] }) {
+  const { t } = useAdminLang();
   const config: Record<IgStatus['status'], { color: string; bg: string; label: string }> = {
-    fresh:   { color: 'green.700',  bg: 'green.100',  label: 'Fresh' },
-    aging:   { color: 'orange.700', bg: 'orange.100', label: 'Aging' },
-    overdue: { color: 'red.700',    bg: 'red.100',    label: 'Rotate now' },
-    unknown: { color: 'gray.600',   bg: 'gray.100',   label: 'Unknown' },
+    fresh:   { color: 'green.700',  bg: 'green.100',  label: t.integrations.status.fresh },
+    aging:   { color: 'orange.700', bg: 'orange.100', label: t.integrations.status.aging },
+    overdue: { color: 'red.700',    bg: 'red.100',    label: t.integrations.status.overdue },
+    unknown: { color: 'gray.600',   bg: 'gray.100',   label: t.integrations.status.unknown },
   };
   const c = config[status];
   return (
@@ -363,8 +363,11 @@ function StatusBadge({ status }: { status: IgStatus['status'] }) {
 }
 
 function StatusDetail({ status }: { status: IgStatus }) {
+  const { t, lang } = useAdminLang();
+  // Format the rotation date in the viewer's locale so Russian gets
+  // "12 августа 2026 г." and English gets "August 12, 2026".
   const formatDate = (iso: string): string =>
-    new Date(iso).toLocaleDateString('en-US', {
+    new Date(iso).toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -373,7 +376,7 @@ function StatusDetail({ status }: { status: IgStatus }) {
   if (status.status === 'unknown' || !status.refreshedAt || status.daysSinceRefresh === null) {
     return (
       <Text fontSize="sm" color="gray.700" fontWeight="400" lineHeight="1.6">
-        {status.message || 'No rotation date on record — click Mark as Refreshed to establish a baseline.'}
+        {status.message || t.integrations.noRotationDate}
       </Text>
     );
   }
@@ -389,34 +392,34 @@ function StatusDetail({ status }: { status: IgStatus }) {
   return (
     <VStack align="flex-start" spacing={2} pt={1}>
       <Text fontSize="sm" color="gray.700" fontWeight="400">
-        Last rotated{' '}
+        {t.integrations.lastRotatedPrefix}{' '}
         <Text as="span" fontWeight="600" color="gray.800">
           {formatDate(status.refreshedAt)}
         </Text>{' '}
         <Text as="span" color="gray.500" fontSize="xs">
-          ({status.daysSinceRefresh} {status.daysSinceRefresh === 1 ? 'day' : 'days'} ago)
+          {t.integrations.daysAgo(status.daysSinceRefresh)}
         </Text>
       </Text>
       {daysRemaining !== null && (
         <Text fontSize="sm" color="gray.700" fontWeight="400">
           {daysRemaining > 0 ? (
             <>
-              Estimated{' '}
+              {t.integrations.runwayPrefix}{' '}
               <Text as="span" fontWeight="600" color={emphasis}>
-                {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'}
+                {t.integrations.daysWord(daysRemaining)}
               </Text>{' '}
-              of runway left (60-day token window).
+              {t.integrations.runwaySuffix}
             </>
           ) : (
             <Text as="span" fontWeight="600" color="red.600">
-              Past the 60-day window — auto-refresh may no longer work.
+              {t.integrations.pastWindow}
             </Text>
           )}
         </Text>
       )}
       {status.userId && (
         <Text fontSize="xs" color="gray.500" fontWeight="300">
-          Instagram user ID:{' '}
+          {t.integrations.instagramUserIdLabel}{' '}
           <Text as="span" fontFamily="'SFMono-Regular', Menlo, Consolas, monospace">
             {status.userId}
           </Text>

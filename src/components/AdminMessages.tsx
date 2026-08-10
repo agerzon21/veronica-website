@@ -12,6 +12,7 @@ import {
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
+import { useAdminLang, adminDict, type AdminT, type AdminLang } from '../i18n/admin';
 
 // Vero speaks Russian natively — customer messages (usually English)
 // get translated to Russian; her replies get translated to English
@@ -143,6 +144,7 @@ function formatPhoneNumbersInText(text: string): string {
 const POLL_INTERVAL_MS = 30_000;
 
 const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
+  const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -169,14 +171,14 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
         setGlobalAiState(data.globalAiState);
         setError(null);
       } else {
-        setError(data.error || `Load failed (${res.status})`);
+        setError(data.error || t.messages.loadFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
     }
-  }, [adminPassword]);
+  }, [adminPassword, t]);
 
   // Initial load + polling. Cleanup on unmount.
   useEffect(() => {
@@ -202,16 +204,16 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
       if (res.ok && data.success) {
         setGlobalAiState(data.globalAiState);
         toast({
-          title: `AI ${next === 'on' ? 'enabled' : 'paused'} globally`,
+          title: t.messages.aiEnabledGlobally(next),
           status: next === 'on' ? 'success' : 'warning',
           duration: 3000,
           isClosable: true,
         });
       } else {
-        toast({ title: data.error || 'Failed to update', status: 'error', duration: 4000 });
+        toast({ title: data.error || t.messages.failedToUpdate, status: 'error', duration: 4000 });
       }
     } catch {
-      toast({ title: 'Could not reach the server', status: 'error', duration: 4000 });
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 4000 });
     } finally {
       setGlobalToggleLoading(false);
       setGlobalToggleConfirmOpen(false);
@@ -245,15 +247,15 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
               letterSpacing="0.25em"
               color="#c9a96e"
             >
-              Admin
+              {t.common.adminKicker}
             </Text>
             <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-              Messages
+              {t.messages.tabTitle}
             </Text>
             <Text fontSize={{ base: 'sm', md: 'sm' }} color="gray.500" fontWeight="300">
               {conversations
-                ? `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`
-                : 'Unified inbox for Instagram DMs.'}
+                ? t.messages.conversationCount(conversations.length)
+                : t.messages.subtitle}
             </Text>
           </VStack>
 
@@ -267,7 +269,7 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
               onClick={adminLevel === 'super' ? handleToggleGlobal : undefined}
             />
             <IconButton
-              aria-label="Refresh"
+              aria-label={t.common.refresh}
               icon={<Icon as={FaSync} boxSize={4} />}
               onClick={loadList}
               variant="ghost"
@@ -291,13 +293,13 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
       {/* Global-AI confirm dialog (used by both Pause and Resume) */}
       <ConfirmDialog
         isOpen={globalToggleConfirmOpen}
-        title={globalAiState === 'on' ? 'Pause AI for everyone?' : 'Resume AI for everyone?'}
+        title={globalAiState === 'on' ? t.messages.pauseAll : t.messages.resumeAll}
         body={
           globalAiState === 'on'
-            ? 'Silence AI replies for ALL conversations? Real customers won’t get automated replies until you turn it back on.'
-            : 'Re-enable AI replies for all conversations?'
+            ? t.messages.pauseAllBody
+            : t.messages.resumeAllBody
         }
-        confirmLabel={globalAiState === 'on' ? 'Pause AI' : 'Resume AI'}
+        confirmLabel={globalAiState === 'on' ? t.messages.pauseAiConfirm : t.messages.resumeAiConfirm}
         danger={globalAiState === 'on'}
         isLoading={globalToggleLoading}
         onConfirm={doToggleGlobal}
@@ -411,11 +413,12 @@ function GlobalAiTogglePill({
   state: 'on' | 'off';
   onClick?: () => void;
 }) {
+  const { t } = useAdminLang();
   const interactive = Boolean(onClick);
   const config =
     state === 'on'
-      ? { bg: 'green.100', color: 'green.700', dot: 'green.500', label: 'AI: On', title: 'Tap to pause AI globally' }
-      : { bg: 'orange.100', color: 'orange.700', dot: 'orange.500', label: 'AI: Paused', title: 'Tap to resume AI globally' };
+      ? { bg: 'green.100', color: 'green.700', dot: 'green.500', label: t.messages.aiOn, title: t.messages.tapToPause }
+      : { bg: 'orange.100', color: 'orange.700', dot: 'orange.500', label: t.messages.aiPaused, title: t.messages.tapToResume };
   // The dynamic `as` swaps between a real <button> and a <div> based
   // on whether we have an onClick — regular admins get a read-only
   // pill, super gets a clickable toggle. Chakra's polymorphic `as`
@@ -515,11 +518,12 @@ function ConversationListRow({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const { t } = useAdminLang();
   const displayName =
     conv.contact_name ||
     conv.contact_handle ||
     conv.linked_client_display_name ||
-    `Instagram user ${conv.external_user_id.slice(-6)}`;
+    t.messages.instagramUserFallback(conv.external_user_id.slice(-6));
 
   return (
     <Box
@@ -557,7 +561,7 @@ function ConversationListRow({
             </Text>
             {conv.last_message_at && (
               <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" fontWeight="300" flexShrink={0}>
-                {formatRelative(conv.last_message_at)}
+                {formatRelative(conv.last_message_at, t)}
               </Text>
             )}
           </Flex>
@@ -569,8 +573,8 @@ function ConversationListRow({
             w="100%"
           >
             {conv.last_message_preview
-              ? formatPreview(conv)
-              : 'No messages yet'}
+              ? formatPreview(conv, t)
+              : t.messages.noMessagesYet}
           </Text>
           <HStack spacing={2} wrap="wrap" mt={0.5}>
             {!conv.ai_enabled && (
@@ -585,7 +589,7 @@ function ConversationListRow({
                 py={0}
                 borderRadius="sm"
               >
-                Needs Vero
+                {t.messages.needsVero}
               </Badge>
             )}
             {conv.linked_client_portal_id && (
@@ -600,7 +604,7 @@ function ConversationListRow({
                 py={0}
                 borderRadius="sm"
               >
-                Client
+                {t.messages.clientBadge}
               </Badge>
             )}
             {conv.unread_count > 0 && (
@@ -692,6 +696,7 @@ function ConversationView({
   // uses it to close the drill-down.
   onBack?: () => void;
 }) {
+  const { t } = useAdminLang();
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -763,15 +768,15 @@ function ConversationView({
         if (res.ok && data.success) {
           setAiSummary(data.summary);
         } else {
-          setAiSummaryError(data.error || 'Could not generate summary');
+          setAiSummaryError(data.error || t.messages.summaryNone);
         }
       } catch {
-        setAiSummaryError('Could not reach the server');
+        setAiSummaryError(t.common.couldNotReach);
       } finally {
         setAiSummaryLoading(false);
       }
     },
-    [adminPassword, summary.id],
+    [adminPassword, summary.id, t],
   );
 
   const loadDetail = useCallback(async (): Promise<void> => {
@@ -787,14 +792,14 @@ function ConversationView({
         setMessages(data.messages);
         setError(null);
       } else {
-        setError(data.error || `Load failed (${res.status})`);
+        setError(data.error || t.messages.loadFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
     }
-  }, [adminPassword, summary.id]);
+  }, [adminPassword, summary.id, t]);
 
   // Load on mount + when selected conversation changes. Also mark
   // as read so the unread badge clears, and kick off the AI summary
@@ -845,10 +850,10 @@ function ConversationView({
         setDetail((d) => (d ? { ...d, ai_enabled: data.ai_enabled } : d));
         onRefreshList();
       } else {
-        toast({ title: data.error || 'Failed to update', status: 'error', duration: 3000 });
+        toast({ title: data.error || t.messages.failedToUpdate, status: 'error', duration: 3000 });
       }
     } catch {
-      toast({ title: 'Could not reach the server', status: 'error', duration: 3000 });
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
     } finally {
       setAiToggleLoading(false);
     }
@@ -882,14 +887,14 @@ function ConversationView({
               outbound = tData.translated;
             } else {
               toast({
-                title: tData.error || 'Translation failed — sending original text',
+                title: tData.error || t.messages.translationFailedSending,
                 status: 'warning',
                 duration: 4000,
               });
             }
           } catch {
             toast({
-              title: 'Translation unreachable — sending original text',
+              title: t.messages.translationUnreachableSending,
               status: 'warning',
               duration: 4000,
             });
@@ -913,14 +918,14 @@ function ConversationView({
         onRefreshList();
       } else {
         toast({
-          title: data.error || 'Send failed',
+          title: data.error || t.messages.sendFailed,
           status: 'error',
           duration: 5000,
           isClosable: true,
         });
       }
     } catch {
-      toast({ title: 'Could not reach the server', status: 'error', duration: 3000 });
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
     } finally {
       setSending(false);
     }
@@ -937,7 +942,7 @@ function ConversationView({
   if (error || !detail) {
     return (
       <Flex flex={1} justify="center" align="center" p={6}>
-        <Text color="red.500" fontSize="sm">{error || 'Could not load conversation.'}</Text>
+        <Text color="red.500" fontSize="sm">{error || t.messages.couldNotLoad}</Text>
       </Flex>
     );
   }
@@ -946,7 +951,7 @@ function ConversationView({
     detail.contact_name ||
     detail.contact_handle ||
     detail.linked_client_display_name ||
-    `Instagram user ${detail.external_user_id.slice(-6)}`;
+    t.messages.instagramUserFallback(detail.external_user_id.slice(-6));
 
   return (
     <>
@@ -970,7 +975,7 @@ function ConversationView({
           {/* Mobile-only back chevron. 44×44 tap target, gold on active. */}
           {onBack && (
             <IconButton
-              aria-label="Back to conversations"
+              aria-label={t.messages.backToConversations}
               icon={<Icon as={FaChevronLeft} boxSize={4} />}
               onClick={onBack}
               variant="ghost"
@@ -1010,7 +1015,7 @@ function ConversationView({
                     py={0}
                     borderRadius="sm"
                   >
-                    Client
+                    {t.messages.clientBadge}
                   </Badge>
                 )}
               </HStack>
@@ -1024,8 +1029,8 @@ function ConversationView({
           <HStack spacing={2} flexShrink={0}>
             {detail.linked_client_portal_id ? (
               <Box
-                title="Linked to a client portal"
-                aria-label="Linked to a client portal"
+                title={t.messages.linkedToPortal}
+                aria-label={t.messages.linkedToPortal}
                 w="32px"
                 h="32px"
                 borderRadius="full"
@@ -1044,7 +1049,7 @@ function ConversationView({
               // header. Same click target size (44×44) with a subtle
               // gold-tinted background so it reads as an action.
               <IconButton
-                aria-label="Create client from this thread"
+                aria-label={t.messages.createClientFromThread}
                 icon={<Icon as={FaUserPlus} boxSize={4} />}
                 onClick={() => setCreateClientOpen(true)}
                 variant="ghost"
@@ -1088,7 +1093,7 @@ function ConversationView({
           await loadDetail();
           onRefreshList();
           toast({
-            title: 'Client portal created and linked to this conversation.',
+            title: t.messages.clientPortalCreated,
             status: 'success',
             duration: 4000,
             isClosable: true,
@@ -1116,11 +1121,11 @@ function ConversationView({
           <Flex align="center" gap={2} minW={0} flex={1}>
             <Icon as={FaExclamationTriangle} color="orange.500" boxSize={3.5} flexShrink={0} />
             <Text fontSize="xs" color="orange.700" fontWeight="500" noOfLines={1}>
-              AI is off — replies are 100% you.
+              {t.messages.aiOffBanner}
             </Text>
           </Flex>
           <IconButton
-            aria-label="Dismiss AI-off notice"
+            aria-label={t.messages.dismissAiOffNotice}
             icon={<Icon as={FaTimes} boxSize={3} />}
             onClick={() => setAiOffBannerDismissed(true)}
             variant="ghost"
@@ -1200,7 +1205,7 @@ function ConversationView({
         <Textarea
           value={replyText}
           onChange={(e) => setReplyText(e.target.value)}
-          placeholder="Type a reply as Vero..."
+          placeholder={t.messages.replyPlaceholder}
           rows={3}
           resize="vertical"
           // 16px on mobile prevents iOS Safari from zooming the whole
@@ -1242,11 +1247,11 @@ function ConversationView({
                 color={translateOnSend ? '#8a6e35' : 'gray.500'}
                 fontWeight="500"
               >
-                Translate before sending
+                {t.messages.translateBeforeSending}
               </Text>
             </HStack>
             <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" display={{ base: 'none', md: 'block' }}>
-              ⌘/Ctrl + Enter to send · Replies from you sent as human (not AI)
+              {t.messages.ctrlEnterSend}
             </Text>
           </VStack>
           {/* Mic + send row. Same shared VoiceInput as the Assistant
@@ -1261,9 +1266,9 @@ function ConversationView({
               // English-typing days the translate step still runs.
               language="ru"
               onTranscript={(text) => setReplyText((prev) => (prev ? `${prev} ${text}` : text))}
-              ariaLabelIdle="Record voice reply"
-              ariaLabelRecording="Release to stop"
-              ariaLabelUploading="Transcribing…"
+              ariaLabelIdle={t.messages.micRecordReply}
+              ariaLabelRecording={t.messages.micReleaseStop}
+              ariaLabelUploading={t.messages.micTranscribing}
               variant="outline"
               size="lg"
               minW={{ base: '48px', md: 'auto' }}
@@ -1280,10 +1285,10 @@ function ConversationView({
               // action is thumb-obvious; hugs content on desktop.
               fullWidth={{ base: true, md: false }}
               isLoading={sending}
-              loadingText={translateOnSend ? 'Translating…' : 'Sending…'}
+              loadingText={translateOnSend ? t.messages.translating : t.common.sending}
               isDisabled={!replyText.trim()}
             >
-              {translateOnSend ? 'Translate & Send' : 'Send'}
+              {translateOnSend ? t.messages.translateAndSend : t.messages.send}
             </CTAButton>
           </Stack>
         </Stack>
@@ -1293,16 +1298,17 @@ function ConversationView({
 }
 
 function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: string }) {
+  const { t, lang } = useAdminLang();
   const isInbound = msg.direction === 'inbound';
   const isAi = msg.sender === 'ai';
 
   const bg = isInbound ? 'white' : isAi ? '#fdf9f0' : '#c9a96e';
   const color = isInbound || isAi ? 'gray.800' : 'white';
   const senderLabel = isInbound
-    ? 'They said'
+    ? t.messages.senderThey
     : isAi
-    ? 'AI Assistant'
-    : 'You (Vero)';
+    ? t.messages.senderAI
+    : t.messages.senderYou;
   const senderColor = isInbound
     ? 'gray.500'
     : isAi
@@ -1334,10 +1340,10 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
         setTranslation(data.translated);
         setDetectedLang(data.detectedLang || null);
       } else {
-        setTranslateError(data.error || 'Translation failed');
+        setTranslateError(data.error || t.messages.translationFailed);
       }
     } catch {
-      setTranslateError('Could not reach the server');
+      setTranslateError(t.common.couldNotReach);
     } finally {
       setTranslating(false);
     }
@@ -1390,7 +1396,7 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
                 <HStack spacing={1.5} mb={0.5} color="#8a6e35">
                   <Icon as={FaLanguage} boxSize={2.5} />
                   <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" letterSpacing="0.08em" textTransform="uppercase">
-                    Translated{detectedLang && detectedLang !== 'unknown' ? ` from ${detectedLang.toUpperCase()}` : ''}
+                    {t.messages.translatedFrom(detectedLang)}
                   </Text>
                 </HStack>
                 <Text
@@ -1446,7 +1452,7 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <Icon as={FaLanguage} boxSize={3} />
-              {translating ? 'Translating…' : 'Translate'}
+              {translating ? t.messages.translating : t.messages.translateAction}
             </Box>
           )}
           <Text
@@ -1454,7 +1460,7 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
             color="gray.400"
             textAlign={isInbound ? 'left' : 'right'}
           >
-            {formatFullTime(msg.sent_at)}
+            {formatFullTime(msg.sent_at, lang)}
             {msg.ai_model && ` · ${msg.ai_model}`}
           </Text>
         </Flex>
@@ -1464,17 +1470,19 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
 }
 
 function SelectPrompt() {
+  const { t } = useAdminLang();
   return (
     <Flex flex={1} justify="center" align="center" p={8} direction="column" gap={3} color="gray.400">
       <Icon as={FaCommentDots} boxSize={10} />
       <Text fontSize="sm" fontWeight="300" textAlign="center">
-        Select a conversation from the left to view messages.
+        {t.messages.selectPrompt}
       </Text>
     </Flex>
   );
 }
 
 function EmptyState() {
+  const { t } = useAdminLang();
   return (
     <Box
       bg="white"
@@ -1501,12 +1509,10 @@ function EmptyState() {
         <Icon as={FaCommentDots} boxSize={7} />
       </Flex>
       <Text fontSize="md" fontWeight="500" color="gray.800" mb={2}>
-        No conversations yet
+        {t.messages.noConversationsYetTitle}
       </Text>
       <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="380px" mx="auto" lineHeight="1.7">
-        As soon as someone DMs @vero.art.photo, the conversation will
-        appear here. The AI assistant will handle the first response
-        automatically unless you pause it above.
+        {t.messages.emptyStateBody}
       </Text>
     </Box>
   );
@@ -1540,25 +1546,35 @@ function SummaryCard({
   onChangeLanguage: (l: SummaryLang) => void;
   onRegenerate: () => void;
 }) {
+  const { t } = useAdminLang();
   const classification = summary?.classification ?? 'unclear';
-  const classMeta = CLASSIFICATION_META[classification] ?? CLASSIFICATION_META.unclear;
+  const classStyle = CLASSIFICATION_STYLE[classification] ?? CLASSIFICATION_STYLE.unclear;
+  // The classification pill label follows the ADMIN panel language
+  // (chrome), not the summary content language toggle.
+  const classLabel = t.messages.classification[classification];
   const localized = readSummaryLocale(summary, language);
 
-  // Label copy that changes with the language so the affordances read
-  // naturally on both sides of the toggle.
-  const strings = language === 'ru'
-    ? { header: 'Сводка', asking: 'Спрашивает', gathered: 'Собрали', nextStep: 'Далее', tone: 'Тон',
-        expandCta: 'Закрыть сводку — открыть чат', collapseCta: 'Открыть сводку',
-        loadingLabel: 'Читаю переписку…', noSummary: 'Сводки пока нет.' }
-    : { header: 'Thread summary', asking: 'Asking', gathered: 'Gathered', nextStep: 'Next step', tone: 'Tone',
-        expandCta: 'Close summary — open chat', collapseCta: 'Open summary',
-        loadingLabel: 'Reading the thread…', noSummary: 'No summary yet.' };
+  // Label copy that changes with the SUMMARY-language toggle so the
+  // section labels around the content read naturally on both sides of
+  // the RU/EN switch — sourced from the shared dict so translations
+  // live in one place.
+  const strings = {
+    header: adminDict.messages.summaryTitle[language],
+    asking: adminDict.messages.summaryAsking[language],
+    gathered: adminDict.messages.summaryGathered[language],
+    nextStep: adminDict.messages.summaryNextStep[language],
+    tone: adminDict.messages.summaryTone[language],
+    expandCta: adminDict.messages.closeSummaryOpenChat[language],
+    collapseCta: adminDict.messages.openSummary[language],
+    loadingLabel: adminDict.messages.summaryLoading[language],
+    noSummary: adminDict.messages.summaryNone[language],
+  };
 
   return (
     <Box
       bg="white"
       borderLeft="3px solid"
-      borderLeftColor={classMeta.borderColor}
+      borderLeftColor={classStyle.borderColor}
       px={{ base: 3.5, md: 4 }}
       py={{ base: 2.5, md: 3 }}
       // In focus mode (expanded on mobile) the card takes the full
@@ -1597,8 +1613,8 @@ function SummaryCard({
           </Text>
           {summary && (
             <Badge
-              bg={classMeta.bg}
-              color={classMeta.color}
+              bg={classStyle.bg}
+              color={classStyle.color}
               fontSize={{ base: 'xs', md: '2xs' }}
               fontWeight="600"
               letterSpacing="0.08em"
@@ -1608,7 +1624,7 @@ function SummaryCard({
               borderRadius="sm"
               flexShrink={0}
             >
-              {classMeta.label}
+              {classLabel}
             </Badge>
           )}
           {collapsed && localized.asking && (
@@ -1628,7 +1644,7 @@ function SummaryCard({
             borderRadius="full"
             p="2px"
             flexShrink={0}
-            aria-label="Summary language"
+            aria-label={t.messages.summaryLangAria}
           >
             {(['ru', 'en'] as const).map((lang) => {
               const active = language === lang;
@@ -1662,7 +1678,7 @@ function SummaryCard({
 
         {/* Regenerate — 44×44 tap target. */}
         <IconButton
-          aria-label="Regenerate summary"
+          aria-label={t.messages.regenerateSummary}
           icon={<Icon as={FaSync} boxSize={3.5} />}
           onClick={onRegenerate}
           isLoading={loading}
@@ -1800,43 +1816,39 @@ function SummaryCard({
 
 // Visual treatment for each inquiry classification. Colors chosen so
 // spam pops red (skip it), booking pops green (Vero should engage),
-// and softer neutrals for everything in between.
-const CLASSIFICATION_META: Record<
+// and softer neutrals for everything in between. Labels live in the
+// i18n dict (t.messages.classification.*) and are looked up at
+// render time so RU/EN can switch without touching this table.
+const CLASSIFICATION_STYLE: Record<
   InquiryClassification,
-  { label: string; bg: string; color: string; borderColor: string }
+  { bg: string; color: string; borderColor: string }
 > = {
   'booking-inquiry': {
-    label: 'Booking inquiry',
     bg: 'green.100',
     color: 'green.800',
     borderColor: '#38A169',
   },
   'existing-client': {
-    label: 'Existing client',
     bg: 'purple.100',
     color: 'purple.800',
     borderColor: '#805AD5',
   },
   'general-question': {
-    label: 'General question',
     bg: 'blue.50',
     color: 'blue.700',
     borderColor: '#4299E1',
   },
   'collaboration-offer': {
-    label: 'Collab offer',
     bg: 'yellow.100',
     color: 'yellow.800',
     borderColor: '#D69E2E',
   },
   'spam-or-unrelated': {
-    label: 'Spam / unrelated',
     bg: 'red.100',
     color: 'red.700',
     borderColor: '#E53E3E',
   },
   unclear: {
-    label: 'Unclear',
     bg: 'gray.100',
     color: 'gray.700',
     borderColor: '#c9a96e',
@@ -1874,6 +1886,7 @@ function CreateClientModal({
   aiSummary: AiSummary | null;
   onCreated: () => void | Promise<void>;
 }) {
+  const { t, lang } = useAdminLang();
   const [sessionType, setSessionType] = useState<string>(
     () => inferSessionType(aiSummary) ?? 'portrait',
   );
@@ -1922,10 +1935,10 @@ function CreateClientModal({
       if (res.ok && data.success) {
         await onCreated();
       } else {
-        setError(data.error || `Create failed (${res.status})`);
+        setError(data.error || t.messages.createFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setSubmitting(false);
     }
@@ -1946,7 +1959,7 @@ function CreateClientModal({
         mx={{ base: 0, md: 4 }}
       >
         <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
-          Convert to client
+          {t.messages.convertToClient}
         </ModalHeader>
         <ModalCloseButton
           size={{ base: 'lg', md: 'md' } as any}
@@ -1956,14 +1969,12 @@ function CreateClientModal({
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <Text fontSize="xs" color="gray.500" lineHeight="1.6">
-              Creates a simple-mode portal (gallery password only) and links it
-              to this conversation. You can fill in email, event date, contract,
-              and gallery URL later from the Portals tab.
+              {t.messages.convertDisclaimer}
             </Text>
 
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                Session type
+                {t.messages.sessionTypeLabel}
               </FormLabel>
               <Select
                 value={sessionType}
@@ -1972,24 +1983,27 @@ function CreateClientModal({
                 fontSize={{ base: 'md', md: 'sm' }}
                 bg="white"
               >
-                <option value="portrait">Portrait</option>
-                <option value="wedding">Wedding</option>
-                <option value="family">Family</option>
-                <option value="maternity">Maternity</option>
-                <option value="engagement">Engagement</option>
-                <option value="newborn">Newborn</option>
-                <option value="other">Other</option>
+                {/* Option values stay English — session_type is a wire
+                    value the API stores in the DB. Labels come from
+                    the dict. */}
+                <option value="portrait">{t.messages.sessionOptions.portrait}</option>
+                <option value="wedding">{t.messages.sessionOptions.wedding}</option>
+                <option value="family">{t.messages.sessionOptions.family}</option>
+                <option value="maternity">{t.messages.sessionOptions.maternity}</option>
+                <option value="engagement">{t.messages.sessionOptions.engagement}</option>
+                <option value="newborn">{t.messages.sessionOptions.newborn}</option>
+                <option value="other">{t.messages.sessionOptions.other}</option>
               </Select>
             </FormControl>
 
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                Client display name
+                {t.messages.clientDisplayName}
               </FormLabel>
               <Input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Anna Petrova"
+                placeholder={t.messages.clientNamePlaceholder}
                 size={{ base: 'md', md: 'sm' }}
                 fontSize={{ base: 'md', md: 'sm' }}
                 bg="white"
@@ -1998,13 +2012,13 @@ function CreateClientModal({
 
             <FormControl>
               <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                Gallery password
+                {t.messages.galleryPasswordLabel}
               </FormLabel>
               <InputGroup size={{ base: 'md', md: 'sm' }}>
                 <Input
                   value={galleryPassword}
                   onChange={(e) => setGalleryPassword(e.target.value)}
-                  placeholder="autogenerated"
+                  placeholder={t.messages.autogenerated}
                   fontSize={{ base: 'md', md: 'sm' }}
                   bg="white"
                   pr="4.5rem"
@@ -2017,20 +2031,20 @@ function CreateClientModal({
                     color="#8a6e35"
                     onClick={() => setGalleryPassword(generateGalleryPassword())}
                   >
-                    New
+                    {t.messages.generateNewPassword}
                   </Button>
                 </InputRightElement>
               </InputGroup>
               <Text fontSize="2xs" color="gray.400" mt={1}>
-                4+ characters. Client uses this to open their gallery once you deliver it.
+                {t.messages.galleryPasswordHint}
               </Text>
             </FormControl>
 
             {(() => {
-              // Prefer the English gathered facts for admin-facing display
-              // in the CreateClient modal — the labels/copy around it are
-              // English, so keeping them all in one language reads cleaner.
-              const gathered = aiSummary ? readSummaryLocale(aiSummary, 'en').gathered : [];
+              // Show the gathered facts in whichever language the admin
+              // panel is currently in — matches the surrounding modal
+              // copy so both read as one language.
+              const gathered = aiSummary ? readSummaryLocale(aiSummary, lang).gathered : [];
               return gathered.length > 0 ? (
                 <Box
                   bg="rgba(201, 169, 110, 0.06)"
@@ -2040,7 +2054,7 @@ function CreateClientModal({
                   p={3}
                 >
                   <Text fontSize="2xs" color="#8a6e35" fontWeight="600" letterSpacing="0.08em" textTransform="uppercase" mb={1.5}>
-                    From this conversation
+                    {t.messages.fromThisConversation}
                   </Text>
                   <VStack align="stretch" spacing={0.5}>
                     {gathered.map((fact, i) => (
@@ -2053,8 +2067,7 @@ function CreateClientModal({
                     ))}
                   </VStack>
                   <Text fontSize="2xs" color="gray.500" mt={2} lineHeight="1.5">
-                    Add these to the portal (event date, email, etc.) from the
-                    Portals tab after creating.
+                    {t.messages.addTheseToPortal}
                   </Text>
                 </Box>
               ) : null;
@@ -2076,7 +2089,7 @@ function CreateClientModal({
               onClick={onClose}
               isDisabled={submitting}
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <CTAButton
               onClick={handleSubmit}
@@ -2084,10 +2097,10 @@ function CreateClientModal({
               variant="solid"
               size="sm"
               isLoading={submitting}
-              loadingText="Creating…"
+              loadingText={t.messages.creating}
               isDisabled={!canSubmit}
             >
-              Create client
+              {t.messages.createClientCta}
             </CTAButton>
           </Stack>
         </ModalFooter>
@@ -2171,41 +2184,46 @@ async function inferCustomerLang(
 
 // ── Formatters ────────────────────────────────────────────────
 
-function formatPreview(conv: ConversationSummary): string {
+function formatPreview(conv: ConversationSummary, t: AdminT): string {
   const preview = conv.last_message_preview ?? '';
   if (conv.last_message_direction === 'inbound') return preview;
-  const prefix = conv.last_message_sender === 'ai' ? 'AI: ' : 'You: ';
+  const prefix = conv.last_message_sender === 'ai'
+    ? t.messages.previewPrefixAi
+    : t.messages.previewPrefixYou;
   return prefix + preview;
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, t: AdminT): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (diffSec < 60) return 'now';
+  if (diffSec < 60) return t.messages.relativeNow;
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m`;
+  if (diffMin < 60) return t.messages.relativeMinutes(diffMin);
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h`;
+  if (diffHr < 24) return t.messages.relativeHours(diffHr);
   const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d`;
+  if (diffDay < 7) return t.messages.relativeDays(diffDay);
   const diffWk = Math.floor(diffDay / 7);
-  if (diffWk < 5) return `${diffWk}w`;
+  if (diffWk < 5) return t.messages.relativeWeeks(diffWk);
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function formatFullTime(iso: string): string {
+function formatFullTime(iso: string, lang: AdminLang): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
+  // Use the matching BCP-47 locale so month names and time formatting
+  // (12h vs 24h) match the admin panel language.
+  const locale = lang === 'ru' ? 'ru-RU' : 'en-US';
   const now = new Date();
   const sameDay =
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
   if (sameDay) {
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
   }
-  return d.toLocaleString('en-US', {
+  return d.toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

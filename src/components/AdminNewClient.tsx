@@ -7,6 +7,7 @@ import {
   CONTRACT_TEMPLATES,
   type ContractTemplateField,
 } from '../data/contract-template';
+import { useAdminLang } from '../i18n/admin';
 
 interface Props {
   adminPassword: string;
@@ -113,6 +114,7 @@ const todayYmd = (): string => {
 // ─── Component ─────────────────────────────────────────────────────────
 
 const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
+  const { t } = useAdminLang();
   const templateKeys = Object.keys(CONTRACT_TEMPLATES);
   const [templateKey, setTemplateKey] = useState<string>(templateKeys[0]);
 
@@ -237,24 +239,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     // every missing piece one at a time.
     const missing: { id: string; label: string }[] = [];
     if (!partner1FullName.trim())
-      missing.push({ id: 'partner1', label: 'Partner 1 name' });
+      missing.push({ id: 'partner1', label: t.newClient.fieldLabelPartner1 });
     if (!clientEmail.trim())
-      missing.push({ id: 'clientEmail', label: 'Client email' });
+      missing.push({ id: 'clientEmail', label: t.newClient.fieldLabelClientEmail });
     if (!eventDateIso)
-      missing.push({ id: 'eventDate', label: 'Event date' });
+      missing.push({ id: 'eventDate', label: t.newClient.fieldLabelEventDate });
     if (!sessionType.trim())
-      missing.push({ id: 'sessionType', label: 'Session type' });
+      missing.push({ id: 'sessionType', label: t.newClient.fieldLabelSessionType });
     if (!clientDisplayName.trim())
-      missing.push({ id: 'displayName', label: 'Display name' });
+      missing.push({ id: 'displayName', label: t.newClient.fieldLabelDisplayName });
     if (!galleryPassword.trim())
-      missing.push({ id: 'galleryPassword', label: 'Gallery password' });
+      missing.push({ id: 'galleryPassword', label: t.newClient.fieldLabelGalleryPassword });
     if (coverage === 'custom' && !customCoverage.trim())
-      missing.push({ id: 'customCoverage', label: 'Custom coverage description' });
+      missing.push({ id: 'customCoverage', label: t.newClient.fieldLabelCustomCoverage });
     if (responsiblePartyEnabled) {
       if (!responsiblePartyName.trim())
-        missing.push({ id: 'responsiblePartyName', label: 'Responsible Party name' });
+        missing.push({ id: 'responsiblePartyName', label: t.newClient.fieldLabelResponsiblePartyName });
       if (!responsiblePartyRelationship.trim())
-        missing.push({ id: 'responsiblePartyRelationship', label: 'Responsible Party relationship' });
+        missing.push({ id: 'responsiblePartyRelationship', label: t.newClient.fieldLabelResponsiblePartyRelationship });
     }
 
     // Amount validation is trickier because it's cross-field (retainer
@@ -263,23 +265,23 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     const retainer = parseFloat(retainerAmount);
     const totalInvalid = !Number.isFinite(total) || total < 0;
     const retainerInvalid = !Number.isFinite(retainer) || retainer < 0;
-    if (totalInvalid) missing.push({ id: 'total', label: 'Total amount' });
-    if (retainerInvalid) missing.push({ id: 'retainer', label: 'Retainer amount' });
+    if (totalInvalid) missing.push({ id: 'total', label: t.newClient.fieldLabelTotal });
+    if (retainerInvalid) missing.push({ id: 'retainer', label: t.newClient.fieldLabelRetainer });
 
     if (missing.length > 0) {
       setFieldErrors(new Set(missing.map((m) => m.id)));
       const labels = missing.map((m) => m.label);
       setError(
         labels.length === 1
-          ? `${labels[0]} is required.`
-          : `Missing: ${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}.`,
+          ? t.newClient.singleFieldRequired(labels[0])
+          : t.newClient.missingFields(labels),
       );
       return;
     }
 
     if (retainer > total) {
       setFieldErrors(new Set(['retainer']));
-      setError('Retainer cannot exceed total.');
+      setError(t.newClient.retainerExceedsTotal);
       return;
     }
 
@@ -386,10 +388,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       if (res.ok && data.success) {
         onCreated();
       } else {
-        setError(data.error || `Server error (${res.status}).`);
+        setError(data.error || t.newClient.serverErrorStatus(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setSubmitting(false);
     }
@@ -399,15 +401,15 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     <Box maxW="760px" mx="auto" px={{ base: 0, md: 0 }}>
       {/* Header */}
       <Flex align="center" mb={8} gap={3}>
-        <AdminBackButton onClick={onCancel} label="Back" />
+        <AdminBackButton onClick={onCancel} label={t.common.back} />
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={6}>
         <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
-          New Client
+          {t.newClient.kicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          Set up a portal
+          {t.newClient.headline}
         </Text>
       </VStack>
 
@@ -423,11 +425,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       >
         <VStack align="stretch" spacing={6}>
           {/* ─── Contract type ─── */}
-          <SectionHeading>Contract</SectionHeading>
+          <SectionHeading>{t.newClient.sectionContract}</SectionHeading>
 
           <Field
-            label="Contract Template"
-            helpText="The template shapes which clauses appear in the contract. Pick the one matching this booking."
+            label={t.newClient.contractTemplateLabel}
+            helpText={t.newClient.contractTemplateHelp}
           >
             <Select
               value={templateKey}
@@ -448,35 +450,35 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           </Field>
 
           {/* ─── Client ─── */}
-          <SectionHeading>Client</SectionHeading>
+          <SectionHeading>{t.newClient.sectionClient}</SectionHeading>
 
           <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
-            <Field label="Partner 1 Full Name" w={{ base: '100%', md: '50%' }} required helpText="Their full legal name. First name is used in the portal greeting." hasError={fieldErrors.has('partner1')}>
-              <FormInput value={partner1FullName} onChange={(e) => { setPartner1FullName(e.target.value); clearFieldError('partner1'); }} placeholder="e.g. Chrisann Bryan" />
+            <Field label={t.newClient.partner1Label} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.partner1Help} hasError={fieldErrors.has('partner1')}>
+              <FormInput value={partner1FullName} onChange={(e) => { setPartner1FullName(e.target.value); clearFieldError('partner1'); }} placeholder={t.newClient.partner1Placeholder} />
             </Field>
-            <Field label="Partner 2 Full Name" w={{ base: '100%', md: '50%' }} helpText="Optional. Leave blank for solo bookings (portraits, etc.).">
-              <FormInput value={partner2FullName} onChange={(e) => setPartner2FullName(e.target.value)} placeholder="e.g. Rajiv Thomas (optional)" />
+            <Field label={t.newClient.partner2Label} w={{ base: '100%', md: '50%' }} helpText={t.newClient.partner2Help}>
+              <FormInput value={partner2FullName} onChange={(e) => setPartner2FullName(e.target.value)} placeholder={t.newClient.partner2Placeholder} />
             </Field>
           </Stack>
 
           <Field
-            label="Display Name"
+            label={t.newClient.displayNameLabel}
             helpText={
               displayNameOverride !== null
-                ? 'Custom — clear the field to go back to the auto-generated name.'
-                : 'Auto-generated from the partner first names. Type to override.'
+                ? t.newClient.displayNameHelpCustom
+                : t.newClient.displayNameHelpAuto
             }
             hasError={fieldErrors.has('displayName')}
           >
             <FormInput
               value={clientDisplayName}
               onChange={(e) => { setDisplayNameOverride(e.target.value); clearFieldError('displayName'); }}
-              placeholder="e.g. Chrisann & Rajiv"
+              placeholder={t.newClient.displayNamePlaceholder}
             />
           </Field>
 
-          <Field label="Client Email" required helpText="The invite email goes here. They'll log in with this address." hasError={fieldErrors.has('clientEmail')}>
-            <FormInput type="email" value={clientEmail} onChange={(e) => { setClientEmail(e.target.value); clearFieldError('clientEmail'); }} placeholder="client@example.com" />
+          <Field label={t.newClient.clientEmailLabel} required helpText={t.newClient.clientEmailHelp} hasError={fieldErrors.has('clientEmail')}>
+            <FormInput type="email" value={clientEmail} onChange={(e) => { setClientEmail(e.target.value); clearFieldError('clientEmail'); }} placeholder={t.newClient.clientEmailPlaceholder} />
           </Field>
 
           {/* ─── Responsible Party (optional) ───
@@ -492,37 +494,37 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 colorScheme="yellow"
               >
                 <Text fontSize="sm" color="gray.700" fontWeight="400">
-                  Different person is paying & signing
+                  {t.newClient.responsiblePartyToggle}
                 </Text>
               </Checkbox>
             </Flex>
             <Text fontSize="xs" color="gray.500" mt={1} ml={6} fontWeight="300" lineHeight="1.5">
-              Use this when a third party (e.g. mother of the bride) is the one financially responsible for the booking and will be signing the contract. Adds a "Responsible Party" section to the contract.
+              {t.newClient.responsiblePartyToggleHelp}
             </Text>
             {responsiblePartyEnabled && (
               <VStack align="stretch" spacing={4} mt={4}>
                 <Field
-                  label="Responsible Party Full Name"
+                  label={t.newClient.responsiblePartyNameLabel}
                   required
-                  helpText="Their full legal name. They'll be the one signing the contract."
+                  helpText={t.newClient.responsiblePartyNameHelp}
                   hasError={fieldErrors.has('responsiblePartyName')}
                 >
                   <FormInput
                     value={responsiblePartyName}
                     onChange={(e) => { setResponsiblePartyName(e.target.value); clearFieldError('responsiblePartyName'); }}
-                    placeholder="e.g. Patricia Bryan"
+                    placeholder={t.newClient.responsiblePartyNamePlaceholder}
                   />
                 </Field>
                 <Field
-                  label="Relationship to Client(s)"
+                  label={t.newClient.responsiblePartyRelationshipLabel}
                   required
-                  helpText='e.g. "Mother of the Bride", "Father of the Groom", "Family Friend".'
+                  helpText={t.newClient.responsiblePartyRelationshipHelp}
                   hasError={fieldErrors.has('responsiblePartyRelationship')}
                 >
                   <FormInput
                     value={responsiblePartyRelationship}
                     onChange={(e) => { setResponsiblePartyRelationship(e.target.value); clearFieldError('responsiblePartyRelationship'); }}
-                    placeholder="Mother of the Bride"
+                    placeholder={t.newClient.responsiblePartyRelationshipPlaceholder}
                   />
                 </Field>
               </VStack>
@@ -530,39 +532,39 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           </Box>
 
           {/* ─── Event ─── */}
-          <SectionHeading>Event</SectionHeading>
+          <SectionHeading>{t.newClient.sectionEvent}</SectionHeading>
 
           <Field
-            label="Event Title"
+            label={t.newClient.eventTitleLabel}
             helpText={
               eventTitleOverride !== null
-                ? 'Custom — clear the field to go back to the auto-generated title.'
-                : "Auto-generated from partner names + contract type (e.g. \"Chrisann & Rajiv's Wedding\"). Type to override."
+                ? t.newClient.eventTitleHelpCustom
+                : t.newClient.eventTitleHelpAuto
             }
           >
             <FormInput
               value={eventTitle}
               onChange={(e) => setEventTitleOverride(e.target.value)}
-              placeholder="e.g. Chrisann & Rajiv's Wedding"
+              placeholder={t.newClient.eventTitlePlaceholder}
             />
           </Field>
 
-          <Field label="Event Date" required helpText="The day of the shoot." hasError={fieldErrors.has('eventDate')}>
+          <Field label={t.newClient.eventDateLabel} required helpText={t.newClient.eventDateHelp} hasError={fieldErrors.has('eventDate')}>
             <FormInput type="date" value={eventDateIso} onChange={(e) => { setEventDateIso(e.target.value); clearFieldError('eventDate'); }} />
           </Field>
 
           <Field
-            label="Coverage"
+            label={t.newClient.coverageLabel}
             required
-            helpText="Specific Times for known hours. Half/Full Day for packages where the schedule will be locked in later."
+            helpText={t.newClient.coverageHelp}
           >
             <SimpleGrid columns={{ base: 2, md: 4 }} spacing={2}>
               {(
                 [
-                  { key: 'specific', label: 'Specific Times' },
-                  { key: 'half-day', label: 'Half Day' },
-                  { key: 'full-day', label: 'Full Day' },
-                  { key: 'custom', label: 'Custom' },
+                  { key: 'specific', label: t.newClient.coverageSpecific },
+                  { key: 'half-day', label: t.newClient.coverageHalfDay },
+                  { key: 'full-day', label: t.newClient.coverageFullDay },
+                  { key: 'custom', label: t.newClient.coverageCustom },
                 ] as const
               ).map((opt) => (
                 <Box
@@ -594,17 +596,20 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           {coverage === 'specific' && (
             <>
               <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
-                <Field label="Start Time" w={{ base: '100%', md: '50%' }} required helpText="When the shoot starts.">
+                <Field label={t.newClient.startTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.startTimeHelp}>
                   <FormInput type="time" value={eventStartTime} onChange={(e) => setEventStartTime(e.target.value)} />
                 </Field>
-                <Field label="End Time" w={{ base: '100%', md: '50%' }} required helpText="When the shoot ends. Duration is auto-calculated.">
+                <Field label={t.newClient.endTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.endTimeHelp}>
                   <FormInput type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
                 </Field>
               </Stack>
 
               {eventStartTime && eventEndTime && (
                 <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={2}>
-                  <Text fontSize="xs" color="gray.500" mb={0.5}>On the contract:</Text>
+                  <Text fontSize="xs" color="gray.500" mb={0.5}>{t.newClient.onTheContract}</Text>
+                  {/* Preview text is the exact English string that will
+                      be substituted into the contract, so it stays
+                      English regardless of admin UI language. */}
                   <Text fontSize="sm" color="gray.800">{formatEventTime(eventStartTime, eventEndTime)}</Text>
                 </Box>
               )}
@@ -614,15 +619,18 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           {(coverage === 'half-day' || coverage === 'full-day') && (
             <Box bg="gray.50" border="1px dashed" borderColor="gray.200" borderRadius="sm" px={3} py={3}>
               <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                Will appear on the contract — Event Details → Time
+                {t.newClient.contractTimeSlot}
               </Text>
+              {/* Preview bodies below are the exact English strings
+                  that will appear on the customer-facing contract, so
+                  they stay English regardless of admin UI language. */}
               <Text fontSize="sm" color="gray.800" mb={3}>
                 {coverage === 'half-day'
                   ? 'Half-day coverage (approximately 4 hours, exact times to be confirmed)'
                   : 'Full-day coverage (exact schedule to be confirmed)'}
               </Text>
               <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                Will appear on the contract — Additional Notes
+                {t.newClient.contractAdditionalNotesSlot}
               </Text>
               <Text fontSize="xs" color="gray.700" fontStyle="italic" lineHeight="1.6">
                 {coverage === 'half-day'
@@ -631,10 +639,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               </Text>
               <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.200">
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                  Note for you (not on the contract)
+                  {t.newClient.noteForYou}
                 </Text>
                 <Text fontSize="xs" color="gray.500" fontStyle="italic">
-                  Once the client confirms the exact times, you can update the event_time variable via Admin → Contract → Edit fields, and remove the clause above from additional_notes.
+                  {t.newClient.noteForYouBody}
                 </Text>
               </Box>
             </Box>
@@ -642,15 +650,15 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
 
           {coverage === 'custom' && (
             <Field
-              label="Custom Coverage Description"
+              label={t.newClient.customCoverageLabel}
               required
-              helpText='Free text — appears on the contract as the Time. e.g. "Ceremony coverage only, exact times TBD" or "Approximately 3 hours, schedule TBD".'
+              helpText={t.newClient.customCoverageHelp}
               hasError={fieldErrors.has('customCoverage')}
             >
               <Textarea
                 value={customCoverage}
                 onChange={(e) => { setCustomCoverage(e.target.value); clearFieldError('customCoverage'); }}
-                placeholder="e.g. Approximately 3 hours, exact times to be confirmed"
+                placeholder={t.newClient.customCoveragePlaceholder}
                 rows={2}
                 focusBorderColor="#c9a96e"
                 fontSize={{ base: 'md', md: 'sm' }}
@@ -658,15 +666,15 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             </Field>
           )}
 
-          <Field label="Session Type" required helpText="What kind of shoot this is. Click a standard type, or use Custom for anything else." hasError={fieldErrors.has('sessionType')}>
+          <Field label={t.newClient.sessionTypeLabel} required helpText={t.newClient.sessionTypeHelp} hasError={fieldErrors.has('sessionType')}>
             <SessionTypePicker value={sessionType} onChange={(v) => { setSessionType(v); clearFieldError('sessionType'); }} />
           </Field>
 
           {/* ─── Pricing ─── */}
-          <SectionHeading>Pricing</SectionHeading>
+          <SectionHeading>{t.newClient.sectionPricing}</SectionHeading>
 
           <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
-            <Field label="Total (USD)" w={{ base: '100%', md: '50%' }} required helpText="Total project cost across the whole booking." hasError={fieldErrors.has('total')}>
+            <Field label={t.newClient.totalLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.totalHelp} hasError={fieldErrors.has('total')}>
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -677,7 +685,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 min="0"
               />
             </Field>
-            <Field label="Retainer (USD)" w={{ base: '100%', md: '50%' }} required helpText="Non-refundable deposit. Due at signing, reserves the date." hasError={fieldErrors.has('retainer')}>
+            <Field label={t.newClient.retainerLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.retainerHelp} hasError={fieldErrors.has('retainer')}>
               <FormInput
                 type="number"
                 inputMode="decimal"
@@ -691,14 +699,14 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           </Stack>
 
           {/* ─── Gallery Pass ─── */}
-          <SectionHeading>Gallery Pass</SectionHeading>
+          <SectionHeading>{t.newClient.sectionGalleryPass}</SectionHeading>
 
           <Field
-            label="Gallery Password"
+            label={t.newClient.galleryPasswordLabel}
             helpText={
               galleryPasswordOverride !== null
-                ? 'Custom — clear the field to go back to the auto-generated password.'
-                : 'Auto-generated from the partner first names + event year (e.g. ChrisannRajiv2026). Type to override.'
+                ? t.newClient.galleryPasswordHelpCustom
+                : t.newClient.galleryPasswordHelpAuto
             }
             hasError={fieldErrors.has('galleryPassword')}
           >
@@ -713,9 +721,9 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           </Field>
 
           {/* ─── Contract variables ─── */}
-          <SectionHeading>Contract Details</SectionHeading>
+          <SectionHeading>{t.newClient.sectionContractDetails}</SectionHeading>
           <Text fontSize="xs" color="gray.500" mt={-3}>
-            Values that get filled into the contract template. Most have sensible defaults — only touch if this booking needs something different.
+            {t.newClient.contractDetailsIntro}
           </Text>
 
           {fields.map((f) => (
@@ -728,9 +736,9 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           ))}
 
           {/* ─── Optional service clauses ─── */}
-          <SectionHeading>Optional Clauses</SectionHeading>
+          <SectionHeading>{t.newClient.sectionOptionalClauses}</SectionHeading>
           <Text fontSize="xs" color="gray.500" mt={-3} mb={-1} fontWeight="300" lineHeight="1.5">
-            Toggle these on only when they apply to this booking. Each adds a clearly-titled section to the contract.
+            {t.newClient.optionalClausesIntro}
           </Text>
 
           <Box pt={2}>
@@ -742,10 +750,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             >
               <Box>
                 <Text fontSize="sm" color="gray.700" fontWeight="500">
-                  Two-camera coverage (lead + second camera operator)
+                  {t.newClient.twoCameraLabel}
                 </Text>
                 <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
-                  Adds a clause describing two-camera coverage for key moments, with the Second Camera Operator acting in an assistant capacity (not as an independent professional). Use this when you're working with an assistant covering supplemental angles.
+                  {t.newClient.twoCameraHelp}
                 </Text>
               </Box>
             </Checkbox>
@@ -760,25 +768,25 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             >
               <Box>
                 <Text fontSize="sm" color="gray.700" fontWeight="500">
-                  Option for additional retouching after delivery
+                  {t.newClient.additionalRetouchingLabel}
                 </Text>
                 <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
-                  Adds a clause noting that the Client can request additional retouching (skin smoothing, advanced color, object removal, etc.) beyond the standard edits, with scope and price negotiated separately.
+                  {t.newClient.additionalRetouchingHelp}
                 </Text>
               </Box>
             </Checkbox>
           </Box>
 
           {/* ─── Additional notes ─── */}
-          <SectionHeading>Additional Notes (optional)</SectionHeading>
+          <SectionHeading>{t.newClient.sectionAdditionalNotes}</SectionHeading>
           <Field
-            label="Custom Clauses / Addendums"
-            helpText="Anything specific to this booking — e.g. 'Includes drone footage', 'Second photographer for ceremony only', or any unusual terms. Appears as an addendum at the end of the contract. Leave blank to skip."
+            label={t.newClient.customClausesLabel}
+            helpText={t.newClient.customClausesHelp}
           >
             <Textarea
               value={additionalNotes}
               onChange={(e) => setAdditionalNotes(e.target.value)}
-              placeholder="Leave blank if none."
+              placeholder={t.newClient.customClausesPlaceholder}
               focusBorderColor="#c9a96e"
               rows={4}
               fontSize={{ base: 'md', md: 'sm' }}
@@ -798,9 +806,9 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             fullWidth
             wrapText
             isLoading={submitting}
-            loadingText="Creating..."
+            loadingText={t.newClient.submitting}
           >
-            Create Portal &amp; Send Invite
+            {t.newClient.submit}
           </CTAButton>
         </VStack>
       </Box>
