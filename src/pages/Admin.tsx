@@ -183,10 +183,12 @@ const Admin = () => {
         <Box
           bg="gray.50"
           minH="100vh"
-          // Top gap clears the fixed site Navbar (~80px). Bottom gap
-          // clears our fixed bottom-nav bar + iOS home indicator.
-          pt={{ base: 20, md: 24 }}
-          pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 20 }}
+          // Admin panel hides the site-wide Navbar + Footer (App.tsx +
+          // login-only Navbar/Footer in this file), so the top gap
+          // just clears the iOS status bar / notch. Bottom gap clears
+          // our fixed bottom-nav bar + iOS home indicator.
+          pt={{ base: 'calc(env(safe-area-inset-top) + 12px)', md: 8 }}
+          pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 12 }}
           px={{ base: 4, md: 8 }}
           // Any single overflowing child would give the whole admin panel
           // a horizontal page scroll — a classic mobile bug. This is a
