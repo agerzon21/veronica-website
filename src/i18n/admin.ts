@@ -1284,6 +1284,13 @@ const dict = {
     deletePaymentAria: { en: 'Delete payment', ru: 'Удалить оплату' },
     confirmDelete: { en: 'Confirm delete', ru: 'Подтвердить удаление' },
     deleting: { en: 'Deleting...', ru: 'Удаляю...' },
+    // Loading-text variants — kept as three-period strings so they
+    // read consistently next to the other "-ing..." labels in this
+    // file (deleting, opening, delivering). common.saving/sending use
+    // the typographic ellipsis char; here we want visual parity within
+    // one screen.
+    saving: { en: 'Saving...', ru: 'Сохраняю...' },
+    sending: { en: 'Sending...', ru: 'Отправляю...' },
 
     // ─── Details section ──────────────────────────────
     displayNameLabel: { en: 'Display Name', ru: 'Имя для отображения' },

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { FaComments, FaDatabase } from 'react-icons/fa';
 import AdminAssistantChat from './AdminAssistantChat';
 import AdminAssistantData from './AdminAssistantData';
+import { useAdminLang } from '../i18n/admin';
 
 /**
  * "Assistant" tab in /admin — two internal sub-tabs:
@@ -40,6 +41,7 @@ function loadInitialLanguage(): ChatLanguage {
 }
 
 const AdminAssistant = ({ adminPassword }: Props) => {
+  const { t } = useAdminLang();
   const [subTab, setSubTab] = useState<SubTab>('chat');
   const [language, setLanguage] = useState<ChatLanguage>(loadInitialLanguage);
 
@@ -68,17 +70,17 @@ const AdminAssistant = ({ adminPassword }: Props) => {
             letterSpacing="0.25em"
             color="#c9a96e"
           >
-            Admin
+            {t.common.adminKicker}
           </Text>
           <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-            Assistant
+            {t.assistant.tabTitle}
           </Text>
           {/* Concise subtitle that stays on one line at 375px so the
               header doesn't eat two extra rows of vertical space on
               mobile — every pixel matters when the chat + composer
               need to fit above the bottom nav. */}
           <Text fontSize={{ base: 'xs', md: 'sm' }} color="gray.500" fontWeight="300" noOfLines={1}>
-            Chat with your AI or browse its data.
+            {t.assistant.subtitle}
           </Text>
         </VStack>
         <LanguageToggle value={language} onChange={setLanguage} />
@@ -91,13 +93,13 @@ const AdminAssistant = ({ adminPassword }: Props) => {
         <SubTabButton
           active={subTab === 'chat'}
           icon={FaComments}
-          label="Chat"
+          label={t.assistant.subtabChat}
           onClick={() => setSubTab('chat')}
         />
         <SubTabButton
           active={subTab === 'data'}
           icon={FaDatabase}
-          label="Data"
+          label={t.assistant.subtabData}
           onClick={() => setSubTab('data')}
         />
       </Flex>
@@ -127,6 +129,7 @@ function LanguageToggle({
   value: ChatLanguage;
   onChange: (next: ChatLanguage) => void;
 }) {
+  const { t } = useAdminLang();
   return (
     <HStack
       spacing={0}
@@ -136,7 +139,7 @@ function LanguageToggle({
       borderRadius="full"
       p="3px"
       role="group"
-      aria-label="Chat language"
+      aria-label={t.assistant.chatLanguageAria}
     >
       <LangPill active={value === 'ru'} onClick={() => onChange('ru')}>
         RU

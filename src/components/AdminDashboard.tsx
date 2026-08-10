@@ -2,6 +2,7 @@ import { Box, HStack, VStack, Text, Flex, Badge, Icon, SimpleGrid, IconButton } 
 import { FaPlus, FaSyncAlt, FaTable, FaCalendarAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminCalendarView from './AdminCalendarView';
+import { useAdminLang } from '../i18n/admin';
 
 export interface AdminPortalSummary {
   id: string;
@@ -70,6 +71,7 @@ const AdminDashboard = ({
   viewMode = 'table',
   onChangeViewMode,
 }: Props) => {
+  const { t } = useAdminLang();
   // Fallback no-op — used only when a caller forgets to wire
   // onChangeViewMode (shouldn't happen in Admin.tsx, but keeps the
   // desktop view toggle from crashing if someone imports this in
@@ -90,13 +92,13 @@ const AdminDashboard = ({
             letterSpacing="0.25em"
             color="#c9a96e"
           >
-            Admin
+            {t.common.adminKicker}
           </Text>
           <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-            Clients
+            {t.clients.tabTitle}
           </Text>
           <Text fontSize="sm" color="gray.500" fontWeight="300">
-            {portals.length} portal{portals.length === 1 ? '' : 's'}
+            {t.clients.portalCount(portals.length)}
           </Text>
         </VStack>
         <HStack spacing={2} flexShrink={0}>
@@ -113,20 +115,20 @@ const AdminDashboard = ({
             <ViewToggleButton
               active={viewMode === 'table'}
               icon={FaTable}
-              label="Table"
+              label={t.nav.table}
               onClick={() => setViewMode('table')}
             />
             <ViewToggleButton
               active={viewMode === 'calendar'}
               icon={FaCalendarAlt}
-              label="Calendar"
+              label={t.nav.calendar}
               onClick={() => setViewMode('calendar')}
             />
           </HStack>
           {/* Refresh is icon-only across every admin tab now (Messages,
               Journal, Clients) so the label pattern is consistent. */}
           <IconButton
-            aria-label="Refresh"
+            aria-label={t.common.refresh}
             icon={<Icon as={FaSyncAlt} boxSize={4} />}
             onClick={onRefresh}
             variant="ghost"
@@ -141,7 +143,7 @@ const AdminDashboard = ({
               gallery-only portal (chooser decides), so "New Client" was
               misleading. Just "+ New". */}
           <CTAButton onClick={onNewClient} icon={FaPlus} variant="solid" size="sm">
-            New
+            {t.clients.newClient}
           </CTAButton>
         </HStack>
       </Flex>
@@ -207,6 +209,7 @@ function TableView({
   portals: AdminPortalSummary[];
   onOpenPortal: (id: string) => void;
 }) {
+  const { t } = useAdminLang();
   return (
     <>
 
@@ -215,7 +218,7 @@ function TableView({
       {portals.length === 0 && (
         <Box bg="white" borderRadius="md" border="1px solid" borderColor="gray.200" py={20} textAlign="center">
           <Text fontSize="sm" color="gray.500" fontWeight="300">
-            No portals yet. Tap "+ New" above to create the first one.
+            {t.clients.emptyState}
           </Text>
         </Box>
       )}
@@ -237,11 +240,11 @@ function TableView({
             color="gray.500"
             gap={4}
           >
-            <Box flex="2.5">Client</Box>
-            <Box flex="1.2">Event Date</Box>
-            <Box flex="1.5">Contract</Box>
-            <Box flex="1.5">Balance</Box>
-            <Box flex="1.5">Gallery</Box>
+            <Box flex="2.5">{t.clients.tableHeaders.client}</Box>
+            <Box flex="1.2">{t.clients.tableHeaders.eventDate}</Box>
+            <Box flex="1.5">{t.clients.tableHeaders.contract}</Box>
+            <Box flex="1.5">{t.clients.tableHeaders.balance}</Box>
+            <Box flex="1.5">{t.clients.tableHeaders.gallery}</Box>
           </Flex>
 
           {/* Rows */}
@@ -264,6 +267,7 @@ function TableView({
 }
 
 function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: () => void }) {
+  const { t } = useAdminLang();
   return (
     <Flex
       as="button"
@@ -287,22 +291,24 @@ function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
     >
       <Box flex="2.5">
         <Text fontWeight="500" color="gray.800">
-          {portal.client_display_name || portal.client_email || '(unnamed)'}
+          {portal.client_display_name || portal.client_email || t.clients.unnamed}
         </Text>
         <HStack spacing={2} mt={0.5}>
           {portal.session_type && (
+            // session_type is a DB enum value ('portrait', 'wedding', ...)
+            // that also travels over the wire — leaving it English + capitalized.
             <Text fontSize="xs" color="gray.500" textTransform="capitalize">
               {portal.session_type}
             </Text>
           )}
           {portal.pending_invite && (
             <Badge fontSize={{ base: 'xs', md: '2xs' }} colorScheme="orange" variant="subtle">
-              Invite pending
+              {t.clients.status.pendingInvite}
             </Badge>
           )}
           {portal.mode === 'simple' && (
             <Badge fontSize={{ base: 'xs', md: '2xs' }} colorScheme="gray" variant="subtle">
-              Gallery-only
+              {t.clients.status.galleryOnly}
             </Badge>
           )}
         </HStack>
@@ -324,6 +330,7 @@ function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
 }
 
 function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: () => void }) {
+  const { t } = useAdminLang();
   return (
     <Box
       as="button"
@@ -353,10 +360,11 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
       <VStack align="stretch" spacing={3}>
         <Box>
           <Text fontWeight="500" color="gray.800">
-            {portal.client_display_name || portal.client_email || '(unnamed)'}
+            {portal.client_display_name || portal.client_email || t.clients.unnamed}
           </Text>
           <HStack spacing={2} mt={1} flexWrap="wrap">
             {portal.session_type && (
+              // See PortalRow — session_type stays as-is (English enum value).
               <Text fontSize="xs" color="gray.500" textTransform="capitalize">
                 {portal.session_type}
               </Text>
@@ -366,12 +374,12 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
             </Text>
             {portal.pending_invite && (
               <Badge fontSize="2xs" colorScheme="orange" variant="subtle">
-                Invite pending
+                {t.clients.status.pendingInvite}
               </Badge>
             )}
             {portal.mode === 'simple' && (
               <Badge fontSize="2xs" colorScheme="gray" variant="subtle">
-                Gallery-only
+                {t.clients.status.galleryOnly}
               </Badge>
             )}
           </HStack>
@@ -383,15 +391,15 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
             wider than its container. */}
         <SimpleGrid columns={{ base: 2, sm: 3 }} spacing={{ base: 2, md: 4 }} fontSize="xs">
           <VStack align="flex-start" spacing={0.5} minW={0}>
-            <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">Contract</Text>
+            <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.contract}</Text>
             <ContractStatusBadge status={portal.contract_status} />
           </VStack>
           <VStack align="flex-start" spacing={0.5} minW={0}>
-            <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">Balance</Text>
+            <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.balance}</Text>
             <BalanceLine paid={portal.paid_to_date} total={portal.contract_total_amount} />
           </VStack>
           <VStack align="flex-start" spacing={0.5} minW={0}>
-            <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">Gallery</Text>
+            <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.gallery}</Text>
             <GalleryStatusBadge portal={portal} />
           </VStack>
         </SimpleGrid>
@@ -401,11 +409,14 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
 }
 
 function ContractStatusBadge({ status }: { status: AdminPortalSummary['contract_status'] }) {
+  const { t } = useAdminLang();
+  // Colors stay local; labels come from the shared dict so they
+  // read the same as everywhere else contract statuses appear.
   const map = {
-    none: { color: 'gray', label: 'N/A' },
-    pending: { color: 'orange', label: 'Pending' },
-    signed: { color: 'green', label: 'Signed' },
-    void: { color: 'red', label: 'Void' },
+    none: { color: 'gray', label: t.clients.status.contract.none },
+    pending: { color: 'orange', label: t.clients.status.contract.pending },
+    signed: { color: 'green', label: t.clients.status.contract.signed },
+    void: { color: 'red', label: t.clients.status.contract.void },
   } as const;
   const cfg = map[status];
   return (
@@ -416,12 +427,13 @@ function ContractStatusBadge({ status }: { status: AdminPortalSummary['contract_
 }
 
 function BalanceLine({ paid, total }: { paid: number; total: number | null }) {
+  const { t } = useAdminLang();
   if (total === null) return <Text color="gray.500">—</Text>;
   const remaining = total - paid;
   if (remaining <= 0 && total > 0) {
     return (
       <Badge colorScheme="green" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
-        Paid {formatMoney(total)}
+        {t.clients.balancePaid(formatMoney(total))}
       </Badge>
     );
   }
@@ -434,11 +446,12 @@ function BalanceLine({ paid, total }: { paid: number; total: number | null }) {
 }
 
 function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
+  const { t } = useAdminLang();
   if (portal.gallery_delivered_at) {
     if (portal.gallery_expires_at && new Date(portal.gallery_expires_at).getTime() < Date.now()) {
       return (
         <Badge colorScheme="gray" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
-          Expired
+          {t.clients.status.gallery.expired}
         </Badge>
       );
     }
@@ -450,7 +463,7 @@ function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
     return (
       <HStack spacing={2}>
         <Badge colorScheme="green" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
-          Delivered
+          {t.clients.status.gallery.delivered}
         </Badge>
         {daysLeft !== null && daysLeft >= 0 && (
           <Text
@@ -458,7 +471,7 @@ function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
             color={daysLeft < 7 ? 'orange.600' : 'gray.500'}
             fontWeight={daysLeft < 7 ? '500' : '400'}
           >
-            {daysLeft}d left
+            {t.clients.status.gallery.daysLeft(daysLeft)}
           </Text>
         )}
       </HStack>
@@ -467,13 +480,13 @@ function GalleryStatusBadge({ portal }: { portal: AdminPortalSummary }) {
   if (portal.drive_url) {
     return (
       <Badge colorScheme="blue" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
-        Ready
+        {t.clients.status.gallery.ready}
       </Badge>
     );
   }
   return (
     <Badge colorScheme="gray" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
-      Not started
+      {t.clients.status.gallery.notStarted}
     </Badge>
   );
 }

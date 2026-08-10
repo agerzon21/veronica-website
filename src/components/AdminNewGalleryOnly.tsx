@@ -4,6 +4,7 @@ import { FaCheck, FaCopy } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import SessionTypePicker from './SessionTypePicker';
+import { useAdminLang } from '../i18n/admin';
 
 interface Props {
   adminPassword: string;
@@ -42,6 +43,9 @@ const buildDisplayName = (sessionType: string, clientName: string, year: string)
 };
 
 // "2026-09-25" → "September 25, 2026"
+// Kept English-only on purpose: this string lands in the share message
+// that Vero sends to clients (who are almost always English-speaking).
+// Not part of the admin UI language.
 const fmtDate = (iso: string): string => {
   if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
@@ -50,6 +54,9 @@ const fmtDate = (iso: string): string => {
   return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 };
 
+// The full share message stays English on purpose — it's copy that Vero
+// sends to her (English-speaking) clients, not admin UI. Do not wrap in
+// the i18n dict.
 const buildShareMessage = (
   firstName: string,
   expiresIso: string | null,
@@ -89,6 +96,7 @@ interface SuccessState {
 }
 
 const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
+  const { t } = useAdminLang();
   const [sessionType, setSessionType] = useState('portrait');
   const [clientName, setClientName] = useState('');
   const [eventDateIso, setEventDateIso] = useState('');
@@ -125,38 +133,38 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
     setError('');
 
     if (!sessionType.trim()) {
-      setError('Session type is required.');
+      setError(t.newGallery.errors.sessionTypeRequired);
       return;
     }
     if (!clientName.trim()) {
-      setError('Client name is required.');
+      setError(t.newGallery.errors.clientNameRequired);
       return;
     }
     if (!displayName.trim()) {
-      setError('Display name is required.');
+      setError(t.newGallery.errors.displayNameRequired);
       return;
     }
     if (!galleryPassword.trim()) {
-      setError('Gallery password is required.');
+      setError(t.newGallery.errors.galleryPasswordRequired);
       return;
     }
     const months = Number(retentionMonths);
     if (!Number.isFinite(months) || months <= 0) {
-      setError('Retention months must be a positive number.');
+      setError(t.newGallery.errors.retentionMustBePositive);
       return;
     }
     const totalNum = totalAmount ? Number(totalAmount) : null;
     const retainerNum = retainerAmount ? Number(retainerAmount) : null;
     if (totalNum !== null && (!Number.isFinite(totalNum) || totalNum < 0)) {
-      setError('Total must be a non-negative number.');
+      setError(t.newGallery.errors.totalMustBeNonNegative);
       return;
     }
     if (retainerNum !== null && (!Number.isFinite(retainerNum) || retainerNum < 0)) {
-      setError('Retainer must be a non-negative number.');
+      setError(t.newGallery.errors.retainerMustBeNonNegative);
       return;
     }
     if (totalNum !== null && retainerNum !== null && retainerNum > totalNum) {
-      setError('Retainer cannot exceed total.');
+      setError(t.newGallery.errors.retainerExceedsTotal);
       return;
     }
 
@@ -196,10 +204,10 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
           emailWasSent: driveDelivered && !!clientEmail.trim(),
         });
       } else {
-        setError(data.error || `Server error (${res.status}).`);
+        setError(data.error || t.newGallery.errors.serverErrorWithStatus(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setSubmitting(false);
     }
@@ -219,18 +227,18 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
   return (
     <Box maxW="640px" mx="auto" px={{ base: 0, md: 0 }}>
       <Flex align="center" mb={8} gap={3}>
-        <AdminBackButton onClick={onCancel} label="Back" />
+        <AdminBackButton onClick={onCancel} label={t.common.back} />
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={6}>
         <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
-          New Gallery
+          {t.newGallery.kicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          Share a photo gallery
+          {t.newGallery.heading}
         </Text>
         <Text fontSize="sm" color="gray.500" fontWeight="300" mt={1}>
-          Use this for any booking that doesn't need a contract — portraits, family sessions, anniversaries, etc. You can create it as soon as you get the order and fill in the Drive URL later, or paste the URL now to deliver immediately.
+          {t.newGallery.intro}
         </Text>
       </VStack>
 
@@ -246,59 +254,59 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
       >
         <VStack align="stretch" spacing={6}>
           <Field
-            label="Session Type"
+            label={t.newGallery.sessionTypeLabel}
             required
-            helpText="What kind of shoot this is. Click a standard type, or use Custom for anything else."
+            helpText={t.newGallery.sessionTypeHelp}
           >
             <SessionTypePicker value={sessionType} onChange={setSessionType} />
           </Field>
 
           <Field
-            label="Client Name"
+            label={t.newGallery.clientNameLabel}
             required
-            helpText="The client's full name (first last, or however they go by). Used to greet them in emails and to build the display name."
+            helpText={t.newGallery.clientNameHelp}
           >
             <FormInput
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="e.g. Alex Smith"
+              placeholder={t.newGallery.clientNamePlaceholder}
             />
           </Field>
 
           <Field
-            label="Event Date"
-            helpText="Optional — used to sort the dashboard and to pick the year for the display name. Defaults to the current year if blank."
+            label={t.newGallery.eventDateLabel}
+            helpText={t.newGallery.eventDateHelp}
           >
             <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
           </Field>
 
           <Field
-            label="Display Name"
+            label={t.newGallery.displayNameLabel}
             helpText={
               displayNameOverride !== null
-                ? 'Custom — clear the field to go back to the auto-generated name.'
-                : 'Auto-generated as "{Session} {Client Name} {Year}", e.g. "Portrait Alex Smith 2026". Type to override.'
+                ? t.newGallery.displayNameHelpCustom
+                : t.newGallery.displayNameHelpAuto
             }
           >
             <FormInput
               value={displayName}
               onChange={(e) => setDisplayNameOverride(e.target.value)}
-              placeholder="Portrait Alex Smith 2026"
+              placeholder={t.newGallery.displayNamePlaceholder}
             />
           </Field>
 
           <Field
-            label="Gallery Password"
+            label={t.newGallery.galleryPasswordLabel}
             helpText={
               galleryPasswordOverride !== null
-                ? 'Custom — clear the field to go back to the auto-generated password.'
-                : 'Auto-generated from the display name (spaces removed). Type to override.'
+                ? t.newGallery.galleryPasswordHelpCustom
+                : t.newGallery.galleryPasswordHelpAuto
             }
           >
             <FormInput
               value={galleryPassword}
               onChange={(e) => setGalleryPasswordOverride(e.target.value)}
-              placeholder="PortraitAlexSmith2026"
+              placeholder={t.newGallery.galleryPasswordPlaceholder}
               autoCapitalize="characters"
               autoCorrect="off"
               spellCheck={false}
@@ -306,30 +314,30 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
           </Field>
 
           <Field
-            label="Google Drive Folder URL"
-            helpText="Paste the share URL of the folder containing the gallery. Make sure the service account has Viewer access. Optional — leave blank if you're just creating the booking placeholder now and will attach photos later."
+            label={t.newGallery.driveUrlLabel}
+            helpText={t.newGallery.driveUrlHelp}
           >
             <FormInput
               type="url"
               value={driveUrl}
               onChange={(e) => setDriveUrl(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/..."
+              placeholder={t.newGallery.driveUrlPlaceholder}
             />
           </Field>
 
           <Field
-            label="Client Email (optional)"
-            helpText="If you enter an email AND a Drive URL above, the client gets an automatic email with the gallery link and password as soon as you click Create. Leave blank to copy the message manually on the next screen."
+            label={t.newGallery.clientEmailLabel}
+            helpText={t.newGallery.clientEmailHelp}
           >
             <FormInput
               type="email"
               value={clientEmail}
               onChange={(e) => setClientEmail(e.target.value)}
-              placeholder="client@example.com"
+              placeholder={t.newGallery.clientEmailPlaceholder}
             />
           </Field>
 
-          <Field label="Retention (months)" helpText="How long the gallery stays online after delivery. Default is 3.">
+          <Field label={t.newGallery.retentionLabel} helpText={t.newGallery.retentionHelp}>
             <FormInput
               type="number"
               value={retentionMonths}
@@ -340,14 +348,14 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
 
           <Box pt={3} borderTop="1px solid" borderColor="gray.100">
             <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={2}>
-              Bookkeeping (optional)
+              {t.newGallery.bookkeepingKicker}
             </Text>
             <Text fontSize="xs" color="gray.500" mb={4} fontWeight="300">
-              These are only visible to you in the admin. The client doesn't see them — gallery-only clients only see their photos.
+              {t.newGallery.bookkeepingHint}
             </Text>
             <VStack align="stretch" spacing={4}>
               <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
-                <Field label="Total (USD)" w={{ base: '100%', md: '50%' }} helpText="What you charged for the project. Optional.">
+                <Field label={t.newGallery.totalLabel} w={{ base: '100%', md: '50%' }} helpText={t.newGallery.totalHelp}>
                   <FormInput
                     type="number"
                     inputMode="decimal"
@@ -357,7 +365,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
                     min="0"
                   />
                 </Field>
-                <Field label="Retainer / Deposit (USD)" w={{ base: '100%', md: '50%' }} helpText="Amount paid up front to reserve the booking.">
+                <Field label={t.newGallery.retainerLabel} w={{ base: '100%', md: '50%' }} helpText={t.newGallery.retainerHelp}>
                   <FormInput
                     type="number"
                     inputMode="decimal"
@@ -369,7 +377,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
                 </Field>
               </Stack>
               <Text fontSize="xs" color="gray.500" fontWeight="300">
-                You can log payments later in the client's detail view — Zelle, cash, Venmo, etc. — with notes attached.
+                {t.newGallery.paymentsNote}
               </Text>
             </VStack>
           </Box>
@@ -386,9 +394,9 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
             size="lg"
             fullWidth
             isLoading={submitting}
-            loadingText="Creating..."
+            loadingText={t.newGallery.creating}
           >
-            Create Gallery
+            {t.newGallery.createCta}
           </CTAButton>
         </VStack>
       </Box>
@@ -399,6 +407,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
 // ─── Success screen with copyable share message ─────────────────────────
 
 function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => void }) {
+  const { t } = useAdminLang();
   const message = buildShareMessage(state.firstName, state.expiresIso, state.galleryPassword);
   const directUrl = `https://vero.photography/portal/pass?password=${encodeURIComponent(state.galleryPassword)}`;
   const [copied, setCopied] = useState(false);
@@ -430,13 +439,13 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
     <Box maxW="640px" mx="auto">
       <VStack align="flex-start" spacing={1} mb={6}>
         <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
-          Done
+          {t.newGallery.doneKicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          Gallery created ✓
+          {t.newGallery.createdHeading}
         </Text>
         <Text fontSize="sm" color="gray.500" fontWeight="300" mt={1}>
-          {state.displayName} is in the system.
+          {t.newGallery.createdSubtitle(state.displayName)}
         </Text>
       </VStack>
 
@@ -447,7 +456,7 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
       {state.driveDelivered && (
         <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" px={{ base: 5, md: 7 }} py={{ base: 4, md: 5 }} mb={4}>
           <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={2}>
-            One-click link
+            {t.newGallery.oneClickLinkLabel}
           </Text>
           <Flex gap={2} align="center" direction={{ base: 'column', sm: 'row' }}>
             <Input
@@ -470,11 +479,11 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
               >
                 {urlCopied ? (
                   <>
-                    <Icon as={FaCheck} boxSize={3} mr={2} /> Copied
+                    <Icon as={FaCheck} boxSize={3} mr={2} /> {t.common.copied}
                   </>
                 ) : (
                   <>
-                    <Icon as={FaCopy} boxSize={3} mr={2} /> Copy
+                    <Icon as={FaCopy} boxSize={3} mr={2} /> {t.common.copy}
                   </>
                 )}
               </CTAButton>
@@ -484,12 +493,12 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
                 size="sm"
                 fullWidth={{ base: true, md: false }}
               >
-                Open
+                {t.common.open}
               </CTAButton>
             </Flex>
           </Flex>
           <Text fontSize="xs" color="gray.500" mt={2} fontWeight="300">
-            Click Open to test the link in a new tab. The full share message is below.
+            {t.newGallery.oneClickLinkHint}
           </Text>
         </Box>
       )}
@@ -498,19 +507,19 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
         <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
           <Box>
             <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500">
-              {state.driveDelivered ? 'Share this with the client' : 'Status'}
+              {state.driveDelivered ? t.newGallery.shareWithClient : t.newGallery.statusLabel}
             </Text>
             {state.emailWasSent ? (
               <Text fontSize="sm" color="gray.600" fontWeight="300" mt={1}>
-                An email has been sent to the client — this is a copy in case you want to send it via text/WhatsApp too.
+                {t.newGallery.emailWasSentBody}
               </Text>
             ) : state.driveDelivered ? (
               <Text fontSize="sm" color="gray.600" fontWeight="300" mt={1}>
-                No client email on file — copy this message and send it however you're in touch.
+                {t.newGallery.noEmailBody}
               </Text>
             ) : (
               <Text fontSize="sm" color="gray.600" fontWeight="300" mt={1}>
-                The gallery is set up but no Drive URL was provided yet. Open the client's detail view to paste the URL and mark as delivered when ready.
+                {t.newGallery.notDeliveredBody}
               </Text>
             )}
           </Box>
@@ -519,12 +528,12 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
               {copied ? (
                 <>
                   <Icon as={FaCheck} boxSize={3} mr={2} />
-                  Copied
+                  {t.common.copied}
                 </>
               ) : (
                 <>
                   <Icon as={FaCopy} boxSize={3} mr={2} />
-                  Copy message
+                  {t.newGallery.copyMessage}
                 </>
               )}
             </CTAButton>
@@ -554,10 +563,10 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
                 // can overflow narrow mobile viewports without a break rule.
                 sx={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}
               >
-                Password: <Text as="span" fontFamily="monospace">{state.galleryPassword}</Text>
+                {t.newGallery.passwordPrefix} <Text as="span" fontFamily="monospace">{state.galleryPassword}</Text>
               </Text>
               <Text fontSize="sm" color="gray.500" fontWeight="300">
-                Save this somewhere — it's how you'll let the client into their gallery once you're ready to deliver.
+                {t.newGallery.passwordSaveHint}
               </Text>
             </VStack>
           </Box>
@@ -565,7 +574,7 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
       </Box>
 
       <CTAButton onClick={onDone} variant="outline" size="md" fullWidth>
-        Back to Dashboard
+        {t.newGallery.backToDashboard}
       </CTAButton>
     </Box>
   );

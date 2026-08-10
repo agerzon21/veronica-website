@@ -1,6 +1,7 @@
 import { Box, VStack, Text, SimpleGrid, Icon, Flex } from '@chakra-ui/react';
 import { FaFileSignature, FaImages } from 'react-icons/fa';
 import AdminBackButton from './ui/AdminBackButton';
+import { useAdminLang } from '../i18n/admin';
 
 interface Props {
   onPick: (mode: 'full' | 'gallery') => void;
@@ -8,34 +9,35 @@ interface Props {
 }
 
 const AdminModeChooser = ({ onPick, onCancel }: Props) => {
+  const { t } = useAdminLang();
   return (
     <Box maxW="900px" mx="auto" px={{ base: 4, md: 6 }} py={{ base: 6, md: 8 }}>
       <Flex align="center" mb={8} gap={3}>
         {/* Standard 44×44 back affordance — replaces the old hand-rolled
             chevron-with-Back-text link that had a ~20px tap target. */}
-        <AdminBackButton onClick={onCancel} label="Back" />
+        <AdminBackButton onClick={onCancel} label={t.common.back} />
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={8}>
         <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
-          New Client
+          {t.modeChooser.kicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          What kind of booking?
+          {t.modeChooser.title}
         </Text>
       </VStack>
 
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
         <Card
           icon={FaFileSignature}
-          title="Full Portal"
-          description="A new booking with a contract to sign, payment tracking, onboarding email, and photo delivery later. Use this for weddings and most paid shoots."
+          title={t.modeChooser.fullTitle}
+          description={t.modeChooser.fullDescription}
           onClick={() => onPick('full')}
         />
         <Card
           icon={FaImages}
-          title="Gallery Only"
-          description="Just share a Google Drive gallery with a password. No contract, no email, no login — replaces the manual photo handoffs. Use this after a shoot when there's no portal flow."
+          title={t.modeChooser.galleryOnlyTitle}
+          description={t.modeChooser.galleryOnlyDescription}
           onClick={() => onPick('gallery')}
         />
       </SimpleGrid>

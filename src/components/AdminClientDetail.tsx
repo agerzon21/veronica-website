@@ -4,6 +4,7 @@ import { FaCheck, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import { CONTRACT_TEMPLATES, extractVariableKeys } from '../data/contract-template';
+import { useAdminLang } from '../i18n/admin';
 
 interface Props {
   portalId: string;
@@ -74,6 +75,7 @@ const daysUntil = (iso: string | null): number | null => {
 };
 
 const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Props) => {
+  const { t } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,10 +96,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
         setPortal(data.portal);
         setPayments(data.payments);
       } else {
-        setError(data.error || `Server error (${res.status})`);
+        setError(data.error || t.clientDetail.serverErrorStatus(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
     }
@@ -122,10 +124,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
         await reload();
         return true;
       }
-      setError(data.error || `Server error (${res.status})`);
+      setError(data.error || t.clientDetail.serverErrorStatus(res.status));
       return false;
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
       return false;
     } finally {
       setSavingField(null);
@@ -145,7 +147,11 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
     ) {
       const remaining = portal.contract_total_amount - portal.paid_to_date;
       const ok = window.confirm(
-        `Heads up — ${`$${remaining.toFixed(0)}`} is still outstanding (paid $${portal.paid_to_date.toFixed(0)} of $${portal.contract_total_amount.toFixed(0)}).\n\nMake sure you've received the full payment, or that you've logged it in the Payments section above.\n\nDeliver anyway?`,
+        t.clientDetail.outstandingConfirm(
+          `$${remaining.toFixed(0)}`,
+          `$${portal.paid_to_date.toFixed(0)}`,
+          `$${portal.contract_total_amount.toFixed(0)}`,
+        ),
       );
       if (!ok) return;
     }
@@ -161,10 +167,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       if (res.ok && data.success) {
         await reload();
       } else {
-        setError(data.error || `Server error (${res.status})`);
+        setError(data.error || t.clientDetail.serverErrorStatus(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setSavingField(null);
     }
@@ -173,7 +179,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   if (loading && !portal) {
     return (
       <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }} textAlign="center" py={20}>
-        <Text color="gray.500">Loading…</Text>
+        <Text color="gray.500">{t.common.loading}</Text>
       </Box>
     );
   }
@@ -181,8 +187,8 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   if (!portal) {
     return (
       <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
-        <AdminBackButton onClick={onBack} label="Back" />
-        <Text color="red.500" mt={6}>{error || 'Could not load this portal.'}</Text>
+        <AdminBackButton onClick={onBack} label={t.common.back} />
+        <Text color="red.500" mt={6}>{error || t.clientDetail.couldNotLoad}</Text>
       </Box>
     );
   }
@@ -195,23 +201,26 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
 
   return (
     <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
-      <AdminBackButton onClick={onBack} label="Back" />
+      <AdminBackButton onClick={onBack} label={t.common.back} />
 
       <VStack align="flex-start" spacing={2} mb={6}>
         <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
-          {portal.session_type ?? 'Client'}
+          {/* Session type comes from user input via a fixed enum; the
+              value itself is UI-visible copy that stays English on the
+              wire, so only the fallback needs translating. */}
+          {portal.session_type ?? t.clientDetail.kickerFallback}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          {portal.client_display_name || portal.client_email || '(unnamed)'}
+          {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
         </Text>
         <HStack spacing={2} flexWrap="wrap">
           {portal.client_email && <Text fontSize="sm" color="gray.500">{portal.client_email}</Text>}
           {portal.event_date && <Text fontSize="sm" color="gray.500">· {formatDate(portal.event_date)}</Text>}
           {portal.mode === 'simple' && (
-            <Badge fontSize="2xs" colorScheme="gray" variant="subtle">Gallery-only</Badge>
+            <Badge fontSize="2xs" colorScheme="gray" variant="subtle">{t.clientDetail.badgeGalleryOnly}</Badge>
           )}
           {portal.setup_token && (
-            <Badge fontSize="2xs" colorScheme="orange" variant="subtle">Invite pending</Badge>
+            <Badge fontSize="2xs" colorScheme="orange" variant="subtle">{t.clientDetail.badgeInvitePending}</Badge>
           )}
         </HStack>
       </VStack>
@@ -223,13 +232,13 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       )}
 
       {/* ─── Gallery section ─── */}
-      <Section title="Photo Gallery">
+      <Section title={t.clientDetail.sectionPhotoGallery}>
         <VStack align="stretch" spacing={4}>
           <InlineField
-            label="Google Drive URL"
+            label={t.clientDetail.driveUrlLabel}
             value={portal.drive_url ?? ''}
-            placeholder="https://drive.google.com/drive/folders/..."
-            helpText="Paste the share URL of the gallery folder. After saving, click Open Folder below to verify the link works."
+            placeholder={t.clientDetail.driveUrlPlaceholder}
+            helpText={t.clientDetail.driveUrlHelp}
             saving={savingField === 'drive_url'}
             onSave={(v) => patch({ drive_url: v }, 'drive_url')}
           />
@@ -246,10 +255,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 size="sm"
               >
                 <Icon as={FaExternalLinkAlt} boxSize={3} mr={2} />
-                Preview Client Gallery
+                {t.clientDetail.previewClientGallery}
               </CTAButton>
               <Text fontSize="xs" color="gray.500" fontWeight="300">
-                Opens what the client sees at /portal/pass.
+                {t.clientDetail.previewClientGalleryHint}
               </Text>
             </Flex>
           )}
@@ -264,24 +273,24 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
           >
             <Box>
               <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                Delivery Status
+                {t.clientDetail.deliveryStatus}
               </Text>
               {portal.gallery_delivered_at ? (
                 <HStack spacing={3}>
                   <Badge colorScheme="green" variant="subtle" fontSize="xs">
-                    Delivered {formatDate(portal.gallery_delivered_at)}
+                    {t.clientDetail.deliveredOn(formatDate(portal.gallery_delivered_at))}
                   </Badge>
                   {portal.gallery_expires_at && (
                     <Text fontSize="sm" color={galleryDaysLeft !== null && galleryDaysLeft < 7 ? 'orange.600' : 'gray.600'}>
                       {galleryDaysLeft !== null && galleryDaysLeft >= 0
-                        ? `${galleryDaysLeft} day${galleryDaysLeft === 1 ? '' : 's'} remaining`
-                        : 'Expired'}
+                        ? t.clientDetail.daysRemaining(galleryDaysLeft)
+                        : t.clientDetail.expired}
                     </Text>
                   )}
                 </HStack>
               ) : (
                 <Badge colorScheme="gray" variant="subtle" fontSize="xs">
-                  Not delivered yet
+                  {t.clientDetail.notDelivered}
                 </Badge>
               )}
             </Box>
@@ -292,10 +301,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                   variant="solid"
                   size="sm"
                   isLoading={savingField === 'deliver'}
-                  loadingText="Delivering..."
+                  loadingText={t.clientDetail.delivering}
                   fullWidth={{ base: true, md: false }}
                 >
-                  Mark as Delivered
+                  {t.clientDetail.markAsDelivered}
                 </CTAButton>
               </Box>
             )}
@@ -304,12 +313,12 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       </Section>
 
       {/* ─── Gallery Pass section ─── */}
-      <Section title="Gallery Pass">
+      <Section title={t.clientDetail.sectionGalleryPass}>
         <VStack align="stretch" spacing={4}>
           <InlineField
-            label="Password"
+            label={t.clientDetail.passwordLabel}
             value={portal.gallery_password}
-            helpText="The password guests use at /portal/pass to view photos."
+            helpText={t.clientDetail.passwordHelp}
             saving={savingField === 'gallery_password'}
             onSave={(v) => patch({ gallery_password: v }, 'gallery_password')}
           />
@@ -323,10 +332,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
           >
             <Box>
               <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                Access
+                {t.clientDetail.access}
               </Text>
               <Text fontSize="sm" color={portal.gallery_enabled ? 'green.600' : 'gray.500'}>
-                {portal.gallery_enabled ? 'Enabled' : 'Disabled'}
+                {portal.gallery_enabled ? t.clientDetail.enabled : t.clientDetail.disabled}
               </Text>
             </Box>
             <Box w={{ base: '100%', md: 'auto' }}>
@@ -337,7 +346,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 isLoading={savingField === 'gallery_enabled'}
                 fullWidth={{ base: true, md: false }}
               >
-                {portal.gallery_enabled ? 'Disable' : 'Enable'}
+                {portal.gallery_enabled ? t.clientDetail.disable : t.clientDetail.enable}
               </CTAButton>
             </Box>
           </Stack>
@@ -357,7 +366,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
 
       {/* ─── Contract section (full-mode only) ─── */}
       {portal.mode === 'full' && (
-        <Section title="Contract">
+        <Section title={t.clientDetail.sectionContract}>
           <VStack align="stretch" spacing={3}>
             {/* Status label + signed-PDF CTA — same stacking pattern so
                 the "View Signed Copy" button doesn't orphan below. */}
@@ -369,7 +378,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             >
               <Box>
                 <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                  Status
+                  {t.clientDetail.status}
                 </Text>
                 <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
               </Box>
@@ -400,14 +409,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             books — full-mode portals always have one; simple-mode rows
             have one only when Vero entered totals at creation. ─── */}
       {portal.contract_total_amount !== null && (
-        <Section title="Payments">
+        <Section title={t.clientDetail.sectionPayments}>
           <VStack align="stretch" spacing={5}>
             {/* 3-up stat row. On mobile the columns stay side-by-side but
                 spacing shrinks so 3 numbers fit without wrapping. */}
             <SimpleGrid columns={3} spacing={{ base: 3, md: 6 }} fontSize="sm">
-              <Stat label="Total" value={formatMoney(portal.contract_total_amount)} />
-              <Stat label="Paid" value={formatMoney(portal.paid_to_date)} />
-              <Stat label="Remaining" value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
+              <Stat label={t.clientDetail.statTotal} value={formatMoney(portal.contract_total_amount)} />
+              <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
+              <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
             </SimpleGrid>
 
             <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
@@ -415,7 +424,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             {payments.length > 0 && (
               <Box>
                 <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
-                  History
+                  {t.clientDetail.history}
                 </Text>
                 <VStack align="stretch" spacing={2}>
                   {payments.map((p) => (
@@ -435,35 +444,35 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       )}
 
       {/* ─── Editable details (admin can correct typos etc.) ─── */}
-      <Section title="Details">
+      <Section title={t.clientDetail.sectionDetails}>
         <VStack align="stretch" spacing={4}>
           <InlineField
-            label="Display Name"
+            label={t.clientDetail.displayNameLabel}
             value={portal.client_display_name ?? ''}
-            helpText="What we'll greet them by in the portal."
+            helpText={t.clientDetail.displayNameHelp}
             saving={savingField === 'client_display_name'}
             onSave={(v) => patch({ client_display_name: v }, 'client_display_name')}
           />
           <InlineField
-            label="Client Email"
+            label={t.clientDetail.clientEmailLabel}
             value={portal.client_email ?? ''}
             helpText={
               portal.mode === 'simple'
-                ? 'Optional. If you add one, "Mark as Delivered" will email the client.'
+                ? t.clientDetail.clientEmailHelpSimple
                 : undefined
             }
             saving={savingField === 'client_email'}
             onSave={(v) => patch({ client_email: v }, 'client_email')}
           />
           <InlineField
-            label="Event Date"
+            label={t.clientDetail.eventDateLabel}
             type="date"
             value={portal.event_date ?? ''}
             saving={savingField === 'event_date'}
             onSave={(v) => patch({ event_date: v }, 'event_date')}
           />
           <InlineField
-            label="Session Type"
+            label={t.clientDetail.sessionTypeLabel}
             value={portal.session_type ?? ''}
             saving={savingField === 'session_type'}
             onSave={(v) => patch({ session_type: v }, 'session_type')}
@@ -473,11 +482,11 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
               section above starts surfacing. Frozen on signed full
               contracts (server enforces). */}
           <InlineField
-            label="Total Amount (USD)"
+            label={t.clientDetail.totalAmountLabel}
             type="text"
             value={portal.contract_total_amount?.toString() ?? ''}
             placeholder="0"
-            helpText="What you charged. Editable until the contract is signed (for full-mode rows)."
+            helpText={t.clientDetail.totalAmountHelp}
             saving={savingField === 'contract_total_amount'}
             onSave={(v) =>
               patch(
@@ -487,11 +496,11 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             }
           />
           <InlineField
-            label="Retainer / Deposit (USD)"
+            label={t.clientDetail.retainerLabel}
             type="text"
             value={portal.contract_retainer_amount?.toString() ?? ''}
             placeholder="0"
-            helpText="Non-refundable deposit. Editable until the contract is signed."
+            helpText={t.clientDetail.retainerHelp}
             saving={savingField === 'contract_retainer_amount'}
             onSave={(v) =>
               patch(
@@ -539,17 +548,18 @@ function Stat({ label, value, emphasize }: { label: string; value: string; empha
 }
 
 function ContractBadge({ status, signedAt }: { status: string; signedAt: string | null }) {
+  const { t } = useAdminLang();
   if (status === 'signed' && signedAt) {
     return (
       <HStack>
-        <Badge colorScheme="green" variant="subtle">Signed</Badge>
-        <Text fontSize="sm" color="gray.600">on {formatDate(signedAt)}</Text>
+        <Badge colorScheme="green" variant="subtle">{t.clientDetail.contractSigned}</Badge>
+        <Text fontSize="sm" color="gray.600">{t.clientDetail.contractSignedOn(formatDate(signedAt))}</Text>
       </HStack>
     );
   }
-  if (status === 'pending') return <Badge colorScheme="orange" variant="subtle">Pending signature</Badge>;
-  if (status === 'void') return <Badge colorScheme="red" variant="subtle">Void</Badge>;
-  return <Badge colorScheme="gray" variant="subtle">N/A</Badge>;
+  if (status === 'pending') return <Badge colorScheme="orange" variant="subtle">{t.clientDetail.contractPending}</Badge>;
+  if (status === 'void') return <Badge colorScheme="red" variant="subtle">{t.clientDetail.contractVoid}</Badge>;
+  return <Badge colorScheme="gray" variant="subtle">{t.clientDetail.contractNA}</Badge>;
 }
 
 // Inline editable field — keeps its own draft state so saves only happen
@@ -571,6 +581,7 @@ function InlineField({
   saving?: boolean;
   onSave: (v: string) => Promise<boolean | void>;
 }) {
+  const { t } = useAdminLang();
   const [draft, setDraft] = useState(value);
   const [touched, setTouched] = useState(false);
 
@@ -617,9 +628,9 @@ function InlineField({
             variant="solid"
             size="sm"
             isLoading={saving}
-            loadingText="Saving..."
+            loadingText={t.clientDetail.saving}
           >
-            Save
+            {t.common.save}
           </CTAButton>
         )}
       </Flex>
@@ -641,6 +652,7 @@ function AddPaymentForm({
   adminPassword: string;
   onAdded: () => void;
 }) {
+  const { t } = useAdminLang();
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('');
   const [note, setNote] = useState('');
@@ -659,7 +671,7 @@ function AddPaymentForm({
     setErr('');
     const n = parseFloat(amount);
     if (!Number.isFinite(n) || n <= 0) {
-      setErr('Enter a positive amount.');
+      setErr(t.clientDetail.enterPositiveAmount);
       return;
     }
     setSubmitting(true);
@@ -682,10 +694,12 @@ function AddPaymentForm({
         reset();
         onAdded();
       } else {
-        setErr(data.error || `Server error (${res.status}).`);
+        // Dict entry returns the phrase without a trailing period; append
+        // it here so the visible copy matches the original.
+        setErr(data.error || `${t.clientDetail.serverErrorStatus(res.status)}.`);
       }
     } catch {
-      setErr('Could not reach the server.');
+      setErr(t.common.couldNotReach);
     } finally {
       setSubmitting(false);
     }
@@ -694,14 +708,14 @@ function AddPaymentForm({
   return (
     <Box bg="gray.50" borderRadius="sm" border="1px solid" borderColor="gray.200" p={4}>
       <Text fontSize="xs" color="gray.500" letterSpacing="0.15em" textTransform="uppercase" mb={3}>
-        Log a Payment
+        {t.clientDetail.logAPayment}
       </Text>
       <VStack align="stretch" spacing={3}>
         {/* Amount / Method / Date stack vertically on phones so labels stay
             legible and each 44px-tall input has room to breathe. */}
         <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={3}>
           <Box>
-            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Amount (USD)</Text>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>{t.clientDetail.amountLabel}</Text>
             <Input
               type="number"
               value={amount}
@@ -715,11 +729,11 @@ function AddPaymentForm({
             />
           </Box>
           <Box>
-            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Method</Text>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>{t.clientDetail.methodLabel}</Text>
             <Input
               value={method}
               onChange={(e) => setMethod(e.target.value)}
-              placeholder="Zelle / Cash / Venmo..."
+              placeholder={t.clientDetail.methodPlaceholder}
               h={{ base: '44px', sm: '36px' }}
               bg="white"
               fontSize={{ base: 'md', sm: 'sm' }}
@@ -728,7 +742,7 @@ function AddPaymentForm({
             />
           </Box>
           <Box>
-            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Date</Text>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>{t.clientDetail.dateLabel}</Text>
             <Input
               type="date"
               value={paidAt}
@@ -742,11 +756,11 @@ function AddPaymentForm({
           </Box>
         </SimpleGrid>
         <Box>
-          <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>Note (optional)</Text>
+          <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>{t.clientDetail.noteLabel}</Text>
           <Textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Retainer received"
+            placeholder={t.clientDetail.notePlaceholder}
             rows={2}
             bg="white"
             fontSize={{ base: 'md', sm: 'sm' }}
@@ -754,8 +768,8 @@ function AddPaymentForm({
           />
         </Box>
         {err && <Text fontSize="sm" color="red.500">{err}</Text>}
-        <CTAButton onClick={submit} variant="solid" size="sm" isLoading={submitting} loadingText="Saving...">
-          Add Payment
+        <CTAButton onClick={submit} variant="solid" size="sm" isLoading={submitting} loadingText={t.clientDetail.saving}>
+          {t.clientDetail.addPayment}
         </CTAButton>
       </VStack>
     </Box>
@@ -773,6 +787,7 @@ function PaymentRow({
   adminPassword: string;
   onDeleted: () => void;
 }) {
+  const { t } = useAdminLang();
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -827,7 +842,7 @@ function PaymentRow({
       {confirming ? (
         <HStack spacing={2}>
           <Box as="button" onClick={() => setConfirming(false)} fontSize="xs" color="gray.500" cursor="pointer" bg="transparent" border="none">
-            Cancel
+            {t.common.cancel}
           </Box>
           <Box
             as="button"
@@ -839,14 +854,14 @@ function PaymentRow({
             border="none"
             disabled={submitting}
           >
-            {submitting ? 'Deleting...' : 'Confirm delete'}
+            {submitting ? t.clientDetail.deleting : t.clientDetail.confirmDelete}
           </Box>
         </HStack>
       ) : (
         // Delete icon needs a real 44×44 tap target on mobile — a bare 12px
         // icon inside a hair-thin Box was impossible to hit reliably.
         <IconButton
-          aria-label="Delete payment"
+          aria-label={t.clientDetail.deletePaymentAria}
           onClick={() => setConfirming(true)}
           icon={<Icon as={FaTrash} boxSize={3} />}
           variant="ghost"
@@ -878,6 +893,7 @@ function AccountSection({
   adminPassword: string;
   onChanged: () => void;
 }) {
+  const { t } = useAdminLang();
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -897,13 +913,14 @@ function AccountSection({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setResendMessage({ kind: 'ok', text: `Invite re-sent to ${portal.client_email}.` });
+        // client_email is user data — pass it into the dict function as-is.
+        setResendMessage({ kind: 'ok', text: t.clientDetail.inviteResent(portal.client_email ?? '') });
         onChanged();
       } else {
-        setResendMessage({ kind: 'err', text: data.error || `Server error (${res.status}).` });
+        setResendMessage({ kind: 'err', text: data.error || `${t.clientDetail.serverErrorStatus(res.status)}.` });
       }
     } catch {
-      setResendMessage({ kind: 'err', text: 'Could not reach the server.' });
+      setResendMessage({ kind: 'err', text: t.common.couldNotReach });
     } finally {
       setResending(false);
     }
@@ -912,7 +929,7 @@ function AccountSection({
   const handleOverride = async () => {
     setOverrideMessage(null);
     if (overridePassword.length < 6) {
-      setOverrideMessage({ kind: 'err', text: 'New password must be at least 6 characters.' });
+      setOverrideMessage({ kind: 'err', text: t.clientDetail.passwordTooShort });
       return;
     }
     setOverriding(true);
@@ -930,23 +947,23 @@ function AccountSection({
       if (res.ok && data.success) {
         setOverrideMessage({
           kind: 'ok',
-          text: `Password set. Share it with the client and ask them to change it on first login.`,
+          text: t.clientDetail.passwordSetOk,
         });
         setOverridePassword('');
         setOverrideOpen(false);
         onChanged();
       } else {
-        setOverrideMessage({ kind: 'err', text: data.error || `Server error (${res.status}).` });
+        setOverrideMessage({ kind: 'err', text: data.error || `${t.clientDetail.serverErrorStatus(res.status)}.` });
       }
     } catch {
-      setOverrideMessage({ kind: 'err', text: 'Could not reach the server.' });
+      setOverrideMessage({ kind: 'err', text: t.common.couldNotReach });
     } finally {
       setOverriding(false);
     }
   };
 
   return (
-    <Section title="Account">
+    <Section title={t.clientDetail.sectionAccount}>
       <VStack align="stretch" spacing={4}>
         {/* Account status + Resend Invite — stacks on mobile so the CTA
             spans full width and doesn't orphan under the badge. */}
@@ -958,14 +975,14 @@ function AccountSection({
         >
           <Box>
             <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-              Status
+              {t.clientDetail.status}
             </Text>
             {portal.client_has_password ? (
-              <Badge colorScheme="green" variant="subtle" fontSize="xs">Account active</Badge>
+              <Badge colorScheme="green" variant="subtle" fontSize="xs">{t.clientDetail.accountActive}</Badge>
             ) : portal.setup_token ? (
-              <Badge colorScheme="orange" variant="subtle" fontSize="xs">Invite pending</Badge>
+              <Badge colorScheme="orange" variant="subtle" fontSize="xs">{t.clientDetail.accountInvitePending}</Badge>
             ) : (
-              <Badge colorScheme="gray" variant="subtle" fontSize="xs">No account</Badge>
+              <Badge colorScheme="gray" variant="subtle" fontSize="xs">{t.clientDetail.noAccount}</Badge>
             )}
           </Box>
           {!portal.client_has_password && (
@@ -975,10 +992,10 @@ function AccountSection({
                 variant="outline"
                 size="sm"
                 isLoading={resending}
-                loadingText="Sending..."
+                loadingText={t.clientDetail.sending}
                 fullWidth={{ base: true, md: false }}
               >
-                Resend Invite
+                {t.clientDetail.resendInvite}
               </CTAButton>
             </Box>
           )}
@@ -1005,10 +1022,10 @@ function AccountSection({
           >
             <Box>
               <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                Password
+                {t.clientDetail.passwordLabel}
               </Text>
               <Text fontSize="sm" color="gray.600" fontWeight="300">
-                Set a temporary password for the client. Use this if they're locked out or if you need to set them up manually instead of waiting for them to use the welcome link.
+                {t.clientDetail.accountPasswordHelp}
               </Text>
             </Box>
             <Box w={{ base: '100%', md: 'auto' }}>
@@ -1018,7 +1035,7 @@ function AccountSection({
                 size="sm"
                 fullWidth={{ base: true, md: false }}
               >
-                {overrideOpen ? 'Cancel' : 'Set Password'}
+                {overrideOpen ? t.common.cancel : t.clientDetail.setPassword}
               </CTAButton>
             </Box>
           </Stack>
@@ -1028,7 +1045,7 @@ function AccountSection({
                 type="text"
                 value={overridePassword}
                 onChange={(e) => setOverridePassword(e.target.value)}
-                placeholder="At least 6 characters"
+                placeholder={t.clientDetail.passwordMinPlaceholder}
                 h={{ base: '44px', sm: '40px' }}
                 bg="white"
                 fontSize={{ base: 'md', sm: 'sm' }}
@@ -1039,9 +1056,9 @@ function AccountSection({
                 variant="solid"
                 size="sm"
                 isLoading={overriding}
-                loadingText="Saving..."
+                loadingText={t.clientDetail.saving}
               >
-                Save
+                {t.common.save}
               </CTAButton>
             </Flex>
           )}
@@ -1077,6 +1094,7 @@ function EditContractVariables({
   adminPassword: string;
   onSaved: () => void;
 }) {
+  const { t } = useAdminLang();
   const [open, setOpen] = useState(false);
   const [vars, setVars] = useState<Record<string, string>>(portal.contract_variables ?? {});
   const [saving, setSaving] = useState(false);
@@ -1112,13 +1130,13 @@ function EditContractVariables({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ kind: 'ok', text: 'Contract updated. The client will see the changes on next load.' });
+        setMessage({ kind: 'ok', text: t.clientDetail.contractUpdatedOk });
         onSaved();
       } else {
-        setMessage({ kind: 'err', text: data.error || `Server error (${res.status}).` });
+        setMessage({ kind: 'err', text: data.error || `${t.clientDetail.serverErrorStatus(res.status)}.` });
       }
     } catch {
-      setMessage({ kind: 'err', text: 'Could not reach the server.' });
+      setMessage({ kind: 'err', text: t.common.couldNotReach });
     } finally {
       setSaving(false);
     }
@@ -1130,7 +1148,7 @@ function EditContractVariables({
     return (
       <Box mt={3} p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
         <Text fontSize="xs" color="yellow.800">
-          Couldn't determine which template this portal uses. To make changes, void it and create a new one — or edit the relevant DB columns directly.
+          {t.clientDetail.editContractUnknownTemplate}
         </Text>
       </Box>
     );
@@ -1140,7 +1158,7 @@ function EditContractVariables({
     <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.100">
       <Flex justify="space-between" align="center" mb={2} wrap="wrap" gap={2}>
         <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em">
-          Edit contract
+          {t.clientDetail.editContractTitle}
         </Text>
         <Box
           as="button"
@@ -1155,11 +1173,11 @@ function EditContractVariables({
           cursor="pointer"
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
-          {open ? 'Hide' : 'Edit fields'}
+          {open ? t.clientDetail.editContractHide : t.clientDetail.editContractEditFields}
         </Box>
       </Flex>
       <Text fontSize="xs" color="gray.500" mb={3} fontWeight="300">
-        Any change here re-renders the contract the client sees. Once they sign, this section disappears and edits are no longer possible.
+        {t.clientDetail.editContractHint}
       </Text>
 
       {open && (
@@ -1204,9 +1222,9 @@ function EditContractVariables({
             variant="solid"
             size="sm"
             isLoading={saving}
-            loadingText="Saving..."
+            loadingText={t.clientDetail.saving}
           >
-            Save Contract Changes
+            {t.clientDetail.saveContractChanges}
           </CTAButton>
         </VStack>
       )}
@@ -1228,6 +1246,7 @@ function ViewSignedPdfButton({
   portalId: string;
   adminPassword: string;
 }) {
+  const { t } = useAdminLang();
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
 
@@ -1242,7 +1261,7 @@ function ViewSignedPdfButton({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.error || `Could not open (status ${res.status}).`);
+        setError(data?.error || t.clientDetail.couldNotOpenStatus(res.status));
         return;
       }
       const blob = await res.blob();
@@ -1251,7 +1270,7 @@ function ViewSignedPdfButton({
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error('[admin-portal-pdf] network error:', err);
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setOpening(false);
     }
@@ -1264,9 +1283,9 @@ function ViewSignedPdfButton({
         variant="outline"
         size="sm"
         isLoading={opening}
-        loadingText="Opening..."
+        loadingText={t.clientDetail.opening}
       >
-        View Signed Copy
+        {t.clientDetail.viewSignedCopy}
       </CTAButton>
       {error && (
         <Text fontSize="xs" color="red.500" mt={1}>
@@ -1292,6 +1311,7 @@ function DangerZone({
   adminPassword: string;
   onDeleted: () => void;
 }) {
+  const { t } = useAdminLang();
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -1309,10 +1329,10 @@ function DangerZone({
       if (res.ok && data.success) {
         onDeleted();
       } else {
-        setError(data.error || `Server error (${res.status}).`);
+        setError(data.error || `${t.clientDetail.serverErrorStatus(res.status)}.`);
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setSubmitting(false);
     }
@@ -1329,15 +1349,15 @@ function DangerZone({
       mt={2}
     >
       <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="red.500" mb={4}>
-        Danger Zone (Super-Admin)
+        {t.clientDetail.sectionDangerZone}
       </Text>
       <Text fontSize="sm" color="gray.600" mb={4} fontWeight="300">
-        Hard-deletes the portal and all logged payments. Cannot be undone. The signed-contract PDF in Blob storage is kept as a historical record.
+        {t.clientDetail.dangerZoneBody}
       </Text>
       {!confirming && (
         <CTAButton onClick={() => setConfirming(true)} variant="outline" size="sm">
           <Icon as={FaTrash} boxSize={3} mr={2} />
-          Delete this portal
+          {t.clientDetail.deleteThisPortal}
         </CTAButton>
       )}
       {confirming && (
@@ -1346,16 +1366,16 @@ function DangerZone({
         // in reading order but Confirm sits on top of the tap zone.
         <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2}>
           <CTAButton onClick={() => setConfirming(false)} variant="ghost" size="sm">
-            Cancel
+            {t.common.cancel}
           </CTAButton>
           <CTAButton
             onClick={doDelete}
             variant="danger"
             size="sm"
             isLoading={submitting}
-            loadingText="Deleting..."
+            loadingText={t.clientDetail.deleting}
           >
-            Confirm delete
+            {t.clientDetail.confirmDelete}
           </CTAButton>
         </Stack>
       )}

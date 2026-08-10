@@ -5,6 +5,7 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import { FaPlus, FaSyncAlt, FaBookOpen, FaExternalLinkAlt, FaEdit } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import AdminJournalEditor from './AdminJournalEditor';
+import { useAdminLang } from '../i18n/admin';
 
 /**
  * "Journal" tab in /admin — the entry point for creating + managing
@@ -48,6 +49,7 @@ type View =
   | { kind: 'editor'; id: string | null };
 
 const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
+  const { t } = useAdminLang();
   const [view, setView] = useState<View>({ kind: 'list' });
   const [posts, setPosts] = useState<JournalPostSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,10 +69,10 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
       if (res.ok && data.success) {
         setPosts(data.posts);
       } else {
-        setError(data.error || `Load failed (${res.status})`);
+        setError(data.error || t.journal.loadFailed(res.status));
       }
     } catch {
-      setError('Could not reach the server.');
+      setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
     }
@@ -113,19 +115,19 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
             letterSpacing="0.25em"
             color="#c9a96e"
           >
-            Admin
+            {t.common.adminKicker}
           </Text>
           <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-            Journal
+            {t.journal.tabTitle}
           </Text>
           <Text fontSize="sm" color="gray.500" fontWeight="300">
-            {posts ? `${posts.length} ${posts.length === 1 ? 'post' : 'posts'}` : 'Weekly recap posts.'}
+            {posts ? t.journal.postCount(posts.length) : t.journal.subtitleEmpty}
           </Text>
         </VStack>
 
         <HStack spacing={2} flexShrink={0}>
           <IconButton
-            aria-label="Refresh posts"
+            aria-label={t.journal.refreshAria}
             icon={<Icon as={FaSyncAlt} boxSize={4} />}
             onClick={loadPosts}
             variant="ghost"
@@ -142,8 +144,8 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
             variant="solid"
             size="sm"
           >
-            <Box as="span" display={{ base: 'none', sm: 'inline' }}>New Post</Box>
-            <Box as="span" display={{ base: 'inline', sm: 'none' }}>New</Box>
+            <Box as="span" display={{ base: 'none', sm: 'inline' }}>{t.journal.newPost}</Box>
+            <Box as="span" display={{ base: 'inline', sm: 'none' }}>{t.journal.newPostShort}</Box>
           </CTAButton>
         </HStack>
       </Flex>
@@ -182,6 +184,7 @@ function PostRow({
   post: JournalPostSummary;
   onEdit: () => void;
 }) {
+  const { t } = useAdminLang();
   const formatDate = (iso: string): string =>
     new Date(iso).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -256,6 +259,7 @@ function PostRow({
               py={0.5}
               borderRadius="sm"
             >
+              {/* session_type is user-authored / DB data — not translated */}
               {post.session_type}
             </Badge>
           )}
@@ -278,13 +282,13 @@ function PostRow({
             bits break to a second line instead of overflowing the card */}
         <Wrap spacing={3} color="gray.500" fontWeight="300">
           <Text fontSize={{ base: 'xs', md: '2xs' }} color={post.drive_folder_url ? 'gray.500' : 'orange.600'}>
-            {post.drive_folder_url ? 'Photos linked' : 'No photos yet'}
+            {post.drive_folder_url ? t.journal.photosLinked : t.journal.noPhotosYet}
           </Text>
           <Text fontSize={{ base: 'xs', md: '2xs' }}>·</Text>
           <Text fontSize={{ base: 'xs', md: '2xs' }}>
             {post.status === 'published' && post.published_at
-              ? `Published ${formatDate(post.published_at)}`
-              : `Updated ${formatDate(post.updated_at)}`}
+              ? t.journal.publishedOn(formatDate(post.published_at))
+              : t.journal.updatedOn(formatDate(post.updated_at))}
           </Text>
         </Wrap>
       </VStack>
@@ -300,7 +304,7 @@ function PostRow({
             href={`/journal/${post.slug}`}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Open live page"
+            aria-label={t.journal.openLivePageAria}
             onClick={(e: MouseEvent) => e.stopPropagation()}
             display="inline-flex"
             alignItems="center"
@@ -318,7 +322,7 @@ function PostRow({
         )}
         <Box display={{ base: 'none', md: 'inline-flex' }}>
           <CTAButton onClick={onEdit} icon={FaEdit} variant="outline" size="sm">
-            Edit
+            {t.common.edit}
           </CTAButton>
         </Box>
       </HStack>
@@ -327,9 +331,10 @@ function PostRow({
 }
 
 function StatusBadge({ status }: { status: 'draft' | 'published' }) {
+  const { t } = useAdminLang();
   const config = {
-    draft:     { bg: 'gray.100',  color: 'gray.600',  label: 'Draft' },
-    published: { bg: 'green.100', color: 'green.700', label: 'Published' },
+    draft:     { bg: 'gray.100',  color: 'gray.600',  label: t.journal.statusDraft },
+    published: { bg: 'green.100', color: 'green.700', label: t.journal.statusPublished },
   }[status];
   return (
     <Badge
@@ -349,6 +354,7 @@ function StatusBadge({ status }: { status: 'draft' | 'published' }) {
 }
 
 function EmptyState({ onNew }: { onNew: () => void }) {
+  const { t } = useAdminLang();
   return (
     <Box
       bg="white"
@@ -375,14 +381,13 @@ function EmptyState({ onNew }: { onNew: () => void }) {
         <Icon as={FaBookOpen} boxSize={7} />
       </Flex>
       <Text fontSize="md" fontWeight="500" color="gray.800" mb={2}>
-        No posts yet
+        {t.journal.emptyTitle}
       </Text>
       <Text fontSize="sm" color="gray.500" fontWeight="300" mb={6} maxW="380px" mx="auto" lineHeight="1.7">
-        Write a weekly recap of a recent shoot — 10–15 favorite photos
-        with a short story. First post publishes to /journal.
+        {t.journal.emptyDescription}
       </Text>
       <CTAButton onClick={onNew} icon={FaPlus} variant="solid" size="sm">
-        New Post
+        {t.journal.newPost}
       </CTAButton>
     </Box>
   );
