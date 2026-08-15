@@ -7,7 +7,7 @@ import {
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes,
-  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaRedo,
+  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaEraser,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
@@ -704,11 +704,6 @@ function ConversationView({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [aiToggleLoading, setAiToggleLoading] = useState(false);
-  // "Refresh profile from Instagram" button — spinner while the
-  // Graph API call is in flight. Optimistically merges the returned
-  // name/handle/pic into local state so the header updates without
-  // a full detail reload.
-  const [profileRefreshing, setProfileRefreshing] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
@@ -842,52 +837,13 @@ function ConversationView({
     }
   }, [messages.length]);
 
-  const handleRefreshProfile = async () => {
-    if (!detail || profileRefreshing) return;
-    setProfileRefreshing(true);
-    try {
-      const res = await fetch('/api/admin/messages-refresh-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: adminPassword,
-          conversationId: summary.id,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        // Optimistically merge the new fields so the header updates
-        // without waiting on a full loadDetail(). We still fire
-        // onRefreshList() so the sidebar picks up the new name too.
-        setDetail((d) =>
-          d
-            ? {
-                ...d,
-                contact_name: data.name ?? null,
-                contact_handle: data.handle ?? null,
-                contact_profile_pic_url: data.profilePicUrl ?? null,
-              }
-            : d,
-        );
-        onRefreshList();
-        toast({
-          title: t.messages.profileRefreshed,
-          status: 'success',
-          duration: 2500,
-        });
-      } else {
-        toast({
-          title: data.error || t.messages.profileRefreshFailed,
-          status: 'error',
-          duration: 3500,
-        });
-      }
-    } catch {
-      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
-    } finally {
-      setProfileRefreshing(false);
-    }
-  };
+  // NOTE: `handleRefreshProfile` used to live here — see git history.
+  // Removed because profile refresh is a per-conversation nicety that
+  // Vero would use approximately never (IG names/pfps rarely change),
+  // and its icon looked like all the other refresh-y icons in the
+  // header. Auto-fetch on webhook creation covers the common case.
+  // The admin endpoint /api/admin/_messages-refresh-profile.ts is
+  // also gone.
 
   const handleToggleAi = async () => {
     if (!detail) return;
@@ -1110,30 +1066,16 @@ function ConversationView({
                 >
                   {displayName}
                 </Text>
-                {/* Refresh profile from Instagram — tiny 32×32 icon
-                    next to the name. Gray by default → gold on hover.
-                    Spins while the Graph API call is in flight. */}
-                <IconButton
-                  aria-label={t.messages.refreshProfile}
-                  title={t.messages.refreshProfile}
-                  icon={
-                    profileRefreshing ? (
-                      <Spinner size="xs" color="#c9a96e" />
-                    ) : (
-                      <Icon as={FaSync} boxSize={3} />
-                    )
-                  }
-                  onClick={handleRefreshProfile}
-                  isDisabled={profileRefreshing}
-                  variant="ghost"
-                  size="xs"
-                  minW="32px"
-                  minH="32px"
-                  color="gray.400"
-                  _hover={{ color: '#c9a96e', bg: 'gray.50' }}
-                  flexShrink={0}
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
-                />
+                {/* NOTE: manual "refresh profile from Instagram"
+                    button was here in earlier commits — removed
+                    because names/pfps rarely change, the webhook
+                    already auto-fetches on new conversations, and
+                    the backfill script covers existing rows. Too
+                    many refresh-icons in the header made it hard
+                    to tell them apart. If a truly stale name ever
+                    matters, add it back or (better) refresh
+                    opportunistically in the webhook on every N-th
+                    message. */}
               </HStack>
               <HStack spacing={2}>
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="capitalize">
@@ -1206,10 +1148,12 @@ function ConversationView({
                 confirm dialog + explicit copy (message count + contact
                 name) make the consequence unmistakable, so accidental
                 taps get caught by the confirm modal.
-                NOTE: a separate profile-refresh IconButton lives on
-                the LEFT side of the header (next to the contact
-                name). These are two different actions — do NOT
-                merge or move them together.
+                Icon is an ERASER (FaEraser), not a refresh — Alex
+                flagged that a "reset" that looked like every other
+                refresh icon in the header was ambiguous. Eraser is
+                the unambiguous "wipe/clean" metaphor. Baseline color
+                is red (not gray) so it reads as destructive at a
+                glance without needing hover.
                 Available to BOTH admin and super — Vero uses this
                 heavily to reset test conversations while she's tuning
                 the AI assistant (she wants a clean slate without
@@ -1217,7 +1161,7 @@ function ConversationView({
             <IconButton
               aria-label={t.messages.resetConversation}
               title={t.messages.resetConversationTooltip}
-              icon={<Icon as={FaRedo} boxSize={3.5} />}
+              icon={<Icon as={FaEraser} boxSize={3.5} />}
               onClick={() => setResetConfirmOpen(true)}
               variant="ghost"
               size="md"
@@ -1225,9 +1169,10 @@ function ConversationView({
               h="36px"
               minW="36px"
               minH="36px"
-              color="gray.500"
-              _hover={{ bg: 'red.50', color: 'red.500' }}
-              _active={{ bg: 'red.100' }}
+              color="red.500"
+              bg="red.50"
+              _hover={{ bg: 'red.100', color: 'red.600' }}
+              _active={{ bg: 'red.200' }}
               borderRadius="full"
               flexShrink={0}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
