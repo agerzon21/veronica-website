@@ -251,6 +251,18 @@ const dict = {
     },
     // Individual conversation
     aiOffBanner: { en: 'AI is off — replies are 100% you.', ru: 'AI отключён — отвечаешь ты сама.' },
+    // "Refresh profile" button next to the contact name in the
+    // conversation header. Manually re-fetches name / handle / avatar
+    // from Instagram via /api/admin/messages-refresh-profile.
+    refreshProfile: {
+      en: 'Refresh profile from Instagram',
+      ru: 'Обновить профиль из Instagram',
+    },
+    profileRefreshed: { en: 'Profile updated', ru: 'Профиль обновлён' },
+    profileRefreshFailed: {
+      en: 'Could not refresh profile',
+      ru: 'Не удалось обновить профиль',
+    },
     createClientFromThread: { en: 'Create client from this thread', ru: 'Создать клиента из этого диалога' },
     linkedClient: { en: 'Linked client', ru: 'Связан с клиентом' },
     linkedToPortal: { en: 'Linked to a client portal', ru: 'Связан с порталом клиента' },
@@ -328,6 +340,49 @@ const dict = {
     openSummary: { en: 'Open summary', ru: 'Открыть сводку' },
     closeSummaryOpenChat: { en: 'Close summary — open chat', ru: 'Закрыть сводку — открыть чат' },
     regenerateSummary: { en: 'Regenerate summary', ru: 'Пересчитать сводку' },
+    // "Wipe conversation" test-reset action (super only). Deletes all
+    // messages + clears the AI summary cache so the AI reads a fresh
+    // thread on the next inbound. The conversation record itself
+    // stays put so the sidebar entry survives and future DMs from the
+    // same account land back into the same row.
+    resetConversation: { en: 'Reset conversation', ru: 'Сбросить диалог' },
+    resetConversationTooltip: {
+      en: 'Reset — clears all messages + AI memory',
+      ru: 'Сброс — очищает все сообщения и память AI',
+    },
+    resetConfirmTitle: { en: 'Reset this conversation?', ru: 'Сбросить этот диалог?' },
+    // Dynamic body — shows the contact name + message count so an
+    // accidental click can't confirm without SEEING what's about to
+    // be deleted. Cheap accident-protection without a "type YES to
+    // confirm" flow. Russian plurals match the pattern used elsewhere
+    // in the dict (1 сообщение / 2-4 сообщения / 5+ сообщений).
+    resetConfirmBody: {
+      en: (name: string, n: number) =>
+        `About to reset conversation with ${name} — this permanently deletes ${n} message${n === 1 ? '' : 's'} and the AI's memory of this thread. The conversation record stays so future messages will still land here. This can't be undone.`,
+      ru: (name: string, n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        let msgs: string;
+        if (mod10 === 1 && mod100 !== 11) msgs = `${n} сообщение`;
+        else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) msgs = `${n} сообщения`;
+        else msgs = `${n} сообщений`;
+        return `Сейчас будет сброшен диалог с ${name} — безвозвратно удалятся ${msgs} и вся память AI по этой переписке. Запись диалога сохранится, так что будущие сообщения по-прежнему попадут сюда. Отменить нельзя.`;
+      },
+    },
+    resetConfirmButton: { en: 'Reset', ru: 'Сбросить' },
+    resetSuccess: {
+      en: (n: number) => `Conversation reset — ${n} message${n === 1 ? '' : 's'} deleted`,
+      // Russian plural: 1 сообщение, 2/3/4 сообщения, 5+ сообщений
+      ru: (n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        let word = 'сообщений';
+        if (mod10 === 1 && mod100 !== 11) word = 'сообщение';
+        else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) word = 'сообщения';
+        return `Диалог сброшен — удалено ${n} ${word}`;
+      },
+    },
+    resetFailed: { en: 'Reset failed', ru: 'Не удалось сбросить' },
     // Composer
     replyPlaceholder: { en: 'Type a reply as Vero...', ru: 'Напиши ответ от имени Веро...' },
     translateBeforeSending: { en: 'Translate before sending', ru: 'Перевести перед отправкой' },

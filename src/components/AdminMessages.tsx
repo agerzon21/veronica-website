@@ -7,7 +7,7 @@ import {
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes,
-  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft,
+  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaRedo,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
@@ -704,6 +704,11 @@ function ConversationView({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [aiToggleLoading, setAiToggleLoading] = useState(false);
+  // "Refresh profile from Instagram" button — spinner while the
+  // Graph API call is in flight. Optimistically merges the returned
+  // name/handle/pic into local state so the header updates without
+  // a full detail reload.
+  const [profileRefreshing, setProfileRefreshing] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
@@ -742,6 +747,11 @@ function ConversationView({
   // remounts on selecting a different thread) so it stops eating
   // vertical space once she's acknowledged it.
   const [aiOffBannerDismissed, setAiOffBannerDismissed] = useState(false);
+  // "Wipe conversation" test-reset (super-only). Confirm-dialog open
+  // state + in-flight flag for the button spinner. Separate from other
+  // destructive flows in this pane so the copy + confirm are specific.
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -832,6 +842,53 @@ function ConversationView({
     }
   }, [messages.length]);
 
+  const handleRefreshProfile = async () => {
+    if (!detail || profileRefreshing) return;
+    setProfileRefreshing(true);
+    try {
+      const res = await fetch('/api/admin/messages-refresh-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          conversationId: summary.id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Optimistically merge the new fields so the header updates
+        // without waiting on a full loadDetail(). We still fire
+        // onRefreshList() so the sidebar picks up the new name too.
+        setDetail((d) =>
+          d
+            ? {
+                ...d,
+                contact_name: data.name ?? null,
+                contact_handle: data.handle ?? null,
+                contact_profile_pic_url: data.profilePicUrl ?? null,
+              }
+            : d,
+        );
+        onRefreshList();
+        toast({
+          title: t.messages.profileRefreshed,
+          status: 'success',
+          duration: 2500,
+        });
+      } else {
+        toast({
+          title: data.error || t.messages.profileRefreshFailed,
+          status: 'error',
+          duration: 3500,
+        });
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+    } finally {
+      setProfileRefreshing(false);
+    }
+  };
+
   const handleToggleAi = async () => {
     if (!detail) return;
     setAiToggleLoading(true);
@@ -856,6 +913,53 @@ function ConversationView({
       toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
     } finally {
       setAiToggleLoading(false);
+    }
+  };
+
+  // "Wipe conversation" — super-admin test-reset. Deletes every
+  // message on this thread and clears the AI summary cache, but leaves
+  // the conversation row intact (external_user_id, contact_name, etc.)
+  // so the next inbound DM from the same account lands right back here
+  // and the AI reads a truly-fresh thread. Alex uses this to test the
+  // assistant as if the customer just messaged for the first time.
+  const doReset = async () => {
+    setResetLoading(true);
+    try {
+      const res = await fetch('/api/admin/messages-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          conversationId: summary.id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Local state clear so the UI reflects the wipe immediately
+        // without waiting on a re-fetch.
+        setMessages([]);
+        setAiSummary(null);
+        setAiSummaryError(null);
+        toast({
+          title: t.messages.resetSuccess(data.deletedMessages ?? 0),
+          status: 'success',
+          duration: 4000,
+          isClosable: true,
+        });
+        onRefreshList();
+      } else {
+        toast({
+          title: data.error || t.messages.resetFailed,
+          status: 'error',
+          duration: 4000,
+          isClosable: true,
+        });
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 4000 });
+    } finally {
+      setResetLoading(false);
+      setResetConfirmOpen(false);
     }
   };
 
@@ -996,9 +1100,41 @@ function ConversationView({
               displayName={displayName}
             />
             <VStack align="flex-start" spacing={0} minW={0} flex={1}>
-              <Text fontSize={{ base: 'sm', md: 'sm' }} fontWeight="500" color="gray.800" noOfLines={1}>
-                {displayName}
-              </Text>
+              <HStack spacing={1} align="center" minW={0} w="100%">
+                <Text
+                  fontSize={{ base: 'sm', md: 'sm' }}
+                  fontWeight="500"
+                  color="gray.800"
+                  noOfLines={1}
+                  minW={0}
+                >
+                  {displayName}
+                </Text>
+                {/* Refresh profile from Instagram — tiny 32×32 icon
+                    next to the name. Gray by default → gold on hover.
+                    Spins while the Graph API call is in flight. */}
+                <IconButton
+                  aria-label={t.messages.refreshProfile}
+                  title={t.messages.refreshProfile}
+                  icon={
+                    profileRefreshing ? (
+                      <Spinner size="xs" color="#c9a96e" />
+                    ) : (
+                      <Icon as={FaSync} boxSize={3} />
+                    )
+                  }
+                  onClick={handleRefreshProfile}
+                  isDisabled={profileRefreshing}
+                  variant="ghost"
+                  size="xs"
+                  minW="32px"
+                  minH="32px"
+                  color="gray.400"
+                  _hover={{ color: '#c9a96e', bg: 'gray.50' }}
+                  flexShrink={0}
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                />
+              </HStack>
               <HStack spacing={2}>
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="capitalize">
                   {detail.platform}
@@ -1064,6 +1200,38 @@ function ConversationView({
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               />
             )}
+            {/* "Wipe conversation" — super-admin test-reset button.
+                Sits to the LEFT of the AI toggle. Red-tint hover
+                distinguishes it as destructive; the equally-red
+                confirm dialog + explicit copy (message count + contact
+                name) make the consequence unmistakable, so accidental
+                taps get caught by the confirm modal.
+                NOTE: a separate profile-refresh IconButton lives on
+                the LEFT side of the header (next to the contact
+                name). These are two different actions — do NOT
+                merge or move them together.
+                Available to BOTH admin and super — Vero uses this
+                heavily to reset test conversations while she's tuning
+                the AI assistant (she wants a clean slate without
+                needing a second IG test account). */}
+            <IconButton
+              aria-label={t.messages.resetConversation}
+              title={t.messages.resetConversationTooltip}
+              icon={<Icon as={FaRedo} boxSize={3.5} />}
+              onClick={() => setResetConfirmOpen(true)}
+              variant="ghost"
+              size="md"
+              w="36px"
+              h="36px"
+              minW="36px"
+              minH="36px"
+              color="gray.500"
+              _hover={{ bg: 'red.50', color: 'red.500' }}
+              _active={{ bg: 'red.100' }}
+              borderRadius="full"
+              flexShrink={0}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            />
             <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
             <Switch
               isChecked={detail.ai_enabled}
@@ -1079,6 +1247,27 @@ function ConversationView({
             gone — those two controls now live in the top header row
             above, saving a full row of vertical space on mobile. */}
       </VStack>
+
+      {/* "Wipe conversation" confirm dialog — Vero's testing loop
+          resets a conversation to a clean slate mid-tuning-session.
+          Available to both admin + super. The safeguard is the
+          per-invocation confirm modal with the specific contact
+          name + message count inlined, not a role gate. */}
+      <ConfirmDialog
+        isOpen={resetConfirmOpen}
+        title={t.messages.resetConfirmTitle}
+        // Body includes the CONTACT NAME + MESSAGE COUNT so accidental
+        // clicks can't confirm without seeing exactly what they're
+        // about to erase — the primary safeguard for an in-list
+        // destructive action that regular admins (not just super)
+        // can trigger.
+        body={t.messages.resetConfirmBody(displayName, messages.length)}
+        confirmLabel={t.messages.resetConfirmButton}
+        danger
+        isLoading={resetLoading}
+        onConfirm={doReset}
+        onCancel={() => setResetConfirmOpen(false)}
+      />
 
       {/* Create-client modal — prefills from IG contact + AI summary */}
       <CreateClientModal

@@ -68,6 +68,13 @@ import crypto from 'node:crypto';
 import getRawBody from 'raw-body';
 import { getDb } from '../_db.js';
 import { processInboundMessage } from '../_ai-reply.js';
+import { fetchIgProfile } from '../_ig-profile.js';
+
+// Max time we're willing to spend on a profile fetch inside the
+// webhook path. Meta's webhook timeout is ~5-20s and we already
+// spend most of that on the AI reply pipeline — profile fetch is
+// nice-to-have, not blocking. Fail fast if the Graph API is slow.
+const PROFILE_FETCH_TIMEOUT_MS = 1500;
 
 // Message events besides plain text (echoes, deleted, reactions, etc.)
 // arrive on the same webhook — we ignore anything without a text body
@@ -365,15 +372,34 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     // conversation for this IGSID already exists, we get its id back
     // without touching any other fields (name, ai_enabled, notes,
     // etc.). If it's new, we insert and get the fresh id.
+    //
+    // Also return the current contact_name so we can tell downstream
+    // whether we still need to fetch the sender profile from Meta.
+    // `xmax = 0` on the conflict target row indicates a fresh INSERT
+    // (nothing was in place before); non-zero means the ON CONFLICT
+    // path fired. Either way `RETURNING` gives us the id + name.
     const convoRows = (await sql`
       INSERT INTO conversations (platform, external_user_id)
       VALUES ('instagram', ${customerIgsid})
       ON CONFLICT (platform, external_user_id) DO UPDATE
         SET external_user_id = EXCLUDED.external_user_id
-      RETURNING id
-    `) as Array<{ id: string }>;
+      RETURNING id, contact_name, (xmax = 0) AS was_inserted
+    `) as Array<{ id: string; contact_name: string | null; was_inserted: boolean }>;
     const conversationId = convoRows[0]?.id;
     if (!conversationId) continue;
+
+    // Enrich the conversation with the sender's IG profile if we don't
+    // have a display name for them yet. Two triggers:
+    //   1. Row was freshly inserted (was_inserted = true).
+    //   2. Row existed but contact_name is still NULL (a previous
+    //      enrichment attempt failed — worth retrying).
+    // Fail-open: any error from fetchIgProfile is logged and swallowed
+    // there; the webhook 200 is never blocked. We DO await it (with a
+    // hard timeout) so a fast success updates the row before we
+    // return, giving Meta an instant human-friendly display name.
+    if (convoRows[0].was_inserted || convoRows[0].contact_name == null) {
+      await enrichConversationProfile(conversationId, customerIgsid);
+    }
 
     const direction = isEcho ? 'outbound' : 'inbound';
     const sender = isEcho ? 'human' : 'contact';
@@ -415,6 +441,65 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
   }
 
   return stats;
+}
+
+/**
+ * Fetch the sender's IG profile and update the conversations row.
+ *
+ * Called inline from the persist loop but hard-capped at
+ * PROFILE_FETCH_TIMEOUT_MS via Promise.race so a slow Graph API can
+ * never blow the Meta webhook SLA. All errors are swallowed —
+ * this is a best-effort enrichment, not a load-bearing step.
+ *
+ * We race the fetch against a timer; whichever fires first wins.
+ * The fetch itself keeps running in the background if the timer
+ * wins first — that's fine (no side effects; Node's event loop
+ * will finish it or drop it on function suspend).
+ */
+async function enrichConversationProfile(
+  conversationId: string,
+  igsid: string,
+): Promise<void> {
+  try {
+    const profile = await Promise.race<Awaited<ReturnType<typeof fetchIgProfile>>>([
+      fetchIgProfile(igsid),
+      new Promise((resolve) =>
+        setTimeout(() => resolve(null), PROFILE_FETCH_TIMEOUT_MS),
+      ),
+    ]);
+    if (!profile) {
+      // Either fetch failed, or timeout won. Nothing to write —
+      // leaving fields NULL means "still needs enrichment" so the
+      // NEXT DM from this user will retry.
+      return;
+    }
+    const sql = getDb();
+    // Only overwrite fields that were NULL. This preserves anything
+    // Vero manually set in the admin UI (e.g. a friendlier name for
+    // a known client) if we later add such a control.
+    await sql`
+      UPDATE conversations
+      SET contact_name = COALESCE(contact_name, ${profile.name}),
+          contact_handle = COALESCE(contact_handle, ${profile.username}),
+          contact_profile_pic_url = COALESCE(contact_profile_pic_url, ${profile.profilePicUrl}),
+          updated_at = NOW()
+      WHERE id = ${conversationId}
+    `;
+    console.log(
+      `[inbox/ig-webhook] enriched profile igsid=${igsid} ` +
+        `name=${profile.name ? 'yes' : 'no'} ` +
+        `handle=${profile.username ? 'yes' : 'no'} ` +
+        `pic=${profile.profilePicUrl ? 'yes' : 'no'}`,
+    );
+  } catch (err) {
+    // Should never throw (fetchIgProfile swallows all errors and the
+    // UPDATE is trivial), but belt-and-suspenders.
+    console.warn(
+      `[inbox/ig-webhook] enrichConversationProfile failed for igsid=${igsid}: ${
+        (err as Error).message
+      }`,
+    );
+  }
 }
 
 function safeEqual(a: string, b: string): boolean {
