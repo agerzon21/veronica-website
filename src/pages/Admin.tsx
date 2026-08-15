@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FaUsers, FaPlug, FaBookOpen, FaCommentDots, FaRobot, FaImage,
   FaInbox, FaFolder, FaBars, FaSignOutAlt, FaHome, FaExternalLinkAlt,
+  FaStar,
 } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import Navbar from '../components/Navbar';
@@ -21,6 +22,7 @@ import AdminClientDetail from '../components/AdminClientDetail';
 import AdminIntegrations from '../components/AdminIntegrations';
 import AdminJournal from '../components/AdminJournal';
 import AdminGallery from '../components/AdminGallery';
+import AdminReviews from '../components/AdminReviews';
 import AdminMessages from '../components/AdminMessages';
 import AdminAssistant from '../components/AdminAssistant';
 import { AdminI18nProvider, useAdminLang, readAdminLang, adminDict, type AdminLang } from '../i18n/admin';
@@ -30,7 +32,7 @@ const MotionDiv = motion.div;
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
 // live outside the tab shell for now — they're modal-ish flows.
-type DashTab = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'integrations';
+type DashTab = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations';
 
 // Sub-tab for the Clients group (Table / Calendar). Moved up here from
 // AdminDashboard so the mobile bottom-nav sub-strip can drive it directly
@@ -50,6 +52,7 @@ const TAB_TO_GROUP: Record<Exclude<DashTab, 'integrations'>, Exclude<NavGroup, '
   assistant: 'inbox',
   journal: 'studio',
   gallery: 'studio',
+  reviews: 'studio',
 };
 
 // (GROUP_DEFAULT_TAB was used by the old auto-navigate-on-group-tap
@@ -59,6 +62,22 @@ const TAB_TO_GROUP: Record<Exclude<DashTab, 'integrations'>, Exclude<NavGroup, '
 
 const MotionBox = motion(Box);
 
+// localStorage key + helper for the "remember last signed-in email"
+// autofill on the login screen. Written on successful sign-in and
+// read lazily by useState on next mount so the email field is
+// prefilled and a "Welcome back, ..." line is shown. Wrapped in a
+// try/catch because localStorage can throw in private-mode Safari
+// and inside SSR/prerender there's no window at all.
+const SAVED_EMAIL_KEY = 'vero_admin_last_email';
+const readSavedEmail = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return localStorage.getItem(SAVED_EMAIL_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
 type View =
   | { kind: 'dashboard' }
   | { kind: 'mode-chooser' }
@@ -67,7 +86,13 @@ type View =
   | { kind: 'detail'; id: string };
 
 const Admin = () => {
-  const [email, setEmail] = useState('');
+  // Email is lazy-initialized from localStorage so a returning
+  // admin sees their address already filled in — a real quality-of-
+  // life win for Vero, who signs in daily. hasSavedEmail gates the
+  // "Welcome back" line on the login screen (new visitors see the
+  // stock form). Both use the same read helper so they can't drift.
+  const [email, setEmail] = useState(readSavedEmail);
+  const [hasSavedEmail, setHasSavedEmail] = useState(() => readSavedEmail() !== '');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -117,7 +142,32 @@ const Admin = () => {
     setError('');
     const r = await loadPortals({ email: email.trim(), password: password.trim() });
     setSubmitting(false);
-    if (!r.ok) setError(r.error || 'Sign in failed.');
+    if (r.ok) {
+      // Remember this email for next time. Safe to swallow errors —
+      // localStorage can throw in Safari private mode, and losing
+      // the autofill nicety is a strictly cosmetic regression.
+      try {
+        localStorage.setItem(SAVED_EMAIL_KEY, email.trim());
+        setHasSavedEmail(true);
+      } catch {
+        /* localStorage blocked — no-op */
+      }
+    } else {
+      setError(r.error || 'Sign in failed.');
+    }
+  };
+
+  // "Sign in as different user" — forgets the saved email and blanks
+  // the input so a new address can be typed. Doesn't touch the password
+  // field or focus anywhere in particular; the user's next tap decides.
+  const handleClearSavedEmail = () => {
+    try {
+      localStorage.removeItem(SAVED_EMAIL_KEY);
+    } catch {
+      /* localStorage blocked — no-op */
+    }
+    setEmail('');
+    setHasSavedEmail(false);
   };
 
   const handleRefresh = async () => {
@@ -232,6 +282,9 @@ const Admin = () => {
               )}
               {dashTab === 'gallery' && (
                 <AdminGallery adminPassword={password} adminLevel={adminLevel} />
+              )}
+              {dashTab === 'reviews' && (
+                <AdminReviews adminPassword={password} adminLevel={adminLevel} />
               )}
               {dashTab === 'integrations' && adminLevel === 'super' && (
                 <AdminIntegrations adminPassword={password} />
@@ -389,6 +442,42 @@ const Admin = () => {
                 </Text>
               </VStack>
 
+              {/* "Welcome back, ..." affordance — only appears when
+                  we've got a remembered email in localStorage. New
+                  visitors see the stock form with an empty email
+                  field. The "different user" link clears the memory
+                  so a second admin on the same browser has an
+                  obvious escape hatch. */}
+              {hasSavedEmail && email && (
+                <VStack spacing={1} w="100%">
+                  <Text
+                    fontSize="sm"
+                    fontWeight="300"
+                    color="whiteAlpha.800"
+                    textAlign="center"
+                  >
+                    Welcome back, {email}
+                  </Text>
+                  <Box
+                    as="button"
+                    type="button"
+                    onClick={handleClearSavedEmail}
+                    fontSize="xs"
+                    fontWeight="300"
+                    color="whiteAlpha.500"
+                    bg="transparent"
+                    border="none"
+                    p={0}
+                    cursor="pointer"
+                    transition="color 0.15s"
+                    _hover={{ textDecoration: 'underline', color: 'whiteAlpha.700' }}
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    Sign in as different user
+                  </Box>
+                </VStack>
+              )}
+
               <Box
                 as="form"
                 onSubmit={handleLogin}
@@ -514,7 +603,7 @@ const Admin = () => {
 // maps into t.nav.* — nav components read the current-language label
 // via useAdminLang() at render time, so switching languages doesn't
 // require a re-render of the tab list itself.
-type NavLabelKey = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'integrations';
+type NavLabelKey = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations';
 type TabDef = { id: DashTab; labelKey: NavLabelKey; icon: typeof FaUsers };
 
 const TABS: TabDef[] = [
@@ -523,6 +612,7 @@ const TABS: TabDef[] = [
   { id: 'assistant', labelKey: 'assistant', icon: FaRobot },
   { id: 'journal', labelKey: 'journal', icon: FaBookOpen },
   { id: 'gallery', labelKey: 'gallery', icon: FaImage },
+  { id: 'reviews', labelKey: 'reviews', icon: FaStar },
 ];
 
 function tabsFor(showIntegrations: boolean): TabDef[] {
@@ -735,6 +825,7 @@ function AdminMobileNav({
       ? [
           { id: 'journal', label: t.nav.journal, isActive: activeTab === 'journal', onClick: () => { onChangeTab('journal'); setOpenGroup(null); } },
           { id: 'gallery', label: t.nav.gallery, isActive: activeTab === 'gallery', onClick: () => { onChangeTab('gallery'); setOpenGroup(null); } },
+          { id: 'reviews', label: t.nav.reviews, isActive: activeTab === 'reviews', onClick: () => { onChangeTab('reviews'); setOpenGroup(null); } },
         ]
       : [];
 

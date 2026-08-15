@@ -28,6 +28,9 @@ import journalDetailHandler from './admin/_journal-detail.js';
 import journalCreateHandler from './admin/_journal-create.js';
 import journalUpdateHandler from './admin/_journal-update.js';
 import journalDeleteHandler from './admin/_journal-delete.js';
+import reviewsListHandler from './admin/_reviews-list.js';
+import reviewsUpsertHandler from './admin/_reviews-upsert.js';
+import reviewsDeleteHandler from './admin/_reviews-delete.js';
 import messagesListHandler from './admin/_messages-list.js';
 import messagesDetailHandler from './admin/_messages-detail.js';
 import messagesToggleAiHandler from './admin/_messages-toggle-ai.js';
@@ -68,6 +71,9 @@ const HANDLERS: Record<
   'journal-create': journalCreateHandler,
   'journal-update': journalUpdateHandler,
   'journal-delete': journalDeleteHandler,
+  'reviews-list': reviewsListHandler,
+  'reviews-upsert': reviewsUpsertHandler,
+  'reviews-delete': reviewsDeleteHandler,
   'messages-list': messagesListHandler,
   'messages-detail': messagesDetailHandler,
   'messages-toggle-ai': messagesToggleAiHandler,

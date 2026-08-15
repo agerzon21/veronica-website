@@ -103,6 +103,7 @@ const dict = {
     assistant: { en: 'Assistant', ru: 'Ассистент' },
     journal: { en: 'Journal', ru: 'Дневник' },
     gallery: { en: 'Gallery', ru: 'Галерея' },
+    reviews: { en: 'Reviews', ru: 'Отзывы' },
     integrations: { en: 'Integrations', ru: 'Интеграции' },
     table: { en: 'Table', ru: 'Таблица' },
     calendar: { en: 'Calendar', ru: 'Календарь' },
@@ -1683,6 +1684,169 @@ const dict = {
       // to /journal" reworded to "как только опубликуешь первую…" so it
       // reads like a natural next step rather than a spec detail.
       ru: 'Напиши обзор недавней съёмки — 10–15 любимых кадров с короткой историей. Первая запись появится на /journal, как только её опубликуешь.',
+    },
+  },
+
+  reviews: {
+    tabTitle: { en: 'Reviews', ru: 'Отзывы' },
+    // Russian plural rules: 1 отзыв, 2/3/4 отзыва, 5+ отзывов (teens
+    // 11-14 always take the gen.pl). Same shape as journal.postCount /
+    // messages.conversationCount.
+    reviewCount: {
+      en: (n: number) => `${n} review${n === 1 ? '' : 's'}`,
+      ru: (n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return `${n} отзыв`;
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} отзыва`;
+        return `${n} отзывов`;
+      },
+    },
+    subtitleEmpty: { en: 'Client testimonials on the site.', ru: 'Отзывы клиентов на сайте.' },
+
+    // Aria labels for icon-only buttons on the list
+    refreshAria: { en: 'Refresh reviews', ru: 'Обновить отзывы' },
+    deleteAria: { en: 'Delete review', ru: 'Удалить отзыв' },
+
+    // + New CTA — short version fits the icon-only mobile breakpoint
+    newReview: { en: 'New Review', ru: 'Новый отзыв' },
+    newReviewShort: { en: 'New', ru: 'Новый' },
+
+    // Inline chips on each card
+    featured: { en: 'Featured', ru: 'В избранном' },
+    hidden: { en: 'Hidden', ru: 'Скрыт' },
+    visible: { en: 'Visible', ru: 'Виден' },
+
+    // Fallback used when a review has no author name on record.
+    unnamedAuthor: { en: '(unnamed)', ru: '(без имени)' },
+
+    // Source badges — kept as brand names (Google/Yelp/Instagram/Email
+    // stay English in RU too, since they're recognized in Cyrillic UIs
+    // the same way). "Manual" is the odd one out — translated for
+    // clarity so Vero knows what she typed herself vs. imported.
+    sourceGoogle: { en: 'Google', ru: 'Google' },
+    sourceYelp: { en: 'Yelp', ru: 'Yelp' },
+    sourceInstagram: { en: 'Instagram', ru: 'Instagram' },
+    sourceEmail: { en: 'Email', ru: 'Email' },
+    sourceManual: { en: 'Manual', ru: 'Вручную' },
+
+    // Errors
+    loadFailed: {
+      en: (status: number) => `Load failed (${status})`,
+      ru: (status: number) => `Не удалось загрузить (${status})`,
+    },
+    saveFailed: {
+      en: (status: number) => `Save failed (${status})`,
+      ru: (status: number) => `Не удалось сохранить (${status})`,
+    },
+    deleteFailed: {
+      en: (status: number) => `Delete failed (${status})`,
+      ru: (status: number) => `Не удалось удалить (${status})`,
+    },
+
+    // Toast on successful delete (delete lives on the list, not editor)
+    reviewDeleted: { en: 'Review deleted', ru: 'Отзыв удалён' },
+
+    // Empty state
+    emptyTitle: { en: 'No reviews yet', ru: 'Пока нет отзывов' },
+    emptyDescription: {
+      en: 'Add a testimonial you got via Google, Instagram DMs, or email. Featured ones show up first on the home page.',
+      // Slightly re-shaped in RU so the "featured on home" idea reads
+      // naturally as a second sentence.
+      ru: 'Добавь отзыв, полученный в Google, Instagram-директе или по почте. Отмеченные «В избранном» появятся первыми на главной.',
+    },
+  },
+
+  reviewsEditor: {
+    // Modal titles
+    newTitle: { en: 'New Review', ru: 'Новый отзыв' },
+    editTitle: { en: 'Edit Review', ru: 'Редактировать отзыв' },
+
+    // Toast titles on save success
+    reviewSaved: { en: 'Review saved', ru: 'Отзыв сохранён' },
+    reviewCreated: { en: 'Review added', ru: 'Отзыв добавлен' },
+
+    // Errors
+    saveFailed: {
+      en: (status: number) => `Save failed (${status})`,
+      ru: (status: number) => `Не удалось сохранить (${status})`,
+    },
+    requiredFields: {
+      en: 'Author name and review text are both required.',
+      ru: 'Имя автора и текст отзыва обязательны.',
+    },
+
+    // Field labels + placeholders + help
+    authorNameLabel: { en: 'Author name', ru: 'Имя автора' },
+    authorNamePlaceholder: { en: 'e.g. Anna Petrova', ru: 'например, Анна Петрова' },
+
+    authorPhotoLabel: { en: 'Author photo URL', ru: 'Ссылка на фото автора' },
+    authorPhotoHelp: {
+      en: 'Optional. Leave blank to show initials in a gold circle.',
+      ru: 'Необязательно. Оставь пустым — покажем инициалы в золотом кружке.',
+    },
+
+    ratingLabel: { en: 'Rating', ru: 'Оценка' },
+    // Aria label on each clickable star — announces "3 stars" to screen
+    // readers. Russian plural: 1 звезда, 2-4 звезды, 5+ звёзд. The
+    // 5-star case ("5 звёзд") uses the "ё" letter deliberately — that's
+    // the correct genitive plural form.
+    ratingStarAria: {
+      en: (n: number) => `${n} star${n === 1 ? '' : 's'}`,
+      ru: (n: number) => {
+        if (n === 1) return `${n} звезда`;
+        if (n >= 2 && n <= 4) return `${n} звезды`;
+        return `${n} звёзд`;
+      },
+    },
+
+    publishDateLabel: { en: 'Publish date', ru: 'Дата отзыва' },
+    publishDateHelp: {
+      en: 'When the review was left. Optional — shown on the card when set.',
+      ru: 'Когда клиент оставил отзыв. Необязательно — если задано, покажем на карточке.',
+    },
+
+    sourceLabel: { en: 'Source', ru: 'Источник' },
+    // Full source labels for the dropdown (the badge on the card uses
+    // shorter forms from t.reviews.source*). "Manual entry" is spelled
+    // out here so Vero knows exactly what the option means.
+    sourceGoogle: { en: 'Google', ru: 'Google' },
+    sourceYelp: { en: 'Yelp', ru: 'Yelp' },
+    sourceInstagram: { en: 'Instagram', ru: 'Instagram' },
+    sourceEmail: { en: 'Email', ru: 'Email' },
+    sourceManual: { en: 'Manual entry', ru: 'Вручную' },
+
+    textLabel: { en: 'Review text', ru: 'Текст отзыва' },
+    textPlaceholder: {
+      en: 'What the client wrote about working with you.',
+      ru: 'Что клиент написал о работе с тобой.',
+    },
+
+    // Help text under the two switches (Visible / Featured) inside the
+    // editor. Same switches appear inline on each list card too.
+    visibleHelp: {
+      en: 'When off, the review is hidden from the public site.',
+      ru: 'Если выключено — отзыв не будет показан на сайте.',
+    },
+    featuredHelp: {
+      en: 'Featured reviews appear first on the home page.',
+      ru: 'Отмеченные отзывы показываются первыми на главной.',
+    },
+
+    // Danger zone — superadmin-only, mirrors journalEditor.dangerZone*
+    dangerZone: { en: 'Danger zone', ru: 'Опасная зона' },
+    dangerZoneBody: {
+      en: 'Deleting a review removes it permanently. No undo.',
+      ru: 'Удаление уберёт отзыв навсегда. Отменить нельзя.',
+    },
+    deleteReview: { en: 'Delete review', ru: 'Удалить отзыв' },
+
+    // Confirm dialog (opens from either the row trash icon or the
+    // editor's danger-zone button)
+    deleteConfirmTitle: { en: 'Delete this review?', ru: 'Удалить этот отзыв?' },
+    deleteConfirmBody: {
+      en: (name: string) => `The review from ${name} will be permanently removed.`,
+      ru: (name: string) => `Отзыв от ${name} будет удалён навсегда.`,
     },
   },
 } as const;

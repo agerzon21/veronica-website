@@ -1,5 +1,7 @@
+// Reviews now come from the DB (admin panel Reviews tab). Was hardcoded
+// TESTIMONIAL_POOL — see git history.
 import { useState, useEffect } from 'react';
-import { Box, Text, Flex, VStack, HStack, Link, Icon } from '@chakra-ui/react';
+import { Box, Text, Flex, VStack, HStack, Link, Icon, Image } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import { FaGoogle, FaStar } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -8,58 +10,22 @@ const MotionDiv = motion.div;
 
 const GOOGLE_PROFILE_URL = 'https://g.page/r/CSNq8ccyWt_wEAE';
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
+
+// TODO: These are currently hardcoded. Wire them up to a Places API integration
+// or a system_state DB entry that admin can update from the Reviews tab.
 const RATING = '5.0';
 const REVIEW_COUNT = 15;
 
-const TESTIMONIAL_POOL = [
-  {
-    name: 'Kimberly Diotte',
-    quote:
-      'Veronika was the absolute best photographer we could have asked for on our wedding day. Her confidence and creativity put you completely at ease — you just trust her. Our photos are something we will treasure forever.',
-  },
-  {
-    name: 'Polina Korchagina',
-    quote:
-      'All of them were very professional and beautiful. I printed and hanged her photos all over my house. Highly recommend her if you want your memorable events stay with you forever.',
-  },
-  {
-    name: 'Lilia Petruk',
-    quote:
-      'I had a personal photo shoot. The photos are amazing and I felt Veronica saw my soul.',
-  },
-  {
-    name: 'Kamila Muzaffarova',
-    quote:
-      'Veronica is very professional! It was a pleasure working with her. Highly recommended.',
-  },
-  {
-    name: 'Ariadne Comulada',
-    quote:
-      'Vero is so amazing to work with. Very responsible and teamwork was amazing. You won’t regret hiring her! We did a destination wedding in Puerto Rico and it was amazing to work with her.',
-  },
-  {
-    name: 'Robert Mwandia',
-    quote:
-      'Had an amazing experience shooting with Vero in the Dominican Republic. Super professional, made everything feel natural, and absolutely nailed the vision. The photos came out incredible, and the drone footage took everything to another level. Highly recommend if you want quality content and a smooth experience from start to finish.',
-  },
-  {
-    name: 'Angelina Rodau',
-    quote:
-      'Veronica has an incredible eye for photography, capturing beautiful moments with creativity and precision while always delivering stunning results. Thank you.',
-  },
-  {
-    name: 'Tali Kipnis',
-    quote:
-      'Veronica is the best!! Thank you so much for capturing such beautiful moments of my special day. The guests also came up to me commenting how nice she is! Highly recommend.',
-  },
-  {
-    name: 'Anahy Diaz',
-    quote:
-      'The result exceeded our expectations. We are delighted with Veronica’s work — she captured the essence of our wedding in an incredible way. Veronica is very kind and always open to your ideas. Plus, she is very creative — we have photos with fireworks! 100% recommended.',
-  },
-];
-
 const TESTIMONIALS_TO_DISPLAY = 2;
+
+interface Review {
+  id: string;
+  author_name: string;
+  author_photo_url: string | null;
+  rating: number;
+  text: string;
+  publish_date: string | null;
+}
 
 const FiveStars = ({ size = 3.5 }: { size?: number }) => (
   <HStack spacing={0.5}>
@@ -69,14 +35,87 @@ const FiveStars = ({ size = 3.5 }: { size?: number }) => (
   </HStack>
 );
 
-const GoogleReviewsSection = () => {
-  const [testimonials, setTestimonials] = useState(
-    TESTIMONIAL_POOL.slice(0, TESTIMONIALS_TO_DISPLAY)
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+};
+
+const AuthorBadge = ({ review }: { review: Review }) => {
+  const initials = getInitials(review.author_name);
+  return (
+    <HStack spacing={3} align="center">
+      {review.author_photo_url ? (
+        <Image
+          src={review.author_photo_url}
+          alt={review.author_name}
+          boxSize="32px"
+          borderRadius="full"
+          objectFit="cover"
+          loading="lazy"
+        />
+      ) : (
+        <Flex
+          boxSize="32px"
+          borderRadius="full"
+          bg="#fdf9f0"
+          border="1px solid"
+          borderColor="#e8d9a8"
+          align="center"
+          justify="center"
+        >
+          <Text
+            fontSize="xs"
+            fontWeight="500"
+            color="#c9a96e"
+            letterSpacing="0.05em"
+          >
+            {initials}
+          </Text>
+        </Flex>
+      )}
+      <Text
+        fontSize="xs"
+        fontWeight="500"
+        textTransform="uppercase"
+        letterSpacing="0.2em"
+        color="#c9a96e"
+      >
+        — {review.author_name}
+      </Text>
+    </HStack>
   );
+};
+
+const GoogleReviewsSection = () => {
+  const [testimonials, setTestimonials] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const shuffled = [...TESTIMONIAL_POOL].sort(() => Math.random() - 0.5);
-    setTestimonials(shuffled.slice(0, TESTIMONIALS_TO_DISPLAY));
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/reviews?limit=10');
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.success && Array.isArray(data.reviews)) {
+          const shuffled = [...(data.reviews as Review[])].sort(
+            () => Math.random() - 0.5
+          );
+          setTestimonials(shuffled.slice(0, TESTIMONIALS_TO_DISPLAY));
+        } else {
+          setTestimonials([]);
+        }
+      } catch {
+        if (!cancelled) setTestimonials([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -135,44 +174,64 @@ const GoogleReviewsSection = () => {
           </Link>
         </VStack>
 
-        {/* Testimonial cards */}
-        <Flex
-          gap={{ base: 10, md: 14 }}
-          maxW="1100px"
-          mx="auto"
-          direction={{ base: 'column', md: 'row' }}
-          align="stretch"
-        >
-          {testimonials.map((t) => (
-            <VStack
-              key={t.name}
-              flex={1}
-              spacing={6}
-              px={{ base: 2, md: 6 }}
-              align="start"
-            >
-              <FiveStars />
-              <Text
-                fontSize={{ base: 'md', md: 'lg' }}
-                fontWeight="200"
-                color="gray.700"
-                fontStyle="italic"
-                lineHeight="1.8"
+        {/* Testimonial cards — skeleton while loading, hidden if empty */}
+        {loading ? (
+          <Flex
+            gap={{ base: 10, md: 14 }}
+            maxW="1100px"
+            mx="auto"
+            direction={{ base: 'column', md: 'row' }}
+            align="stretch"
+          >
+            {[0, 1].map((i) => (
+              <VStack
+                key={i}
+                flex={1}
+                spacing={6}
+                px={{ base: 2, md: 6 }}
+                align="start"
               >
-                “{t.quote}”
-              </Text>
-              <Text
-                fontSize="xs"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                color="#c9a96e"
+                <Box h="14px" w="100px" bg="gray.100" borderRadius="sm" />
+                <VStack spacing={3} align="stretch" w="100%">
+                  <Box h="14px" w="100%" bg="gray.100" borderRadius="sm" />
+                  <Box h="14px" w="95%" bg="gray.100" borderRadius="sm" />
+                  <Box h="14px" w="80%" bg="gray.100" borderRadius="sm" />
+                </VStack>
+                <Box h="14px" w="140px" bg="gray.100" borderRadius="sm" />
+              </VStack>
+            ))}
+          </Flex>
+        ) : testimonials.length > 0 ? (
+          <Flex
+            gap={{ base: 10, md: 14 }}
+            maxW="1100px"
+            mx="auto"
+            direction={{ base: 'column', md: 'row' }}
+            align="stretch"
+          >
+            {testimonials.map((t) => (
+              <VStack
+                key={t.id}
+                flex={1}
+                spacing={6}
+                px={{ base: 2, md: 6 }}
+                align="start"
               >
-                — {t.name}
-              </Text>
-            </VStack>
-          ))}
-        </Flex>
+                <FiveStars />
+                <Text
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  fontWeight="200"
+                  color="gray.700"
+                  fontStyle="italic"
+                  lineHeight="1.8"
+                >
+                  “{t.text}”
+                </Text>
+                <AuthorBadge review={t} />
+              </VStack>
+            ))}
+          </Flex>
+        ) : null}
 
         {/* CTA — links to write-review URL */}
         <Flex justify="center" mt={{ base: 14, md: 20 }}>
