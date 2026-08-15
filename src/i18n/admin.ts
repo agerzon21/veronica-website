@@ -105,6 +105,7 @@ const dict = {
     gallery: { en: 'Gallery', ru: 'Галерея' },
     reviews: { en: 'Reviews', ru: 'Отзывы' },
     integrations: { en: 'Integrations', ru: 'Интеграции' },
+    crons: { en: 'Crons', ru: 'Задачи' },
     table: { en: 'Table', ru: 'Таблица' },
     calendar: { en: 'Calendar', ru: 'Календарь' },
   },
@@ -1755,6 +1756,32 @@ const dict = {
       // naturally as a second sentence.
       ru: 'Добавь отзыв, полученный в Google, Instagram-директе или по почте. Отмеченные «В избранном» появятся первыми на главной.',
     },
+
+    // Google Aggregate card — the "5.0 · 15 reviews" badge on the home
+    // page. Two scalars kept in system_state and edited by hand here
+    // rather than pulled from the Places API.
+    aggregateTitle: { en: 'Google Aggregate', ru: 'Итоги Google' },
+    aggregateSubtitle: {
+      en: "The '5.0 · 15 reviews' badge on your home page. Update these when new reviews land on Google.",
+      ru: 'Плашка «5.0 · 15 отзывов» на главной странице. Обнови эти числа, когда в Google появятся новые отзывы.',
+    },
+    aggregateRatingLabel: { en: 'Rating', ru: 'Рейтинг' },
+    aggregateCountLabel: { en: 'Review count', ru: 'Количество отзывов' },
+    aggregateUpdatedAt: {
+      en: (date: string) => `Updated ${date}`,
+      ru: (date: string) => `Обновлено ${date}`,
+    },
+    aggregateInvalidRating: {
+      en: 'Rating must be a number 0.0–5.0',
+      ru: 'Рейтинг должен быть числом от 0.0 до 5.0',
+    },
+    aggregateInvalidCount: {
+      en: 'Count must be a non-negative whole number',
+      ru: 'Количество должно быть целым неотрицательным числом',
+    },
+    aggregateSaveFailed: { en: 'Save failed', ru: 'Не удалось сохранить' },
+    aggregateSaved: { en: 'Aggregate saved', ru: 'Итоги сохранены' },
+    aggregateNeverUpdated: { en: 'Never updated', ru: 'Ещё не обновлялось' },
   },
 
   reviewsEditor: {
@@ -1847,6 +1874,146 @@ const dict = {
     deleteConfirmBody: {
       en: (name: string) => `The review from ${name} will be permanently removed.`,
       ru: (name: string) => `Отзыв от ${name} будет удалён навсегда.`,
+    },
+  },
+
+  crons: {
+    // ─── Header ───────────────────────────────────────
+    tabTitle: { en: 'Crons', ru: 'Задачи' },
+    subtitle: {
+      en: 'Scheduled background jobs. Toggle, run on demand, inspect history.',
+      ru: 'Фоновые задачи по расписанию. Включай, запускай вручную, смотри историю.',
+    },
+    // Meta strip count. Russian plural: 1 задача, 2/3/4 задачи, 5+ задач.
+    cronCount: {
+      en: (n: number) => `${n} ${n === 1 ? 'cron' : 'crons'}`,
+      ru: (n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return `${n} задача`;
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} задачи`;
+        return `${n} задач`;
+      },
+    },
+    refreshAria: { en: 'Refresh crons', ru: 'Обновить список задач' },
+
+    // ─── Card body ────────────────────────────────────
+    // The toggle label + status pills. Kept short so they fit next
+    // to the Switch on narrow cards.
+    enabled: { en: 'Enabled', ru: 'Включена' },
+    disabled: { en: 'Disabled', ru: 'Отключена' },
+    enabledAria: { en: 'Toggle cron enabled', ru: 'Переключить активность задачи' },
+    // The header row above the description.
+    scheduleLabel: { en: 'Schedule', ru: 'Расписание' },
+    pathLabel: { en: 'Path', ru: 'Путь' },
+
+    // Human-readable schedule fallbacks. Common cases get named
+    // strings; anything else falls back to the raw expression with
+    // a "custom" tag.
+    scheduleDaily2Utc: { en: 'Daily at 2:00 UTC', ru: 'Ежедневно в 02:00 UTC' },
+    scheduleDaily12Utc: { en: 'Daily at 12:00 UTC', ru: 'Ежедневно в 12:00 UTC' },
+    scheduleCustom: {
+      en: (expr: string) => `${expr} (custom schedule)`,
+      ru: (expr: string) => `${expr} (своё расписание)`,
+    },
+
+    // ─── Last-run summary line ────────────────────────
+    // "Ran 3h ago in 8.4s" / "Skipped 1d ago" / "Errored 12h ago: msg"
+    // Format arguments as pre-composed strings from the component
+    // so plural / date-format logic stays in one place.
+    lastRunOk: {
+      en: (ago: string, duration: string) => `Ran ${ago} in ${duration}`,
+      ru: (ago: string, duration: string) => `Выполнена ${ago}, длилась ${duration}`,
+    },
+    lastRunSkipped: {
+      en: (ago: string) => `Skipped ${ago} (cron is off)`,
+      ru: (ago: string) => `Пропущена ${ago} (задача отключена)`,
+    },
+    lastRunError: {
+      en: (ago: string, msg: string) => `Errored ${ago}: ${msg}`,
+      ru: (ago: string, msg: string) => `Ошибка ${ago}: ${msg}`,
+    },
+    lastRunRunning: {
+      en: (ago: string) => `Running (started ${ago})`,
+      ru: (ago: string) => `Выполняется (началась ${ago})`,
+    },
+    lastRunNever: { en: 'Has never run', ru: 'Ещё ни разу не запускалась' },
+
+    // Trigger tags shown next to a run row in the history table.
+    triggerSchedule: { en: 'schedule', ru: 'расписание' },
+    triggerManual: { en: 'manual', ru: 'вручную' },
+
+    // Status labels on run rows.
+    statusOk: { en: 'ok', ru: 'ок' },
+    statusError: { en: 'error', ru: 'ошибка' },
+    statusSkipped: { en: 'skipped', ru: 'пропуск' },
+    statusRunning: { en: 'running', ru: 'выполняется' },
+
+    // ─── Buttons ──────────────────────────────────────
+    runNow: { en: 'Run now', ru: 'Запустить сейчас' },
+    running: { en: 'Running…', ru: 'Запускаю…' },
+    history: { en: 'History', ru: 'История' },
+    hideHistory: { en: 'Hide history', ru: 'Скрыть историю' },
+    historyLoading: { en: 'Loading history…', ru: 'Загружаю историю…' },
+    historyEmpty: { en: 'No runs recorded yet.', ru: 'Запусков ещё не было.' },
+
+    // Column headers for the compact history table.
+    historyStartedAt: { en: 'Started', ru: 'Начало' },
+    historyDuration: { en: 'Duration', ru: 'Длительность' },
+    historyStatus: { en: 'Status', ru: 'Статус' },
+    historyTrigger: { en: 'Trigger', ru: 'Источник' },
+    historyError: { en: 'Error', ru: 'Ошибка' },
+
+    // Toggle-confirm — we DON'T actually pop a modal on toggle (the
+    // switch flip is instant + reversible), but on Run Now we do
+    // surface a soft "are you sure" toast so a mis-tap on the wedding
+    // photo sync doesn't kick off a Vision-API bill for nothing.
+    runNowConfirmTitle: {
+      en: (name: string) => `Run '${name}' now?`,
+      ru: (name: string) => `Запустить «${name}» сейчас?`,
+    },
+    runNowConfirmBody: {
+      en: 'This runs the cron immediately, ignoring its schedule. Use to test after code changes or when you need fresh data now.',
+      ru: 'Задача запустится сразу, вне расписания. Пригодится, чтобы проверить после изменений в коде или получить свежие данные прямо сейчас.',
+    },
+    runNowConfirm: { en: 'Run', ru: 'Запустить' },
+
+    // ─── Toasts ───────────────────────────────────────
+    toggleFailed: { en: 'Could not update cron', ru: 'Не удалось обновить задачу' },
+    runNowSuccess: {
+      en: (name: string) => `Ran '${name}' — see last-run info above`,
+      ru: (name: string) => `Задача «${name}» выполнена — статус выше`,
+    },
+    runNowSkipped: {
+      en: (name: string) => `Skipped '${name}' — enable it first`,
+      ru: (name: string) => `«${name}» пропущена — сначала включи её`,
+    },
+    runNowFailed: {
+      en: (name: string) => `'${name}' errored — check the history`,
+      ru: (name: string) => `«${name}» завершилась с ошибкой — см. историю`,
+    },
+
+    // ─── Errors ───────────────────────────────────────
+    loadFailed: {
+      en: (status: number) => `Load failed (${status})`,
+      ru: (status: number) => `Не удалось загрузить (${status})`,
+    },
+    historyLoadFailed: {
+      en: (status: number) => `History load failed (${status})`,
+      ru: (status: number) => `Не удалось загрузить историю (${status})`,
+    },
+
+    // ─── Empty state ──────────────────────────────────
+    emptyTitle: { en: 'No crons registered yet', ru: 'Пока нет зарегистрированных задач' },
+    emptyDescription: {
+      en: "Registered crons auto-appear here on their first run. If you're seeing this after a fresh deploy, wait for the next scheduled invocation (or hit any of the /api/cron/* URLs manually).",
+      ru: 'Задачи появляются здесь после первого запуска. Если ты только что задеплоила код, подожди до ближайшего срабатывания (или дёрни любую из URL /api/cron/* вручную).',
+    },
+    // Shown when the DB migration hasn't been applied yet (endpoint
+    // returns migrationRequired instead of an error).
+    migrationRequired: {
+      en: 'The cron_jobs table has not been created yet. Run db/migrations/013-cron-jobs.sql against production Neon.',
+      ru: 'Таблица cron_jobs ещё не создана. Запусти db/migrations/013-cron-jobs.sql на продакшн-базе Neon.',
     },
   },
 } as const;

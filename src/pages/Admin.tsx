@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FaUsers, FaPlug, FaBookOpen, FaCommentDots, FaRobot, FaImage,
   FaInbox, FaFolder, FaBars, FaSignOutAlt, FaHome, FaExternalLinkAlt,
-  FaStar,
+  FaStar, FaClock,
 } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import Navbar from '../components/Navbar';
@@ -25,6 +25,7 @@ import AdminGallery from '../components/AdminGallery';
 import AdminReviews from '../components/AdminReviews';
 import AdminMessages from '../components/AdminMessages';
 import AdminAssistant from '../components/AdminAssistant';
+import AdminCrons from '../components/AdminCrons';
 import { AdminI18nProvider, useAdminLang, readAdminLang, adminDict, type AdminLang } from '../i18n/admin';
 
 const MotionDiv = motion.div;
@@ -32,7 +33,7 @@ const MotionDiv = motion.div;
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
 // live outside the tab shell for now — they're modal-ish flows.
-type DashTab = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations';
+type DashTab = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations' | 'crons';
 
 // Sub-tab for the Clients group (Table / Calendar). Moved up here from
 // AdminDashboard so the mobile bottom-nav sub-strip can drive it directly
@@ -46,7 +47,9 @@ type ClientsView = 'table' | 'calendar';
 // doesn't require opening a submenu.
 type NavGroup = 'clients' | 'inbox' | 'studio' | 'menu';
 
-const TAB_TO_GROUP: Record<Exclude<DashTab, 'integrations'>, Exclude<NavGroup, 'menu'>> = {
+// Integrations + Crons are super-only, reached via the Menu drawer only,
+// so they intentionally live outside the mobile bottom-nav groups.
+const TAB_TO_GROUP: Record<Exclude<DashTab, 'integrations' | 'crons'>, Exclude<NavGroup, 'menu'>> = {
   clients: 'clients',
   messages: 'inbox',
   assistant: 'inbox',
@@ -289,6 +292,9 @@ const Admin = () => {
               {dashTab === 'integrations' && adminLevel === 'super' && (
                 <AdminIntegrations adminPassword={password} />
               )}
+              {dashTab === 'crons' && adminLevel === 'super' && (
+                <AdminCrons adminPassword={password} adminLevel={adminLevel} />
+              )}
             </>
           )}
           {view.kind === 'mode-chooser' && (
@@ -352,6 +358,10 @@ const Admin = () => {
           onSignOut={handleSignOut}
           onGoIntegrations={() => {
             setDashTab('integrations');
+            menuDisclosure.onClose();
+          }}
+          onGoCrons={() => {
+            setDashTab('crons');
             menuDisclosure.onClose();
           }}
         />
@@ -805,8 +815,12 @@ function AdminMobileNav({
   // (which tab in the bottom bar looks selected). Independent of
   // openGroup — the sub-menu can be open on Inbox while the active
   // group is Studio.
+  // Integrations + Crons are super-only, reached via the Menu drawer,
+  // so both highlight the Menu slot in the bottom nav.
   const activeGroup: NavGroup =
-    activeTab === 'integrations' ? 'menu' : TAB_TO_GROUP[activeTab];
+    activeTab === 'integrations' || activeTab === 'crons'
+      ? 'menu'
+      : TAB_TO_GROUP[activeTab];
 
   // Sub-nav pill lookup for the open group. Menu never has one
   // (it opens a drawer instead).
@@ -1017,12 +1031,14 @@ function AdminMenuDrawer({
   adminLevel,
   onSignOut,
   onGoIntegrations,
+  onGoCrons,
 }: {
   isOpen: boolean;
   onClose: () => void;
   adminLevel: 'admin' | 'super';
   onSignOut: () => void;
   onGoIntegrations: () => void;
+  onGoCrons: () => void;
 }) {
   const { t, lang, setLang } = useAdminLang();
   return (
@@ -1070,6 +1086,7 @@ function AdminMenuDrawer({
             {adminLevel === 'super' && (
               <>
                 <MenuSectionLabel>{t.menuDrawer.super}</MenuSectionLabel>
+                <MenuButton icon={FaClock} label={t.nav.crons} onClick={onGoCrons} />
                 <MenuButton icon={FaPlug} label={t.nav.integrations} onClick={onGoIntegrations} />
               </>
             )}

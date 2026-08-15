@@ -22,6 +22,19 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sendEmail } from '../_auto-reply.js';
 import { getDb } from '../_db.js';
 import { detectAndMarkRotation } from '../_ig-detect.js';
+import { runGuarded, type CronTrigger } from './_guard.js';
+
+// Cron metadata registered into cron_jobs on the first run. Kept as a
+// const at the top so a grep for "instagram-check" lands on the truth
+// (schedule stays in sync with vercel.json by convention — the guard
+// re-upserts on every invocation, so any manual drift auto-heals).
+const CRON_META = {
+  name: 'instagram-check',
+  path: '/api/cron/instagram-check',
+  schedule: '0 12 * * *',
+  description:
+    'Daily: emails Alex when the Instagram long-lived token has ~10 days of runway left. Reminder only — Alex owns the rotation.',
+} as const;
 
 // Instagram long-lived tokens are 60 days. Alert at day 50 → 10 days
 // of runway to notice + rotate.
@@ -42,62 +55,83 @@ const VERCEL_ENV_LINK =
 const ADMIN_LINK =
   process.env.ADMIN_URL ?? 'https://vero.photography/admin';
 
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
-  try {
-    // Auto-detect first: if the env var changed since last cron, mark
-    // as refreshed transparently before we evaluate whether to remind.
-    // This is what makes the manual "Mark as Refreshed" click optional
-    // for the common flow (rotate → paste → redeploy → we notice on
-    // the next cron and reset the clock silently).
-    try {
-      await detectAndMarkRotation();
-    } catch (err) {
-      console.error('[cron/instagram-check] auto-detect failed (non-fatal):', err);
-    }
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // The admin "Run now" button sets ?trigger=manual on the internal
+  // fetch so history rows label manual invocations distinctly.
+  const rawTrigger = req.query?.trigger;
+  const trigger: CronTrigger =
+    (Array.isArray(rawTrigger) ? rawTrigger[0] : rawTrigger) === 'manual'
+      ? 'manual'
+      : 'schedule';
 
-    const sql = getDb();
+  const result = await runGuarded({ ...CRON_META, trigger }, doInstagramCheck);
 
-    // Read both keys in a single round-trip. `ig_token_refreshed` is
-    // the rotation clock; `ig_token_reminded_at` is our dedupe stamp.
-    const rows = (await sql`
-      SELECT key, updated_at
-      FROM system_state
-      WHERE key IN ('ig_token_refreshed', 'ig_token_reminded_at')
-    `) as Array<{ key: string; updated_at: string }>;
-
-    const refreshedAt = rows.find((r) => r.key === 'ig_token_refreshed')?.updated_at;
-    const remindedAt = rows.find((r) => r.key === 'ig_token_reminded_at')?.updated_at;
-
-    if (!refreshedAt) {
-      // Table's empty — no rotation date on record. One-shot alert so
-      // the situation is noticed; then dedupe kicks in.
-      if (recentlyReminded(remindedAt)) {
-        return res.status(200).json({ ok: true, action: 'silent-no-refresh-date' });
-      }
-      await sendReminderEmail(null, null);
-      await markReminded(sql);
-      return res.status(200).json({ ok: true, action: 'alerted-no-refresh-date' });
-    }
-
-    const daysSince = Math.floor(
-      (Date.now() - new Date(refreshedAt).getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (daysSince < REMIND_AFTER_DAYS) {
-      return res.status(200).json({ ok: true, action: 'no-op', daysSince });
-    }
-
-    if (recentlyReminded(remindedAt)) {
-      return res.status(200).json({ ok: true, action: 'silent-already-reminded', daysSince });
-    }
-
-    await sendReminderEmail(refreshedAt, daysSince);
-    await markReminded(sql);
-    return res.status(200).json({ ok: true, action: 'reminded', daysSince });
-  } catch (err) {
-    console.error('[cron/instagram-check] handler failed:', err);
-    return res.status(500).json({ ok: false, error: 'Cron failed' });
+  if (result.skipped) {
+    return res.status(200).json({ ok: true, action: 'skipped-cron-disabled' });
   }
+  if (result.error) {
+    return res.status(500).json({ ok: false, error: result.error });
+  }
+  return res.status(200).json({ ok: true, ...(result.ok ?? {}) });
+}
+
+/**
+ * The actual reminder logic — separated from the HTTP handler so
+ * runGuarded() can time it, catch its throws, and record enabled /
+ * disabled cleanly. Returns a small payload the handler splats into
+ * the JSON response.
+ */
+async function doInstagramCheck(): Promise<{ action: string; daysSince?: number }> {
+  // Auto-detect first: if the env var changed since last cron, mark
+  // as refreshed transparently before we evaluate whether to remind.
+  // This is what makes the manual "Mark as Refreshed" click optional
+  // for the common flow (rotate → paste → redeploy → we notice on
+  // the next cron and reset the clock silently).
+  try {
+    await detectAndMarkRotation();
+  } catch (err) {
+    console.error('[cron/instagram-check] auto-detect failed (non-fatal):', err);
+  }
+
+  const sql = getDb();
+
+  // Read both keys in a single round-trip. `ig_token_refreshed` is
+  // the rotation clock; `ig_token_reminded_at` is our dedupe stamp.
+  const rows = (await sql`
+    SELECT key, updated_at
+    FROM system_state
+    WHERE key IN ('ig_token_refreshed', 'ig_token_reminded_at')
+  `) as Array<{ key: string; updated_at: string }>;
+
+  const refreshedAt = rows.find((r) => r.key === 'ig_token_refreshed')?.updated_at;
+  const remindedAt = rows.find((r) => r.key === 'ig_token_reminded_at')?.updated_at;
+
+  if (!refreshedAt) {
+    // Table's empty — no rotation date on record. One-shot alert so
+    // the situation is noticed; then dedupe kicks in.
+    if (recentlyReminded(remindedAt)) {
+      return { action: 'silent-no-refresh-date' };
+    }
+    await sendReminderEmail(null, null);
+    await markReminded(sql);
+    return { action: 'alerted-no-refresh-date' };
+  }
+
+  const daysSince = Math.floor(
+    (Date.now() - new Date(refreshedAt).getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (daysSince < REMIND_AFTER_DAYS) {
+    return { action: 'no-op', daysSince };
+  }
+
+  if (recentlyReminded(remindedAt)) {
+    return { action: 'silent-already-reminded', daysSince };
+  }
+
+  await sendReminderEmail(refreshedAt, daysSince);
+  await markReminded(sql);
+  return { action: 'reminded', daysSince };
 }
 
 function recentlyReminded(remindedAt: string | undefined): boolean {

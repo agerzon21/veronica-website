@@ -24,5 +24,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Delegate straight to the cron handler. It does its own res.json
   // reply, so we're done after this call.
+  //
+  // Inject ?trigger=manual so the guard writes a cron_runs row with
+  // trigger='manual' — otherwise this in-app sync would masquerade
+  // as a scheduled Vercel Cron run in the history.
+  req.query = { ...req.query, trigger: 'manual' };
   return gallerySync(req, res);
 }

@@ -31,6 +31,7 @@ import journalDeleteHandler from './admin/_journal-delete.js';
 import reviewsListHandler from './admin/_reviews-list.js';
 import reviewsUpsertHandler from './admin/_reviews-upsert.js';
 import reviewsDeleteHandler from './admin/_reviews-delete.js';
+import reviewsAggregateHandler from './admin/_reviews-aggregate.js';
 import messagesListHandler from './admin/_messages-list.js';
 import messagesDetailHandler from './admin/_messages-detail.js';
 import messagesToggleAiHandler from './admin/_messages-toggle-ai.js';
@@ -50,6 +51,10 @@ import gallerySyncNowHandler from './admin/_gallery-sync-now.js';
 import gallerySettingsHandler from './admin/_gallery-settings.js';
 import assistantChatHandler from './admin/_assistant-chat.js';
 import transcribeHandler from './admin/_transcribe.js';
+import cronsListHandler from './admin/_crons-list.js';
+import cronsToggleHandler from './admin/_crons-toggle.js';
+import cronsRunNowHandler from './admin/_crons-run-now.js';
+import cronsHistoryHandler from './admin/_crons-history.js';
 
 const HANDLERS: Record<
   string,
@@ -74,6 +79,7 @@ const HANDLERS: Record<
   'reviews-list': reviewsListHandler,
   'reviews-upsert': reviewsUpsertHandler,
   'reviews-delete': reviewsDeleteHandler,
+  'reviews-aggregate': reviewsAggregateHandler,
   'messages-list': messagesListHandler,
   'messages-detail': messagesDetailHandler,
   'messages-toggle-ai': messagesToggleAiHandler,
@@ -93,6 +99,10 @@ const HANDLERS: Record<
   'gallery-settings': gallerySettingsHandler,
   'assistant-chat': assistantChatHandler,
   transcribe: transcribeHandler,
+  'crons-list': cronsListHandler,
+  'crons-toggle': cronsToggleHandler,
+  'crons-run-now': cronsRunNowHandler,
+  'crons-history': cronsHistoryHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

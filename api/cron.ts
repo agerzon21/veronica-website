@@ -29,7 +29,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import instagramCheckHandler from './cron/_instagram-check.js';
 import gallerySyncHandler from './cron/_gallery-sync.js';
 
-const HANDLERS: Record<
+// Exported so the admin "Run now" endpoint (api/admin/_crons-run-now.ts)
+// can look a handler up by name and invoke it in-process, instead of
+// firing off a self-fetch that would need to know the deployment URL
+// and CRON_SECRET separately. Same source of truth either way.
+export const HANDLERS: Record<
   string,
   (req: VercelRequest, res: VercelResponse) => Promise<unknown> | unknown
 > = {

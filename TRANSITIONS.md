@@ -81,5 +81,9 @@ Ongoing infrastructure + feature work with concrete checklists. Update this file
 - [ ] Upgrade Resend to Pro ($20/mo) — needed before Phase 4
 - [ ] Decide which other domains to add to Resend (gerz.dev? spysocial.app?)
 
+## Decisions logged
+
+- **Google Places API for the "5.0 · 15 reviews" badge → SKIPPED for now.** Verified free tier works (Enterprise SKU, 1K/mo free, ~30 calls/mo for daily poll), but requires Google Cloud project + billing card + per-SKU quota policing + separate Place ID lookup + env var wiring. Cost/benefit doesn't pencil for two numbers that change ~monthly. Manual editor in the Reviews admin tab instead. Reconsider if either (a) reviews change often enough that manual becomes annoying, or (b) we build Google Cloud setup for something else anyway (Business Profile API for auto-review-ingest, calendar API for something, etc.) and Places is basically free-additional.
+
 ---
 Last updated by an agent on 2026-08-14. Kept up to date as work progresses.

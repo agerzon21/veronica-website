@@ -2,7 +2,7 @@ import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, Wrap, IconButton,
   Switch, Input, Textarea, Select, Stack,
 } from '@chakra-ui/react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   FaPlus, FaSyncAlt, FaStar, FaEdit, FaTrash, FaGoogle, FaYelp,
   FaInstagram, FaEnvelope, FaUser,
@@ -266,6 +266,13 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
         </Box>
       )}
 
+      {/* Google Aggregate card — the "5.0 · 15 reviews" badge on the
+          public home page. Lives above the review list because it's a
+          persistent site-wide setting, not a moderation queue item. */}
+      <Box mb={{ base: 5, md: 6 }}>
+        <GoogleAggregateCard adminPassword={adminPassword} />
+      </Box>
+
       {loading ? (
         <Flex justify="center" py={16}>
           <Spinner color="#c9a96e" />
@@ -325,6 +332,255 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
     </Box>
   );
 };
+
+// ── Google Aggregate card ──────────────────────────────────────────
+// A compact editor for the two system_state scalars that drive the
+// "5.0 · 15 reviews on Google" badge on the home page. Save is only
+// enabled when both fields are valid AND dirty — nudges the admin
+// toward "leave it alone unless something actually changed."
+function GoogleAggregateCard({ adminPassword }: { adminPassword: string }) {
+  const { t } = useAdminLang();
+  const toast = useToast();
+  const [ratingInput, setRatingInput] = useState('');
+  const [countInput, setCountInput] = useState('');
+  const [initialRating, setInitialRating] = useState('');
+  const [initialCount, setInitialCount] = useState('');
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Empty body (past the password) → read path; the server
+        // distinguishes read vs. update by the absence of rating/count.
+        const res = await fetch('/api/admin/reviews-aggregate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.success) {
+          const r = typeof data.rating === 'string' ? data.rating : '';
+          const c = typeof data.count === 'number' ? String(data.count) : '';
+          setRatingInput(r);
+          setCountInput(c);
+          setInitialRating(r);
+          setInitialCount(c);
+          setUpdatedAt(typeof data.updated_at === 'string' ? data.updated_at : null);
+        } else {
+          setError(data.error || t.reviews.loadFailed(res.status));
+        }
+      } catch {
+        if (!cancelled) setError(t.common.couldNotReach);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [adminPassword, t]);
+
+  // Validation mirrors the server-side rules so the Save button state
+  // can react instantly without a round-trip. If either side of the
+  // pair is invalid, Save is disabled.
+  const ratingValid = /^[0-5](\.\d)?$/.test(ratingInput.trim());
+  const countValid = /^\d+$/.test(countInput.trim());
+  const dirty =
+    ratingInput.trim() !== initialRating.trim() ||
+    countInput.trim() !== initialCount.trim();
+  const canSave = ratingValid && countValid && dirty && !saving;
+
+  // Human-friendly timestamp — formatted client-side so the browser
+  // locale wins, matching how the review-card publish_date renders.
+  const updatedLabel = useMemo(() => {
+    if (!updatedAt) return t.reviews.aggregateNeverUpdated;
+    const d = new Date(updatedAt);
+    if (Number.isNaN(d.getTime())) return t.reviews.aggregateNeverUpdated;
+    return t.reviews.aggregateUpdatedAt(
+      d.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }),
+    );
+  }, [updatedAt, t]);
+
+  const handleSave = async () => {
+    if (!ratingValid) {
+      setError(t.reviews.aggregateInvalidRating);
+      return;
+    }
+    if (!countValid) {
+      setError(t.reviews.aggregateInvalidCount);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/reviews-aggregate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          rating: ratingInput.trim(),
+          count: Number(countInput.trim()),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const r = typeof data.rating === 'string' ? data.rating : ratingInput.trim();
+        const c =
+          typeof data.count === 'number' ? String(data.count) : countInput.trim();
+        setRatingInput(r);
+        setCountInput(c);
+        setInitialRating(r);
+        setInitialCount(c);
+        setUpdatedAt(typeof data.updated_at === 'string' ? data.updated_at : null);
+        toast({
+          title: t.reviews.aggregateSaved,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        setError(data.error || t.reviews.aggregateSaveFailed);
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderRadius="sm"
+      p={{ base: 4, md: 5 }}
+    >
+      <Flex align="flex-start" gap={3} mb={3}>
+        <Flex
+          boxSize={{ base: '40px', md: '44px' }}
+          borderRadius="full"
+          bg="#fdf9f0"
+          border="1px solid"
+          borderColor="#e8d9a8"
+          align="center"
+          justify="center"
+          flexShrink={0}
+        >
+          <Icon as={FaGoogle} boxSize={4} color="#c9a96e" />
+        </Flex>
+        <VStack align="flex-start" spacing={1} flex={1} minW={0}>
+          <Text
+            fontSize={{ base: 'xs', md: '2xs' }}
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing={{ base: '0.15em', md: '0.22em' }}
+            color="#c9a96e"
+          >
+            {t.reviews.aggregateTitle}
+          </Text>
+          <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+            {t.reviews.aggregateSubtitle}
+          </Text>
+        </VStack>
+      </Flex>
+
+      {loading ? (
+        <Flex justify="center" py={4}>
+          <Spinner size="sm" color="#c9a96e" />
+        </Flex>
+      ) : (
+        <>
+          {error && (
+            <Box
+              bg="red.50"
+              border="1px solid"
+              borderColor="red.200"
+              p={2.5}
+              mb={3}
+              borderRadius="sm"
+            >
+              <Text fontSize="xs" color="red.700">{error}</Text>
+            </Box>
+          )}
+
+          <Stack direction={{ base: 'column', sm: 'row' }} spacing={3} align="flex-end">
+            <Box flex={1} w="100%">
+              <Text
+                fontSize={{ base: 'xs', md: '2xs' }}
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing={{ base: '0.15em', md: '0.22em' }}
+                color="gray.600"
+                mb={1.5}
+              >
+                {t.reviews.aggregateRatingLabel}
+              </Text>
+              <Input
+                value={ratingInput}
+                onChange={(e) => setRatingInput(e.target.value)}
+                placeholder="5.0"
+                inputMode="decimal"
+                // A short input matches the value's actual footprint
+                // and stops the row from collapsing weirdly on desktop.
+                maxLength={3}
+                isInvalid={ratingInput !== '' && !ratingValid}
+                {...inputStyles}
+              />
+            </Box>
+            <Box flex={1} w="100%">
+              <Text
+                fontSize={{ base: 'xs', md: '2xs' }}
+                fontWeight="500"
+                textTransform="uppercase"
+                letterSpacing={{ base: '0.15em', md: '0.22em' }}
+                color="gray.600"
+                mb={1.5}
+              >
+                {t.reviews.aggregateCountLabel}
+              </Text>
+              <Input
+                value={countInput}
+                onChange={(e) => setCountInput(e.target.value)}
+                placeholder="15"
+                inputMode="numeric"
+                isInvalid={countInput !== '' && !countValid}
+                {...inputStyles}
+              />
+            </Box>
+            <CTAButton
+              onClick={handleSave}
+              variant="solid"
+              size="sm"
+              isDisabled={!canSave}
+              isLoading={saving}
+              loadingText={t.common.saving}
+            >
+              {t.common.save}
+            </CTAButton>
+          </Stack>
+
+          <Text fontSize="xs" color="gray.400" fontWeight="300" mt={3}>
+            {updatedLabel}
+          </Text>
+        </>
+      )}
+    </Box>
+  );
+}
 
 // ── Row card ───────────────────────────────────────────────────────
 function ReviewCard({

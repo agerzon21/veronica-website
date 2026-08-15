@@ -46,6 +46,19 @@ import {
   type FolderSection,
 } from '../_drive.js';
 import { describePhoto, type VisionResult } from '../_ai-vision.js';
+import { runGuarded, type CronTrigger } from './_guard.js';
+
+// Cron metadata registered into cron_jobs on the first run. Kept as a
+// const so a grep for "gallery-sync" lands on the truth (schedule
+// stays in sync with vercel.json by convention — the guard re-upserts
+// on every invocation, so any manual drift auto-heals).
+const CRON_META = {
+  name: 'gallery-sync',
+  path: '/api/cron/gallery-sync',
+  schedule: '0 2 * * *',
+  description:
+    'Daily at 2:00 UTC: reconciles gallery_photos against the Drive Gallery folder. New photos get AI-drafted metadata; removed ones are soft-deleted.',
+} as const;
 
 type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
 const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'maternity'] as const;
@@ -66,154 +79,179 @@ interface ExistingRow {
   deleted_at: string | null;
 }
 
+// Sentinel error thrown for a misconfigured Drive folder. The guard
+// treats it like any other throw (marks the run as 'error' with this
+// message), and the outer handler unwraps it to a 400 rather than
+// the default 500 — the operator-facing error message is user-facing.
+class ConfigError extends Error {}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // The admin "Run now" button + the "Sync from Drive" admin action
+  // both invoke this handler with ?trigger=manual so the history
+  // table can distinguish scheduled runs from human-triggered ones.
+  const rawTrigger = req.query?.trigger;
+  const trigger: CronTrigger =
+    (Array.isArray(rawTrigger) ? rawTrigger[0] : rawTrigger) === 'manual'
+      ? 'manual'
+      : 'schedule';
+
+  const result = await runGuarded({ ...CRON_META, trigger }, doGallerySync);
+
+  if (result.skipped) {
+    return res.status(200).json({ success: true, skipped: true });
+  }
+  if (result.error) {
+    // Config errors from the "folder not set" branch surface as 400.
+    // Every other error is a server-side sync failure (500).
+    const isConfig = /Gallery folder|extract a Drive folder/.test(result.error);
+    return res
+      .status(isConfig ? 400 : 500)
+      .json({ success: false, error: result.error });
+  }
+  return res.status(200).json({ success: true, ...(result.ok ?? {}) });
+}
+
+/**
+ * The reconciliation body — separated from the HTTP handler so
+ * runGuarded() can time it and record enabled / disabled cleanly.
+ * Returns a payload the handler splats into JSON.
+ */
+async function doGallerySync() {
   // Folder id is admin-editable — stored in system_state so a
   // non-technical operator can set it from the Gallery tab without
   // touching Vercel env vars. Env var still respected as a fallback
   // for backwards-compat with any existing deploy that has it set.
-  try {
-    const sql = getDb();
-    const stateRows = (await sql`
-      SELECT value FROM system_state WHERE key = 'gallery_drive_folder_id' LIMIT 1
-    `) as Array<{ value: string | null }>;
-    const dbValue = stateRows[0]?.value ?? null;
-    const folderUrl = dbValue ?? process.env.GALLERY_DRIVE_FOLDER_ID ?? '';
+  const sql = getDb();
+  const stateRows = (await sql`
+    SELECT value FROM system_state WHERE key = 'gallery_drive_folder_id' LIMIT 1
+  `) as Array<{ value: string | null }>;
+  const dbValue = stateRows[0]?.value ?? null;
+  const folderUrl = dbValue ?? process.env.GALLERY_DRIVE_FOLDER_ID ?? '';
 
-    if (!folderUrl) {
-      return res.status(400).json({
-        success: false,
-        error:
-          "Gallery folder isn't configured yet. Set it from Admin → Gallery → Change folder.",
-      });
-    }
-    const folderId = extractFolderId(folderUrl);
-    if (!folderId) {
-      return res.status(400).json({
-        success: false,
-        error: `Could not extract a Drive folder id from '${folderUrl}'. Paste the Drive folder URL (or its id) into Admin → Gallery → Change folder.`,
-      });
-    }
-
-    // ── 1. Discover: list every image in every category subfolder ──
-    const tree = await listFolderTree(folderId);
-    // Root files are ignored — Vero organizes into per-category
-    // subfolders; anything at the root is a mistake and shouldn't
-    // silently appear in some default category.
-    const perCategory = groupByCategory(tree.sections);
-    const driveFiles: Array<{ category: Category; file: DriveFile }> = [];
-    for (const [category, files] of perCategory) {
-      for (const file of files) driveFiles.push({ category, file });
-    }
-
-    // ── 2. Pull all existing rows in one query for diffing ──
-    const existingRows = (await sql`
-      SELECT id, drive_file_id, deleted_at FROM gallery_photos
-    `) as ExistingRow[];
-    const byDriveId = new Map<string, ExistingRow>();
-    for (const r of existingRows) byDriveId.set(r.drive_file_id, r);
-
-    // Bucket into { existing (refresh timestamp), restored (undelete
-    // + refresh), new (needs Vision + insert) }.
-    const toRefresh: string[] = [];  // drive_file_ids currently in Drive AND DB
-    const toRestore: string[] = [];  // in Drive + DB but soft-deleted
-    const toInsert: Array<{ category: Category; file: DriveFile }> = [];
-    for (const { category, file } of driveFiles) {
-      const existing = byDriveId.get(file.id);
-      if (!existing) {
-        toInsert.push({ category, file });
-      } else if (existing.deleted_at) {
-        toRestore.push(file.id);
-      } else {
-        toRefresh.push(file.id);
-      }
-    }
-
-    // Anything in DB but NOT in Drive today = soft delete
-    const seenDriveIds = new Set(driveFiles.map((d) => d.file.id));
-    const toSoftDelete = existingRows
-      .filter((r) => !seenDriveIds.has(r.drive_file_id) && !r.deleted_at)
-      .map((r) => r.drive_file_id);
-
-    // ── 3. Refresh + restore in a single pass ──
-    if (toRefresh.length > 0) {
-      await sql`
-        UPDATE gallery_photos
-        SET drive_seen_at = NOW()
-        WHERE drive_file_id = ANY(${toRefresh})
-      `;
-    }
-    if (toRestore.length > 0) {
-      await sql`
-        UPDATE gallery_photos
-        SET deleted_at = NULL, drive_seen_at = NOW()
-        WHERE drive_file_id = ANY(${toRestore})
-      `;
-    }
-    if (toSoftDelete.length > 0) {
-      await sql`
-        UPDATE gallery_photos
-        SET deleted_at = NOW()
-        WHERE drive_file_id = ANY(${toSoftDelete})
-      `;
-    }
-
-    // ── 4. Insert new photos — bounded + concurrent Vision calls ──
-    const batch = toInsert.slice(0, MAX_NEW_PER_RUN);
-    const inserted: string[] = [];
-    const insertFailures: Array<{ file: string; error: string }> = [];
-
-    await mapWithConcurrency(batch, VISION_CONCURRENCY, async ({ category, file }) => {
-      try {
-        const vision = await describePhoto(file.thumbnailUrl, category);
-        // Slug uniqueness: append a short suffix on collision. We
-        // check by inserting with ON CONFLICT and retrying with an
-        // incrementing suffix — simple and race-safe.
-        const finalSlug = await insertWithUniqueSlug(
-          sql,
-          vision,
-          file,
-          category,
-        );
-        inserted.push(finalSlug);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        insertFailures.push({ file: file.name, error: msg });
-        console.error(`[gallery-sync] insert failed for ${file.name}:`, err);
-      }
-    });
-
-    const remainingNew = Math.max(0, toInsert.length - batch.length);
-
-    // ── 5. Trigger a Vercel deploy so prerendered HTML pages
-    //     refresh with the new set. Only fire if the set of live
-    //     photos actually changed — a pure "refresh timestamps"
-    //     run doesn't need to redeploy.
-    const changed =
-      inserted.length > 0 || toRestore.length > 0 || toSoftDelete.length > 0;
-    let deployTriggered = false;
-    if (changed) {
-      deployTriggered = await triggerDeployHook();
-    }
-
-    return res.status(200).json({
-      success: true,
-      driveFilesSeen: driveFiles.length,
-      inserted: inserted.length,
-      insertedSlugs: inserted,
-      restored: toRestore.length,
-      softDeleted: toSoftDelete.length,
-      refreshed: toRefresh.length,
-      insertFailures,
-      remainingNewNextRun: remainingNew,
-      deployTriggered,
-    });
-  } catch (err) {
-    console.error('[gallery-sync] handler failed:', err);
-    return res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : 'Sync failed',
-    });
+  if (!folderUrl) {
+    throw new ConfigError(
+      "Gallery folder isn't configured yet. Set it from Admin → Gallery → Change folder.",
+    );
   }
+  const folderId = extractFolderId(folderUrl);
+  if (!folderId) {
+    throw new ConfigError(
+      `Could not extract a Drive folder id from '${folderUrl}'. Paste the Drive folder URL (or its id) into Admin → Gallery → Change folder.`,
+    );
+  }
+
+  // ── 1. Discover: list every image in every category subfolder ──
+  const tree = await listFolderTree(folderId);
+  // Root files are ignored — Vero organizes into per-category
+  // subfolders; anything at the root is a mistake and shouldn't
+  // silently appear in some default category.
+  const perCategory = groupByCategory(tree.sections);
+  const driveFiles: Array<{ category: Category; file: DriveFile }> = [];
+  for (const [category, files] of perCategory) {
+    for (const file of files) driveFiles.push({ category, file });
+  }
+
+  // ── 2. Pull all existing rows in one query for diffing ──
+  const existingRows = (await sql`
+    SELECT id, drive_file_id, deleted_at FROM gallery_photos
+  `) as ExistingRow[];
+  const byDriveId = new Map<string, ExistingRow>();
+  for (const r of existingRows) byDriveId.set(r.drive_file_id, r);
+
+  // Bucket into { existing (refresh timestamp), restored (undelete
+  // + refresh), new (needs Vision + insert) }.
+  const toRefresh: string[] = [];  // drive_file_ids currently in Drive AND DB
+  const toRestore: string[] = [];  // in Drive + DB but soft-deleted
+  const toInsert: Array<{ category: Category; file: DriveFile }> = [];
+  for (const { category, file } of driveFiles) {
+    const existing = byDriveId.get(file.id);
+    if (!existing) {
+      toInsert.push({ category, file });
+    } else if (existing.deleted_at) {
+      toRestore.push(file.id);
+    } else {
+      toRefresh.push(file.id);
+    }
+  }
+
+  // Anything in DB but NOT in Drive today = soft delete
+  const seenDriveIds = new Set(driveFiles.map((d) => d.file.id));
+  const toSoftDelete = existingRows
+    .filter((r) => !seenDriveIds.has(r.drive_file_id) && !r.deleted_at)
+    .map((r) => r.drive_file_id);
+
+  // ── 3. Refresh + restore in a single pass ──
+  if (toRefresh.length > 0) {
+    await sql`
+      UPDATE gallery_photos
+      SET drive_seen_at = NOW()
+      WHERE drive_file_id = ANY(${toRefresh})
+    `;
+  }
+  if (toRestore.length > 0) {
+    await sql`
+      UPDATE gallery_photos
+      SET deleted_at = NULL, drive_seen_at = NOW()
+      WHERE drive_file_id = ANY(${toRestore})
+    `;
+  }
+  if (toSoftDelete.length > 0) {
+    await sql`
+      UPDATE gallery_photos
+      SET deleted_at = NOW()
+      WHERE drive_file_id = ANY(${toSoftDelete})
+    `;
+  }
+
+  // ── 4. Insert new photos — bounded + concurrent Vision calls ──
+  const batch = toInsert.slice(0, MAX_NEW_PER_RUN);
+  const inserted: string[] = [];
+  const insertFailures: Array<{ file: string; error: string }> = [];
+
+  await mapWithConcurrency(batch, VISION_CONCURRENCY, async ({ category, file }) => {
+    try {
+      const vision = await describePhoto(file.thumbnailUrl, category);
+      // Slug uniqueness: append a short suffix on collision. We
+      // check by inserting with ON CONFLICT and retrying with an
+      // incrementing suffix — simple and race-safe.
+      const finalSlug = await insertWithUniqueSlug(
+        sql,
+        vision,
+        file,
+        category,
+      );
+      inserted.push(finalSlug);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      insertFailures.push({ file: file.name, error: msg });
+      console.error(`[gallery-sync] insert failed for ${file.name}:`, err);
+    }
+  });
+
+  const remainingNew = Math.max(0, toInsert.length - batch.length);
+
+  // ── 5. Trigger a Vercel deploy so prerendered HTML pages
+  //     refresh with the new set. Only fire if the set of live
+  //     photos actually changed — a pure "refresh timestamps"
+  //     run doesn't need to redeploy.
+  const changed =
+    inserted.length > 0 || toRestore.length > 0 || toSoftDelete.length > 0;
+  let deployTriggered = false;
+  if (changed) {
+    deployTriggered = await triggerDeployHook();
+  }
+
+  return {
+    driveFilesSeen: driveFiles.length,
+    inserted: inserted.length,
+    insertedSlugs: inserted,
+    restored: toRestore.length,
+    softDeleted: toSoftDelete.length,
+    refreshed: toRefresh.length,
+    insertFailures,
+    remainingNewNextRun: remainingNew,
+    deployTriggered,
+  };
 }
 
 /**

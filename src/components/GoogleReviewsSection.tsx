@@ -11,10 +11,11 @@ const MotionDiv = motion.div;
 const GOOGLE_PROFILE_URL = 'https://g.page/r/CSNq8ccyWt_wEAE';
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 
-// TODO: These are currently hardcoded. Wire them up to a Places API integration
-// or a system_state DB entry that admin can update from the Reviews tab.
-const RATING = '5.0';
-const REVIEW_COUNT = 15;
+// Fallback used when the API errors or the aggregate row hasn't been
+// seeded yet. Keeps the badge from ever rendering "· null Reviews on
+// Google" — a small stability net for a piece of homepage chrome.
+const FALLBACK_RATING = '5.0';
+const FALLBACK_REVIEW_COUNT = 15;
 
 const TESTIMONIALS_TO_DISPLAY = 2;
 
@@ -90,6 +91,8 @@ const AuthorBadge = ({ review }: { review: Review }) => {
 
 const GoogleReviewsSection = () => {
   const [testimonials, setTestimonials] = useState<Review[]>([]);
+  const [rating, setRating] = useState<string>(FALLBACK_RATING);
+  const [reviewCount, setReviewCount] = useState<number>(FALLBACK_REVIEW_COUNT);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -104,6 +107,17 @@ const GoogleReviewsSection = () => {
             () => Math.random() - 0.5
           );
           setTestimonials(shuffled.slice(0, TESTIMONIALS_TO_DISPLAY));
+          // aggregate.rating / .count are null before Vero seeds them —
+          // fall through to the constants so the badge stays intact.
+          const agg = data.aggregate as
+            | { rating?: string | null; count?: number | null }
+            | undefined;
+          if (agg && typeof agg.rating === 'string' && agg.rating.trim()) {
+            setRating(agg.rating.trim());
+          }
+          if (agg && typeof agg.count === 'number' && agg.count >= 0) {
+            setReviewCount(agg.count);
+          }
         } else {
           setTestimonials([]);
         }
@@ -168,7 +182,7 @@ const GoogleReviewsSection = () => {
                   textDecorationColor: '#c9a96e',
                 }}
               >
-                {RATING} · {REVIEW_COUNT} Reviews on Google →
+                {rating} · {reviewCount} Reviews on Google →
               </Text>
             </HStack>
           </Link>
