@@ -1,0 +1,80 @@
+-- ⚠️  DEPLOY ORDERING: apply this migration to prod Neon BEFORE
+--     deploying the code change that references ai_reply_intents.
+--     The code has a defensive fail-open on 42P01 (table missing)
+--     that keeps AI replies working with a loud warning log, so a
+--     missed apply is a KNOWN DEGRADED state (pre-015 double-reply
+--     race is possible) rather than a silent outage — but the whole
+--     point of the migration is to close that race, so don't leave
+--     the table unmigrated for long.
+--
+-- Race-guard table for the AI reply pipeline.
+--
+-- Problem: when Meta sends two webhook POSTs milliseconds apart
+-- (routine — happens whenever a customer types quickly, not just on
+-- retries), each POST lands on its own Vercel serverless invocation
+-- with a DIFFERENT inbound message. Both invocations run the dedup
+-- and rate-limit SELECTs in api/_ai-reply.ts concurrently, BEFORE
+-- either has persisted an outbound row. Both see zero outbound rows
+-- → both pass the guards → both call OpenAI → both call
+-- sendIgTextMessage → customer gets two AI replies in a row.
+--
+-- The within-invocation version of this race was closed by the
+-- ack-first + waitUntil + sequential-for-await refactor in commit
+-- 130c3fd (Meta batches multiple events into a single POST → one
+-- invocation processes them serially). This migration + the
+-- corresponding code change close the cross-invocation version
+-- (Meta ships two separate POSTs → two invocations → parallel
+-- lambdas).
+--
+-- Fix: right after the cheap guards (dedup, rate-limit) but before
+-- any code path that actually SENDS a message, the reply pipeline
+-- INSERTs a claim row keyed on CONVERSATION_ID. The PRIMARY KEY
+-- constraint makes the write atomic — only one lambda per
+-- conversation wins; the loser sees ON CONFLICT DO NOTHING returning
+-- zero rows and short-circuits with `action: skipped-concurrent-run`,
+-- never touching OpenAI or the IG API.
+--
+-- The claim is RELEASED in a finally block after the pipeline
+-- completes (success or failure). The purpose is pure serialization
+-- — once we're done, the next legitimate reply to this conversation
+-- should be free to proceed. Keeping the claim on success would
+-- block ALL future AI replies to that conversation forever.
+--
+-- Why conversation_id and not inbound_message_id: the race is about
+-- "don't send two replies to the same customer in a tiny window";
+-- keying on inbound_message_id would let two different mids in the
+-- same conversation each claim their own row and both send. Keying
+-- on conversation_id catches "another lambda is currently mid-flight
+-- replying to this customer — I should back off." The lifetime of
+-- the claim covers one full OpenAI + IG-send round-trip; any second
+-- inbound during that window skips, and after the winner releases,
+-- the existing dedup + rate-limit gates catch any staleness on
+-- subsequent inbounds (winner's outbound is now in the DB).
+--
+-- Neon's HTTP driver has no session-persistent connection so a
+-- Postgres advisory lock (pg_try_advisory_xact_lock) isn't
+-- available without wrapping the whole pipeline in a transaction —
+-- a much larger refactor. A UNIQUE-constrained sentinel row is the
+-- cleanest primitive that works over the HTTP driver.
+--
+-- Cleanup: ON DELETE CASCADE via the FK to conversations means
+-- claims get purged automatically if a conversation is ever deleted
+-- (rare — the admin panel currently only supports conversation
+-- reset, which doesn't delete the row, but the CASCADE is defensive
+-- for future flows). The reply pipeline's finally block is the
+-- primary release mechanism.
+--
+-- Fields:
+--   conversation_id  — PK, FK to conversations(id). The conversation
+--                      this claim governs. UNIQUE via PK.
+--   claimed_at       — for future analytics ("how often do we lose
+--                      races?" and "are there stuck claims from
+--                      crashed lambdas?"). Not read by the code today.
+--
+-- Run once against prod Neon. Safe re-run: CREATE TABLE IF NOT EXISTS.
+
+CREATE TABLE IF NOT EXISTS ai_reply_intents (
+  conversation_id  UUID PRIMARY KEY
+                     REFERENCES conversations(id) ON DELETE CASCADE,
+  claimed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

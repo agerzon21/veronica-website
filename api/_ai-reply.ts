@@ -160,6 +160,11 @@ export interface ReplyResult {
     | 'skipped-rate-limit'
     | 'skipped-casual-message'
     | 'skipped-spam-solicitation'
+    // Cross-invocation race — another Vercel lambda already claimed
+    // the ai_reply_intents row for this inbound (Meta shipped two
+    // POSTs milliseconds apart to two different lambdas). See
+    // db/migrations/015-ai-reply-intents.sql for the mechanism.
+    | 'skipped-concurrent-run'
     | 'error-send-failed'
     | 'error-generation-failed';
   reason?: string;
@@ -333,99 +338,212 @@ export async function processInboundMessage(args: {
       };
     }
 
-    // ── 8. Booking / pricing / date intent → bridge + disable ──
-    // Broadened to also catch date references and recommendation
-    // requests. Any of these should defer to Vero — she confirms
-    // dates + shapes style conversations personally.
-    if (
-      matchesBookingIntent(latestInboundBody) ||
-      matchesDateIntent(latestInboundBody) ||
-      matchesRecommendationIntent(latestInboundBody)
-    ) {
-      return await sendBridgeAndEscalate(
-        sql,
-        convo,
-        'booking_bridge',
-        'sent-booking-bridge',
-        'booking / date / recommendation intent detected',
-      );
-    }
-
-    // ── 9. Spam / repeat detection: last 3 inbounds very similar ──
-    if (looksLikeSpam(inboundMessages)) {
-      return await sendBridgeAndEscalate(
-        sql,
-        convo,
-        'booking_bridge',
-        'sent-spam-bridge',
-        'inbound messages look repetitive',
-      );
-    }
-
-    // ── 10. Wrap-up trigger: too many AI replies already ─────
-    if (outboundAiMessages.length >= MAX_AI_MSGS_PER_CONVO) {
-      return await sendBridgeAndEscalate(
-        sql,
-        convo,
-        'escalation_wrap_up',
-        'sent-wrap-up',
-        `hit MAX_AI_MSGS (${MAX_AI_MSGS_PER_CONVO})`,
-      );
-    }
-
-    // ── 9. Load ai_context for the system prompt ─────────────
-    const contextRows = (await sql`
-      SELECT category, label, content
-      FROM ai_context
-      WHERE active = TRUE
-      ORDER BY category, sort_order
-    `) as Array<ContextRow>;
-
-    // ── 10. Generate reply ───────────────────────────────────
-    let replyText: string;
+    // ── 7.5. Cross-invocation race guard ─────────────────────
+    //
+    // Claim exclusive right to reply in THIS CONVERSATION. If Meta
+    // shipped two POSTs milliseconds apart to two different Vercel
+    // lambdas (routine — happens whenever a customer types quickly,
+    // not just on retries), both lambdas will have passed the dedup
+    // + rate-limit gates above concurrently. The PRIMARY KEY on
+    // ai_reply_intents.conversation_id makes this INSERT atomic:
+    // one lambda per conversation wins and proceeds; the other gets
+    // zero rows back and short-circuits without touching OpenAI or
+    // the IG API.
+    //
+    // See db/migrations/015-ai-reply-intents.sql for the full
+    // rationale. The within-invocation version of this race is
+    // handled by the sequential-for-await loop in _ig-webhook.ts;
+    // this is the cross-invocation counterpart.
+    //
+    // Why conversation_id and not inbound_message_id: the race is
+    // about "don't send two replies to the same customer in a tiny
+    // window." Two different mids in the same conversation processed
+    // by two lambdas would each claim their own row if we keyed on
+    // inbound_message_id — both would proceed and both would send.
+    // Conversation-scoped claim is the right lock granularity.
+    //
+    // Placed AFTER the silent-skip filters (empty/emoji + spam
+    // solicitation) so we don't burn claim rows on messages we'd
+    // never reply to anyway — and BEFORE any code path that sends
+    // (bridges + main AI reply below).
+    // Track whether we actually acquired the claim. Stays false in
+    // the fail-open path below (missing table); the finally then
+    // knows to skip the release DELETE, which would ALSO fail with
+    // the same 42P01 and drown the real return in cleanup noise.
+    let claimAcquired = false;
     try {
-      replyText = await generateReply({
-        contextRows,
-        history,
-        aiMessageCount: outboundAiMessages.length,
+      const claim = (await sql`
+        INSERT INTO ai_reply_intents (conversation_id)
+        VALUES (${convo.id})
+        ON CONFLICT DO NOTHING
+        RETURNING conversation_id
+      `) as Array<{ conversation_id: string }>;
+
+      if (claim.length === 0) {
+        return {
+          action: 'skipped-concurrent-run',
+          reason: 'another lambda is currently replying in this conversation',
+        };
+      }
+      claimAcquired = true;
+    } catch (claimErr) {
+      // Defensive fail-open on missing table (42P01). If someone
+      // deployed the code before running migration 015, we don't
+      // want every single AI reply to silently die with
+      // 'error-generation-failed' — that would look identical to
+      // an OpenAI outage from the outside. Fall back to pre-015
+      // behavior (works but the cross-invocation race is possible)
+      // and emit a loud warning that names the exact remediation.
+      //
+      // Any OTHER error here is unexpected — re-throw so the outer
+      // catch handles it as a real pipeline error.
+      const msg = claimErr instanceof Error ? claimErr.message : String(claimErr);
+      const isMissingTable =
+        msg.includes('ai_reply_intents') &&
+        (msg.includes('does not exist') || msg.includes('42P01'));
+      if (!isMissingTable) throw claimErr;
+      console.warn(
+        '[ai-reply] ai_reply_intents table missing — falling back to pre-015 ' +
+          'behavior. Cross-invocation double-reply race is possible until ' +
+          'db/migrations/015-ai-reply-intents.sql is applied to prod Neon. ' +
+          `Underlying error: ${msg}`,
+      );
+      // claimAcquired stays false; the finally block will skip the DELETE
+      // (which would fail with the same 42P01 and add nothing useful).
+    }
+
+    // Below this point we ALWAYS release the claim in the finally
+    // block if we acquired it — success OR failure. The claim's
+    // purpose is pure serialization: once we're done, the next
+    // legitimate reply to this conversation should be free to
+    // proceed. Keeping the claim on success would block ALL future
+    // AI replies to this convo forever. Any subsequent inbound
+    // during our flight already hit skipped-concurrent-run above;
+    // any inbound arriving AFTER we release will pass the claim
+    // gate but get caught by the existing dedup ("outbound after
+    // this inbound?") or the 60s rate-limit gate — because our
+    // outbound is now in the DB.
+    try {
+      // ── 8. Booking / pricing / date intent → bridge + disable ──
+      // Broadened to also catch date references and recommendation
+      // requests. Any of these should defer to Vero — she confirms
+      // dates + shapes style conversations personally.
+      if (
+        matchesBookingIntent(latestInboundBody) ||
+        matchesDateIntent(latestInboundBody) ||
+        matchesRecommendationIntent(latestInboundBody)
+      ) {
+        return await sendBridgeAndEscalate(
+          sql,
+          convo,
+          'booking_bridge',
+          'sent-booking-bridge',
+          'booking / date / recommendation intent detected',
+        );
+      }
+
+      // ── 9. Spam / repeat detection: last 3 inbounds very similar ──
+      if (looksLikeSpam(inboundMessages)) {
+        return await sendBridgeAndEscalate(
+          sql,
+          convo,
+          'booking_bridge',
+          'sent-spam-bridge',
+          'inbound messages look repetitive',
+        );
+      }
+
+      // ── 10. Wrap-up trigger: too many AI replies already ─────
+      if (outboundAiMessages.length >= MAX_AI_MSGS_PER_CONVO) {
+        return await sendBridgeAndEscalate(
+          sql,
+          convo,
+          'escalation_wrap_up',
+          'sent-wrap-up',
+          `hit MAX_AI_MSGS (${MAX_AI_MSGS_PER_CONVO})`,
+        );
+      }
+
+      // ── 11. Load ai_context for the system prompt ─────────────
+      const contextRows = (await sql`
+        SELECT category, label, content
+        FROM ai_context
+        WHERE active = TRUE
+        ORDER BY category, sort_order
+      `) as Array<ContextRow>;
+
+      // ── 12. Generate reply ───────────────────────────────────
+      let replyText: string;
+      try {
+        replyText = await generateReply({
+          contextRows,
+          history,
+          aiMessageCount: outboundAiMessages.length,
+        });
+      } catch (err) {
+        console.error('[ai-reply] generation failed:', err);
+        return {
+          action: 'error-generation-failed',
+          reason: err instanceof Error ? err.message : 'unknown',
+        };
+      }
+      if (!replyText.trim()) {
+        return { action: 'error-generation-failed', reason: 'empty reply' };
+      }
+
+      // ── 13. Send via IG API ──────────────────────────────────
+      const sendResult = await sendIgTextMessage({
+        recipientIgsid: convo.external_user_id,
+        text: replyText,
       });
-    } catch (err) {
-      console.error('[ai-reply] generation failed:', err);
-      return {
-        action: 'error-generation-failed',
-        reason: err instanceof Error ? err.message : 'unknown',
-      };
-    }
-    if (!replyText.trim()) {
-      return { action: 'error-generation-failed', reason: 'empty reply' };
-    }
+      if (!sendResult.ok) {
+        return {
+          action: 'error-send-failed',
+          reason: sendResult.error ?? `HTTP ${sendResult.statusCode}`,
+        };
+      }
 
-    // ── 11. Send via IG API ──────────────────────────────────
-    const sendResult = await sendIgTextMessage({
-      recipientIgsid: convo.external_user_id,
-      text: replyText,
-    });
-    if (!sendResult.ok) {
-      return {
-        action: 'error-send-failed',
-        reason: sendResult.error ?? `HTTP ${sendResult.statusCode}`,
-      };
+      // ── 14. Persist outbound row ─────────────────────────────
+      await sql`
+        INSERT INTO messages (
+          conversation_id, direction, sender, body,
+          external_message_id, sent_at, ai_model
+        )
+        VALUES (
+          ${convo.id}, 'outbound', 'ai', ${replyText},
+          ${sendResult.externalMessageId ?? null}, NOW(), ${OPENAI_MODEL}
+        )
+        ON CONFLICT (external_message_id) DO NOTHING
+      `;
+
+      return { action: 'sent-ai-reply', outboundBody: replyText };
+    } finally {
+      // Only release if we actually acquired the claim (the fail-
+      // open path above leaves claimAcquired=false, in which case
+      // the DELETE would also throw 42P01 and just add noise).
+      // Swallow any DELETE failure — we don't want a cleanup error
+      // to mask the real return value we're about to hand back.
+      // Worst case a stuck claim row lingers; the next inbound in
+      // this conversation will be blocked until it's cleared
+      // manually, via a conversation reset (which clears the claim
+      // in _messages-reset.ts), or via the ON DELETE CASCADE if
+      // the conversation itself is deleted. If we start seeing
+      // stuck claims in the wild, add a periodic sweep of
+      // ai_reply_intents where claimed_at < NOW() - INTERVAL '5 minutes'.
+      if (claimAcquired) {
+        try {
+          await sql`
+            DELETE FROM ai_reply_intents
+            WHERE conversation_id = ${convo.id}
+          `;
+        } catch (releaseErr) {
+          console.error(
+            '[ai-reply] failed to release ai_reply_intents claim:',
+            releaseErr,
+          );
+        }
+      }
     }
-
-    // ── 12. Persist outbound row ─────────────────────────────
-    await sql`
-      INSERT INTO messages (
-        conversation_id, direction, sender, body,
-        external_message_id, sent_at, ai_model
-      )
-      VALUES (
-        ${convo.id}, 'outbound', 'ai', ${replyText},
-        ${sendResult.externalMessageId ?? null}, NOW(), ${OPENAI_MODEL}
-      )
-      ON CONFLICT (external_message_id) DO NOTHING
-    `;
-
-    return { action: 'sent-ai-reply', outboundBody: replyText };
   } catch (err) {
     console.error('[ai-reply] pipeline error:', err);
     return {

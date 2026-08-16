@@ -82,6 +82,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `,
     ]);
 
+    // Best-effort clear of any stuck ai_reply_intents claim (kept
+    // out of the transaction above so the reset still works even
+    // if migration 015 hasn't been applied yet — a missing table
+    // throws 42P01, which we swallow). If a lambda ever crashed
+    // hard mid-flight, its claim row would linger and future AI
+    // replies would skip with 'skipped-concurrent-run' until
+    // manually cleared. Clearing it on reset means the "test as
+    // if fresh" button is a full clean slate including any
+    // lingering race-guard state.
+    try {
+      await sql`
+        DELETE FROM ai_reply_intents
+        WHERE conversation_id = ${conversationId}
+      `;
+    } catch (claimErr) {
+      const msg = claimErr instanceof Error ? claimErr.message : String(claimErr);
+      const isMissingTable =
+        msg.includes('ai_reply_intents') &&
+        (msg.includes('does not exist') || msg.includes('42P01'));
+      if (isMissingTable) {
+        console.warn(
+          '[admin/messages-reset] ai_reply_intents table missing — skipped ' +
+            'stuck-claim cleanup. Apply db/migrations/015-ai-reply-intents.sql ' +
+            'to prod Neon.',
+        );
+      } else {
+        // Log but don't fail — the main reset succeeded, this is bonus cleanup.
+        console.error(
+          '[admin/messages-reset] failed to clear ai_reply_intents:',
+          claimErr,
+        );
+      }
+    }
+
     const deletedMessages = Array.isArray(deletedRows) ? deletedRows.length : 0;
     console.log(
       `[admin/messages-reset] Reset conversation ${conversationId}, deleted ${deletedMessages} messages`,
