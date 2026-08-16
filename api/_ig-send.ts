@@ -18,6 +18,21 @@
 
 const IG_GRAPH_BASE = 'https://graph.instagram.com/v21.0';
 
+// Hard cap on how long we'll wait for Meta's Graph API to respond.
+// Meta's typical send latency is well under 2s; 10s is comfortable
+// headroom but cleanly cuts off pathological hangs.
+//
+// Why this matters: the send is called from inside a waitUntil() in
+// api/inbox/_ig-webhook.ts. Meta's ACK of our webhook already went
+// out — but the outbound row is only INSERTed AFTER this send returns.
+// If Meta hangs past Vercel's maxDuration:60 cap, the function is
+// killed with the outbound row uncommitted; the customer received the
+// reply but the admin thread is missing it, and Vero might reply
+// manually → double-send. AbortSignal.timeout aborts cleanly at 10s
+// so the caller can see a real error and skip the INSERT if we don't
+// know whether Meta actually accepted our message.
+const IG_SEND_TIMEOUT_MS = 10_000;
+
 export interface IgSendResult {
   ok: boolean;
   externalMessageId?: string;
@@ -56,6 +71,13 @@ export async function sendIgTextMessage(args: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      // See IG_SEND_TIMEOUT_MS docs at the top of this file.
+      // AbortSignal.timeout is native Node 18+ / modern browsers;
+      // Vercel serverless runs Node 20+ so this is supported without
+      // a polyfill. On timeout, fetch rejects with a DOMException
+      // (name: 'TimeoutError'), which lands in the catch below and
+      // surfaces to the caller as { ok: false, error: '...' }.
+      signal: AbortSignal.timeout(IG_SEND_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -76,6 +98,14 @@ export async function sendIgTextMessage(args: {
       externalMessageId: data.message_id,
     };
   } catch (err) {
+    // AbortSignal.timeout throws a TimeoutError DOMException — surface
+    // it distinctly so callers see 'timeout' vs a generic network
+    // error in the ai_reply action reason field.
+    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
+    if (isTimeout) {
+      console.error(`[ig-send] fetch timed out after ${IG_SEND_TIMEOUT_MS}ms`);
+      return { ok: false, error: `IG send timed out after ${IG_SEND_TIMEOUT_MS}ms` };
+    }
     console.error('[ig-send] fetch failed:', err);
     return {
       ok: false,

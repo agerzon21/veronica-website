@@ -4,16 +4,16 @@ Ongoing infrastructure + feature work with concrete checklists. Update this file
 
 ## Website work phases
 
-### Phase 1: Reviews tab + sign-in autofill (IN PROGRESS)
+### Phase 1: Reviews tab + sign-in autofill — DONE
 - [x] DB migration 012-reviews.sql applied to prod
 - [x] 9 hardcoded testimonials seeded from GoogleReviewsSection.tsx
-- [ ] Admin CRUD endpoints (reviews-list, reviews-upsert, reviews-delete)
-- [ ] Public /api/reviews read endpoint
-- [ ] AdminReviews.tsx admin panel UI
-- [ ] Wired into Studio nav group
-- [ ] i18n strings for reviews
-- [ ] GoogleReviewsSection refactored to read from API
-- [ ] Sign-in autofill quick win
+- [x] Admin CRUD endpoints (reviews-list, reviews-upsert, reviews-delete)
+- [x] Public /api/reviews read endpoint (with edge cache)
+- [x] AdminReviews.tsx admin panel UI (+ Google Aggregate card)
+- [x] Wired into Studio nav group
+- [x] i18n strings for reviews
+- [x] GoogleReviewsSection refactored to read from API (with fallback constants)
+- [x] Sign-in autofill quick win (localStorage last-email)
 
 ### Phase 2: Own contact form (replaces Web3Forms) — IN PROGRESS, two-step rollout
 Original scope note was wrong — `contact_submissions` table and `/api/contact` endpoint already exist in prod. Actual work broken into two PRs:
@@ -68,6 +68,17 @@ Original scope note was wrong — `contact_submissions` table and `/api/contact`
 - [x] **001-baseline.sql** — retroactive DDL for the three god tables
 - [ ] **Reconcile contract-body freeze** — frozen at creation, docs said "at signing" (comments wrong); pick a rule, enforce, update docs
 - [ ] **Session cookies for client portal** — bundle with Phase 3
+
+## IG webhook follow-ups (identified by 2026-08-16 diagnostic + refactor)
+
+The ack-first + waitUntil refactor (commit forthcoming) closed the
+within-invocation double-reply race and moved AI work off Meta's ACK
+path. Remaining gaps identified by the adversarial review, ordered by
+priority:
+
+- [ ] **Cross-invocation race — sentinel INSERT with UNIQUE constraint**. When Meta sends two POSTs milliseconds apart (routine, not just retries), each lands on its own Vercel lambda. Both run dedup + rate-limit SELECTs concurrently before either persists an outbound — both pass, both send, customer gets two AI replies. The within-invocation fix (single waitUntil + sequential for-await) doesn't help here since the two lambdas share no state. Fix: add a `messages.in_reply_to_message_id` column with UNIQUE constraint (migration 015), have `processInboundMessage` INSERT a "pending" outbound row keyed on the inbound mid at the very start of the pipeline — losing the race → ON CONFLICT → skip. Only the winner proceeds to OpenAI/send/finalize. Adds one DB roundtrip per reply and requires the messages queries elsewhere in the app to tolerate a brief `body=NULL, status='pending'` state (or use `direction='outbound_pending'` and filter in list queries). Real work but the cleanest concurrency primitive available on neon-serverless HTTP (advisory locks require a persistent session which the HTTP driver doesn't have).
+- [ ] **Surface AI failures in the admin panel**. Today when the AI silently fails (generation error, IG send error, spam-filter skip, rate-limit skip), it's logged but not visible to Vero — she can't distinguish "AI decided not to reply" from "AI tried and errored." Add `conversations.ai_last_error` (text) + `ai_last_error_at` (timestamptz) columns, populate from processInboundMessage's error branches, render as a small red banner on the conversation card in AdminMessages. Migration 016.
+- [ ] **Fold echo-webhook self-healing into the ack path**. If the primary send-and-INSERT flow ever fails at the INSERT step (e.g. Vercel kills mid-flight past maxDuration), Meta will echo the message back via `is_echo=true` on the webhook, and our persist loop stores it correctly. But there's a window between "customer received reply" and "admin thread shows the reply" where Vero could reply manually → double-send. Consider persisting a `sending` sentinel BEFORE calling sendIgTextMessage, then UPDATE-to-`sent` after — the admin panel would render `sending` as a spinner so Vero waits.
 
 ## Infrastructure transitions
 

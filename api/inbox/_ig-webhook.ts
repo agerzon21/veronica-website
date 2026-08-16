@@ -15,10 +15,14 @@
  *     DM sent to any connected IG Business account (in our case, just
  *     @vero.art.photo). We verify the signature, parse the payload,
  *     upsert the conversation, insert message rows, and return 200
- *     FAST. Meta retries slow/failed webhooks and eventually blacklists
- *     endpoints that consistently time out — the actual reply-generation
- *     work happens asynchronously in a later step (session 2), not
- *     inline here.
+ *     FAST. Meta expects a 2xx within ~20s or it treats the delivery
+ *     as failed, retries with backoff, and eventually de-prioritizes
+ *     endpoints that consistently time out or 5xx. The AI reply
+ *     pipeline runs AFTER we send the 200, wrapped in waitUntil()
+ *     from @vercel/functions so the serverless function stays alive
+ *     to complete it without holding open Meta's HTTP connection.
+ *     Total time-to-200 in the happy path: signature verify + parse
+ *     + persist + optional 1.5s profile enrich ≈ <2s.
  *
  * Signature verification (POST):
  *   Meta signs the raw request body with the app secret and sends it as
@@ -64,6 +68,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { waitUntil } from '@vercel/functions';
 import crypto from 'node:crypto';
 import getRawBody from 'raw-body';
 import { getDb } from '../_db.js';
@@ -71,9 +76,11 @@ import { processInboundMessage } from '../_ai-reply.js';
 import { fetchIgProfile } from '../_ig-profile.js';
 
 // Max time we're willing to spend on a profile fetch inside the
-// webhook path. Meta's webhook timeout is ~5-20s and we already
-// spend most of that on the AI reply pipeline — profile fetch is
-// nice-to-have, not blocking. Fail fast if the Graph API is slow.
+// synchronous webhook path (before we ack Meta with 200). Meta's
+// webhook timeout is ~20s. The AI reply pipeline runs AFTER we ack
+// (see waitUntil() in handleMessageEvent), so this cap is really
+// about not stalling the ack — 1.5s is generous. Fail fast if the
+// Graph API is slow.
 const PROFILE_FETCH_TIMEOUT_MS = 1500;
 
 // Message events besides plain text (echoes, deleted, reactions, etc.)
@@ -216,9 +223,10 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ignored: 'non-instagram object' });
   }
 
-  // Persist FIRST, respond FAST. Meta expects a 200 within ~5s or
-  // it treats the webhook as failed and retries. Any long work
-  // (AI reply generation) MUST happen after we return.
+  // Persist FIRST, respond FAST. Meta expects a 200 within ~20s or
+  // it treats the webhook as failed and retries. AI reply generation
+  // happens after we return via waitUntil() below — see that section
+  // for the ack-first rationale.
   let persistStats: PersistStats;
   try {
     persistStats = await persistEvents(payload);
@@ -229,40 +237,104 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Persist failed' });
   }
 
+  // Split mids into inbound vs echo so a debugger grepping by mid
+  // finds the row regardless of direction. Invariant:
+  // len(inbound_mids) + len(echo_mids) == stored.
+  //
+  // Kept the field names structural (comma-separated inside brackets)
+  // so any existing Vercel log query that used the old stored_mids=[..]
+  // shape can be migrated to inbound_mids=[..] with a search/replace,
+  // and echo_mids is the new discovery path.
+  const inboundMids = persistStats.storedMessages.map((s) => s.mid).join(',');
+  const echoMids = persistStats.echoMids.join(',');
   console.log(
     `[inbox/ig-webhook] persist result: ` +
       `stored=${persistStats.stored} ` +
       `processed_echo=${persistStats.processedEcho} ` +
       `skipped_no_text=${persistStats.skippedNoText} ` +
-      `skipped_no_message_field=${persistStats.skippedNoMessageField}`,
+      `skipped_no_message_field=${persistStats.skippedNoMessageField} ` +
+      `inbound_mids=[${inboundMids}] ` +
+      `echo_mids=[${echoMids}]`,
   );
 
-  // Trigger the AI reply pipeline for each newly-stored inbound
-  // message. Runs inline (before we return 200) — total budget for
-  // signature verify + persist + AI generation + IG send is ~3-4s,
-  // comfortably under Meta's 5s webhook timeout. If we ever start
-  // exceeding, Meta retries; our dedup logic (checking for an
-  // outbound message after this inbound's sent_at) makes retries
-  // no-op idempotently rather than double-replying.
+  // ── Ack Meta FIRST, then run the AI reply pipeline via waitUntil ──
   //
-  // The AI reply function never throws; it returns a structured
-  // result we log for observability without crashing the webhook.
-  for (const stored of persistStats.storedMessages) {
-    try {
-      const result = await processInboundMessage({
-        conversationId: stored.conversationId,
-        inboundMessageId: stored.messageId,
-        inboundSentAt: stored.sentAt,
-      });
-      console.log(
-        `[inbox/ig-webhook] ai-reply action=${result.action}` +
-          (result.reason ? ` reason="${result.reason}"` : ''),
-      );
-    } catch (err) {
-      // processInboundMessage shouldn't throw, but belt-and-suspenders
-      // — never let a reply failure break the webhook 200.
-      console.error('[inbox/ig-webhook] ai-reply threw:', err);
-    }
+  // Two reasons this ordering matters:
+  //
+  //   1. Meta enforces a ~20s webhook SLA — a slow OpenAI call (or
+  //      any other slow downstream) that keeps the response open past
+  //      that mark gets us classified as an unhealthy subscriber, at
+  //      which point Meta starts batching / delaying deliveries to us.
+  //      Ack in <2s (persist-only path) and OpenAI can take as long
+  //      as it needs.
+  //   2. waitUntil() keeps the serverless function alive to complete
+  //      the passed promise even after we've written the 200. Without
+  //      it, the function terminates the instant handler returns and
+  //      the AI work gets dropped mid-flight. maxDuration:60 on
+  //      api/inbox.ts (vercel.json) is the outer bound on that
+  //      lifetime.
+  //
+  // IMPORTANT — Sequential inside ONE waitUntil, not one waitUntil
+  // per message:
+  //
+  //   When Meta batches multiple messaging events into a single POST
+  //   (see the top-of-file docstring, and confirmed by the adversarial
+  //   review), a per-message fan-out would fire N concurrent
+  //   processInboundMessage() calls against the same conversation.
+  //   The dedup and rate-limit guards in _ai-reply.ts are read-then-
+  //   decide with no locking, so all N would pass, call OpenAI, send,
+  //   and insert — customer gets N replies instead of the one
+  //   combined reply the AI would naturally produce from history.
+  //
+  //   Draining the loop sequentially inside a single waitUntil
+  //   preserves the pre-refactor ordering guarantee: after
+  //   processInboundMessage(A) commits its outbound row, B's
+  //   subsequent dedup SELECT sees A and skips (skipped-already-
+  //   replied / skipped-rate-limit). B's inbound is still persisted
+  //   and shows up in the transcript; only the redundant AI+send
+  //   for B is suppressed.
+  //
+  //   NOTE — this fix closes the within-invocation race (Meta batches
+  //   N events into ONE POST). The cross-invocation race (Meta ships
+  //   two separate POSTs milliseconds apart to two different Vercel
+  //   lambdas) is UNCHANGED and still open — see TRANSITIONS.md
+  //   "IG webhook follow-ups" for the plan (sentinel INSERT with a
+  //   UNIQUE constraint on in-reply-to). Rare in practice (Meta
+  //   usually batches), and the 60s rate-limit gate catches most of
+  //   the fallout — but a bounded double-reply is still possible
+  //   until the sentinel lands.
+  //
+  // processInboundMessage doesn't throw — it returns a structured
+  // ReplyResult. The .catch here is belt-and-suspenders in case a
+  // future edit slips a throw through; a background rejection would
+  // otherwise silently vanish.
+  if (persistStats.storedMessages.length > 0) {
+    waitUntil(
+      (async () => {
+        for (const stored of persistStats.storedMessages) {
+          const startedAt = Date.now();
+          try {
+            const result = await processInboundMessage({
+              conversationId: stored.conversationId,
+              inboundMessageId: stored.messageId,
+              inboundSentAt: stored.sentAt,
+            });
+            console.log(
+              `[inbox/ig-webhook] ai-reply mid=${stored.mid} ` +
+                `action=${result.action} ` +
+                `duration_ms=${Date.now() - startedAt}` +
+                (result.reason ? ` reason="${result.reason}"` : ''),
+            );
+          } catch (err) {
+            console.error(
+              `[inbox/ig-webhook] ai-reply mid=${stored.mid} threw ` +
+                `duration_ms=${Date.now() - startedAt}:`,
+              err,
+            );
+          }
+        }
+      })(),
+    );
   }
 
   return res.status(200).json({ ok: true });
@@ -298,6 +370,12 @@ interface StoredMessageRef {
   conversationId: string;
   messageId: string;
   sentAt: string;
+  // Meta's message ID (mid) — the primary key we get from Instagram.
+  // Threaded through so downstream logs can be grepped by mid, letting
+  // us correlate a specific inbound to its ai-reply outcome without
+  // joining through the DB (which is what we had to do before we
+  // started emitting mid on every log line).
+  mid: string;
 }
 
 interface PersistStats {
@@ -309,6 +387,13 @@ interface PersistStats {
   // trigger AI reply generation for each new inbound. Empty on
   // no-op / all-skipped payloads (e.g., only echoes or reactions).
   storedMessages: StoredMessageRef[];
+  // Echo mids stored on this run. Tracked separately from
+  // storedMessages so the log's inbound_mids field only lists the
+  // messages the AI reply loop will process, while echo_mids lets a
+  // debugger grep for a Vero-sent message by its Meta mid without
+  // seeing an empty list and wrongly concluding it wasn't persisted.
+  // Invariant: storedMessages.length + echoMids.length === stored.
+  echoMids: string[];
 }
 
 /**
@@ -329,6 +414,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     skippedNoText: 0,
     skippedNoMessageField: 0,
     storedMessages: [],
+    echoMids: [],
   };
 
   for (const evt of events) {
@@ -430,11 +516,13 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
         // AI-reply triggering — Vero replying from her phone
         // shouldn't spawn a bot reply on top of her own.
         stats.processedEcho++;
+        stats.echoMids.push(mid);
       } else {
         stats.storedMessages.push({
           conversationId,
           messageId: inserted[0].id,
           sentAt,
+          mid,
         });
       }
     }

@@ -186,12 +186,29 @@ interface ContextRow {
   content: string;
 }
 
+// Client-side timeout on OpenAI calls. The SDK default is 600s (10 min)
+// which is nowhere near what we want for a webhook-driven reply:
+//   - gpt-4o-mini with max_tokens:300 normally returns in a few
+//     seconds (typical: 1-3s).
+//   - If OpenAI is having a bad day and a call actually takes 30s+,
+//     that used to blow Meta's 20s webhook SLA (fixed in _ig-webhook.ts
+//     by moving processInboundMessage to waitUntil, so this is now
+//     defense-in-depth rather than load-bearing).
+//   - Beyond that, an unbounded call ties up the serverless function
+//     for the entire maxDuration:60 window, wasting execution budget
+//     and delaying any other work.
+// 15s is well above the p99 for our request shape but cleanly cuts
+// off pathological hangs. On timeout the SDK throws AbortError which
+// bubbles through processInboundMessage's try/catch to
+// action:'error-generation-failed' with reason:'…timeout…'.
+const OPENAI_CLIENT_TIMEOUT_MS = 15_000;
+
 let cachedClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (cachedClient) return cachedClient;
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY env var missing');
-  cachedClient = new OpenAI({ apiKey: key });
+  cachedClient = new OpenAI({ apiKey: key, timeout: OPENAI_CLIENT_TIMEOUT_MS });
   return cachedClient;
 }
 
