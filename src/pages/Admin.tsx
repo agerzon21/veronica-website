@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FaUsers, FaPlug, FaBookOpen, FaCommentDots, FaRobot, FaImage,
   FaInbox, FaFolder, FaBars, FaSignOutAlt, FaHome, FaExternalLinkAlt,
-  FaStar, FaClock,
+  FaStar, FaClock, FaEnvelopeOpenText,
 } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import Navbar from '../components/Navbar';
@@ -23,6 +23,7 @@ import AdminIntegrations from '../components/AdminIntegrations';
 import AdminJournal from '../components/AdminJournal';
 import AdminGallery from '../components/AdminGallery';
 import AdminReviews from '../components/AdminReviews';
+import AdminLeads from '../components/AdminLeads';
 import AdminMessages from '../components/AdminMessages';
 import AdminAssistant from '../components/AdminAssistant';
 import AdminCrons from '../components/AdminCrons';
@@ -33,7 +34,7 @@ const MotionDiv = motion.div;
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
 // live outside the tab shell for now — they're modal-ish flows.
-type DashTab = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations' | 'crons';
+type DashTab = 'clients' | 'messages' | 'leads' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations' | 'crons';
 
 // Sub-tab for the Clients group (Table / Calendar). Moved up here from
 // AdminDashboard so the mobile bottom-nav sub-strip can drive it directly
@@ -52,6 +53,7 @@ type NavGroup = 'clients' | 'inbox' | 'studio' | 'menu';
 const TAB_TO_GROUP: Record<Exclude<DashTab, 'integrations' | 'crons'>, Exclude<NavGroup, 'menu'>> = {
   clients: 'clients',
   messages: 'inbox',
+  leads: 'inbox',
   assistant: 'inbox',
   journal: 'studio',
   gallery: 'studio',
@@ -276,6 +278,9 @@ const Admin = () => {
               )}
               {dashTab === 'messages' && (
                 <AdminMessages adminPassword={password} adminLevel={adminLevel} />
+              )}
+              {dashTab === 'leads' && (
+                <AdminLeads adminPassword={password} adminLevel={adminLevel} />
               )}
               {dashTab === 'assistant' && (
                 <AdminAssistant adminPassword={password} />
@@ -613,12 +618,13 @@ const Admin = () => {
 // maps into t.nav.* — nav components read the current-language label
 // via useAdminLang() at render time, so switching languages doesn't
 // require a re-render of the tab list itself.
-type NavLabelKey = 'clients' | 'messages' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations';
+type NavLabelKey = 'clients' | 'messages' | 'leads' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'integrations';
 type TabDef = { id: DashTab; labelKey: NavLabelKey; icon: typeof FaUsers };
 
 const TABS: TabDef[] = [
   { id: 'clients', labelKey: 'clients', icon: FaUsers },
   { id: 'messages', labelKey: 'messages', icon: FaCommentDots },
+  { id: 'leads', labelKey: 'leads', icon: FaEnvelopeOpenText },
   { id: 'assistant', labelKey: 'assistant', icon: FaRobot },
   { id: 'journal', labelKey: 'journal', icon: FaBookOpen },
   { id: 'gallery', labelKey: 'gallery', icon: FaImage },
@@ -833,6 +839,7 @@ function AdminMobileNav({
       : openGroup === 'inbox'
       ? [
           { id: 'messages', label: t.nav.messages, isActive: activeTab === 'messages', onClick: () => { onChangeTab('messages'); setOpenGroup(null); } },
+          { id: 'leads', label: t.nav.leads, isActive: activeTab === 'leads', onClick: () => { onChangeTab('leads'); setOpenGroup(null); } },
           { id: 'assistant', label: t.nav.assistant, isActive: activeTab === 'assistant', onClick: () => { onChangeTab('assistant'); setOpenGroup(null); } },
         ]
       : openGroup === 'studio'

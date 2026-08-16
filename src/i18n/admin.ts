@@ -100,6 +100,7 @@ const dict = {
     studio: { en: 'Studio', ru: 'Студия' },
     menu: { en: 'Menu', ru: 'Меню' },
     messages: { en: 'Messages', ru: 'Сообщения' },
+    leads: { en: 'Leads', ru: 'Лиды' },
     assistant: { en: 'Assistant', ru: 'Ассистент' },
     journal: { en: 'Journal', ru: 'Дневник' },
     gallery: { en: 'Gallery', ru: 'Галерея' },
@@ -1929,6 +1930,150 @@ const dict = {
     deleteConfirmBody: {
       en: (name: string) => `The review from ${name} will be permanently removed.`,
       ru: (name: string) => `Отзыв от ${name} будет удалён навсегда.`,
+    },
+  },
+
+  leads: {
+    tabTitle: { en: 'Leads', ru: 'Лиды' },
+    subtitleEmpty: { en: 'Inquiries from the contact form.', ru: 'Запросы из формы обратной связи.' },
+
+    // Russian plural: 1 лид, 2/3/4 лида, 5+ лидов (teens 11-14 → лидов).
+    // Same shape as reviews.reviewCount / journal.postCount.
+    leadCount: {
+      en: (n: number) => `${n} lead${n === 1 ? '' : 's'}`,
+      ru: (n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return `${n} лид`;
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} лида`;
+        return `${n} лидов`;
+      },
+    },
+
+    // "12 leads · 3 new" — the "N new" tail uses a mini plural helper
+    // because English needs "new" invariant while Russian needs
+    // agreement (1 новый, 2/3/4 новых — technically "новый" is masc.sg
+    // agreeing with "лид"; kept simple with "новых" as a shortcut).
+    subtitleWithNew: {
+      en: (total: number, unread: number) =>
+        `${total} lead${total === 1 ? '' : 's'} · ${unread} new`,
+      ru: (total: number, unread: number) => {
+        const totalStr =
+          (total % 10 === 1 && total % 100 !== 11)
+            ? `${total} лид`
+            : (total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 12 || total % 100 > 14))
+              ? `${total} лида`
+              : `${total} лидов`;
+        return `${totalStr} · ${unread} новых`;
+      },
+    },
+
+    refreshAria: { en: 'Refresh leads', ru: 'Обновить лидов' },
+
+    // Fallback if a submission somehow has an empty name field
+    // (validation should prevent this, but be defensive on display).
+    unnamedLead: { en: '(no name)', ru: '(без имени)' },
+
+    // Errors
+    loadFailed: {
+      en: (status: number) => `Load failed (${status})`,
+      ru: (status: number) => `Не удалось загрузить (${status})`,
+    },
+    saveFailed: {
+      en: (status: number) => `Save failed (${status})`,
+      ru: (status: number) => `Не удалось сохранить (${status})`,
+    },
+    deleteFailed: {
+      en: (status: number) => `Delete failed (${status})`,
+      ru: (status: number) => `Не удалось удалить (${status})`,
+    },
+
+    leadDeleted: { en: 'Lead deleted', ru: 'Лид удалён' },
+
+    emptyTitle: { en: 'No leads yet', ru: 'Пока нет лидов' },
+    emptyDescription: {
+      en: "Contact-form submissions land here. They also go straight to Vero's email — this is the searchable history + status tracker.",
+      ru: 'Сюда попадают заявки из формы. Одновременно они приходят на почту Veronike — этот экран для истории и отметок о статусе.',
+    },
+  },
+
+  leadsEditor: {
+    // Modal title — no "new" variant because leads only arrive via the
+    // public form; the admin panel is read + status + notes only.
+    editTitle: { en: 'Lead Details', ru: 'Информация о лиде' },
+
+    // Toast on save success — status flip and/or notes edit
+    leadSaved: { en: 'Lead updated', ru: 'Лид обновлён' },
+
+    // Field labels — the immutable submitter-owned fields (name, email,
+    // shoot type, preferred date, location, message) show as detail rows
+    // rather than form inputs, so their labels double as row headers.
+    emailLabel: { en: 'Email', ru: 'Email' },
+    shootTypeLabel: { en: 'Type', ru: 'Тип съёмки' },
+    preferredDateLabel: { en: 'Preferred date', ru: 'Желаемая дата' },
+    locationLabel: { en: 'Location', ru: 'Локация' },
+    messageLabel: { en: 'Message', ru: 'Сообщение' },
+
+    // Reply shortcut — opens mailto: with subject prefilled to match
+    // the auto-reply Gmail-threading logic in _auto-reply.ts.
+    replyViaEmail: { en: 'Reply via email', ru: 'Ответить письмом' },
+
+    // Editable fields
+    statusLabel: { en: 'Status', ru: 'Статус' },
+
+    // The status enum. Kept in sync with STATUS_VALUES in AdminLeads.tsx
+    // and ALLOWED_STATUSES in api/admin/_leads-update.ts — three sources
+    // of truth, one intent (add a status → update all three).
+    statusOption: {
+      new:       { en: 'New',       ru: 'Новый' },
+      contacted: { en: 'Contacted', ru: 'Связались' },
+      replied:   { en: 'Replied',   ru: 'Ответили' },
+      booked:    { en: 'Booked',    ru: 'Забронирован' },
+      ghosted:   { en: 'Ghosted',   ru: 'Не ответил' },
+      spam:      { en: 'Spam',      ru: 'Спам' },
+    },
+
+    contactedAtLabel: { en: 'First contact', ru: 'Первый контакт' },
+    // Three states for the help text under the contacted_at read-only
+    // display: already set (show timestamp), will-stamp on save (Vero
+    // has flipped status past "new"), or still unset.
+    contactedAtHelpSet: {
+      en: (when: string) => `You first replied ${when}.`,
+      ru: (when: string) => `Первый ответ был ${when}.`,
+    },
+    contactedAtHelpWillStamp: {
+      en: 'Timestamp will be recorded when you save this change.',
+      ru: 'Отметка времени будет записана при сохранении.',
+    },
+    contactedAtHelpUnset: {
+      en: 'Set automatically the first time you flip status past "New".',
+      ru: 'Заполняется автоматически при первом изменении статуса из «Новый».',
+    },
+    notContactedYet: { en: 'Not contacted yet', ru: 'Ещё не связывались' },
+
+    notesLabel: { en: 'Notes', ru: 'Заметки' },
+    notesHelp: {
+      en: 'Internal only — never shown to the lead. Jot follow-up plans, quotes given, blockers, etc.',
+      ru: 'Только для внутреннего использования — клиент их не увидит. Записывай планы, цены, комментарии.',
+    },
+    notesPlaceholder: {
+      en: 'e.g. Called back Tue, sent quote — waiting on reply.',
+      ru: 'например, Перезвонили во вторник, отправили цену — ждём ответа.',
+    },
+
+    // Danger zone — super-only, mirrors reviewsEditor.dangerZone*
+    dangerZone: { en: 'Danger zone', ru: 'Опасная зона' },
+    dangerZoneBody: {
+      en: 'Deleting a lead removes it permanently. Prefer flipping status to "spam" or "ghosted" instead — keeps the record for later analytics.',
+      ru: 'Удаление уберёт лида навсегда. Лучше сначала поставить статус «Спам» или «Не ответил» — так запись останется для аналитики.',
+    },
+    deleteLead: { en: 'Delete lead', ru: 'Удалить лида' },
+
+    // Confirm dialog
+    deleteConfirmTitle: { en: 'Delete this lead?', ru: 'Удалить этого лида?' },
+    deleteConfirmBody: {
+      en: (name: string) => `The lead from ${name} will be permanently removed.`,
+      ru: (name: string) => `Лид от ${name} будет удалён навсегда.`,
     },
   },
 

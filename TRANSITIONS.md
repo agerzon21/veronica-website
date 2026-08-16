@@ -15,12 +15,27 @@ Ongoing infrastructure + feature work with concrete checklists. Update this file
 - [ ] GoogleReviewsSection refactored to read from API
 - [ ] Sign-in autofill quick win
 
-### Phase 2: Own contact form (replaces Web3Forms) — planned
-- [ ] contact_submissions DB table
-- [ ] /api/contact endpoint (validates, stores, sends Resend notification)
-- [ ] Admin Leads section (list of form submissions)
-- [ ] Update src/pages/Contact.tsx to POST to our endpoint
-- [ ] Remove WEB3FORMS_KEY
+### Phase 2: Own contact form (replaces Web3Forms) — IN PROGRESS, two-step rollout
+Original scope note was wrong — `contact_submissions` table and `/api/contact` endpoint already exist in prod. Actual work broken into two PRs:
+
+**PR 1 — dual-run (this commit):**
+- [x] 014-contact-submissions.sql — retro-baseline of the existing prod table + `notes`, `contacted_at`, `updated_at`+trigger, indexes
+- [x] `sendLeadNotification()` in api/_auto-reply.ts + `replyTo` support in `EmailMessage` interface + forward in `sendEmail`
+- [x] api/contact.ts — add `sendLeadNotification` as a third Promise.allSettled (non-fatal, log-only failure)
+- [x] api/admin/_leads-list.ts + _leads-update.ts + _leads-delete.ts (list/update = admin, delete = super)
+- [x] Register 3 leads-* actions in api/admin.ts dispatcher
+- [x] AdminLeads.tsx + i18n (t.leads.* + t.leadsEditor.* + t.nav.leads)
+- [x] Wired into Admin.tsx → inbox group alongside Messages + Assistant
+
+**PR 2 — cut Web3Forms cord (after dual-run verification):**
+- [ ] Verify Vero receives BOTH Web3Forms email AND the new Resend notification for ~1 week of real submissions
+- [ ] src/pages/Contact.tsx — POST directly to /api/contact, drop the Web3Forms fetch + hardcoded WEB3FORMS_KEY + "Cloudflare bot challenge" comment
+- [ ] Update DATABASE.md line 58-60 and this file (line 37) to drop Web3Forms references
+- [ ] Delete ThankYou.tsx's duplicate /api/contact fetch (now triggered from Contact.tsx directly)
+
+**Migration to apply before deploying PR 1:** paste `db/migrations/014-contact-submissions.sql` into Neon SQL editor. Safe idempotent — `CREATE TABLE IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS` + `DROP TRIGGER IF EXISTS` + `SET NOT NULL`. On prod (where the base table already exists) it's effectively an ALTER TABLE + CREATE INDEX + CREATE TRIGGER + status → NOT NULL alignment.
+
+**Known dual-run limitation (self-heals in PR 2):** during PR 1 the DB insert + Vero notification + auto-reply all fire from ThankYou.tsx's useEffect AFTER the client navigates from /contact to /contact/thank-you (Web3Forms POST happens first, from Contact.tsx). If the user closes the tab, backgrounds it on mobile, or has flaky network during that navigation window, the /api/contact fetch can abort — meaning Web3Forms delivered the email to Vero but the contact_submissions row was never created and the Vero notification never fired. Result: Vero's Web3Forms inbox is authoritative during dual-run; the Admin Leads panel is best-effort. Do NOT tell Vero to treat the Leads panel as the source of truth yet — treat it as an audit trail that may under-report. PR 2 fixes this by moving the /api/contact fetch into Contact.tsx's handleSubmit (before navigate), running in parallel with the direct email send.
 
 ### Phase 3: Session cookies (auto sign-in) — planned
 - [ ] Admin HttpOnly session cookie (JWT signed with env-var secret)

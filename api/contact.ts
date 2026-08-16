@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sendAutoReply, type ContactPayload } from './_auto-reply.js';
+import { sendAutoReply, sendLeadNotification, type ContactPayload } from './_auto-reply.js';
 import { getDb } from './_db.js';
 
 async function logSubmission(data: ContactPayload): Promise<void> {
@@ -42,17 +42,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Name and email are required' });
   }
 
-  // Log to Neon (best-effort) and send auto-reply in parallel. Promise.all
-  // would fail-fast if either rejects; allSettled lets each finish even if
-  // the other errors. Auto-reply is the critical path for the user response.
-  const [_, autoReplyResult] = await Promise.allSettled([
+  // Three parallel best-effort operations. allSettled (not all) so one
+  // rejection doesn't cancel the others.
+  //
+  // 1. logSubmission     — DB row for the admin Leads view. Non-fatal;
+  //                         a lost row doesn't break the customer flow.
+  // 2. sendAutoReply     — CRITICAL PATH. Customer expects a confirmation
+  //                         email. A rejection here is the only condition
+  //                         that returns 500.
+  // 3. sendLeadNotification — pings Vero ("new lead came in") so she
+  //                         actually knows to look at the Admin panel.
+  //                         Replaces the Web3Forms notification we're
+  //                         cutting in PR 2. Non-fatal — if her ping
+  //                         fails, the customer STILL got their reply.
+  const [_logResult, autoReplyResult, notifyResult] = await Promise.allSettled([
     logSubmission(data),
     sendAutoReply(data),
+    sendLeadNotification(data),
   ]);
 
   if (autoReplyResult.status === 'rejected') {
     console.error('[contact] sendAutoReply failed:', autoReplyResult.reason);
     return res.status(500).json({ success: false, error: 'Auto-reply failed' });
+  }
+
+  if (notifyResult.status === 'rejected') {
+    // Log-only. The lead is in the DB and the customer got their reply;
+    // Vero just won't get pinged for THIS specific submission. She'll
+    // still see it in the Admin Leads panel on her next check-in.
+    console.error('[contact] sendLeadNotification failed (non-fatal):', notifyResult.reason);
+  } else {
+    console.log('[contact] lead notification sent:', { id: notifyResult.value.id });
   }
 
   console.log('[contact] auto-reply sent:', { id: autoReplyResult.value.id });

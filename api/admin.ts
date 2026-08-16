@@ -32,6 +32,9 @@ import reviewsListHandler from './admin/_reviews-list.js';
 import reviewsUpsertHandler from './admin/_reviews-upsert.js';
 import reviewsDeleteHandler from './admin/_reviews-delete.js';
 import reviewsAggregateHandler from './admin/_reviews-aggregate.js';
+import leadsListHandler from './admin/_leads-list.js';
+import leadsUpdateHandler from './admin/_leads-update.js';
+import leadsDeleteHandler from './admin/_leads-delete.js';
 import messagesListHandler from './admin/_messages-list.js';
 import messagesDetailHandler from './admin/_messages-detail.js';
 import messagesToggleAiHandler from './admin/_messages-toggle-ai.js';
@@ -81,6 +84,9 @@ const HANDLERS: Record<
   'reviews-upsert': reviewsUpsertHandler,
   'reviews-delete': reviewsDeleteHandler,
   'reviews-aggregate': reviewsAggregateHandler,
+  'leads-list': leadsListHandler,
+  'leads-update': leadsUpdateHandler,
+  'leads-delete': leadsDeleteHandler,
   'messages-list': messagesListHandler,
   'messages-detail': messagesDetailHandler,
   'messages-toggle-ai': messagesToggleAiHandler,

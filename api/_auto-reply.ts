@@ -134,6 +134,13 @@ interface EmailMessage {
   subject: string;
   html: string;
   text: string;
+  // Optional Reply-To override. Default (undefined) keeps replies coming
+  // back to FROM_ADDRESS (Veronika herself) — correct for auto-replies to
+  // clients. Used by sendLeadNotification below to route Vero's Reply
+  // straight to the lead's own inbox: she reads the notification, hits
+  // Reply, Gmail addresses it to the lead. Set to a string address to
+  // override; multiple reply-to addresses aren't supported by Resend.
+  replyTo?: string;
   // Optional file attachments. Each entry is sent inline via Resend's
   // attachments API — used by the contract-signing flow to deliver the
   // signed PDF to both the client and Veronika in one email.
@@ -156,7 +163,10 @@ export async function sendEmail(message: EmailMessage): Promise<{ id: string }> 
     from: `${FROM_DISPLAY} <${FROM_ADDRESS}>`,
     to: message.to,
     cc: message.cc,
-    replyTo: FROM_ADDRESS,
+    // Default reply-to is Vero herself (FROM_ADDRESS). Any caller that
+    // wants replies routed elsewhere (e.g. lead notifications → the
+    // lead's inbox) passes an explicit `replyTo`.
+    replyTo: message.replyTo ?? FROM_ADDRESS,
     subject: message.subject,
     html: message.html,
     text: message.text,
@@ -181,6 +191,111 @@ export async function sendAutoReply(data: ContactPayload): Promise<{ id: string 
     subject: `Re: Your ${data.shoot_type || 'Photography'} Inquiry`,
     text: buildAutoReplyText(data),
     html: buildAutoReplyHtml(data),
+  });
+}
+
+/**
+ * Builds the Vero-facing "new lead came in" notification body.
+ *
+ * Deliberately unadorned — internal notification, not customer-facing.
+ * Vero reads it in Gmail, sees who/what/when at a glance, and hits Reply
+ * to land in the lead's own inbox (replyTo below is the lead's address,
+ * not FROM_ADDRESS).
+ */
+function buildLeadNotificationHtml(data: ContactPayload): string {
+  const safeName = escapeHtml(data.name || 'Unknown');
+  const safeEmail = escapeHtml(data.email || '');
+  const safeShoot = escapeHtml(data.shoot_type || 'Not specified');
+  const trimmedDate = (data.date || '').trim();
+  const trimmedLocation = (data.location || '').trim();
+  const trimmedMessage = (data.message || '').trim();
+  const rows: string[] = [
+    `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Name</td><td style="padding:6px 0;color:#2d2d2d;">${safeName}</td></tr>`,
+    `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Email</td><td style="padding:6px 0;"><a href="mailto:${safeEmail}" style="color:#c9a96e;">${safeEmail}</a></td></tr>`,
+    `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Type</td><td style="padding:6px 0;color:#2d2d2d;">${safeShoot}</td></tr>`,
+  ];
+  if (trimmedDate) {
+    rows.push(
+      `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Preferred date</td><td style="padding:6px 0;color:#2d2d2d;">${escapeHtml(trimmedDate)}</td></tr>`,
+    );
+  }
+  if (trimmedLocation) {
+    rows.push(
+      `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Location</td><td style="padding:6px 0;color:#2d2d2d;">${escapeHtml(trimmedLocation)}</td></tr>`,
+    );
+  }
+
+  const messageBlock = trimmedMessage
+    ? `<p style="margin:20px 0 8px;font-size:13px;color:#888;">Message</p>
+<p style="border-left:3px solid #d8d8d8;margin:0 0 20px;padding:6px 0 6px 14px;color:#2d2d2d;font-style:italic;font-size:14px;white-space:pre-wrap;">${escapeHtml(trimmedMessage)}</p>`
+    : '';
+
+  // Hit Reply in Gmail — replyTo below is set to the lead's email, so
+  // this button is really just belt-and-suspenders for clients that
+  // don't honor Reply-To (rare, but iOS Mail occasionally).
+  const replyButton = `<p style="margin:12px 0 0;"><a href="mailto:${safeEmail}" style="display:inline-block;padding:10px 20px;background:#c9a96e;color:#fff;text-decoration:none;border-radius:4px;font-size:14px;">Reply to ${safeName}</a></p>`;
+
+  return `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
+<p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography · New Lead</p>
+<table style="border-collapse:collapse;width:100%;">
+${rows.join('\n')}
+</table>
+${messageBlock}
+${replyButton}
+<hr style="border:none;border-top:1px solid #ececec;margin:28px 0 12px;">
+<p style="font-size:12px;color:#888;">Submitted via vero.photography contact form. Hit Reply in your mail client to respond directly to ${safeName} — reply-to is set to their address, not ours.</p>
+</body></html>`;
+}
+
+function buildLeadNotificationText(data: ContactPayload): string {
+  const lines: string[] = [
+    `NEW LEAD — vero.photography`,
+    ``,
+    `Name:  ${data.name || 'Unknown'}`,
+    `Email: ${data.email || ''}`,
+    `Type:  ${data.shoot_type || 'Not specified'}`,
+  ];
+  if ((data.date || '').trim()) lines.push(`Preferred date: ${data.date}`);
+  if ((data.location || '').trim()) lines.push(`Location: ${data.location}`);
+  const trimmedMessage = (data.message || '').trim();
+  if (trimmedMessage) {
+    lines.push('');
+    lines.push('Message:');
+    lines.push(trimmedMessage.split('\n').map((l) => `  ${l}`).join('\n'));
+  }
+  lines.push('');
+  lines.push('Hit Reply to respond directly — reply-to is set to the lead.');
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Sends Vero a "new lead came in" notification.
+ *
+ * Destination: LOGIN_ADMIN_EMAIL env var (already the address Vero uses
+ * to sign into /admin, i.e. her canonical owner identity in the system)
+ * with FROM_ADDRESS as a fallback so a missing env var never silently
+ * swallows the notification — worst case, Vero gets it at
+ * vero@vero.photography and forwards to herself.
+ *
+ * Reply-to is the LEAD'S email, not Vero's — so hitting Reply in Gmail
+ * threads straight to the lead. This is the whole point of the sendEmail
+ * `replyTo` override added alongside this function.
+ *
+ * Failure of this send is NON-FATAL for the /api/contact endpoint. The
+ * primary work (customer auto-reply + DB log) already succeeded by the
+ * time this fires; if the notification bounces we log and continue.
+ * Callers should wrap in Promise.allSettled or a try/catch that swallows.
+ */
+export async function sendLeadNotification(data: ContactPayload): Promise<{ id: string }> {
+  const notifyTo = process.env.LOGIN_ADMIN_EMAIL || FROM_ADDRESS;
+  const shootLabel = data.shoot_type || 'inquiry';
+  return sendEmail({
+    to: notifyTo,
+    replyTo: data.email,
+    subject: `[New lead] ${data.name} — ${shootLabel}`,
+    text: buildLeadNotificationText(data),
+    html: buildLeadNotificationHtml(data),
   });
 }
 

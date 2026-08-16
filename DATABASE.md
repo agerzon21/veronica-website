@@ -58,6 +58,11 @@ create table subscribers (
 -- Contact submissions: every form submission logged for Veronika's records.
 -- Mirrors what already gets emailed via Web3Forms; the table gives us
 -- searchable history + a foundation for future CRM/calendar work.
+--
+-- Note: the schema below reflects the CURRENT state after migration
+-- 014-contact-submissions.sql is applied. The extension columns
+-- (notes / contacted_at / updated_at + trigger) and the SET NOT NULL
+-- on status came in via 014 as part of the Admin Leads section work.
 create table contact_submissions (
   id              uuid primary key default gen_random_uuid(),
   name            text not null,
@@ -66,8 +71,11 @@ create table contact_submissions (
   preferred_date  text,
   location        text,
   message         text,
-  status          text default 'new',           -- new | replied | booked | ghosted (future)
-  created_at      timestamptz not null default now()
+  status          text not null default 'new',  -- new | contacted | replied | booked | ghosted | spam
+  notes           text,                          -- internal-only free-form notes for the admin (014)
+  contacted_at    timestamptz,                   -- first outbound reply timestamp (014)
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()  -- touched by trigger (014)
 );
 ```
 
