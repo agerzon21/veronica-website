@@ -197,75 +197,117 @@ export async function sendAutoReply(data: ContactPayload): Promise<{ id: string 
 /**
  * Builds the Vero-facing "new lead came in" notification body.
  *
- * Deliberately unadorned — internal notification, not customer-facing.
- * Vero reads it in Gmail, sees who/what/when at a glance, and hits Reply
- * to land in the lead's own inbox (replyTo below is the lead's address,
- * not FROM_ADDRESS).
+ * Design intent — designed to be REPLY-FRIENDLY in Gmail:
+ *
+ * Vero reads this in Gmail and hits her mail client's native Reply
+ * button (Reply-To is set to the lead's email, so Reply goes to
+ * them). Gmail auto-quotes the whole notification body below her
+ * typed response. That means everything in this email will be
+ * visible to the CUSTOMER (as quoted history) once Vero replies.
+ * The body is therefore written to look reasonable from the
+ * customer's POV when quoted — no internal-only jargon, no "New
+ * lead" banner shouting at them, no Vero-only instructions above
+ * the auto-collapse separator.
+ *
+ * Two structural elements make this work:
+ *
+ *   1. Customer-safe subject (`Wedding Photography Inquiry —
+ *      Sarah Johnson`) so Sarah sees `Re: Wedding Photography
+ *      Inquiry — Sarah Johnson` when Vero replies. No `[New lead]`
+ *      prefix or other internal markers that would leak.
+ *
+ *   2. Everything below a `--` line on its own is collapsed by
+ *      Gmail/Apple Mail/Outlook as a signature block, and hidden
+ *      from view by default in the quoted history. Internal-only
+ *      text (the "submitted via" footer) goes below that line.
+ *
+ * We deliberately don't render a "Reply to <name>" button anymore.
+ * The old button opened a blank mailto: compose with no context,
+ * which confused Vero (she'd click it expecting Gmail's Reply
+ * behavior). Removing it forces the discoverable natural action:
+ * use the mail client's own Reply, which correctly carries the
+ * whole thread and threads with the auto-reply the customer
+ * already received.
  */
 function buildLeadNotificationHtml(data: ContactPayload): string {
-  const safeName = escapeHtml(data.name || 'Unknown');
+  const safeName = escapeHtml(data.name || 'Someone');
   const safeEmail = escapeHtml(data.email || '');
-  const safeShoot = escapeHtml(data.shoot_type || 'Not specified');
   const trimmedDate = (data.date || '').trim();
   const trimmedLocation = (data.location || '').trim();
   const trimmedMessage = (data.message || '').trim();
-  const rows: string[] = [
-    `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Name</td><td style="padding:6px 0;color:#2d2d2d;">${safeName}</td></tr>`,
-    `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Email</td><td style="padding:6px 0;"><a href="mailto:${safeEmail}" style="color:#c9a96e;">${safeEmail}</a></td></tr>`,
-    `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Type</td><td style="padding:6px 0;color:#2d2d2d;">${safeShoot}</td></tr>`,
-  ];
+
+  // Customer-facing preamble: reads naturally as the first quoted
+  // line when Sarah receives Vero's reply. Kept generic — the shoot
+  // type shows up in the table below, so we don't need to grammar-
+  // wrangle it here ("Sarah reached out about a Portrait Session
+  // session" is a dup we can't have).
+  const preamble = `<p style="margin:0 0 16px;color:#2d2d2d;font-size:15px;">${safeName} reached out via vero.photography:</p>`;
+
+  const rows: string[] = [];
+  rows.push(
+    `<tr><td style="padding:4px 12px 4px 0;color:#888;font-size:13px;white-space:nowrap;">From</td><td style="padding:4px 0;color:#2d2d2d;font-size:14px;"><a href="mailto:${safeEmail}" style="color:#2d2d2d;text-decoration:none;">${safeName} &lt;${safeEmail}&gt;</a></td></tr>`,
+  );
+  if (data.shoot_type) {
+    rows.push(
+      `<tr><td style="padding:4px 12px 4px 0;color:#888;font-size:13px;white-space:nowrap;">Type</td><td style="padding:4px 0;color:#2d2d2d;font-size:14px;">${escapeHtml(data.shoot_type)}</td></tr>`,
+    );
+  }
   if (trimmedDate) {
     rows.push(
-      `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Preferred date</td><td style="padding:6px 0;color:#2d2d2d;">${escapeHtml(trimmedDate)}</td></tr>`,
+      `<tr><td style="padding:4px 12px 4px 0;color:#888;font-size:13px;white-space:nowrap;">Preferred date</td><td style="padding:4px 0;color:#2d2d2d;font-size:14px;">${escapeHtml(trimmedDate)}</td></tr>`,
     );
   }
   if (trimmedLocation) {
     rows.push(
-      `<tr><td style="padding:6px 12px 6px 0;color:#888;font-size:13px;white-space:nowrap;">Location</td><td style="padding:6px 0;color:#2d2d2d;">${escapeHtml(trimmedLocation)}</td></tr>`,
+      `<tr><td style="padding:4px 12px 4px 0;color:#888;font-size:13px;white-space:nowrap;">Location</td><td style="padding:4px 0;color:#2d2d2d;font-size:14px;">${escapeHtml(trimmedLocation)}</td></tr>`,
     );
   }
 
   const messageBlock = trimmedMessage
-    ? `<p style="margin:20px 0 8px;font-size:13px;color:#888;">Message</p>
-<p style="border-left:3px solid #d8d8d8;margin:0 0 20px;padding:6px 0 6px 14px;color:#2d2d2d;font-style:italic;font-size:14px;white-space:pre-wrap;">${escapeHtml(trimmedMessage)}</p>`
+    ? `<p style="margin:20px 0 8px;font-size:13px;color:#888;">Their message:</p>
+<p style="border-left:3px solid #d8d8d8;margin:0 0 20px;padding:6px 0 6px 14px;color:#2d2d2d;font-size:15px;white-space:pre-wrap;">${escapeHtml(trimmedMessage)}</p>`
     : '';
 
-  // Hit Reply in Gmail — replyTo below is set to the lead's email, so
-  // this button is really just belt-and-suspenders for clients that
-  // don't honor Reply-To (rare, but iOS Mail occasionally).
-  const replyButton = `<p style="margin:12px 0 0;"><a href="mailto:${safeEmail}" style="display:inline-block;padding:10px 20px;background:#c9a96e;color:#fff;text-decoration:none;border-radius:4px;font-size:14px;">Reply to ${safeName}</a></p>`;
-
+  // The "-- " (dash-dash-space) on its own line is the RFC 3676
+  // signature delimiter. Gmail / Apple Mail / Outlook collapse
+  // everything below it when showing quoted history. Our internal-
+  // only note lives there so Sarah's view of Vero's reply doesn't
+  // include "submitted via contact form — reply-to is set to their
+  // address, not ours" which would be confusing to her.
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
-<p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography · New Lead</p>
-<table style="border-collapse:collapse;width:100%;">
+${preamble}
+<table style="border-collapse:collapse;margin:0 0 4px;">
 ${rows.join('\n')}
 </table>
 ${messageBlock}
-${replyButton}
-<hr style="border:none;border-top:1px solid #ececec;margin:28px 0 12px;">
-<p style="font-size:12px;color:#888;">Submitted via vero.photography contact form. Hit Reply in your mail client to respond directly to ${safeName} — reply-to is set to their address, not ours.</p>
+<p style="margin:20px 0 0;color:#888;font-size:13px;">-- </p>
+<p style="margin:0;color:#aaa;font-size:12px;">Submitted via the contact form at vero.photography. Reply-To is set to ${safeName}'s address, so hitting Reply threads directly to them.</p>
 </body></html>`;
 }
 
 function buildLeadNotificationText(data: ContactPayload): string {
+  const name = data.name || 'Someone';
+
   const lines: string[] = [
-    `NEW LEAD — vero.photography`,
+    `${name} reached out via vero.photography:`,
     ``,
-    `Name:  ${data.name || 'Unknown'}`,
-    `Email: ${data.email || ''}`,
-    `Type:  ${data.shoot_type || 'Not specified'}`,
+    `From:  ${name} <${data.email || ''}>`,
   ];
+  if (data.shoot_type) lines.push(`Type: ${data.shoot_type}`);
   if ((data.date || '').trim()) lines.push(`Preferred date: ${data.date}`);
   if ((data.location || '').trim()) lines.push(`Location: ${data.location}`);
   const trimmedMessage = (data.message || '').trim();
   if (trimmedMessage) {
     lines.push('');
-    lines.push('Message:');
+    lines.push('Their message:');
     lines.push(trimmedMessage.split('\n').map((l) => `  ${l}`).join('\n'));
   }
+  // Signature delimiter — clients collapse below this in quoted history.
   lines.push('');
-  lines.push('Hit Reply to respond directly — reply-to is set to the lead.');
+  lines.push('-- ');
+  lines.push(`Submitted via the contact form at vero.photography.`);
+  lines.push(`Reply-To is set to ${name}'s address, so hitting Reply threads directly to them.`);
   return lines.join('\n') + '\n';
 }
 
@@ -289,11 +331,27 @@ function buildLeadNotificationText(data: ContactPayload): string {
  */
 export async function sendLeadNotification(data: ContactPayload): Promise<{ id: string }> {
   const notifyTo = process.env.LOGIN_ADMIN_EMAIL || FROM_ADDRESS;
-  const shootLabel = data.shoot_type || 'inquiry';
+
+  // Subject is customer-safe: when Vero hits Reply in Gmail, the
+  // customer receives `Re: <this subject>`. `[New lead] Sarah Johnson
+  // — Wedding Photography` looks internal and confusing to the
+  // customer as a Re: chain. `Wedding Photography Inquiry —
+  // Sarah Johnson` reads naturally from either side. Vero can still
+  // filter her inbox by "Inquiry —" to isolate leads.
+  //
+  // For unknown shoot types (or 'Other') we fall back to a generic
+  // "Photography Inquiry" so we never emit an odd `— Sarah Johnson`
+  // with no context.
+  const shoot =
+    data.shoot_type && data.shoot_type !== 'Other'
+      ? data.shoot_type
+      : 'Photography';
+  const nameForSubject = data.name || 'New lead';
+
   return sendEmail({
     to: notifyTo,
     replyTo: data.email,
-    subject: `[New lead] ${data.name} — ${shootLabel}`,
+    subject: `${shoot} Inquiry — ${nameForSubject}`,
     text: buildLeadNotificationText(data),
     html: buildLeadNotificationHtml(data),
   });
