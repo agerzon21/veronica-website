@@ -6,7 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes,
+  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib,
   FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaEraser,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -79,6 +79,16 @@ export interface Message {
   external_message_id: string | null;
   sent_at: string;
   ai_model: string | null;
+  // Email-only. NULL for Instagram messages. When non-null on an
+  // inbound, we show it as a subject line above the body; on an
+  // outbound, it's what we sent to the customer as the Subject
+  // header (auto-derived from the parent thread with a "Re: " prefix).
+  subject?: string | null;
+  in_reply_to?: string | null;
+  // How THIS message arrived — distinct from the conversation's
+  // platform, which is how we reply. A contact-form submission arrives
+  // as 'form' inside a conversation whose platform is 'email'.
+  channel?: 'instagram' | 'email' | 'form' | 'whatsapp' | 'sms';
 }
 
 export type InquiryClassification =
@@ -156,6 +166,9 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
   // message ugly.
   const [globalToggleConfirmOpen, setGlobalToggleConfirmOpen] = useState(false);
   const [globalToggleLoading, setGlobalToggleLoading] = useState(false);
+  // Email signature editor. Lives at the tab level rather than inside a
+  // conversation — it applies to every email Vero sends, not to one thread.
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const toast = useToast();
 
   const loadList = useCallback(async (): Promise<void> => {
@@ -269,6 +282,19 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
               onClick={adminLevel === 'super' ? handleToggleGlobal : undefined}
             />
             <IconButton
+              aria-label={t.messages.signatureEdit}
+              title={t.messages.signatureEdit}
+              icon={<Icon as={FaPenNib} boxSize={3.5} />}
+              onClick={() => setSignatureOpen(true)}
+              variant="ghost"
+              size="md"
+              minW="44px"
+              minH="44px"
+              color="gray.500"
+              _hover={{ color: '#c9a96e' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            />
+            <IconButton
               aria-label={t.common.refresh}
               icon={<Icon as={FaSync} boxSize={4} />}
               onClick={loadList}
@@ -304,6 +330,14 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
         isLoading={globalToggleLoading}
         onConfirm={doToggleGlobal}
         onCancel={() => setGlobalToggleConfirmOpen(false)}
+      />
+
+      {/* Email signature editor — applies to every email sent from the
+          panel, so it lives here rather than inside a conversation. */}
+      <SignatureModal
+        isOpen={signatureOpen}
+        onClose={() => setSignatureOpen(false)}
+        adminPassword={adminPassword}
       />
 
       {/* Two-pane on desktop, drill-down on mobile */}
@@ -523,7 +557,9 @@ function ConversationListRow({
     conv.contact_name ||
     conv.contact_handle ||
     conv.linked_client_display_name ||
-    t.messages.instagramUserFallback(conv.external_user_id.slice(-6));
+    (conv.platform === 'email'
+      ? t.messages.emailSenderFallback(conv.external_user_id)
+      : t.messages.instagramUserFallback(conv.external_user_id.slice(-6)));
 
   return (
     <Box
@@ -636,11 +672,22 @@ function PlatformAvatar({
   profilePicUrl: string | null;
   displayName: string;
 }) {
-  const platformIcon = platform === 'instagram' ? FaInstagram : FaCommentDots;
+  // Platform-specific badge shown as a small corner sticker on the
+  // conversation avatar. IG uses the Instagram brand gradient;
+  // email uses the muted gold that matches the rest of admin
+  // (envelope glyph); anything else falls back to a neutral gray
+  // chat bubble so a new platform still renders sensibly before
+  // we've styled it.
+  const platformIcon =
+    platform === 'instagram' ? FaInstagram
+      : platform === 'email' ? FaEnvelope
+      : FaCommentDots;
   const platformGradient =
     platform === 'instagram'
       ? 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)'
-      : 'linear-gradient(135deg, #4a5568, #718096)';
+      : platform === 'email'
+        ? 'linear-gradient(135deg, #c9a96e, #b8964f)'
+        : 'linear-gradient(135deg, #4a5568, #718096)';
   return (
     <Box position="relative" flexShrink={0}>
       <Box
@@ -1011,7 +1058,9 @@ function ConversationView({
     detail.contact_name ||
     detail.contact_handle ||
     detail.linked_client_display_name ||
-    t.messages.instagramUserFallback(detail.external_user_id.slice(-6));
+    (detail.platform === 'email'
+      ? t.messages.emailSenderFallback(detail.external_user_id)
+      : t.messages.instagramUserFallback(detail.external_user_id.slice(-6)));
 
   return (
     <>
@@ -1177,14 +1226,26 @@ function ConversationView({
               flexShrink={0}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
-            <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
-            <Switch
-              isChecked={detail.ai_enabled}
-              onChange={handleToggleAi}
-              isDisabled={aiToggleLoading}
-              colorScheme="yellow"
-              size={{ base: 'md', md: 'sm' } as any}
-            />
+            {/* AI toggle — only wired for Instagram today. Email
+                conversations don't have an AI-reply pipeline yet
+                (deferred; the receiving side ships in this PR but
+                auto-reply-for-email is future work), so we HIDE
+                the toggle entirely on email conversations to avoid
+                the confusing "I flipped it and nothing happened"
+                UX. When email AI eventually lands, remove this
+                platform check. */}
+            {detail.platform !== 'email' && (
+              <>
+                <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
+                <Switch
+                  isChecked={detail.ai_enabled}
+                  onChange={handleToggleAi}
+                  isDisabled={aiToggleLoading}
+                  colorScheme="yellow"
+                  size={{ base: 'md', md: 'sm' } as any}
+                />
+              </>
+            )}
           </HStack>
         </Flex>
 
@@ -1239,8 +1300,11 @@ function ConversationView({
           for any conversation with AI disabled; Vero can close it
           for the current session (state resets on remount when she
           picks a different thread) so it stops occupying screen
-          space once she's acknowledged it. */}
-      {!detail.ai_enabled && !aiOffBannerDismissed && (
+          space once she's acknowledged it.
+          Suppressed for email conversations — email doesn't have an
+          AI reply pipeline yet, so a "AI is off" banner would be
+          misleading (implies it could be on). */}
+      {detail.platform !== 'email' && !detail.ai_enabled && !aiOffBannerDismissed && (
         <Flex
           bg="orange.50"
           borderBottom="1px solid"
@@ -1316,6 +1380,43 @@ function ConversationView({
         display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
       >
         <VStack spacing={3} align="stretch">
+          {/* Email conversations get a small Gmail-style subject
+              header at the top of the thread so Vero can see what
+              the email is about at a glance without scrolling
+              through the body. Uses the OLDEST message's subject
+              (the original thread starter) — subsequent replies'
+              subjects just chain "Re: " prefixes and would be
+              noise. IG conversations skip this entirely (no
+              subjects). */}
+          {detail.platform === 'email' && messages.length > 0 && (() => {
+            const firstWithSubject = messages.find((m) => m.subject && m.subject.trim());
+            if (!firstWithSubject?.subject) return null;
+            return (
+              <Box
+                bg="white"
+                border="1px solid"
+                borderColor="gray.200"
+                borderRadius="md"
+                px={4}
+                py={3}
+                mb={1}
+              >
+                <Text
+                  fontSize="xs"
+                  fontWeight="500"
+                  color="gray.500"
+                  textTransform="uppercase"
+                  letterSpacing="0.08em"
+                  mb={1}
+                >
+                  Subject
+                </Text>
+                <Text fontSize="sm" fontWeight="500" color="gray.800">
+                  {firstWithSubject.subject}
+                </Text>
+              </Box>
+            );
+          })()}
           {messages.map((m) => (
             <MessageBubble key={m.id} msg={m} adminPassword={adminPassword} />
           ))}
@@ -1438,8 +1539,15 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
 
   const bg = isInbound ? 'white' : isAi ? '#fdf9f0' : '#c9a96e';
   const color = isInbound || isAi ? 'gray.800' : 'white';
+  // The inbound eyebrow names the channel rather than always saying
+  // "They said" — that phrasing suits a DM but reads wrong on a formal
+  // email, and a contact-form submission was never "said" at all.
   const senderLabel = isInbound
-    ? t.messages.senderThey
+    ? msg.channel === 'form'
+      ? t.messages.senderForm
+      : msg.channel === 'email'
+      ? t.messages.senderEmail
+      : t.messages.senderThey
     : isAi
     ? t.messages.senderAI
     : t.messages.senderYou;
@@ -1448,7 +1556,15 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
     : isAi
     ? '#8a6e35'
     : '#8a6e35';
-  const senderIcon = isInbound ? FaUser : isAi ? FaRobot : FaUser;
+  const senderIcon = isInbound
+    ? msg.channel === 'form'
+      ? FaClipboardList
+      : msg.channel === 'email'
+      ? FaEnvelope
+      : FaUser
+    : isAi
+    ? FaRobot
+    : FaUser;
 
   const [translation, setTranslation] = useState<string | null>(null);
   const [detectedLang, setDetectedLang] = useState<string | null>(null);
@@ -2241,6 +2357,235 @@ function CreateClientModal({
       </ModalContent>
     </Modal>
   );
+}
+
+/**
+ * Editor for the signature appended to every email sent from this panel.
+ *
+ * Two fields because email is two formats: nearly every client renders
+ * the HTML version, but the plaintext one still matters for the rare
+ * text-only reader and — more practically — it's what gets quoted back
+ * in reply chains. Keeping them in sync is Vero's call; we don't
+ * generate one from the other, because guessing at her formatting is
+ * worse than letting her write both.
+ *
+ * Instagram messages never get a signature; signing a DM reads as
+ * automated and the handle is already visible.
+ */
+function SignatureModal({
+  isOpen,
+  onClose,
+  adminPassword,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  adminPassword: string;
+}) {
+  const { t } = useAdminLang();
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [html, setHtml] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch('/api/admin/messages-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: adminPassword }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.success) {
+          setText(data.signatureText ?? '');
+          setHtml(data.signatureHtml ?? '');
+        } else {
+          setError(data.error || t.messages.couldNotLoad);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError(t.common.couldNotReach);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, adminPassword, t]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/messages-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          save: true,
+          signatureText: text,
+          signatureHtml: html,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({ title: t.messages.signatureSaved, status: 'success', duration: 2500 });
+        onClose();
+      } else {
+        setError(data.error || t.messages.signatureSaveFailed);
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size={{ base: 'full', md: 'lg' } as any}
+      isCentered={{ base: false, md: true } as any}
+      motionPreset="slideInBottom"
+    >
+      <ModalOverlay />
+      <ModalContent
+        borderRadius={{ base: 0, md: 'md' }}
+        maxH={{ base: '100dvh', md: 'auto' }}
+        mx={{ base: 0, md: 4 }}
+      >
+        <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
+          {t.messages.signatureTitle}
+        </ModalHeader>
+        <ModalCloseButton
+          size={{ base: 'lg', md: 'md' } as any}
+          top={{ base: 3, md: 2 }}
+          right={{ base: 3, md: 2 }}
+        />
+        <ModalBody>
+          {loading ? (
+            <Flex justify="center" py={8}>
+              <Spinner size="sm" color="#c9a96e" />
+            </Flex>
+          ) : (
+            <VStack spacing={4} align="stretch">
+              <Text fontSize="xs" color="gray.500" lineHeight="1.6">
+                {t.messages.signatureHelp}
+              </Text>
+
+              <Box>
+                <Text fontSize="xs" fontWeight="500" color="gray.600" mb={1.5}>
+                  {t.messages.signatureTextLabel}
+                </Text>
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={4}
+                  fontSize="sm"
+                  fontFamily="mono"
+                  resize="vertical"
+                />
+              </Box>
+
+              <Box>
+                <Text fontSize="xs" fontWeight="500" color="gray.600" mb={1}>
+                  {t.messages.signatureHtmlLabel}
+                </Text>
+                <Text fontSize="2xs" color="gray.400" mb={1.5}>
+                  {t.messages.signatureHtmlHelp}
+                </Text>
+                <Textarea
+                  value={html}
+                  onChange={(e) => setHtml(e.target.value)}
+                  rows={5}
+                  fontSize="xs"
+                  fontFamily="mono"
+                  resize="vertical"
+                />
+              </Box>
+
+              <Box>
+                <Text
+                  fontSize="2xs"
+                  fontWeight="500"
+                  color="gray.500"
+                  textTransform="uppercase"
+                  letterSpacing="0.08em"
+                  mb={1.5}
+                >
+                  {t.messages.signaturePreview}
+                </Text>
+                <Box
+                  bg="white"
+                  border="1px solid"
+                  borderColor="gray.200"
+                  borderRadius="md"
+                  px={4}
+                  py={3}
+                  fontSize="sm"
+                  // The server rejects scripts/handlers on save, but this
+                  // preview renders UNSAVED input — so strip here too.
+                  // Otherwise pasting a signature from a generator could
+                  // execute its tracking script inside the admin panel
+                  // before validation ever sees it.
+                  dangerouslySetInnerHTML={{ __html: sanitizeSignaturePreview(html) }}
+                />
+              </Box>
+
+              {error && (
+                <Text fontSize="xs" color="red.600">
+                  {error}
+                </Text>
+              )}
+            </VStack>
+          )}
+        </ModalBody>
+        <ModalFooter gap={2} pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}>
+          <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} w="100%">
+            <Button variant="ghost" size="sm" onClick={onClose} isDisabled={saving}>
+              {t.common.cancel}
+            </Button>
+            <CTAButton
+              onClick={handleSave}
+              icon={FaPenNib}
+              variant="solid"
+              size="sm"
+              isLoading={saving}
+              isDisabled={loading}
+            >
+              {t.common.save}
+            </CTAButton>
+          </Stack>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+/**
+ * Strip the constructs the server also rejects, so the live preview of
+ * unsaved signature HTML can't execute anything. Deliberately mirrors
+ * the UNSAFE_HTML list in api/admin/_messages-settings.ts — if you add a
+ * rule there, add it here.
+ */
+function sanitizeSignaturePreview(html: string): string {
+  return html
+    .replace(/<\s*(script|iframe|object|embed)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*(script|iframe|object|embed)\b[^>]*\/?>/gi, '')
+    // `[\s/]` not `\s` — HTML accepts a slash as an attribute separator,
+    // so `<img src=x/onerror=…>` slips past a whitespace-only guard.
+    // Replaced with a space so the separator isn't lost, which would
+    // glue two attributes together.
+    .replace(/[\s/]on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, ' ')
+    .replace(/javascript\s*:/gi, '');
 }
 
 /**

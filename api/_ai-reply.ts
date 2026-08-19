@@ -506,11 +506,16 @@ export async function processInboundMessage(args: {
       // ── 14. Persist outbound row ─────────────────────────────
       await sql`
         INSERT INTO messages (
-          conversation_id, direction, sender, body,
+          conversation_id, direction, sender, channel, body,
           external_message_id, sent_at, ai_model
         )
         VALUES (
-          ${convo.id}, 'outbound', 'ai', ${replyText},
+          ${convo.id}, 'outbound', 'ai',
+          -- Derived from the conversation rather than hardcoded, so this
+          -- stays correct when the reply engine gains non-Instagram
+          -- channels. messages.channel is NOT NULL (migration 017).
+          (SELECT platform FROM conversations WHERE id = ${convo.id}),
+          ${replyText},
           ${sendResult.externalMessageId ?? null}, NOW(), ${OPENAI_MODEL}
         )
         ON CONFLICT (external_message_id) DO NOTHING
@@ -589,11 +594,15 @@ async function sendBridgeAndEscalate(
   // conversation stays quiet until Vero re-engages via admin UI.
   await sql`
     INSERT INTO messages (
-      conversation_id, direction, sender, body,
+      conversation_id, direction, sender, channel, body,
       external_message_id, sent_at
     )
     VALUES (
-      ${convo.id}, 'outbound', 'ai', ${bridgeText},
+      ${convo.id}, 'outbound', 'ai',
+      -- See the note on the reply INSERT above: channel is NOT NULL and
+      -- is derived from the conversation, not hardcoded to instagram.
+      (SELECT platform FROM conversations WHERE id = ${convo.id}),
+      ${bridgeText},
       ${send.externalMessageId ?? null}, NOW()
     )
     ON CONFLICT (external_message_id) DO NOTHING

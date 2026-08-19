@@ -498,11 +498,11 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     // don't create duplicates.
     const inserted = (await sql`
       INSERT INTO messages (
-        conversation_id, direction, sender, body,
+        conversation_id, direction, sender, channel, body,
         external_message_id, sent_at
       )
       VALUES (
-        ${conversationId}, ${direction}, ${sender}, ${text},
+        ${conversationId}, ${direction}, ${sender}, 'instagram', ${text},
         ${mid}, ${sentAt}
       )
       ON CONFLICT (external_message_id) DO NOTHING
@@ -663,9 +663,12 @@ function firstQuery(v: string | string[] | undefined): string | undefined {
   return v;
 }
 
-// Tell Vercel to give us the raw body instead of auto-parsing — we
-// need the exact bytes for signature verification. See the
-// readRawBody() docstring for why.
+// Documentation only. Vercel reads `export const config` from the
+// TOP-LEVEL function file (api/inbox.ts), not from imported handler
+// modules — the bodyParser:false that actually takes effect at
+// runtime lives there. Kept here so readers who navigate directly
+// to this handler understand raw-body is expected. See the
+// readRawBody() docstring for why we need raw bytes for HMAC.
 export const config = {
   api: {
     bodyParser: false,

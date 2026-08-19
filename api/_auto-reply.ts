@@ -10,6 +10,7 @@
  * email clients personally.
  */
 
+import { randomUUID } from 'node:crypto';
 import { Resend } from 'resend';
 
 export interface ContactPayload {
@@ -148,6 +149,9 @@ interface EmailMessage {
     filename: string;
     content: Buffer | string;  // Buffer or base64-encoded string
   }>;
+  // Raw SMTP headers. Used to set an explicit Message-ID so the message
+  // can be threaded against later — see sendAutoReply.
+  headers?: Record<string, string>;
 }
 
 /**
@@ -174,6 +178,7 @@ export async function sendEmail(message: EmailMessage): Promise<{ id: string }> 
       filename: a.filename,
       content: a.content,
     })),
+    headers: message.headers,
   });
   if (error) {
     throw new Error(`Resend send failed: ${error.message}`);
@@ -184,14 +189,38 @@ export async function sendEmail(message: EmailMessage): Promise<{ id: string }> 
   return data;
 }
 
-/** Send the auto-reply for a contact form submission. */
-export async function sendAutoReply(data: ContactPayload): Promise<{ id: string }> {
-  return sendEmail({
+/**
+ * Send the auto-reply for a contact form submission.
+ *
+ * Sets an EXPLICIT SMTP Message-ID rather than letting Resend generate
+ * one, and returns it alongside Resend's tracking id.
+ *
+ * Why it matters: this auto-reply is the first message in what becomes a
+ * real email thread. When Vero later replies from the admin panel,
+ * api/admin/_messages-send.ts builds In-Reply-To / References from the
+ * external_message_ids stored on the thread. Resend's tracking id is not
+ * an RFC 5322 msg-id and is deliberately filtered out there, so without
+ * a real Message-ID here the reply would carry NO threading headers —
+ * and the customer's mail client would show it as a brand-new
+ * conversation, detached from the confirmation they just received.
+ *
+ * The value is normalized (no angle brackets) to match what
+ * _email-send.ts generates and what _email-webhook.ts stores, so all
+ * three agree on equality.
+ */
+export async function sendAutoReply(
+  data: ContactPayload,
+): Promise<{ id: string; messageId: string }> {
+  const domain = FROM_ADDRESS.split('@')[1] || 'vero.photography';
+  const messageId = `${randomUUID()}@${domain}`;
+  const sent = await sendEmail({
     to: data.email,
     subject: `Re: Your ${data.shoot_type || 'Photography'} Inquiry`,
     text: buildAutoReplyText(data),
     html: buildAutoReplyHtml(data),
+    headers: { 'Message-ID': `<${messageId}>` },
   });
+  return { id: sent.id, messageId };
 }
 
 /**

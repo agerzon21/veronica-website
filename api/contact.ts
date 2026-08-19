@@ -1,14 +1,25 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sendAutoReply, sendLeadNotification, type ContactPayload } from './_auto-reply.js';
+import {
+  sendAutoReply,
+  sendLeadNotification,
+  buildAutoReplyText,
+  type ContactPayload,
+} from './_auto-reply.js';
+import { recordContactSubmission } from './_inbox-record.js';
 import { getDb } from './_db.js';
 
-async function logSubmission(data: ContactPayload): Promise<void> {
-  // Best-effort log to contact_submissions. Failure here is non-fatal —
-  // Web3Forms still delivered the inquiry email + the auto-reply will still
-  // send. We just lose the database row for that one submission.
+/**
+ * Best-effort log to contact_submissions.
+ *
+ * Returns the new row's id so the inbox mirror can key its message on it
+ * (and link the lead row back to the conversation). Returns null on
+ * failure — non-fatal: Web3Forms still delivered the inquiry email and
+ * the auto-reply still sends. We just lose the database row.
+ */
+async function logSubmission(data: ContactPayload): Promise<string | null> {
   try {
     const sql = getDb();
-    await sql`
+    const rows = (await sql`
       insert into contact_submissions
         (name, email, shoot_type, preferred_date, location, message)
       values (
@@ -19,9 +30,12 @@ async function logSubmission(data: ContactPayload): Promise<void> {
         ${data.location ?? null},
         ${data.message ?? null}
       )
-    `;
+      returning id
+    `) as Array<{ id: string }>;
+    return rows[0]?.id ?? null;
   } catch (err) {
     console.error('[contact] logSubmission failed (non-fatal):', err);
+    return null;
   }
 }
 
@@ -55,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   //                         Replaces the Web3Forms notification we're
   //                         cutting in PR 2. Non-fatal — if her ping
   //                         fails, the customer STILL got their reply.
-  const [_logResult, autoReplyResult, notifyResult] = await Promise.allSettled([
+  const [logResult, autoReplyResult, notifyResult] = await Promise.allSettled([
     logSubmission(data),
     sendAutoReply(data),
     sendLeadNotification(data),
@@ -76,5 +90,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   console.log('[contact] auto-reply sent:', { id: autoReplyResult.value.id });
+
+  // 4. Mirror the submission into the unified inbox as a conversation, so
+  //    Vero can reply from the Messages panel and any later email from
+  //    this person threads into the same history.
+  //
+  //    Runs AFTER the batch above rather than inside it because it needs
+  //    both the submission id (to key the message) and the auto-reply's
+  //    id + body (to record it as the first outbound in the thread).
+  //    Storing that outbound is also what keeps the AI assistant from
+  //    immediately sending a second message on top of the auto-reply —
+  //    _ai-reply.ts skips any conversation whose newest inbound is
+  //    already followed by an outbound.
+  //
+  //    Swallows its own errors; never affects the response.
+  await recordContactSubmission({
+    submissionId: logResult.status === 'fulfilled' ? logResult.value : null,
+    data,
+    autoReplyMessageId: autoReplyResult.value.messageId,
+    autoReplyText: buildAutoReplyText(data),
+  });
+
   return res.status(200).json({ success: true, emailId: autoReplyResult.value.id });
 }

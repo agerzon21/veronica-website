@@ -213,7 +213,7 @@ const dict = {
 
   messages: {
     tabTitle: { en: 'Messages', ru: 'Сообщения' },
-    subtitle: { en: 'Unified inbox for Instagram DMs.', ru: 'Единый ящик для Instagram-сообщений.' },
+    subtitle: { en: 'Unified inbox for Instagram DMs and email.', ru: 'Единый ящик для Instagram-сообщений и почты.' },
     conversationCount: {
       en: (n: number) => `${n} ${n === 1 ? 'conversation' : 'conversations'}`,
       // Russian plural rules: 1 диалог, 2/3/4 диалога, 5+ диалогов
@@ -272,10 +272,17 @@ const dict = {
     noConversations: { en: 'No conversations yet.', ru: 'Пока нет диалогов.' },
     dismissAiOffNotice: { en: 'Dismiss AI-off notice', ru: 'Скрыть уведомление об отключённом AI' },
     couldNotLoad: { en: 'Could not load conversation.', ru: 'Не удалось загрузить диалог.' },
-    // Conversation list
+    // Conversation list — fallback labels when contact_name/handle
+    // are both null. Instagram falls back to a masked ID suffix
+    // ("Instagram user 234..."). Email falls back to the sender's
+    // email address itself (which is the external_user_id).
     instagramUserFallback: {
       en: (suffix: string) => `Instagram user ${suffix}`,
       ru: (suffix: string) => `Instagram-пользователь ${suffix}`,
+    },
+    emailSenderFallback: {
+      en: (address: string) => address,
+      ru: (address: string) => address,
     },
     noMessagesYet: { en: 'No messages yet', ru: 'Пока нет сообщений' },
     needsVero: { en: 'Needs Vero', ru: 'Нужна Веро' },
@@ -310,6 +317,28 @@ const dict = {
     senderThey: { en: 'They said', ru: 'Они пишут' },
     senderAI: { en: 'AI Assistant', ru: 'AI-ассистент' },
     senderYou: { en: 'You (Vero)', ru: 'Ты (Веро)' },
+    // Inbound eyebrow varies by how the message arrived. "They said"
+    // reads fine on a DM but oddly on a formal email, and a contact-form
+    // submission isn't something anyone "said" at all.
+    senderForm: { en: 'Contact form', ru: 'Форма на сайте' },
+    senderEmail: { en: 'Email', ru: 'Письмо' },
+
+    // ── Signature editor ─────────────────────────────────────────
+    signatureTitle: { en: 'Email signature', ru: 'Подпись в письмах' },
+    signatureEdit: { en: 'Edit email signature', ru: 'Изменить подпись' },
+    signatureHelp: {
+      en: 'Added to the end of every email you send from here. Not used for Instagram messages.',
+      ru: 'Добавляется в конец каждого письма, отправленного отсюда. В Instagram не используется.',
+    },
+    signatureTextLabel: { en: 'Plain text version', ru: 'Текстовая версия' },
+    signatureHtmlLabel: { en: 'Formatted (HTML) version', ru: 'Оформленная версия (HTML)' },
+    signatureHtmlHelp: {
+      en: 'Most people see this one. Leave it alone unless you know HTML.',
+      ru: 'Большинство увидит именно её. Не трогай, если не знаешь HTML.',
+    },
+    signaturePreview: { en: 'Preview', ru: 'Предпросмотр' },
+    signatureSaved: { en: 'Signature saved', ru: 'Подпись сохранена' },
+    signatureSaveFailed: { en: 'Could not save signature', ru: 'Не удалось сохранить подпись' },
     // Per-message translate panel
     translatedFrom: {
       en: (fromLang: string | null) =>
@@ -326,8 +355,8 @@ const dict = {
     },
     noConversationsYetTitle: { en: 'No conversations yet', ru: 'Пока нет диалогов' },
     emptyStateBody: {
-      en: 'As soon as someone DMs @vero.art.photo, the conversation will appear here. The AI assistant will handle the first response automatically unless you pause it above.',
-      ru: 'Как только кто-то напишет @vero.art.photo, диалог появится здесь. AI-ассистент ответит первым автоматически — если только ты не поставишь его на паузу выше.',
+      en: 'As soon as someone DMs @vero.art.photo or emails you, the conversation will appear here. Instagram DMs get a first response from the AI assistant unless you pause it; email conversations are always manual for now.',
+      ru: 'Как только кто-то напишет @vero.art.photo или отправит email, диалог появится здесь. На Instagram-сообщения AI-ассистент ответит первым, если не поставить его на паузу; email пока требует ручного ответа.',
     },
     // Summary card
     summaryTitle: { en: 'Thread summary', ru: 'Сводка' },

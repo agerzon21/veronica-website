@@ -41,6 +41,13 @@ interface MessageRow {
   external_message_id: string | null;
   sent_at: string;
   ai_model: string | null;
+  // Email-only fields (migration 016). NULL for Instagram/other
+  // platforms; the admin UI only surfaces them when non-null.
+  subject: string | null;
+  in_reply_to: string | null;
+  // How the message arrived, distinct from the conversation's platform
+  // (which is how we reply). 'form' for contact-form submissions.
+  channel: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -81,7 +88,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageRows = (await sql`
       SELECT
         id, direction, sender, body,
-        external_message_id, sent_at, ai_model
+        external_message_id, sent_at, ai_model,
+        subject, in_reply_to, channel
       FROM messages
       WHERE conversation_id = ${conversationId}
       ORDER BY sent_at ASC

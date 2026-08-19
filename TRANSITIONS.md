@@ -43,14 +43,50 @@ Original scope note was wrong — `contact_submissions` table and `/api/contact`
 - [ ] Auto sign-in flow on /admin page load
 - [ ] Extend same pattern to client portal auth
 
-### Phase 4: Email inbox (Gmail / Resend Inbound) — planned
-- [ ] Upgrade Resend to Pro ($20/mo)
-- [ ] Add Resend Inbound MX records for vero.photography at Namecheap
-- [ ] /api/inbox/email webhook endpoint (Resend POSTs inbound emails here)
-- [ ] Email conversation storage in DB
-- [ ] Unified inbox in admin panel (email + IG DMs)
-- [ ] Reply flow via Resend (from vero@ with signature auto-appended)
+### Phase 4: Unified inbox — email + contact form — SHIPPED 2026-08-19
+
+Scope changed materially from the original plan. The plan assumed Resend Inbound
+on a `inbox.` subdomain behind a Resend Pro upgrade. Research killed that: Resend
+Free allows **1 domain, not 3**, and inbound counts against the **same 100/day
+quota as sending** — so a spam wave on a catch-all MX would stop contract and
+portal emails. ImprovMX Premium ($9/mo, already being paid) already includes
+webhooks and fans one alias out to **both** Gmail and an HTTP webhook, which
+needs zero DNS changes and keeps Gmail as an independent fallback.
+
+- [x] 016 — `messages.subject`, `messages.in_reply_to`
+- [x] 017 — `messages.channel` (NOT NULL), `messages.from_address`,
+      `contact_submissions.conversation_id`, signature seeds, backfill of 31 past
+      submissions into 26 conversations (`ai_enabled=FALSE`)
+- [x] 017a — hotfix: `channel` DEFAULT 'instagram'. **Required** because three
+      pre-existing INSERT sites (`_ig-webhook.ts`, `_ai-reply.ts` x2) omitted the
+      column; without it every inbound IG DM fails to persist between applying
+      017 and deploying the fix.
+- [x] `api/inbox/_email-webhook.ts` — provider-adapter inbound. ImprovMX active,
+      Resend standby. Routes by **sender address**, not In-Reply-To.
+- [x] `api/_inbox-record.ts` + `api/contact.ts` — form submissions become
+      conversations; the auto-reply is recorded as the first outbound
+- [x] `api/_email-signature.ts` + `api/admin/_messages-settings.ts` — signature in
+      `system_state`, editable from the Messages header
+- [x] Reply flow via Resend, From and Reply-To both `vero@vero.photography`
+- [ ] **017b — drop the `channel` default.** Run after this deploy is verified.
+- [ ] Configure the ImprovMX alias to append the webhook URL
+- [ ] Verify `In-Reply-To` is present in ImprovMX's real payload (undocumented)
+- [ ] `_messages-list.ts` does not expose `channel` — no "from the form" hint in
+      the conversation rail until you open the thread
 - [ ] Strip web3forms metadata from quoted history
+
+**Known gap (accepted):** replies Vero sends from Gmail directly are not captured.
+Only the Gmail API closes this, and for the product that means restricted scopes
++ CASA Tier 2 at $500–$4,500/yr recurring. Every shared-inbox product ships with
+this caveat.
+
+**Long-term direction (decided 2026-08-19):** the system is intended to be sold to
+other photographers. Provider choice is the expensive-to-reverse decision, so
+inbound stays behind an adapter. Resend is the likely product path (full domain
+provisioning API, $20 + $20/100 domains); ImprovMX does not scale (per-account
+quotas shared across tenants, bounce-on-overage, 30/100 domain caps, unsigned
+webhooks). Preferred onboarding is registering the customer's domain for them
+(Porkbun API, `.photography` ≈ $29/yr) so they do zero DNS work.
 
 ### Phase 5: AI on emails — planned
 - [ ] Reuse messages-summary pattern for email threads
@@ -112,4 +148,4 @@ priority:
 - **Google Places API for the "5.0 · 15 reviews" badge → SKIPPED for now.** Verified free tier works (Enterprise SKU, 1K/mo free, ~30 calls/mo for daily poll), but requires Google Cloud project + billing card + per-SKU quota policing + separate Place ID lookup + env var wiring. Cost/benefit doesn't pencil for two numbers that change ~monthly. Manual editor in the Reviews admin tab instead. Reconsider if either (a) reviews change often enough that manual becomes annoying, or (b) we build Google Cloud setup for something else anyway (Business Profile API for auto-review-ingest, calendar API for something, etc.) and Places is basically free-additional.
 
 ---
-Last updated by an agent on 2026-08-14. Kept up to date as work progresses.
+Last updated by an agent on 2026-08-19. Kept up to date as work progresses.
