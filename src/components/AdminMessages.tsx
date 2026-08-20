@@ -877,6 +877,47 @@ function ConversationView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary.id]);
 
+  // Refresh the OPEN thread when new mail lands in it.
+  //
+  // The effect above only fires on summary.id, so a message arriving in
+  // the conversation Vero is currently reading was invisible until she
+  // clicked away and back — the rail showed the unread badge while the
+  // thread beside it sat frozen.
+  //
+  // This rides the list's existing 30s poll (POLL_INTERVAL_MS) rather
+  // than adding a second timer: that poll already refreshes
+  // summary.last_message_at, so a change in it is exactly the signal
+  // "this thread has something new."
+  //
+  // The ref is keyed on id|timestamp so switching conversations does not
+  // masquerade as new mail — that case is already handled above, and
+  // double-fetching would race the two loads.
+  const lastSeenRef = useRef<string>(`${summary.id}|${summary.last_message_at ?? ''}`);
+  useEffect(() => {
+    const key = `${summary.id}|${summary.last_message_at ?? ''}`;
+    if (key === lastSeenRef.current) return;
+    const sameConversation = lastSeenRef.current.startsWith(`${summary.id}|`);
+    lastSeenRef.current = key;
+    if (!sameConversation) return;
+
+    void loadDetail();
+    // She is looking at the thread, so the message is read the moment it
+    // renders. Without this the badge would sit there while she reads it.
+    (async () => {
+      try {
+        await fetch('/api/admin/messages-mark-read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, conversationId: summary.id }),
+        });
+        onRefreshList();
+      } catch {
+        // silent — a stale badge is not worth surfacing an error for
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary.id, summary.last_message_at]);
+
   // Auto-scroll to bottom on new messages / initial load.
   useEffect(() => {
     if (scrollRef.current) {

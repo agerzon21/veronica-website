@@ -88,9 +88,46 @@ quotas shared across tenants, bounce-on-overage, 30/100 domain caps, unsigned
 webhooks). Preferred onboarding is registering the customer's domain for them
 (Porkbun API, `.photography` ≈ $29/yr) so they do zero DNS work.
 
-### Phase 5: AI on emails — planned
-- [ ] Reuse messages-summary pattern for email threads
-- [ ] Higher scrutiny threshold — always draft, never auto-send
+### Phase 5: Assistant upgrade — NEXT UP (priority set 2026-08-19)
+
+Two capabilities, both EXTENSIONS of the existing Assistant tab
+(`api/admin/_assistant-chat.ts`), which already runs an OpenAI tool loop
+against `ai_context`. Not new subsystems.
+
+**5a — Reply co-pilot.** Replaces Vero's current workflow of screenshotting an
+email, pasting it into ChatGPT, and copying the answer back. She should be able
+to say, in the admin chat: *"for the conversation with so-and-so, help me draft
+a reply — here's what I want to say."*
+
+- [ ] New tools on the existing loop: `list_conversations`, `read_thread`,
+      `draft_reply`, `send_reply`
+- [ ] `send_reply` reuses `api/admin/_messages-send.ts`, which already dispatches
+      by platform — so the same flow works for email and Instagram with no
+      channel-specific code in the assistant
+- [ ] Draft-then-approve: output the draft in chat; only send on explicit approval
+- [ ] Auto-reply on NEW inbound (email + form) stays separate — that's the
+      `_ai-reply.ts` pipeline, see 5c
+
+**5b — Developer/system knowledge, non-deletable.** So Vero can ask the panel how
+the panel works ("I finished a gallery, how do I give the client access?", "how
+do I add a photo to the gallery?") instead of messaging Alex.
+
+- [ ] **Schema:** `ai_context` is fully CRUD-able today — by Vero via the Context
+      tab AND by the assistant's own `delete_knowledge` tool. Add
+      `source TEXT NOT NULL DEFAULT 'vero'` (`'vero' | 'system'`); `context-update`,
+      `context-delete`, and the assistant's delete/upsert tools must REFUSE on
+      `source='system'`. Without this the assistant can erase its own docs.
+- [ ] Seed system entries from what we actually know: gallery workflow
+      (CLAUDE.md), client portal + gallery access (CLIENT_PORTAL.md), photo
+      pipeline, Leads/Messages panels, contract + payment flow
+- [ ] System prompt must distinguish "I can tell you how to do this" from
+      "this is broken and needs Alex in the code" — and say so plainly rather
+      than guessing
+
+**5c — Auto-reply on email** (the original Phase 5 scope):
+- [ ] Channel dispatch in `api/_ai-reply.ts` — only 3 coupling points
+      (import at :31, sends at :495 and :578); every guardrail already works
+- [ ] Email policy: always draft, never auto-send
 - [ ] Spam classification
 
 ### Phase 6: Reviews auto-ingest — planned (depends on Phase 4)

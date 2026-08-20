@@ -373,7 +373,7 @@ async function sendEmail(
  * See the filter comment in sendEmail(): rows that never traversed SMTP
  * carry a synthetic `<scheme>:` id. Those must never reach the wire.
  */
-const SYNTHETIC_ID_PREFIXES = ['form:', 'autoreply:', 'improvmx:', 'resend:'];
+const SYNTHETIC_ID_PREFIXES = ['form:', 'autoreply:', 'improvmx:', 'resend:', 'recovered:'];
 
 function isRealMessageId(id: string | null): boolean {
   if (!id) return false;
