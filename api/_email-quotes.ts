@@ -237,5 +237,29 @@ export function looksLikeSameMessage(a: string, b: string): boolean {
   const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
   if (shorter.length >= 25 && longer.includes(shorter)) return true;
 
-  return false;
+  // Word-overlap fallback.
+  //
+  // Containment alone is too strict for the case that actually bites:
+  // the SAME message rendered two different ways. Our auto-reply goes
+  // out as multipart, and the client's quote may come back derived from
+  // the HTML part — carrying a "Vero Photography" header and a
+  // "you're receiving this because…" footer that the stored plaintext
+  // part never had. 608 chars vs 431, neither containing the other,
+  // despite being one message. Without this the auto-reply gets
+  // "recovered" as a phantom duplicate on the client's first reply.
+  //
+  // Jaccard over word sets ignores that chrome: the shared sentences
+  // dominate. 0.6 is deliberately well clear of the ~0.1-0.2 that two
+  // genuinely different messages between the same two people score.
+  return jaccardSimilarity(na, nb) >= 0.6;
+}
+
+/** Jaccard index over whitespace-delimited word sets. */
+function jaccardSimilarity(a: string, b: string): number {
+  const setA = new Set(a.split(/\s+/).filter(Boolean));
+  const setB = new Set(b.split(/\s+/).filter(Boolean));
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const w of setA) if (setB.has(w)) intersection++;
+  return intersection / (setA.size + setB.size - intersection);
 }

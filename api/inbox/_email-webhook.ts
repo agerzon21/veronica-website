@@ -185,7 +185,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Gmail rather than the panel — those never touch our webhook. So
     // before discarding it, mine it for anything missing.
     const split = splitQuotedEmail(email.body);
-    await recoverQuotedOutbound(sql, conversationId, split.mostRecentQuote, email.fromAddress);
+    await recoverQuotedOutbound(
+      sql,
+      conversationId,
+      split.mostRecentQuote,
+      email.fromAddress,
+      email.sentAt,
+    );
 
     const body = email.attachmentNames.length
       ? `${split.newContent}\n\n[Attachments: ${email.attachmentNames.join(', ')} — open in Gmail]`
@@ -755,6 +761,7 @@ async function recoverQuotedOutbound(
   conversationId: string,
   quote: QuotedMessage | null,
   replySender: string,
+  replySentAt: string,
 ): Promise<void> {
   if (!quote || !quote.body.trim()) return;
 
@@ -779,14 +786,23 @@ async function recoverQuotedOutbound(
 
     if (existing.some((m) => looksLikeSameMessage(m.body, quote.body))) return;
 
-    // Clamp: a quoted attribution line can carry a bad or timezone-less
-    // date, and sent_at drives both the thread order and the inbox sort.
-    const now = Date.now();
-    let sentAt = quote.sentAt ?? new Date(now - 1000).toISOString();
-    const ts = new Date(sentAt).getTime();
-    if (!Number.isFinite(ts) || ts > now || ts < now - 90 * 24 * 60 * 60 * 1000) {
-      sentAt = new Date(now - 1000).toISOString();
-    }
+    // Anchor the recovered message to the reply that revealed it, NOT to
+    // the timestamp in the quoted attribution line.
+    //
+    // Attribution lines carry a wall-clock time with NO timezone ("at
+    // 1:22 PM"). Vercel runs UTC, so parsing that yields 13:22 UTC for a
+    // message actually sent at 13:22 EDT — four hours early, which sorts
+    // the recovered message above the thread instead of into it. That is
+    // exactly the bug this replaced: the recovery worked, but landed the
+    // message where nobody would look for it.
+    //
+    // The absolute time is genuinely unknowable from the quote. The
+    // ORDER is not: this message provably came before the reply quoting
+    // it. So place it one second earlier and be correct about the only
+    // thing that matters.
+    const replyMs = new Date(replySentAt).getTime();
+    const anchorMs = Number.isFinite(replyMs) ? replyMs : Date.now();
+    const sentAt = new Date(anchorMs - 1000).toISOString();
 
     // 'recovered:' marks this as reconstructed, not sent by us — it is a
     // synthetic id and is filtered out of RFC 5322 References headers by
