@@ -1,5 +1,5 @@
-import { Box, VStack, Text, Flex, Button, Icon, Spinner } from '@chakra-ui/react';
-import { FaWhatsapp, FaInstagram, FaRegEnvelope, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
+import { Box, VStack, Text, Flex, Button, Icon } from '@chakra-ui/react';
+import { FaWhatsapp, FaInstagram, FaRegEnvelope, FaCheckCircle } from 'react-icons/fa';
 import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
@@ -9,19 +9,14 @@ import { trackAdsLeadConversion, trackContactSubmission } from '../utils/analyti
 
 const MotionDiv = motion.div;
 
-interface AutoReplyPayload {
-  name: string;
-  email: string;
-  shoot_type: string;
-  message: string;
-  botcheck: string;
-}
-
-// sending  → request in flight / waiting on delivery confirmation (spinner)
-// delivered → recipient mail server confirmed receipt (green)
-// pending  → sent OK but delivery not confirmed within our wait window
-// failed   → the send itself failed, or the message bounced
-type AutoReplyStatus = 'idle' | 'sending' | 'delivered' | 'pending' | 'failed';
+// idle      → direct visit / back-navigation; nothing was submitted here
+// delivered → the submission (and its auto-reply) already completed
+//
+// 'sending' / 'pending' / 'failed' are gone: this page no longer performs
+// the submission. Contact.tsx awaits /api/contact before navigating, so by
+// the time we render, the work is done — and a failure never gets here at
+// all, it keeps the user on the form with their answers intact.
+type AutoReplyStatus = 'idle' | 'delivered';
 
 const ThankYou = () => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -29,49 +24,35 @@ const ThankYou = () => {
 
   const location = useLocation();
 
-  // Read the nav state and apply dedup ONCE on mount via useState's lazy
-  // initializer. We can't recompute on every render because the useEffect
-  // below sets a sessionStorage marker as soon as the fetch starts —
-  // re-evaluating on later renders would flip the dedup decision and hide
-  // the success/failed status block we just rendered.
+  // Did the user actually just submit the form, or did they land here
+  // directly / navigate back?
   //
-  // On a fresh form submit: marker is absent → autoReplyPayload is the real
-  //   payload → spinner shows → fetch fires → status updates → status block
-  //   stays visible because this useState value doesn't change.
-  // On back-navigation re-mount: marker is present → autoReplyPayload is
-  //   null on first render → renders the direct-visit variant, no re-fire.
-  const [{ autoReplyPayload, submissionId }] = useState<{
-    autoReplyPayload: AutoReplyPayload | null;
-    submissionId: string | null;
-  }>(() => {
-    const navState = location.state as
-      | { autoReplyPayload?: AutoReplyPayload; submissionId?: string }
-      | null;
-    const rawPayload = navState?.autoReplyPayload ?? null;
+  // Resolved ONCE on mount via useState's lazy initializer so later renders
+  // can't flip the answer out from under the rendered content.
+  //
+  // The sessionStorage marker no longer guards a network call — Contact.tsx
+  // performs the submission before navigating here. It exists purely so a
+  // back-navigation doesn't re-fire the Google Ads conversion event and
+  // inflate lead counts.
+  const [justSubmitted] = useState<boolean>(() => {
+    const navState = location.state as { submissionId?: string } | null;
     const subId = navState?.submissionId ?? null;
-    if (!rawPayload || !subId) {
-      return { autoReplyPayload: null, submissionId: subId };
-    }
-    if (
-      typeof window !== 'undefined' &&
-      sessionStorage.getItem(`auto-reply-sent:${subId}`) !== null
-    ) {
-      return { autoReplyPayload: null, submissionId: subId };
-    }
-    return { autoReplyPayload: rawPayload, submissionId: subId };
+    if (!subId) return false;
+    if (typeof window === 'undefined') return false;
+    if (sessionStorage.getItem(`submitted:${subId}`) !== null) return false;
+    sessionStorage.setItem(`submitted:${subId}`, '1');
+    return true;
   });
 
-  const [autoReplyStatus, setAutoReplyStatus] = useState<AutoReplyStatus>(
-    autoReplyPayload ? 'sending' : 'idle'
-  );
+  const autoReplyStatus: AutoReplyStatus = justSubmitted ? 'delivered' : 'idle';
 
   useEffect(() => {
     // Only fire conversion signals on an actual fresh submission.
-    // autoReplyPayload is null for direct visits, back-navigations, and
-    // page refreshes (guarded by the sessionStorage dedup in the useState
+    // justSubmitted is false for direct visits, back-navigations, and page
+    // refreshes (guarded by the sessionStorage dedup in the useState
     // initializer above), so this check prevents inflating Google Ads
     // conversion counts with people just landing on the URL.
-    if (!autoReplyPayload) return;
+    if (!justSubmitted) return;
     ReactGA.event('generate_lead', {
       event_category: 'Contact',
       event_label: 'Contact Form',
@@ -83,62 +64,8 @@ const ThankYou = () => {
     }
     // Google Ads lead-form conversion. Reports to AW-18082198928.
     trackAdsLeadConversion();
-  }, [autoReplyPayload]);
+  }, [justSubmitted]);
 
-  // Fire the auto-reply request once on mount if we have a payload.
-  //
-  // TEMP: real delivery-status polling (via /api/email-status → Resend
-  // emails.get) needs a Full-access Resend key, which is being swapped in.
-  // Until then the lookup always returns "unknown" and times out, so we fall
-  // back to an optimistic confirmation: hold the spinner for a short beat,
-  // then — if the send succeeded — show the confirmation with a "may take a
-  // couple minutes" note. The send itself is reliable; we just can't confirm
-  // *delivery* yet. Restore the polling version (see git history) once the
-  // Full-access key is live.
-  useEffect(() => {
-    if (!autoReplyPayload || !submissionId) return;
-    // Mark this submission as processed BEFORE the fetch resolves, so a
-    // back-navigation that re-mounts the component doesn't re-fire it.
-    sessionStorage.setItem(`auto-reply-sent:${submissionId}`, '1');
-
-    const MIN_SPINNER_MS = 10000;
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    (async () => {
-      const startedAt = Date.now();
-      let ok = false;
-      try {
-        const res = await fetch('/api/contact', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(autoReplyPayload),
-        });
-        const data = await res.json().catch(() => ({ success: false }));
-        ok = Boolean(data?.success);
-      } catch {
-        ok = false;
-      }
-      if (cancelled) return;
-
-      if (!ok) {
-        setAutoReplyStatus('failed');
-        return;
-      }
-      // Hold the spinner for a short beat so it reads as "working", then
-      // optimistically confirm (send succeeded; delivery isn't tracked yet).
-      const remaining = Math.max(0, MIN_SPINNER_MS - (Date.now() - startedAt));
-      timer = setTimeout(() => {
-        if (!cancelled) setAutoReplyStatus('delivered');
-      }, remaining);
-    })();
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [autoReplyPayload, submissionId]);
 
   const handleWhatsAppClick = () => {
     const phoneNumber = '+15709095707';
@@ -212,10 +139,10 @@ const ThankYou = () => {
                   lineHeight="1.9"
                   maxW="440px"
                 >
-                  {autoReplyPayload ? (
+                  {justSubmitted ? (
                     <>
-                      Your message is in. I'm sending you a quick confirmation from{' '}
-                      <Text as="span" color="#c9a96e">vero@vero.photography</Text> right now — and I'll personally reply within 24 hours.
+                      Your message is in. A confirmation is on its way from{' '}
+                      <Text as="span" color="#c9a96e">vero@vero.photography</Text> — and I'll personally reply within 24 hours.
                     </>
                   ) : (
                     <>Your message is in. I'll personally reply within 24 hours.</>
@@ -224,12 +151,12 @@ const ThankYou = () => {
               </VStack>
 
               {/* Auto-reply status block */}
-              {autoReplyPayload && (
+              {justSubmitted && (
                 <AutoReplyStatusBlock status={autoReplyStatus} />
               )}
 
               {/* Generic spam warning for users who land here without submitting */}
-              {!autoReplyPayload && (
+              {!justSubmitted && (
                 <Box
                   w="100%"
                   maxW="460px"
@@ -317,35 +244,6 @@ const ContactPill = ({ icon, label, iconSize, onClick }: ContactPillProps) => (
 );
 
 const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
-  if (status === 'sending') {
-    return (
-      <Box
-        w="100%"
-        maxW="460px"
-        bg="rgba(201, 169, 110, 0.08)"
-        borderLeft="2px solid #c9a96e"
-        px={5}
-        py={4}
-      >
-        <Flex align="center" gap={3} mb={2}>
-          <Spinner size="sm" color="#c9a96e" thickness="2px" speed="0.8s" />
-          <Text
-            fontSize="xs"
-            color="whiteAlpha.900"
-            fontWeight="500"
-            letterSpacing="0.1em"
-            textTransform="uppercase"
-          >
-            Delivering Confirmation…
-          </Text>
-        </Flex>
-        <Text fontSize="sm" color="whiteAlpha.700" fontWeight="300" lineHeight="1.7">
-          Waiting for it to reach your inbox — this usually takes a few seconds. Hang tight.
-        </Text>
-      </Box>
-    );
-  }
-
   if (status === 'delivered') {
     return (
       <MotionDiv
@@ -374,74 +272,6 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
             Look for an email from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text> — it's on its way and can take a couple of minutes to arrive. If you don't see it, <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text>, and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
-          </Text>
-        </Box>
-      </MotionDiv>
-    );
-  }
-
-  if (status === 'pending') {
-    return (
-      <MotionDiv
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        style={{ width: '100%', maxWidth: '460px' }}
-      >
-        <Box
-          bg="rgba(201, 169, 110, 0.08)"
-          borderLeft="2px solid #c9a96e"
-          px={5}
-          py={4}
-        >
-          <Flex align="center" gap={3} mb={2}>
-            <Icon as={FaRegEnvelope} color="#c9a96e" boxSize={4} />
-            <Text
-              fontSize="xs"
-              color="whiteAlpha.900"
-              fontWeight="500"
-              letterSpacing="0.1em"
-              textTransform="uppercase"
-            >
-              Confirmation On Its Way
-            </Text>
-          </Flex>
-          <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Your confirmation was sent and is taking a little longer than usual to land. Give it a minute or two, and <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text> if it's not in your inbox.
-          </Text>
-        </Box>
-      </MotionDiv>
-    );
-  }
-
-  if (status === 'failed') {
-    return (
-      <MotionDiv
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        style={{ width: '100%', maxWidth: '460px' }}
-      >
-        <Box
-          bg="rgba(246, 173, 85, 0.08)"
-          borderLeft="2px solid #f6ad55"
-          px={5}
-          py={4}
-        >
-          <Flex align="center" gap={3} mb={2}>
-            <Icon as={FaExclamationCircle} color="#f6ad55" boxSize={4} />
-            <Text
-              fontSize="xs"
-              color="whiteAlpha.900"
-              fontWeight="500"
-              letterSpacing="0.1em"
-              textTransform="uppercase"
-            >
-              Confirmation Couldn't Send
-            </Text>
-          </Flex>
-          <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            No worries — I still got your message and will personally reach out within 24 hours. My reply might land in <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text>, so please check there too.
           </Text>
         </Box>
       </MotionDiv>

@@ -9,8 +9,6 @@ import { trackContactSubmission } from '../utils/analytics';
 
 const MotionDiv = motion.div;
 
-const WEB3FORMS_KEY = '4cc6342e-8d13-4060-b349-7d4c91fc31fb';
-
 const inputStyles = {
   // Higher-contrast fields. The old whiteAlpha.100/200 combo blended into any
   // bright spots on the background photo — boundaries vanished. Going darker
@@ -54,14 +52,10 @@ const Contact = () => {
     setError('');
 
     const formData = new FormData(e.currentTarget);
-    formData.append('access_key', WEB3FORMS_KEY);
-    formData.append('subject', `New Inquiry — ${formData.get('shoot_type')} Session`);
-    formData.append('from_name', 'Vero Photography Website');
 
-    // Capture fields for the auto-reply payload that ThankYou will fire.
-    // date + location are optional, so they may be empty strings — that's fine,
-    // the auto-reply template skips empty fields.
-    const autoReplyPayload = {
+    // date + location are optional, so they may be empty strings — that's
+    // fine, the auto-reply template skips empty fields.
+    const payload = {
       name: String(formData.get('name') || ''),
       email: String(formData.get('email') || ''),
       shoot_type: String(formData.get('shoot_type') || ''),
@@ -72,20 +66,34 @@ const Contact = () => {
     };
 
     try {
-      // Notify Vero via Web3Forms — must run client-side to pass Cloudflare's
-      // bot challenge (server-side requests get a 403 challenge page).
-      const response = await fetch('https://api.web3forms.com/submit', {
+      // Submit and WAIT before navigating.
+      //
+      // This used to POST to Web3Forms here and let the thank-you page fire
+      // /api/contact from a useEffect after the route changed. That window
+      // was a real hole: closing the tab, backgrounding on mobile, or a
+      // flaky connection during the navigation aborted the request, and the
+      // lead vanished from our side — no database row, no notification to
+      // Vero, no conversation in the inbox — while Web3Forms had already
+      // emailed her. Awaiting it here closes that.
+      //
+      // The cost is a slightly longer spinner, since this one request does
+      // the database write, the customer's auto-reply, Vero's notification,
+      // and the inbox thread. Worth it: a failure now keeps the user on the
+      // form with their answers intact and lets them retry, instead of
+      // stranding them on a thank-you page with an error and no data.
+      const response = await fetch('/api/contact', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      const data = await response.json();
-      if (data.success) {
-        // ThankYou page kicks off /api/contact for the auto-reply and shows
-        // a live loading→success/failed status to the user. The submissionId
-        // is used to dedupe the auto-reply send if the user navigates back
-        // to the thank-you page later (we'd otherwise re-fire the email).
+      const data = await response.json().catch(() => ({ success: false }));
+
+      if (response.ok && data.success) {
+        // submissionId only dedupes the analytics conversion event on a
+        // back-navigation now — there is no longer a network side effect on
+        // the thank-you page to guard.
         const submissionId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        navigate('/contact/thank-you', { state: { autoReplyPayload, submissionId } });
+        navigate('/contact/thank-you', { state: { submissionId } });
       } else {
         setError('Something went wrong. Please try again.');
       }

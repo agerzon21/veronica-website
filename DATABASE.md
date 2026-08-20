@@ -56,8 +56,12 @@ create table subscribers (
 );
 
 -- Contact submissions: every form submission logged for Veronika's records.
--- Mirrors what already gets emailed via Web3Forms; the table gives us
--- searchable history + a foundation for future CRM/calendar work.
+-- This table is the SOURCE OF TRUTH for leads. Contact.tsx posts to
+-- /api/contact and awaits it before navigating, so the row, the customer's
+-- auto-reply, Vero's notification, and the inbox conversation all land
+-- together or the user is told the submission failed.
+-- (Web3Forms was removed once that ordering was fixed — before it, the API
+-- call fired after navigation and could abort, so this table under-reported.)
 --
 -- Note: the schema below reflects the CURRENT state after migration
 -- 014-contact-submissions.sql is applied. The extension columns
