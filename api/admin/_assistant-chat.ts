@@ -399,6 +399,39 @@ async function executeToolCall(
       return { success: true, action: 'updated', entry: updated[0] };
     }
 
+    // No id supplied — this is the path the model actually takes most of
+    // the time, because it rarely bothers to search first.
+    //
+    // It used to INSERT unconditionally, which meant every time Vero
+    // re-explained something ("make the replies more tailored") the
+    // assistant created ANOTHER row instead of revising the existing
+    // one. That is the literal mechanism behind "I've told it this
+    // several times and nothing changes": her corrections piled up as
+    // duplicates, the model saw the same instruction repeated, and the
+    // prompt grew without the behavior changing. It left 6 duplicated
+    // entries and ~5k wasted characters in every reply's context.
+    //
+    // Match on (category, label) first. Those are the model's own
+    // identifiers for a fact, so re-teaching the same fact now updates
+    // it. A genuinely new fact gets a new label and still inserts.
+    const existing = (await sql`
+      SELECT id FROM ai_context
+      WHERE LOWER(category) = LOWER(${category}) AND LOWER(label) = LOWER(${label})
+      ORDER BY created_at ASC
+      LIMIT 1
+    `) as Array<{ id: string }>;
+
+    if (existing.length > 0) {
+      const updated = (await sql`
+        UPDATE ai_context
+        SET content = ${content}, source = 'chatbot', active = TRUE, updated_at = NOW()
+        WHERE id = ${existing[0].id}
+        RETURNING id, category, label, content
+      `) as Array<{ id: string; category: string; label: string; content: string }>;
+      dbWrites.push({ type: 'updated', category, label, content_summary: contentSummary });
+      return { success: true, action: 'updated', entry: updated[0] };
+    }
+
     const created = (await sql`
       INSERT INTO ai_context (category, label, content, source, active)
       VALUES (${category}, ${label}, ${content}, 'chatbot', TRUE)

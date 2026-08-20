@@ -11,7 +11,9 @@
  *   2. Check per-conversation ai_enabled toggle
  *   3. Check dedup: any outbound msg after this inbound already?
  *   4. Check rate limit: any AI msg from us in the last 5 min?
- *   5. Detect booking/pricing intent → send bridge, disable AI, done
+ *   5. Detect booking COMMITMENT (deposit/contract/"book it") → send
+ *      bridge, disable AI, done. Pricing questions and date mentions
+ *      deliberately do NOT bridge — they go to the model.
  *   6. Detect spam (last 3 inbounds too similar) → send bridge, disable AI, done
  *   7. Detect wrap-up trigger (>= MAX_AI_MSGS AI replies already)
  *      → send wrap-up handoff, disable AI, done
@@ -24,6 +26,14 @@
  * without dumping full messages. Everything Vero can edit lives in
  * ai_context; hardcoded meta-framing keeps her from accidentally
  * unmaking the safety rails via the UI.
+ *
+ * A note on that split, learned the hard way: the rails must forbid
+ * only what is genuinely unsafe. They previously banned quoting any
+ * price and making any suggestion, which meant the pricing Vero had
+ * carefully entered could never be used, and no amount of coaching
+ * through the Assistant tab could change it — her edits land in
+ * ai_context, which the hardcoded rules overrode. If Vero is asking
+ * for behavior the rails prohibit, the rails are what need revisiting.
  */
 
 import OpenAI from 'openai';
@@ -49,29 +59,38 @@ const MIN_GAP_MS_BETWEEN_AI = 60_000; // 60 seconds
 // Balances context (better replies) vs token cost.
 const HISTORY_CONTEXT_MESSAGES = 12;
 
-// Booking / pricing intent keywords. If ANY of these substring-match
-// the (lowercased) inbound message, we skip AI generation and send
-// the pre-written bridge message + disable AI for the convo. Kept
-// generous — false positives are fine (Vero handles the follow-up
-// personally either way); false negatives are the risk we minimize.
-//
-// English + Russian (Vero gets both). Add more languages as needed.
+/**
+ * COMMITMENT keywords only — the point where money or a firm date is
+ * actually being locked in, which Vero must handle herself.
+ *
+ * Deliberately much narrower than it used to be. The old list included
+ * 'price', 'cost', 'how much', 'rate', 'package', 'available' — i.e. the
+ * ordinary questions every prospective client opens with. Bridging those
+ * meant the assistant refused to answer exactly the questions Vero had
+ * loaded pricing data into the knowledge base to answer, and then
+ * switched itself off. Those now flow to the model, which quotes RANGES
+ * from KNOWN FACTS and gathers the variables a real quote depends on.
+ *
+ * What stays here is genuinely transactional: deposits, contracts,
+ * invoices, and explicit "I want to book" intent.
+ */
 const BOOKING_INTENT_KEYWORDS = [
   // English
-  'price', 'pricing', 'cost', 'quote', 'quotes', 'how much', 'rate', 'rates',
-  'fee', 'fees', 'deposit', 'retainer', 'book', 'booking', 'available',
-  'availability', 'hire', 'hiring', 'package', 'packages', 'discount',
-  'contract', 'payment', 'invoice', 'reserve',
+  'deposit', 'retainer', 'contract', 'invoice', 'pay', 'payment',
+  'book it', 'book you', 'book her', 'booking form', 'lock in', 'reserve',
+  'sign up', 'put down',
   // Russian
-  'цена', 'цены', 'стоимость', 'сколько стоит', 'сколько', 'предоплата',
-  'аванс', 'забронировать', 'бронирование', 'свободн', 'доступн', 'заказать',
-  'пакет', 'скидк', 'договор', 'оплат',
+  'предоплата', 'аванс', 'забронировать', 'бронирование', 'договор',
+  'оплатить', 'оплата', 'внести',
 ];
 
 // Date pattern regex — catches month names, ISO dates, "the 12th",
-// "next weekend", "this saturday", etc. Any date reference in an
-// inbound message → treat as booking intent (Vero should confirm
-// availability herself, never the AI).
+// "next weekend", "this saturday", etc.
+//
+// No longer a bridge trigger. A date mention is ordinary in a first
+// message ("we're thinking sometime in May") and bridging on it meant
+// refusing to engage with most real inquiries. It now raises the
+// never-confirm-availability rail inside the prompt instead.
 const DATE_INTENT_PATTERNS: RegExp[] = [
   // Month names (English + Russian) + optional day
   /\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\b/i,
@@ -85,18 +104,6 @@ const DATE_INTENT_PATTERNS: RegExp[] = [
   // Relative dates
   /\b(today|tomorrow|next (week|weekend|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i,
   /\b(завтра|послезавтра|на выходн|в субботу|в воскресенье|на следующ)/i,
-];
-
-// Words that indicate the customer is asking for RECOMMENDATIONS
-// (style, session type, ideas, etc.). AI should never suggest these
-// itself — style is Vero's craft, she wants to shape those
-// conversations personally.
-const RECOMMENDATION_INTENT_KEYWORDS = [
-  'suggest', 'suggestion', 'recommend', 'recommendation', 'what do you think',
-  'what would you', 'any ideas', 'not sure yet', 'help me decide', 'what should',
-  'idea', 'ideas', 'inspiration',
-  // Russian
-  'предложите', 'посоветуйте', 'что вы думаете', 'какие идеи', 'помогите выбрать',
 ];
 
 // Agency / solicitation / spam patterns. These are the sales pitches
@@ -116,6 +123,20 @@ const SPAM_SOLICITATION_PATTERNS: RegExp[] = [
 
   // Agency / service selling ("we specialize in", "we help X grow", "we design")
   /\bwe (specialize|specialise) in\b/i,
+
+  // FREELANCER pitches — the same solicitation in the first person.
+  // Every pattern here used to assume "we", so a solo editor writing
+  // "Hello! I'm a professional photo editor, I specialize in colour
+  // correction..." sailed straight through. That flavor is the single
+  // most common junk DM a photographer gets.
+  /\bi (specialize|specialise) in\b/i,
+  /\bi(?:'m| am)?\s+a\s+(professional\s+)?(photo|video|image|wedding|event)\s*(editor|retoucher)/i,
+  /\b(photo|video|image)\s*(editor|editing|retouch(ing|er)?)\b[\s\S]{0,60}\b(\d+\+?\s*years?|experience|service)/i,
+  /\bi (came across|noticed|found) your (instagram|profile|account|page|work|website)/i,
+  /\bi(?:'d| would) love to (help|work with|collaborate)/i,
+  /\b(color|colour) correction\b/i,
+  /\bskin retouch(ing)?\b/i,
+  /\bbackground (cleanup|removal)\b/i,
   /\bwe (help|design|build|create|make) (websites?|brands?|logos?|content|videos?|clients?|businesses?|companies)/i,
   /\bwe (are|are a|are an)\s+\w+\s+(agency|studio|team|company|firm)/i,
   /\bour (agency|studio|team|portfolio|services|clients?|work)\b/i,
@@ -424,21 +445,27 @@ export async function processInboundMessage(args: {
     // this inbound?") or the 60s rate-limit gate — because our
     // outbound is now in the DB.
     try {
-      // ── 8. Booking / pricing / date intent → bridge + disable ──
-      // Broadened to also catch date references and recommendation
-      // requests. Any of these should defer to Vero — she confirms
-      // dates + shapes style conversations personally.
-      if (
-        matchesBookingIntent(latestInboundBody) ||
-        matchesDateIntent(latestInboundBody) ||
-        matchesRecommendationIntent(latestInboundBody)
-      ) {
+      // ── 8. Booking COMMITMENT → bridge + disable ──────────────
+      //
+      // Narrowed hard. This used to also fire on any date mention and
+      // any request for a suggestion, on top of a keyword list that
+      // included 'price', 'cost', 'available' and 'package'. Between
+      // them, almost every real opening message got the canned deferral
+      // instead of an answer — and the bridge switches the AI off, so
+      // one false positive killed the thread permanently.
+      //
+      // Now only actual transaction intent (deposit, contract, invoice,
+      // "I want to book") defers, because that is where Vero genuinely
+      // has to take over. Pricing questions, date mentions and requests
+      // for ideas all continue to the model, which has the knowledge
+      // base and clear rules about what it may and may not commit to.
+      if (matchesBookingIntent(latestInboundBody)) {
         return await sendBridgeAndEscalate(
           sql,
           convo,
           'booking_bridge',
           'sent-booking-bridge',
-          'booking / date / recommendation intent detected',
+          'booking commitment detected',
         );
       }
 
@@ -479,6 +506,7 @@ export async function processInboundMessage(args: {
           contextRows,
           history,
           aiMessageCount: outboundAiMessages.length,
+          mentionsDate: matchesDateIntent(latestInboundBody),
         });
       } catch (err) {
         console.error('[ai-reply] generation failed:', err);
@@ -616,19 +644,34 @@ async function sendBridgeAndEscalate(
   return { action, reason, outboundBody: bridgeText };
 }
 
+/**
+ * Whole-phrase match that works for Latin AND Cyrillic.
+ *
+ * `String.includes` was catastrophic here: "fee" matched "feel" and
+ * "feel free", "rate" matched "grateful"/"celebrate"/"corporate", "book"
+ * matched "Facebook", and Russian "сколько" ("how many") matched
+ * "сколько человек". Seven out of eight ordinary opening messages
+ * tripped the booking bridge, which sent a canned deferral and switched
+ * the AI off for that conversation permanently — half of Vero's threads
+ * ended up with ai_enabled=false from false positives alone.
+ *
+ * JS `\b` is ASCII-only, so it silently fails on Cyrillic. Unicode
+ * property escapes with lookaround give a real word boundary for both
+ * alphabets.
+ */
+function containsPhrase(haystack: string, phrase: string): boolean {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(haystack);
+}
+
 function matchesBookingIntent(text: string): boolean {
-  const lower = text.toLowerCase();
-  return BOOKING_INTENT_KEYWORDS.some((kw) => lower.includes(kw));
+  return BOOKING_INTENT_KEYWORDS.some((kw) => containsPhrase(text, kw));
 }
 
 function matchesDateIntent(text: string): boolean {
   return DATE_INTENT_PATTERNS.some((re) => re.test(text));
 }
 
-function matchesRecommendationIntent(text: string): boolean {
-  const lower = text.toLowerCase();
-  return RECOMMENDATION_INTENT_KEYWORDS.some((kw) => lower.includes(kw));
-}
 
 /**
  * Detects agency / solicitation / sales-pitch DMs. Bias toward
@@ -696,12 +739,23 @@ interface GenerateArgs {
   contextRows: ContextRow[];
   history: Message[];
   aiMessageCount: number;
+  /**
+   * Whether the message being replied to names a date. Dates used to be
+   * intercepted before generation ever ran; now they reach the model, so
+   * the "never confirm availability" rail is emphasized per-message
+   * rather than relying on a rule buried in a long prompt.
+   */
+  mentionsDate: boolean;
 }
 
 async function generateReply(args: GenerateArgs): Promise<string> {
   const client = getOpenAI();
 
-  const systemPrompt = buildSystemPrompt(args.contextRows, args.aiMessageCount);
+  const systemPrompt = buildSystemPrompt(
+    args.contextRows,
+    args.aiMessageCount,
+    args.mentionsDate,
+  );
 
   // Feed conversation history as alternating user/assistant messages.
   // 'contact' = user, 'ai' = assistant, 'human' = assistant too
@@ -728,7 +782,11 @@ async function generateReply(args: GenerateArgs): Promise<string> {
   return response.choices[0]?.message?.content?.trim() ?? '';
 }
 
-function buildSystemPrompt(contextRows: ContextRow[], aiMessageCount: number): string {
+function buildSystemPrompt(
+  contextRows: ContextRow[],
+  aiMessageCount: number,
+  mentionsDate: boolean,
+): string {
   // Group context rows by category for clean prompt structure.
   const byCategory = new Map<string, ContextRow[]>();
   for (const row of contextRows) {
@@ -773,6 +831,13 @@ function buildSystemPrompt(contextRows: ContextRow[], aiMessageCount: number): s
 Then, in the same message, briefly address whatever the customer actually asked. Don't re-introduce in subsequent replies.`
     : `On your FIRST reply of the conversation, introduce yourself briefly as "${assistantName}" (one sentence) and then address whatever the customer asked. Don't re-introduce in subsequent replies.`;
 
+  // The current message names a date. Dates used to be intercepted
+  // before the model ever ran; now they reach it, so the guardrail has
+  // to be loud at exactly the moment it matters.
+  const dateWarning = mentionsDate
+    ? ' **The message you are replying to mentions a specific date — this rule is live right now.**'
+    : '';
+
   return `You are ${assistantName} — an AI assistant helping Vero manage her Instagram inbox while she's shooting.
 
 ## WHO YOU ARE (never violate)
@@ -781,11 +846,11 @@ Then, in the same message, briefly address whatever the customer actually asked.
 - ${introGuidance}
 
 ## HARD BEHAVIORAL RULES (these are safety rails — never break them)
-1. **NEVER affirm, confirm, or acknowledge specific dates.** If a customer mentions a date, do not say "great!", "wonderful!", "sounds good!", "that works!", or anything implying Vero is available. The system will normally intercept date mentions before you see them; if one gets through, defer immediately.
-2. **NEVER quote prices, ranges, packages, or dollar figures.** The system handles pricing separately.
-3. **NEVER make style, session-type, or creative recommendations.** If asked "what do you suggest?" or "any ideas?" — defer: "Vero loves shaping session ideas personally — she'll follow up with some options based on what you're looking for." Style is her craft.
-4. **NEVER commit to availability, deliverables, or timing** beyond what's in the KNOWN FACTS below.
-5. When unsure, DEFER TO VERO. A short "let me pass this to Vero and she'll follow up personally" is always better than making things up or being creative.
+1. **NEVER confirm availability on a specific date.** If a customer names a date, acknowledge it as noted — never "great!", "that works!", "she's free" or anything implying it's held. Only Vero confirms dates.${dateWarning}
+2. **Pricing: give RANGES, never a firm quote.** You MAY share the figures in KNOWN FACTS below, always framed as a starting point or a range — "sessions typically start around X", "wedding coverage runs roughly X–Y". Then explain that the exact number depends on the specifics and ask for what's missing: number of people, location and travel distance, and how many hours of coverage. NEVER state a final total, and never invent a figure that isn't in KNOWN FACTS. If you have no relevant figure, say Vero will follow up with a quote.
+3. **You SHOULD be helpful and ask good questions.** Answer what you can from KNOWN FACTS, and gather what Vero will need — session type, guest count, rough location and travel, timeframe, the kind of look they're after. Suggesting options that appear in KNOWN FACTS is fine and encouraged. What you must NOT do is invent creative direction, promise a specific artistic outcome, or claim details that aren't written below.
+4. **NEVER commit to deliverables or timing** beyond what's in KNOWN FACTS.
+5. When you genuinely don't know, say so and hand off — but only after answering what you DO know. "Let me pass this to Vero" as a reply to a question you have the facts for is a failure, not a safe default.
 
 ## KNOWN FACTS (only cite these — never invent details)
 ${contextSections.join('\n\n')}
@@ -801,12 +866,12 @@ ${contextSections.join('\n\n')}
 
 ## STYLE GUIDE
 - ${websiteCtaHint}
-- If someone asks a general question you have a KNOWN FACT for → answer briefly + gather one relevant piece of info for Vero (like session type or general timeframe).
-- If someone asks anything you don't have a KNOWN FACT for → brief acknowledgment + "Vero will follow up personally on that."
-- Prefer to gather info FROM the customer rather than share info WITH them. Vero handles the actual conversation.
+- If someone asks a question you have a KNOWN FACT for → answer it, then ask ONE follow-up that moves things forward.
+- If someone asks something you have no KNOWN FACT for → brief acknowledgment + "Vero will follow up personally on that."
+- Answer AND gather. Do not withhold information you have in order to route the customer to Vero — she added those facts so they would get used.
 
 ## THE GOAL
-Your job is essentially triage: acknowledge the message warmly, gather info Vero will need (session type, general location, general timeframe as CONTEXT — not confirmed), then hand off to Vero. You're the friendly greeter, not the salesperson or planner.
+Be genuinely useful on the first reply, and leave Vero a warm lead with the details already collected. Answer what you can from KNOWN FACTS, give ranges rather than quotes, and gather the specifics a real quote depends on. You're a knowledgeable first responder — not a salesperson, and not a wall that forwards everything to Vero.
 
 Now respond to the most recent customer message.`;
 }
