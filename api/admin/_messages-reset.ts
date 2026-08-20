@@ -1,7 +1,13 @@
 /**
  * Admin: "Wipe conversation" — test-reset for a single conversation.
  *
- * Super-admin only. Destructive. Deletes ALL messages for the given
+ * Available to BOTH admin and super — Vero resets test conversations
+ * constantly while tuning the AI assistant, and gating this on super
+ * would mean asking Alex every time. (The handler has always used
+ * requireAdmin; this docblock said "super-admin only" and was simply
+ * wrong. The matching UI comment in AdminMessages.tsx has it right.)
+ *
+ * Destructive. Deletes ALL messages for the given
  * conversation and clears the summary cache + activity counters on the
  * conversation row itself, WITHOUT removing the conversation record.
  * The row (external_user_id, contact_name/handle/pic, ai_enabled, notes,

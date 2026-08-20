@@ -363,6 +363,20 @@ async function sendEmail(
     });
   }
 
+  // Log Resend's own tracking id alongside our SMTP Message-ID.
+  //
+  // These are different identifiers and only the Message-ID is stored
+  // (it's what threading needs). But when someone reports "I sent a
+  // reply and the client never got it", the only question that matters
+  // is what Resend did with it — and without the tracking id there is no
+  // way to look that up in their dashboard. Delivery can lag several
+  // minutes, so "hasn't arrived" and "failed" look identical from the
+  // panel; this line is what tells them apart.
+  console.log(
+    `[admin/messages-send] email accepted by Resend — to=${recipientEmail} ` +
+      `resend_id=${sendResult.resendId ?? 'unknown'} message_id=${preMessageId}`,
+  );
+
   return res.status(200).json({ success: true, message: inserted[0] });
 }
 
