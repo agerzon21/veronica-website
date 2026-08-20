@@ -23,17 +23,37 @@
  *   → 200 { success }
  *     Clears the thread. Useful if a conversation went sideways.
  *
- * Tool loop: OpenAI can call search_knowledge_base / upsert_knowledge
- * / delete_knowledge. We execute the tool, feed the result back,
- * loop until it stops calling tools and just returns a text reply.
- * Hard cap of 8 tool-call rounds per turn so a runaway loop can't
- * eat the function budget.
+ * Tool loop: OpenAI can call search_knowledge_base / upsert_knowledge /
+ * delete_knowledge to manage the customer-reply knowledge base, and
+ * list_conversations / read_thread / send_reply to help Vero answer an
+ * actual customer. We execute the tool, feed the result back, and loop
+ * until it stops calling tools. Hard cap of 8 rounds per turn so a
+ * runaway loop can't eat the function budget.
+ *
+ * Three things this assistant does, which are easy to conflate:
+ *
+ *   1. EDITS THE KNOWLEDGE BASE that the customer-facing reply engine
+ *      uses. Vero says "family sessions are $600 now" and it lands in
+ *      ai_context.
+ *   2. DRAFTS AND SENDS REPLIES on her behalf. This replaces her actual
+ *      habit of screenshotting a message into ChatGPT and copying the
+ *      answer back. Sending goes through api/_reply-delivery.ts — the
+ *      same path as the Messages panel's Send button — so threading,
+ *      signature and idempotency are identical. Requires explicit
+ *      approval: the model must pass confirmed=true, and is told never
+ *      to do that in the same turn it proposes a draft.
+ *   3. ANSWERS "HOW DO I…" QUESTIONS about the admin panel itself, from
+ *      ai_context rows with source='system'. Those are written by Alex,
+ *      are excluded from the customer-facing prompt (migration 018), and
+ *      are protected from edit/delete here — otherwise the assistant
+ *      could be talked into deleting its own documentation.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+import { deliverReply } from '../_reply-delivery.js';
 
 const MODEL = 'gpt-4o-mini';
 const MAX_TOOL_ROUNDS = 8;
@@ -138,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       category: string;
       label: string;
       content: string;
-      source: 'manual' | 'chatbot';
+      source: 'manual' | 'chatbot' | 'system';
       active: boolean;
       updated_at: string;
     }>;
@@ -330,6 +350,69 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_conversations',
+      description:
+        "List recent customer conversations from the unified inbox (Instagram DMs and email). Use this when Vero refers to a customer by name or asks about 'the conversation with X' and you need to find the right conversation_id. Returns the most recently active conversations first.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              "Optional case-insensitive substring to match against the contact's name, handle, or email address.",
+          },
+          limit: { type: 'number', description: 'How many to return. Default 15, max 40.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_thread',
+      description:
+        'Read the full message history of one conversation, oldest first, so you can draft a reply that actually responds to what the customer said. Always call this before drafting a reply.',
+      parameters: {
+        type: 'object',
+        properties: {
+          conversation_id: { type: 'string', description: 'UUID from list_conversations.' },
+        },
+        required: ['conversation_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_reply',
+      description:
+        "Send a reply to a customer on whichever channel the conversation uses (Instagram or email — handled automatically). ONLY call this after showing Vero the draft and getting her explicit approval in the chat. Never call it in the same turn you first propose a draft. The message is sent as Vero herself, not as the AI.",
+      parameters: {
+        type: 'object',
+        properties: {
+          conversation_id: { type: 'string', description: 'UUID of the conversation to reply in.' },
+          text: {
+            type: 'string',
+            description:
+              "The exact message to send, in the language the CUSTOMER writes in (not the admin chat language). For email, the signature is appended automatically — do not include one.",
+          },
+          confirmed: {
+            type: 'boolean',
+            description:
+              'Must be true. Set this only after Vero has seen this exact text and explicitly approved sending it.',
+          },
+          content_summary: {
+            type: 'string',
+            description: "Short summary for the toast, in the admin chat's language.",
+          },
+        },
+        required: ['conversation_id', 'text', 'confirmed', 'content_summary'],
+      },
+    },
+  },
 ];
 
 async function executeToolCall(
@@ -358,7 +441,7 @@ async function executeToolCall(
       label: string;
       content: string;
       active: boolean;
-      source: 'manual' | 'chatbot';
+      source: 'manual' | 'chatbot' | 'system';
       updated_at: string;
     }>;
     const filtered = all.filter((r) => {
@@ -387,6 +470,20 @@ async function executeToolCall(
     }
 
     if (providedId) {
+      // source='system' rows document how the admin panel works
+      // (migration 018). The assistant must not be able to rewrite its
+      // own instructions — it would do so cheerfully if Vero said
+      // something like "that's wrong, fix it", and the damage would only
+      // surface later as confidently wrong answers.
+      const [owner] = (await sql`
+        SELECT source FROM ai_context WHERE id = ${providedId}
+      `) as Array<{ source: string }>;
+      if (owner?.source === 'system') {
+        return {
+          error:
+            'That entry documents how the admin panel works and is maintained by Alex. Tell Vero it can\'t be edited here, and to message Alex if it looks wrong.',
+        };
+      }
       const updated = (await sql`
         UPDATE ai_context
         SET category = ${category}, label = ${label}, content = ${content},
@@ -443,6 +540,17 @@ async function executeToolCall(
 
   if (name === 'delete_knowledge') {
     const id = String(args.id ?? '').trim();
+    if (id) {
+      const [owner] = (await sql`
+        SELECT source FROM ai_context WHERE id = ${id}
+      `) as Array<{ source: string }>;
+      if (owner?.source === 'system') {
+        return {
+          error:
+            'That entry documents how the admin panel works and is maintained by Alex. It cannot be deleted here.',
+        };
+      }
+    }
     const contentSummary =
       String(args.content_summary ?? args.content_ru_summary ?? '').trim() || 'entry deleted';
     if (!id) return { error: 'id is required' };
@@ -458,6 +566,116 @@ async function executeToolCall(
       content_summary: contentSummary,
     });
     return { success: true, action: 'deleted', entry: deleted[0] };
+  }
+
+  // ── Reply co-pilot ────────────────────────────────────────────
+  //
+  // Replaces Veronika's actual workflow: screenshot the message, paste
+  // it into ChatGPT, ask for a reply, copy it back. She can now say
+  // "help me answer Sarah" and stay in one place.
+
+  if (name === 'list_conversations') {
+    const query = String(args.query ?? '').trim();
+    const rawLimit = Number(args.limit);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 40) : 15;
+    const like = `%${query}%`;
+
+    const rows = (await sql`
+      SELECT c.id, c.platform, c.contact_name, c.contact_handle, c.external_user_id,
+             c.ai_enabled, c.unread_count, c.last_message_at,
+             last_msg.body AS last_body, last_msg.direction AS last_direction
+      FROM conversations c
+      LEFT JOIN LATERAL (
+        SELECT body, direction FROM messages m
+        WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1
+      ) last_msg ON TRUE
+      WHERE ${query === ''}
+         OR c.contact_name ILIKE ${like}
+         OR c.contact_handle ILIKE ${like}
+         OR c.external_user_id ILIKE ${like}
+      ORDER BY c.last_message_at DESC NULLS LAST
+      LIMIT ${limit}
+    `) as Array<Record<string, unknown>>;
+
+    return {
+      conversations: rows.map((r) => ({
+        conversation_id: r.id,
+        channel: r.platform,
+        name: r.contact_name ?? r.contact_handle ?? r.external_user_id,
+        unread: r.unread_count,
+        last_message_at: r.last_message_at,
+        // Truncated: the model only needs enough to pick the right
+        // thread. read_thread gives it the full history.
+        last_message: typeof r.last_body === 'string' ? r.last_body.slice(0, 160) : null,
+        last_message_from: r.last_direction === 'inbound' ? 'customer' : 'us',
+      })),
+    };
+  }
+
+  if (name === 'read_thread') {
+    const conversationId = String(args.conversation_id ?? '').trim();
+    if (!conversationId) return { error: 'conversation_id is required' };
+
+    const [convo] = (await sql`
+      SELECT platform, contact_name, contact_handle, external_user_id, ai_enabled
+      FROM conversations WHERE id = ${conversationId} LIMIT 1
+    `) as Array<Record<string, unknown>>;
+    if (!convo) return { error: 'No conversation with that id' };
+
+    const msgs = (await sql`
+      SELECT direction, sender, channel, body, subject, sent_at
+      FROM messages WHERE conversation_id = ${conversationId}
+      ORDER BY sent_at ASC LIMIT 40
+    `) as Array<Record<string, unknown>>;
+
+    return {
+      channel: convo.platform,
+      name: convo.contact_name ?? convo.contact_handle ?? convo.external_user_id,
+      ai_enabled: convo.ai_enabled,
+      messages: msgs.map((m) => ({
+        from: m.direction === 'inbound' ? 'customer' : m.sender === 'ai' ? 'ai' : 'vero',
+        channel: m.channel,
+        subject: m.subject ?? undefined,
+        text: m.body,
+        sent_at: m.sent_at,
+      })),
+    };
+  }
+
+  if (name === 'send_reply') {
+    const conversationId = String(args.conversation_id ?? '').trim();
+    const text = String(args.text ?? '').trim();
+    const contentSummary = String(args.content_summary ?? '').trim() || 'reply sent';
+    if (!conversationId || !text) {
+      return { error: 'conversation_id and text are required' };
+    }
+    // Structural speed bump on top of the prompt instruction. The model
+    // has to affirmatively assert approval, which makes an accidental
+    // send take a deliberate step rather than a plausible next token.
+    if (args.confirmed !== true) {
+      return {
+        error:
+          'Not sent. Show Vero the draft and get her explicit approval first, then call again with confirmed=true.',
+      };
+    }
+
+    // Goes through the SAME path as the Messages panel's Send button —
+    // threading headers, signature, persist-before-send ordering and
+    // channel dispatch all included. See api/_reply-delivery.ts.
+    const result = await deliverReply(sql, conversationId, text);
+    if (!result.ok) {
+      return { error: result.error ?? 'Send failed' };
+    }
+    console.log(
+      `[assistant-chat] sent reply via co-pilot to conversation=${conversationId}`,
+    );
+    dbWrites.push({
+      type: 'created',
+      category: 'reply',
+      label: 'Reply sent',
+      content_summary: contentSummary,
+    });
+    return { success: true, sent: true, message_id: result.message?.id ?? null };
   }
 
   return { error: `Unknown tool: ${name}` };
@@ -496,7 +714,7 @@ function buildSystemPrompt(
     category: string;
     label: string;
     content: string;
-    source: 'manual' | 'chatbot';
+    source: 'manual' | 'chatbot' | 'system';
     active: boolean;
   }>,
   language: ChatLanguage,
@@ -504,12 +722,30 @@ function buildSystemPrompt(
   // Group by category for readable rendering. Include ID so the
   // model can pass it to upsert_knowledge for updates without
   // needing an extra search call.
+  // Two different kinds of knowledge live in this table and must be
+  // rendered separately. source='system' rows document how the ADMIN
+  // PANEL works (migration 018) — they answer Vero's "how do I…"
+  // questions. Everything else is business knowledge that drives the
+  // customer-facing reply engine. Mixing them in one list made the model
+  // treat panel documentation as something to quote at customers.
   const byCategory = new Map<string, typeof contextRows>();
+  const systemRows: typeof contextRows = [];
   for (const row of contextRows) {
     if (!row.active) continue;
+    if (row.source === 'system') {
+      systemRows.push(row);
+      continue;
+    }
     if (!byCategory.has(row.category)) byCategory.set(row.category, []);
     byCategory.get(row.category)!.push(row);
   }
+
+  const systemKnowledge =
+    systemRows.length === 0
+      ? '(Not loaded yet.)'
+      : systemRows
+          .map((r) => `- **${r.label}**: ${r.content}`)
+          .join('\n');
   const knowledgeSummary =
     byCategory.size === 0
       ? '(No entries yet — the knowledge base is empty. Feel free to help Vero populate it.)'
@@ -552,6 +788,24 @@ Help Vero read, review, and shape the customer-reply knowledge base (the ai_cont
 Below is everything currently in the customer-reply knowledge base. Read it as raw data — DO NOT quote it as if it were your own greeting or your own voice. Entries under the "identity" category describe how the CUSTOMER-FACING bot introduces itself to CUSTOMERS — those are NOT how you introduce yourself to Vero. When you're greeting Vero, you're greeting her personally as her internal assistant, not reciting a template from this table.
 
 ${knowledgeSummary}
+
+## HELPING VERO ANSWER CUSTOMERS (reply co-pilot)
+She can ask you to help her reply to someone — "help me answer Sarah", "draft a reply to that wedding inquiry". When she does:
+1. Use list_conversations to find the thread (she'll refer to people by name, not id).
+2. Use read_thread to read what was actually said. NEVER draft from the name alone.
+3. Write the draft IN THE CHAT and show it to her. Write it in the language the CUSTOMER uses, even if you and Vero are talking in another language.
+4. Wait. Do NOT call send_reply in the same turn you first show a draft.
+5. Only after she approves ("yes", "send it", "да, отправь") call send_reply with confirmed=true and the exact approved text.
+If she asks for changes, revise and show it again. It goes out as Vero herself, on whatever channel the conversation uses — you don't need to think about Instagram vs email, that's handled.
+
+## HOW THE ADMIN PANEL WORKS (answer her questions from this)
+Vero will ask you how to DO things — "I finished a gallery, how do I give the client access?", "how do I add a photo to the site?". Answer from the facts below. These are maintained by Alex and you cannot edit or delete them; if she says one is wrong, tell her to message Alex rather than trying to change it.
+
+If something is BROKEN rather than just unfamiliar — the site is down, emails aren't arriving, Instagram messages stopped — that's Alex's, not something she should try to fix. Say so directly, and tell her what to send him so he can diagnose it quickly.
+
+If the answer genuinely isn't below, say you don't know and suggest she ask Alex. Do NOT guess at steps — a confident wrong instruction wastes her time and makes her stop trusting you.
+
+${systemKnowledge}
 
 ## STYLE
 - Warm and casual, like a smart friend who happens to run the business's systems.

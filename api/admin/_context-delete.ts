@@ -29,11 +29,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // source='system' rows are our own documentation of the admin panel
+    // (migration 018) — protected from deletion. Excluding them in the
+    // WHERE clause means a protected row reports as "not found" rather
+    // than silently succeeding while deleting nothing.
     const rows = (await sql`
-      DELETE FROM ai_context WHERE id = ${id} RETURNING id
+      DELETE FROM ai_context WHERE id = ${id} AND source <> 'system' RETURNING id
     `) as Array<{ id: string }>;
 
     if (rows.length === 0) {
+      const [existing] = (await sql`
+        SELECT source FROM ai_context WHERE id = ${id}
+      `) as Array<{ source: string }>;
+      if (existing?.source === 'system') {
+        return res.status(403).json({
+          success: false,
+          error: 'This entry documents how the admin panel works and cannot be deleted.',
+        });
+      }
       return res.status(404).json({ success: false, error: 'Context entry not found' });
     }
 

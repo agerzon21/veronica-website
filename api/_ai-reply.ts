@@ -492,10 +492,17 @@ export async function processInboundMessage(args: {
       }
 
       // ── 11. Load ai_context for the system prompt ─────────────
+      //
+      // EXCLUDES source='system'. Those rows document how the admin
+      // panel works — they exist so Veronika can ask the in-panel
+      // assistant "how do I give a client gallery access?". They are
+      // not facts about the photography business, and a customer
+      // asking about wedding coverage must never be told how to use
+      // the Journal panel. See migration 018.
       const contextRows = (await sql`
         SELECT category, label, content
         FROM ai_context
-        WHERE active = TRUE
+        WHERE active = TRUE AND source <> 'system'
         ORDER BY category, sort_order
       `) as Array<ContextRow>;
 
