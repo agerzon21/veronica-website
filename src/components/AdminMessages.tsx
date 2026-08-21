@@ -6,7 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib, FaCheckCircle,
+  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib, FaCheckCircle, FaTrash,
   FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaEraser,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -874,6 +874,8 @@ function ConversationView({
   // destructive flows in this pane so the copy + confirm are specific.
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
@@ -1046,6 +1048,43 @@ function ConversationView({
   // so the next inbound DM from the same account lands right back here
   // and the AI reads a truly-fresh thread. Alex uses this to test the
   // assistant as if the customer just messaged for the first time.
+  // Remove the conversation entirely. The eraser beside this only wipes
+  // MESSAGES and keeps the row — deliberate, so a re-test lands back in
+  // the same thread — but that leaves dead empty rows in the inbox with
+  // no way to clear them. This is the way out.
+  const doDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch('/api/admin/messages-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, conversationId: summary.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({ title: t.messages.deleted, status: 'success', duration: 3000 });
+        setDeleteConfirmOpen(false);
+        // The thread we're looking at no longer exists — go back to the
+        // list before refreshing it, or the detail pane renders a 404.
+        // onBack is optional (desktop passes nothing; SelectPrompt takes
+        // over there once the list no longer contains this id).
+        onBack?.();
+        onRefreshList();
+      } else {
+        toast({
+          title: data.error || t.messages.deleteFailed,
+          status: 'error',
+          duration: 4000,
+          isClosable: true,
+        });
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const doReset = async () => {
     setResetLoading(true);
     try {
@@ -1406,6 +1445,26 @@ function ConversationView({
                 heavily to reset test conversations while she's tuning
                 the AI assistant (she wants a clean slate without
                 needing a second IG test account). */}
+            {/* Delete beside the eraser. Two destructive controls sit
+                together, so they are visually distinct and separately
+                labelled: ERASER wipes the messages but keeps the thread
+                (so a re-test lands back in it), TRASH removes the thread
+                entirely. Without the second one, every reset left a dead
+                empty row in the inbox permanently. */}
+            <IconButton
+              aria-label={t.messages.deleteConversation}
+              title={t.messages.deleteConversation}
+              icon={<Icon as={FaTrash} boxSize={3.5} />}
+              onClick={() => setDeleteConfirmOpen(true)}
+              variant="ghost"
+              size="md"
+              w="36px"
+              h="36px"
+              minW="36px"
+              color="red.500"
+              _hover={{ bg: 'red.50' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            />
             <IconButton
               aria-label={t.messages.resetConversation}
               title={t.messages.resetConversationTooltip}
@@ -1472,6 +1531,20 @@ function ConversationView({
         isLoading={resetLoading}
         onConfirm={doReset}
         onCancel={() => setResetConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title={t.messages.deleteConfirmTitle}
+        // Names the contact and the message count for the same reason the
+        // reset dialog does: this is destructive, admin-level, and one tap
+        // away in the header.
+        body={t.messages.deleteConfirmBody(displayName, messages.length)}
+        confirmLabel={t.messages.deleteConfirmButton}
+        danger
+        isLoading={deleteLoading}
+        onConfirm={doDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
       />
 
       {/* Create-client modal — prefills from IG contact + AI summary */}

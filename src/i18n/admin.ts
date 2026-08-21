@@ -323,6 +323,19 @@ const dict = {
     senderForm: { en: 'Contact form', ru: 'Форма на сайте' },
     senderEmail: { en: 'Email', ru: 'Письмо' },
 
+    // ── Delete a conversation ────────────────────────────────────
+    deleteConversation: { en: 'Delete conversation', ru: 'Удалить диалог' },
+    deleteConfirmTitle: { en: 'Delete this conversation?', ru: 'Удалить этот диалог?' },
+    deleteConfirmBody: {
+      en: (name: string, n: number) =>
+        `This permanently removes the conversation with ${name} and its ${n} message${n === 1 ? '' : 's'}. If they were a contact-form lead, the lead record itself is kept. This cannot be undone.`,
+      ru: (name: string, n: number) =>
+        `Диалог с ${name} и ${n} сообщени${n === 1 ? 'е' : 'й'} будут удалены навсегда. Если это была заявка с сайта, сама заявка сохранится. Отменить нельзя.`,
+    },
+    deleteConfirmButton: { en: 'Delete', ru: 'Удалить' },
+    deleted: { en: 'Conversation deleted', ru: 'Диалог удалён' },
+    deleteFailed: { en: 'Could not delete', ru: 'Не удалось удалить' },
+
     // ── Email delivery state ─────────────────────────────────────
     deliverySent: { en: 'Sent', ru: 'Отправлено' },
     deliveryDelivered: { en: 'Delivered', ru: 'Доставлено' },
