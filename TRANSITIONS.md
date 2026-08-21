@@ -79,9 +79,12 @@ needs zero DNS changes and keeps Gmail as an independent fallback.
 - [x] `api/_email-signature.ts` + `api/admin/_messages-settings.ts` — signature in
       `system_state`, editable from the Messages header
 - [x] Reply flow via Resend, From and Reply-To both `vero@vero.photography`
-- [ ] **017b — drop the `channel` default.** Run after this deploy is verified.
-- [ ] Configure the ImprovMX alias to append the webhook URL
-- [ ] Verify `In-Reply-To` is present in ImprovMX's real payload (undocumented)
+- [x] **017b — drop the `channel` default.** Applied and verified.
+- [x] Configure the ImprovMX alias to append the webhook URL — live and delivering.
+- [x] Verify `In-Reply-To` is present in ImprovMX's real payload — YES. 5 of 8
+      real inbound emails carried it (the 3 without are thread openers, which
+      correctly have no parent). Threading has a real anchor, not just the
+      sender-address fallback.
 - [ ] `_messages-list.ts` does not expose `channel` — no "from the form" hint in
       the conversation rail until you open the thread
 - [ ] Strip web3forms metadata from quoted history
@@ -207,7 +210,7 @@ priority:
 ## Pending human tasks
 
 - [ ] Add passkey/authenticator app to vero@vero.photography Google account (Google pushing away from SMS-only auth in 2026)
-- [ ] Upgrade Resend to Pro ($20/mo) — needed before Phase 4
+- [x] ~~Upgrade Resend to Pro~~ — not needed; ImprovMX webhooks cover inbound.
 - [ ] Decide which other domains to add to Resend (gerz.dev? spysocial.app?)
 
 ## Decisions logged
