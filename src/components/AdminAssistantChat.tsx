@@ -1,10 +1,11 @@
 import {
   Box, Flex, Text, HStack, VStack, Textarea, Icon, Spinner, IconButton,
+  Menu, MenuButton, MenuList, MenuItem, MenuDivider,
   useToast, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  FaPaperPlane, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb,
+  FaPaperPlane, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb, FaChevronDown,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import VoiceInput from './ui/VoiceInput';
@@ -76,6 +77,8 @@ interface Strings {
   emptyTitle: string;
   emptyDescription: string;
   suggestedPrompts: string[];
+  quickActionsLabel: string;
+  quickActions: Array<{ label: string; prompt: string }>;
   toastLabels: { created: string; updated: string; deleted: string };
   errorReply: (detail: string) => string;
   serverUnreachable: string;
@@ -105,6 +108,29 @@ const STRINGS: Record<ChatLanguage, Strings> = {
       'Добавь новую услугу: семейная фотосессия в студии за $400',
       'Ответы AI слишком формальные — сделай их теплее',
     ],
+    quickActionsLabel: 'С чем помочь?',
+    quickActions: [
+      {
+        label: 'Помоги ответить клиенту',
+        prompt: 'Помоги мне ответить на одно из моих сообщений. Покажи последние несколько диалогов, и я выберу.',
+      },
+      {
+        label: 'Что ждёт моего ответа?',
+        prompt: 'Какие диалоги ждут моего ответа прямо сейчас? Покажи коротко, что там происходит.',
+      },
+      {
+        label: 'Вопрос по админке или сайту',
+        prompt: 'У меня вопрос по админ-панели: ',
+      },
+      {
+        label: 'Изменить, как AI отвечает клиентам',
+        prompt: 'Хочу поменять то, как AI отвечает клиентам. Вот что мне не нравится: ',
+      },
+      {
+        label: 'Добавить или обновить информацию',
+        prompt: 'Запиши, пожалуйста: ',
+      },
+    ],
     toastLabels: { created: 'Записал', updated: 'Обновил', deleted: 'Удалил' },
     errorReply: (detail) => `(Что-то пошло не так: ${detail})`,
     serverUnreachable: '(Не удалось связаться с сервером.)',
@@ -131,6 +157,29 @@ const STRINGS: Record<ChatLanguage, Strings> = {
       'Tell me about my client communication style',
       'Add a new service: family studio session for $400',
       'The AI replies feel too formal — make them warmer',
+    ],
+    quickActionsLabel: 'What do you need?',
+    quickActions: [
+      {
+        label: 'Help me reply to a customer',
+        prompt: 'Help me reply to one of my conversations. Show me the last few and I\'ll pick one.',
+      },
+      {
+        label: "What's waiting on me?",
+        prompt: 'Which conversations are waiting on my reply right now? Give me a short rundown.',
+      },
+      {
+        label: 'Question about the panel or site',
+        prompt: 'I have a question about the admin panel: ',
+      },
+      {
+        label: 'Change how the AI replies',
+        prompt: "I want to change how the AI replies to customers. Here's what I don't like: ",
+      },
+      {
+        label: 'Add or update something you know',
+        prompt: 'Please make a note of this: ',
+      },
     ],
     toastLabels: { created: 'Saved', updated: 'Updated', deleted: 'Deleted' },
     errorReply: (detail) => `(Something went wrong: ${detail})`,
@@ -433,8 +482,60 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
           crushed to ~230px alongside the mic + send buttons. Mic is
           rendered as icon-only always; Send is icon-only on mobile
           (to keep the row balanced) and CTA-labeled on desktop. */}
+      {/* Quick actions.
+          The suggestion chips only ever appeared on the empty state, so
+          the moment Vero sent one message they were gone — and the thing
+          she most needs ("help me answer this person") is exactly what
+          she'd reach for mid-conversation. This menu stays put.
+          Each entry just prefills the composer rather than sending, so
+          she can add the customer's name or her own notes before hitting
+          send. The trailing-space prompts are deliberately unfinished
+          sentences for that reason. */}
+      <Box mt={3}>
+        <Menu placement="top-start" autoSelect={false}>
+          <MenuButton
+            as={Box}
+            role="button"
+            display="inline-flex"
+            alignItems="center"
+            gap={1.5}
+            cursor="pointer"
+            fontSize="xs"
+            fontWeight="500"
+            color="gray.600"
+            bg="white"
+            border="1px solid"
+            borderColor="gray.200"
+            borderRadius="full"
+            px={3}
+            py={1.5}
+            minH="32px"
+            _hover={{ borderColor: '#c9a96e', color: '#8a6e35' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            <Icon as={FaRegLightbulb} boxSize={3} />
+            {t.quickActionsLabel}
+            <Icon as={FaChevronDown} boxSize={2.5} />
+          </MenuButton>
+          <MenuList fontSize="sm" minW="280px" zIndex={20}>
+            {t.quickActions.map((a, i) => (
+              <Box key={a.label}>
+                {i === 2 && <MenuDivider />}
+                <MenuItem
+                  onClick={() => setInput(a.prompt)}
+                  _hover={{ bg: '#fdf9f0' }}
+                  _focus={{ bg: '#fdf9f0' }}
+                >
+                  {a.label}
+                </MenuItem>
+              </Box>
+            ))}
+          </MenuList>
+        </Menu>
+      </Box>
+
       <Box
-        mt={3}
+        mt={2}
         // Safe-area padding so the composer clears the iOS home
         // indicator when this pane goes edge-to-edge.
         pb={{ base: 'max(env(safe-area-inset-bottom), 0px)', md: 0 }}
