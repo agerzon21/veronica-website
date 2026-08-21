@@ -141,10 +141,36 @@ do I add a photo to the gallery?") instead of messaging Alex.
 - [ ] Email policy: always draft, never auto-send
 - [ ] Spam classification
 
-### Phase 6: Reviews auto-ingest — planned (depends on Phase 4)
-- [ ] Detect Yelp + Google review notification emails in inbox
-- [ ] Parse review content from email body
-- [ ] Auto-create draft entries in Reviews tab for Vero to approve
+### Phase 6: Reviews auto-ingest — STARTED 2026-08-20
+
+Unblocked now that Phase 4 has landed. The prerequisites were already done
+(vero@ Google account, GBP manager access, review notifications enabled) —
+the notification emails have been arriving all along.
+
+- [x] **Stop discarding them.** The auto-responder filter added with the email
+      inbox drops `Precedence: bulk` / `Auto-Submitted: auto-generated`, which
+      is exactly what Google Business Profile and Yelp notifications carry —
+      so every review email was being received and thrown away. Now allowlisted
+      by sender domain AND a review-ish subject (a bare domain allowlist would
+      also pull in Google security alerts and Workspace billing).
+- [ ] **Capture a real notification** and write the parser against its actual
+      body. Deliberately not guessing at Google's HTML — that parser only gets
+      one chance to be right and there is no way to test it without a sample.
+- [ ] Parse reviewer name, star rating, review text
+- [ ] Auto-create the review as a DRAFT (`visible=false`) for Vero to approve,
+      same pattern as the gallery sync
+- [ ] Route review notifications out of the Messages inbox — they should not
+      sit there looking like client conversations. Same work as collapsing
+      promotional mail.
+
+**Known limitation to verify with the first real sample:** Google's email may
+carry only a snippet of the review rather than the full text. If so the draft
+gets name + rating + partial text and Vero pastes the rest — still far better
+than typing it from scratch, but not hands-off.
+
+**Not in scope:** the "5.0 · 16 reviews" Google Aggregate card stays MANUAL.
+That was a logged decision — the Places API needs a Cloud project, billing
+card and per-SKU quota policing for two numbers that change monthly.
 
 ## Near-term security/quality fixes (parallel to phases above)
 
