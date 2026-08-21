@@ -1159,6 +1159,56 @@ function ConversationView({
     }
   };
 
+  // Re-send a message that bounced.
+  //
+  // Goes back through the normal send path rather than "un-bouncing" the
+  // old row: it creates a fresh attempt with its own delivery tracking,
+  // so the thread honestly shows one failed and one successful send
+  // rather than a row that silently changes its mind.
+  //
+  // Translation is skipped — the stored body is already in the
+  // customer's language (it was translated on the first attempt), and
+  // running it through again would translate a translation. The
+  // signature is already on the stored text and appendSignatureText is
+  // idempotent, so it isn't doubled.
+  const handleRetrySend = async (text: string) => {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch('/api/admin/messages-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          conversationId: summary.id,
+          text,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await loadDetail();
+        onRefreshList();
+      } else {
+        toast({
+          title: data.error || t.messages.sendFailed,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    } catch {
+      await loadDetail();
+      toast({
+        title: t.common.couldNotReach,
+        description: t.messages.sendFailedCheckThread,
+        status: 'warning',
+        duration: 8000,
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleSend = async () => {
     const raw = replyText.trim();
     if (!raw) return;
@@ -1773,7 +1823,13 @@ function ConversationView({
             // It surfaces in the banner above the composer instead.
             .filter((m) => m.status !== 'draft')
             .map((m) => (
-              <MessageBubble key={m.id} msg={m} adminPassword={adminPassword} />
+              <MessageBubble
+                key={m.id}
+                msg={m}
+                adminPassword={adminPassword}
+                onRetry={handleRetrySend}
+                retrying={sending}
+              />
             ))}
         </VStack>
       </Box>
@@ -1967,7 +2023,15 @@ function ConversationView({
  */
 const DELIVERY_TERMINAL = ['delivered', 'bounced', 'complained', 'failed', 'canceled'];
 
-function DeliveryBadge({ state }: { state: string | null | undefined }) {
+function DeliveryBadge({
+  state,
+  onRetry,
+  retrying,
+}: {
+  state: string | null | undefined;
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
   const { t } = useAdminLang();
   if (!state) return null;
 
@@ -2005,11 +2069,43 @@ function DeliveryBadge({ state }: { state: string | null | undefined }) {
           ? t.messages.deliveryDelivered
           : t.messages.deliverySent}
       </Text>
+      {/* Retry only on failure, and only because the common bounce here
+          is TRANSIENT — a busy or filtering receiver, or a shared
+          sending IP briefly on a blocklist. Those clear on their own,
+          so a second attempt genuinely works. Re-sends the same text
+          through the normal send path, so it picks up whatever IP the
+          pool hands out next. */}
+      {failed && onRetry && (
+        <Box
+          as="button"
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          ml={1}
+          fontSize="2xs"
+          fontWeight="500"
+          color="#8a6e35"
+          textDecoration="underline"
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          {retrying ? t.common.sending : t.messages.deliveryBouncedRetry}
+        </Box>
+      )}
     </Flex>
   );
 }
 
-function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: string }) {
+function MessageBubble({
+  msg,
+  adminPassword,
+  onRetry,
+  retrying,
+}: {
+  msg: Message;
+  adminPassword: string;
+  onRetry?: (text: string) => void;
+  retrying?: boolean;
+}) {
   const { t, lang } = useAdminLang();
   const isInbound = msg.direction === 'inbound';
   const isAi = msg.sender === 'ai';
@@ -2194,7 +2290,11 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
         {/* Outbound email only — Instagram doesn't need it and inbound
             has nothing to report. */}
         {!isInbound && msg.channel === 'email' && (
-          <DeliveryBadge state={msg.delivery_state} />
+          <DeliveryBadge
+            state={msg.delivery_state}
+            retrying={retrying}
+            onRetry={onRetry ? () => onRetry(msg.body) : undefined}
+          />
         )}
       </Box>
     </Flex>
