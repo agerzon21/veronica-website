@@ -340,10 +340,11 @@ const dict = {
     deliverySent: { en: 'Sent', ru: 'Отправлено' },
     deliveryDelivered: { en: 'Delivered', ru: 'Доставлено' },
     deliveryBounced: { en: "Didn't arrive", ru: 'Не доставлено' },
+    deliveryBouncedRetry: { en: 'Try again', ru: 'Отправить ещё раз' },
     deliveryPending: { en: 'Sending…', ru: 'Отправляется…' },
     deliveryBouncedHelp: {
-      en: 'This never reached them — their mail server refused it. Could be a wrong address, a full mailbox, or their spam filter. Check the address is right; if it is, reach them another way rather than resending.',
-      ru: 'Письмо не дошло — почтовый сервер получателя его отклонил. Возможно, неверный адрес, переполненный ящик или спам-фильтр. Проверь адрес; если он верный — свяжись другим способом, а не отправляй повторно.',
+      en: "This didn't reach them — their mail server turned it away. That's often temporary (their server was busy or filtering), so trying again later usually works. If it keeps failing, check the address is right and reach them another way.",
+      ru: 'Письмо не дошло — сервер получателя его отклонил. Часто это временно (сервер был занят или сработал фильтр), поэтому повторная отправка обычно срабатывает. Если не проходит снова — проверь адрес и свяжись другим способом.',
     },
     sendFailedCheckThread: {
       en: "If your message isn't in the thread, it didn't send. Refresh before sending again.",
