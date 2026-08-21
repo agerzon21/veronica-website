@@ -323,6 +323,23 @@ const dict = {
     senderForm: { en: 'Contact form', ru: 'Форма на сайте' },
     senderEmail: { en: 'Email', ru: 'Письмо' },
 
+    // ── AI draft awaiting review (email only) ────────────────────
+    draftTitle: { en: 'AI wrote a reply', ru: 'AI написал ответ' },
+    draftHelp: {
+      en: "It hasn't been sent. Edit it below if you want, then send — or discard it.",
+      ru: 'Оно не отправлено. Отредактируй ниже, если нужно, потом отправь — или удали.',
+    },
+    draftUse: { en: 'Use this draft', ru: 'Взять черновик' },
+    draftDiscard: { en: 'Discard', ru: 'Удалить' },
+    draftDiscarded: { en: 'Draft discarded', ru: 'Черновик удалён' },
+
+    // ── Promotional / unrelated threads ──────────────────────────
+    showPromotional: {
+      en: (n: number) => `Show ${n} promotional`,
+      ru: (n: number) => `Показать рекламные (${n})`,
+    },
+    hidePromotional: { en: 'Hide promotional', ru: 'Скрыть рекламные' },
+
     // ── Signature editor ─────────────────────────────────────────
     signatureTitle: { en: 'Email signature', ru: 'Подпись в письмах' },
     signatureEdit: { en: 'Edit email signature', ru: 'Изменить подпись' },

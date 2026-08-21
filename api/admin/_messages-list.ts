@@ -35,6 +35,10 @@ interface ConversationRow {
   last_message_body: string | null;
   last_message_direction: 'inbound' | 'outbound' | null;
   last_message_sender: 'contact' | 'ai' | 'human' | null;
+  // Cached AI triage verdict, if a summary has been generated. Used by
+  // the inbox to fold promotional / unrelated mail out of the way.
+  classification: string | null;
+  has_draft: boolean;
 }
 
 const PREVIEW_MAX_CHARS = 120;
@@ -72,7 +76,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         cp.client_display_name AS linked_client_display_name,
         last_msg.body      AS last_message_body,
         last_msg.direction AS last_message_direction,
-        last_msg.sender    AS last_message_sender
+        last_msg.sender    AS last_message_sender,
+        c.summary_json->>'classification' AS classification,
+        EXISTS (
+          SELECT 1 FROM messages d
+          WHERE d.conversation_id = c.id AND d.status = 'draft'
+        ) AS has_draft
       FROM conversations c
       LEFT JOIN client_portals cp ON cp.id = c.linked_client_portal_id
       LEFT JOIN LATERAL (
@@ -104,6 +113,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         created_at: r.created_at,
         last_message_direction: r.last_message_direction,
         last_message_sender: r.last_message_sender,
+        classification: r.classification,
+        has_draft: r.has_draft,
         // Truncate the preview so the inbox rail stays tidy. Full
         // body is fetched via messages-detail when Vero opens the
         // conversation.

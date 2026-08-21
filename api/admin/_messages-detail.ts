@@ -48,6 +48,9 @@ interface MessageRow {
   // How the message arrived, distinct from the conversation's platform
   // (which is how we reply). 'form' for contact-form submissions.
   channel: string;
+  // 'sent' | 'draft' | 'failed' — a draft is an AI reply awaiting
+  // Vero's approval, never delivered. See migration 019.
+  status: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -89,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SELECT
         id, direction, sender, body,
         external_message_id, sent_at, ai_model,
-        subject, in_reply_to, channel
+        subject, in_reply_to, channel, status
       FROM messages
       WHERE conversation_id = ${conversationId}
       ORDER BY sent_at ASC

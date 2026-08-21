@@ -99,47 +99,40 @@ quotas shared across tenants, bounce-on-overage, 30/100 domain caps, unsigned
 webhooks). Preferred onboarding is registering the customer's domain for them
 (Porkbun API, `.photography` ≈ $29/yr) so they do zero DNS work.
 
-### Phase 5: Assistant upgrade — NEXT UP (priority set 2026-08-19)
+### Phase 5: Assistant upgrade — DONE 2026-08-20
 
-Two capabilities, both EXTENSIONS of the existing Assistant tab
-(`api/admin/_assistant-chat.ts`), which already runs an OpenAI tool loop
-against `ai_context`. Not new subsystems.
+All three parts shipped. Built on the existing Assistant tool loop rather than
+as new subsystems.
 
-**5a — Reply co-pilot.** Replaces Vero's current workflow of screenshotting an
-email, pasting it into ChatGPT, and copying the answer back. She should be able
-to say, in the admin chat: *"for the conversation with so-and-so, help me draft
-a reply — here's what I want to say."*
+- [x] **5a — Reply co-pilot.** `list_conversations` / `read_thread` /
+      `send_reply` on the assistant. Replaces Vero's screenshot-into-ChatGPT
+      loop. Sending goes through `api/_reply-delivery.ts`, extracted from
+      `_messages-send.ts` so the Send button and the assistant are ONE
+      implementation (threading chain, signature, persist-before-send). Requires
+      `confirmed=true`, and the model is told never to set it in the turn it
+      first proposes a draft.
+- [x] **5b — System knowledge.** 32 entries seeded from the codebase and
+      adversarially verified against it (27 needed correcting). Migration 018
+      adds `source='system'`; excluded from the customer-facing prompt and
+      protected from edit/delete in the Context tab AND in the assistant's own
+      tools — it has a delete tool and would otherwise erase its own docs.
+- [x] **5c — AI on email.** `_email-webhook.ts` now invokes the reply engine
+      (ack-first + waitUntil, same as IG). On email the engine **drafts and
+      stops** — migration 019 adds `messages.status`. Vero sees the draft above
+      the composer, uses or discards it. Every guardrail applies unchanged.
+      Drafts are excluded from the dedup and rate-limit gates, or one unactioned
+      draft would silence the thread forever.
+- [x] **Promotional collapse.** Threads classified `spam-or-unrelated` fold
+      behind a "Show N promotional" toggle. Classified and stored, never
+      filtered at ingest — a misclassification costs a click, not a client.
 
-- [ ] New tools on the existing loop: `list_conversations`, `read_thread`,
-      `draft_reply`, `send_reply`
-- [ ] `send_reply` reuses `api/admin/_messages-send.ts`, which already dispatches
-      by platform — so the same flow works for email and Instagram with no
-      channel-specific code in the assistant
-- [ ] Draft-then-approve: output the draft in chat; only send on explicit approval
-- [ ] Auto-reply on NEW inbound (email + form) stays separate — that's the
-      `_ai-reply.ts` pipeline, see 5c
-
-**5b — Developer/system knowledge, non-deletable.** So Vero can ask the panel how
-the panel works ("I finished a gallery, how do I give the client access?", "how
-do I add a photo to the gallery?") instead of messaging Alex.
-
-- [ ] **Schema:** `ai_context` is fully CRUD-able today — by Vero via the Context
-      tab AND by the assistant's own `delete_knowledge` tool. Add
-      `source TEXT NOT NULL DEFAULT 'vero'` (`'vero' | 'system'`); `context-update`,
-      `context-delete`, and the assistant's delete/upsert tools must REFUSE on
-      `source='system'`. Without this the assistant can erase its own docs.
-- [ ] Seed system entries from what we actually know: gallery workflow
-      (CLAUDE.md), client portal + gallery access (CLIENT_PORTAL.md), photo
-      pipeline, Leads/Messages panels, contract + payment flow
-- [ ] System prompt must distinguish "I can tell you how to do this" from
-      "this is broken and needs Alex in the code" — and say so plainly rather
-      than guessing
-
-**5c — Auto-reply on email** (the original Phase 5 scope):
-- [ ] Channel dispatch in `api/_ai-reply.ts` — only 3 coupling points
-      (import at :31, sends at :495 and :578); every guardrail already works
-- [ ] Email policy: always draft, never auto-send
-- [ ] Spam classification
+**Follow-ups worth knowing:**
+- The assistant's prompt now carries ~54k chars of panel documentation per turn
+  (~$0.002/turn at gpt-4o-mini). Fine for now; if replies get slow, move system
+  knowledge behind a search tool instead of inlining it.
+- `messages.status` has a `'failed'` value nothing writes yet — a failed send
+  currently deletes its row instead. Reserved so the alternative needs no
+  migration.
 
 ### Phase 6: Reviews auto-ingest — STARTED 2026-08-20
 

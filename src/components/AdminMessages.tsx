@@ -64,6 +64,8 @@ export interface ConversationSummary {
   created_at: string;
   last_message_direction: 'inbound' | 'outbound' | null;
   last_message_sender: 'contact' | 'ai' | 'human' | null;
+  classification?: string | null;
+  has_draft?: boolean;
   last_message_preview: string | null;
 }
 
@@ -89,6 +91,8 @@ export interface Message {
   // platform, which is how we reply. A contact-form submission arrives
   // as 'form' inside a conversation whose platform is 'email'.
   channel?: 'instagram' | 'email' | 'form' | 'whatsapp' | 'sms';
+  // 'draft' = written by the AI, never delivered, waiting on Vero.
+  status?: 'sent' | 'draft' | 'failed';
 }
 
 export type InquiryClassification =
@@ -529,9 +533,27 @@ function ConversationList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useAdminLang();
+  const [showPromotional, setShowPromotional] = useState(false);
+
+  // Marketing mail, cold pitches and review notifications all land in
+  // the same inbox as real clients, because filtering them at ingest
+  // would mean silently losing anything misclassified — and a lost
+  // client is far worse than a visible advert. So they're ingested,
+  // classified, and folded out of the way HERE, where a mistake costs
+  // one click instead of a booking.
+  //
+  // A thread Vero has open stays visible regardless, so the list can't
+  // yank the conversation she's reading out from under her.
+  const isPromotional = (c: ConversationSummary) =>
+    c.classification === 'spam-or-unrelated' && c.id !== selectedId;
+
+  const primary = conversations.filter((c) => !isPromotional(c));
+  const promotional = conversations.filter(isPromotional);
+
   return (
     <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
-      {conversations.map((c) => (
+      {primary.map((c) => (
         <ConversationListRow
           key={c.id}
           conv={c}
@@ -539,6 +561,35 @@ function ConversationList({
           onClick={() => onSelect(c.id)}
         />
       ))}
+
+      {promotional.length > 0 && (
+        <Box
+          as="button"
+          onClick={() => setShowPromotional((v) => !v)}
+          py={2.5}
+          px={4}
+          textAlign="left"
+          bg="gray.50"
+          _hover={{ bg: 'gray.100' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Text fontSize="xs" color="gray.500" fontWeight="500">
+            {showPromotional
+              ? t.messages.hidePromotional
+              : t.messages.showPromotional(promotional.length)}
+          </Text>
+        </Box>
+      )}
+
+      {showPromotional &&
+        promotional.map((c) => (
+          <ConversationListRow
+            key={c.id}
+            conv={c}
+            isSelected={c.id === selectedId}
+            onClick={() => onSelect(c.id)}
+          />
+        ))}
     </VStack>
   );
 }
@@ -749,6 +800,31 @@ function ConversationView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [discardingDraft, setDiscardingDraft] = useState(false);
+
+  // The AI's unsent suggestion, if it left one. Only ever present on
+  // non-Instagram channels — see the dispatch in api/_ai-reply.ts.
+  const pendingDraft = messages.find((m) => m.status === 'draft') ?? null;
+
+  const handleDiscardDraft = async () => {
+    setDiscardingDraft(true);
+    try {
+      const res = await fetch('/api/admin/messages-draft-discard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, conversationId: summary.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({ title: t.messages.draftDiscarded, status: 'success', duration: 2000 });
+        await loadDetail();
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+    } finally {
+      setDiscardingDraft(false);
+    }
+  };
   const [sending, setSending] = useState(false);
   const [aiToggleLoading, setAiToggleLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
@@ -1458,9 +1534,15 @@ function ConversationView({
               </Box>
             );
           })()}
-          {messages.map((m) => (
-            <MessageBubble key={m.id} msg={m} adminPassword={adminPassword} />
-          ))}
+          {messages
+            // A draft is a suggestion, not something the customer
+            // received. Rendering it as an ordinary outbound bubble would
+            // read as "already replied" — the exact wrong impression.
+            // It surfaces in the banner above the composer instead.
+            .filter((m) => m.status !== 'draft')
+            .map((m) => (
+              <MessageBubble key={m.id} msg={m} adminPassword={adminPassword} />
+            ))}
         </VStack>
       </Box>
 
@@ -1469,6 +1551,57 @@ function ConversationView({
           home indicator. Hidden on mobile when the summary is expanded
           (focus mode) — the collapse affordance is Vero's way back to
           the composer. */}
+      {/* AI draft awaiting review. Email conversations only — Instagram
+          sends automatically, so a draft never exists there. */}
+      {pendingDraft && (
+        <Box
+          bg="#fdf9f0"
+          borderTop="1px solid"
+          borderColor="#e8d9b8"
+          px={{ base: 3, md: 4 }}
+          py={3}
+          flexShrink={0}
+          display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
+        >
+          <Flex align="center" gap={2} mb={1.5}>
+            <Icon as={FaRobot} boxSize={3} color="#8a6e35" />
+            <Text
+              fontSize="2xs"
+              fontWeight="500"
+              color="#8a6e35"
+              letterSpacing="0.08em"
+              textTransform="uppercase"
+            >
+              {t.messages.draftTitle}
+            </Text>
+          </Flex>
+          <Text fontSize="sm" color="gray.700" lineHeight="1.6" noOfLines={4} mb={2}>
+            {pendingDraft.body}
+          </Text>
+          <Text fontSize="2xs" color="gray.500" mb={2}>
+            {t.messages.draftHelp}
+          </Text>
+          <HStack spacing={2}>
+            <CTAButton
+              onClick={() => setReplyText(pendingDraft.body)}
+              variant="solid"
+              size="sm"
+              icon={FaPaperPlane}
+            >
+              {t.messages.draftUse}
+            </CTAButton>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDiscardDraft}
+              isLoading={discardingDraft}
+            >
+              {t.messages.draftDiscard}
+            </Button>
+          </HStack>
+        </Box>
+      )}
+
       <Box
         p={{ base: 3, md: 4 }}
         pb={{ base: 'max(env(safe-area-inset-bottom), 12px)', md: 4 }}

@@ -48,7 +48,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import getRawBody from 'raw-body';
 import { Resend } from 'resend';
+import { waitUntil } from '@vercel/functions';
 import { getDb } from '../_db.js';
+import { processInboundMessage } from '../_ai-reply.js';
 import { splitQuotedEmail, looksLikeSameMessage, type QuotedMessage } from '../_email-quotes.js';
 
 /** Our own sending identity — used to drop echoes of our own outbound. */
@@ -228,6 +230,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(
       `[inbox/email-webhook] stored message=${inserted[0].id} conversation=${conversationId}`,
     );
+
+    // ── Hand off to the AI reply engine ───────────────────────────
+    //
+    // Ack the provider FIRST, then think — same shape as the Instagram
+    // webhook. ImprovMX retries only twice before dropping mail
+    // permanently, so a slow OpenAI call must never sit on the response.
+    //
+    // On email the engine DRAFTS rather than sends (migration 019), so
+    // nothing reaches the customer without Vero. Every other guardrail —
+    // kill switch, per-conversation toggle, rate limit, spam filter,
+    // booking-commitment bridge — applies unchanged.
+    //
+    // Review notifications are skipped: Google telling us someone left a
+    // review is not a customer writing in, and drafting a reply to it
+    // would be nonsense.
+    const isReviewMail = isReviewNotification(email.fromAddress, email.subject);
+    if (!isReviewMail) {
+      const conversationIdForAi = conversationId;
+      const storedId = inserted[0].id;
+      const storedSentAt = email.sentAt;
+      waitUntil(
+        (async () => {
+          const startedAt = Date.now();
+          try {
+            const result = await processInboundMessage({
+              conversationId: conversationIdForAi,
+              inboundMessageId: storedId,
+              inboundSentAt: storedSentAt,
+            });
+            console.log(
+              `[inbox/email-webhook] ai-reply action=${result.action} ` +
+                `duration_ms=${Date.now() - startedAt}` +
+                (result.reason ? ` reason="${result.reason}"` : ''),
+            );
+          } catch (err) {
+            // processInboundMessage returns structured results rather
+            // than throwing; this is belt-and-braces so a future edit
+            // that slips a throw through doesn't vanish silently.
+            console.error('[inbox/email-webhook] ai-reply threw:', err);
+          }
+        })(),
+      );
+    }
+
     return res.status(200).json({ ok: true, messageId: inserted[0].id });
   } catch (err) {
     console.error('[inbox/email-webhook] persist failed:', err);

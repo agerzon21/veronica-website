@@ -1,115 +1,41 @@
 # Quick Tasks
 
-The 5 things you actually do day-to-day. Bookmark this file.
+**Ask the Assistant tab in the admin panel.** It knows how the panel works and
+answers in Russian or English: *"I finished a gallery, how do I give the client
+access?"*, *"how do I add a photo to the site?"*, *"a client can't log in."*
 
----
+That knowledge lives in the database (`ai_context`, `source='system'`), seeded
+from `scripts/data/system-knowledge.json`. Re-seed after changing the panel:
 
-## Add a new client gallery (most common — every delivery)
-
-### 1. In Google Drive
-
-- Open the **Vero Photography Website** folder
-- Create a new subfolder (e.g. `Smith Wedding June 2026`)
-- Upload all the client's photos into it
-- Open that subfolder
-- **Copy its URL** from the browser address bar — looks like:
-  ```
-  https://drive.google.com/drive/folders/1aB2cD3eF4gH5iJ6kL7mN8oP9qR0sT
-  ```
-
-### 2. In Neon
-
-- Go to https://console.neon.tech and open **vero-photography-db**
-- Click **SQL Editor** in the left sidebar
-- Paste this, replacing the four bracketed values:
-
-```sql
-insert into client_galleries (label, password, drive_url, client_name)
-values (
-  '[short-internal-name]',
-  '[PASSWORD-FOR-CLIENT]',
-  '[paste Drive folder URL here]',
-  '[Client Name shown on the welcome screen]'
-);
-```
-
-**Concrete example:**
-
-```sql
-insert into client_galleries (label, password, drive_url, client_name)
-values (
-  'smith-wedding-jun-2026',
-  'SUNFLOWER-9421',
-  'https://drive.google.com/drive/folders/1aB2cD3eF4gH5iJ6kL7mN8oP9qR0sT',
-  'Smith Wedding'
-);
-```
-
-- Hit **Run** (or Cmd+Enter)
-- Confirm: "Query executed successfully, 1 row affected"
-
-### 3. Send the password to the client
-
-Text/email them:
-
-> Your photos are ready! Go to **vero.photography/portal** and enter password **SUNFLOWER-9421**.
-
-Done.
-
----
-
-## Change a client's password
-
-If a password leaks or they need a new one:
-
-```sql
-update client_galleries
-set password = 'NEW-PASSWORD-HERE'
-where label = 'smith-wedding-jun-2026';
+```bash
+node --env-file=.env.local scripts/seed-system-knowledge.mjs
 ```
 
 ---
 
-## Remove a client gallery
+## Why this file no longer contains the instructions
 
-After a client's downloaded everything and you want to revoke access:
+It used to walk through creating a client gallery by pasting `INSERT`
+statements into the Neon SQL editor. Every part of that is now wrong:
 
-```sql
-delete from client_galleries where label = 'smith-wedding-jun-2026';
-```
+- The `client_galleries` table **no longer exists**. Galleries live in
+  `client_portals`.
+- The real flow is **Clients → + New → Gallery Only** (or **Full Portal** for
+  contract bookings). No SQL.
+- It told Vero to send clients to `/portal` with only a password — but
+  `/portal` needs an email *and* a password. Gallery-only clients use
+  `/portal/pass`, and the admin panel generates that link for her.
+- Rotating a password was an `UPDATE`; it's now an inline field on the client's
+  record. Removing access was a `DELETE`; it's now a toggle.
 
-The Drive folder is untouched — only the portal access is revoked. Veronika still has the photos in Drive.
+An audit of the codebase found **42** statements across the docs contradicted by
+the code. Instructions that drift are worse than no instructions — Vero follows
+them, they fail, and she stops trusting the docs *and* the panel.
 
----
+Hence the change of approach: the how-to knowledge now lives next to the code
+it describes, is verified against it, and is re-seeded when the panel changes.
+A markdown file nobody re-reads after shipping a feature will always rot.
 
-## Look up a discount code
-
-Someone says "I got 10% off from the website, my code is VERO-XXXXXXXX" and you want to verify it's real + check who they are:
-
-```sql
-select email, discount_code, created_at
-from subscribers
-where discount_code = 'VERO-XXXXXXXX';
-```
-
-If it exists, the code is legit. If no rows, they're either lying or typed it wrong.
-
----
-
-## See recent contact form submissions
-
-```sql
-select created_at, name, email, shoot_type, preferred_date, location, message
-from contact_submissions
-order by created_at desc
-limit 20;
-```
-
-This is everything submitted via the Contact form — useful for following up on inquiries Veronika might've missed in her email.
-
----
-
-## Need more detail?
-
-- Full architecture + setup: [CLIENT_PORTAL.md](CLIENT_PORTAL.md)
-- Database schema reference: [DATABASE.md](DATABASE.md)
+**Developer-facing docs are still files** and still accurate — see
+[DATABASE.md](DATABASE.md), [CLIENT_PORTAL.md](CLIENT_PORTAL.md),
+[CLAUDE.md](CLAUDE.md), and [TRANSITIONS.md](TRANSITIONS.md).

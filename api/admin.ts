@@ -43,6 +43,7 @@ import messagesSendHandler from './admin/_messages-send.js';
 import messagesMarkReadHandler from './admin/_messages-mark-read.js';
 import messagesTranslateHandler from './admin/_messages-translate.js';
 import messagesSummaryHandler from './admin/_messages-summary.js';
+import messagesDraftDiscardHandler from './admin/_messages-draft-discard.js';
 import messagesSettingsHandler from './admin/_messages-settings.js';
 import messagesResetHandler from './admin/_messages-reset.js';
 import contextListHandler from './admin/_context-list.js';
@@ -98,6 +99,7 @@ const HANDLERS: Record<
   'messages-summary': messagesSummaryHandler,
   'messages-reset': messagesResetHandler,
   'messages-settings': messagesSettingsHandler,
+  'messages-draft-discard': messagesDraftDiscardHandler,
   'context-list': contextListHandler,
   'context-create': contextCreateHandler,
   'context-update': contextUpdateHandler,

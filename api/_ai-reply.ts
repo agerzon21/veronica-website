@@ -172,6 +172,9 @@ const SPAM_SOLICITATION_PATTERNS: RegExp[] = [
 export interface ReplyResult {
   action:
     | 'sent-ai-reply'
+    // Email: written but deliberately NOT delivered, awaiting Vero.
+    | 'drafted-ai-reply'
+    | 'skipped-draft-pending'
     | 'sent-booking-bridge'
     | 'sent-wrap-up'
     | 'sent-spam-bridge'
@@ -196,6 +199,7 @@ interface Conversation {
   id: string;
   external_user_id: string;
   ai_enabled: boolean;
+  platform: string;
 }
 
 interface Message {
@@ -261,7 +265,7 @@ export async function processInboundMessage(args: {
 
     // ── 2. Load conversation + per-convo toggle check ────────
     const convoRows = (await sql`
-      SELECT id, external_user_id, ai_enabled
+      SELECT id, external_user_id, ai_enabled, platform
       FROM conversations
       WHERE id = ${args.conversationId}
       LIMIT 1
@@ -275,10 +279,14 @@ export async function processInboundMessage(args: {
     }
 
     // ── 3. Dedup: did we already reply to this inbound? ──────
+    // status <> 'draft' matters: an unsent draft is not a reply. Without
+    // it, one draft Vero hasn't actioned would permanently convince the
+    // engine this conversation is handled.
     const laterOutbound = (await sql`
       SELECT id FROM messages
       WHERE conversation_id = ${args.conversationId}
         AND direction = 'outbound'
+        AND status <> 'draft'
         AND sent_at > ${args.inboundSentAt}
       LIMIT 1
     `) as Array<{ id: string }>;
@@ -299,6 +307,7 @@ export async function processInboundMessage(args: {
       SELECT id, sent_at FROM messages
       WHERE conversation_id = ${args.conversationId}
         AND direction = 'outbound'
+        AND status <> 'draft'
         AND sent_at > ${rateLimitCutoff}
       LIMIT 1
     `) as Array<{ id: string; sent_at: string }>;
@@ -491,6 +500,21 @@ export async function processInboundMessage(args: {
         );
       }
 
+      // ── 10b. Don't stack drafts ───────────────────────────────
+      // If Vero hasn't dealt with the last draft yet, writing another
+      // one on top helps nobody and burns an OpenAI call.
+      const pendingDraft = (await sql`
+        SELECT id FROM messages
+        WHERE conversation_id = ${convo.id} AND status = 'draft'
+        LIMIT 1
+      `) as Array<{ id: string }>;
+      if (pendingDraft.length > 0) {
+        return {
+          action: 'skipped-draft-pending',
+          reason: 'an unsent AI draft is already waiting on this conversation',
+        };
+      }
+
       // ── 11. Load ai_context for the system prompt ─────────────
       //
       // EXCLUDES source='system'. Those rows document how the admin
@@ -526,7 +550,31 @@ export async function processInboundMessage(args: {
         return { action: 'error-generation-failed', reason: 'empty reply' };
       }
 
-      // ── 13. Send via IG API ──────────────────────────────────
+      // ── 13. Deliver, or draft ────────────────────────────────
+      //
+      // Instagram sends automatically. Email does NOT — it drafts and
+      // waits for Vero.
+      //
+      // Not timidity: email is the channel real bookings arrive on, the
+      // message is permanent and forwardable, and it goes out under
+      // Vero's own name from her own address. One human glance before
+      // that leaves is worth the friction. She sees the draft waiting in
+      // the composer, edits if she wants, and sends. See migration 019.
+      if (convo.platform !== 'instagram') {
+        await sql`
+          INSERT INTO messages (
+            conversation_id, direction, sender, channel, body,
+            sent_at, ai_model, status
+          )
+          VALUES (
+            ${convo.id}, 'outbound', 'ai', ${convo.platform}, ${replyText},
+            NOW(), ${OPENAI_MODEL}, 'draft'
+          )
+        `;
+        console.log(`[ai-reply] drafted reply for ${convo.platform} conversation ${convo.id}`);
+        return { action: 'drafted-ai-reply', outboundBody: replyText };
+      }
+
       const sendResult = await sendIgTextMessage({
         recipientIgsid: convo.external_user_id,
         text: replyText,
@@ -545,12 +593,7 @@ export async function processInboundMessage(args: {
           external_message_id, sent_at, ai_model
         )
         VALUES (
-          ${convo.id}, 'outbound', 'ai',
-          -- Derived from the conversation rather than hardcoded, so this
-          -- stays correct when the reply engine gains non-Instagram
-          -- channels. messages.channel is NOT NULL (migration 017).
-          (SELECT platform FROM conversations WHERE id = ${convo.id}),
-          ${replyText},
+          ${convo.id}, 'outbound', 'ai', 'instagram', ${replyText},
           ${sendResult.externalMessageId ?? null}, NOW(), ${OPENAI_MODEL}
         )
         ON CONFLICT (external_message_id) DO NOTHING
@@ -615,6 +658,26 @@ async function sendBridgeAndEscalate(
     bridgeRows[0]?.content ??
     'Thanks so much for reaching out! Vero will personally get back to you shortly.';
 
+  // Off-Instagram channels draft rather than send, exactly like a normal
+  // AI reply does — see the dispatch in step 13. A bridge is still a
+  // message going out under Vero's name, so it gets the same human step.
+  if (convo.platform !== 'instagram') {
+    await sql`
+      INSERT INTO messages (
+        conversation_id, direction, sender, channel, body, sent_at, status
+      )
+      VALUES (
+        ${convo.id}, 'outbound', 'ai', ${convo.platform}, ${bridgeText}, NOW(), 'draft'
+      )
+    `;
+    await sql`
+      UPDATE conversations SET ai_enabled = FALSE, updated_at = NOW()
+      WHERE id = ${convo.id}
+    `;
+    console.log(`[ai-reply] drafted bridge (${action}) for ${convo.platform}`);
+    return { action, reason, outboundBody: bridgeText };
+  }
+
   const send = await sendIgTextMessage({
     recipientIgsid: convo.external_user_id,
     text: bridgeText,
@@ -633,11 +696,7 @@ async function sendBridgeAndEscalate(
       external_message_id, sent_at
     )
     VALUES (
-      ${convo.id}, 'outbound', 'ai',
-      -- See the note on the reply INSERT above: channel is NOT NULL and
-      -- is derived from the conversation, not hardcoded to instagram.
-      (SELECT platform FROM conversations WHERE id = ${convo.id}),
-      ${bridgeText},
+      ${convo.id}, 'outbound', 'ai', 'instagram', ${bridgeText},
       ${send.externalMessageId ?? null}, NOW()
     )
     ON CONFLICT (external_message_id) DO NOTHING

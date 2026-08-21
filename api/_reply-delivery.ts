@@ -72,11 +72,30 @@ export async function deliverReply(
     };
   }
 
-  if (convo.platform === 'instagram') {
-    return await sendInstagram(sql, conversationId, convo.external_user_id, text);
-  }
-  if (convo.platform === 'email') {
-    return await sendEmail(sql, conversationId, convo.external_user_id, text);
+  const result =
+    convo.platform === 'instagram'
+      ? await sendInstagram(sql, conversationId, convo.external_user_id, text)
+      : convo.platform === 'email'
+        ? await sendEmail(sql, conversationId, convo.external_user_id, text)
+        : null;
+
+  if (result) {
+    // A successful send resolves whatever draft was pending — whether Vero
+    // sent it verbatim, edited it first, or typed something else entirely.
+    // Leaving it would re-show the banner over a thread she just answered,
+    // and would block the engine from drafting again (one draft per
+    // conversation).
+    if (result.ok) {
+      try {
+        await sql`
+          DELETE FROM messages
+          WHERE conversation_id = ${conversationId} AND status = 'draft'
+        `;
+      } catch (err) {
+        console.error('[reply-delivery] draft cleanup failed (non-fatal):', err);
+      }
+    }
+    return result;
   }
   // WhatsApp / SMS / etc. handlers go here later.
   return {
