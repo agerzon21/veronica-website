@@ -18,6 +18,7 @@
 import { getDb } from './_db.js';
 import { sendIgTextMessage } from './_ig-send.js';
 import { sendEmailReply, deriveReplySubject } from './_email-send.js';
+import { getResendMessageId } from './_auto-reply.js';
 import { loadSignature, appendSignatureText, buildReplyHtml } from './_email-signature.js';
 
 const MAX_IG_MESSAGE_LEN = 1000; // sensible for IG DMs; Meta rejects >1000 anyway
@@ -252,8 +253,12 @@ async function sendEmail(
   // Pre-generate the ID. Import randomUUID directly to avoid coupling
   // the caller to _email-send.ts internals.
   const { randomUUID } = await import('node:crypto');
-  const fromDomain = EMAIL_FROM_ADDRESS.split('@')[1] || 'localhost';
-  const preMessageId = `${randomUUID()}@${fromDomain}`;
+  // 'pending:' prefix, deliberately WITHOUT an '@'. This is a placeholder
+  // holding the UNIQUE slot until Resend tells us the real Message-ID,
+  // and isRealMessageId() must reject it — an id shaped like
+  // <uuid>@ourdomain would sail through that filter and get emitted in
+  // References, which is the exact bug this replaces.
+  const preMessageId = `pending:${randomUUID()}`;
 
   // Append Vero's signature (editable from the Messages tab, stored in
   // system_state). We persist the SIGNED text, not the raw composer
@@ -336,9 +341,21 @@ async function sendEmail(
   // external_message_id, which is our SMTP Message-ID for threading.
   if (sendResult.resendId) {
     try {
+      // Swap the placeholder for the Message-ID Resend actually used, so
+      // the customer's reply — which will carry it in In-Reply-To — can
+      // be matched, and so our next send can reference it. Null is fine:
+      // the delivery poller backfills it (see _messages-delivery.ts).
+      let realMessageId: string | null = null;
+      try {
+        realMessageId = await getResendMessageId(sendResult.resendId);
+      } catch {
+        realMessageId = null;
+      }
       await sql`
         UPDATE messages
-        SET delivery_id = ${sendResult.resendId}, delivery_state = 'sent'
+        SET delivery_id = ${sendResult.resendId},
+            delivery_state = 'sent',
+            external_message_id = COALESCE(${realMessageId}, external_message_id)
         WHERE id = ${inserted[0].id}
       `;
     } catch (err) {
@@ -363,7 +380,9 @@ async function sendEmail(
  * See the filter comment in sendEmail(): rows that never traversed SMTP
  * carry a synthetic `<scheme>:` id. Those must never reach the wire.
  */
-const SYNTHETIC_ID_PREFIXES = ['form:', 'autoreply:', 'improvmx:', 'resend:', 'recovered:'];
+const SYNTHETIC_ID_PREFIXES = [
+  'form:', 'autoreply:', 'improvmx:', 'resend:', 'recovered:', 'pending:',
+];
 
 function isRealMessageId(id: string | null): boolean {
   if (!id) return false;

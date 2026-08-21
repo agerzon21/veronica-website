@@ -31,7 +31,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
-import { getDeliveryStatus } from '../_auto-reply.js';
+import { getDeliveryStatus, getResendMessageId } from '../_auto-reply.js';
 
 /** Outcomes that can't change, so they're never re-polled. */
 const TERMINAL_STATES = ['delivered', 'bounced', 'complained'];
@@ -58,12 +58,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
 
     const rows = (await sql`
-      SELECT id, delivery_id, delivery_state
+      SELECT id, delivery_id, delivery_state, external_message_id
       FROM messages
       WHERE conversation_id = ${conversationId}
         AND delivery_id IS NOT NULL
       ORDER BY sent_at DESC
-    `) as Array<{ id: string; delivery_id: string; delivery_state: string | null }>;
+    `) as Array<{
+      id: string;
+      delivery_id: string;
+      delivery_state: string | null;
+      external_message_id: string | null;
+    }>;
+
+    // Backfill any Message-ID that wasn't populated yet at send time.
+    //
+    // Resend assigns the real SMTP Message-ID and doesn't document how
+    // soon it appears on the retrieve endpoint, so a send can legitimately
+    // finish before it exists. A row left holding a 'pending:' placeholder
+    // can't be referenced by the next reply and can't be matched against
+    // the customer's In-Reply-To — i.e. the thread silently breaks. This
+    // poller already talks to Resend per message, so it repairs them.
+    for (const r of rows) {
+      if (!r.external_message_id?.startsWith('pending:')) continue;
+      try {
+        const real = await getResendMessageId(r.delivery_id);
+        if (!real) continue;
+        await sql`
+          UPDATE messages SET external_message_id = ${real} WHERE id = ${r.id}
+        `;
+        console.log(`[admin/messages-delivery] backfilled message-id for ${r.id}`);
+      } catch {
+        // Try again next poll; a placeholder is not worth failing over.
+      }
+    }
 
     const states: Record<string, string> = {};
     const pending: typeof rows = [];

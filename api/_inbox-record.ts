@@ -29,13 +29,17 @@ export interface RecordArgs {
   submissionId: string | null;
   data: ContactPayload;
   /**
-   * The auto-reply's real SMTP Message-ID (normalized, no angle
-   * brackets), if it went out. NOT Resend's tracking id — this value is
-   * what api/admin/_messages-send.ts threads Vero's later reply against,
-   * so it has to be a genuine RFC 5322 msg-id or the reply arrives
-   * detached from the confirmation the client already has.
+   * The auto-reply's real SMTP Message-ID as ASSIGNED BY RESEND — read
+   * back after send, never minted by us (Resend discards a Message-ID
+   * header you set). This is the anchor the whole thread hangs off, so
+   * if it's wrong the customer sees loose emails.
+   *
+   * May be null when Resend hasn't populated it yet; we then store a
+   * 'pending:' placeholder that the delivery poller replaces.
    */
   autoReplyMessageId?: string | null;
+  /** Resend's tracking id for the auto-reply, for the backfill to join on. */
+  autoReplyResendId?: string | null;
   /** Rendered plaintext of the auto-reply, so the thread reads correctly. */
   autoReplyText?: string | null;
 }
@@ -123,7 +127,11 @@ export async function recordContactSubmission(args: RecordArgs): Promise<RecordR
       RETURNING id, sent_at
     `) as Array<{ id: string; sent_at: string }>;
 
-    if (args.autoReplyMessageId && args.autoReplyText) {
+    if (args.autoReplyText && (args.autoReplyMessageId || args.autoReplyResendId)) {
+      // 'pending:' deliberately has no '@' so isRealMessageId() rejects
+      // it and it can never be emitted in a References header.
+      const autoReplyId =
+        args.autoReplyMessageId ?? `pending:${args.autoReplyResendId}`;
       await sql`
         INSERT INTO messages (
           conversation_id, direction, sender, channel, body,
@@ -131,11 +139,18 @@ export async function recordContactSubmission(args: RecordArgs): Promise<RecordR
         )
         VALUES (
           ${conversationId}, 'outbound', 'ai', 'email',
-          ${args.autoReplyText}, ${args.autoReplyMessageId}, ${FROM_ADDRESS},
+          ${args.autoReplyText}, ${autoReplyId}, ${FROM_ADDRESS},
           ${`Re: Your ${args.data.shoot_type || 'Photography'} Inquiry`}, NOW()
         )
         ON CONFLICT (external_message_id) DO NOTHING
       `;
+      if (args.autoReplyResendId) {
+        await sql`
+          UPDATE messages
+          SET delivery_id = ${args.autoReplyResendId}, delivery_state = 'sent'
+          WHERE external_message_id = ${autoReplyId}
+        `;
+      }
     }
 
     // Link the lead row to its thread so the admin UI can move between

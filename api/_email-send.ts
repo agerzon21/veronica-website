@@ -1,39 +1,35 @@
 /**
  * Email reply sender — outbound side of the email inbox feature.
  *
- * Companion to _email-webhook.ts (inbound). When Vero replies to an
- * email conversation from the admin panel, this helper generates a
- * proper SMTP Message-ID header, wires up In-Reply-To + References
- * so mail clients thread the conversation correctly, and sets a
- * Reply-To that routes future customer replies back to our webhook
- * (via the same inbox.<domain> subdomain the inbound webhook
- * consumes).
+ * Companion to _email-webhook.ts (inbound). Wires up In-Reply-To +
+ * References so mail clients thread the conversation correctly.
  *
- * Why we generate our own Message-ID:
- *   Threading in email works by matching the customer's next reply's
- *   `In-Reply-To` header value against a Message-ID we sent
- *   previously. If we let Resend auto-generate the Message-ID we
- *   don't know what it is until Resend responds, and even then
- *   Resend's outbound Message-IDs use their domain (something
- *   like <resend-generated@amazonses.com>). Some strict mail
- *   clients care that In-Reply-To domains match the From domain.
- *   Generating our own ID on OUR domain keeps everything aligned.
+ * ─── We do NOT choose the Message-ID ────────────────────────────
  *
- * Why we set a custom Reply-To:
- *   By default, hitting Reply in the customer's mail client would
- *   send to the From address (Vero's vero@vero.photography), which
- *   routes through ImprovMX to her Gmail — invisible to our system.
- *   We want the customer's reply to land in our webhook so we can
- *   store + display it in the conversation view. Setting Reply-To
- *   to an address on the inbound subdomain (e.g. reply@inbox.<domain>)
- *   makes that happen — customer's reply goes to Resend Inbound →
- *   our webhook → threaded via the In-Reply-To header they'll set
- *   to the Message-ID we generated here.
+ * This file used to mint its own `<uuid@vero.photography>` and set it as
+ * a Message-ID header, reasoning that an id on our own domain keeps
+ * everything aligned. That reasoning was wrong on the only point that
+ * mattered: RESEND SILENTLY DISCARDS IT and assigns its own (an Amazon
+ * SES id).
  *
- * The customer's mail client shows Vero's From address prominently
- * ("From: Vero Photography <vero@vero.photography>") and only reveals
- * Reply-To if they look at message details. Their experience: normal
- * Vero email, Reply just works.
+ * Confirmed empirically — a real customer reply carried
+ * `In-Reply-To: 010001a02045c24f-…-0000`, an SES id, not ours. So every
+ * In-Reply-To/References we emitted pointed at a message that existed
+ * only in our database. Gmail has required a genuine reference chain
+ * since 2019 and will not thread on matching subjects alone, so the
+ * customer saw a pile of unrelated emails while the admin panel showed a
+ * tidy thread (it routes on sender address, which masked the problem).
+ *
+ * Resend added `message_id` to their retrieve endpoint in July 2026 for
+ * exactly this. The flow is now: send → read the assigned id back via
+ * getResendMessageId() → store it → reference it next time.
+ *
+ * ─── Reply-To ───────────────────────────────────────────────────
+ *
+ * Set to vero@vero.photography, the same address we send from. Mail to
+ * it hits ImprovMX, which fans out to both Veronika's Gmail and our
+ * inbound webhook — so replies reach the panel with no subdomain and no
+ * extra DNS, and the customer sees one consistent address.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -118,19 +114,26 @@ function generateMessageId(fromAddress: string): string {
 export async function sendEmailReply(
   args: EmailReplyArgs,
 ): Promise<EmailReplyResult> {
-  // Use caller-provided ID if given (idempotency pattern), else
-  // generate our own. Either way, this is what we set in the
-  // outbound SMTP Message-ID header and hand back to the caller
-  // for DB persistence.
+  // Kept purely as an idempotency key for the caller's pre-insert. It is
+  // NOT the SMTP Message-ID and must never be treated as one.
   const messageId = args.messageId || generateMessageId(args.from);
 
   // Build headers explicitly. Resend's SDK accepts a `headers`
   // parameter that maps directly onto the outbound SMTP headers.
   // Values here are wrapped in angle brackets per RFC 5322; we
   // strip them again on the webhook side via normalizeMsgId().
-  const headers: Record<string, string> = {
-    'Message-ID': `<${messageId}>`,
-  };
+  // NOTE: we deliberately do NOT set a Message-ID header.
+  //
+  // Resend silently discards it and assigns its own (an Amazon SES id).
+  // Setting one produced an id that existed only in our database, so the
+  // In-Reply-To/References we built from it referenced a message no mail
+  // client had ever seen — and Gmail, which since 2019 requires a real
+  // reference chain and will not thread on subject alone, showed the
+  // customer a pile of unrelated emails.
+  //
+  // The real id is read back after send via getResendMessageId(). See
+  // api/_reply-delivery.ts.
+  const headers: Record<string, string> = {};
   if (args.inReplyTo) {
     headers['In-Reply-To'] = `<${args.inReplyTo}>`;
   }

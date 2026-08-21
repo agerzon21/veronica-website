@@ -210,16 +210,28 @@ export async function sendEmail(message: EmailMessage): Promise<{ id: string }> 
  */
 export async function sendAutoReply(
   data: ContactPayload,
-): Promise<{ id: string; messageId: string }> {
-  const domain = FROM_ADDRESS.split('@')[1] || 'vero.photography';
-  const messageId = `${randomUUID()}@${domain}`;
+): Promise<{ id: string; messageId: string | null }> {
   const sent = await sendEmail({
     to: data.email,
     subject: `Re: Your ${data.shoot_type || 'Photography'} Inquiry`,
     text: buildAutoReplyText(data),
     html: buildAutoReplyHtml(data),
-    headers: { 'Message-ID': `<${messageId}>` },
   });
+
+  // Read back the Message-ID Resend assigned. This is the FIRST message
+  // in what becomes a real thread, so it's the anchor everything else
+  // references — if it's wrong, the customer sees loose emails no matter
+  // what the later sends do.
+  //
+  // Null is tolerated: population timing is undocumented, and the
+  // delivery poller backfills it later rather than blocking the
+  // customer's form submission on a second API call.
+  let messageId: string | null = null;
+  try {
+    messageId = await getResendMessageId(sent.id);
+  } catch (err) {
+    console.warn('[auto-reply] could not read back message_id:', (err as Error).message);
+  }
   return { id: sent.id, messageId };
 }
 
@@ -407,6 +419,32 @@ export type DeliveryEvent =
  * Thank-You page to wait for the recipient's mail server to actually confirm
  * receipt (`delivered`) before telling the user the confirmation went through.
  */
+/**
+ * The SMTP Message-ID Resend actually put on the wire.
+ *
+ * We cannot choose this. Passing a `Message-ID` header to emails.send is
+ * silently discarded — Resend assigns its own (an Amazon SES id), which
+ * is why every In-Reply-To/References we emitted from a self-minted id
+ * pointed at a message that existed in nobody's mailbox, and mail
+ * clients rendered loose emails instead of a thread.
+ *
+ * Resend added `message_id` to the retrieve endpoint in July 2026
+ * specifically for this. Returns it normalized (no angle brackets) to
+ * match how inbound ids are stored, or null if not yet populated — the
+ * docs don't state how soon after send it appears, so callers must
+ * tolerate null and backfill later.
+ */
+export async function getResendMessageId(id: string): Promise<string | null> {
+  const { data, error } = await getResend().emails.get(id);
+  if (error || !data) return null;
+  const raw = (data as unknown as { message_id?: string | null }).message_id;
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim().replace(/^</, '').replace(/>$/, '').trim();
+  if (!trimmed) return null;
+  const at = trimmed.lastIndexOf('@');
+  return at > 0 ? trimmed.slice(0, at) + '@' + trimmed.slice(at + 1).toLowerCase() : trimmed;
+}
+
 export async function getDeliveryStatus(id: string): Promise<DeliveryEvent> {
   const { data, error } = await getResend().emails.get(id);
   if (error) {

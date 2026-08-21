@@ -110,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     submissionId: logResult.status === 'fulfilled' ? logResult.value : null,
     data,
     autoReplyMessageId: autoReplyResult.value.messageId,
+    autoReplyResendId: autoReplyResult.value.id,
     autoReplyText: buildAutoReplyText(data),
   });
 
