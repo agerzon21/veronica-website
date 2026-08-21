@@ -70,13 +70,25 @@ const CHAT_SLOT = 'default';
  * window — and it would fail on Vero, mid-sentence, with no obvious
  * cause.
  *
- * SENT is the smaller window: enough that the assistant remembers what
- * you were just discussing, not so much that a month of chat rides along
- * on every question. STORED is larger because the transcript is hers to
- * scroll; it's bounded only so the row can't grow forever.
+ * SENT is the smaller window, but deliberately generous. The system
+ * prompt is the expensive part — roughly 19k tokens of knowledge base and
+ * panel documentation, rebuilt every turn — against which 80 messages of
+ * chat is around 4k. Economizing on the history would trade real
+ * continuity for a rounding error. The cap exists to bound growth over
+ * months, not to save tokens.
+ *
+ * What actually persists is NOT in this window: ai_context is loaded in
+ * full on every turn, so anything the assistant wrote down (pricing,
+ * tone, services) is permanent no matter how long the chat gets. The
+ * transcript is a working surface; the knowledge base is the memory.
+ * That's why the prompt pushes it to save durable facts rather than rely
+ * on remembering them.
+ *
+ * STORED is larger still — the transcript is Vero's to scroll, and she
+ * keeps far more of it than the model is given.
  */
-const MAX_HISTORY_SENT = 30;
-const MAX_HISTORY_STORED = 200;
+const MAX_HISTORY_SENT = 80;
+const MAX_HISTORY_STORED = 400;
 
 /**
  * Trim to at most `limit` trailing messages, starting at a 'user' turn.
