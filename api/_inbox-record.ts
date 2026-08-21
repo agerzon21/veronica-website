@@ -17,6 +17,13 @@
 import { getDb } from './_db.js';
 import { FROM_ADDRESS, type ContactPayload } from './_auto-reply.js';
 
+export interface RecordResult {
+  conversationId: string | null;
+  /** The inbound row we created for the submission, for the AI to act on. */
+  inboundMessageId: string | null;
+  inboundSentAt: string | null;
+}
+
 export interface RecordArgs {
   /** contact_submissions.id — NULL if that insert failed. */
   submissionId: string | null;
@@ -67,9 +74,14 @@ export function buildSubmissionSubject(data: ContactPayload): string {
  * something Veronika typed) and ai_model=NULL, which distinguishes a
  * template send from a real LLM reply.
  */
-export async function recordContactSubmission(args: RecordArgs): Promise<void> {
+export async function recordContactSubmission(args: RecordArgs): Promise<RecordResult> {
+  const empty: RecordResult = {
+    conversationId: null,
+    inboundMessageId: null,
+    inboundSentAt: null,
+  };
   const email = (args.data.email || '').trim().toLowerCase();
-  if (!email) return;
+  if (!email) return empty;
 
   try {
     const sql = getDb();
@@ -86,7 +98,7 @@ export async function recordContactSubmission(args: RecordArgs): Promise<void> {
     const conversationId = convoRows[0]?.id;
     if (!conversationId) {
       console.error('[inbox-record] no conversation id returned');
-      return;
+      return empty;
     }
 
     // Deterministic id keyed on the submission row so a retry can't
@@ -97,7 +109,7 @@ export async function recordContactSubmission(args: RecordArgs): Promise<void> {
       ? `form:${args.submissionId}`
       : `form:orphan:${Date.now()}:${email}`;
 
-    await sql`
+    const inboundRows = (await sql`
       INSERT INTO messages (
         conversation_id, direction, sender, channel, body,
         external_message_id, from_address, subject, sent_at
@@ -108,7 +120,8 @@ export async function recordContactSubmission(args: RecordArgs): Promise<void> {
         ${buildSubmissionSubject(args.data)}, NOW()
       )
       ON CONFLICT (external_message_id) DO NOTHING
-    `;
+      RETURNING id, sent_at
+    `) as Array<{ id: string; sent_at: string }>;
 
     if (args.autoReplyMessageId && args.autoReplyText) {
       await sql`
@@ -138,7 +151,13 @@ export async function recordContactSubmission(args: RecordArgs): Promise<void> {
     console.log(
       `[inbox-record] recorded submission for ${email} → conversation ${conversationId}`,
     );
+    return {
+      conversationId,
+      inboundMessageId: inboundRows[0]?.id ?? null,
+      inboundSentAt: inboundRows[0]?.sent_at ?? null,
+    };
   } catch (err) {
     console.error('[inbox-record] failed (non-fatal):', err);
+    return empty;
   }
 }

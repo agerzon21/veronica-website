@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { waitUntil } from '@vercel/functions';
 import {
   sendAutoReply,
   sendLeadNotification,
@@ -6,6 +7,7 @@ import {
   type ContactPayload,
 } from './_auto-reply.js';
 import { recordContactSubmission } from './_inbox-record.js';
+import { processInboundMessage } from './_ai-reply.js';
 import { getDb } from './_db.js';
 
 /**
@@ -104,12 +106,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   //    already followed by an outbound.
   //
   //    Swallows its own errors; never affects the response.
-  await recordContactSubmission({
+  const recorded = await recordContactSubmission({
     submissionId: logResult.status === 'fulfilled' ? logResult.value : null,
     data,
     autoReplyMessageId: autoReplyResult.value.messageId,
     autoReplyText: buildAutoReplyText(data),
   });
+
+  // 5. Have the AI draft a real follow-up for Vero.
+  //
+  // The templated auto-reply above is a RECEIPT — "got it, I'll reply
+  // within 24 hours". It's the same for everyone and answers nothing. But
+  // a contact-form submission is the most qualified lead the business
+  // gets: it arrives with shoot type, date, location and a message. That
+  // is exactly the material the assistant should be working from.
+  //
+  // Nothing here reaches the customer. On email the reply engine DRAFTS
+  // (migration 019) — the draft waits above Vero's composer for her to
+  // use, edit, or discard. So the client receives one message, the
+  // receipt, and Vero gets a prepared reply that already references their
+  // date and session type.
+  //
+  // waitUntil so the person who just submitted the form isn't held on a
+  // spinner waiting for OpenAI. The response has already been decided.
+  if (recorded.conversationId && recorded.inboundMessageId && recorded.inboundSentAt) {
+    const { conversationId, inboundMessageId, inboundSentAt } = recorded;
+    waitUntil(
+      (async () => {
+        try {
+          const result = await processInboundMessage({
+            conversationId,
+            inboundMessageId,
+            inboundSentAt,
+          });
+          console.log(`[contact] ai-reply action=${result.action}` +
+            (result.reason ? ` reason="${result.reason}"` : ''));
+        } catch (err) {
+          console.error('[contact] ai-reply threw:', err);
+        }
+      })(),
+    );
+  }
 
   return res.status(200).json({ success: true, emailId: autoReplyResult.value.id });
 }

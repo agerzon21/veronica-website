@@ -10,7 +10,9 @@
  *   1. Check global kill switch (system_state.messaging_ai_state)
  *   2. Check per-conversation ai_enabled toggle
  *   3. Check dedup: any outbound msg after this inbound already?
+ *      (auto-send channels only — see note in the code)
  *   4. Check rate limit: any AI msg from us in the last 5 min?
+ *      (auto-send channels only)
  *   5. Detect booking COMMITMENT (deposit/contract/"book it") → send
  *      bridge, disable AI, done. Pricing questions and date mentions
  *      deliberately do NOT bridge — they go to the model.
@@ -279,17 +281,31 @@ export async function processInboundMessage(args: {
     }
 
     // ── 3. Dedup: did we already reply to this inbound? ──────
+    // Both this gate and the rate limit below exist to stop us SENDING a
+    // second message on top of one we just sent. On a draft-only channel
+    // we never send — the AI writes, Vero decides — so neither applies,
+    // and applying them silently costs her the feature.
+    //
+    // That is exactly what happened with contact-form leads: the
+    // templated auto-reply lands as an outbound immediately, so every
+    // form submission looked "already replied to" and no draft was ever
+    // written for the most qualified leads the business gets.
+    //
+    // Stacked drafts are prevented separately (step 10b), so relaxing
+    // these cannot produce a pile of suggestions.
+    const autoSendsOnThisChannel = convo.platform === 'instagram';
+
     // status <> 'draft' matters: an unsent draft is not a reply. Without
     // it, one draft Vero hasn't actioned would permanently convince the
     // engine this conversation is handled.
-    const laterOutbound = (await sql`
+    const laterOutbound = autoSendsOnThisChannel ? (await sql`
       SELECT id FROM messages
       WHERE conversation_id = ${args.conversationId}
         AND direction = 'outbound'
         AND status <> 'draft'
         AND sent_at > ${args.inboundSentAt}
       LIMIT 1
-    `) as Array<{ id: string }>;
+    `) as Array<{ id: string }> : [];
     if (laterOutbound.length > 0) {
       return { action: 'skipped-already-replied', reason: 'outbound exists after inbound' };
     }
@@ -303,14 +319,14 @@ export async function processInboundMessage(args: {
     // recognizes. Passing an ISO timestamp as a plain parameter
     // sidesteps the whole problem.
     const rateLimitCutoff = new Date(Date.now() - MIN_GAP_MS_BETWEEN_AI).toISOString();
-    const rateRows = (await sql`
+    const rateRows = autoSendsOnThisChannel ? (await sql`
       SELECT id, sent_at FROM messages
       WHERE conversation_id = ${args.conversationId}
         AND direction = 'outbound'
         AND status <> 'draft'
         AND sent_at > ${rateLimitCutoff}
       LIMIT 1
-    `) as Array<{ id: string; sent_at: string }>;
+    `) as Array<{ id: string; sent_at: string }> : [];
     if (rateRows.length > 0) {
       return { action: 'skipped-rate-limit', reason: 'outbound within rate-limit window' };
     }
