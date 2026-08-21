@@ -8,6 +8,7 @@ import {
   FaPaperPlane, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb, FaChevronDown,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
 import VoiceInput from './ui/VoiceInput';
 import type { ChatLanguage } from './AdminAssistant';
 
@@ -191,7 +192,18 @@ const STRINGS: Record<ChatLanguage, Strings> = {
 
 const AdminAssistantChat = ({ adminPassword, language }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
+  // A conversation can hand a question over — "this draft isn't right,
+  // help me fix it" — by parking a prompt in sessionStorage and switching
+  // tabs. Read once on mount and clear, so it can't reappear later.
+  // Prefills rather than sends: the prompt ends mid-sentence on purpose,
+  // waiting for Vero to say what she'd change.
+  const [input, setInput] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const parked = sessionStorage.getItem(ASSISTANT_HANDOFF_KEY);
+    if (!parked) return '';
+    sessionStorage.removeItem(ASSISTANT_HANDOFF_KEY);
+    return parked;
+  });
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null);

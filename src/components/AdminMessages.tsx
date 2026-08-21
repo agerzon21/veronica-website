@@ -47,6 +47,8 @@ const VERO_LANG = 'ru';
 interface Props {
   adminPassword: string;
   adminLevel: 'admin' | 'super';
+  /** Switch to the Assistant tab (see ASSISTANT_HANDOFF_KEY). */
+  onOpenAssistant?: () => void;
 }
 
 export interface ConversationSummary {
@@ -159,7 +161,18 @@ function formatPhoneNumbersInText(text: string): string {
 
 const POLL_INTERVAL_MS = 30_000;
 
-const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
+/**
+ * Where a conversation parks a question on its way to the Assistant tab.
+ *
+ * sessionStorage rather than props or a route param because the two tabs
+ * are siblings with no shared state, and the handoff is a one-shot
+ * message, not app state — the Assistant reads it once on mount and
+ * clears it. Survives the remount that switching tabs causes, which is
+ * the whole point.
+ */
+export const ASSISTANT_HANDOFF_KEY = 'assistant-handoff-prompt';
+
+const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) => {
   const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
@@ -426,6 +439,7 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
                 // Desktop-only: unused — SelectPrompt shows when null.
                 onBack={() => setSelectedId(null)}
                 onRefreshList={loadList}
+                onOpenAssistant={onOpenAssistant}
               />
             ) : (
               <SelectPrompt />
@@ -789,6 +803,7 @@ function ConversationView({
   adminPassword,
   onRefreshList,
   onBack,
+  onOpenAssistant,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
@@ -797,6 +812,7 @@ function ConversationView({
   // handles the "no thread open" state), but on mobile the parent
   // uses it to close the drill-down.
   onBack?: () => void;
+  onOpenAssistant?: () => void;
 }) {
   const { t } = useAdminLang();
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -809,6 +825,23 @@ function ConversationView({
   // The AI's unsent suggestion, if it left one. Only ever present on
   // non-Instagram channels — see the dispatch in api/_ai-reply.ts.
   const pendingDraft = messages.find((m) => m.status === 'draft') ?? null;
+
+  // "This draft isn't right" → hand the whole situation to the Assistant.
+  //
+  // The prompt names the person and quotes the draft, so Vero doesn't have
+  // to re-explain which thread she means or paste anything. The assistant
+  // already has list_conversations / read_thread / send_reply, so it can
+  // pull the real history, revise with her, and send when she approves —
+  // the loop she currently does by pasting into ChatGPT.
+  const handleRefineWithAssistant = () => {
+    const who = displayName;
+    const draft = pendingDraft?.body ?? '';
+    sessionStorage.setItem(
+      ASSISTANT_HANDOFF_KEY,
+      `Help me improve the reply to ${who}. Read the conversation first. Here's the draft I have:\n\n${draft}\n\nWhat I'd change: `,
+    );
+    onOpenAssistant?.();
+  };
 
   const handleDiscardDraft = async () => {
     setDiscardingDraft(true);
@@ -1224,7 +1257,9 @@ function ConversationView({
     // that never settles. Re-check on a short interval until every
     // message reaches a terminal state, then stop — the endpoint caches
     // terminal outcomes, so this cannot become a permanent poll.
-    const POLL_MS = 5000;
+    // 3s matches the thank-you page, which feels immediate. 5s felt
+    // noticeably laggy against mail that had visibly already arrived.
+    const POLL_MS = 3000;
     const MAX_WAIT_MS = 90_000;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1245,8 +1280,14 @@ function ConversationView({
             data.states[m.id] ? { ...m, delivery_state: data.states[m.id] } : m,
           ),
         );
+        // NOTE: [].every() is true, so an empty result would read as
+        // "everything settled" and stop the loop on its first tick —
+        // which is exactly the case right after a send, before the
+        // delivery id has been written. Require at least one known state
+        // before believing we're done.
         const states = Object.values(data.states) as string[];
-        const settled = states.every((v) => DELIVERY_TERMINAL.includes(v));
+        const settled =
+          states.length > 0 && states.every((v) => DELIVERY_TERMINAL.includes(v));
         if (settled || Date.now() - startedAt >= MAX_WAIT_MS) return;
       } catch {
         // Silent — a missing delivery badge is not worth an error toast.
@@ -1764,6 +1805,16 @@ function ConversationView({
             >
               {t.messages.draftUse}
             </CTAButton>
+            {onOpenAssistant && (
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Icon as={FaRobot} boxSize={3} />}
+                onClick={handleRefineWithAssistant}
+              >
+                {t.messages.draftRefine}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"

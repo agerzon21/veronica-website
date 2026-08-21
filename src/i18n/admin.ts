@@ -357,6 +357,7 @@ const dict = {
       ru: 'Оно не отправлено. Отредактируй ниже, если нужно, потом отправь — или удали.',
     },
     draftUse: { en: 'Use this draft', ru: 'Взять черновик' },
+    draftRefine: { en: 'Improve with assistant', ru: 'Доработать с ассистентом' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },
     draftDiscarded: { en: 'Draft discarded', ru: 'Черновик удалён' },
 

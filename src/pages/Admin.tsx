@@ -277,7 +277,15 @@ const Admin = () => {
                 />
               )}
               {dashTab === 'messages' && (
-                <AdminMessages adminPassword={password} adminLevel={adminLevel} />
+                <AdminMessages
+                  adminPassword={password}
+                  adminLevel={adminLevel}
+                  // Lets a conversation hand off to the Assistant tab —
+                  // "this draft isn't right, help me fix it" — without
+                  // Vero having to navigate and re-explain which thread
+                  // she means.
+                  onOpenAssistant={() => setDashTab('assistant')}
+                />
               )}
               {dashTab === 'leads' && (
                 <AdminLeads adminPassword={password} adminLevel={adminLevel} />
