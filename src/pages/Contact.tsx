@@ -93,7 +93,12 @@ const Contact = () => {
         // back-navigation now — there is no longer a network side effect on
         // the thank-you page to guard.
         const submissionId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        navigate('/contact/thank-you', { state: { submissionId } });
+        // emailId is Resend's id for the auto-reply. The thank-you page
+        // polls it so the confirmation reflects ACTUAL delivery to the
+        // customer's mail server, not a timer.
+        navigate('/contact/thank-you', {
+          state: { submissionId, emailId: data.emailId ?? null },
+        });
       } else {
         setError('Something went wrong. Please try again.');
       }

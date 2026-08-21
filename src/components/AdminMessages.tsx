@@ -1218,8 +1218,20 @@ function ConversationView({
   // terminal outcomes so it isn't a Resend call per render forever.
   useEffect(() => {
     if (detail?.platform !== 'email') return;
+
+    // Delivery resolves in seconds, not instantly, so a single check on
+    // open would almost always catch it mid-flight and leave a spinner
+    // that never settles. Re-check on a short interval until every
+    // message reaches a terminal state, then stop — the endpoint caches
+    // terminal outcomes, so this cannot become a permanent poll.
+    const POLL_MS = 5000;
+    const MAX_WAIT_MS = 90_000;
     let cancelled = false;
-    (async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const startedAt = Date.now();
+
+    const check = async () => {
+      if (cancelled) return;
       try {
         const res = await fetch('/api/admin/messages-delivery', {
           method: 'POST',
@@ -1233,12 +1245,19 @@ function ConversationView({
             data.states[m.id] ? { ...m, delivery_state: data.states[m.id] } : m,
           ),
         );
+        const states = Object.values(data.states) as string[];
+        const settled = states.every((v) => DELIVERY_TERMINAL.includes(v));
+        if (settled || Date.now() - startedAt >= MAX_WAIT_MS) return;
       } catch {
         // Silent — a missing delivery badge is not worth an error toast.
       }
-    })();
+      timer = setTimeout(check, POLL_MS);
+    };
+
+    void check();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary.id, detail?.platform, messages.length]);
@@ -1878,33 +1897,42 @@ function ConversationView({
  * different facts, and a bounce is exactly the case where she needs to
  * know and would otherwise never find out.
  */
+const DELIVERY_TERMINAL = ['delivered', 'bounced', 'complained', 'failed', 'canceled'];
+
 function DeliveryBadge({ state }: { state: string | null | undefined }) {
   const { t } = useAdminLang();
   if (!state) return null;
 
-  const bounced = state === 'bounced' || state === 'complained';
+  const failed =
+    state === 'bounced' || state === 'complained' || state === 'failed' || state === 'canceled';
   const delivered = state === 'delivered';
-  const label = bounced
-    ? t.messages.deliveryBounced
-    : delivered
-    ? t.messages.deliveryDelivered
-    : state === 'sent'
-    ? t.messages.deliverySent
-    : t.messages.deliveryPending;
+  const inFlight = !DELIVERY_TERMINAL.includes(state);
 
   return (
     <Flex align="center" gap={1} justify="flex-end" mt={1}>
-      <Icon
-        as={bounced ? FaExclamationTriangle : delivered ? FaCheckCircle : FaPaperPlane}
-        boxSize={2.5}
-        color={bounced ? 'red.500' : delivered ? 'green.500' : 'gray.400'}
-      />
+      {/* In-flight gets a spinner rather than a static icon: the state is
+          genuinely still resolving, and a motionless "Sent" reads as the
+          final answer. Sized to the text so it's a hint, not a widget. */}
+      {inFlight ? (
+        <Spinner size="xs" boxSize={2.5} thickness="1.5px" speed="0.9s" color="gray.400" />
+      ) : (
+        <Icon
+          as={delivered ? FaCheckCircle : FaExclamationTriangle}
+          boxSize={2.5}
+          color={delivered ? 'green.500' : 'red.500'}
+        />
+      )}
       <Text
         fontSize="2xs"
-        color={bounced ? 'red.600' : 'gray.500'}
-        fontWeight={bounced ? '500' : '400'}
+        color={failed ? 'red.600' : delivered ? 'green.600' : 'gray.500'}
+        fontWeight={failed ? '500' : '400'}
+        title={failed ? t.messages.deliveryBouncedHelp : undefined}
       >
-        {label}
+        {failed
+          ? t.messages.deliveryBounced
+          : delivered
+          ? t.messages.deliveryDelivered
+          : t.messages.deliverySent}
       </Text>
     </Flex>
   );
