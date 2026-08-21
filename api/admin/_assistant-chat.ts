@@ -59,6 +59,44 @@ const MODEL = 'gpt-4o-mini';
 const MAX_TOOL_ROUNDS = 8;
 const CHAT_SLOT = 'default';
 
+/**
+ * How many prior turns get replayed to the model, and how many are kept
+ * in the database.
+ *
+ * The whole thread used to be sent on every single turn, on top of a
+ * system prompt that now carries the entire admin-panel documentation.
+ * Nothing trimmed it, so a long-running conversation got steadily slower
+ * and more expensive and would eventually just fail against the context
+ * window — and it would fail on Vero, mid-sentence, with no obvious
+ * cause.
+ *
+ * SENT is the smaller window: enough that the assistant remembers what
+ * you were just discussing, not so much that a month of chat rides along
+ * on every question. STORED is larger because the transcript is hers to
+ * scroll; it's bounded only so the row can't grow forever.
+ */
+const MAX_HISTORY_SENT = 30;
+const MAX_HISTORY_STORED = 200;
+
+/**
+ * Trim to at most `limit` trailing messages, starting at a 'user' turn.
+ *
+ * The boundary matters. A `tool` message is only valid when the
+ * `assistant` turn carrying its matching tool_calls is also present —
+ * slice in the middle of a tool sequence and OpenAI rejects the whole
+ * request. Every conversational exchange starts with a user turn, so
+ * advancing to one guarantees a coherent window.
+ */
+function trimHistory(messages: StoredMessage[], limit: number): StoredMessage[] {
+  if (messages.length <= limit) return messages;
+  let start = messages.length - limit;
+  while (start < messages.length && messages[start].role !== 'user') start++;
+  // Everything after the cut was one enormous tool sequence — rather
+  // than send something malformed, send nothing and let the system
+  // prompt carry the turn.
+  return start >= messages.length ? [] : messages.slice(start);
+}
+
 let cachedClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (cachedClient) return cachedClient;
@@ -177,7 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // prior turns, then the new user turn.
     const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...priorMessages.map(toOpenaiMessage),
+      ...trimHistory(priorMessages, MAX_HISTORY_SENT).map(toOpenaiMessage),
       { role: 'user', content: userMessage },
     ];
 
@@ -243,8 +281,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         '(The assistant kept calling tools without giving a final answer. Try rephrasing.)';
     }
 
-    // Persist the full expanded thread to the DB.
-    const updatedThread = [...priorMessages, ...newlyPersistedMessages];
+    // Persist the thread, bounded. Vero keeps far more scrollback than
+    // the model is given, but not an unbounded amount.
+    const updatedThread = trimHistory(
+      [...priorMessages, ...newlyPersistedMessages],
+      MAX_HISTORY_STORED,
+    );
     await sql`
       INSERT INTO assistant_chats (slot, messages)
       VALUES (${CHAT_SLOT}, ${JSON.stringify(updatedThread)}::jsonb)

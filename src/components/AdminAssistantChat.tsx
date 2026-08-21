@@ -236,18 +236,16 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
   useEffect(() => {
     if (!scrollRef.current) return;
     if (!initialScrollDoneRef.current) {
-      // First load — pin to top so the empty state / oldest messages
-      // are visible and Vero knows there's context to scroll through.
-      scrollRef.current.scrollTop = 0;
-      // Only mark first-scroll "done" once the loading spinner has
-      // finished and we're rendering real content (either messages
-      // or the empty-state prompts). Otherwise a spinner-only paint
-      // would satisfy this and the subsequent history render would
-      // jump to the bottom.
+      // Land on the NEWEST message, not the oldest.
+      //
+      // This used to pin to the top on first load, on the theory that
+      // seeing old context tells you there's history to scroll through.
+      // In practice it means every visit to the tab opens on a
+      // conversation from days ago and you have to scroll to find where
+      // you left off. Chats open at the bottom; that's the convention
+      // for a reason.
       if (!loading) initialScrollDoneRef.current = true;
-      return;
     }
-    // After that: standard "auto-scroll to newest" chat behavior.
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, sending, loading]);
 
@@ -534,9 +532,10 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
           rendered as icon-only always; Send is icon-only on mobile
           (to keep the row balanced) and CTA-labeled on desktop. */}
       <Box
-        mt={3}
+        mt={{ base: 2, md: 3 }}
         // Safe-area padding so the composer clears the iOS home
-        // indicator when this pane goes edge-to-edge.
+        // indicator when this pane goes edge-to-edge. The admin
+        // container already clears the fixed bottom nav.
         pb={{ base: 'max(env(safe-area-inset-bottom), 0px)', md: 0 }}
       >
         <Stack
@@ -599,12 +598,16 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
             </CTAButton>
           </Stack>
         </Stack>
+        {/* The ⌘+Enter hint used to live here. Removed on mobile — it
+            cost a full line immediately above the send button to explain
+            a keyboard shortcut that doesn't exist on a phone. Kept on
+            desktop where it's both true and free. */}
         <Text
-          fontSize={{ base: '2xs', md: '2xs' }}
+          fontSize="2xs"
           color="gray.400"
           mt={1.5}
           px={1}
-          textAlign={{ base: 'center', md: 'left' }}
+          display={{ base: 'none', md: 'block' }}
           noOfLines={1}
         >
           {t.submitHint}
