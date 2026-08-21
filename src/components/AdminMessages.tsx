@@ -1249,6 +1249,23 @@ function ConversationView({
   // or a full mailbox bounces afterwards and looks identical to success
   // without this. Fires once per thread open; the endpoint caches
   // terminal outcomes so it isn't a Resend call per render forever.
+  // Keyed on the NEWEST outbound email, not on messages.length.
+  //
+  // Sending a reply while a draft is pending DELETES the draft row and
+  // INSERTS the sent one, so the array length is identical before and
+  // after — the effect never re-ran, no poll ever started for the message
+  // just sent, and the badge sat on "Sent" until switching conversations
+  // remounted the component. Which looked exactly like "it only updates
+  // when I navigate away and back".
+  //
+  // This changes precisely when there is a new outbound to track, and
+  // deliberately NOT when delivery_state updates — that would restart the
+  // poll on its own output.
+  const newestOutboundEmailId =
+    [...messages]
+      .reverse()
+      .find((m) => m.direction === 'outbound' && m.channel === 'email')?.id ?? null;
+
   useEffect(() => {
     if (detail?.platform !== 'email') return;
 
@@ -1301,7 +1318,7 @@ function ConversationView({
       if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary.id, detail?.platform, messages.length]);
+  }, [summary.id, detail?.platform, newestOutboundEmailId]);
 
   if (loading) {
     return (
@@ -1977,6 +1994,9 @@ function DeliveryBadge({ state }: { state: string | null | undefined }) {
         fontSize="2xs"
         color={failed ? 'red.600' : delivered ? 'green.600' : 'gray.500'}
         fontWeight={failed ? '500' : '400'}
+        // A bounce is the one state that needs Vero to DO something, and
+        // retrying is usually futile — a hard bounce means the address
+        // doesn't accept mail, and Resend suppresses it after one.
         title={failed ? t.messages.deliveryBouncedHelp : undefined}
       >
         {failed
