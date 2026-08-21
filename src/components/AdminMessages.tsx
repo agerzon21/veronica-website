@@ -1228,6 +1228,25 @@ function ConversationView({
       ? t.messages.emailSenderFallback(detail.external_user_id)
       : t.messages.instagramUserFallback(detail.external_user_id.slice(-6)));
 
+  // The address / handle to show under the name.
+  //
+  // For email, external_user_id IS the address — that's how the thread is
+  // keyed. For Instagram it's the IGSID, an opaque number that means
+  // nothing to Vero, so we use the handle and fall back to showing the
+  // channel name rather than a meaningless id.
+  //
+  // Skipped entirely when it would just repeat the heading — an email
+  // thread with no contact_name already displays the address as its
+  // title, and printing it twice looks like a bug.
+  const rawIdentifier =
+    detail.platform === 'email'
+      ? detail.external_user_id
+      : detail.contact_handle
+      ? `@${detail.contact_handle.replace(/^@/, '')}`
+      : null;
+  const contactIdentifier =
+    rawIdentifier && rawIdentifier !== displayName ? rawIdentifier : null;
+
   return (
     <>
       {/* Thread header — contact identity + per-convo AI toggle + Create client.
@@ -1292,9 +1311,23 @@ function ConversationView({
                     opportunistically in the webhook on every N-th
                     message. */}
               </HStack>
-              <HStack spacing={2}>
-                <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" textTransform="capitalize">
-                  {detail.platform}
+              <HStack spacing={2} minW={0}>
+                {/* The actual identifier, not just the channel name.
+                    "Email" under a display name tells Vero nothing she
+                    can act on — she needs to see WHICH address, because
+                    display names repeat, get spoofed, and a client
+                    writing from a work vs personal address is a
+                    different thread. Instagram shows @handle; email
+                    shows the address. Falls back to the channel name
+                    when Instagram never gave us a handle. */}
+                <Text
+                  fontSize={{ base: 'xs', md: '2xs' }}
+                  color="gray.500"
+                  textTransform={contactIdentifier ? 'none' : 'capitalize'}
+                  noOfLines={1}
+                  title={contactIdentifier ?? detail.platform}
+                >
+                  {contactIdentifier ?? detail.platform}
                 </Text>
                 {detail.linked_client_display_name && (
                   <Badge
