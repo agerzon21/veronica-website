@@ -330,6 +330,24 @@ async function sendEmail(
   // way to look that up in their dashboard. Delivery can lag several
   // minutes, so "hasn't arrived" and "failed" look identical from the
   // panel; this line is what tells them apart.
+  // Store Resend's tracking id, not just log it. Without it there is no
+  // way to ask Resend what became of this message, which is the only way
+  // Vero can tell "delivered" from "accepted but bounced". Distinct from
+  // external_message_id, which is our SMTP Message-ID for threading.
+  if (sendResult.resendId) {
+    try {
+      await sql`
+        UPDATE messages
+        SET delivery_id = ${sendResult.resendId}, delivery_state = 'sent'
+        WHERE id = ${inserted[0].id}
+      `;
+    } catch (err) {
+      // Non-fatal: the email is already gone. Losing the tracking id
+      // costs us delivery visibility on this one message, nothing more.
+      console.error('[reply-delivery] could not store delivery id:', err);
+    }
+  }
+
   console.log(
     `[reply-delivery] email accepted by Resend — to=${recipientEmail} ` +
       `resend_id=${sendResult.resendId ?? 'unknown'} message_id=${preMessageId}`,

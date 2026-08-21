@@ -51,6 +51,9 @@ interface MessageRow {
   // 'sent' | 'draft' | 'failed' — a draft is an AI reply awaiting
   // Vero's approval, never delivered. See migration 019.
   status: string;
+  // Resend's cached last_event for outbound email ('delivered',
+  // 'bounced', …). NULL for Instagram and for anything not yet polled.
+  delivery_state: string | null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -92,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SELECT
         id, direction, sender, body,
         external_message_id, sent_at, ai_model,
-        subject, in_reply_to, channel, status
+        subject, in_reply_to, channel, status, delivery_state
       FROM messages
       WHERE conversation_id = ${conversationId}
       ORDER BY sent_at ASC

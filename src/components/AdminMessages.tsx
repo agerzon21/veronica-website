@@ -6,7 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib,
+  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib, FaCheckCircle,
   FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaEraser,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -93,6 +93,8 @@ export interface Message {
   channel?: 'instagram' | 'email' | 'form' | 'whatsapp' | 'sms';
   // 'draft' = written by the AI, never delivered, waiting on Vero.
   status?: 'sent' | 'draft' | 'failed';
+  // Resend's last_event for outbound email. Absent on Instagram.
+  delivery_state?: string | null;
 }
 
 export type InquiryClassification =
@@ -1151,11 +1153,56 @@ function ConversationView({
         });
       }
     } catch {
-      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+      // A network error here does NOT mean the message wasn't sent — the
+      // request may have gone through and only the response been lost on
+      // bad wifi or a backgrounded phone. Telling her "failed" would make
+      // her re-send and the client receive it twice. Reload and let the
+      // thread answer the question.
+      await loadDetail();
+      toast({
+        title: t.common.couldNotReach,
+        description: t.messages.sendFailedCheckThread,
+        status: 'warning',
+        duration: 8000,
+        isClosable: true,
+      });
     } finally {
       setSending(false);
     }
   };
+
+  // Ask Resend what became of the emails in this thread.
+  //
+  // "It's in the thread" only proves Resend ACCEPTED it. A wrong address
+  // or a full mailbox bounces afterwards and looks identical to success
+  // without this. Fires once per thread open; the endpoint caches
+  // terminal outcomes so it isn't a Resend call per render forever.
+  useEffect(() => {
+    if (detail?.platform !== 'email') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/messages-delivery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, conversationId: summary.id }),
+        });
+        const data = await res.json();
+        if (cancelled || !data?.success || !data.states) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            data.states[m.id] ? { ...m, delivery_state: data.states[m.id] } : m,
+          ),
+        );
+      } catch {
+        // Silent — a missing delivery badge is not worth an error toast.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary.id, detail?.platform, messages.length]);
 
   if (loading) {
     return (
@@ -1716,6 +1763,47 @@ function ConversationView({
   );
 }
 
+/**
+ * Delivery badge for outbound email.
+ *
+ * Instagram needs nothing here — Vero can open the app and see the
+ * message. Email is opaque: the composer clears and she has to trust it
+ * went. Worse, "Resend accepted it" and "the client received it" are
+ * different facts, and a bounce is exactly the case where she needs to
+ * know and would otherwise never find out.
+ */
+function DeliveryBadge({ state }: { state: string | null | undefined }) {
+  const { t } = useAdminLang();
+  if (!state) return null;
+
+  const bounced = state === 'bounced' || state === 'complained';
+  const delivered = state === 'delivered';
+  const label = bounced
+    ? t.messages.deliveryBounced
+    : delivered
+    ? t.messages.deliveryDelivered
+    : state === 'sent'
+    ? t.messages.deliverySent
+    : t.messages.deliveryPending;
+
+  return (
+    <Flex align="center" gap={1} justify="flex-end" mt={1}>
+      <Icon
+        as={bounced ? FaExclamationTriangle : delivered ? FaCheckCircle : FaPaperPlane}
+        boxSize={2.5}
+        color={bounced ? 'red.500' : delivered ? 'green.500' : 'gray.400'}
+      />
+      <Text
+        fontSize="2xs"
+        color={bounced ? 'red.600' : 'gray.500'}
+        fontWeight={bounced ? '500' : '400'}
+      >
+        {label}
+      </Text>
+    </Flex>
+  );
+}
+
 function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: string }) {
   const { t, lang } = useAdminLang();
   const isInbound = msg.direction === 'inbound';
@@ -1898,6 +1986,11 @@ function MessageBubble({ msg, adminPassword }: { msg: Message; adminPassword: st
             {msg.ai_model && ` · ${msg.ai_model}`}
           </Text>
         </Flex>
+        {/* Outbound email only — Instagram doesn't need it and inbound
+            has nothing to report. */}
+        {!isInbound && msg.channel === 'email' && (
+          <DeliveryBadge state={msg.delivery_state} />
+        )}
       </Box>
     </Flex>
   );

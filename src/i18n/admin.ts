@@ -323,6 +323,20 @@ const dict = {
     senderForm: { en: 'Contact form', ru: 'Форма на сайте' },
     senderEmail: { en: 'Email', ru: 'Письмо' },
 
+    // ── Email delivery state ─────────────────────────────────────
+    deliverySent: { en: 'Sent', ru: 'Отправлено' },
+    deliveryDelivered: { en: 'Delivered', ru: 'Доставлено' },
+    deliveryBounced: { en: "Didn't arrive", ru: 'Не доставлено' },
+    deliveryPending: { en: 'Sending…', ru: 'Отправляется…' },
+    deliveryBouncedHelp: {
+      en: 'The address rejected it — check it and try again.',
+      ru: 'Адрес отклонил письмо — проверь его и попробуй снова.',
+    },
+    sendFailedCheckThread: {
+      en: "If your message isn't in the thread, it didn't send. Refresh before sending again.",
+      ru: 'Если сообщения нет в переписке — оно не отправилось. Обнови перед повторной отправкой.',
+    },
+
     // ── AI draft awaiting review (email only) ────────────────────
     draftTitle: { en: 'AI wrote a reply', ru: 'AI написал ответ' },
     draftHelp: {
