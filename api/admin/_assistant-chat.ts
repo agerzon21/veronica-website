@@ -70,12 +70,18 @@ const CHAT_SLOT = 'default';
  * window — and it would fail on Vero, mid-sentence, with no obvious
  * cause.
  *
- * SENT is the smaller window, but deliberately generous. The system
- * prompt is the expensive part — roughly 19k tokens of knowledge base and
- * panel documentation, rebuilt every turn — against which 80 messages of
- * chat is around 4k. Economizing on the history would trade real
- * continuity for a rounding error. The cap exists to bound growth over
- * months, not to save tokens.
+ * SENT is the smaller window, but deliberately generous. Measured against
+ * the live thread: the knowledge base and panel documentation rebuilt into
+ * every prompt come to ~17.5k tokens, and 80 stored messages to ~10k —
+ * because stored messages include tool_calls and tool results, which are
+ * far more verbose than the visible chat suggests. So history is roughly
+ * a third of the payload, not the rounding error it looks like.
+ *
+ * 80 is still the right number: ~27k tokens a turn is a fraction of the
+ * 128k window and costs well under a cent on gpt-4o-mini, while a shorter
+ * window costs real continuity in a long working session. But if this ever
+ * needs tightening, note that trimming TOOL RESULTS from stored history
+ * would reclaim more than shrinking the window, and lose less.
  *
  * What actually persists is NOT in this window: ai_context is loaded in
  * full on every turn, so anything the assistant wrote down (pricing,
