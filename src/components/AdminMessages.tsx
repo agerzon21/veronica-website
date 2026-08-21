@@ -402,9 +402,11 @@ const AdminMessages = ({ adminPassword, adminLevel }: Props) => {
             // conversation feels like its own screen. zIndex=25 sits
             // above page content but below the bottom nav (30) so nav
             // stays reachable; but nav is also hidden when a chat is
-            // open (we render it above the pane via top: 0 rather than
-            // covering nav) — actually we set top to admin header
-            // start so the composer clears the bottom nav safely.
+            // Full-screen fixed pane on mobile. NOTE: this sits BELOW the
+            // admin bottom nav in stacking order (nav is z-30), so the nav
+            // paints over the last ~80px. The composer compensates with
+            // bottom padding rather than this pane shrinking, so the
+            // message list still uses the full height.
             position={{ base: 'fixed', lg: 'static' }}
             top={{ base: 0, lg: 'auto' }}
             left={{ base: 0, lg: 'auto' }}
@@ -1604,7 +1606,15 @@ function ConversationView({
 
       <Box
         p={{ base: 3, md: 4 }}
-        pb={{ base: 'max(env(safe-area-inset-bottom), 12px)', md: 4 }}
+        // Clear the FIXED bottom nav, not just the iOS home indicator.
+        //
+        // On mobile this pane is position:fixed at h=100dvh / bottom=0 with
+        // z-index 25, and the admin bottom nav is z-index 30 at bottom=0 —
+        // so the nav paints over the last ~80px of the pane. That is
+        // exactly where the Send button sits, so Vero could type a reply
+        // and have nowhere to tap. Matches the clearance the main admin
+        // container already uses (src/pages/Admin.tsx).
+        pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 4 }}
         borderTop="1px solid"
         borderColor="gray.100"
         bg="white"
