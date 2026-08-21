@@ -423,10 +423,61 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
           the reset icon so vertical space is preserved. Reset button
           is an icon-only 36×36 button (with tooltip) to save the
           full-line real estate the old label chip was eating. */}
-      <Flex align="center" justify={{ base: 'flex-end', md: 'space-between' }} mb={2} px={1}>
-        <HStack spacing={2} display={{ base: 'none', md: 'flex' }}>
-          <Icon as={FaRegLightbulb} boxSize={3.5} color="#c9a96e" />
-          <Text fontSize="xs" color="gray.500" fontWeight="400" letterSpacing="0.06em">
+      <Flex align="center" justify="space-between" mb={2} px={1} gap={2}>
+        {/* Quick actions + the hint share the left side, so on mobile —
+            where the hint is hidden and this row held nothing but the
+            right-aligned reset — the menu costs no extra vertical space.
+            It used to sit on its own line above the composer, which on a
+            phone was a whole row spent on one chip. */}
+        <HStack spacing={3} minW={0}>
+  <Menu placement="bottom-start" autoSelect={false}>
+            <MenuButton
+              as={Box}
+              role="button"
+              display="inline-flex"
+              alignItems="center"
+              gap={1.5}
+              cursor="pointer"
+              fontSize="xs"
+              fontWeight="500"
+              color="gray.600"
+              bg="white"
+              border="1px solid"
+              borderColor="gray.200"
+              borderRadius="full"
+              px={3}
+              py={1.5}
+              minH="32px"
+              _hover={{ borderColor: '#c9a96e', color: '#8a6e35' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Icon as={FaRegLightbulb} boxSize={3} />
+              {t.quickActionsLabel}
+              <Icon as={FaChevronDown} boxSize={2.5} />
+            </MenuButton>
+            <MenuList fontSize="sm" minW="280px" zIndex={20}>
+              {t.quickActions.map((a, i) => (
+                <Box key={a.label}>
+                  {i === 2 && <MenuDivider />}
+                  <MenuItem
+                    onClick={() => setInput(a.prompt)}
+                    _hover={{ bg: '#fdf9f0' }}
+                    _focus={{ bg: '#fdf9f0' }}
+                  >
+                    {a.label}
+                  </MenuItem>
+                </Box>
+              ))}
+            </MenuList>
+          </Menu>
+          <Text
+            fontSize="xs"
+            color="gray.500"
+            fontWeight="400"
+            letterSpacing="0.06em"
+            display={{ base: 'none', lg: 'block' }}
+            noOfLines={1}
+          >
             {t.headerHint}
           </Text>
         </HStack>
@@ -482,60 +533,8 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
           crushed to ~230px alongside the mic + send buttons. Mic is
           rendered as icon-only always; Send is icon-only on mobile
           (to keep the row balanced) and CTA-labeled on desktop. */}
-      {/* Quick actions.
-          The suggestion chips only ever appeared on the empty state, so
-          the moment Vero sent one message they were gone — and the thing
-          she most needs ("help me answer this person") is exactly what
-          she'd reach for mid-conversation. This menu stays put.
-          Each entry just prefills the composer rather than sending, so
-          she can add the customer's name or her own notes before hitting
-          send. The trailing-space prompts are deliberately unfinished
-          sentences for that reason. */}
-      <Box mt={3}>
-        <Menu placement="top-start" autoSelect={false}>
-          <MenuButton
-            as={Box}
-            role="button"
-            display="inline-flex"
-            alignItems="center"
-            gap={1.5}
-            cursor="pointer"
-            fontSize="xs"
-            fontWeight="500"
-            color="gray.600"
-            bg="white"
-            border="1px solid"
-            borderColor="gray.200"
-            borderRadius="full"
-            px={3}
-            py={1.5}
-            minH="32px"
-            _hover={{ borderColor: '#c9a96e', color: '#8a6e35' }}
-            sx={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            <Icon as={FaRegLightbulb} boxSize={3} />
-            {t.quickActionsLabel}
-            <Icon as={FaChevronDown} boxSize={2.5} />
-          </MenuButton>
-          <MenuList fontSize="sm" minW="280px" zIndex={20}>
-            {t.quickActions.map((a, i) => (
-              <Box key={a.label}>
-                {i === 2 && <MenuDivider />}
-                <MenuItem
-                  onClick={() => setInput(a.prompt)}
-                  _hover={{ bg: '#fdf9f0' }}
-                  _focus={{ bg: '#fdf9f0' }}
-                >
-                  {a.label}
-                </MenuItem>
-              </Box>
-            ))}
-          </MenuList>
-        </Menu>
-      </Box>
-
       <Box
-        mt={2}
+        mt={3}
         // Safe-area padding so the composer clears the iOS home
         // indicator when this pane goes edge-to-edge.
         pb={{ base: 'max(env(safe-area-inset-bottom), 0px)', md: 0 }}
