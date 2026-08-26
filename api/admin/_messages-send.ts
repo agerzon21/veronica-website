@@ -13,6 +13,7 @@
  *   → 400 missing fields / empty text / oversize for the channel
  *   → 401 wrong password
  *   → 404 no such conversation
+ *   → 409 an identical message was just sent (retry with allowDuplicate)
  *   → 502 upstream (IG API / Resend) rejected the send
  *
  * The message is persisted with sender='human' regardless of channel so
@@ -49,7 +50,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const result = await deliverReply(getDb(), conversationId, text);
+    // allowDuplicate is set by the client only after Vero has confirmed
+    // she means to repeat herself, and by the bounce-retry path where the
+    // repeat is the entire point.
+    const result = await deliverReply(getDb(), conversationId, text, {
+      allowDuplicate: req.body?.allowDuplicate === true,
+    });
     if (!result.ok) {
       return res.status(result.status).json({ success: false, error: result.error });
     }

@@ -46,10 +46,28 @@ export interface DeliveryResult {
  * Look up the conversation, enforce the channel's length cap, and
  * dispatch to the right sender.
  */
+/**
+ * How far back to look for an identical message before treating a send
+ * as an accidental repeat.
+ *
+ * Generous on purpose. The real duplicate we found had a 32-second gap —
+ * a slow send with no feedback, clicked twice — but the same mistake
+ * happens minutes later when someone isn't sure the first one went. A
+ * genuinely intentional repeat inside 15 minutes is vanishingly rare,
+ * and it isn't blocked anyway, just confirmed.
+ */
+const DUPLICATE_WINDOW_MINUTES = 15;
+
+/** Whitespace/case-insensitive compare, so a stray newline isn't a new message. */
+function normalizeForCompare(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 export async function deliverReply(
   sql: ReturnType<typeof getDb>,
   conversationId: string,
   text: string,
+  options: { allowDuplicate?: boolean } = {},
 ): Promise<DeliveryResult> {
   const convoRows = (await sql`
     SELECT external_user_id, platform
@@ -62,6 +80,39 @@ export async function deliverReply(
     return { ok: false, status: 404, error: 'Conversation not found' };
   }
   const convo = convoRows[0];
+
+  // Refuse a send that repeats one we just made, unless the caller says
+  // it's deliberate.
+  //
+  // Sends aren't instant, and the panel gives no feedback until the
+  // request returns. On a slow connection that's several seconds of a
+  // screen that looks like nothing happened — so the button gets pressed
+  // again, and the customer receives the same message twice. This is a
+  // 409 rather than a silent no-op: silently dropping it would look
+  // identical to a failure and provoke a third attempt.
+  if (!options.allowDuplicate) {
+    const cutoff = new Date(
+      Date.now() - DUPLICATE_WINDOW_MINUTES * 60 * 1000,
+    ).toISOString();
+    const recent = (await sql`
+      SELECT body FROM messages
+      WHERE conversation_id = ${conversationId}
+        AND direction = 'outbound'
+        AND status <> 'draft'
+        AND sent_at > ${cutoff}
+      ORDER BY sent_at DESC
+      LIMIT 10
+    `) as Array<{ body: string }>;
+
+    const candidate = normalizeForCompare(text);
+    if (recent.some((m) => normalizeForCompare(m.body) === candidate)) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'duplicate',
+      };
+    }
+  }
 
   // IG has a Meta-enforced 1000-char limit; email supports long bodies.
   const maxLen = convo.platform === 'email' ? MAX_EMAIL_MESSAGE_LEN : MAX_IG_MESSAGE_LEN;

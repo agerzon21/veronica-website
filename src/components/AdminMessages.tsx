@@ -821,6 +821,8 @@ function ConversationView({
   const [error, setError] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [discardingDraft, setDiscardingDraft] = useState(false);
+  // Text the server flagged as a repeat, held while Vero decides.
+  const [duplicateText, setDuplicateText] = useState<string | null>(null);
 
   // The AI's unsent suggestion, if it left one. Only ever present on
   // non-Instagram channels — see the dispatch in api/_ai-reply.ts.
@@ -1182,6 +1184,8 @@ function ConversationView({
           password: adminPassword,
           conversationId: summary.id,
           text,
+          // The whole point of a retry is to send the same words again.
+          allowDuplicate: true,
         }),
       });
       const data = await res.json();
@@ -1266,6 +1270,10 @@ function ConversationView({
         setReplyText('');
         await loadDetail();
         onRefreshList();
+      } else if (res.status === 409) {
+        // Not an error — the server noticed this repeats something just
+        // sent. Ask rather than refuse; she may well mean it.
+        setDuplicateText(outbound);
       } else {
         toast({
           title: data.error || t.messages.sendFailed,
@@ -1660,6 +1668,24 @@ function ConversationView({
         onCancel={() => setResetConfirmOpen(false)}
       />
 
+      {/* Duplicate-send confirmation. Deliberately a question, not a
+          block — repeating yourself is occasionally correct (a nudge, a
+          resend after a bounce), and refusing outright would be worse
+          than the duplicate. */}
+      <ConfirmDialog
+        isOpen={duplicateText !== null}
+        title={t.messages.duplicateConfirmTitle}
+        body={t.messages.duplicateConfirmBody}
+        confirmLabel={t.messages.duplicateConfirmButton}
+        isLoading={sending}
+        onConfirm={() => {
+          const text = duplicateText;
+          setDuplicateText(null);
+          if (text) void handleRetrySend(text);
+        }}
+        onCancel={() => setDuplicateText(null)}
+      />
+
       <ConfirmDialog
         isOpen={deleteConfirmOpen}
         title={t.messages.deleteConfirmTitle}
@@ -1869,19 +1895,36 @@ function ConversationView({
           <Text fontSize="2xs" color="gray.500" mb={2}>
             {t.messages.draftHelp}
           </Text>
-          <HStack spacing={2}>
+          {/* Stacked on mobile, inline on desktop.
+              As a single row on a phone these three read as one run-on
+              string — a filled button immediately followed by two bare
+              text buttons, with no boundary between "Improve with
+              assistant" and "Discard". Full-width stacked rows give each
+              action its own line and hit target; the secondaries get
+              outlines so they read as buttons rather than prose. */}
+          <Stack
+            direction={{ base: 'column', md: 'row' }}
+            spacing={2}
+            align="stretch"
+          >
             <CTAButton
               onClick={() => setReplyText(pendingDraft.body)}
               variant="solid"
               size="sm"
               icon={FaPaperPlane}
+              fullWidth={{ base: true, md: false }}
             >
               {t.messages.draftUse}
             </CTAButton>
             {onOpenAssistant && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
+                minH={{ base: '40px', md: 'auto' }}
+                borderColor="#e8d9b8"
+                color="#8a6e35"
+                bg="white"
+                _hover={{ bg: '#fdf9f0', borderColor: '#c9a96e' }}
                 leftIcon={<Icon as={FaRobot} boxSize={3} />}
                 onClick={handleRefineWithAssistant}
               >
@@ -1889,14 +1932,19 @@ function ConversationView({
               </Button>
             )}
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
+              minH={{ base: '40px', md: 'auto' }}
+              borderColor="gray.300"
+              color="gray.600"
+              bg="white"
+              _hover={{ bg: 'gray.50' }}
               onClick={handleDiscardDraft}
               isLoading={discardingDraft}
             >
               {t.messages.draftDiscard}
             </Button>
-          </HStack>
+          </Stack>
         </Box>
       )}
 

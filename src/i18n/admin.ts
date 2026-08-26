@@ -358,6 +358,16 @@ const dict = {
       ru: 'Оно не отправлено. Отредактируй ниже, если нужно, потом отправь — или удали.',
     },
     draftUse: { en: 'Use this draft', ru: 'Взять черновик' },
+    duplicateConfirmTitle: {
+      en: 'Send this again?',
+      ru: 'Отправить ещё раз?',
+    },
+    duplicateConfirmBody: {
+      en: 'You just sent this exact message to this person. Sending it again means they receive it twice — send anyway?',
+      ru: 'Ты только что отправила это же сообщение этому человеку. Если отправить снова, он получит его дважды — всё равно отправить?',
+    },
+    duplicateConfirmButton: { en: 'Send anyway', ru: 'Всё равно отправить' },
+
     draftRefine: { en: 'Improve with assistant', ru: 'Доработать с ассистентом' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },
     draftDiscarded: { en: 'Draft discarded', ru: 'Черновик удалён' },

@@ -724,6 +724,12 @@ async function executeToolCall(
     // channel dispatch all included. See api/_reply-delivery.ts.
     const result = await deliverReply(sql, conversationId, text);
     if (!result.ok) {
+      if (result.status === 409) {
+        return {
+          error:
+            'That exact message was already sent to this person in the last 15 minutes. Tell Vero it looks like a duplicate and ask whether she wants it sent again anyway.',
+        };
+      }
       return { error: result.error ?? 'Send failed' };
     }
     console.log(
