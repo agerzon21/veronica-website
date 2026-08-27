@@ -67,7 +67,8 @@ export interface ConversationSummary {
   last_message_direction: 'inbound' | 'outbound' | null;
   last_message_sender: 'contact' | 'ai' | 'human' | null;
   classification?: string | null;
-  is_promotional?: boolean;
+  // null = no opinion, let the AI classification decide.
+  is_promotional?: boolean | null;
   has_draft?: boolean;
   last_message_preview: string | null;
 }
@@ -568,9 +569,12 @@ function ConversationList({
   // threads that have been opened (summaries are generated on demand), so
   // for the marketing mail Vero never opens — which is most of it — her
   // manual flag is the one that actually does the work.
+  // Vero's explicit choice wins; otherwise the AI classification decides.
+  // `?? ` rather than `||` matters — an explicit FALSE ("show this") has
+  // to beat a spam-or-unrelated classification, which is the whole point
+  // of the column being nullable.
   const isPromotional = (c: ConversationSummary) =>
-    (c.is_promotional === true || c.classification === 'spam-or-unrelated') &&
-    c.id !== selectedId;
+    (c.is_promotional ?? c.classification === 'spam-or-unrelated') && c.id !== selectedId;
 
   const primary = conversations.filter((c) => !isPromotional(c));
   const promotional = conversations.filter(isPromotional);
@@ -851,8 +855,15 @@ function ConversationView({
     onOpenAssistant?.();
   };
 
+  // Is this thread currently folded out of the inbox — for EITHER reason?
+  // The button used to reflect only the manual flag, so an
+  // auto-classified thread showed "hide" while already hidden, and
+  // pressing it appeared to do nothing.
+  const isHidden =
+    detail?.is_promotional ?? summary.classification === 'spam-or-unrelated';
+
   const handleTogglePromotional = async () => {
-    const next = !detail?.is_promotional;
+    const next = !isHidden;
     try {
       const res = await fetch('/api/admin/messages-mark-promotional', {
         method: 'POST',
@@ -1625,24 +1636,16 @@ function ConversationView({
                 threads are keyed on the sender's address, this covers
                 everything they send from now on. */}
             <IconButton
-              aria-label={
-                detail.is_promotional
-                  ? t.messages.unmarkPromotional
-                  : t.messages.markPromotional
-              }
-              title={
-                detail.is_promotional
-                  ? t.messages.unmarkPromotional
-                  : t.messages.markPromotional
-              }
-              icon={<Icon as={detail.is_promotional ? FaEye : FaEyeSlash} boxSize={3.5} />}
+              aria-label={isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
+              title={isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
+              icon={<Icon as={isHidden ? FaEye : FaEyeSlash} boxSize={3.5} />}
               onClick={handleTogglePromotional}
               variant="ghost"
               size="md"
               w="36px"
               h="36px"
               minW="36px"
-              color={detail.is_promotional ? '#8a6e35' : 'gray.400'}
+              color={isHidden ? '#8a6e35' : 'gray.400'}
               _hover={{ color: '#c9a96e' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             />

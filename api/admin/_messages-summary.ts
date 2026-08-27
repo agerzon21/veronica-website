@@ -189,7 +189,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SET
         summary_json = ${JSON.stringify(summary)}::jsonb,
         summary_message_id = ${cacheRow.latest_message_id},
-        summary_generated_at = NOW()
+        summary_generated_at = NOW(),
+        -- A thread the classifier calls spam-or-unrelated should not get
+        -- AI replies. Without this the assistant was drafting warm
+        -- replies to marketing blasts, and those drafts surfaced as the
+        -- inbox preview — making a thread Vero had never opened look
+        -- like she had answered it.
+        --
+        -- Deliberately one-way: promotional switches AI OFF, but a
+        -- non-promotional classification does NOT switch it back on.
+        -- Vero turns AI off on real client threads when she wants to
+        -- handle someone personally, and a summary refresh silently
+        -- undoing that would start auto-replying to her client.
+        ai_enabled = CASE
+          WHEN ${classification} = 'spam-or-unrelated' THEN FALSE
+          ELSE ai_enabled
+        END
       WHERE id = ${conversationId}
     `;
 

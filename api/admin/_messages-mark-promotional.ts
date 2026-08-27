@@ -17,11 +17,10 @@
  * visible in the inbox preview, which made a thread Vero had never
  * opened look like she had answered it.
  *
- * Unmarking clears the flag but deliberately does NOT switch the AI back
- * on. If she is un-hiding a thread it is because she wants to deal with
- * it herself, and silently re-enabling automated replies to a sender she
- * had previously binned is the kind of surprise that erodes trust in the
- * whole feature.
+ * Unmarking sets FALSE — an explicit "show this", which overrides an AI
+ * classification that would otherwise keep folding the thread — and
+ * switches the AI back on, since un-hiding is a statement that the
+ * thread is real.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -50,8 +49,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
 
-    // Switching AI off on mark, but not back on when unmarking — see the
-    // note in this file's header.
+    // FALSE is an explicit "show this", not an absence of opinion — it
+    // has to override an auto-classification that would otherwise keep
+    // folding the thread. NULL means "no opinion, let the classifier
+    // decide" and is only ever set by migration 022.
+    //
+    // Unmarking re-enables AI. That's the reverse of what this did
+    // originally, and it's right: un-hiding is an explicit statement
+    // that the thread is real, so leaving the assistant switched off
+    // would make her wonder why nothing drafts. Marking still switches
+    // it off.
     const rows = promotional
       ? ((await sql`
           UPDATE conversations
@@ -61,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `) as Array<{ id: string; contact_name: string | null; external_user_id: string }>)
       : ((await sql`
           UPDATE conversations
-          SET is_promotional = FALSE, updated_at = NOW()
+          SET is_promotional = FALSE, ai_enabled = TRUE, updated_at = NOW()
           WHERE id = ${conversationId}
           RETURNING id, contact_name, external_user_id
         `) as Array<{ id: string; contact_name: string | null; external_user_id: string }>);
