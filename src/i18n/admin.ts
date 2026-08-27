@@ -373,6 +373,14 @@ const dict = {
     draftDiscarded: { en: 'Draft discarded', ru: 'Черновик удалён' },
 
     // ── Promotional / unrelated threads ──────────────────────────
+    markPromotional: { en: 'Hide as promotional', ru: 'Скрыть как рекламу' },
+    unmarkPromotional: { en: 'Show in main inbox', ru: 'Вернуть в основной список' },
+    markedPromotional: {
+      en: 'Hidden — future emails from this sender are hidden too',
+      ru: 'Скрыто — письма от этого отправителя тоже будут скрыты',
+    },
+    unmarkedPromotional: { en: 'Back in the main inbox', ru: 'Снова в основном списке' },
+
     showPromotional: {
       en: (n: number) => `Show ${n} promotional`,
       ru: (n: number) => `Показать рекламные (${n})`,

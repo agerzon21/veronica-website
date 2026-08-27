@@ -43,6 +43,7 @@ import messagesSendHandler from './admin/_messages-send.js';
 import messagesMarkReadHandler from './admin/_messages-mark-read.js';
 import messagesTranslateHandler from './admin/_messages-translate.js';
 import messagesSummaryHandler from './admin/_messages-summary.js';
+import messagesMarkPromotionalHandler from './admin/_messages-mark-promotional.js';
 import messagesDeleteHandler from './admin/_messages-delete.js';
 import messagesDeliveryHandler from './admin/_messages-delivery.js';
 import messagesDraftDiscardHandler from './admin/_messages-draft-discard.js';
@@ -104,6 +105,7 @@ const HANDLERS: Record<
   'messages-draft-discard': messagesDraftDiscardHandler,
   'messages-delivery': messagesDeliveryHandler,
   'messages-delete': messagesDeleteHandler,
+  'messages-mark-promotional': messagesMarkPromotionalHandler,
   'context-list': contextListHandler,
   'context-create': contextCreateHandler,
   'context-update': contextUpdateHandler,

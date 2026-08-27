@@ -25,6 +25,8 @@ interface ConversationRow {
   contact_handle: string | null;
   contact_profile_pic_url: string | null;
   ai_enabled: boolean;
+  // Manually marked as marketing/unrelated by Vero (migration 021).
+  is_promotional: boolean;
   linked_client_portal_id: string | null;
   linked_client_display_name: string | null;
   notes: string;
@@ -78,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SELECT
         c.id, c.platform, c.external_user_id,
         c.contact_name, c.contact_handle, c.contact_profile_pic_url,
-        c.ai_enabled, c.linked_client_portal_id, c.notes,
+        c.ai_enabled, c.is_promotional, c.linked_client_portal_id, c.notes,
         c.last_message_at, c.unread_count, c.created_at,
         cp.client_display_name AS linked_client_display_name
       FROM conversations c

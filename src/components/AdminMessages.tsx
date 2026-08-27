@@ -6,7 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib, FaCheckCircle, FaTrash,
+  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib, FaCheckCircle, FaTrash, FaEye, FaEyeSlash,
   FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaEraser,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
@@ -67,6 +67,7 @@ export interface ConversationSummary {
   last_message_direction: 'inbound' | 'outbound' | null;
   last_message_sender: 'contact' | 'ai' | 'human' | null;
   classification?: string | null;
+  is_promotional?: boolean;
   has_draft?: boolean;
   last_message_preview: string | null;
 }
@@ -563,8 +564,13 @@ function ConversationList({
   //
   // A thread Vero has open stays visible regardless, so the list can't
   // yank the conversation she's reading out from under her.
+  // Two signals, either one folds. The AI classification only exists for
+  // threads that have been opened (summaries are generated on demand), so
+  // for the marketing mail Vero never opens — which is most of it — her
+  // manual flag is the one that actually does the work.
   const isPromotional = (c: ConversationSummary) =>
-    c.classification === 'spam-or-unrelated' && c.id !== selectedId;
+    (c.is_promotional === true || c.classification === 'spam-or-unrelated') &&
+    c.id !== selectedId;
 
   const primary = conversations.filter((c) => !isPromotional(c));
   const promotional = conversations.filter(isPromotional);
@@ -843,6 +849,33 @@ function ConversationView({
       `Help me improve the reply to ${who}. Read the conversation first. Here's the draft I have:\n\n${draft}\n\nWhat I'd change: `,
     );
     onOpenAssistant?.();
+  };
+
+  const handleTogglePromotional = async () => {
+    const next = !detail?.is_promotional;
+    try {
+      const res = await fetch('/api/admin/messages-mark-promotional', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          conversationId: summary.id,
+          promotional: next,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({
+          title: next ? t.messages.markedPromotional : t.messages.unmarkedPromotional,
+          status: 'success',
+          duration: 3000,
+        });
+        await loadDetail();
+        onRefreshList();
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+    }
   };
 
   const handleDiscardDraft = async () => {
@@ -1586,6 +1619,33 @@ function ConversationView({
                 (so a re-test lands back in it), TRASH removes the thread
                 entirely. Without the second one, every reset left a dead
                 empty row in the inbox permanently. */}
+            {/* Fold this sender out of the inbox. Not a delete — mail
+                from a marketing sender is occasionally worth reading, so
+                a mistaken tap should cost a click to undo. Because email
+                threads are keyed on the sender's address, this covers
+                everything they send from now on. */}
+            <IconButton
+              aria-label={
+                detail.is_promotional
+                  ? t.messages.unmarkPromotional
+                  : t.messages.markPromotional
+              }
+              title={
+                detail.is_promotional
+                  ? t.messages.unmarkPromotional
+                  : t.messages.markPromotional
+              }
+              icon={<Icon as={detail.is_promotional ? FaEye : FaEyeSlash} boxSize={3.5} />}
+              onClick={handleTogglePromotional}
+              variant="ghost"
+              size="md"
+              w="36px"
+              h="36px"
+              minW="36px"
+              color={detail.is_promotional ? '#8a6e35' : 'gray.400'}
+              _hover={{ color: '#c9a96e' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            />
             <IconButton
               aria-label={t.messages.deleteConversation}
               title={t.messages.deleteConversation}
