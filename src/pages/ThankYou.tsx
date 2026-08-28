@@ -294,7 +294,7 @@ const ContactPill = ({ icon, label, iconSize, onClick }: ContactPillProps) => (
     transition="all 0.4s"
     _hover={{ transform: 'translateY(-3px)', '& svg': { color: 'white' } }}
     sx={{ WebkitTapHighlightColor: 'transparent' }}
-    role="group"
+    data-group
   >
     <Flex h="24px" align="center"><Icon as={icon} color="#c9a96e" boxSize={iconSize} transition="all 0.4s" /></Flex>
     <Text color="whiteAlpha.800" fontSize="xs" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase"

@@ -158,7 +158,7 @@ const GoogleReviewsSection = () => {
             href={GOOGLE_PROFILE_URL}
             isExternal
             _hover={{ textDecoration: 'none' }}
-            role="group"
+            data-group
           >
             <HStack
               spacing={3}
