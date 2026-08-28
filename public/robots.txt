@@ -1,5 +1,15 @@
 User-agent: *
 Allow: /
+
+# Gallery photos are served through the /api/photo proxy (they live in Google
+# Drive, not the repo). Every one of the 227 prerendered /photo/* pages points
+# its og:image and schema.org contentUrl at /api/photo?id=... — so a blanket
+# "Disallow: /api/" told Google it may read those pages but must not fetch the
+# photograph they exist to show. On a photography site that is the whole point
+# of the page. This Allow must stay ABOVE the /api/ Disallow and be more
+# specific than it; both Google and Bing resolve conflicts by longest match.
+Allow: /api/photo
+
 Disallow: /private/
 Disallow: /admin
 Disallow: /admin/
@@ -10,5 +20,8 @@ Disallow: /api/
 # Sitemap
 Sitemap: https://vero.photography/sitemap.xml
 
-# Crawl-delay
-Crawl-delay: 10 
+# No Crawl-delay. It used to be 10, which throttles compliant crawlers to one
+# URL per 10 seconds — roughly 40 minutes to walk the 235 URLs in the sitemap.
+# Google ignores the directive entirely, so it only ever slowed down Bing and
+# the smaller crawlers. The site is static and CDN-cached; there is nothing to
+# protect from crawl load.

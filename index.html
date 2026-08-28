@@ -51,6 +51,12 @@
          the signal in static HTML guarantees first-pass indexing sees it. -->
     <meta name="robots" content="index, follow, max-image-preview:large" />
 
+    <!-- Homepage canonical in STATIC html, so a crawler that does not execute
+         JS sees one. React Helmet renders a duplicate at runtime, and
+         prerender-photos.mjs strips every canonical before injecting its own
+         per-photo one — so /photo/* pages never end up with two. -->
+    <link rel="canonical" href="https://vero.photography/" />
+
     <!-- The camera-body preload used to live here. Removed: at scroll 0 the LCD
          overshoots the viewport by 1.2x, so the camera body is 100% occluded on
          every viewport up to ~2940 CSS px wide — we were spending 182KB at
@@ -211,6 +217,35 @@
     </script>
   </head>
   <body>
+    <!-- VG-HOME-NOSCRIPT:START — stripped from /photo/* by prerender-photos.mjs,
+         which injects its own per-photo noscript after the root div. Without
+         this, a crawler or AI agent that does not execute JS sees a completely
+         empty body on every route except /photo/*, which is most of why
+         DebugBear's agentic-browsing score sits at 0.33. -->
+    <noscript>
+      <h1>Vero Photography</h1>
+      <p>
+        Wedding, portrait, family, and maternity photography by Veronika Gerzon.
+        Based in Scranton, Pennsylvania — available worldwide.
+      </p>
+      <nav aria-label="Site">
+        <ul>
+          <li><a href="/gallery">Gallery</a></li>
+          <li><a href="/gallery/weddings">Wedding photography</a></li>
+          <li><a href="/gallery/portraits">Portrait photography</a></li>
+          <li><a href="/gallery/family">Family photography</a></li>
+          <li><a href="/gallery/maternity">Maternity photography</a></li>
+          <li><a href="/about">About Veronika</a></li>
+          <li><a href="/journal">Journal</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </nav>
+      <p>
+        Enable JavaScript for the full experience, or reach Veronika directly at
+        <a href="tel:+15709095707">(570) 909-5707</a>.
+      </p>
+    </noscript>
+    <!-- VG-HOME-NOSCRIPT:END -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -9,6 +9,7 @@ interface ImageCarouselProps {
     position?: string;
     mobileUrl?: string;
     mobileSrcSet?: string;
+    desktopSrcSet?: string;
     mobilePosition?: string;
     /** If true, this image is excluded from the carousel on mobile viewports. */
     mobileSkip?: boolean;
@@ -175,8 +176,12 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
         >
           <Image
             src={getCurrentImage()}
-            srcSet={isMobile ? currentImage.mobileSrcSet : undefined}
-            sizes={isMobile && currentImage.mobileSrcSet ? HERO_SIZES : undefined}
+            srcSet={isMobile ? currentImage.mobileSrcSet : currentImage.desktopSrcSet}
+            sizes={
+              (isMobile ? currentImage.mobileSrcSet : currentImage.desktopSrcSet)
+                ? HERO_SIZES
+                : undefined
+            }
             alt={`Slide ${currentIndex + 1}`}
             objectFit="cover"
             width="100%"
