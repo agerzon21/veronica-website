@@ -51,8 +51,14 @@
          the signal in static HTML guarantees first-pass indexing sees it. -->
     <meta name="robots" content="index, follow, max-image-preview:large" />
 
-    <!-- Preload the hero camera image so LCP starts the network fetch before JS parses -->
-    <link rel="preload" as="image" href="/assets/images/eos_r6_mark_ii_body_v2.webp" fetchpriority="high" />
+    <!-- The camera-body preload used to live here. Removed: at scroll 0 the LCD
+         overshoots the viewport by 1.2x, so the camera body is 100% occluded on
+         every viewport up to ~2940 CSS px wide — we were spending 182KB at
+         fetchpriority=high on an image nobody sees, on EVERY route, because the
+         SPA rewrite serves this HTML for /gallery, /about, /portal and /admin
+         too. The <img> in HeroSection.tsx keeps its own fetchPriority="high"
+         and decoding="sync" (the iOS sharpness fix), so it still arrives
+         promptly on ultrawide displays where it IS visible at scroll 0. -->
 
     <!-- Warm the gtag connection during the bundle download instead of after
          it. No crossorigin: react-ga4 injects gtag as a plain non-CORS

@@ -10,6 +10,8 @@ import heroVariants from '../data/hero-variants.json';
 type Slide = {
   url: string;
   mobileUrl?: string;
+  /** "path 1280w, path 1600w" — mobile derivatives only. */
+  mobileSrcSet?: string;
   position?: string;
   mobilePosition?: string;
   mobileSkip?: boolean;
@@ -27,11 +29,20 @@ type Slide = {
 // The `?? original` fallback is deliberate: if the manifest is ever stale or a
 // derivative is missing, mobile silently serves the original rather than
 // rendering a blank hero. Slower, never broken.
-const VARIANTS = heroVariants as Record<string, string>;
+const VARIANTS = heroVariants as Record<string, Record<string, string>>;
 
 const CAROUSEL_IMAGES: Slide[] = (heroSlides as Slide[]).map((slide) => {
   const mobileSource = slide.mobileUrl || slide.url;
-  return { ...slide, mobileUrl: VARIANTS[mobileSource] ?? mobileSource };
+  const rungs = VARIANTS[mobileSource];
+  if (!rungs) return { ...slide, mobileUrl: mobileSource };
+  return {
+    ...slide,
+    // src falls back to the widest rung for anything that ignores srcSet.
+    mobileUrl: rungs['1600'] ?? mobileSource,
+    mobileSrcSet: Object.entries(rungs)
+      .map(([w, path]) => `${path} ${w}w`)
+      .join(', '),
+  };
 });
 
 const Home: React.FC = () => {

@@ -8,6 +8,7 @@ interface ImageCarouselProps {
     url: string;
     position?: string;
     mobileUrl?: string;
+    mobileSrcSet?: string;
     mobilePosition?: string;
     /** If true, this image is excluded from the carousel on mobile viewports. */
     mobileSkip?: boolean;
@@ -37,8 +38,10 @@ const arrange = (imgs: Slide[], mobile: boolean): Slide[] => {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
+
   return shuffled;
 };
+
 
 const ImageCarousel: React.FC<ImageCarouselProps> = ({
   images: initialImages,
@@ -134,6 +137,12 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
   const getCurrentImage = () =>
     isMobile && currentImage.mobileUrl ? currentImage.mobileUrl : currentImage.url;
 
+  // Exact, not a guess. The slide paints inside the camera LCD, whose width at
+  // scroll 0 is 1.2*vh*0.7140852 = 0.857*vh in portrait and 1.2*vw in
+  // landscape (derived from computeCameraSize + LCD_BOUNDS in HeroSection).
+  // Verified: 86vh at vh=823 gives 707.8px against a real 705.2px.
+  const HERO_SIZES = '(orientation: portrait) 86vh, 120vw';
+
   const variants = {
     enter: { opacity: 0 },
     center: { opacity: 1 },
@@ -166,6 +175,8 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
         >
           <Image
             src={getCurrentImage()}
+            srcSet={isMobile ? currentImage.mobileSrcSet : undefined}
+            sizes={isMobile && currentImage.mobileSrcSet ? HERO_SIZES : undefined}
             alt={`Slide ${currentIndex + 1}`}
             objectFit="cover"
             width="100%"
@@ -180,7 +191,12 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
             onError={(e) => {
               const img = e.currentTarget as HTMLImageElement;
               const original = currentImage.url;
-              if (img.src.includes('/assets/hero/') && !img.src.endsWith(original)) {
+              if (img.currentSrc.includes('/assets/hero/') && !img.src.endsWith(original)) {
+                // srcset MUST be cleared first. Assigning src alone does not
+                // override an already-matched srcset candidate, so without this
+                // the fallback silently does nothing and the hero stays blank.
+                img.srcset = '';
+                img.sizes = '';
                 img.src = original;
               }
             }}

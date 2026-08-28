@@ -51,12 +51,19 @@ const outDir = join(root, 'public', 'assets', 'hero');
 // have upscaled 1.8-2.2x — visibly soft on the hero of a photographer's site.
 // 1600 costs ~3.0MB of variants instead of ~1.7MB, still ~2.6x under the
 // 7.86MB of originals it replaces.
-const WIDTH = 1600;
+// TWO rungs. 1600 is sized for DPR-3 flagships (LCD 730-799 CSS px -> ~2200
+// device px). But a 412x823 viewport at DPR 1.75 — Lighthouse's profile, and a
+// very common mid-tier Android — only needs 705 * 1.75 = 1234 device px, so it
+// was being handed ~32% more bytes than it can display. srcSet lets the browser
+// pick. Do not collapse these to one rung in either direction.
+const WIDTHS = [1280, 1600];
+const PRIMARY = 1600; // the plain `src` fallback for anything without srcset
 const QUALITY = 72;
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
 const isCheck = args.includes('--check');
+const force = args.includes('--force');
 
 const slides = JSON.parse(readFileSync(slidesPath, 'utf-8'));
 
@@ -69,7 +76,10 @@ const mobileSources = [
   ),
 ];
 
-const variantName = (src) => `${basename(src, '.webp')}-m.webp`;
+// 1600 keeps the historical `-m.webp` name so existing committed files and the
+// manifest stay stable; 1280 gets an explicit suffix.
+const variantName = (src, w) =>
+  w === PRIMARY ? `${basename(src, '.webp')}-m.webp` : `${basename(src, '.webp')}-m${w}.webp`;
 
 if (!isDryRun && !isCheck && !existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
@@ -85,57 +95,60 @@ for (const src of mobileSources) {
     missingSources.push(src);
     continue;
   }
+  manifest[src] = {};
 
-  const outName = variantName(src);
-  const outPath = join(outDir, outName);
-  const publicPath = `/assets/hero/${outName}`;
-  manifest[src] = publicPath;
+  for (const w of WIDTHS) {
+    const outName = variantName(src, w);
+    const outPath = join(outDir, outName);
+    manifest[src][w] = `/assets/hero/${outName}`;
 
-  // Regenerate only when the source is newer than the derivative, so a repeat
-  // run is cheap and produces no spurious git churn.
-  //
-  // --check deliberately ignores mtime: git does not preserve it, so checkout
-  // order on a fresh clone makes the comparison arbitrary and CI would fail at
-  // random. In check mode, existing-and-committed is the contract.
-  const fresh = isCheck
-    ? existsSync(outPath)
-    : existsSync(outPath) && statSync(outPath).mtimeMs >= statSync(srcPath).mtimeMs;
+    // Regenerate when the source is newer than the derivative, so a repeat run
+    // is cheap and produces no git churn.
+    //
+    // --force exists because this gate is mtime-only: changing WIDTHS or
+    // QUALITY does NOT make a derivative stale, so a constant change would be a
+    // silent no-op and you would commit nothing while believing otherwise.
+    //
+    // --check deliberately ignores mtime entirely: git does not preserve it, so
+    // checkout order on a fresh clone makes the comparison arbitrary and CI
+    // would fail at random. In check mode, existing-and-committed is the
+    // contract.
+    const fresh = isCheck
+      ? existsSync(outPath)
+      : !force && existsSync(outPath) && statSync(outPath).mtimeMs >= statSync(srcPath).mtimeMs;
 
-  if (fresh) {
-    reused++;
-    continue;
-  }
+    if (fresh) {
+      reused++;
+      continue;
+    }
+    if (isCheck) {
+      stale++;
+      console.error(`  MISSING ${outName}`);
+      continue;
+    }
+    if (isDryRun) {
+      console.log(`  WOULD WRITE ${outName}`);
+      generated++;
+      continue;
+    }
 
-  if (isCheck) {
-    stale++;
-    console.error(`  STALE ${outName}`);
-    continue;
-  }
+    // .rotate() applies EXIF orientation so a phone-shot original cannot come
+    // out sideways. Width-only resize keeps the aspect ratio exact, which
+    // preserves every hand-tuned objectPosition crop and keeps CLS at 0.
+    const buf = await sharp(srcPath)
+      .rotate()
+      .resize({ width: w, withoutEnlargement: true })
+      .webp({ quality: QUALITY, effort: 6 })
+      .toBuffer();
 
-  if (isDryRun) {
-    const kb = statSync(srcPath).size / 1024;
-    console.log(`  WOULD WRITE ${outName}  (source ${Math.round(kb)}KB)`);
+    writeFileSync(outPath, buf);
+    const before = statSync(srcPath).size / 1024;
+    const after = buf.length / 1024;
+    console.log(
+      `  ✓ ${outName}: ${Math.round(before)}KB → ${Math.round(after)}KB (-${Math.round(100 - (after / before) * 100)}%)`,
+    );
     generated++;
-    continue;
   }
-
-  // .rotate() with no argument applies the EXIF orientation and strips the
-  // tag, so a phone-shot original can't come out sideways. Width-only resize
-  // keeps the aspect ratio exact, which is what preserves every hand-tuned
-  // objectPosition crop in hero-slides.json — and keeps CLS at 0.
-  const buf = await sharp(srcPath)
-    .rotate()
-    .resize({ width: WIDTH, withoutEnlargement: true })
-    .webp({ quality: QUALITY, effort: 6 })
-    .toBuffer();
-
-  writeFileSync(outPath, buf);
-  const before = statSync(srcPath).size / 1024;
-  const after = buf.length / 1024;
-  console.log(
-    `  ✓ ${outName}: ${Math.round(before)}KB → ${Math.round(after)}KB (-${Math.round(100 - (after / before) * 100)}%)`,
-  );
-  generated++;
 }
 
 if (missingSources.length) {
@@ -156,7 +169,9 @@ if (isCheck) {
       .filter(Boolean)
       .map((p) => '/' + p.replace(/^public\//, '')),
   );
-  const untracked = Object.values(manifest).filter((p) => !tracked.has(p));
+  const untracked = Object.values(manifest)
+    .flatMap((r) => Object.values(r))
+    .filter((p) => !tracked.has(p));
   if (untracked.length) {
     console.error('\n[hero-variants] FATAL: variants exist on disk but are not committed:');
     untracked.forEach((p) => console.error(`  ${p}`));
@@ -170,10 +185,12 @@ if (isCheck) {
   const onDisk = existsSync(manifestPath)
     ? JSON.parse(readFileSync(manifestPath, 'utf-8'))
     : {};
-  const drift = mobileSources.filter((s) => onDisk[s] !== manifest[s]);
+  const drift = mobileSources.filter(
+    (s) => JSON.stringify(onDisk[s]) !== JSON.stringify(manifest[s]),
+  );
   if (drift.length) {
     console.error('\n[hero-variants] FATAL: hero-variants.json is out of sync with hero-slides.json:');
-    drift.forEach((s) => console.error(`  ${s} -> committed:${onDisk[s] ?? 'MISSING'}`));
+    drift.forEach((s) => console.error(`  ${s} -> committed:${JSON.stringify(onDisk[s]) ?? 'MISSING'}`));
     console.error('Run: npm run hero-variants');
     process.exit(1);
   }

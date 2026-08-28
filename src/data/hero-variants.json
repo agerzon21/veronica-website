@@ -1,14 +1,50 @@
 {
-  "/assets/photos/portraits/tropical-bikini-pose-bamboo.webp": "/assets/hero/tropical-bikini-pose-bamboo-m.webp",
-  "/assets/photos/portraits/shadow-play-portrait.webp": "/assets/hero/shadow-play-portrait-m.webp",
-  "/assets/photos/portraits/girl-embracing-palm-leaf.webp": "/assets/hero/girl-embracing-palm-leaf-m.webp",
-  "/assets/photos/portraits/ocean-swimming-joy.webp": "/assets/hero/ocean-swimming-joy-m.webp",
-  "/assets/photos/weddings/winged-couple-fantasy-portrait.webp": "/assets/hero/winged-couple-fantasy-portrait-m.webp",
-  "/assets/photos/weddings/newlyweds-running-sea.webp": "/assets/hero/newlyweds-running-sea-m.webp",
-  "/assets/photos/portraits/lace-pink-dress-blue-glacier.webp": "/assets/hero/lace-pink-dress-blue-glacier-m.webp",
-  "/assets/photos/weddings/bride-groom-under-veil-smiles.webp": "/assets/hero/bride-groom-under-veil-smiles-m.webp",
-  "/assets/photos/portraits/friendship-tree-roots.webp": "/assets/hero/friendship-tree-roots-m.webp",
-  "/assets/photos/weddings/lotus-pond-reflection-newlyweds.webp": "/assets/hero/lotus-pond-reflection-newlyweds-m.webp",
-  "/assets/photos/portraits/woman-poppy-petals-floating.webp": "/assets/hero/woman-poppy-petals-floating-m.webp",
-  "/assets/photos/portraits/yellow-tank-top-sunflower-field.webp": "/assets/hero/yellow-tank-top-sunflower-field-m.webp"
+  "/assets/photos/portraits/tropical-bikini-pose-bamboo.webp": {
+    "1280": "/assets/hero/tropical-bikini-pose-bamboo-m1280.webp",
+    "1600": "/assets/hero/tropical-bikini-pose-bamboo-m.webp"
+  },
+  "/assets/photos/portraits/shadow-play-portrait.webp": {
+    "1280": "/assets/hero/shadow-play-portrait-m1280.webp",
+    "1600": "/assets/hero/shadow-play-portrait-m.webp"
+  },
+  "/assets/photos/portraits/girl-embracing-palm-leaf.webp": {
+    "1280": "/assets/hero/girl-embracing-palm-leaf-m1280.webp",
+    "1600": "/assets/hero/girl-embracing-palm-leaf-m.webp"
+  },
+  "/assets/photos/portraits/ocean-swimming-joy.webp": {
+    "1280": "/assets/hero/ocean-swimming-joy-m1280.webp",
+    "1600": "/assets/hero/ocean-swimming-joy-m.webp"
+  },
+  "/assets/photos/weddings/winged-couple-fantasy-portrait.webp": {
+    "1280": "/assets/hero/winged-couple-fantasy-portrait-m1280.webp",
+    "1600": "/assets/hero/winged-couple-fantasy-portrait-m.webp"
+  },
+  "/assets/photos/weddings/newlyweds-running-sea.webp": {
+    "1280": "/assets/hero/newlyweds-running-sea-m1280.webp",
+    "1600": "/assets/hero/newlyweds-running-sea-m.webp"
+  },
+  "/assets/photos/portraits/lace-pink-dress-blue-glacier.webp": {
+    "1280": "/assets/hero/lace-pink-dress-blue-glacier-m1280.webp",
+    "1600": "/assets/hero/lace-pink-dress-blue-glacier-m.webp"
+  },
+  "/assets/photos/weddings/bride-groom-under-veil-smiles.webp": {
+    "1280": "/assets/hero/bride-groom-under-veil-smiles-m1280.webp",
+    "1600": "/assets/hero/bride-groom-under-veil-smiles-m.webp"
+  },
+  "/assets/photos/portraits/friendship-tree-roots.webp": {
+    "1280": "/assets/hero/friendship-tree-roots-m1280.webp",
+    "1600": "/assets/hero/friendship-tree-roots-m.webp"
+  },
+  "/assets/photos/weddings/lotus-pond-reflection-newlyweds.webp": {
+    "1280": "/assets/hero/lotus-pond-reflection-newlyweds-m1280.webp",
+    "1600": "/assets/hero/lotus-pond-reflection-newlyweds-m.webp"
+  },
+  "/assets/photos/portraits/woman-poppy-petals-floating.webp": {
+    "1280": "/assets/hero/woman-poppy-petals-floating-m1280.webp",
+    "1600": "/assets/hero/woman-poppy-petals-floating-m.webp"
+  },
+  "/assets/photos/portraits/yellow-tank-top-sunflower-field.webp": {
+    "1280": "/assets/hero/yellow-tank-top-sunflower-field-m1280.webp",
+    "1600": "/assets/hero/yellow-tank-top-sunflower-field-m.webp"
+  }
 }

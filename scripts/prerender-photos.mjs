@@ -105,20 +105,6 @@ const photos = rows
     keywords: Array.isArray(r.keywords) ? r.keywords : [],
   }));
 
-// The homepage preloads the decorative camera photo at fetchpriority=high.
-// Cloning that into every photo page costs each SEO route ~177KB and a
-// High-priority connection for an image it never renders. Anchored on
-// `eos_r6` and terminated before the Open Graph comment, which is the strip
-// anchor below — eating that comment would silently give every photo page
-// the homepage's og:image.
-const photoTemplate = template.replace(
-  /[ \t]*<!-- Preload the hero camera image[\s\S]*?-->\n?[ \t]*<link\b[^>]*eos_r6[^>]*>\n?/,
-  '',
-);
-if (photoTemplate === template) {
-  console.warn('[prerender] camera preload not found — did index.html change?');
-}
-
 let totalPages = 0;
 
 for (const photo of photos) {
@@ -137,7 +123,7 @@ for (const photo of photos) {
   const safeDescription = photo.description.replace(/"/g, '&quot;');
   const keywordsContent = photo.keywords.join(', ').replace(/"/g, '&quot;');
 
-  let html = photoTemplate;
+  let html = template;
 
   html = html.replace(
     /<title>[^<]*<\/title>/,
