@@ -5,7 +5,7 @@ import { motion, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactGA from 'react-ga4';
-import { trackAdsLeadConversion, trackContactSubmission } from '../utils/analytics';
+import { ensureAnalytics, trackAdsLeadConversion, trackContactSubmission } from '../utils/analytics';
 
 const MotionDiv = motion.div;
 
@@ -110,6 +110,11 @@ const ThankYou = () => {
     // initializer above), so this check prevents inflating Google Ads
     // conversion counts with people just landing on the URL.
     if (!justSubmitted) return;
+    // gtag is deferred site-wide now, and this component reaches past the
+    // analytics wrappers to ReactGA/window.gtag directly. Boot it first or
+    // these three sends can land before the GA4 and Ads configs and be
+    // silently discarded. Idempotent; a no-op when gtag is already up.
+    ensureAnalytics();
     ReactGA.event('generate_lead', {
       event_category: 'Contact',
       event_label: 'Contact Form',

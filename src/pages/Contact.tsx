@@ -3,9 +3,10 @@ import CTAButton from '../components/ui/CTAButton';
 import { FaWhatsapp, FaInstagram, FaRegEnvelope } from 'react-icons/fa';
 import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { trackContactSubmission } from '../utils/analytics';
+import { prefetchChunk } from '../components/ChunkErrorBoundary';
 
 const MotionDiv = motion.div;
 
@@ -43,6 +44,14 @@ const Contact = () => {
   const contentRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(contentRef, { once: true, amount: 0.15 });
   const navigate = useNavigate();
+
+  // ThankYou is a lazy route now, so submitting would otherwise trigger a
+  // chunk fetch between the POST and the Google Ads conversion firing. Warm it
+  // as soon as someone lands on /contact — by the time they finish typing it
+  // is already in memory, and submit -> conversion has no network gap.
+  useEffect(() => {
+    prefetchChunk(() => import('./ThankYou'));
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 

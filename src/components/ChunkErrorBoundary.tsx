@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Heading, Text, VStack, Button, Link } from '@chakra-ui/react';
+import { ensureAnalytics } from '../utils/analytics';
 
 /**
  * Safety net for lazily-loaded routes.
@@ -37,10 +38,32 @@ export function isChunkLoadError(error: unknown): boolean {
   );
 }
 
+// Speculative prefetches (warming a route the user has NOT navigated to) must
+// never trigger a reload. A failed background fetch is harmless; reloading
+// because of one would discard whatever the visitor was typing — the Contact
+// form warms ThankYou while someone is mid-message.
+let speculativeDepth = 0;
+
+/** Run a background import() that can fail silently without triggering recovery. */
+export function prefetchChunk(load: () => Promise<unknown>): void {
+  speculativeDepth++;
+  void Promise.resolve()
+    .then(load)
+    .catch(() => {
+      /* a warm-up miss is not an error worth surfacing */
+    })
+    .finally(() => {
+      speculativeDepth--;
+    });
+}
+
+export const isSpeculativeLoad = () => speculativeDepth > 0;
+
 /** Reload once to pick up the new deploy, with loop and offline guards. */
 export function attemptChunkRecovery(): boolean {
   if (typeof window === 'undefined') return false;
   if (!navigator.onLine) return false;
+  if (isSpeculativeLoad()) return false;
   let last = 0;
   try {
     last = Number(sessionStorage.getItem(RELOAD_KEY) || 0);
@@ -69,7 +92,10 @@ class ChunkErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error) {
     // Surface it in analytics so this shows up in a report instead of only in
-    // a frustrated text message.
+    // a frustrated text message. gtag is deferred site-wide, so it usually
+    // does NOT exist yet at the moment a chunk fails — boot it first or this
+    // telemetry is silently dropped in exactly the window it matters.
+    ensureAnalytics();
     if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
       (window as any).gtag('event', 'chunk_load_error', {
         event_category: 'Error',
