@@ -9,7 +9,9 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "hero-variants": "node scripts/build-hero-variants.mjs",
-    "hero-variants:check": "node scripts/build-hero-variants.mjs --check"
+    "hero-variants:check": "node scripts/build-hero-variants.mjs --check",
+    "ig-fallbacks": "node scripts/build-ig-fallbacks.mjs",
+    "ig-fallbacks:check": "node scripts/build-ig-fallbacks.mjs --check"
   },
   "dependencies": {
     "@chakra-ui/icons": "^2.2.4",
