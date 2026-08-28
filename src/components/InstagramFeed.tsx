@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Box, VStack, HStack, Text, Link, Grid, AspectRatio, Image, Icon, Flex } from '@chakra-ui/react';
 import { FaInstagram, FaHeart, FaRegComment, FaPlay, FaFilm, FaImages } from 'react-icons/fa';
 import instagramData from '../data/instagram.json';
@@ -81,8 +81,8 @@ const FALLBACK_PHOTOS: Photo[] = [
   { url: '/assets/photos/portraits/lace-pink-dress-blue-glacier.webp', alt: 'Lace dress portrait at a blue glacier' },
   { url: '/assets/photos/weddings/couple-embracing-greenery.webp', alt: 'Couple embracing in lush greenery' },
   { url: '/assets/photos/family/four-generations-yellow.webp', alt: 'Four generations of a family in warm yellow tones' },
-  { url: '/assets/photos/maternity/pregnant-family-three-bw.webp', alt: 'Black and white maternity portrait of a family of three' },
-  { url: '/assets/photos/portraits/sisters-cooking-together.webp', alt: 'Sisters cooking together in a warm kitchen' },
+  { url: '/assets/photos/family/pregnant-family-three-bw.webp', alt: 'Black and white maternity portrait of a family of three' },
+  { url: '/assets/photos/family/sisters-cooking-together.webp', alt: 'Sisters cooking together in a warm kitchen' },
 ];
 
 // Convert raw counts to "1.2K" / "12.3K" / "1.2M" style.
@@ -131,8 +131,44 @@ const toPhotos = (posts: IgPost[]): Photo[] =>
 const InstagramFeed = () => {
   const [data, setData] = useState<IgData>(instagramData as IgData);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+
+  // This section sits several viewport-heights below the fold (the hero is
+  // 350lvh), but the fetch used to fire on mount at ~5.6s — and the response
+  // triggers a cross-origin connection to Instagram's CDN that was costing
+  // ~894ms of DNS+TCP+TLS right inside the LCP window.
+  //
+  // rootMargin is deliberately MODEST. An earlier version used 2500px to beat
+  // the browser's native lazy-image heuristic, but the hero is ~2880px tall,
+  // so a 2500px margin fires the observer on mount and gates nothing —
+  // Lighthouse caught all nine fallback photos still loading at ~199ms.
+  // Because the <img> tags themselves are now gated on `near` (see the grid
+  // below), there is no race with the browser to win: nothing can be fetched
+  // before we render it. 600px is simply "about to be scrolled into view".
+  useEffect(() => {
+    const el = sectionRef.current;
+    // Fail OPEN in every degraded case — a missing feed is worse than an
+    // early fetch.
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setNear(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNear(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '600px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   useEffect(() => {
+    if (!near) return;
     let cancelled = false;
     (async () => {
       try {
@@ -150,7 +186,7 @@ const InstagramFeed = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [near]);
 
   const livePhotos = toPhotos(data.posts ?? []);
   // Grid is 3×3 on mobile, mosaic (1 big + 8 small) on desktop → we
@@ -169,7 +205,7 @@ const InstagramFeed = () => {
   const openPost = PHOTOS[openIdx ?? -1] as Photo | undefined;
 
   return (
-    <Box py={{ base: 14, md: 20 }} px={4} bg="white">
+    <Box ref={sectionRef} py={{ base: 14, md: 20 }} px={4} bg="white">
       <VStack spacing={5} mb={{ base: 10, md: 12 }}>
         <Text
           fontSize="xs"
@@ -221,6 +257,13 @@ const InstagramFeed = () => {
                   objectFit="cover"
                   width="100%"
                   height="100%"
+                  // Sits ~1770px below the fold, past Chrome's lazy-load
+                  // threshold, and is a cross-origin request to Instagram's
+                  // CDN — it was costing ~894ms of DNS+TCP+TLS inside the
+                  // LCP window. Deliberately no fallbackSrc: Chakra ignores
+                  // it whenever `loading` is set, so it would be dead code.
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <Image
@@ -334,8 +377,19 @@ const InstagramFeed = () => {
                 '&:hover .ig-overlay': { opacity: 1 },
               }}
             >
-              <AspectRatio ratio={1}>
-                <Image src={photo.url} alt={photo.alt} objectFit="cover" loading="lazy" />
+              {/* Render the <img> only once the section is near the viewport.
+                  loading="lazy" alone was NOT enough: Lighthouse measured all
+                  nine full-resolution fallback photos — 5.1MB — downloading at
+                  ~315ms, which on simulated slow 4G pushed LCP to 15.4s. The
+                  browser's lazy threshold is a heuristic that varies with
+                  connection type; this doesn't depend on it.
+                  AspectRatio holds the box either way, so CLS stays 0. */}
+              <AspectRatio ratio={1} bg="gray.100">
+                {near ? (
+                  <Image src={photo.url} alt={photo.alt} objectFit="cover" loading="lazy" decoding="async" />
+                ) : (
+                  <Box aria-hidden />
+                )}
               </AspectRatio>
 
               {/* Corner badge for videos / reels / carousels. Mirrors
