@@ -395,7 +395,7 @@ const Contact = () => {
                       transform: 'translateY(-2px)',
                     }}
                     sx={{ WebkitTapHighlightColor: 'transparent' }}
-                    role="group"
+                    data-group
                   >
                     <Icon
                       as={method.icon}

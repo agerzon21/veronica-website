@@ -530,7 +530,7 @@ const IndividualPhoto: React.FC = () => {
                       position="relative"
                       overflow="hidden"
                       cursor="pointer"
-                      role="group"
+                      data-group
                       bg="white"
                       sx={{
                         // Scoped hover: only the inner img reacts,
