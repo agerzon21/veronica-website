@@ -28,6 +28,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import instagramCheckHandler from './cron/_instagram-check.js';
 import gallerySyncHandler from './cron/_gallery-sync.js';
+import igAvatarRefreshHandler from './cron/_ig-avatar-refresh.js';
 
 // Exported so the admin "Run now" endpoint (api/admin/_crons-run-now.ts)
 // can look a handler up by name and invoke it in-process, instead of
@@ -39,6 +40,11 @@ export const HANDLERS: Record<
 > = {
   'instagram-check': instagramCheckHandler,
   'gallery-sync': gallerySyncHandler,
+  // No vercel.json cron entry — both Hobby slots are taken. This is chained
+  // from instagram-check (which already runs daily and already talks to the
+  // Graph API) and is invocable from the admin "Run now" button, which goes
+  // through this same HANDLERS map.
+  'ig-avatar-refresh': igAvatarRefreshHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

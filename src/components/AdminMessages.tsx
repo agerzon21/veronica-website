@@ -770,11 +770,21 @@ function PlatformAvatar({
   return (
     <Box position="relative" flexShrink={0}>
       <Box
+        // position: the <img> below is absolutely positioned to cover this
+        // circle exactly. Without this it would anchor to the outer relative
+        // Box, which also contains the corner platform badge.
+        position="relative"
         w="44px"
         h="44px"
         borderRadius="full"
         overflow="hidden"
-        bg={profilePicUrl ? 'gray.100' : 'gray.700'}
+        // Always the dark fill, never gray.100. The initials sit underneath the
+        // image now, so a light background would render white-on-light the
+        // moment a broken avatar reveals them. When the image loads it covers
+        // this completely (objectFit cover at 100%/100%), so the fill is only
+        // ever visible when there is no usable image — which is exactly when
+        // the initials need contrast.
+        bg="gray.700"
         display="flex"
         alignItems="center"
         justifyContent="center"
@@ -782,11 +792,36 @@ function PlatformAvatar({
         fontWeight="500"
         fontSize="sm"
       >
+        {/* Initials are rendered underneath, always. The <img> sits on top and
+            simply removes ITSELF on error, revealing them.
+
+            Instagram pre-signs these cdninstagram URLs and they expire in
+            24-72h (as little as 1-3h during a CDN rotation). A daily cron now
+            refreshes them, but a URL can still die between runs — and with no
+            onError this rendered as a broken-image glyph, which is what Vero
+            was seeing across the whole inbox.
+
+            Done by mutating the DOM node rather than with useState so this
+            component stays hook-free (it is rendered inside two different list
+            maps), matching the handleTileError pattern already used in
+            InstagramFeed. No dep array means no exhaustive-deps risk, and
+            `npm run lint` runs with --max-warnings 0. */}
+        {initials(displayName)}
         {profilePicUrl ? (
-          <Box as="img" src={profilePicUrl} alt={displayName} w="100%" h="100%" objectFit="cover" />
-        ) : (
-          initials(displayName)
-        )}
+          <Box
+            as="img"
+            src={profilePicUrl}
+            alt={displayName}
+            w="100%"
+            h="100%"
+            objectFit="cover"
+            position="absolute"
+            inset={0}
+            onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        ) : null}
       </Box>
       {/* Small platform badge in the corner */}
       <Flex

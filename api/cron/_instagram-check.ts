@@ -19,6 +19,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { refreshIgAvatars } from './_ig-avatar-refresh.js';
 import { sendEmail } from '../_auto-reply.js';
 import { getDb } from '../_db.js';
 import { detectAndMarkRotation } from '../_ig-detect.js';
@@ -82,6 +83,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
  * the JSON response.
  */
 async function doInstagramCheck(): Promise<{ action: string; daysSince?: number }> {
+  // Refresh Instagram avatars FIRST. This function has several early returns
+  // (no refresh date, already alerted, daysSince < 50, already reminded) and
+  // the "nothing to do" path is the common steady state — anything placed
+  // after them would never run in normal operation. Wrapped in its own
+  // try/catch so an avatar failure can never suppress the token-expiry email,
+  // which is this job's actual purpose.
+  try {
+    const avatars = await refreshIgAvatars();
+    console.log(
+      `[cron/instagram-check] avatar refresh: refreshed=${avatars.refreshed} failed=${avatars.failed}`,
+    );
+  } catch (err) {
+    console.error(
+      '[cron/instagram-check] avatar refresh failed (continuing):',
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   // Auto-detect first: if the env var changed since last cron, mark
   // as refreshed transparently before we evaluate whether to remind.
   // This is what makes the manual "Mark as Refreshed" click optional
