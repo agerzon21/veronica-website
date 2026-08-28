@@ -134,6 +134,55 @@ const tileSrcSet = (url: string): string | undefined => {
     .join(', ');
 };
 
+// A tile that fails to load has, until now, stayed blank forever — there was
+// no onError anywhere in this component.
+//
+// Nine tiles mount at once when `near` flips, all cross-origin to
+// scontent-*.cdninstagram.com on a connection that is cold at that moment
+// (~894ms of DNS+TCP+TLS, per the measurement in the observer comment above).
+// A few of those nine can fail transiently — reset or timed out mid-burst. The
+// data is fine; the request just never completed. That is why tapping a blank
+// tile has always "fixed" it: the modal issues one fresh request on a
+// now-warm connection and it succeeds.
+//
+// So: retry once after a short delay, then fall back to the local derivative
+// for that slot. PHOTOS is all-live or all-fallback (see the >= 9 test), so
+// slot i maps cleanly onto FALLBACK_PHOTOS[i]. The dataset flags make this
+// idempotent and loop-proof — an <img> can only ever escalate retry -> local
+// -> give up, never cycle.
+const handleTileError = (e: React.SyntheticEvent<HTMLImageElement>, slot: number) => {
+  const img = e.currentTarget;
+  const stage = img.dataset.vgStage;
+
+  if (!stage) {
+    img.dataset.vgStage = 'retry';
+    const original = img.currentSrc || img.src;
+    // Cache-busting the retry would defeat the point — we want the warm
+    // connection, not a fresh cache entry. Re-assigning the same src is enough
+    // to re-issue the request.
+    window.setTimeout(() => {
+      img.removeAttribute('srcset');
+      img.removeAttribute('sizes');
+      img.src = original;
+    }, 400);
+    return;
+  }
+
+  if (stage === 'retry') {
+    img.dataset.vgStage = 'local';
+    const local = FALLBACK_PHOTOS[slot];
+    if (!local) return;
+    const rungs = FALLBACK_SRCSET[local.url];
+    img.removeAttribute('srcset');
+    img.removeAttribute('sizes');
+    // Prefer the small square derivative; the full-resolution original is a
+    // last resort we do not want on a phone.
+    img.src = rungs?.['560'] ?? local.url;
+  }
+  // stage === 'local' -> the local derivative itself failed. Stop; the
+  // AspectRatio's gray.100 background is the final state.
+};
+
 // Mobile: 3 columns inside px={4} padding with a gap. Desktop: the first tile
 // spans 2x2 (~544px), the rest are ~266px.
 const TILE_SIZES = '(min-width: 768px) 266px, calc((100vw - 48px) / 3)';
@@ -439,6 +488,7 @@ const InstagramFeed = () => {
                     // heuristic gate that can decline to load a tile that is
                     // already on screen — which is exactly what went wrong.
                     decoding="async"
+                    onError={(e) => handleTileError(e, i)}
                   />
                 ) : (
                   <Box aria-hidden />
