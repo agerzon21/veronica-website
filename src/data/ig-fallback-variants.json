@@ -1,0 +1,47 @@
+{
+  "/assets/photos/portraits/sunset-palm-tree-portrait.webp": {
+    "240": "/assets/ig-fallback/sunset-palm-tree-portrait-240.webp",
+    "560": "/assets/ig-fallback/sunset-palm-tree-portrait-560.webp",
+    "1120": "/assets/ig-fallback/sunset-palm-tree-portrait-1120.webp"
+  },
+  "/assets/photos/weddings/winged-couple-fantasy-portrait.webp": {
+    "240": "/assets/ig-fallback/winged-couple-fantasy-portrait-240.webp",
+    "560": "/assets/ig-fallback/winged-couple-fantasy-portrait-560.webp",
+    "1120": "/assets/ig-fallback/winged-couple-fantasy-portrait-1120.webp"
+  },
+  "/assets/photos/family/family-white-beach.webp": {
+    "240": "/assets/ig-fallback/family-white-beach-240.webp",
+    "560": "/assets/ig-fallback/family-white-beach-560.webp",
+    "1120": "/assets/ig-fallback/family-white-beach-1120.webp"
+  },
+  "/assets/photos/maternity/pregnant-friends-colorful-dresses.webp": {
+    "240": "/assets/ig-fallback/pregnant-friends-colorful-dresses-240.webp",
+    "560": "/assets/ig-fallback/pregnant-friends-colorful-dresses-560.webp",
+    "1120": "/assets/ig-fallback/pregnant-friends-colorful-dresses-1120.webp"
+  },
+  "/assets/photos/portraits/lace-pink-dress-blue-glacier.webp": {
+    "240": "/assets/ig-fallback/lace-pink-dress-blue-glacier-240.webp",
+    "560": "/assets/ig-fallback/lace-pink-dress-blue-glacier-560.webp",
+    "1120": "/assets/ig-fallback/lace-pink-dress-blue-glacier-1120.webp"
+  },
+  "/assets/photos/weddings/couple-embracing-greenery.webp": {
+    "240": "/assets/ig-fallback/couple-embracing-greenery-240.webp",
+    "560": "/assets/ig-fallback/couple-embracing-greenery-560.webp",
+    "1120": "/assets/ig-fallback/couple-embracing-greenery-1120.webp"
+  },
+  "/assets/photos/family/four-generations-yellow.webp": {
+    "240": "/assets/ig-fallback/four-generations-yellow-240.webp",
+    "560": "/assets/ig-fallback/four-generations-yellow-560.webp",
+    "1120": "/assets/ig-fallback/four-generations-yellow-1120.webp"
+  },
+  "/assets/photos/family/pregnant-family-three-bw.webp": {
+    "240": "/assets/ig-fallback/pregnant-family-three-bw-240.webp",
+    "560": "/assets/ig-fallback/pregnant-family-three-bw-560.webp",
+    "1120": "/assets/ig-fallback/pregnant-family-three-bw-1120.webp"
+  },
+  "/assets/photos/family/sisters-cooking-together.webp": {
+    "240": "/assets/ig-fallback/sisters-cooking-together-240.webp",
+    "560": "/assets/ig-fallback/sisters-cooking-together-560.webp",
+    "1120": "/assets/ig-fallback/sisters-cooking-together-1120.webp"
+  }
+}

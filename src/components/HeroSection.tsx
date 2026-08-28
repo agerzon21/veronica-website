@@ -13,6 +13,10 @@ interface HeroSectionProps {
     position?: string;
     mobileUrl?: string;
     mobilePosition?: string;
+    /** Excluded from the carousel on mobile viewports. */
+    mobileSkip?: boolean;
+    /** Excluded from the carousel on desktop viewports. */
+    desktopSkip?: boolean;
   }>;
 }
 

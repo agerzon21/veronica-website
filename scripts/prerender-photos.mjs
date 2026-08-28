@@ -17,6 +17,29 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { neon } from '@neondatabase/serverless';
+import { config as loadEnv } from 'dotenv';
+
+// This script previously read no env file at all, so a local `npm run build`
+// always took the skip path even with credentials sitting in .env.local.
+// quiet: dotenv v17 prints promotional tips into the build log otherwise.
+loadEnv({ path: '.env.local', quiet: true });
+loadEnv({ quiet: true });
+
+// VERCEL_ENV, not VERCEL — the latter is '1' on preview builds too, and a
+// preview should stay buildable when the DB is briefly unreachable.
+const isProdBuild = process.env.VERCEL_ENV === 'production';
+// Escape hatch so an urgent contract-signing hotfix is never blocked by a
+// database blip: ALLOW_PRERENDER_SKIP=1.
+const allowSkip = process.env.ALLOW_PRERENDER_SKIP === '1';
+
+const failProd = (msg) => {
+  if (isProdBuild && !allowSkip) {
+    console.error(`[prerender] FATAL: ${msg}`);
+    console.error('[prerender] Refusing to ship a production build with no SEO pages.');
+    console.error('[prerender] Override with ALLOW_PRERENDER_SKIP=1 if this is intentional.');
+    process.exit(1);
+  }
+};
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
@@ -28,6 +51,7 @@ const TITLE_SUFFIX = ' | Vero Photography';
 // convention) or DATABASE_URL (common in local .env). No URL → skip.
 const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 if (!dbUrl) {
+  failProd('no POSTGRES_URL / DATABASE_URL in a production build.');
   console.warn(
     '[prerender] POSTGRES_URL not set — skipping prerender + sitemap generation.',
   );
@@ -37,15 +61,30 @@ if (!dbUrl) {
 const sql = neon(dbUrl);
 const template = readFileSync(templatePath, 'utf-8');
 
+// Retry before giving up: Neon's free tier autosuspends, and the daily
+// unattended deploy hook (.github/workflows) can land on a cold database.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let rows;
-try {
-  rows = await sql`
-    SELECT slug, category, drive_file_id, title, alt, description, keywords
-    FROM gallery_photos
-    WHERE status = 'published' AND deleted_at IS NULL
-  `;
-} catch (err) {
-  console.error('[prerender] DB query failed:', err.message);
+let lastErr;
+for (let attempt = 0; attempt < 3; attempt++) {
+  try {
+    rows = await sql`
+      SELECT slug, category, drive_file_id, title, alt, description, keywords
+      FROM gallery_photos
+      WHERE status = 'published' AND deleted_at IS NULL
+    `;
+    lastErr = undefined;
+    break;
+  } catch (err) {
+    lastErr = err;
+    console.warn(`[prerender] DB query attempt ${attempt + 1}/3 failed: ${err.message}`);
+    if (attempt < 2) await sleep(1000 * 2 ** attempt);
+  }
+}
+
+if (lastErr) {
+  console.error('[prerender] DB query failed after 3 attempts:', lastErr.message);
+  failProd('could not reach the database.');
   console.warn('[prerender] Continuing with empty photo set — SPA route still works.');
   rows = [];
 }
@@ -66,6 +105,20 @@ const photos = rows
     keywords: Array.isArray(r.keywords) ? r.keywords : [],
   }));
 
+// The homepage preloads the decorative camera photo at fetchpriority=high.
+// Cloning that into every photo page costs each SEO route ~177KB and a
+// High-priority connection for an image it never renders. Anchored on
+// `eos_r6` and terminated before the Open Graph comment, which is the strip
+// anchor below — eating that comment would silently give every photo page
+// the homepage's og:image.
+const photoTemplate = template.replace(
+  /[ \t]*<!-- Preload the hero camera image[\s\S]*?-->\n?[ \t]*<link\b[^>]*eos_r6[^>]*>\n?/,
+  '',
+);
+if (photoTemplate === template) {
+  console.warn('[prerender] camera preload not found — did index.html change?');
+}
+
 let totalPages = 0;
 
 for (const photo of photos) {
@@ -84,7 +137,7 @@ for (const photo of photos) {
   const safeDescription = photo.description.replace(/"/g, '&quot;');
   const keywordsContent = photo.keywords.join(', ').replace(/"/g, '&quot;');
 
-  let html = template;
+  let html = photoTemplate;
 
   html = html.replace(
     /<title>[^<]*<\/title>/,
@@ -170,6 +223,13 @@ for (const photo of photos) {
 }
 
 console.log(`Pre-rendered ${totalPages} individual photo pages.`);
+
+// A green build that produced zero SEO pages is the exact failure this
+// script used to ship silently. Never again on production.
+if (totalPages === 0) {
+  failProd('prerendered 0 photo pages.');
+  console.warn('[prerender] 0 pages generated.');
+}
 
 // Regenerate sitemap.xml from the same DB data so it never drifts.
 const SITE = 'https://vero.photography';

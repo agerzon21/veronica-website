@@ -2,9 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="shortcut icon" href="https://vero.photography/assets/images/favicon.ico" />
-    <link rel="icon" type="image/x-icon" href="https://vero.photography/assets/images/favicon.ico" />
-    <link rel="apple-touch-icon" href="https://vero.photography/assets/images/apple-touch-icon.png" />
+    <!-- Root-relative, not absolute. The leading slash is load-bearing:
+         prerender-photos.mjs clones this head into /photo/<cat>/<slug>.html,
+         and a document-relative path would resolve to
+         /photo/<cat>/assets/… which the SPA catch-all answers with 200 HTML
+         rather than a 404. Absolute prod URLs also broke preview/localhost. -->
+    <link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico" />
+    <link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
     <!-- Prevent iOS Safari's focus-auto-zoom on form inputs. Safari zooms
@@ -49,6 +53,17 @@
 
     <!-- Preload the hero camera image so LCP starts the network fetch before JS parses -->
     <link rel="preload" as="image" href="/assets/images/eos_r6_mark_ii_body_v2.webp" fetchpriority="high" />
+
+    <!-- Warm the gtag connection during the bundle download instead of after
+         it. No crossorigin: react-ga4 injects gtag as a plain non-CORS
+         <script async src>, so an anonymous preconnect socket would land in a
+         different pool, get no reuse, and log a "preconnect was not used"
+         warning. Only googletagmanager — the analytics.google.com and
+         doubleclick beacons fire past Chrome's ~10s idle-socket timeout.
+         MUST stay above the Open Graph comment below: prerender-photos.mjs
+         strips from that comment onward when building each photo page. -->
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="preconnect" href="https://www.googletagmanager.com" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
