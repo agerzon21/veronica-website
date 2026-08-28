@@ -79,6 +79,10 @@ function PrefetchPublicRoutes() {
       prefetchChunk(() => import('./pages/About'));
       prefetchChunk(() => import('./pages/Contact'));
       prefetchChunk(() => import('./pages/Gallery'));
+      // Footer links. Tiny (3.5KB gzip each) and reached from every page, so
+      // the idle cost is nil and they stop feeling laggy on a cold click.
+      prefetchChunk(() => import('./pages/Privacy'));
+      prefetchChunk(() => import('./pages/Terms'));
     };
     const ric = (window as any).requestIdleCallback as
       | ((cb: () => void, opts?: { timeout: number }) => number)
@@ -124,6 +128,11 @@ function AppShell() {
           renders after <Routes>, so a null or short fallback would paint the
           footer high and then shove it down when the chunk lands — turning a
           perfect CLS of 0 into a visible layout shift. */}
+      {/* The site had NO <main> landmark anywhere — Chakra's Box renders a div,
+          so every route was an undifferentiated div soup to screen readers and
+          to AI agents. Wrapping <Routes> gives exactly one <main> per page,
+          outside <Suspense> so it exists even while a lazy chunk is loading. */}
+      <Box as="main" id="main">
       <Suspense
         fallback={
           <Box minH="100vh" display="flex" alignItems="center" justifyContent="center">
@@ -151,6 +160,7 @@ function AppShell() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       </Suspense>
+      </Box>
       {!isAdmin && <Footer />}
       {!isAdmin && <ExitIntentPopup />}
     </>

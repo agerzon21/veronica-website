@@ -36,6 +36,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const slidesPath = join(root, 'src', 'data', 'hero-slides.json');
 const manifestPath = join(root, 'src', 'data', 'hero-variants.json');
+const desktopManifestPath = join(root, 'src', 'data', 'hero-variants-desktop.json');
 const outDir = join(root, 'public', 'assets', 'hero');
 
 // The slide does NOT render at viewport width. It renders inside the camera
@@ -58,6 +59,20 @@ const outDir = join(root, 'public', 'assets', 'hero');
 // pick. Do not collapse these to one rung in either direction.
 const WIDTHS = [1280, 1600];
 const PRIMARY = 1600; // the plain `src` fallback for anything without srcset
+
+// Desktop was still being served the untouched originals — 8.26MB across the
+// 12 desktop-eligible slides, up to 5947px wide. That is why mobile PageSpeed
+// improved dramatically and desktop did not move off 72.
+//
+// The camera LCD at scroll 0 is ~1.2*vw in landscape: 1728 CSS px at 1440,
+// 2304 at 1920, capped at 2940. So 2560 covers every non-retina desktop and
+// retina up to a ~1280 viewport, while the ORIGINAL stays in the srcset as the
+// top rung for large retina displays. Nothing is downscaled below what the
+// screen can show — several originals are only 2000px wide and are already
+// being upscaled today, so they get no rung at all (the size guard skips any
+// re-encode that is not actually smaller).
+const DESKTOP_WIDTHS = [1920, 2560];
+const DESKTOP_QUALITY = 78;
 const QUALITY = 72;
 
 const args = process.argv.slice(2);
@@ -76,10 +91,15 @@ const mobileSources = [
   ),
 ];
 
+// Desktop uses `url`, never mobileUrl — entry 8 deliberately shows a different
+// photo on each.
+const desktopSources = [...new Set(slides.filter((s) => !s.desktopSkip).map((s) => s.url))];
+
 // 1600 keeps the historical `-m.webp` name so existing committed files and the
 // manifest stay stable; 1280 gets an explicit suffix.
 const variantName = (src, w) =>
   w === PRIMARY ? `${basename(src, '.webp')}-m.webp` : `${basename(src, '.webp')}-m${w}.webp`;
+const desktopName = (src, w) => `${basename(src, '.webp')}-d${w}.webp`;
 
 if (!isDryRun && !isCheck && !existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
@@ -151,6 +171,58 @@ for (const src of mobileSources) {
   }
 }
 
+// ---- desktop rungs ----------------------------------------------------
+const desktopManifest = {};
+const originalWidths = {};
+for (const src of desktopSources) {
+  const srcPath = join(root, 'public', src);
+  if (!existsSync(srcPath)) {
+    missingSources.push(src);
+    continue;
+  }
+  const meta = await sharp(srcPath).metadata();
+  desktopManifest[src] = {};
+  // Needed so the original can carry a correct `w` descriptor as the widest
+  // srcset candidate.
+  if (meta.width) originalWidths[src] = meta.width;
+
+  for (const w of DESKTOP_WIDTHS) {
+    // Never emit a rung at or above the original's own width — that is pure
+    // re-encode with no pixels gained, and for the 2000px-wide slides it would
+    // hand the browser a same-size candidate that is not actually better.
+    if (!meta.width || meta.width <= w) continue;
+
+    const outName = desktopName(src, w);
+    const outPath = join(outDir, outName);
+    desktopManifest[src][w] = `/assets/hero/${outName}`;
+
+    const fresh = isCheck
+      ? existsSync(outPath)
+      : !force && existsSync(outPath) && statSync(outPath).mtimeMs >= statSync(srcPath).mtimeMs;
+    if (fresh) { reused++; continue; }
+    if (isCheck) { stale++; console.error(`  MISSING ${outName}`); continue; }
+    if (isDryRun) { console.log(`  WOULD WRITE ${outName}`); generated++; continue; }
+
+    const buf = await sharp(srcPath)
+      .rotate()
+      .resize({ width: w, withoutEnlargement: true })
+      .webp({ quality: DESKTOP_QUALITY, effort: 6 })
+      .toBuffer();
+
+    // Guard: if the re-encode is not smaller, keep the original in the srcset
+    // and drop the rung rather than shipping a bigger file.
+    if (buf.length >= statSync(srcPath).size) {
+      delete desktopManifest[src][w];
+      continue;
+    }
+    writeFileSync(outPath, buf);
+    const before = statSync(srcPath).size / 1024;
+    const after = buf.length / 1024;
+    console.log(`  \u2713 ${outName}: ${Math.round(before)}KB \u2192 ${Math.round(after)}KB (-${Math.round(100 - (after / before) * 100)}%)`);
+    generated++;
+  }
+}
+
 if (missingSources.length) {
   console.error('\n[hero-variants] FATAL: source photos missing from public/:');
   missingSources.forEach((s) => console.error(`  ${s}`));
@@ -207,6 +279,13 @@ if (isCheck) {
 
 if (!isDryRun) {
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+  // Desktop manifest carries only the rungs; the ORIGINAL is appended as the
+  // top srcset candidate at render time (see Home.tsx desktopSrcSetFor), so a
+  // large retina display still gets the untouched file.
+  writeFileSync(
+    desktopManifestPath,
+    JSON.stringify({ rungs: desktopManifest, originalWidths: originalWidths }, null, 2) + '\n',
+  );
 }
 
 console.log(

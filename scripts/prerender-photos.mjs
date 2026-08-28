@@ -105,6 +105,18 @@ const photos = rows
     keywords: Array.isArray(r.keywords) ? r.keywords : [],
   }));
 
+// index.html carries a homepage <noscript> (site blurb + nav) so non-JS
+// crawlers and AI agents see something on every SPA route. Photo pages get
+// their own per-photo noscript injected below, so strip the homepage one here
+// rather than shipping two.
+const photoTemplate = template.replace(
+  /[ \t]*<!-- VG-HOME-NOSCRIPT:START[\s\S]*?<!-- VG-HOME-NOSCRIPT:END -->\n?/,
+  '',
+);
+if (photoTemplate === template) {
+  console.warn('[prerender] homepage noscript block not found — did index.html change?');
+}
+
 let totalPages = 0;
 
 for (const photo of photos) {
@@ -123,7 +135,7 @@ for (const photo of photos) {
   const safeDescription = photo.description.replace(/"/g, '&quot;');
   const keywordsContent = photo.keywords.join(', ').replace(/"/g, '&quot;');
 
-  let html = template;
+  let html = photoTemplate;
 
   html = html.replace(
     /<title>[^<]*<\/title>/,
@@ -138,6 +150,11 @@ for (const photo of photos) {
   // Strip existing OG block + any stray og: tags from the template
   html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/, '');
   html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
+  // Drop any canonical inherited from index.html. photoMeta adds the correct
+  // per-photo one below; two canonicals on a page is worse than none, and
+  // relying on the Open Graph strip to swallow it was fragile — a single
+  // explanatory comment in the wrong place silently terminated that regex.
+  html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
 
   const photoMeta = `
     <!-- Open Graph -->

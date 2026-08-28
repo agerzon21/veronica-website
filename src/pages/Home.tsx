@@ -6,12 +6,15 @@ import GoogleReviewsSection from '../components/GoogleReviewsSection';
 import InstagramFeed from '../components/InstagramFeed';
 import heroSlides from '../data/hero-slides.json';
 import heroVariants from '../data/hero-variants.json';
+import heroVariantsDesktop from '../data/hero-variants-desktop.json';
 
 type Slide = {
   url: string;
   mobileUrl?: string;
   /** "path 1280w, path 1600w" — mobile derivatives only. */
   mobileSrcSet?: string;
+  /** Desktop rungs plus the untouched original as the widest candidate. */
+  desktopSrcSet?: string;
   position?: string;
   mobilePosition?: string;
   mobileSkip?: boolean;
@@ -31,12 +34,33 @@ type Slide = {
 // rendering a blank hero. Slower, never broken.
 const VARIANTS = heroVariants as Record<string, Record<string, string>>;
 
+// Desktop was still served the untouched originals — 8.26MB across 12 slides,
+// up to 5947px wide — which is why mobile PageSpeed moved and desktop stayed
+// at 72. The ORIGINAL remains the widest srcset candidate, so a large retina
+// display still gets the full-quality file; everything smaller takes a rung.
+const DESKTOP = heroVariantsDesktop as {
+  rungs: Record<string, Record<string, string>>;
+  originalWidths: Record<string, number>;
+};
+
+const desktopSrcSetFor = (original: string): string | undefined => {
+  const rungs = DESKTOP.rungs[original];
+  const width = DESKTOP.originalWidths[original];
+  if (!rungs || !Object.keys(rungs).length || !width) return undefined;
+  return [
+    ...Object.entries(rungs).map(([w, path]) => `${path} ${w}w`),
+    `${original} ${width}w`,
+  ].join(', ');
+};
+
 const CAROUSEL_IMAGES: Slide[] = (heroSlides as Slide[]).map((slide) => {
   const mobileSource = slide.mobileUrl || slide.url;
   const rungs = VARIANTS[mobileSource];
-  if (!rungs) return { ...slide, mobileUrl: mobileSource };
+  const desktopSrcSet = desktopSrcSetFor(slide.url);
+  if (!rungs) return { ...slide, mobileUrl: mobileSource, desktopSrcSet };
   return {
     ...slide,
+    desktopSrcSet,
     // src falls back to the widest rung for anything that ignores srcSet.
     mobileUrl: rungs['1600'] ?? mobileSource,
     mobileSrcSet: Object.entries(rungs)
