@@ -383,7 +383,25 @@ const InstagramFeed = () => {
           const isHero = i === 0;
           return (
             <Box
-              key={photo.permalink ?? photo.url ?? i}
+              // Index key ON PURPOSE. This is a fixed 9-slot grid that is never
+              // reordered, filtered or resized, so slot IS identity here.
+              //
+              // A content-derived key was the cause of tiles going permanently
+              // blank on a fast mobile scroll: the bundled instagram.json ships
+              // 0 posts (and fetch-instagram.mjs caps at 6 while the >= 9 test
+              // below needs 9), so EVERY page load paints FALLBACK_PHOTOS
+              // first, then swaps to live data. Fallbacks have no permalink and
+              // live posts do, so all nine keys changed — React destroyed nine
+              // already-loaded <img>s and mounted nine empty lazy ones into a
+              // page that had stopped scrolling, where the lazy heuristic
+              // silently declined to load some of them and nothing ever
+              // re-evaluated them.
+              //
+              // Keying by slot turns that swap into an attribute mutation on
+              // the surviving elements, which puts it on the spec's
+              // current-request/pending-request path: the old image keeps
+              // painting until the new one decodes, then swaps atomically.
+              key={i}
               gridColumn={isHero ? { base: 'auto', md: 'span 2' } : 'auto'}
               gridRow={isHero ? { base: 'auto', md: 'span 2' } : 'auto'}
               position="relative"
@@ -415,7 +433,11 @@ const InstagramFeed = () => {
                     sizes={tileSrcSet(photo.url) ? TILE_SIZES : undefined}
                     alt={photo.alt}
                     objectFit="cover"
-                    loading="lazy"
+                    // No loading="lazy": `near` (the IntersectionObserver
+                    // above) is already the gate, and it gates the ELEMENT, not
+                    // just the fetch. Stacking lazy on top only adds a second,
+                    // heuristic gate that can decline to load a tile that is
+                    // already on screen — which is exactly what went wrong.
                     decoding="async"
                   />
                 ) : (
