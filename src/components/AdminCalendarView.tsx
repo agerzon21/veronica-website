@@ -1,4 +1,4 @@
-import { Box, VStack, HStack, Text, Flex, Icon, SimpleGrid } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text, Flex, Icon, SimpleGrid, useBreakpointValue } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import type { AdminPortalSummary } from './AdminDashboard';
@@ -85,6 +85,33 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
       }));
   }, [cells, portalsByDate]);
 
+  // Which layout to render. 'auto' follows the breakpoint (the original
+  // behaviour); 'month' and 'agenda' are explicit overrides so the month grid
+  // can be used on a phone (handy for seeing a whole month at a glance) and
+  // the agenda list on desktop (handy for reading the next few bookings in
+  // order). Persisted so the choice survives a reload.
+  const [viewMode, setViewMode] = useState<'auto' | 'month' | 'agenda'>(() => {
+    if (typeof window === 'undefined') return 'auto';
+    try {
+      const saved = localStorage.getItem('vg:calendarView');
+      return saved === 'month' || saved === 'agenda' ? saved : 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+
+  const isWide = useBreakpointValue({ base: false, md: true }, { ssr: false, fallback: 'base' }) ?? false;
+  const effectiveView = viewMode === 'auto' ? (isWide ? 'month' : 'agenda') : viewMode;
+
+  const setView = (v: 'month' | 'agenda') => {
+    setViewMode(v);
+    try {
+      localStorage.setItem('vg:calendarView', v);
+    } catch {
+      // Private-mode Safari can throw; the toggle still works for this session.
+    }
+  };
+
   return (
     <Box>
       {/* Month nav — bigger nav buttons on mobile so the chevrons are
@@ -132,8 +159,9 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
         </Box>
       </Flex>
 
-      {/* Mobile: agenda list (only days with events) */}
-      <Box display={{ base: 'block', md: 'none' }} mb={4}>
+      {/* Agenda list — only days with events. Default on mobile, available on
+          desktop via the toggle. */}
+      <Box display={effectiveView === 'agenda' ? 'block' : 'none'} mb={4}>
         {agenda.length === 0 ? (
           <Box
             bg="white"
@@ -225,7 +253,9 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
       {/* Desktop: 6×7 month grid — hidden on mobile because 40-53px
           cells with 10px event labels are actively worse than an
           agenda. */}
-      <Box display={{ base: 'none', md: 'block' }}>
+      {/* Month grid. Default on desktop; on a phone it is tight but useful for
+          seeing the whole month and the days of the week at a glance. */}
+      <Box display={effectiveView === 'month' ? 'block' : 'none'}>
         {/* Day labels */}
         <SimpleGrid columns={7} spacing={0} mb={1}>
           {DAY_LABELS.map((d) => (
@@ -261,12 +291,47 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
         </Box>
       </Box>
 
-      {/* Legend */}
-      <HStack spacing={5} mt={4} fontSize="xs" color="gray.500" flexWrap="wrap">
-        <LegendDot color="brand.accent" label="Booked" />
-        <LegendDot color="green.500" label="Signed / Delivered" />
-        <LegendDot color="orange.400" label="Pending" />
-      </HStack>
+      {/* Legend — centred, with the layout toggle beside it. */}
+      <Flex
+        mt={4}
+        direction={{ base: 'column', sm: 'row' }}
+        align="center"
+        justify="center"
+        gap={{ base: 3, sm: 5 }}
+        flexWrap="wrap"
+      >
+        <HStack spacing={5} fontSize="xs" color="gray.500" flexWrap="wrap" justify="center">
+          <LegendDot color="brand.accent" label="Booked" />
+          <LegendDot color="green.500" label="Signed / Delivered" />
+          <LegendDot color="orange.400" label="Pending" />
+        </HStack>
+
+        <HStack spacing={0} borderRadius="sm" overflow="hidden" border="1px solid" borderColor="gray.200">
+          {(['month', 'agenda'] as const).map((v) => (
+            <Box
+              key={v}
+              as="button"
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={effectiveView === v}
+              px={3}
+              py={1.5}
+              minH="32px"
+              fontSize="2xs"
+              letterSpacing="0.12em"
+              textTransform="uppercase"
+              cursor="pointer"
+              bg={effectiveView === v ? 'brand.accent' : 'white'}
+              color={effectiveView === v ? 'white' : 'gray.500'}
+              _hover={effectiveView === v ? {} : { color: 'brand.accentText', bg: 'gray.50' }}
+              transition="all 0.15s"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              {v === 'month' ? 'Month' : 'Agenda'}
+            </Box>
+          ))}
+        </HStack>
+      </Flex>
     </Box>
   );
 };

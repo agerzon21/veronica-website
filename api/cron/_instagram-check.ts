@@ -92,7 +92,7 @@ async function doInstagramCheck(): Promise<{ action: string; daysSince?: number 
   try {
     const avatars = await refreshIgAvatars();
     console.log(
-      `[cron/instagram-check] avatar refresh: refreshed=${avatars.refreshed} failed=${avatars.failed}`,
+      `[cron/instagram-check] avatar mirror: mirrored=${avatars.mirrored} failed=${avatars.failed}`,
     );
   } catch (err) {
     console.error(
