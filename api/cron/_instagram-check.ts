@@ -34,7 +34,7 @@ const CRON_META = {
   path: '/api/cron/instagram-check',
   schedule: '0 12 * * *',
   description:
-    'Daily: emails Alex when the Instagram long-lived token has ~10 days of runway left. Reminder only — Alex owns the rotation.',
+    'Daily Instagram upkeep. (1) Refreshes contact profile pictures — Meta pre-signs those URLs and they expire in 24-72h, so without this every avatar in Messages goes blank. (2) Emails Alex when the long-lived token has ~10 days of runway left; reminder only, Alex owns the rotation. NOTE: disabling this stops the avatar refresh too.',
 } as const;
 
 // Instagram long-lived tokens are 60 days. Alert at day 50 → 10 days
