@@ -182,6 +182,7 @@ export interface ReplyResult {
     | 'sent-spam-bridge'
     | 'skipped-global-kill'
     | 'skipped-convo-disabled'
+    | 'skipped-personal'
     | 'skipped-already-replied'
     | 'skipped-rate-limit'
     | 'skipped-casual-message'
@@ -201,6 +202,7 @@ interface Conversation {
   id: string;
   external_user_id: string;
   ai_enabled: boolean;
+  is_personal: boolean;
   platform: string;
 }
 
@@ -267,7 +269,7 @@ export async function processInboundMessage(args: {
 
     // ── 2. Load conversation + per-convo toggle check ────────
     const convoRows = (await sql`
-      SELECT id, external_user_id, ai_enabled, platform
+      SELECT id, external_user_id, ai_enabled, is_personal, platform
       FROM conversations
       WHERE id = ${args.conversationId}
       LIMIT 1
@@ -276,6 +278,17 @@ export async function processInboundMessage(args: {
     if (!convo) {
       return { action: 'error-generation-failed', reason: 'conversation not found' };
     }
+    // Personal threads (friends & family) are checked BEFORE ai_enabled, and
+    // separately from it, on purpose. ai_enabled is a soft toggle with several
+    // writers — the escalation path, the summary classifier, Vero's own switch
+    // — any of which can flip it back on. is_personal has exactly one writer
+    // (_messages-mark-personal.ts), so it is the durable statement that this
+    // thread is not work. Auto-replying to Vero's sister as if she were a
+    // prospective client is the failure this prevents.
+    if (convo.is_personal) {
+      return { action: 'skipped-personal', reason: 'is_personal=true' };
+    }
+
     if (!convo.ai_enabled) {
       return { action: 'skipped-convo-disabled', reason: 'ai_enabled=false' };
     }

@@ -387,6 +387,23 @@ const dict = {
     },
     hidePromotional: { en: 'Hide promotional', ru: 'Скрыть рекламные' },
 
+    // ── Personal (friends & family) ──────────────────────────────
+    // Nothing classifies these automatically — Vero marks them by hand — so
+    // the copy says "marked", not "detected".
+    markPersonal: { en: 'Mark as personal', ru: 'Отметить как личное' },
+    unmarkPersonal: { en: 'Move back to inbox', ru: 'Вернуть в основной список' },
+    markedPersonal: {
+      en: 'Moved to Personal — the assistant will not reply to this thread',
+      ru: 'В личных — ассистент больше не отвечает в этой переписке',
+    },
+    unmarkedPersonal: { en: 'Back in the main inbox', ru: 'Снова в основном списке' },
+
+    showPersonal: {
+      en: (n: number) => `Show ${n} personal`,
+      ru: (n: number) => `Показать личные (${n})`,
+    },
+    hidePersonal: { en: 'Hide personal', ru: 'Скрыть личные' },
+
     // ── Signature editor ─────────────────────────────────────────
     signatureTitle: { en: 'Email signature', ru: 'Подпись в письмах' },
     signatureEdit: { en: 'Edit email signature', ru: 'Изменить подпись' },

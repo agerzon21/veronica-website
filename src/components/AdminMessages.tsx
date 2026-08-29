@@ -6,8 +6,31 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  FaInstagram, FaRobot, FaUser, FaSync, FaPaperPlane, FaPowerOff, FaCommentDots, FaExclamationTriangle, FaTimes, FaEnvelope, FaClipboardList, FaPenNib, FaCheckCircle, FaTrash, FaEye, FaEyeSlash,
-  FaLanguage, FaLightbulb, FaChevronDown, FaChevronUp, FaUserPlus, FaExternalLinkAlt, FaChevronLeft, FaEraser,
+  FaInstagram,
+  FaRobot,
+  FaUser,
+  FaSync,
+  FaPaperPlane,
+  FaPowerOff,
+  FaCommentDots,
+  FaExclamationTriangle,
+  FaTimes,
+  FaEnvelope,
+  FaClipboardList,
+  FaPenNib,
+  FaCheckCircle,
+  FaTrash,
+  FaEye,
+  FaEyeSlash,
+  FaLanguage,
+  FaLightbulb,
+  FaChevronDown,
+  FaChevronUp,
+  FaUserPlus,
+  FaExternalLinkAlt,
+  FaChevronLeft,
+  FaEraser,
+  FaUserFriends,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
@@ -69,6 +92,7 @@ export interface ConversationSummary {
   classification?: string | null;
   // null = no opinion, let the AI classification decide.
   is_promotional?: boolean | null;
+  is_personal?: boolean;
   has_draft?: boolean;
   last_message_preview: string | null;
 }
@@ -555,6 +579,7 @@ function ConversationList({
 }) {
   const { t } = useAdminLang();
   const [showPromotional, setShowPromotional] = useState(false);
+  const [showPersonal, setShowPersonal] = useState(false);
 
   // Marketing mail, cold pitches and review notifications all land in
   // the same inbox as real clients, because filtering them at ingest
@@ -576,8 +601,15 @@ function ConversationList({
   const isPromotional = (c: ConversationSummary) =>
     (c.is_promotional ?? c.classification === 'spam-or-unrelated') && c.id !== selectedId;
 
-  const primary = conversations.filter((c) => !isPromotional(c));
-  const promotional = conversations.filter(isPromotional);
+  // Personal is checked FIRST and is a plain boolean — no classifier competes
+  // with it, so there is no nullable "no opinion" state like is_promotional has.
+  // A thread can only be in one bucket; personal wins so a friend who also
+  // trips the spam classifier still lands in Personal rather than Promotional.
+  const isPersonal = (c: ConversationSummary) => !!c.is_personal && c.id !== selectedId;
+
+  const personal = conversations.filter(isPersonal);
+  const primary = conversations.filter((c) => !isPersonal(c) && !isPromotional(c));
+  const promotional = conversations.filter((c) => !isPersonal(c) && isPromotional(c));
 
   return (
     <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
@@ -589,6 +621,33 @@ function ConversationList({
           onClick={() => onSelect(c.id)}
         />
       ))}
+
+      {personal.length > 0 && (
+        <Box
+          as="button"
+          onClick={() => setShowPersonal((v) => !v)}
+          py={2.5}
+          px={4}
+          textAlign="left"
+          bg="gray.50"
+          _hover={{ bg: 'gray.100' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Text fontSize="xs" color="gray.500" fontWeight="500">
+            {showPersonal ? t.messages.hidePersonal : t.messages.showPersonal(personal.length)}
+          </Text>
+        </Box>
+      )}
+
+      {showPersonal &&
+        personal.map((c) => (
+          <ConversationListRow
+            key={c.id}
+            conv={c}
+            isSelected={c.id === selectedId}
+            onClick={() => onSelect(c.id)}
+          />
+        ))}
 
       {promotional.length > 0 && (
         <Box
@@ -913,6 +972,37 @@ function ConversationView({
       if (res.ok && data.success) {
         toast({
           title: next ? t.messages.markedPromotional : t.messages.unmarkedPromotional,
+          status: 'success',
+          duration: 3000,
+        });
+        await loadDetail();
+        onRefreshList();
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+    }
+  };
+
+  // Personal is a plain boolean with one writer, so unlike isHidden there is no
+  // classifier to fall back to — detail?.is_personal is the whole truth.
+  const isPersonalThread = !!detail?.is_personal;
+
+  const handleTogglePersonal = async () => {
+    const next = !isPersonalThread;
+    try {
+      const res = await fetch('/api/admin/messages-mark-personal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          conversationId: summary.id,
+          personal: next,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({
+          title: next ? t.messages.markedPersonal : t.messages.unmarkedPersonal,
           status: 'success',
           duration: 3000,
         });
@@ -1670,6 +1760,23 @@ function ConversationView({
                 a mistaken tap should cost a click to undo. Because email
                 threads are keyed on the sender's address, this covers
                 everything they send from now on. */}
+            {/* Personal — friends & family. Distinct from the eye beside it:
+                that one folds away marketing noise, this one says "not work",
+                which is what actually stops the assistant replying (see the
+                is_personal gate in api/_ai-reply.ts). Gold when active so it
+                reads as a deliberate state rather than a hidden thread. */}
+            <IconButton
+              aria-label={isPersonalThread ? t.messages.unmarkPersonal : t.messages.markPersonal}
+              title={isPersonalThread ? t.messages.unmarkPersonal : t.messages.markPersonal}
+              icon={<Icon as={FaUserFriends} boxSize={3.5} />}
+              onClick={handleTogglePersonal}
+              size="sm"
+              variant="ghost"
+              color={isPersonalThread ? 'brand.accentText' : 'gray.400'}
+              bg={isPersonalThread ? 'brand.surface' : 'transparent'}
+              _hover={{ color: 'brand.accentText', bg: 'brand.surface' }}
+              borderRadius="full"
+            />
             <IconButton
               aria-label={isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
               title={isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
