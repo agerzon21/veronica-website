@@ -1,150 +1,193 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { put } from '@vercel/blob';
 import { getDb } from '../_db.js';
 import { fetchIgProfile } from '../_ig-profile.js';
 import { runGuarded, type CronTrigger } from './_guard.js';
 
-// Exported so api/cron.ts can surface it in the registry — see the comment
-// there. Without a registry entry this job could never appear in the admin
-// Crons list, because that list reads cron_jobs rows and only runGuarded
-// creates them: a job had to run before it could be listed, and it could only
-// be run from the list.
+/**
+ * Mirror Instagram contact avatars into Vercel Blob, permanently.
+ *
+ * THE PROBLEM
+ * Meta never gives out a stable image URL. `profile_pic` comes back as a
+ * PRE-SIGNED cdninstagram link that expires in 24-72h — as little as 1-3h
+ * during a CDN rotation (see api/_ig-profile.ts). We stored that string at
+ * first contact and nothing ever renewed it, so every avatar in the admin
+ * inbox eventually 403'd and rendered as a broken image. Nothing "broke": the
+ * value was always on a timer.
+ *
+ * WHY MIRRORING, NOT A DAILY RE-FETCH
+ * The first version of this job re-fetched a fresh signed URL every day. It
+ * worked, but it is the wrong shape — it needs a cron forever, it can drift,
+ * and a URL can still die between runs. Downloading the bytes ONCE and hosting
+ * them ourselves is permanent: after a row is mirrored it never needs touching
+ * again, so this job drains its own queue and then does nothing. A run
+ * reporting "0 mirrored" is the intended end state, not a failure.
+ *
+ * QUOTA SAFETY
+ * api/photo.ts's header records that proxying image bytes through a Function
+ * "blew our Vercel Hobby quota in two days". That was a READ path — every
+ * gallery view streamed megabytes through the origin. This is a WRITE path that
+ * runs at most a few dozen times ever, at ~8-14KB per avatar, and reads go
+ * browser -> Blob CDN directly, never through us. Different shape entirely.
+ *
+ * SLOT COST: zero. Underscore-prefixed inside api/cron/, registered in the
+ * HANDLERS map in api/cron.ts, and chained from instagram-check. No new
+ * endpoint file, no new vercel.json cron entry. api/ stays 12/12.
+ */
+
 export const CRON_META = {
   name: 'ig-avatar-refresh',
   path: '/api/cron/ig-avatar-refresh',
   schedule: 'chained daily after instagram-check',
   description:
-    'Re-fetches Instagram profile pictures so they do not expire. Meta pre-signs those URLs and they die in 24-72h; nothing refreshed them, so every avatar in Messages eventually went blank. Runs inside instagram-check, and can be run on demand here.',
+    'Mirrors Instagram contact avatars into our own storage so they stop expiring. Meta only hands out pre-signed URLs that die within 24-72h; this downloads each one once and serves a permanent copy. Drains to zero work once every contact is mirrored — a run reporting "0 mirrored" means everything is already done, not that it failed.',
 } as const;
 
-/**
- * Refresh Instagram contact avatars.
- *
- * WHY THIS EXISTS
- * Avatars in the admin Messages tab were all blank. The cause is not a bug in
- * any one line — it is that nothing ever refreshed them.
- *
- * `enrichConversationProfile` in api/inbox/_ig-webhook.ts is the ONLY thing
- * that writes `contact_profile_pic_url`, and its single caller (:487) is gated
- * on `was_inserted || contact_name == null`. So it runs exactly once, at first
- * contact, and never again. Meanwhile Meta pre-signs those cdninstagram URLs
- * and they die in 24-72h — as little as 1-3h during a CDN rotation, per the
- * header of api/_ig-profile.ts. Every avatar was always going to rot; the only
- * question was how fast.
- *
- * (The COALESCE arg order in that UPDATE looks inverted and was initially
- * blamed. It is not the cause: because of the gate, the column is always NULL
- * when it runs, so both orderings return the same value. Reordering it alone
- * would have fixed nothing.)
- *
- * WHY A DAILY RE-FETCH AND NOT A BLOB MIRROR
- * Mirroring the bytes to Vercel Blob gives permanently stable URLs and is the
- * better long-term answer. But it is a much larger change resting on an
- * unverified assumption (every existing blob in this store is `private`; public
- * writes are untested here). A daily re-fetch needs no new storage, no new
- * dependency and no new failure mode — and since the URLs live 24-72h and this
- * runs daily, it keeps the overwhelming majority alive. The CDN-rotation tail
- * is handled on the client: PlatformAvatar now falls back to initials instead
- * of rendering a broken image.
- *
- * Escalate to the Blob mirror only if this proves insufficient in practice.
- *
- * SLOT COST: zero. Underscore-prefixed inside api/cron/, registered in the
- * HANDLERS map in api/cron.ts and chained from the existing instagram-check
- * job — no new endpoint file, no new vercel.json cron entry. api/ stays 12/12.
- */
+// Bounded so this shares instagram-check's 60s invocation safely. The queue
+// drains over a few runs rather than risking a timeout on the first one.
+const MAX_PER_RUN = 25;
+const DEADLINE_MS = 35_000;
+const PROFILE_TIMEOUT_MS = 2_000;
+const DOWNLOAD_TIMEOUT_MS = 4_000;
+const MAX_FAILURES = 3;
+// Meta avatars are ~8-14KB. Anything wildly larger is not an avatar — refuse it
+// rather than storing whatever we were handed.
+const MAX_BYTES = 512 * 1024;
 
-// Meta's Graph API is rate-limited per token, and this shares a 60s invocation
-// with detectAndMarkRotation and possibly a Resend send. Bound both.
-const MAX_PER_RUN = 60;
-const DEADLINE_MS = 40_000;
-const PER_PROFILE_TIMEOUT_MS = 2_000;
+type Row = {
+  id: string;
+  external_user_id: string;
+  contact_profile_pic_url: string | null;
+};
 
-type Row = { id: string; external_user_id: string };
+const withTimeout = async <T>(p: Promise<T>, ms: number): Promise<T | null> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), ms);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
 
 export async function refreshIgAvatars(): Promise<{
-  attempted: number;
-  refreshed: number;
+  pending: number;
+  mirrored: number;
   failed: number;
-  skipped: number;
 }> {
   const sql = getDb();
   const startedAt = Date.now();
-  let refreshed = 0;
+  let mirrored = 0;
   let failed = 0;
 
-  // Oldest-touched first, so a run that hits the deadline still makes forward
-  // progress on the staleest rows next time rather than re-walking the same head.
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.warn('[cron/ig-avatar-refresh] BLOB_READ_WRITE_TOKEN missing — skipping');
+    return { pending: 0, mirrored: 0, failed: 0 };
+  }
+
+  // Only rows with no permanent avatar yet. Once mirrored, a row leaves this
+  // queue forever — which is why this job trends to zero.
   const rows = (await sql`
-    SELECT id, external_user_id
+    SELECT id, external_user_id, contact_profile_pic_url
     FROM conversations
     WHERE platform = 'instagram'
       AND external_user_id IS NOT NULL
-    ORDER BY updated_at ASC
+      AND contact_avatar_url IS NULL
+      AND contact_avatar_failures < ${MAX_FAILURES}
+    ORDER BY updated_at DESC
     LIMIT ${MAX_PER_RUN}
   `) as unknown as Row[];
 
   for (const row of rows) {
     if (Date.now() - startedAt > DEADLINE_MS) {
       console.warn(
-        `[cron/ig-avatar-refresh] deadline hit after ${refreshed + failed}/${rows.length}; remainder next run`,
+        `[cron/ig-avatar-refresh] deadline hit after ${mirrored + failed}/${rows.length}; remainder next run`,
       );
       break;
     }
 
-    let profile: Awaited<ReturnType<typeof fetchIgProfile>> = null;
     try {
-      profile = await Promise.race([
-        fetchIgProfile(row.external_user_id),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), PER_PROFILE_TIMEOUT_MS)),
-      ]);
-    } catch {
-      // fetchIgProfile is documented never to throw, but a timeout race can
-      // still reject upstream. Treat any error as "no profile this run".
-      profile = null;
-    }
+      // Always re-fetch rather than trusting the stored URL: for any row that
+      // has been sitting a while the stored one is already dead, which is the
+      // whole problem this job exists to solve. Fall back to the stored URL
+      // only if the Graph call fails.
+      const profile = await withTimeout(fetchIgProfile(row.external_user_id), PROFILE_TIMEOUT_MS);
+      const sourceUrl = profile?.profilePicUrl ?? row.contact_profile_pic_url;
+      if (!sourceUrl) throw new Error('no profile picture available');
 
-    if (!profile?.profilePicUrl) {
+      const res = await withTimeout(fetch(sourceUrl), DOWNLOAD_TIMEOUT_MS);
+      if (!res) throw new Error('download timed out');
+      if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
+
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0) throw new Error('empty body');
+      if (buf.length > MAX_BYTES) throw new Error(`unexpectedly large: ${buf.length} bytes`);
+
+      const contentType = res.headers.get('content-type') ?? 'image/jpeg';
+      if (!contentType.startsWith('image/')) throw new Error(`not an image: ${contentType}`);
+
+      // Deterministic pathname keyed on the IGSID, so re-mirroring a contact
+      // overwrites in place rather than accumulating orphans.
+      //
+      // access:'public' so reads go browser -> Blob CDN directly. A private
+      // blob would have to be proxied through a Function on every inbox render
+      // — exactly the pattern that blew the Hobby quota once already.
+      // NOTE: every other blob in this store is 'private'; this is the first
+      // public write. If the store rejects it, the throw is caught per-row
+      // below and surfaces in the run history rather than killing the job.
+      //
+      // allowOverwrite is mandatory: @vercel/blob v2 defaults it to false and
+      // throws "This blob already exists" on any retry.
+      const { url } = await put(`ig-avatars/${row.external_user_id}`, buf, {
+        access: 'public',
+        contentType,
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        cacheControlMaxAge: 60 * 60 * 24 * 30,
+      });
+
+      await sql`
+        UPDATE conversations
+        SET contact_avatar_url = ${url},
+            contact_avatar_mirrored_at = NOW(),
+            contact_avatar_failures = 0
+        WHERE id = ${row.id}
+      `;
+      mirrored++;
+    } catch (err) {
       failed++;
-      continue;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[cron/ig-avatar-refresh] ${row.external_user_id}: ${message}`);
+      // Give up on a row after MAX_FAILURES so a deleted account is not retried
+      // on every run forever.
+      await sql`
+        UPDATE conversations
+        SET contact_avatar_failures = contact_avatar_failures + 1
+        WHERE id = ${row.id}
+      `;
     }
-
-    // FRESH WINS here, unlike the name/handle columns. contact_profile_pic_url
-    // holds an expiring signed credential, not a human-entered value — keeping
-    // the old one is strictly worse than taking the new one. Names are
-    // different and are deliberately left alone by this job.
-    await sql`
-      UPDATE conversations
-      SET contact_profile_pic_url = ${profile.profilePicUrl}
-      WHERE id = ${row.id}
-    `;
-    refreshed++;
   }
 
-  return { attempted: rows.length, refreshed, failed, skipped: rows.length - refreshed - failed };
+  return { pending: rows.length, mirrored, failed };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // req.query.trigger, NOT req.headers. The admin "Run now" path builds its
-  // request as { ...req, query: { ...req.query, trigger: 'manual' } } in
-  // api/admin/_crons-run-now.ts — and spreading a VercelRequest does NOT carry
-  // `headers`, which is a prototype getter on IncomingMessage. Reading
-  // req.headers there threw "Cannot read properties of undefined", so Run now
-  // failed before the job did any work. Every other cron already uses
-  // req.query?.trigger; this one was the odd man out.
+  // req.query.trigger, NOT req.headers: api/admin/_crons-run-now.ts builds its
+  // request as { ...req, query: {...} }, and spreading a VercelRequest does not
+  // carry `headers` (a prototype getter on IncomingMessage). Matches
+  // _instagram-check.ts and _gallery-sync.ts.
   const rawTrigger = req.query?.trigger;
   const trigger: CronTrigger =
-    (Array.isArray(rawTrigger) ? rawTrigger[0] : rawTrigger) === 'manual'
-      ? 'manual'
-      : 'schedule';
-  // Through runGuarded so this gets the same enable toggle, timing and run
-  // history as every other job when invoked directly or via "Run now". The
-  // chained call from instagram-check deliberately calls refreshIgAvatars()
-  // raw instead — that work belongs to instagram-check's own run record, not
-  // a second one.
+    (Array.isArray(rawTrigger) ? rawTrigger[0] : rawTrigger) === 'manual' ? 'manual' : 'schedule';
+
   const result = await runGuarded({ ...CRON_META, trigger }, refreshIgAvatars);
 
-  // GuardResult's payload field is `ok` (the work() return value), not `value`,
-  // and errors surface on `error`. Matches _instagram-check.ts's handler.
   if (result.skipped) {
     return res.status(200).json({ ok: true, action: 'skipped-cron-disabled' });
   }
