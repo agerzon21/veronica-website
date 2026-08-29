@@ -54,13 +54,13 @@ const PillButton = ({ label, isActive, onClick, icon, disabled = false }: Props)
         // its hover fill.
         '@media (hover: hover)': {
           _hover: isActive
-            ? { bg: '#b8964f', borderColor: '#b8964f' }
-            : { borderColor: '#c9a96e', color: '#c9a96e' },
+            ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
+            : { borderColor: 'brand.accent', color: 'brand.accent' },
         },
       }}
       _active={
         isActive
-          ? { bg: '#b8964f', borderColor: '#b8964f' }
+          ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
           : { bg: 'rgba(201, 169, 110, 0.08)' }
       }
     >

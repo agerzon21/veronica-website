@@ -284,11 +284,11 @@ const InstagramFeed = () => {
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing="0.3em"
-          color="#c9a96e"
+          color="brand.accentText"
         >
           Follow Along
         </Text>
-        <Box w="40px" h="1px" bg="#c9a96e" />
+        <Box w="40px" h="1px" bg="brand.accent" />
       </VStack>
 
       {/* Instagram-style profile card. Avatar is the real IG profile pic
@@ -354,7 +354,7 @@ const InstagramFeed = () => {
           <Link
             href={INSTAGRAM_URL}
             isExternal
-            _hover={{ textDecoration: 'none', color: '#c9a96e' }}
+            _hover={{ textDecoration: 'none', color: 'brand.accent' }}
           >
             <HStack spacing={2}>
               <Text
@@ -365,7 +365,7 @@ const InstagramFeed = () => {
               >
                 {USERNAME}
               </Text>
-              <Icon as={FaInstagram} color="#c9a96e" boxSize={{ base: 4, md: 5 }} />
+              <Icon as={FaInstagram} color="brand.accent" boxSize={{ base: 4, md: 5 }} />
             </HStack>
           </Link>
 
@@ -400,7 +400,7 @@ const InstagramFeed = () => {
           <Text
             fontSize={{ base: 'xs', md: 'sm' }}
             fontWeight="300"
-            color="gray.500"
+            color="gray.600"
             letterSpacing="0.02em"
             noOfLines={2}
           >

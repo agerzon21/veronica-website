@@ -201,7 +201,7 @@ const ExitIntentPopup = () => {
               {submittedCode ? (
                 <VStack spacing={5} textAlign="center" py={4}>
                   <Box
-                    bg="#c9a96e"
+                    bg="brand.accent"
                     color="white"
                     w="56px"
                     h="56px"
@@ -217,7 +217,7 @@ const ExitIntentPopup = () => {
                     fontWeight="500"
                     textTransform="uppercase"
                     letterSpacing="0.25em"
-                    color="#c9a96e"
+                    color="brand.accent"
                   >
                     {submittedCode === 'already' ? 'Already on the list' : 'You’re in'}
                   </Text>
@@ -246,11 +246,11 @@ const ExitIntentPopup = () => {
                     fontWeight="500"
                     textTransform="uppercase"
                     letterSpacing="0.25em"
-                    color="#c9a96e"
+                    color="brand.accent"
                   >
                     Before you go
                   </Text>
-                  <Box w="40px" h="1px" bg="#c9a96e" />
+                  <Box w="40px" h="1px" bg="brand.accent" />
                   <Text
                     as="h2"
                     fontSize={{ base: '2xl', md: '3xl' }}
@@ -259,7 +259,7 @@ const ExitIntentPopup = () => {
                     lineHeight="1.3"
                     m={0}
                   >
-                    Get <Box as="span" color="#c9a96e" fontWeight="400">10% off</Box>
+                    Get <Box as="span" color="brand.accent" fontWeight="400">10% off</Box>
                     <br />
                     your next session
                   </Text>
@@ -283,7 +283,7 @@ const ExitIntentPopup = () => {
                         bg="white"
                         color="gray.800"
                         _focus={{
-                          borderColor: '#c9a96e',
+                          borderColor: 'brand.accent',
                           boxShadow: '0 0 0 1px #c9a96e',
                         }}
                         textAlign="center"

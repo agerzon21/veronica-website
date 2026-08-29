@@ -36,6 +36,7 @@ import SEO from './components/SEO';
 // extra requests for a ~5KB component.
 import ExitIntentPopup from './components/ExitIntentPopup';
 import ChunkErrorBoundary, { prefetchChunk } from './components/ChunkErrorBoundary';
+import theme from './theme';
 import { scheduleAnalytics, trackPageView } from './utils/analytics';
 
 function ScrollToTop() {
@@ -170,7 +171,11 @@ function AppShell() {
 function App() {
   return (
     <HelmetProvider>
-      <ChakraProvider>
+      {/* theme={theme} is load-bearing. The previous src/theme/index.ts was
+          never passed here, so it silently did nothing for its entire life and
+          was eventually deleted as dead code. If tokens ever stop applying,
+          check this prop first. */}
+      <ChakraProvider theme={theme}>
         {/* Outside <Router> so a chunk failure during the very first route
             resolution is still caught. */}
         <ChunkErrorBoundary>

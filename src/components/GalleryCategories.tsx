@@ -105,7 +105,7 @@ const GalleryCategories = () => {
                     <Box
                       w="30px"
                       h="1px"
-                      bg="#c9a96e"
+                      bg="brand.accent"
                       transition="all 0.4s ease"
                       _groupHover={{ w: '50px' }}
                     />

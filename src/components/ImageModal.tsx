@@ -165,7 +165,7 @@ const DownloadMenu = ({
     transition: 'all 0.4s ease',
     whiteSpace: 'nowrap' as const,
     _hover: { bg: GOLD, color: 'white', transform: 'translateY(-2px)' },
-    _active: { bg: '#b8964f', transform: 'translateY(0)' },
+    _active: { bg: 'brand.accentStrong', transform: 'translateY(0)' },
     _expanded: { bg: GOLD, color: 'white' },
     sx: { WebkitTapHighlightColor: 'transparent' },
   };
@@ -812,7 +812,7 @@ const ImageModal = ({
               onClick={handleShare}
               color="whiteAlpha.600"
               transition="color 0.3s"
-              _hover={{ color: '#c9a96e' }}
+              _hover={{ color: 'brand.accent' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <ExternalLinkIcon boxSize={4} />

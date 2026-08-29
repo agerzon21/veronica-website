@@ -60,9 +60,9 @@ const Footer = () => {
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
-                color="#c9a96e"
+                color="brand.accent"
                 transition="all 0.3s"
-                _hover={{ bg: '#c9a96e', color: 'white', textDecoration: 'none' }}
+                _hover={{ bg: 'brand.accent', color: 'white', textDecoration: 'none' }}
               >
                 <Icon as={s.icon} boxSize={{ base: 4, md: '18px' }} />
               </Link>
@@ -96,10 +96,10 @@ const Footer = () => {
                 to={l.to}
                 fontSize="2xs"
                 fontWeight="400"
-                color="gray.500"
+                color="gray.600"
                 letterSpacing="0.15em"
                 textTransform="uppercase"
-                _hover={{ color: '#c9a96e', textDecoration: 'none' }}
+                _hover={{ color: 'brand.accent', textDecoration: 'none' }}
                 transition="color 0.3s"
               >
                 {l.label}
@@ -112,7 +112,7 @@ const Footer = () => {
             <Text
               fontSize="2xs"
               fontWeight="500"
-              color="gray.500"
+              color="gray.600"
               textTransform="uppercase"
               letterSpacing="0.25em"
               textAlign="center"
@@ -121,7 +121,7 @@ const Footer = () => {
             </Text>
             <Text
               fontSize="2xs"
-              color="gray.400"
+              color="gray.600"
               fontWeight="300"
               letterSpacing="0.1em"
             >

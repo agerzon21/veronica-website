@@ -138,11 +138,11 @@ const Gallery = () => {
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.2em"
-                  color="#c9a96e"
+                  color="brand.accent"
                 >
                   Portfolio
                 </Text>
-                <Box w="35px" h="1px" bg="#c9a96e" />
+                <Box w="35px" h="1px" bg="brand.accent" />
                 <Text
                   as="h1"
                   fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
@@ -204,11 +204,11 @@ const Gallery = () => {
                 fontWeight="500"
                 textTransform="uppercase"
                 letterSpacing="0.2em"
-                color="#c9a96e"
+                color="brand.accent"
               >
                 Gallery
               </Text>
-              <Box w="35px" h="1px" bg="#c9a96e" />
+              <Box w="35px" h="1px" bg="brand.accent" />
               <Text
                 as="h1"
                 fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
@@ -236,7 +236,7 @@ const Gallery = () => {
               align="center"
               color="whiteAlpha.800"
               transition="all 0.3s"
-              _hover={{ color: '#c9a96e' }}
+              _hover={{ color: 'brand.accent' }}
               cursor="pointer"
               gap={2}
             >
@@ -264,7 +264,7 @@ const Gallery = () => {
           // cream-placeholder tiles while individual Drive-proxy
           // images stream in.
           <Flex justify="center" align="center" direction="column" gap={3} py={20}>
-            <Spinner color="#c9a96e" size="lg" thickness="2px" />
+            <Spinner color="brand.accent" size="lg" thickness="2px" />
             <Text
               fontSize="xs"
               color="gray.400"

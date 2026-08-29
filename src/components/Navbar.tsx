@@ -90,7 +90,7 @@ const Navbar = () => {
                   transition="all 0.3s"
                   _hover={{
                     color: 'white',
-                    bg: '#c9a96e',
+                    bg: 'brand.accent',
                     textDecoration: 'none',
                   }}
                 >
@@ -108,9 +108,9 @@ const Navbar = () => {
                   textUnderlineOffset="6px"
                   transition="color 0.3s"
                   _hover={{
-                    color: '#c9a96e',
+                    color: 'brand.accent',
                     textDecoration: 'underline',
-                    textDecorationColor: '#c9a96e',
+                    textDecorationColor: 'brand.accent',
                     textDecorationThickness: '1px',
                   }}
                 >
@@ -139,9 +139,9 @@ const Navbar = () => {
                   textUnderlineOffset="6px"
                   transition="color 0.3s"
                   _hover={{
-                    color: '#c9a96e',
+                    color: 'brand.accent',
                     textDecoration: 'underline',
-                    textDecorationColor: '#c9a96e',
+                    textDecorationColor: 'brand.accent',
                     textDecorationThickness: '1px',
                   }}
                 >

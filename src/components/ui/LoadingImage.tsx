@@ -38,9 +38,9 @@ const LoadingImage = ({
 }: LoadingImageProps) => {
   const [loaded, setLoaded] = useState(false);
   return (
-    <Box position="relative" overflow="hidden" bg="#f5efe4" {...boxProps}>
+    <Box position="relative" overflow="hidden" bg="brand.surfaceSunken" {...boxProps}>
       <Spinner
-        color="#c9a96e"
+        color="brand.accentText"
         thickness="2px"
         size={spinnerSize}
         speed="0.8s"

@@ -60,16 +60,16 @@ const AuthorBadge = ({ review }: { review: Review }) => {
         <Flex
           boxSize="32px"
           borderRadius="full"
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           align="center"
           justify="center"
         >
           <Text
             fontSize="xs"
             fontWeight="500"
-            color="#c9a96e"
+            color="brand.accentText"
             letterSpacing="0.05em"
           >
             {initials}
@@ -81,7 +81,7 @@ const AuthorBadge = ({ review }: { review: Review }) => {
         fontWeight="500"
         textTransform="uppercase"
         letterSpacing="0.2em"
-        color="#c9a96e"
+        color="brand.accent"
       >
         — {review.author_name}
       </Text>
@@ -147,11 +147,11 @@ const GoogleReviewsSection = () => {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.2em"
-            color="#c9a96e"
+            color="brand.accentText"
           >
             Kind Words
           </Text>
-          <Box w="35px" h="1px" bg="#c9a96e" />
+          <Box w="35px" h="1px" bg="brand.accent" />
 
           {/* Google rating badge — links to profile */}
           <Link
@@ -178,8 +178,8 @@ const GoogleReviewsSection = () => {
                 textDecorationColor="gray.400"
                 transition="color 0.3s, text-decoration-color 0.3s"
                 _groupHover={{
-                  color: '#c9a96e',
-                  textDecorationColor: '#c9a96e',
+                  color: 'brand.accent',
+                  textDecorationColor: 'brand.accent',
                 }}
               >
                 {rating} · {reviewCount} Reviews on Google →

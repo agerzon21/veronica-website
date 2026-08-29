@@ -100,11 +100,11 @@ function JournalIndex() {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.3em"
-            color="#c9a96e"
+            color="brand.accentText"
           >
             Journal
           </Text>
-          <Box w="40px" h="1px" bg="#c9a96e" />
+          <Box w="40px" h="1px" bg="brand.accent" />
           <Text
             as="h1"
             fontSize={{ base: '3xl', md: '5xl' }}
@@ -134,7 +134,7 @@ function JournalIndex() {
             <ErrorState message={error} />
           ) : posts === null ? (
             <Flex justify="center" py={16}>
-              <Spinner color="#c9a96e" />
+              <Spinner color="brand.accent" />
             </Flex>
           ) : posts.length === 0 ? (
             <EmptyState />
@@ -218,7 +218,7 @@ function YearMarker({ year }: { year: number }) {
           fontSize={{ base: 'xs', md: 'sm' }}
           fontWeight="500"
           letterSpacing="0.2em"
-          color="#8a6e35"
+          color="brand.accentText"
         >
           {year}
         </Text>
@@ -244,7 +244,7 @@ function TimelineEntry({ post, side }: { post: PostSummary; side: 'left' | 'righ
         w="9px"
         h="9px"
         borderRadius="full"
-        bg="#c9a96e"
+        bg="brand.accent"
         border="2px solid white"
         boxShadow="0 0 0 1px rgba(201, 169, 110, 0.4)"
         zIndex={2}
@@ -352,10 +352,10 @@ function TimelineCard({
           <Flex
             w={{ base: '90px', md: '140px' }}
             flexShrink={0}
-            bg="#fdf9f0"
+            bg="brand.surface"
             align="center"
             justify="center"
-            color="#c9a96e"
+            color="brand.accentText"
           >
             <Icon as={FaBookOpen} boxSize={5} />
           </Flex>
@@ -398,7 +398,7 @@ function TimelineCard({
               fontWeight="500"
               letterSpacing="0.14em"
               textTransform="uppercase"
-              color="#8a6e35"
+              color="brand.accentText"
             >
               {post.session_type}
             </Text>
@@ -424,7 +424,7 @@ function TimelineCard({
         <Box
           borderTop="1px solid"
           borderColor="gray.100"
-          bg="#fdf9f0"
+          bg="brand.surface"
           px={{ base: 4, md: 5 }}
           py={{ base: 4, md: 5 }}
         >
@@ -482,7 +482,7 @@ function TimelineCard({
                   fontWeight="500"
                   letterSpacing="0.08em"
                   textTransform="lowercase"
-                  color="#8a6e35"
+                  color="brand.accentText"
                   bg="white"
                   border="1px solid"
                   borderColor="rgba(201, 169, 110, 0.35)"
@@ -506,8 +506,8 @@ function TimelineCard({
               fontWeight="500"
               letterSpacing="0.14em"
               textTransform="uppercase"
-              color="#c9a96e"
-              _hover={{ color: '#8a6e35' }}
+              color="brand.accent"
+              _hover={{ color: 'brand.accentText' }}
               transition="color 0.15s"
             >
               See the full post
@@ -538,12 +538,12 @@ function EmptyState() {
         h="72px"
         mx="auto"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
         mb={5}
       >
         <Icon as={FaBookOpen} boxSize={7} />
