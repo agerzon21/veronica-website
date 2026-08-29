@@ -16,6 +16,10 @@
  * churning through the space faster than a human can.
  */
 
+import { createHash, randomBytes } from 'node:crypto';
+import { getDb } from './_db.js';
+import { verifyPortalHash } from './portal/_password.js';
+
 const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -39,10 +43,84 @@ export interface AdminAuthFail {
  * password" so an attacker can't distinguish "no such account" from
  * "wrong password."
  */
+// ── Session tokens ────────────────────────────────────────────────────────
+// Only the SHA-256 of a token is stored, so a database leak does not hand over
+// live sessions. Same reasoning as client_portals.reset_token_hash.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+
+/** A session token is 64 hex chars; an admin password is not. Cheap discriminator. */
+const looksLikeToken = (v: string) => /^[a-f0-9]{64}$/.test(v);
+
+export async function createAdminSession(userId: string, userAgent?: string): Promise<string> {
+  const token = randomBytes(32).toString('hex');
+  const sql = getDb();
+  await sql`
+    INSERT INTO admin_sessions (token_hash, user_id, expires_at, user_agent)
+    VALUES (${sha256(token)}, ${userId}, ${new Date(Date.now() + SESSION_TTL_MS).toISOString()}, ${userAgent ?? null})
+  `;
+  return token;
+}
+
+export async function destroyAdminSession(token: string): Promise<void> {
+  const sql = getDb();
+  await sql`DELETE FROM admin_sessions WHERE token_hash = ${sha256(token)}`;
+}
+
+/** Resolves a session token to a live, active user. Null for anything invalid. */
+async function resolveSession(
+  token: string,
+): Promise<{ level: AdminLevel; userId: string } | null> {
+  try {
+    const sql = getDb();
+    const rows = (await sql`
+      SELECT s.user_id, s.expires_at, u.level, u.is_active
+      FROM admin_sessions s
+      JOIN admin_users u ON u.id = s.user_id
+      WHERE s.token_hash = ${sha256(token)}
+      LIMIT 1
+    `) as Array<{ user_id: string; expires_at: string; level: AdminLevel; is_active: boolean }>;
+    const row = rows[0];
+    if (!row || !row.is_active) return null;
+    if (new Date(row.expires_at).getTime() < Date.now()) return null;
+    return { level: row.level, userId: row.user_id };
+  } catch (err) {
+    // The tables may not exist yet (migration 026 not applied). Fail closed on
+    // the token path — the env-password path below still works, so this can
+    // never lock anyone out.
+    console.error('[admin] session lookup failed:', err);
+    return null;
+  }
+}
+
+/** Looks a user up by email and verifies their password against the hash. */
+async function loginFromDb(
+  emailLc: string,
+  password: string,
+): Promise<{ level: AdminLevel; userId: string } | null> {
+  try {
+    const sql = getDb();
+    const rows = (await sql`
+      SELECT id, password_hash, level, is_active
+      FROM admin_users
+      WHERE LOWER(email) = ${emailLc}
+      LIMIT 1
+    `) as Array<{ id: string; password_hash: string; level: AdminLevel; is_active: boolean }>;
+    const row = rows[0];
+    if (!row || !row.is_active) return null;
+    if (!verifyPortalHash(password, row.password_hash)) return null;
+    await sql`UPDATE admin_users SET last_login_at = NOW() WHERE id = ${row.id}`;
+    return { level: row.level, userId: row.id };
+  } catch (err) {
+    console.error('[admin] db login failed, falling back to env vars:', err);
+    return null;
+  }
+}
+
 export async function loginAdmin(
   email: unknown,
   password: unknown,
-): Promise<{ ok: true; level: AdminLevel } | AdminAuthFail> {
+): Promise<{ ok: true; level: AdminLevel; userId?: string } | AdminAuthFail> {
   const expectedAdminEmail = process.env.LOGIN_ADMIN_EMAIL;
   const expectedSuperEmail = process.env.LOGIN_SUPER_EMAIL;
   const expectedAdmin = process.env.ADMIN_PASSWORD;
@@ -56,6 +134,15 @@ export async function loginAdmin(
     return { ok: false, status: 401, error: 'Email and password required' };
   }
   const emailLc = email.trim().toLowerCase();
+
+  // Database first. If admin_users has this person, that is the source of
+  // truth. Falls through to the env vars when the table is empty, missing, or
+  // does not know them — which is what makes the migration a non-event.
+  const dbUser = await loginFromDb(emailLc, password);
+  if (dbUser) {
+    return { ok: true, level: dbUser.level, userId: dbUser.userId };
+  }
+
   if (
     expectedSuper &&
     expectedSuperEmail &&
@@ -83,7 +170,9 @@ export async function loginAdmin(
  * NOTE: this is post-login. The email requirement is enforced at login;
  * once the client has a valid password we treat it as a bearer token.
  */
-export async function requireAdmin(password: unknown): Promise<{ ok: true; level: AdminLevel } | AdminAuthFail> {
+export async function requireAdmin(
+  password: unknown,
+): Promise<{ ok: true; level: AdminLevel; userId?: string } | AdminAuthFail> {
   const expectedAdmin = process.env.ADMIN_PASSWORD;
   const expectedSuper = process.env.SUPER_ADMIN_PASSWORD;
   if (!expectedAdmin) {
@@ -94,6 +183,16 @@ export async function requireAdmin(password: unknown): Promise<{ ok: true; level
     await sleep(WRONG_AUTH_DELAY_MS);
     return { ok: false, status: 401, error: 'Password required' };
   }
+
+  // A session token looks like 64 hex chars. Try that first — but ONLY as an
+  // additional path. If it does not resolve we fall straight through to the
+  // env-var comparison below, so a missing table, an expired row or a botched
+  // seed can never lock anyone out of their own admin panel.
+  if (looksLikeToken(password)) {
+    const session = await resolveSession(password);
+    if (session) return { ok: true, level: session.level, userId: session.userId };
+  }
+
   if (expectedSuper && password === expectedSuper) {
     return { ok: true, level: 'super' };
   }

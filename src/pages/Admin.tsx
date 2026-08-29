@@ -90,6 +90,11 @@ type View =
   | { kind: 'new-gallery' }
   | { kind: 'detail'; id: string };
 
+// sessionStorage, not localStorage: the token should die with the tab. Vero
+// often works on a shared laptop, and a persistent admin session there is worse
+// than retyping a password.
+const ADMIN_SESSION_KEY = 'vg:adminSession';
+
 const Admin = () => {
   // Email is lazy-initialized from localStorage so a returning
   // admin sees their address already filled in — a real quality-of-
@@ -98,7 +103,15 @@ const Admin = () => {
   // stock form). Both use the same read helper so they can't drift.
   const [email, setEmail] = useState(readSavedEmail);
   const [hasSavedEmail, setHasSavedEmail] = useState(() => readSavedEmail() !== '');
-  const [password, setPassword] = useState('');
+  // A session token from a previous page view, if there is one. Restoring this
+  // is what makes a reload keep you signed in.
+  const [password, setPassword] = useState(() => {
+    try {
+      return sessionStorage.getItem(ADMIN_SESSION_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [portals, setPortals] = useState<AdminPortalSummary[] | null>(null);
@@ -132,6 +145,22 @@ const Admin = () => {
       if (res.ok && data.success) {
         setPortals(data.portals);
         if (data.level === 'super' || data.level === 'admin') setAdminLevel(data.level);
+
+        // Swap the raw password for a session token as soon as one comes back.
+        // Every later request sends the token instead, so the password exists
+        // in memory only for the duration of the login itself.
+        //
+        // Persisted, which is the actual win: the panel used to hold the
+        // password in React state alone, so any reload logged you straight out.
+        if (data.session_token) {
+          setPassword(data.session_token);
+          try {
+            sessionStorage.setItem(ADMIN_SESSION_KEY, data.session_token);
+          } catch {
+            // Private-mode Safari can throw. The session still works for this
+            // tab; it just will not survive a reload.
+          }
+        }
         return { ok: true };
       }
       return { ok: false, error: data.error || `Server error (${res.status})` };
@@ -194,6 +223,23 @@ const Admin = () => {
    * since it advertises the admin URL after logout).
    */
   const handleSignOut = () => {
+    // Revoke server-side too, not just locally. A token cleared only in the
+    // browser stays valid for its full 30 days if it was ever captured.
+    // Fire-and-forget: sign-out must never be blocked by a network failure.
+    const token = password;
+    if (/^[a-f0-9]{64}$/.test(token)) {
+      void fetch('/api/admin/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: token }),
+      }).catch(() => {});
+    }
+    try {
+      sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    } catch {
+      // Private-mode Safari; the state reset below still signs them out here.
+    }
+
     setPortals(null);
     setEmail('');
     setPassword('');

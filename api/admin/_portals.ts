@@ -21,7 +21,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
-import { loginAdmin, requireAdmin } from '../_admin-auth.js';
+import { loginAdmin, requireAdmin, createAdminSession } from '../_admin-auth.js';
 
 type Row = {
   id: string;
@@ -58,6 +58,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : await requireAdmin(req.body?.password);
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
 
+  // On a LOGIN (email present) mint a session token, if this resolved to a real
+  // admin_users row. The panel stores that instead of the raw password, which
+  // is what makes a reload survivable — today it keeps the password in React
+  // state and loses it on refresh.
+  //
+  // Env-var logins get no token (there is no user row to attach one to) and
+  // keep working exactly as before. That is the fallback that makes this
+  // migration lockout-proof.
+  let sessionToken: string | null = null;
+  if (email && auth.userId) {
+    try {
+      sessionToken = await createAdminSession(
+        auth.userId,
+        typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
+      );
+    } catch (err) {
+      // Never fail a valid login because session creation failed — the caller
+      // falls back to sending the password, which still authenticates.
+      console.error('[admin/portals] could not create session:', err);
+    }
+  }
+
   try {
     const sql = getDb();
     const rows = (await sql`
@@ -74,6 +96,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       level: auth.level,
+      // null for env-var logins; the client keeps using the password then.
+      session_token: sessionToken,
       portals: rows.map((r) => ({
         id: r.id,
         mode: r.mode,
