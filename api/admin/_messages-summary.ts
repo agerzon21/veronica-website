@@ -202,7 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         -- handle someone personally, and a summary refresh silently
         -- undoing that would start auto-replying to her client.
         ai_enabled = CASE
-          WHEN ${classification} = 'spam-or-unrelated' THEN FALSE
+          WHEN ${summary.classification} = 'spam-or-unrelated' THEN FALSE
           ELSE ai_enabled
         END
       WHERE id = ${conversationId}
