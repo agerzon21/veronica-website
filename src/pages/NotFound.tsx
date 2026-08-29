@@ -50,7 +50,7 @@ const NotFound = () => {
                 >
                   Page Not Found
                 </Text>
-                <Box w="40px" h="1px" bg="#c9a96e" />
+                <Box w="40px" h="1px" bg="brand.accent" />
                 <Text
                   fontSize={{ base: 'sm', md: 'md' }}
                   color="gray.500"

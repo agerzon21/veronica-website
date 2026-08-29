@@ -22,7 +22,7 @@ const inputStyles = {
   _placeholder: { color: 'whiteAlpha.500', fontWeight: '300' },
   _hover: { borderColor: 'whiteAlpha.500' },
   _focus: {
-    borderColor: '#c9a96e',
+    borderColor: 'brand.accent',
     boxShadow: '0 0 0 1px #c9a96e',
     bg: 'blackAlpha.600',
   },
@@ -34,7 +34,7 @@ const inputStyles = {
 const labelStyles = {
   fontSize: '2xs',
   fontWeight: '500',
-  color: '#c9a96e',
+  color: 'brand.accent',
   letterSpacing: '0.2em',
   textTransform: 'uppercase' as const,
   mb: 1.5,
@@ -200,7 +200,7 @@ const Contact = () => {
                 >
                   Book a Session
                 </Text>
-                <Box w="40px" h="1px" bg="#c9a96e" />
+                <Box w="40px" h="1px" bg="brand.accent" />
                 <Text
                   fontSize={{ base: 'sm', md: 'md' }}
                   color="whiteAlpha.900"
@@ -390,7 +390,7 @@ const Contact = () => {
                     cursor="pointer"
                     transition="all 0.3s"
                     _hover={{
-                      borderColor: '#c9a96e',
+                      borderColor: 'brand.accent',
                       bg: 'rgba(201, 169, 110, 0.12)',
                       transform: 'translateY(-2px)',
                     }}
@@ -399,14 +399,14 @@ const Contact = () => {
                   >
                     <Icon
                       as={method.icon}
-                      color="#c9a96e"
+                      color="brand.accent"
                       boxSize={method.iconSize}
                       transition="all 0.3s"
                       flexShrink={0}
                     />
                     <VStack spacing={0.5} align={{ base: 'flex-start', md: 'center' }}>
                       <Text
-                        color="#c9a96e"
+                        color="brand.accent"
                         fontSize="2xs"
                         fontWeight="500"
                         letterSpacing="0.2em"

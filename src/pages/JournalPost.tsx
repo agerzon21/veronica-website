@@ -163,7 +163,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
           <title>Loading… | Vero Photography Journal</title>
         </Helmet>
         <Flex minH="80vh" align="center" justify="center">
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       </>
     );
@@ -177,12 +177,12 @@ const JournalPost = ({ slug }: { slug: string }) => {
           <meta name="robots" content="noindex" />
         </Helmet>
         <Flex minH="80vh" align="center" justify="center" direction="column" gap={4} px={4}>
-          <Icon as={FaBookOpen} boxSize={8} color="#c9a96e" />
+          <Icon as={FaBookOpen} boxSize={8} color="brand.accent" />
           <Text fontSize="lg" color="gray.700" fontWeight="300">
             That post doesn't exist (yet).
           </Text>
           <RouterLink to="/journal">
-            <Text fontSize="xs" letterSpacing="0.2em" textTransform="uppercase" color="#c9a96e">
+            <Text fontSize="xs" letterSpacing="0.2em" textTransform="uppercase" color="brand.accent">
               ← Back to the journal
             </Text>
           </RouterLink>
@@ -239,7 +239,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
             <HStack
               spacing={2}
               color="gray.500"
-              _hover={{ color: '#c9a96e' }}
+              _hover={{ color: 'brand.accent' }}
               fontSize="xs"
               fontWeight="500"
               letterSpacing="0.2em"
@@ -259,13 +259,13 @@ const JournalPost = ({ slug }: { slug: string }) => {
                 fontWeight="500"
                 letterSpacing="0.2em"
                 textTransform="uppercase"
-                color="#c9a96e"
+                color="brand.accent"
               >
                 {dateLabel}
               </Text>
               {post.session_type && (
                 <>
-                  <Box w="4px" h="4px" borderRadius="full" bg="#c9a96e" />
+                  <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" />
                   <Text
                     fontSize="2xs"
                     fontWeight="500"
@@ -344,11 +344,11 @@ const JournalPost = ({ slug }: { slug: string }) => {
                     <Box
                       as="a"
                       href={href}
-                      color="#c9a96e"
+                      color="brand.accent"
                       textDecoration="underline"
                       textDecorationColor="rgba(201, 169, 110, 0.4)"
                       textUnderlineOffset="3px"
-                      _hover={{ color: '#8a6e35', textDecorationColor: '#8a6e35' }}
+                      _hover={{ color: 'brand.accentText', textDecorationColor: 'brand.accentText' }}
                       target={href?.startsWith('http') ? '_blank' : undefined}
                       rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
                     >
@@ -371,7 +371,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
                     <Box
                       as="blockquote"
                       borderLeft="3px solid"
-                      borderColor="#c9a96e"
+                      borderColor="brand.accent"
                       pl={5}
                       py={1}
                       my={6}
@@ -402,8 +402,8 @@ const JournalPost = ({ slug }: { slug: string }) => {
                   fontWeight="500"
                   letterSpacing="0.1em"
                   textTransform="lowercase"
-                  color="#8a6e35"
-                  bg="#fdf9f0"
+                  color="brand.accentText"
+                  bg="brand.surface"
                   border="1px solid"
                   borderColor="rgba(201, 169, 110, 0.35)"
                   px={2}
@@ -429,11 +429,11 @@ const JournalPost = ({ slug }: { slug: string }) => {
               fontWeight="500"
               letterSpacing="0.16em"
               textTransform="uppercase"
-              color="#8a6e35"
+              color="brand.accentText"
               bg="rgba(201, 169, 110, 0.1)"
               border="1px solid"
               borderColor="rgba(201, 169, 110, 0.4)"
-              _hover={{ bg: 'rgba(201, 169, 110, 0.2)', borderColor: '#c9a96e', color: '#6b5424' }}
+              _hover={{ bg: 'rgba(201, 169, 110, 0.2)', borderColor: 'brand.accent', color: '#6b5424' }}
               px={5}
               py={2.5}
               borderRadius="sm"
@@ -478,7 +478,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
                 bg="white"
                 border="1px solid"
                 borderColor="gray.300"
-                _hover={{ borderColor: '#c9a96e', color: '#8a6e35' }}
+                _hover={{ borderColor: 'brand.accent', color: 'brand.accentText' }}
                 px={5}
                 py={2.5}
                 borderRadius="sm"
@@ -541,8 +541,8 @@ function SiblingNavCard({
         bg="white"
         transition="all 0.2s"
         _hover={{
-          borderColor: '#c9a96e',
-          bg: '#fdf9f0',
+          borderColor: 'brand.accent',
+          bg: 'brand.surface',
           transform: 'translateY(-1px)',
           boxShadow: '0 4px 12px -6px rgba(201, 169, 110, 0.35)',
         }}
@@ -552,7 +552,7 @@ function SiblingNavCard({
         <HStack
           spacing={2}
           justify={isNext ? 'flex-end' : 'flex-start'}
-          color="#8a6e35"
+          color="brand.accentText"
           mb={1.5}
         >
           {!isNext && <Icon as={FaArrowLeft} boxSize={2.5} />}

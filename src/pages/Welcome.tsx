@@ -137,10 +137,10 @@ const Welcome = () => {
           >
             <VStack spacing={8}>
               <VStack spacing={4}>
-                <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+                <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
                   Welcome
                 </Text>
-                <Box w="40px" h="1px" bg="#c9a96e" />
+                <Box w="40px" h="1px" bg="brand.accent" />
                 <Text
                   as="h1"
                   fontSize={{ base: '2xl', md: '3xl' }}
@@ -188,7 +188,7 @@ const Welcome = () => {
                 >
                   <VStack align="stretch" spacing={5}>
                     <Box>
-                      <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.2em" color="#c9a96e" mb={3}>
+                      <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.2em" color="brand.accent" mb={3}>
                         Your Booking
                       </Text>
                       <VStack align="stretch" spacing={2}>
@@ -229,7 +229,7 @@ const Welcome = () => {
                             display="block"
                             fontSize="2xs"
                             fontWeight="500"
-                            color="#c9a96e"
+                            color="brand.accent"
                             letterSpacing="0.2em"
                             textTransform="uppercase"
                             mb={2}
@@ -251,7 +251,7 @@ const Welcome = () => {
                             display="block"
                             fontSize="2xs"
                             fontWeight="500"
-                            color="#c9a96e"
+                            color="brand.accent"
                             letterSpacing="0.2em"
                             textTransform="uppercase"
                             mb={2}
@@ -383,7 +383,7 @@ function WelcomePasswordInput({
         _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
         _hover={{ borderColor: 'whiteAlpha.500' }}
         _focus={{
-          borderColor: '#c9a96e',
+          borderColor: 'brand.accent',
           boxShadow: '0 0 0 1px #c9a96e',
           bg: 'blackAlpha.600',
         }}
@@ -395,7 +395,7 @@ function WelcomePasswordInput({
           onClick={onToggleShow}
           aria-label={show ? 'Hide password' : 'Show password'}
           color="whiteAlpha.600"
-          _hover={{ color: '#c9a96e' }}
+          _hover={{ color: 'brand.accent' }}
           bg="transparent"
           border="none"
           cursor="pointer"

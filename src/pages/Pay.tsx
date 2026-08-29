@@ -72,7 +72,7 @@ const Pay = () => {
                 {/* Watermark heart */}
                 <Icon
                   as={FaHeart}
-                  color="#c9a96e"
+                  color="brand.accentText"
                   opacity={0.06}
                   boxSize={{ base: '90px', md: '110px' }}
                   position="absolute"
@@ -149,7 +149,7 @@ const Pay = () => {
 
                   <Button
                     onClick={handleCopy}
-                    bg="#c9a96e"
+                    bg="brand.accent"
                     color="white"
                     fontSize="xs"
                     fontWeight="400"
@@ -158,8 +158,8 @@ const Pay = () => {
                     h="44px"
                     w="100%"
                     borderRadius="sm"
-                    _hover={{ bg: '#d4b87a', transform: 'translateY(-1px)' }}
-                    _active={{ bg: '#b8964f', transform: 'translateY(0)' }}
+                    _hover={{ bg: 'brand.accentSoft', transform: 'translateY(-1px)' }}
+                    _active={{ bg: 'brand.accentStrong', transform: 'translateY(0)' }}
                     transition="all 0.3s"
                   >
                     Copy Number

@@ -243,7 +243,7 @@ const IndividualPhoto: React.FC = () => {
             fontWeight="400"
             textTransform="uppercase"
             letterSpacing="0.2em"
-            color="#c9a96e"
+            color="brand.accentText"
             _hover={{ color: 'gray.700' }}
             transition="color 0.3s"
           >
@@ -379,11 +379,11 @@ const IndividualPhoto: React.FC = () => {
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.2em"
-                  color="#c9a96e"
+                  color="brand.accent"
                 >
                   {categoryLabel}
                 </Text>
-                <Box w="35px" h="1px" bg="#c9a96e" />
+                <Box w="35px" h="1px" bg="brand.accent" />
 
                 {/* Title */}
                 <Text
@@ -447,7 +447,7 @@ const IndividualPhoto: React.FC = () => {
                     onClick={handleCopyLink}
                     color="gray.400"
                     transition="color 0.3s"
-                    _hover={{ color: '#c9a96e' }}
+                    _hover={{ color: 'brand.accent' }}
                     sx={{ WebkitTapHighlightColor: 'transparent' }}
                   >
                     <CopyIcon boxSize={3.5} />
@@ -462,7 +462,7 @@ const IndividualPhoto: React.FC = () => {
                     onClick={handleShare}
                     color="gray.400"
                     transition="color 0.3s"
-                    _hover={{ color: '#c9a96e' }}
+                    _hover={{ color: 'brand.accent' }}
                     sx={{ WebkitTapHighlightColor: 'transparent' }}
                   >
                     <ExternalLinkIcon boxSize={3.5} />
@@ -482,7 +482,7 @@ const IndividualPhoto: React.FC = () => {
                   letterSpacing="0.2em"
                   color="gray.400"
                   transition="color 0.3s"
-                  _hover={{ color: '#c9a96e' }}
+                  _hover={{ color: 'brand.accent' }}
                   mt={4}
                 >
                   ← Back to {categoryLabel}
@@ -503,11 +503,11 @@ const IndividualPhoto: React.FC = () => {
                     fontWeight="500"
                     textTransform="uppercase"
                     letterSpacing="0.2em"
-                    color="#c9a96e"
+                    color="brand.accentText"
                   >
                     Related
                   </Text>
-                  <Box w="30px" h="1px" bg="#c9a96e" />
+                  <Box w="30px" h="1px" bg="brand.accent" />
                   <Text
                     fontSize={{ base: 'lg', md: 'xl' }}
                     fontWeight="200"

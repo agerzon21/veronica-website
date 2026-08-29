@@ -61,12 +61,12 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
               fontWeight="500"
               textTransform="uppercase"
               letterSpacing="0.3em"
-              color="#c9a96e"
+              color="brand.accentText"
               mb={4}
             >
               {kicker}
             </Text>
-            <Box w="40px" h="1px" bg="#c9a96e" mx="auto" mb={6} />
+            <Box w="40px" h="1px" bg="brand.accent" mx="auto" mb={6} />
             <Text
               as="h1"
               fontSize={{ base: '2xl', md: '4xl' }}
@@ -101,7 +101,7 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
             mb={{ base: 10, md: 14 }}
             fontStyle="italic"
             borderLeft="2px solid"
-            borderColor="#c9a96e"
+            borderColor="brand.accent"
             pl={5}
           >
             {intro}
@@ -131,7 +131,7 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
             <Text
               as="a"
               href="mailto:vero@vero.photography"
-              color="#c9a96e"
+              color="brand.accent"
               fontWeight="400"
               _hover={{ textDecoration: 'underline' }}
             >
@@ -205,7 +205,7 @@ export const PolicyList = ({ items }: { items: React.ReactNode[] }) => (
           w="4px"
           h="4px"
           borderRadius="full"
-          bg="#c9a96e"
+          bg="brand.accent"
           mt={{ base: '10px', md: '12px' }}
           flexShrink={0}
         />

@@ -56,7 +56,7 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
               px={8}
               py={2}
               transition="all 0.3s"
-              _hover={{ color: 'gray.900', bg: '#c9a96e' }}
+              _hover={{ color: 'gray.900', bg: 'brand.accent' }}
               textTransform="uppercase"
               letterSpacing="wide"
               onClick={onClose}

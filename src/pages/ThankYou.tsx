@@ -192,7 +192,7 @@ const ThankYou = () => {
                 >
                   Thank You
                 </Text>
-                <Box w="40px" h="1px" bg="#c9a96e" />
+                <Box w="40px" h="1px" bg="brand.accent" />
                 <Text
                   fontSize={{ base: 'sm', md: 'md' }}
                   color="whiteAlpha.800"
@@ -204,7 +204,7 @@ const ThankYou = () => {
                   {justSubmitted ? (
                     <>
                       Your message is in. A confirmation is on its way from{' '}
-                      <Text as="span" color="#c9a96e">vero@vero.photography</Text> — and I'll personally reply within 24 hours.
+                      <Text as="span" color="brand.accent">vero@vero.photography</Text> — and I'll personally reply within 24 hours.
                     </>
                   ) : (
                     <>Your message is in. I'll personally reply within 24 hours.</>
@@ -231,7 +231,7 @@ const ThankYou = () => {
                     Heads up
                   </Text>
                   <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-                    My reply might land in your <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text> folder — please check there if you don't see it in your inbox.
+                    My reply might land in your <Text as="span" color="brand.accentText" fontWeight="400">Spam</Text> or <Text as="span" color="brand.accentText" fontWeight="400">Promotions</Text> folder — please check there if you don't see it in your inbox.
                   </Text>
                 </Box>
               )}
@@ -242,15 +242,15 @@ const ThankYou = () => {
                 w="100%"
                 maxW="320px"
                 h="52px"
-                bg="#c9a96e"
+                bg="brand.accent"
                 color="white"
                 fontSize="sm"
                 fontWeight="400"
                 letterSpacing="0.2em"
                 textTransform="uppercase"
                 borderRadius="sm"
-                _hover={{ bg: '#d4b87a', transform: 'translateY(-1px)' }}
-                _active={{ bg: '#b8964f', transform: 'translateY(0)' }}
+                _hover={{ bg: 'brand.accentSoft', transform: 'translateY(-1px)' }}
+                _active={{ bg: 'brand.accentStrong', transform: 'translateY(0)' }}
                 transition="all 0.3s"
               >
                 Back to Home
@@ -296,9 +296,9 @@ const ContactPill = ({ icon, label, iconSize, onClick }: ContactPillProps) => (
     sx={{ WebkitTapHighlightColor: 'transparent' }}
     data-group
   >
-    <Flex h="24px" align="center"><Icon as={icon} color="#c9a96e" boxSize={iconSize} transition="all 0.4s" /></Flex>
+    <Flex h="24px" align="center"><Icon as={icon} color="brand.accent" boxSize={iconSize} transition="all 0.4s" /></Flex>
     <Text color="whiteAlpha.800" fontSize="xs" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase"
-      _groupHover={{ color: '#c9a96e' }} transition="all 0.4s"
+      _groupHover={{ color: 'brand.accent' }} transition="all 0.4s"
     >
       {label}
     </Text>
@@ -317,7 +317,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
         py={4}
       >
         <Flex align="center" gap={3} mb={2}>
-          <Spinner size="sm" color="#c9a96e" thickness="2px" speed="0.8s" />
+          <Spinner size="sm" color="brand.accentText" thickness="2px" speed="0.8s" />
           <Text
             fontSize="xs"
             color="whiteAlpha.900"
@@ -362,7 +362,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
             </Text>
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Look for an email from <Text as="span" color="#c9a96e" fontWeight="400">vero@vero.photography</Text> — it's on its way and can take a couple of minutes to arrive. If you don't see it, <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text>, and mark it as <Text as="span" color="#c9a96e" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
+            Look for an email from <Text as="span" color="brand.accent" fontWeight="400">vero@vero.photography</Text> — it's on its way and can take a couple of minutes to arrive. If you don't see it, <Text as="span" color="brand.accent" fontWeight="400">check your Spam or Promotions folder</Text>, and mark it as <Text as="span" color="brand.accent" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
           </Text>
         </Box>
       </MotionDiv>
@@ -384,7 +384,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
           py={4}
         >
           <Flex align="center" gap={3} mb={2}>
-            <Icon as={FaRegEnvelope} color="#c9a96e" boxSize={4} />
+            <Icon as={FaRegEnvelope} color="brand.accentText" boxSize={4} />
             <Text
               fontSize="xs"
               color="whiteAlpha.900"
@@ -396,7 +396,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
             </Text>
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Your confirmation was sent and is taking a little longer than usual to land. Give it a minute or two, and <Text as="span" color="#c9a96e" fontWeight="400">check your Spam or Promotions folder</Text> if it's not in your inbox.
+            Your confirmation was sent and is taking a little longer than usual to land. Give it a minute or two, and <Text as="span" color="brand.accentText" fontWeight="400">check your Spam or Promotions folder</Text> if it's not in your inbox.
           </Text>
         </Box>
       </MotionDiv>
@@ -430,7 +430,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
             </Text>
           </Flex>
           <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            No worries — I still got your message and will personally reach out within 24 hours. My reply might land in <Text as="span" color="#c9a96e" fontWeight="400">Spam</Text> or <Text as="span" color="#c9a96e" fontWeight="400">Promotions</Text>, so please check there too.
+            No worries — I still got your message and will personally reach out within 24 hours. My reply might land in <Text as="span" color="brand.accent" fontWeight="400">Spam</Text> or <Text as="span" color="brand.accent" fontWeight="400">Promotions</Text>, so please check there too.
           </Text>
         </Box>
       </MotionDiv>

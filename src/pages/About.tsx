@@ -79,11 +79,11 @@ const About = () => {
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.2em"
-                  color="#c9a96e"
+                  color="brand.accent"
                 >
                   About Me
                 </Text>
-                <Box w="35px" h="1px" bg="#c9a96e" />
+                <Box w="35px" h="1px" bg="brand.accent" />
                 <Text fontSize="2xl" fontWeight="200" color="white" lineHeight="1.4">
                   Creating images that feel as
                   <br />
@@ -111,11 +111,11 @@ const About = () => {
                     fontWeight="500"
                     textTransform="uppercase"
                     letterSpacing="0.2em"
-                    color="#c9a96e"
+                    color="brand.accentText"
                   >
                     My Approach
                   </Text>
-                  <Box w="35px" h="1px" bg="#c9a96e" />
+                  <Box w="35px" h="1px" bg="brand.accent" />
                   <VStack spacing={4}>
                     <Text fontSize="md" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
                       Every session starts with understanding your vision. I believe the best photos come
@@ -165,11 +165,11 @@ const About = () => {
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.2em"
-                  color="#c9a96e"
+                  color="brand.accent"
                 >
                   About Me
                 </Text>
-                <Box w="35px" h="1px" bg="#c9a96e" />
+                <Box w="35px" h="1px" bg="brand.accent" />
                 <Text
                   fontSize={{ lg: '3xl', xl: '4xl' }}
                   fontWeight="200"
@@ -207,11 +207,11 @@ const About = () => {
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.2em"
-                  color="#c9a96e"
+                  color="brand.accentText"
                 >
                   My Approach
                 </Text>
-                <Box w="35px" h="1px" bg="#c9a96e" />
+                <Box w="35px" h="1px" bg="brand.accent" />
                 <VStack spacing={4}>
                   <Text fontSize="md" color="gray.500" lineHeight="2" fontWeight="300" textAlign="center">
                     Every session starts with understanding your vision. I believe the best photos come
@@ -247,13 +247,13 @@ const About = () => {
                 fontWeight="500"
                 textTransform="uppercase"
                 letterSpacing="0.2em"
-                color="#c9a96e"
+                color="brand.accent"
                 mb={4}
                 textAlign="center"
               >
                 A Unique Perspective
               </Text>
-              <Box w="35px" h="1px" bg="#c9a96e" mx="auto" mb={8} />
+              <Box w="35px" h="1px" bg="brand.accent" mx="auto" mb={8} />
               <Text
                 fontSize={{ base: 'xl', md: '2xl' }}
                 fontWeight="200"
@@ -303,7 +303,7 @@ const About = () => {
                 fontWeight="500"
                 textTransform="uppercase"
                 letterSpacing="0.2em"
-                color="#c9a96e"
+                color="brand.accent"
               >
                 {stat.label}
               </Text>
@@ -340,11 +340,11 @@ const About = () => {
                     fontWeight="500"
                     textTransform="uppercase"
                     letterSpacing="0.25em"
-                    color="#c9a96e"
+                    color="brand.accentText"
                   >
                     Work With Me
                   </Text>
-                  <Box w="35px" h="1px" bg="#c9a96e" />
+                  <Box w="35px" h="1px" bg="brand.accent" />
                 </VStack>
                 <Text
                   fontSize={{ base: 'lg', md: 'xl' }}

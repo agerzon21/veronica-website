@@ -214,13 +214,13 @@ const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
                   the widget below on the homepage so the modal reads
                   as part of the same visual language. */}
               <HStack spacing={2} pb={2} borderBottom="1px solid" borderColor="gray.100">
-                <Icon as={FaInstagram} color="#c9a96e" boxSize={4} />
+                <Icon as={FaInstagram} color="brand.accent" boxSize={4} />
                 <Text
                   fontSize="xs"
                   fontWeight="500"
                   letterSpacing="0.18em"
                   textTransform="uppercase"
-                  color="#c9a96e"
+                  color="brand.accent"
                 >
                   @vero.art.photo
                 </Text>

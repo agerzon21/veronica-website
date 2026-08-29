@@ -18,11 +18,11 @@ const StatsSection = () => {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.2em"
-            color="#c9a96e"
+            color="brand.accentText"
           >
             Veronika Gerzon
           </Text>
-          <Box w="35px" h="1px" bg="#c9a96e" />
+          <Box w="35px" h="1px" bg="brand.accent" />
           <Text
             fontSize={{ base: 'lg', md: 'xl' }}
             fontWeight="200"
@@ -51,7 +51,7 @@ const StatsSection = () => {
                 fontWeight="500"
                 textTransform="uppercase"
                 letterSpacing="0.2em"
-                color="#c9a96e"
+                color="brand.accent"
               >
                 {stat.label}
               </Text>

@@ -60,7 +60,7 @@ const SessionTypePicker = ({ value, onChange }: Props) => {
           color="gray.800"
           fontSize="sm"
           borderRadius="sm"
-          _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
         />
       )}
     </Box>
@@ -90,11 +90,11 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
       cursor="pointer"
       transition="all 0.15s"
       _hover={{
-        borderColor: '#c9a96e',
+        borderColor: 'brand.accent',
         color: selected ? 'white' : '#c9a96e',
       }}
       _active={{
-        borderColor: '#c9a96e',
+        borderColor: 'brand.accent',
         bg: selected ? '#c9a96e' : 'rgba(201, 169, 110, 0.08)',
       }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}

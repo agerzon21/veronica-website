@@ -210,7 +210,7 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
                 // stream in at different speeds. Matches the gold-cream
                 // palette so it reads as intentional loading state,
                 // not blank space.
-                bg="#f5efe4"
+                bg="brand.surfaceSunken"
                 onClick={(e: React.MouseEvent) => {
                   if (e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button !== 0) return;
                   e.preventDefault();
@@ -260,7 +260,7 @@ function GalleryImg({ src, alt, title }: { src: string; alt: string; title: stri
   return (
     <>
       <Spinner
-        color="#c9a96e"
+        color="brand.accent"
         thickness="2px"
         size="md"
         speed="0.8s"
