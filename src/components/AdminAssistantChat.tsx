@@ -275,7 +275,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
           <Box
             bg="linear-gradient(135deg, #fdf9f0 0%, #f5efe4 100%)"
             border="1px solid"
-            borderColor="#c9a96e"
+            borderColor="brand.accent"
             borderRadius="md"
             px={4}
             py={3}
@@ -288,7 +288,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
                 w="32px"
                 h="32px"
                 borderRadius="full"
-                bg="#c9a96e"
+                bg="brand.accent"
                 color="white"
                 align="center"
                 justify="center"
@@ -302,7 +302,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
                   fontWeight="600"
                   letterSpacing="0.14em"
                   textTransform="uppercase"
-                  color="#8a6e35"
+                  color="brand.accentText"
                 >
                   {label}
                 </Text>
@@ -458,7 +458,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
               px={3}
               py={1.5}
               minH="32px"
-              _hover={{ borderColor: '#c9a96e', color: '#8a6e35' }}
+              _hover={{ borderColor: 'brand.accent', color: 'brand.accentText' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <Icon as={FaRegLightbulb} boxSize={3} />
@@ -471,8 +471,8 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
                   {i === 2 && <MenuDivider />}
                   <MenuItem
                     onClick={() => setInput(a.prompt)}
-                    _hover={{ bg: '#fdf9f0' }}
-                    _focus={{ bg: '#fdf9f0' }}
+                    _hover={{ bg: 'brand.surface' }}
+                    _focus={{ bg: 'brand.surface' }}
                   >
                     {a.label}
                   </MenuItem>
@@ -502,7 +502,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
             minW="36px"
             minH="36px"
             color="gray.400"
-            _hover={{ color: '#c9a96e' }}
+            _hover={{ color: 'brand.accent' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           />
         )}
@@ -521,7 +521,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
       >
         {loading ? (
           <Flex justify="center" py={12}>
-            <Spinner size="sm" color="#c9a96e" />
+            <Spinner size="sm" color="brand.accentText" />
           </Flex>
         ) : messages.length === 0 ? (
           <EmptyState
@@ -567,7 +567,7 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
             bg="white"
             borderColor="gray.300"
             _hover={{ borderColor: 'gray.400' }}
-            _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -635,7 +635,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
     <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
       <Box
         maxW={{ base: '90%', md: '75%' }}
-        bg={isUser ? '#c9a96e' : '#fdf9f0'}
+        bg={isUser ? 'brand.accent' : 'brand.surface'}
         color={isUser ? 'white' : 'gray.800'}
         border={isUser ? 'none' : '1px solid'}
         borderColor="rgba(201, 169, 110, 0.3)"
@@ -666,7 +666,7 @@ function TypingDots() {
           w="6px"
           h="6px"
           borderRadius="full"
-          bg="#c9a96e"
+          bg="brand.accent"
           sx={{
             animation: `verobounce 1.2s ease-in-out ${i * 0.15}s infinite`,
             '@keyframes verobounce': {
@@ -697,12 +697,12 @@ function EmptyState({
         w="64px"
         h="64px"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
       >
         <Icon as={FaRegLightbulb} boxSize={6} />
       </Flex>
@@ -726,8 +726,8 @@ function EmptyState({
             bg="white"
             border="1px solid"
             borderColor="gray.200"
-            _hover={{ borderColor: '#c9a96e', bg: '#fdf9f0' }}
-            _active={{ borderColor: '#c9a96e', bg: '#f5efe4' }}
+            _hover={{ borderColor: 'brand.accent', bg: 'brand.surface' }}
+            _active={{ borderColor: 'brand.accent', bg: 'brand.surfaceSunken' }}
             borderRadius="sm"
             px={{ base: 4, md: 3.5 }}
             py={{ base: 3, md: 2.5 }}

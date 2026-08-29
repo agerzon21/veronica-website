@@ -116,8 +116,8 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
           letterSpacing={{ base: '0.15em', md: '0.2em' }}
           textTransform="uppercase"
           color="gray.500"
-          _hover={{ color: '#c9a96e' }}
-          _active={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
+          _hover={{ color: 'brand.accent' }}
+          _active={{ color: 'brand.accent', bg: 'rgba(201, 169, 110, 0.06)' }}
           cursor="pointer"
           bg="transparent"
           border={{ base: '1px solid', md: 'none' }}
@@ -156,7 +156,7 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
                   key={key}
                   bg="white"
                   border="1px solid"
-                  borderColor={isToday ? '#c9a96e' : 'gray.200'}
+                  borderColor={isToday ? 'brand.accent' : 'gray.200'}
                   borderRadius="sm"
                   p={4}
                 >
@@ -164,7 +164,7 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
                     <Text
                       fontSize="2xl"
                       fontWeight="300"
-                      color={isToday ? '#c9a96e' : 'gray.800'}
+                      color={isToday ? 'brand.accent' : 'gray.800'}
                       lineHeight="1"
                     >
                       {date.getDate()}
@@ -175,7 +175,7 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
                         fontWeight="500"
                         letterSpacing="0.12em"
                         textTransform="uppercase"
-                        color={isToday ? '#c9a96e' : 'gray.500'}
+                        color={isToday ? 'brand.accent' : 'gray.500'}
                       >
                         {date.toLocaleDateString('en-US', { weekday: 'long' })}
                         {isToday && ' · Today'}
@@ -194,14 +194,14 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
                         onClick={() => onOpenPortal(p.id)}
                         w="100%"
                         textAlign="left"
-                        bg="#fdf9f0"
+                        bg="brand.surface"
                         border="1px solid"
                         borderColor="rgba(201, 169, 110, 0.35)"
                         borderRadius="sm"
                         px={3}
                         py={3}
                         minH="44px"
-                        _active={{ bg: '#f5efe4', borderColor: '#c9a96e' }}
+                        _active={{ bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }}
                         sx={{ WebkitTapHighlightColor: 'transparent' }}
                       >
                         <Text fontSize="sm" color="gray.800" fontWeight="500" noOfLines={1}>
@@ -263,7 +263,7 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
 
       {/* Legend */}
       <HStack spacing={5} mt={4} fontSize="xs" color="gray.500" flexWrap="wrap">
-        <LegendDot color="#c9a96e" label="Booked" />
+        <LegendDot color="brand.accent" label="Booked" />
         <LegendDot color="green.500" label="Signed / Delivered" />
         <LegendDot color="orange.400" label="Pending" />
       </HStack>
@@ -309,7 +309,7 @@ function DayCell({
             w="22px"
             h="22px"
             borderRadius="full"
-            bg="#c9a96e"
+            bg="brand.accent"
             color="white"
             fontSize="xs"
             fontWeight="500"
@@ -351,7 +351,7 @@ function EventChip({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
     if (portal.gallery_delivered_at) return 'green.500';
     if (portal.contract_status === 'signed') return 'green.500';
     if (portal.contract_status === 'pending') return 'orange.400';
-    return '#c9a96e';
+    return 'brand.accent';
   })();
 
   const label = portal.client_display_name || portal.client_email || '(unnamed)';
@@ -407,8 +407,8 @@ function NavButton({ onClick, children }: { onClick: () => void; children: React
       justifyContent="center"
       cursor="pointer"
       color="gray.600"
-      _hover={{ borderColor: '#c9a96e', color: '#c9a96e' }}
-      _active={{ borderColor: '#c9a96e', color: '#c9a96e', bg: '#fdf9f0' }}
+      _hover={{ borderColor: 'brand.accent', color: 'brand.accent' }}
+      _active={{ borderColor: 'brand.accent', color: 'brand.accent', bg: 'brand.surface' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       {children}

@@ -68,7 +68,7 @@ const AdminAssistant = ({ adminPassword }: Props) => {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.common.adminKicker}
           </Text>
@@ -173,13 +173,13 @@ function LangPill({
       fontWeight="600"
       letterSpacing="0.14em"
       borderRadius="full"
-      bg={active ? '#c9a96e' : 'transparent'}
+      bg={active ? 'brand.accent' : 'transparent'}
       color={active ? 'white' : 'gray.500'}
       cursor="pointer"
       border="none"
       transition="all 0.15s"
       _hover={active ? {} : { color: 'gray.700' }}
-      _active={active ? { bg: '#b8964f' } : { bg: 'rgba(201, 169, 110, 0.08)' }}
+      _active={active ? { bg: 'brand.accentStrong' } : { bg: 'rgba(201, 169, 110, 0.08)' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       {children}
@@ -211,15 +211,15 @@ function SubTabButton({
       bg="transparent"
       border="none"
       borderBottom="2px solid"
-      borderColor={active ? '#c9a96e' : 'transparent'}
+      borderColor={active ? 'brand.accent' : 'transparent'}
       cursor="pointer"
       transition="all 0.15s"
       sx={{ WebkitTapHighlightColor: 'transparent' }}
-      _hover={{ borderColor: active ? '#c9a96e' : 'gray.300' }}
+      _hover={{ borderColor: active ? 'brand.accent' : 'gray.300' }}
       _active={{ bg: 'rgba(201, 169, 110, 0.06)' }}
     >
       <HStack spacing={2} justify="center">
-        <Icon as={icon} boxSize={{ base: 3.5, md: 3 }} color={active ? '#c9a96e' : 'gray.500'} />
+        <Icon as={icon} boxSize={{ base: 3.5, md: 3 }} color={active ? 'brand.accent' : 'gray.500'} />
         <Text
           fontSize={{ base: 'xs', md: 'xs' }}
           fontWeight="500"

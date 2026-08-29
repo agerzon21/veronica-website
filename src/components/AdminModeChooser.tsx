@@ -19,7 +19,7 @@ const AdminModeChooser = ({ onPick, onCancel }: Props) => {
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={8}>
-        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
           {t.modeChooser.kicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
@@ -73,12 +73,12 @@ function Card({
       // Touch devices trigger `:hover` on tap and get stuck in the lifted
       // state until the next tap elsewhere — gate the lift behind a real
       // hover-capable pointer, and pair it with an explicit press state.
-      _active={{ borderColor: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
+      _active={{ borderColor: 'brand.accent', bg: 'rgba(201, 169, 110, 0.06)' }}
       sx={{
         WebkitTapHighlightColor: 'transparent',
         '@media (hover: hover)': {
           '&:hover': {
-            borderColor: '#c9a96e',
+            borderColor: 'brand.accent',
             transform: 'translateY(-2px)',
             boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
           },
@@ -86,7 +86,7 @@ function Card({
       }}
     >
       <VStack align="flex-start" spacing={3}>
-        <Icon as={icon} boxSize={6} color="#c9a96e" />
+        <Icon as={icon} boxSize={6} color="brand.accent" />
         <Text fontSize="lg" fontWeight="500" color="gray.800">
           {title}
         </Text>

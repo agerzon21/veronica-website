@@ -90,7 +90,7 @@ const AdminDashboard = ({
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.common.adminKicker}
           </Text>
@@ -136,7 +136,7 @@ const AdminDashboard = ({
             minW="44px"
             minH="44px"
             color="gray.500"
-            _hover={{ color: '#c9a96e' }}
+            _hover={{ color: 'brand.accent' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           />
           {/* + New — the flow creates either a full client portal OR a
@@ -176,7 +176,7 @@ function ViewToggleButton({
       as="button"
       type="button"
       onClick={onClick}
-      bg={active ? '#c9a96e' : 'white'}
+      bg={active ? 'brand.accent' : 'white'}
       color={active ? 'white' : 'gray.600'}
       border="none"
       px={3}
@@ -349,11 +349,11 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
       // On touch devices `_hover` sticks after tap and looks like the card
       // is stuck "selected", so we gate it behind `hover: hover` and use
       // an explicit `_active` for the pressed-tap feedback instead.
-      _active={{ borderColor: '#c9a96e', bg: '#fdf9f0' }}
+      _active={{ borderColor: 'brand.accent', bg: 'brand.surface' }}
       sx={{
         WebkitTapHighlightColor: 'transparent',
         '@media (hover: hover)': {
-          '&:hover': { borderColor: '#c9a96e' },
+          '&:hover': { borderColor: 'brand.accent' },
         },
       }}
     >

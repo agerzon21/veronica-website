@@ -416,13 +416,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         {STATS.map((stat, i) => (
           <React.Fragment key={stat.label}>
             <VStack spacing={2} minW={{ base: '80px', md: '100px' }}>
-              <Icon as={stat.icon} boxSize={4} color="#c9a96e" />
+              <Icon as={stat.icon} boxSize={4} color="brand.accent" />
               <Text
                 fontSize="10px"
                 fontWeight="500"
                 textTransform="uppercase"
                 letterSpacing="0.2em"
-                color="#c9a96e"
+                color="brand.accent"
               >
                 {stat.label}
               </Text>
@@ -430,7 +430,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                 {stat.value}
               </Text>
             </VStack>
-            {i < STATS.length - 1 && <Box w="1px" h="50px" bg="#c9a96e" opacity={0.3} />}
+            {i < STATS.length - 1 && <Box w="1px" h="50px" bg="brand.accent" opacity={0.3} />}
           </React.Fragment>
         ))}
       </Flex>
@@ -488,11 +488,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                 fontWeight="500"
                 textTransform="uppercase"
                 letterSpacing="0.3em"
-                color="#c9a96e"
+                color="brand.accent"
               >
                 Veronika Gerzon
               </Text>
-              <Box w="40px" h="1px" bg="#c9a96e" />
+              <Box w="40px" h="1px" bg="brand.accent" />
               <Text
                 as="h1"
                 fontSize={{ base: 'lg', md: '2xl', lg: '3xl' }}
@@ -608,7 +608,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               left={0}
               width="100%"
               height="100%"
-              bg="#c9a96e"
+              bg="brand.accent"
               borderRadius="full"
               style={{
                 scaleY: scrollYProgress,
@@ -625,7 +625,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               marginLeft="-4.5px"
               marginTop="-4.5px"
               borderRadius="full"
-              bg="#c9a96e"
+              bg="brand.accent"
               boxShadow="0 0 10px rgba(201, 169, 110, 0.85), 0 1px 3px rgba(0, 0, 0, 0.2)"
               style={{ top: progressThumbTop }}
             />
@@ -634,7 +634,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           <Text
             fontSize="9px"
             fontWeight="500"
-            color="#c9a96e"
+            color="brand.accent"
             letterSpacing="0.3em"
             textTransform="uppercase"
             mt={3}

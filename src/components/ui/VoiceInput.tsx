@@ -244,10 +244,10 @@ const VoiceInput = ({
         void stop();
       }}
       isLoading={isBusy}
-      bg={isRecording ? '#c9a96e' : 'white'}
-      color={isRecording ? 'white' : '#8a6e35'}
-      borderColor={isRecording ? '#c9a96e' : 'gray.300'}
-      _hover={{ bg: isRecording ? '#b8964f' : 'gray.50' }}
+      bg={isRecording ? 'brand.accent' : 'white'}
+      color={isRecording ? 'white' : 'brand.accentText'}
+      borderColor={isRecording ? 'brand.accent' : 'gray.300'}
+      _hover={{ bg: isRecording ? 'brand.accentStrong' : 'gray.50' }}
       sx={{
         touchAction: 'none',
         WebkitTapHighlightColor: 'transparent',

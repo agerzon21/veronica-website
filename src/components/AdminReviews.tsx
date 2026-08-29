@@ -81,7 +81,7 @@ const inputStyles = {
   fontSize: { base: 'md', md: 'sm' },
   _hover: { borderColor: 'gray.400' },
   _focus: {
-    borderColor: '#c9a96e',
+    borderColor: 'brand.accent',
     boxShadow: '0 0 0 1px #c9a96e',
   },
 } as const;
@@ -223,7 +223,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.common.adminKicker}
           </Text>
@@ -245,7 +245,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
             minW="44px"
             minH="44px"
             color="gray.500"
-            _hover={{ color: '#c9a96e' }}
+            _hover={{ color: 'brand.accent' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           />
           <CTAButton
@@ -275,7 +275,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
 
       {loading ? (
         <Flex justify="center" py={16}>
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       ) : !items || items.length === 0 ? (
         <EmptyState onNew={() => setEditor({ mode: 'create' })} />
@@ -473,14 +473,14 @@ function GoogleAggregateCard({ adminPassword }: { adminPassword: string }) {
         <Flex
           boxSize={{ base: '40px', md: '44px' }}
           borderRadius="full"
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           align="center"
           justify="center"
           flexShrink={0}
         >
-          <Icon as={FaGoogle} boxSize={4} color="#c9a96e" />
+          <Icon as={FaGoogle} boxSize={4} color="brand.accentText" />
         </Flex>
         <VStack align="flex-start" spacing={1} flex={1} minW={0}>
           <Text
@@ -488,7 +488,7 @@ function GoogleAggregateCard({ adminPassword }: { adminPassword: string }) {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing={{ base: '0.15em', md: '0.22em' }}
-            color="#c9a96e"
+            color="brand.accentText"
           >
             {t.reviews.aggregateTitle}
           </Text>
@@ -500,7 +500,7 @@ function GoogleAggregateCard({ adminPassword }: { adminPassword: string }) {
 
       {loading ? (
         <Flex justify="center" py={4}>
-          <Spinner size="sm" color="#c9a96e" />
+          <Spinner size="sm" color="brand.accent" />
         </Flex>
       ) : (
         <>
@@ -605,7 +605,7 @@ function ReviewCard({
       borderColor="gray.200"
       borderRadius="sm"
       p={{ base: 4, md: 5 }}
-      _hover={{ borderColor: '#c9a96e' }}
+      _hover={{ borderColor: 'brand.accent' }}
       transition="all 0.15s"
     >
       <Flex align="flex-start" gap={4} wrap={{ base: 'wrap', md: 'nowrap' }}>
@@ -983,7 +983,7 @@ function Field({
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing={{ base: '0.15em', md: '0.22em' }}
-          color="#c9a96e"
+          color="brand.accent"
         >
           {label}
           {required && (
@@ -1046,7 +1046,9 @@ function ToggleRow({
 // ── Presentational helpers ─────────────────────────────────────────
 function Chip({ label, tone }: { label: string; tone: 'gold' | 'gray' }) {
   const config = {
-    gold: { bg: '#fdf9f0', color: '#b8964f', borderColor: '#e8d9a8' },
+        // accentText, not accentStrong: accentStrong (#b8964f) is a FILL colour and
+    // measures 2.66:1 as text on this cream surface. accentText is 4.58:1 here.
+    gold: { bg: 'brand.surface', color: 'brand.accentText', borderColor: 'brand.accentBorder' },
     gray: { bg: 'gray.100', color: 'gray.600', borderColor: 'transparent' },
   }[tone];
   return (
@@ -1128,14 +1130,14 @@ function AuthorAvatar({ review }: { review: ReviewRow }) {
     <Flex
       boxSize={{ base: '40px', md: '48px' }}
       borderRadius="full"
-      bg="#fdf9f0"
+      bg="brand.surface"
       border="1px solid"
-      borderColor="#e8d9a8"
+      borderColor="brand.accentBorder"
       align="center"
       justify="center"
       flexShrink={0}
     >
-      <Text fontSize="xs" fontWeight="500" color="#c9a96e" letterSpacing="0.05em">
+      <Text fontSize="xs" fontWeight="500" color="brand.accentText" letterSpacing="0.05em">
         {initials}
       </Text>
     </Flex>
@@ -1159,12 +1161,12 @@ function EmptyState({ onNew }: { onNew: () => void }) {
         h="72px"
         mx="auto"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
         mb={5}
       >
         <Icon as={FaStar} boxSize={7} />

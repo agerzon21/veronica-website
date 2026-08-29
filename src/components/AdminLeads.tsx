@@ -77,7 +77,7 @@ const inputStyles = {
   fontSize: { base: 'md', md: 'sm' },
   _hover: { borderColor: 'gray.400' },
   _focus: {
-    borderColor: '#c9a96e',
+    borderColor: 'brand.accent',
     boxShadow: '0 0 0 1px #c9a96e',
   },
 } as const;
@@ -189,7 +189,7 @@ const AdminLeads = ({ adminPassword, adminLevel }: Props) => {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.common.adminKicker}
           </Text>
@@ -217,7 +217,7 @@ const AdminLeads = ({ adminPassword, adminLevel }: Props) => {
             minW="44px"
             minH="44px"
             color="gray.500"
-            _hover={{ color: '#c9a96e' }}
+            _hover={{ color: 'brand.accent' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           />
         </HStack>
@@ -231,7 +231,7 @@ const AdminLeads = ({ adminPassword, adminLevel }: Props) => {
 
       {loading ? (
         <Flex justify="center" py={16}>
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       ) : !items || items.length === 0 ? (
         <EmptyState />
@@ -305,10 +305,10 @@ function LeadCard({
       w="100%"
       bg="white"
       border="1px solid"
-      borderColor={isNew ? '#e8d9a8' : 'gray.200'}
+      borderColor={isNew ? 'brand.accentBorder' : 'gray.200'}
       borderRadius="sm"
       p={{ base: 4, md: 5 }}
-      _hover={{ borderColor: '#c9a96e' }}
+      _hover={{ borderColor: 'brand.accent' }}
       transition="all 0.15s"
       cursor="pointer"
       sx={{ WebkitTapHighlightColor: 'transparent' }}
@@ -317,14 +317,14 @@ function LeadCard({
         <Flex
           boxSize={{ base: '40px', md: '48px' }}
           borderRadius="full"
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           align="center"
           justify="center"
           flexShrink={0}
         >
-          <Text fontSize="xs" fontWeight="500" color="#c9a96e" letterSpacing="0.05em">
+          <Text fontSize="xs" fontWeight="500" color="brand.accentText" letterSpacing="0.05em">
             {initials}
           </Text>
         </Flex>
@@ -532,9 +532,9 @@ function LeadEditorModal({
         {/* Header block — who + when + status. Not editable; that's the
             submitter's identity. */}
         <Box
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           borderRadius="sm"
           p={{ base: 4, md: 5 }}
         >
@@ -544,12 +544,12 @@ function LeadEditorModal({
               borderRadius="full"
               bg="white"
               border="1px solid"
-              borderColor="#e8d9a8"
+              borderColor="brand.accentBorder"
               align="center"
               justify="center"
               flexShrink={0}
             >
-              <Text fontSize="sm" fontWeight="500" color="#c9a96e">
+              <Text fontSize="sm" fontWeight="500" color="brand.accentText">
                 {getInitials(lead.name)}
               </Text>
             </Flex>
@@ -579,13 +579,13 @@ function LeadEditorModal({
             py={2}
             bg="white"
             border="1px solid"
-            borderColor="#c9a96e"
+            borderColor="brand.accent"
             color="#8f7239"
             fontSize="xs"
             fontWeight="500"
             borderRadius="sm"
             textDecoration="none"
-            _hover={{ bg: '#c9a96e', color: 'white' }}
+            _hover={{ bg: 'brand.accent', color: 'white' }}
             transition="all 0.15s"
           >
             <Icon as={FaReply} boxSize={3} />
@@ -601,7 +601,7 @@ function LeadEditorModal({
             <Box
               as="a"
               href={`mailto:${lead.email}`}
-              color="#c9a96e"
+              color="brand.accentText"
               textDecoration="none"
               _hover={{ textDecoration: 'underline' }}
             >
@@ -776,7 +776,7 @@ function DetailRow({
 function StatusBadge({ status }: { status: LeadStatus }) {
   const { t } = useAdminLang();
   const config: Record<LeadStatus, { bg: string; color: string; borderColor: string }> = {
-    new:       { bg: '#fdf9f0',  color: '#8f7239',  borderColor: '#e8d9a8' },
+    new:       { bg: 'brand.surface',  color: '#8f7239',  borderColor: 'brand.accentBorder' },
     contacted: { bg: '#eef4fb',  color: '#3067b0',  borderColor: '#c2d8ef' },
     replied:   { bg: '#eef4fb',  color: '#3067b0',  borderColor: '#c2d8ef' },
     booked:    { bg: '#e6f4ea',  color: '#1e7a3c',  borderColor: '#a8d8b6' },
@@ -821,7 +821,7 @@ function Field({
         fontWeight="500"
         textTransform="uppercase"
         letterSpacing={{ base: '0.15em', md: '0.22em' }}
-        color="#c9a96e"
+        color="brand.accent"
         mb={1.5}
       >
         {label}
@@ -853,12 +853,12 @@ function EmptyState() {
         h="72px"
         mx="auto"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
         mb={5}
       >
         <Icon as={FaUser} boxSize={7} />

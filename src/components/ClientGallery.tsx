@@ -148,7 +148,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
             >
               <Icon
                 as={isVideo ? FaPlay : FaImage}
-                color="#c9a96e"
+                color="brand.accent"
                 boxSize={5}
                 ml={isVideo ? 1 : 0}
               />
@@ -244,7 +244,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
             '.chakra-group:hover &, [role="group"]:hover &': { opacity: 1 },
           },
         }}
-        _hover={{ bg: '#c9a96e' }}
+        _hover={{ bg: 'brand.accent' }}
       >
         <Icon as={FaDownload} boxSize={3.5} />
       </Box>
@@ -472,12 +472,12 @@ const ClientGallery = ({
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing="0.25em"
-          color="#c9a96e"
+          color="brand.accent"
           mb={3}
         >
           Private Gallery
         </Text>
-        <Box w="40px" h="1px" bg="#c9a96e" mx="auto" mb={5} />
+        <Box w="40px" h="1px" bg="brand.accent" mx="auto" mb={5} />
         <Text
           as="h1"
           fontSize={{ base: '2xl', md: '3xl' }}
@@ -498,7 +498,7 @@ const ClientGallery = ({
           <Text fontSize="sm" color="gray.500" fontWeight="300" mt={2}>
             {totalCount} {totalCount === 1 ? 'photo' : 'photos'}
             {favoritesEnabled && favoritesCount > 0 && (
-              <Text as="span" color="#c9a96e" fontWeight="400">
+              <Text as="span" color="brand.accent" fontWeight="400">
                 {' '}({favoritesCount} favorited)
               </Text>
             )}
@@ -537,9 +537,9 @@ const ClientGallery = ({
           mt={{ base: 6, md: 8 }}
           maxW="720px"
           mx="auto"
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           borderRadius="md"
           px={{ base: 4, md: 6 }}
           py={{ base: 4, md: 5 }}
@@ -550,7 +550,7 @@ const ClientGallery = ({
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accentText"
             textAlign="center"
             mb={{ base: 3, md: 4 }}
           >
@@ -596,15 +596,15 @@ const ClientGallery = ({
         <Box
           maxW="520px"
           mx="auto"
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           borderRadius="md"
           px={{ base: 6, md: 8 }}
           py={{ base: 6, md: 7 }}
           textAlign="center"
         >
-          <Flex justify="center" gap={1} mb={4} color="#c9a96e">
+          <Flex justify="center" gap={1} mb={4} color="brand.accentText">
             {[0, 1, 2, 3, 4].map((i) => (
               <Icon key={i} as={FaStar} boxSize={4} />
             ))}
@@ -710,7 +710,7 @@ const ClientGallery = ({
                     fontWeight="500"
                     textTransform="uppercase"
                     letterSpacing="0.25em"
-                    color="#c9a96e"
+                    color="brand.accent"
                     mb={2}
                   >
                     Section
@@ -726,7 +726,7 @@ const ClientGallery = ({
                   >
                     {section.name}
                   </Text>
-                  <Box w="30px" h="1px" bg="#c9a96e" mx="auto" mb={1.5} />
+                  <Box w="30px" h="1px" bg="brand.accent" mx="auto" mb={1.5} />
                   <Text fontSize="xs" color="gray.500" fontWeight="300">
                     {section.files.length} {section.files.length === 1 ? 'photo' : 'photos'}
                   </Text>
@@ -1021,7 +1021,7 @@ function GalleryActionBar({
             fontWeight="500"
             letterSpacing="0.15em"
             textTransform="uppercase"
-            color="#c9a96e"
+            color="brand.accentText"
             borderBottom="1px solid"
             borderColor="gray.100"
           >
@@ -1082,7 +1082,7 @@ function ActionBarButton({ href, newTab, onClick, icon, label, display }: Action
     borderRadius: 'full',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    _hover: { color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.08)' },
+    _hover: { color: 'brand.accent', bg: 'rgba(201, 169, 110, 0.08)' },
     sx: { WebkitTapHighlightColor: 'transparent' },
     whiteSpace: 'nowrap' as const,
   };
@@ -1212,7 +1212,7 @@ function SaveTip({
         bg="#f3e6bf"
         align="center"
         justify="center"
-        color="#8a6e35"
+        color="brand.accentText"
         mt={{ base: 0.5, md: 0 }}
       >
         <Icon as={icon} boxSize={{ base: 3, md: 4 }} />
@@ -1339,7 +1339,7 @@ function FavoritesInfoSection({
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing="0.25em"
-          color="#c9a96e"
+          color="brand.accent"
           mb={2}
         >
           Favorites
@@ -1357,7 +1357,7 @@ function FavoritesInfoSection({
             ? 'Save your favorite photos'
             : `${count} ${count === 1 ? 'photo' : 'photos'} saved`}
         </Text>
-        <Box w="30px" h="1px" bg="#c9a96e" mx="auto" mb={2} />
+        <Box w="30px" h="1px" bg="brand.accent" mx="auto" mb={2} />
         <Text fontSize="xs" color="gray.500" fontWeight="300" maxW="440px" mx="auto" lineHeight="1.7">
           A quick way to keep track of the photos you love — for
           picking prints, sharing with family, or building an album.
@@ -1371,9 +1371,9 @@ function FavoritesInfoSection({
         <Box
           maxW="720px"
           mx="auto"
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           borderRadius="md"
           px={{ base: 5, md: 7 }}
           py={{ base: 5, md: 6 }}
@@ -1503,9 +1503,9 @@ function FilterActiveBanner({
         align={{ base: 'stretch', md: 'center' }}
         justify="space-between"
         gap={{ base: 3, md: 4 }}
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         borderRadius="md"
         px={{ base: 4, md: 5 }}
         py={{ base: 3, md: 3 }}
@@ -1876,16 +1876,16 @@ function ScrollChevron({
       borderRadius="full"
       bg="rgba(255, 255, 255, 0.9)"
       backdropFilter="blur(6px)"
-      color="#c9a96e"
+      color="brand.accent"
       border="1px solid"
       borderColor="rgba(201, 169, 110, 0.35)"
       boxShadow="0 2px 6px rgba(0, 0, 0, 0.08)"
       cursor="pointer"
       transition="all 0.2s"
       _hover={{
-        bg: '#c9a96e',
+        bg: 'brand.accent',
         color: 'white',
-        borderColor: '#c9a96e',
+        borderColor: 'brand.accent',
       }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
@@ -1933,9 +1933,9 @@ function NavPill({
       letterSpacing="0.2em"
       textTransform="uppercase"
       color={disabled ? 'gray.300' : active ? 'white' : 'gray.700'}
-      bg={active && !disabled ? '#c9a96e' : 'transparent'}
+      bg={active && !disabled ? 'brand.accent' : 'transparent'}
       border="1px solid"
-      borderColor={disabled ? 'gray.200' : active ? '#c9a96e' : 'gray.200'}
+      borderColor={disabled ? 'gray.200' : active ? 'brand.accent' : 'gray.200'}
       borderRadius="full"
       transition="all 0.25s ease"
       cursor={disabled ? 'not-allowed' : 'pointer'}
@@ -1944,10 +1944,10 @@ function NavPill({
         disabled
           ? {}
           : active
-          ? { bg: '#b8964f', borderColor: '#b8964f' }
+          ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
           : {
-              borderColor: '#c9a96e',
-              color: '#c9a96e',
+              borderColor: 'brand.accent',
+              color: 'brand.accent',
               bg: 'rgba(201, 169, 110, 0.06)',
             }
       }
@@ -2034,10 +2034,10 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
     <Box bg="white" borderTop="1px solid" borderColor="gray.100" py={12} px={6}>
       <VStack maxW="520px" mx="auto" spacing={6}>
         <VStack spacing={2}>
-          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accentText">
             Share these photos
           </Text>
-          <Box w="30px" h="1px" bg="#c9a96e" />
+          <Box w="30px" h="1px" bg="brand.accent" />
         </VStack>
 
         <Text fontSize="sm" color="gray.600" fontWeight="300" textAlign="center" lineHeight="1.7">
@@ -2051,9 +2051,9 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
             visually demoted so nobody wonders which to pick. */}
         <Box
           w="100%"
-          bg="#fdf9f0"
+          bg="brand.surface"
           border="1px solid"
-          borderColor="#e8d9a8"
+          borderColor="brand.accentBorder"
           borderRadius="md"
           px={{ base: 5, md: 7 }}
           py={{ base: 6, md: 7 }}
@@ -2064,7 +2064,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accentText"
             mb={4}
           >
             Easiest — one-click link
@@ -2131,7 +2131,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
                 h="40px"
                 bg="white"
                 fontSize="sm"
-                _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
               />
               <CTAButton
                 onClick={sendInvite}
@@ -2198,7 +2198,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
                 borderRadius="sm"
                 color="gray.500"
                 cursor="pointer"
-                _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+                _hover={{ color: 'brand.accent', bg: 'gray.100' }}
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
                 <Icon as={pwCopied ? FaCheck : FaCopy} boxSize={3} />

@@ -39,7 +39,7 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing="0.25em"
-          color="#c9a96e"
+          color="brand.accent"
         >
           {t.common.adminKicker}
         </Text>
@@ -175,7 +175,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
               fontWeight="500"
               textTransform="uppercase"
               letterSpacing={{ base: '0.15em', md: '0.2em' }}
-              color="#c9a96e"
+              color="brand.accent"
             >
               {t.integrations.kicker}
             </Text>
@@ -222,13 +222,13 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
           Vercel, then clicks Mark as Refreshed to reset the clock. */}
       <Box mt={6} pt={5} borderTop="1px solid" borderColor="gray.100">
         <Flex align="center" gap={2} mb={3}>
-          <Icon as={FaTerminal} boxSize={3} color="#c9a96e" />
+          <Icon as={FaTerminal} boxSize={3} color="brand.accent" />
           <Text
             fontSize={{ base: 'xs', md: '2xs' }}
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing={{ base: '0.15em', md: '0.2em' }}
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.integrations.howToRotate}
           </Text>

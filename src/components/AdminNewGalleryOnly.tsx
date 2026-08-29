@@ -231,7 +231,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={6}>
-        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
           {t.newGallery.kicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
@@ -438,7 +438,7 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
   return (
     <Box maxW="640px" mx="auto">
       <VStack align="flex-start" spacing={1} mb={6}>
-        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
           {t.newGallery.doneKicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
@@ -468,7 +468,7 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
               fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
               color="gray.800"
               onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-              focusBorderColor="#c9a96e"
+              focusBorderColor="brand.accent"
             />
             <Flex gap={2} w={{ base: '100%', sm: 'auto' }}>
               <CTAButton
@@ -549,7 +549,7 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
             fontSize="sm"
             fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
             color="gray.800"
-            focusBorderColor="#c9a96e"
+            focusBorderColor="brand.accent"
             onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
           />
         ) : (
@@ -606,7 +606,7 @@ const Field = ({
       gap={1.5}
       fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
-      color="#c9a96e"
+      color="brand.accent"
       letterSpacing={{ base: '0.15em', md: '0.2em' }}
       textTransform="uppercase"
       mb={2}
@@ -636,7 +636,7 @@ const FormInput = (props: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'siz
     fontSize={{ base: 'md', md: 'sm' }}
     borderRadius="sm"
     _hover={{ borderColor: 'gray.400' }}
-    _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
   />
 );
 

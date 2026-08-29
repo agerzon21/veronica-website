@@ -279,7 +279,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
               fontWeight="500"
               textTransform="uppercase"
               letterSpacing="0.25em"
-              color="#c9a96e"
+              color="brand.accent"
             >
               {t.common.adminKicker}
             </Text>
@@ -312,7 +312,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
               minW="44px"
               minH="44px"
               color="gray.500"
-              _hover={{ color: '#c9a96e' }}
+              _hover={{ color: 'brand.accent' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
             <IconButton
@@ -324,7 +324,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
               minW="44px"
               minH="44px"
               color="gray.500"
-              _hover={{ color: '#c9a96e' }}
+              _hover={{ color: 'brand.accent' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
           </HStack>
@@ -364,7 +364,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
       {/* Two-pane on desktop, drill-down on mobile */}
       {loading ? (
         <Flex justify="center" py={16}>
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       ) : !conversations || conversations.length === 0 ? (
         <EmptyState />
@@ -650,7 +650,7 @@ function ConversationListRow({
       p={4}
       bg={isSelected ? 'rgba(201, 169, 110, 0.08)' : 'transparent'}
       borderLeft="3px solid"
-      borderLeftColor={isSelected ? '#c9a96e' : 'transparent'}
+      borderLeftColor={isSelected ? 'brand.accent' : 'transparent'}
       _hover={isSelected ? {} : { bg: 'gray.50' }}
       cursor="pointer"
       sx={{ WebkitTapHighlightColor: 'transparent' }}
@@ -724,7 +724,7 @@ function ConversationListRow({
             )}
             {conv.unread_count > 0 && (
               <Badge
-                bg="#c9a96e"
+                bg="brand.accent"
                 color="white"
                 fontSize={{ base: 'xs', md: '2xs' }}
                 fontWeight="600"
@@ -1460,7 +1460,7 @@ function ConversationView({
   if (loading) {
     return (
       <Flex flex={1} justify="center" align="center">
-        <Spinner color="#c9a96e" />
+        <Spinner color="brand.accent" />
       </Flex>
     );
   }
@@ -1530,7 +1530,7 @@ function ConversationView({
               minW="44px"
               minH="44px"
               color="gray.500"
-              _hover={{ color: '#c9a96e' }}
+              _hover={{ color: 'brand.accent' }}
               display={{ base: 'inline-flex', lg: 'none' }}
               flexShrink={0}
               ml={-2}
@@ -1636,7 +1636,7 @@ function ConversationView({
                 minW="44px"
                 minH="44px"
                 bg="rgba(201, 169, 110, 0.12)"
-                color="#8a6e35"
+                color="brand.accentText"
                 _hover={{ bg: 'rgba(201, 169, 110, 0.22)' }}
                 _active={{ bg: 'rgba(201, 169, 110, 0.28)' }}
                 borderRadius="full"
@@ -1680,8 +1680,8 @@ function ConversationView({
               w="36px"
               h="36px"
               minW="36px"
-              color={isHidden ? '#8a6e35' : 'gray.400'}
-              _hover={{ color: '#c9a96e' }}
+              color={isHidden ? 'brand.accentText' : 'gray.400'}
+              _hover={{ color: 'brand.accent' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
             <IconButton
@@ -1727,7 +1727,7 @@ function ConversationView({
                 platform check. */}
             {detail.platform !== 'email' && (
               <>
-                <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? '#c9a96e' : 'gray.400'} />
+                <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? 'brand.accent' : 'gray.400'} />
                 <Switch
                   isChecked={detail.ai_enabled}
                   onChange={handleToggleAi}
@@ -1967,7 +1967,7 @@ function ConversationView({
           sends automatically, so a draft never exists there. */}
       {pendingDraft && (
         <Box
-          bg="#fdf9f0"
+          bg="brand.surface"
           borderTop="1px solid"
           borderColor="#e8d9b8"
           px={{ base: 3, md: 4 }}
@@ -1976,11 +1976,11 @@ function ConversationView({
           display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
         >
           <Flex align="center" gap={2} mb={1.5}>
-            <Icon as={FaRobot} boxSize={3} color="#8a6e35" />
+            <Icon as={FaRobot} boxSize={3} color="brand.accentText" />
             <Text
               fontSize="2xs"
               fontWeight="500"
-              color="#8a6e35"
+              color="brand.accentText"
               letterSpacing="0.08em"
               textTransform="uppercase"
             >
@@ -2020,9 +2020,9 @@ function ConversationView({
                 size="sm"
                 minH={{ base: '40px', md: 'auto' }}
                 borderColor="#e8d9b8"
-                color="#8a6e35"
+                color="brand.accentText"
                 bg="white"
-                _hover={{ bg: '#fdf9f0', borderColor: '#c9a96e' }}
+                _hover={{ bg: 'brand.surface', borderColor: 'brand.accent' }}
                 leftIcon={<Icon as={FaRobot} boxSize={3} />}
                 onClick={handleRefineWithAssistant}
               >
@@ -2075,7 +2075,7 @@ function ConversationView({
           bg="white"
           borderColor="gray.300"
           _hover={{ borderColor: 'gray.400' }}
-          _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
           onKeyDown={(e) => {
             // Cmd/Ctrl+Enter to send
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -2102,10 +2102,10 @@ function ConversationView({
                 colorScheme="yellow"
                 size={{ base: 'md', md: 'sm' } as any}
               />
-              <Icon as={FaLanguage} boxSize={3.5} color={translateOnSend ? '#c9a96e' : 'gray.400'} />
+              <Icon as={FaLanguage} boxSize={3.5} color={translateOnSend ? 'brand.accent' : 'gray.400'} />
               <Text
                 fontSize={{ base: 'xs', md: '2xs' }}
-                color={translateOnSend ? '#8a6e35' : 'gray.500'}
+                color={translateOnSend ? 'brand.accentText' : 'gray.500'}
                 fontWeight="500"
               >
                 {t.messages.translateBeforeSending}
@@ -2230,7 +2230,7 @@ function DeliveryBadge({
           ml={1}
           fontSize="2xs"
           fontWeight="500"
-          color="#8a6e35"
+          color="brand.accentText"
           textDecoration="underline"
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
@@ -2362,7 +2362,7 @@ function MessageBubble({
           >
             {translation ? (
               <>
-                <HStack spacing={1.5} mb={0.5} color="#8a6e35">
+                <HStack spacing={1.5} mb={0.5} color="brand.accentText">
                   <Icon as={FaLanguage} boxSize={2.5} />
                   <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" letterSpacing="0.08em" textTransform="uppercase">
                     {t.messages.translatedFrom(detectedLang)}
@@ -2401,13 +2401,13 @@ function MessageBubble({
               gap={1.5}
               fontSize="xs"
               fontWeight="500"
-              color={translating ? 'gray.400' : '#8a6e35'}
+              color={translating ? 'gray.400' : 'brand.accentText'}
               bg={translating ? 'gray.50' : 'rgba(201, 169, 110, 0.12)'}
               border="1px solid"
               borderColor={translating ? 'gray.200' : 'rgba(201, 169, 110, 0.4)'}
               _hover={translating ? undefined : {
                 bg: 'rgba(201, 169, 110, 0.22)',
-                borderColor: '#c9a96e',
+                borderColor: 'brand.accent',
                 color: '#6b5424',
               }}
               cursor={translating ? 'default' : 'pointer'}
@@ -2476,12 +2476,12 @@ function EmptyState() {
         h="72px"
         mx="auto"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
         mb={5}
       >
         <Icon as={FaCommentDots} boxSize={7} />
@@ -2578,13 +2578,13 @@ function SummaryCard({
           cursor="pointer"
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
-          <Icon as={FaLightbulb} boxSize={3.5} color="#8a6e35" flexShrink={0} />
+          <Icon as={FaLightbulb} boxSize={3.5} color="brand.accentText" flexShrink={0} />
           <Text
             fontSize={{ base: 'xs', md: '2xs' }}
             fontWeight="600"
             letterSpacing={{ base: '0.12em', md: '0.14em' }}
             textTransform="uppercase"
-            color="#8a6e35"
+            color="brand.accentText"
             flexShrink={0}
           >
             {strings.header}
@@ -2640,7 +2640,7 @@ function SummaryCard({
                   fontWeight="600"
                   letterSpacing="0.1em"
                   color={active ? 'white' : 'gray.500'}
-                  bg={active ? '#c9a96e' : 'transparent'}
+                  bg={active ? 'brand.accent' : 'transparent'}
                   borderRadius="full"
                   border="none"
                   cursor="pointer"
@@ -2665,7 +2665,7 @@ function SummaryCard({
           minW="44px"
           minH="44px"
           color="gray.500"
-          _hover={{ color: '#c9a96e' }}
+          _hover={{ color: 'brand.accent' }}
           isDisabled={loading}
           flexShrink={0}
           sx={{ WebkitTapHighlightColor: 'transparent' }}
@@ -2677,7 +2677,7 @@ function SummaryCard({
         <Box mt={3}>
           {loading && !summary ? (
             <Flex align="center" gap={2} py={2}>
-              <Spinner size="xs" color="#c9a96e" />
+              <Spinner size="xs" color="brand.accent" />
               <Text fontSize="xs" color="gray.500">{strings.loadingLabel}</Text>
             </Flex>
           ) : error && !summary ? (
@@ -2701,7 +2701,7 @@ function SummaryCard({
                   <VStack align="stretch" spacing={0.5}>
                     {localized.gathered.map((fact, i) => (
                       <Flex key={i} gap={2} align="flex-start">
-                        <Text fontSize="sm" color="#c9a96e" lineHeight="1.5">•</Text>
+                        <Text fontSize="sm" color="brand.accent" lineHeight="1.5">•</Text>
                         <Text fontSize="sm" color="gray.700" lineHeight="1.5">
                           {formatPhoneNumbersInText(fact)}
                         </Text>
@@ -2727,7 +2727,7 @@ function SummaryCard({
                   </Text>
                   <Badge
                     bg="rgba(201, 169, 110, 0.15)"
-                    color="#8a6e35"
+                    color="brand.accentText"
                     fontSize={{ base: 'xs', md: '2xs' }}
                     fontWeight="500"
                     letterSpacing="0.05em"
@@ -2764,7 +2764,7 @@ function SummaryCard({
           onClick={onToggleCollapsed}
           w="100%"
           bg={collapsed ? '#c9a96e' : 'rgba(201, 169, 110, 0.12)'}
-          color={collapsed ? 'white' : '#8a6e35'}
+          color={collapsed ? 'white' : 'brand.accentText'}
           border="1px solid"
           borderColor={collapsed ? '#c9a96e' : 'rgba(201, 169, 110, 0.4)'}
           borderRadius="sm"
@@ -2829,7 +2829,7 @@ const CLASSIFICATION_STYLE: Record<
   unclear: {
     bg: 'gray.100',
     color: 'gray.700',
-    borderColor: '#c9a96e',
+    borderColor: 'brand.accent',
   },
 };
 
@@ -3006,7 +3006,7 @@ function CreateClientModal({
                     h="1.5rem"
                     size="xs"
                     variant="ghost"
-                    color="#8a6e35"
+                    color="brand.accentText"
                     onClick={() => setGalleryPassword(generateGalleryPassword())}
                   >
                     {t.messages.generateNewPassword}
@@ -3031,13 +3031,13 @@ function CreateClientModal({
                   borderRadius="sm"
                   p={3}
                 >
-                  <Text fontSize="2xs" color="#8a6e35" fontWeight="600" letterSpacing="0.08em" textTransform="uppercase" mb={1.5}>
+                  <Text fontSize="2xs" color="brand.accentText" fontWeight="600" letterSpacing="0.08em" textTransform="uppercase" mb={1.5}>
                     {t.messages.fromThisConversation}
                   </Text>
                   <VStack align="stretch" spacing={0.5}>
                     {gathered.map((fact, i) => (
                       <Flex key={i} gap={2} align="flex-start">
-                        <Text fontSize="xs" color="#c9a96e">•</Text>
+                        <Text fontSize="xs" color="brand.accent">•</Text>
                         <Text fontSize="xs" color="gray.700" lineHeight="1.5">
                           {formatPhoneNumbersInText(fact)}
                         </Text>
@@ -3201,7 +3201,7 @@ function SignatureModal({
         <ModalBody>
           {loading ? (
             <Flex justify="center" py={8}>
-              <Spinner size="sm" color="#c9a96e" />
+              <Spinner size="sm" color="brand.accent" />
             </Flex>
           ) : (
             <VStack spacing={4} align="stretch">
