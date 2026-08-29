@@ -391,18 +391,28 @@ function EndCap({ direction }: { direction: 'prev' | 'next' }) {
       top="50%"
       transform="translateY(-50%)"
       {...(direction === 'prev' ? { left: { base: 1, md: 4 } } : { right: { base: 1, md: 4 } })}
-      display={{ base: 'none', sm: 'flex' }}
+      // Shown at every size now — mobile had no end-cap at all, so the first
+      // and last post just had dead space where the arrow would be.
+      display="flex"
       alignItems="center"
       justifyContent="center"
-      py={4}
-      px={1.5}
+      py={5}
+      px={2}
       borderRadius="full"
-      color="whiteAlpha.600"
+      // Gold, and lit. A plain white label read as disabled chrome; this is the
+      // one thing to do once you have reached the end of the set, so it should
+      // look deliberate. The glow is a soft radial behind the text rather than
+      // a border, so it reads as a light source instead of a button.
+      color="brand.accent"
       fontSize="2xs"
-      letterSpacing="0.22em"
+      letterSpacing="0.25em"
       textTransform="uppercase"
-      transition="color 0.2s"
-      _hover={{ color: 'whiteAlpha.900' }}
+      textShadow="0 0 12px rgba(201, 169, 110, 0.55)"
+      bg="radial-gradient(ellipse at center, rgba(201,169,110,0.16) 0%, rgba(201,169,110,0.06) 45%, transparent 72%)"
+      opacity={0.85}
+      transition="opacity 0.25s, text-shadow 0.25s"
+      _hover={{ opacity: 1, textShadow: '0 0 18px rgba(201, 169, 110, 0.85)' }}
+      _active={{ opacity: 1 }}
       zIndex={2}
       sx={{
         writingMode: 'vertical-rl',
