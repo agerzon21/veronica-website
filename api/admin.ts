@@ -45,6 +45,7 @@ import messagesTranslateHandler from './admin/_messages-translate.js';
 import messagesSummaryHandler from './admin/_messages-summary.js';
 import messagesMarkPromotionalHandler from './admin/_messages-mark-promotional.js';
 import messagesMarkPersonalHandler from './admin/_messages-mark-personal.js';
+import logoutHandler from './admin/_logout.js';
 import messagesDeleteHandler from './admin/_messages-delete.js';
 import messagesDeliveryHandler from './admin/_messages-delivery.js';
 import messagesDraftDiscardHandler from './admin/_messages-draft-discard.js';
@@ -108,6 +109,7 @@ const HANDLERS: Record<
   'messages-delete': messagesDeleteHandler,
   'messages-mark-promotional': messagesMarkPromotionalHandler,
   'messages-mark-personal': messagesMarkPersonalHandler,
+  logout: logoutHandler,
   'context-list': contextListHandler,
   'context-create': contextCreateHandler,
   'context-update': contextUpdateHandler,
