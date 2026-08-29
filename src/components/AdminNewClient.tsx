@@ -187,7 +187,6 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       ...prev,
       effective_date: prev.effective_date || todayYmd(),
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // When the template changes, reset variables to that template's defaults.

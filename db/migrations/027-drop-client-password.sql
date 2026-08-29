@@ -1,0 +1,40 @@
+-- 027 — Drop the plaintext client_password column.
+--
+-- Run BY HAND against production Neon, AFTER deploying the code that stops
+-- referencing the column. Safe to re-run (IF EXISTS).
+--
+-- ─── Why this is safe now ────────────────────────────────────────────────
+--
+-- Migration 025 added client_password_hash and switched every read to
+-- checkPortalPassword(), which preferred the hash and fell back to plaintext
+-- for rows that had not been upgraded yet. scripts/hash-client-passwords.mjs
+-- then hashed every remaining row and NULLed the plaintext.
+--
+-- Verified against production immediately before writing this migration:
+--   12 portals, 5 with mode='full'
+--   5  rows with client_password_hash
+--   0  rows with a non-null client_password
+--   0  full portals without a hash
+--
+-- So the fallback branch has been dead code for a release. Nobody can be
+-- locked out by removing it, because there is nothing left in the column to
+-- fall back TO.
+--
+-- ─── Re-check before running ─────────────────────────────────────────────
+--
+-- If any of these returns non-zero, STOP and re-run
+-- scripts/hash-client-passwords.mjs first:
+--
+--   SELECT count(*) FROM client_portals WHERE client_password IS NOT NULL;
+--   SELECT count(*) FROM client_portals WHERE mode = 'full'
+--                                         AND client_password_hash IS NULL;
+--
+-- ─── Rollback ────────────────────────────────────────────────────────────
+--
+-- ALTER TABLE client_portals ADD COLUMN client_password TEXT;
+--
+-- This restores the SHAPE but not the data, which is the point: the plaintext
+-- is gone for good. Clients who need a new password use the reset flow
+-- (api/portal/_request-reset.ts) or Vero's override in the admin panel.
+
+ALTER TABLE client_portals DROP COLUMN IF EXISTS client_password;

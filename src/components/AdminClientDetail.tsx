@@ -940,7 +940,7 @@ function AccountSection({
         body: JSON.stringify({
           password: adminPassword,
           id: portal.id,
-          patch: { client_password: overridePassword },
+          patch: { set_client_password: overridePassword },
         }),
       });
       const data = await res.json();

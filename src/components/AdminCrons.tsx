@@ -66,16 +66,7 @@ const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
   const [confirmRun, setConfirmRun] = useState<CronRow | null>(null);
   const toast = useToast();
 
-  // Belt-and-braces: parent gates this component on adminLevel==='super',
-  // but if it ever gets rendered with the wrong level we want a clear
-  // signal rather than a broken UI whose API calls all 403.
-  if (adminLevel !== 'super') {
-    return (
-      <Box maxW="1200px" mx="auto" p={6}>
-        <Text fontSize="sm" color="red.600">Super-admin only.</Text>
-      </Box>
-    );
-  }
+  const isSuper = adminLevel === 'super';
 
   const loadItems = async () => {
     setLoading(true);
@@ -104,9 +95,25 @@ const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
   };
 
   useEffect(() => {
+    if (!isSuper) return;
     void loadItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminPassword]);
+  }, [adminPassword, isSuper]);
+
+  // Belt-and-braces: the parent gates this component on adminLevel==='super',
+  // but if it is ever rendered at the wrong level we want a clear signal rather
+  // than a UI whose every API call 403s.
+  //
+  // This sits BELOW the hooks on purpose. It used to sit above them, which made
+  // useEffect conditional — React requires the same hooks in the same order on
+  // every render, and a level change while mounted would have thrown.
+  if (!isSuper) {
+    return (
+      <Box maxW="1200px" mx="auto" p={6}>
+        <Text fontSize="sm" color="red.600">Super-admin only.</Text>
+      </Box>
+    );
+  }
 
   // Optimistic toggle — flip local state first, roll back if the API
   // rejects. Feels instant even on flaky connections. Matches the

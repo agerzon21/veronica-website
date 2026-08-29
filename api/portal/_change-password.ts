@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Verify credentials against the current password. Same lookup shape
     // as /api/portal/client so behavior stays consistent.
     const rows = (await sql`
-      select id, client_password, client_password_hash
+      select id, client_password_hash
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
@@ -73,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // same delay either way so this cannot enumerate client addresses.
     if (
       !rows[0] ||
-      !checkPortalPassword(currentPassword, rows[0].client_password_hash, rows[0].client_password).ok
+      !checkPortalPassword(currentPassword, rows[0].client_password_hash).ok
     ) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
@@ -85,7 +85,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           -- Clear the legacy plaintext for this row. Once a client changes
           -- their password there is no reason to keep a readable copy, and it
           -- shrinks the set of rows the eventual DROP has to wait on.
-          client_password = null,
           updated_at = now()
       where id = ${rows[0].id}
     `;

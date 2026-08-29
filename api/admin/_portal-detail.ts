@@ -21,7 +21,7 @@ type PortalRow = {
   partner_2_full_name: string | null;
   client_display_name: string | null;
   client_email: string | null;
-  client_password: string | null;
+  client_password_hash: string | null;
   event_date: string | null;
   gallery_password: string;
   gallery_enabled: boolean;
@@ -71,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       select id, mode, session_type,
              partner_1_first_name, partner_2_first_name,
              partner_1_full_name, partner_2_full_name,
-             client_display_name, client_email, client_password, event_date,
+             client_display_name, client_email, client_password_hash, event_date,
              gallery_password, gallery_enabled, drive_url,
              gallery_delivered_at, gallery_expires_at,
              contract_status, contract_template_key, contract_body, contract_variables,
@@ -110,8 +110,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Onboarding state for the admin Account section. Surfaces
         // whether the client has finished welcome (set_a_password) vs
         // is still pending an invite.
-        client_has_password: !!r.client_password,
-        client_password: undefined,
+        // Reads the HASH. It used to read the plaintext column, which
+        // migration 025 emptied — so from that point every client reported
+        // "no password" and Vero saw a Resend invite button for people whose
+        // accounts already worked.
+        client_has_password: !!r.client_password_hash,
+        client_password_hash: undefined,
       },
       payments: payments.map((p) => ({
         id: p.id,

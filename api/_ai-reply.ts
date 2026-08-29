@@ -100,7 +100,7 @@ const DATE_INTENT_PATTERNS: RegExp[] = [
   // ISO dates (2026-08-12)
   /\b\d{4}-\d{2}-\d{2}\b/,
   // Numeric dates (8/12, 8-12-2026, 12.08)
-  /\b\d{1,2}[\/\-.]\d{1,2}([\/\-.]\d{2,4})?\b/,
+  /\b\d{1,2}[/\-.]\d{1,2}([/\-.]\d{2,4})?\b/,
   // "12th", "3rd", "1st"
   /\b\d+(st|nd|rd|th)\b/i,
   // Relative dates

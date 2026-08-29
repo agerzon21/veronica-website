@@ -10,7 +10,6 @@
  * email clients personally.
  */
 
-import { randomUUID } from 'node:crypto';
 import { Resend } from 'resend';
 
 export interface ContactPayload {

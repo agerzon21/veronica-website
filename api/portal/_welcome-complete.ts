@@ -44,7 +44,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       set client_password_hash = ${hashPortalPassword(password)},
           -- Explicitly null, not merely unset: a brand-new client should never
           -- have a plaintext password row at all.
-          client_password = null,
           setup_token = null,
           setup_token_expires_at = null,
           updated_at = now()

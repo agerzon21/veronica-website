@@ -80,7 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await sql`
       UPDATE client_portals
       SET client_password_hash = ${hashPortalPassword(password)},
-          client_password = NULL,
           reset_token_hash = NULL,
           reset_token_expires_at = NULL,
           updated_at = NOW()

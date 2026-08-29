@@ -131,15 +131,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // temporary value and tell them to change it on first login.
     // Always allowed regardless of contract status; this is the support
     // hatch.
-    if (typeof patch.client_password === 'string') {
-      const v = patch.client_password.trim();
+    // `patch` is Record<string, unknown>, so a key rename is NOT caught by the
+    // compiler — a stale caller would silently no-op and Vero would think she
+    // had set a password when she had not. Fail loudly instead.
+    if ('client_password' in patch) {
+      return res.status(400).json({
+        success: false,
+        error: 'client_password was renamed to set_client_password.',
+      });
+    }
+
+    if (typeof patch.set_client_password === 'string') {
+      const v = patch.set_client_password.trim();
       if (v.length < 6) {
         return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
       }
       await sql`
         update client_portals
         set client_password_hash = ${hashPortalPassword(v)},
-            client_password = null,
             setup_token = null,
             setup_token_expires_at = null,
             updated_at = now()

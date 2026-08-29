@@ -60,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Verify the client + fetch their id in one shot. Same shape as
     // /api/portal/client so behavior is consistent.
     const rows = (await sql`
-      select id, client_password, client_password_hash from client_portals
+      select id, client_password_hash from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
       limit 1
@@ -71,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // same delay whether the email is unknown or the password is wrong, so this
     // cannot be used to discover which addresses belong to clients.
     const authRow = rows[0];
-    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash, authRow.client_password).ok) {
+    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash).ok) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }

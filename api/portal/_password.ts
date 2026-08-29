@@ -3,7 +3,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 /**
  * Client-portal password hashing.
  *
- * db/migrations/001-baseline-client-portals.sql:72 stored client_password in
+ * db/migrations/001-baseline-client-portals.sql:72 stored the password in
  * PLAINTEXT, with its own comment calling it "a known security bug flagged for
  * the near-term fix list". It stayed that way. Anyone with database access
  * could read every client's portal password.
@@ -65,24 +65,18 @@ export function verifyPortalHash(plain: string, stored: string | null | undefine
 /**
  * The single decision point for "is this the right portal password".
  *
- * Returns whether it matched, and whether the caller should now write a hash
- * (true only when the match came from the legacy plaintext column).
+ * Until migration 027 this also compared a legacy plaintext column and told the
+ * caller to upgrade the row on a match. That column is gone: every row was
+ * hashed by scripts/hash-client-passwords.mjs and the plaintext NULLed, so the
+ * fallback had been dead code for a release before it was removed.
  *
- * Constant-time-ish by construction: the hash path always runs scrypt, and the
- * plaintext path is only reached when no hash exists at all.
+ * A row with no hash simply cannot authenticate. That is correct — it means the
+ * client has been invited but has not set a password yet, and the way in is the
+ * setup token or a reset link, not a password comparison.
  */
 export function checkPortalPassword(
   supplied: string,
   storedHash: string | null | undefined,
-  storedPlain: string | null | undefined,
-): { ok: boolean; needsUpgrade: boolean } {
-  if (storedHash) {
-    return { ok: verifyPortalHash(supplied, storedHash), needsUpgrade: false };
-  }
-  // Legacy row: no hash yet. Compare the plaintext, and tell the caller to
-  // upgrade it if this was correct.
-  if (storedPlain != null && storedPlain.length > 0 && supplied === storedPlain) {
-    return { ok: true, needsUpgrade: true };
-  }
-  return { ok: false, needsUpgrade: false };
+): { ok: boolean } {
+  return { ok: !!storedHash && verifyPortalHash(supplied, storedHash) };
 }

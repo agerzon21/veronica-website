@@ -32,7 +32,6 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type PortalRow = {
   // Selected only to authenticate the email+password branch; never returned.
-  client_password: string | null;
   client_password_hash: string | null;
   id: string;
   client_display_name: string | null;
@@ -78,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `) as PortalRow[])
       : ((await sql`
           select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at,
-                 client_password, client_password_hash
+                 client_password_hash
           from client_portals
           where mode = 'full'
             and lower(client_email) = ${email}
@@ -95,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !!shareRow &&
       (galleryPassword
         ? true
-        : checkPortalPassword(password, shareRow.client_password_hash, shareRow.client_password).ok);
+        : checkPortalPassword(password, shareRow.client_password_hash).ok);
 
     if (!shareOk) {
       await sleep(WRONG_AUTH_DELAY_MS);

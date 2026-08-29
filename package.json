@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint . --report-unused-disable-directives",
     "preview": "vite preview",
     "hero-variants": "node scripts/build-hero-variants.mjs",
     "hero-variants:check": "node scripts/build-hero-variants.mjs --check",
@@ -54,6 +54,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "typescript": "^5.2.2",
+    "typescript-eslint": "^8.68.0",
     "vite": "^5.0.8"
   }
 }

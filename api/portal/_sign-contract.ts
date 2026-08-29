@@ -40,7 +40,6 @@ const VERONIKA_NAME = 'Veronika Polbina';
 
 type ClientRow = {
   // Selected only to authenticate — never returned to the client.
-  client_password: string | null;
   client_password_hash: string | null;
   id: string;
   client_display_name: string | null;
@@ -107,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Auth + load contract body
     const rows = (await sql`
       select id, client_display_name, client_email, contract_status, contract_body,
-             client_password, client_password_hash
+             client_password_hash
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
@@ -119,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // same delay whether the email is unknown or the password is wrong, so this
     // cannot be used to discover which addresses belong to clients.
     const authRow = rows[0];
-    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash, authRow.client_password).ok) {
+    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash).ok) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }

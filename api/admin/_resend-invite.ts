@@ -30,7 +30,6 @@ type Row = {
   mode: 'simple' | 'full';
   client_display_name: string | null;
   client_email: string | null;
-  client_password: string | null;
   client_password_hash: string | null;
 };
 
@@ -49,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, mode, client_display_name, client_email, client_password, client_password_hash
+      select id, mode, client_display_name, client_email, client_password_hash
       from client_portals where id = ${id} limit 1
     `) as Row[];
     if (rows.length === 0) return res.status(404).json({ success: false, error: 'Portal not found' });
@@ -60,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Check BOTH: an activated client has a hash and (usually) no plaintext.
     // Testing only the legacy column would let this re-invite someone who has
     // already set their password, invalidating their working login.
-    if (portal.client_password || portal.client_password_hash) {
+    if (portal.client_password_hash) {
       return res.status(409).json({
         success: false,
         error: 'Client has already set a password. Use the password-override option instead.',
