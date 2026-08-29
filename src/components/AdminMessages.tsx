@@ -1,12 +1,39 @@
 import {
-  Box, VStack, HStack, Text, Flex, Icon, Badge, Textarea, Spinner, useToast, Switch,
-  Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
-  FormControl, FormLabel, Input, Select, InputGroup, InputRightElement, Button, IconButton,
+  Box,
+  VStack,
+  HStack,
+  Text,
+  Flex,
+  Icon,
+  Badge,
+  Textarea,
+  Spinner,
+  useToast,
+  Switch,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  FormControl,
+  FormLabel,
+  Input,
+  Select,
+  InputGroup,
+  InputRightElement,
+  Button,
+  IconButton,
   Stack,
-} from '@chakra-ui/react';
-import { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  FaInstagram,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  } from '@chakra-ui/react'; import { useEffect,
+  useState,
+  useCallback,
+  useRef } from 'react'; import {   FaInstagram,
   FaRobot,
   FaUser,
   FaSync,
@@ -31,6 +58,7 @@ import {
   FaChevronLeft,
   FaEraser,
   FaUserFriends,
+  FaEllipsisV,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
@@ -1760,6 +1788,11 @@ function ConversationView({
                 a mistaken tap should cost a click to undo. Because email
                 threads are keyed on the sender's address, this covers
                 everything they send from now on. */}
+            {/* Secondary actions. On desktop they sit inline; on mobile they
+                move into the overflow menu below, because five icon buttons
+                plus the AI switch overflowed the row and squeezed the contact
+                name down to two characters. */}
+            <HStack spacing={1} display={{ base: 'none', md: 'inline-flex' }}>
             {/* Personal — friends & family. Distinct from the eye beside it:
                 that one folds away marketing noise, this one says "not work",
                 which is what actually stops the assistant replying (see the
@@ -1824,6 +1857,54 @@ function ConversationView({
               flexShrink={0}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             />
+            </HStack>
+
+            {/* Mobile overflow. Same actions, one 44px target. */}
+            <Menu placement="bottom-end" autoSelect={false}>
+              <MenuButton
+                as={IconButton}
+                aria-label={t.messages.moreActions}
+                icon={<Icon as={FaEllipsisV} boxSize={3.5} />}
+                size="sm"
+                variant="ghost"
+                color="gray.500"
+                w="36px"
+                h="36px"
+                minW="36px"
+                borderRadius="full"
+                display={{ base: 'inline-flex', md: 'none' }}
+                flexShrink={0}
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              />
+              <MenuList minW="220px" zIndex={20}>
+                <MenuItem
+                  icon={<Icon as={FaUserFriends} boxSize={3.5} />}
+                  onClick={handleTogglePersonal}
+                >
+                  {isPersonalThread ? t.messages.unmarkPersonal : t.messages.markPersonal}
+                </MenuItem>
+                <MenuItem
+                  icon={<Icon as={isHidden ? FaEye : FaEyeSlash} boxSize={3.5} />}
+                  onClick={handleTogglePromotional}
+                >
+                  {isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
+                </MenuItem>
+                <MenuItem
+                  icon={<Icon as={FaEraser} boxSize={3.5} />}
+                  onClick={() => setResetConfirmOpen(true)}
+                >
+                  {t.messages.resetConversation}
+                </MenuItem>
+                <MenuItem
+                  icon={<Icon as={FaTrash} boxSize={3.5} />}
+                  color="red.500"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                >
+                  {t.messages.deleteConversation}
+                </MenuItem>
+              </MenuList>
+            </Menu>
+
             {/* AI toggle — only wired for Instagram today. Email
                 conversations don't have an AI-reply pipeline yet
                 (deferred; the receiving side ships in this PR but

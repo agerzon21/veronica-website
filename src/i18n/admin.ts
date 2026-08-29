@@ -403,6 +403,7 @@ const dict = {
       ru: (n: number) => `Показать личные (${n})`,
     },
     hidePersonal: { en: 'Hide personal', ru: 'Скрыть личные' },
+    moreActions: { en: 'More actions', ru: 'Ещё действия' },
 
     // ── Signature editor ─────────────────────────────────────────
     signatureTitle: { en: 'Email signature', ru: 'Подпись в письмах' },
