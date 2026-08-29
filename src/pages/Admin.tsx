@@ -1,5 +1,6 @@
 import {
   Box, Flex, HStack, VStack, Text, Input, Icon,
+  InputGroup, InputRightElement, IconButton, Spinner,
   Drawer, DrawerBody, DrawerContent, DrawerOverlay, DrawerCloseButton,
   useDisclosure,
 } from '@chakra-ui/react';
@@ -9,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FaUsers, FaPlug, FaBookOpen, FaCommentDots, FaRobot, FaImage,
   FaInbox, FaFolder, FaBars, FaSignOutAlt, FaHome, FaExternalLinkAlt,
-  FaStar, FaClock, FaEnvelopeOpenText, FaUsersCog,
+  FaStar, FaClock, FaEnvelopeOpenText, FaUsersCog, FaEye, FaEyeSlash,
 } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import Navbar from '../components/Navbar';
@@ -99,6 +100,9 @@ type View =
 // than retyping a password.
 const ADMIN_SESSION_KEY = 'vg:adminSession';
 
+/** Session tokens are 64 hex chars; a typed password is not. */
+const looksLikeSessionToken = (v: string) => /^[a-f0-9]{64}$/.test(v);
+
 const Admin = () => {
   // Email is lazy-initialized from localStorage so a returning
   // admin sees their address already filled in — a real quality-of-
@@ -107,8 +111,14 @@ const Admin = () => {
   // stock form). Both use the same read helper so they can't drift.
   const [email, setEmail] = useState(readSavedEmail);
   const [hasSavedEmail, setHasSavedEmail] = useState(() => readSavedEmail() !== '');
-  // A session token from a previous page view, if there is one. Restoring this
-  // is what makes a reload keep you signed in.
+  // The credential sent with every admin API call: a session token once one
+  // has been issued, otherwise the raw password (env-var logins get no token).
+  // Seeded from a previous page view, which is what lets a reload stay signed
+  // in — see the restore effect below.
+  //
+  // This is NOT what the login form is bound to. It used to be, and the result
+  // was that a stored 64-hex session token rendered as a pre-filled password
+  // nobody recognised.
   const [password, setPassword] = useState(() => {
     try {
       return sessionStorage.getItem(ADMIN_SESSION_KEY) ?? '';
@@ -116,6 +126,19 @@ const Admin = () => {
       return '';
     }
   });
+  // What the user types on the login screen. Separate state, deliberately.
+  const [loginPassword, setLoginPassword] = useState('');
+  // True while we are trying a stored token, so the login form does not flash
+  // before we know whether the session is still good.
+  const [restoring, setRestoring] = useState(() => {
+    try {
+      return looksLikeSessionToken(sessionStorage.getItem(ADMIN_SESSION_KEY) ?? '');
+    } catch {
+      return false;
+    }
+  });
+  const restoreAttempted = useRef(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [portals, setPortals] = useState<AdminPortalSummary[] | null>(null);
@@ -164,6 +187,12 @@ const Admin = () => {
             // Private-mode Safari can throw. The session still works for this
             // tab; it just will not survive a reload.
           }
+        } else if (credentials.email) {
+          // No token came back, so this was an env-var login — there is no
+          // admin_users row to attach a session to. The typed password has to
+          // become the credential, or every later request goes out empty.
+          // Guarded on `email` so a refresh call never overwrites a good token.
+          setPassword(credentials.password);
         }
         return { ok: true };
       }
@@ -175,12 +204,16 @@ const Admin = () => {
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) return;
+    if (!email.trim() || !loginPassword.trim()) return;
     setSubmitting(true);
     setError('');
-    const r = await loadPortals({ email: email.trim(), password: password.trim() });
+    const r = await loadPortals({ email: email.trim(), password: loginPassword.trim() });
     setSubmitting(false);
     if (r.ok) {
+      // Drop the typed password as soon as it has been exchanged. Nothing
+      // downstream reads it, and leaving it in state keeps it in the DOM.
+      setLoginPassword('');
+      setShowPassword(false);
       // Remember this email for next time. Safe to swallow errors —
       // localStorage can throw in Safari private mode, and losing
       // the autofill nicety is a strictly cosmetic regression.
@@ -247,6 +280,8 @@ const Admin = () => {
     setPortals(null);
     setEmail('');
     setPassword('');
+    setLoginPassword('');
+    setShowPassword(false);
     setError('');
     setView({ kind: 'dashboard' });
     setDashTab('clients');
@@ -264,6 +299,35 @@ const Admin = () => {
   // whatever scroll position the login page had (which was often
   // scrolled down because the login card is centered vertically).
   // Also scroll to top on tab switch so each tab starts at its header.
+  // Try the stored session token exactly once on mount. Without this the token
+  // is restored into state and never used: the reload-stays-signed-in promise
+  // silently did nothing, and the only visible effect was the login form
+  // pre-filling with the token.
+  useEffect(() => {
+    if (restoreAttempted.current) return;
+    restoreAttempted.current = true;
+    if (!looksLikeSessionToken(password)) {
+      setRestoring(false);
+      return;
+    }
+    void (async () => {
+      const r = await loadPortals({ password });
+      if (!r.ok) {
+        // Expired, revoked, or the account was disabled. Drop it rather than
+        // leaving a dead token in storage to be retried on every load.
+        try {
+          sessionStorage.removeItem(ADMIN_SESSION_KEY);
+        } catch {
+          /* private-mode Safari — the state reset below is what matters */
+        }
+        setPassword('');
+      }
+      setRestoring(false);
+    })();
+    // Mount only. loadPortals closes over setters, all of which are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (portals) window.scrollTo(0, 0);
   }, [portals]);
@@ -439,6 +503,17 @@ const Admin = () => {
     );
   }
 
+  // Restoring a stored session. Shown INSTEAD of the login form so a returning
+  // admin does not see a sign-in screen flash before landing on the dashboard.
+  // Bounded by the restore effect, which always clears this flag.
+  if (restoring) {
+    return (
+      <Box minH="100vh" bg="#0d0d0d" display="flex" alignItems="center" justifyContent="center">
+        <Spinner color="brand.accent" size="lg" thickness="2px" speed="0.8s" />
+      </Box>
+    );
+  }
+
   // Login screen — matches the Portal dark style. Renders the site
   // Navbar + Footer inline so anyone hitting /admin unauthenticated
   // has an obvious way back to the public site (App.tsx hides both
@@ -456,6 +531,8 @@ const Admin = () => {
     emailLabel: adminDict.auth.emailLabel[loginLang],
     emailPlaceholder: adminDict.auth.emailPlaceholder[loginLang],
     passwordLabel: adminDict.auth.passwordLabel[loginLang],
+    showPassword: adminDict.auth.showPassword[loginLang],
+    hidePassword: adminDict.auth.hidePassword[loginLang],
     passwordPlaceholder: adminDict.auth.passwordPlaceholder[loginLang],
     signInCta: adminDict.auth.signInCta[loginLang],
     signingIn: adminDict.auth.signingIn[loginLang],
@@ -625,29 +702,53 @@ const Admin = () => {
                   >
                     {loginT.passwordLabel}
                   </Text>
-                  <Input
-                    id="admin-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={loginT.passwordPlaceholder}
-                    autoComplete="current-password"
-                    h="48px"
-                    bg="blackAlpha.500"
-                    border="1px solid"
-                    borderColor="whiteAlpha.300"
-                    color="white"
-                    fontSize={{ base: '16px', md: 'sm' }}
-                    fontWeight="300"
-                    borderRadius="sm"
-                    _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
-                    _hover={{ borderColor: 'whiteAlpha.500' }}
-                    _focus={{
-                      borderColor: 'brand.accent',
-                      boxShadow: '0 0 0 1px #c9a96e',
-                      bg: 'blackAlpha.600',
-                    }}
-                  />
+                  <InputGroup>
+                    <Input
+                      id="admin-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder={loginT.passwordPlaceholder}
+                      autoComplete="current-password"
+                      h="48px"
+                      bg="blackAlpha.500"
+                      border="1px solid"
+                      borderColor="whiteAlpha.300"
+                      color="white"
+                      fontSize={{ base: '16px', md: 'sm' }}
+                      fontWeight="300"
+                      borderRadius="sm"
+                      // Room for the reveal button, so a long password does not
+                      // run underneath it.
+                      pr="52px"
+                      _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
+                      _hover={{ borderColor: 'whiteAlpha.500' }}
+                      _focus={{
+                        borderColor: 'brand.accent',
+                        boxShadow: '0 0 0 1px #c9a96e',
+                        bg: 'blackAlpha.600',
+                      }}
+                    />
+                    <InputRightElement h="48px" w="52px">
+                      <IconButton
+                        aria-label={
+                          showPassword ? loginT.hidePassword : loginT.showPassword
+                        }
+                        icon={<Icon as={showPassword ? FaEyeSlash : FaEye} boxSize={4} />}
+                        onClick={() => setShowPassword((v) => !v)}
+                        // Not a submit button — without this, Enter in the
+                        // password field would toggle visibility instead of
+                        // signing in.
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        color="whiteAlpha.600"
+                        _hover={{ color: 'brand.accent', bg: 'whiteAlpha.100' }}
+                        _active={{ bg: 'whiteAlpha.200' }}
+                        sx={{ WebkitTapHighlightColor: 'transparent' }}
+                      />
+                    </InputRightElement>
+                  </InputGroup>
                   {error && (
                     <Text fontSize="sm" color="red.300" fontWeight="300" textAlign="center">
                       {error}

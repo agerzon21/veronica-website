@@ -87,6 +87,8 @@ const dict = {
     emailLabel: { en: 'Email', ru: 'Email' },
     emailPlaceholder: { en: 'you@example.com', ru: 'you@example.com' },
     passwordLabel: { en: 'Password', ru: 'Пароль' },
+    showPassword: { en: 'Show password', ru: 'Показать пароль' },
+    hidePassword: { en: 'Hide password', ru: 'Скрыть пароль' },
     passwordPlaceholder: { en: 'Enter password', ru: 'Введи пароль' },
     signInCta: { en: 'Sign In', ru: 'Войти' },
     signingIn: { en: 'Signing in...', ru: 'Вход...' },
@@ -2422,6 +2424,25 @@ const dict = {
         `Ничего из сделанного не удаляется, доступ можно вернуть в любой момент.`,
     },
     disableConfirm: { en: 'Disable access', ru: 'Отключить' },
+
+    // ─── Delete ───────────────────────────────────────
+    deleteAction: { en: 'Delete', ru: 'Удалить' },
+    deleteTitle: { en: 'Delete this account?', ru: 'Удалить аккаунт?' },
+    deleteBody: {
+      en: (email: string) =>
+        `${email} will be removed permanently, along with every session they have open. This cannot be undone. ` +
+        `If you only want to take their access away for now, disable the account instead — that is reversible.`,
+      ru: (email: string) =>
+        `${email} будет удалён навсегда вместе со всеми активными сессиями. Это необратимо. ` +
+        `Если нужно лишь временно закрыть доступ — отключите аккаунт, это обратимо.`,
+    },
+    deleteConfirm: { en: 'Delete permanently', ru: 'Удалить навсегда' },
+    deletedToast: { en: 'Account deleted', ru: 'Аккаунт удалён' },
+    // Why the two original accounts show no Delete button.
+    envBackedHint: {
+      en: 'Set up from an environment variable — can be disabled, but not deleted.',
+      ru: 'Создан из переменной окружения — можно отключить, но не удалить.',
+    },
     disabledToast: { en: 'Access disabled', ru: 'Доступ отключён' },
     enabledToast: { en: 'Access restored', ru: 'Доступ восстановлен' },
 

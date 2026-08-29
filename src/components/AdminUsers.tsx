@@ -3,7 +3,9 @@ import {
   Input, Select, FormControl, FormLabel, Collapse, Divider,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaSyncAlt, FaUserPlus, FaKey, FaCopy, FaCheck, FaSignOutAlt } from 'react-icons/fa';
+import {
+  FaSyncAlt, FaUserPlus, FaKey, FaCopy, FaCheck, FaSignOutAlt, FaTrash,
+} from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import AdminCard from './ui/AdminCard';
@@ -25,10 +27,11 @@ import { useAdminLang } from '../i18n/admin';
  * issues a one-time password shown once to whoever created it. Granting access
  * is therefore always a visible, deliberate act.
  *
- * You can DISABLE an account but not delete one. Disabling ends access
- * immediately (requireAdmin joins on is_active, and the handler drops their
- * sessions in the same request) while keeping the row, so nothing that
- * references a user id is left dangling.
+ * Disable and delete both exist, but delete is not offered on every row. It is
+ * hidden for the two accounts backed by Vercel env credentials: removing those
+ * rows would RESTORE access rather than revoke it, because the env fallback
+ * reads a missing row as "no opinion" and lets the password through. Disable
+ * works for them precisely because the row survives with is_active = false.
  *
  * The screen renders for EVERY admin level, but shows different things. A
  * super sees the account list and the add-someone form; everyone sees their own
@@ -54,6 +57,8 @@ interface UserRow {
   last_login_at: string | null;
   created_at: string;
   active_sessions: number;
+  /** Tied to a Vercel env credential. Disable-only — see the API's delete branch. */
+  env_backed?: boolean;
 }
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -66,6 +71,7 @@ const AdminUsers = ({ adminPassword, adminLevel }: Props) => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [me, setMe] = useState<string | null>(null);
   const [confirmDisable, setConfirmDisable] = useState<UserRow | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
 
   // Add-a-person form
   const [addOpen, setAddOpen] = useState(false);
@@ -158,6 +164,27 @@ const AdminUsers = ({ adminPassword, adminLevel }: Props) => {
     } finally {
       setBusyId(null);
       setConfirmDisable(null);
+    }
+  };
+
+  const deleteUser = async (row: UserRow) => {
+    setBusyId(row.id);
+    try {
+      const { res, data } = await call({ op: 'delete', user_id: row.id });
+      if (res.ok && data.success) {
+        setItems((cur) => (cur ? cur.filter((r) => r.id !== row.id) : cur));
+        toast({ title: t.users.deletedToast, status: 'success', duration: 3000, isClosable: true });
+      } else {
+        toast({
+          title: data.error || t.users.loadFailed,
+          status: 'error', duration: 5000, isClosable: true,
+        });
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 5000, isClosable: true });
+    } finally {
+      setBusyId(null);
+      setConfirmDelete(null);
     }
   };
 
@@ -378,6 +405,12 @@ const AdminUsers = ({ adminPassword, adminLevel }: Props) => {
                   <Text fontSize="xs" color="gray.500" fontWeight="300">{u.email}</Text>
                 )}
 
+                {u.env_backed && (
+                  <Text fontSize="xs" color="gray.400" fontWeight="300">
+                    {t.users.envBackedHint}
+                  </Text>
+                )}
+
                 <Text fontSize="xs" color="gray.500" fontWeight="300">
                   {u.is_active && u.active_sessions > 0
                     ? t.users.signedInNow(u.active_sessions)
@@ -388,14 +421,30 @@ const AdminUsers = ({ adminPassword, adminLevel }: Props) => {
               </VStack>
 
               {u.id !== me && (
-                <CTAButton
-                  variant={u.is_active ? 'danger' : 'outline'}
-                  size="sm"
-                  isLoading={busyId === u.id}
-                  onClick={() => (u.is_active ? setConfirmDisable(u) : void setActive(u, true))}
-                >
-                  {u.is_active ? t.users.disableAction : t.users.enableAction}
-                </CTAButton>
+                <HStack spacing={2} flexShrink={0}>
+                  <CTAButton
+                    variant={u.is_active ? 'danger' : 'outline'}
+                    size="sm"
+                    isLoading={busyId === u.id}
+                    onClick={() => (u.is_active ? setConfirmDisable(u) : void setActive(u, true))}
+                  >
+                    {u.is_active ? t.users.disableAction : t.users.enableAction}
+                  </CTAButton>
+                  {/* Deliberately absent for env-backed rows rather than
+                      present-and-rejected: offering an action that can only
+                      fail is worse than not offering it. */}
+                  {!u.env_backed && (
+                    <CTAButton
+                      variant="ghost"
+                      size="sm"
+                      icon={FaTrash}
+                      isDisabled={busyId === u.id}
+                      onClick={() => setConfirmDelete(u)}
+                    >
+                      {t.users.deleteAction}
+                    </CTAButton>
+                  )}
+                </HStack>
               )}
             </Flex>
           </AdminCard>
@@ -585,6 +634,18 @@ const AdminUsers = ({ adminPassword, adminLevel }: Props) => {
           </Text>
         </Box>
       )}
+
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        title={t.users.deleteTitle}
+        body={confirmDelete ? t.users.deleteBody(confirmDelete.email) : undefined}
+        confirmLabel={t.users.deleteConfirm}
+        cancelLabel={t.users.cancel}
+        danger
+        isLoading={!!busyId}
+        onConfirm={() => confirmDelete && void deleteUser(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
 
       <ConfirmDialog
         isOpen={!!confirmDisable}

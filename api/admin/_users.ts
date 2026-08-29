@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHash, randomInt } from 'node:crypto';
 import { getDb } from '../_db.js';
-import { requireAdmin, lookupEnvAccount } from '../_admin-auth.js';
+import {
+  requireAdmin, lookupEnvAccount, envBackedEmails, type AdminLevel,
+} from '../_admin-auth.js';
 import { hashPortalPassword, verifyPortalHash } from '../portal/_password.js';
 
 /**
@@ -12,6 +14,7 @@ import { hashPortalPassword, verifyPortalHash } from '../portal/_password.js';
  * POST { password, op: 'list' }                                      → super only
  * POST { password, op: 'create', email, display_name, level }        → super only
  * POST { password, op: 'set-active', user_id, is_active }            → super only
+ * POST { password, op: 'delete', user_id }                           → super only
  * POST { password, op: 'change-own', current_password, new_password } → any admin
  *   (also the break-glass reset when authenticated by env password — see below)
  * POST { password, op: 'signout-others' }                            → any admin
@@ -33,10 +36,16 @@ import { hashPortalPassword, verifyPortalHash } from '../portal/_password.js';
  * so the act of granting access is visible and deliberate rather than something
  * that can be done quietly to an existing account.
  *
- * WHY DEACTIVATE AND NOT DELETE
- * is_active = false ends access immediately (resolveSession joins on it) while
- * keeping the row, so admin_sessions rows and any future audit trail still
- * point at a real user rather than a dangling id.
+ * DISABLE vs DELETE
+ * Both exist because they answer different questions. Disable is reversible and
+ * keeps the row, which is what you want for "they are on leave" or "revoke this
+ * right now while I work out what happened". Delete is permanent and is what
+ * you want when an account should simply never have existed.
+ *
+ * Delete is safe to offer because admin_sessions.user_id is the only foreign
+ * key pointing at admin_users, and it is ON DELETE CASCADE — so removing a row
+ * cannot strand a reference. If anything ever references admin_users for an
+ * audit trail, this needs revisiting.
  */
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -60,6 +69,8 @@ const SELF_SERVICE_OPS = new Set(['change-own', 'signout-others']);
  * and the length is FIXED rather than derived from a float's decimal expansion
  * — the previous base-36 slice could land well under MIN_PASSWORD_LENGTH.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const TEMP_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 function generateTemporaryPassword(): string {
   const group = () =>
@@ -102,6 +113,22 @@ async function dropOtherSessions(
   return rows.length;
 }
 
+/**
+ * Is `userId` the account the caller is signed in as?
+ *
+ * An env-var login carries no userId, so a plain `userId === auth.userId`
+ * silently answers "no" for it and the operator is allowed to disable or delete
+ * the very account they are using. Resolve the env identity before deciding.
+ */
+async function isSelf(
+  auth: { level: AdminLevel; userId?: string },
+  userId: string,
+): Promise<boolean> {
+  if (auth.userId) return userId === auth.userId;
+  const envAccount = await lookupEnvAccount(auth.level);
+  return envAccount?.id === userId;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -138,6 +165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         GROUP BY user_id
       `) as Array<{ user_id: string; n: number }>;
       const byUser = new Map(sessions.map((s) => [s.user_id, s.n]));
+      const envBacked = new Set(envBackedEmails());
 
       return res.status(200).json({
         success: true,
@@ -146,7 +174,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // it from the LOGIN_*_EMAIL the level implies — otherwise the operator
         // is shown a "Disable access" button on their own row.
         me: auth.userId ?? (await lookupEnvAccount(auth.level))?.id ?? null,
-        users: rows.map((r) => ({ ...r, active_sessions: byUser.get(r.id) ?? 0 })),
+        users: rows.map((r) => ({
+          ...r,
+          active_sessions: byUser.get(r.id) ?? 0,
+          // Backed by a Vercel env credential, so it can be disabled but never
+          // deleted — see the delete branch for why.
+          env_backed: envBacked.has(r.email.trim().toLowerCase()),
+        })),
       });
     }
 
@@ -188,11 +222,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       // Postgres raises on a malformed uuid, which would surface as an opaque
       // 500. A bad id is a bad request.
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      if (!UUID_RE.test(userId)) {
         return res.status(400).json({ success: false, error: 'Unknown account.' });
       }
 
-      if (!isActive && auth.userId && userId === auth.userId) {
+      if (!isActive && (await isSelf(auth, userId))) {
         return res.status(409).json({
           success: false,
           error: 'You cannot disable your own account.',
@@ -249,6 +283,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Access must end NOW, not whenever the token expires.
       await sql`DELETE FROM admin_sessions WHERE user_id = ${userId}`;
+      return res.status(200).json({ success: true });
+    }
+
+    if (op === 'delete') {
+      const userId = typeof req.body?.user_id === 'string' ? req.body.user_id : '';
+      if (!UUID_RE.test(userId)) {
+        return res.status(400).json({ success: false, error: 'Unknown account.' });
+      }
+      if (await isSelf(auth, userId)) {
+        return res
+          .status(409)
+          .json({ success: false, error: 'You cannot delete your own account.' });
+      }
+
+      // An env-backed account must never be deleted.
+      //
+      // Deleting it does not revoke anything — it does the opposite. Access for
+      // these two accounts is gated by envAccountDisabled(), which asks "is
+      // there a row for this email that is switched off?". Remove the row and
+      // the answer becomes "no row, so not disabled", and the env password logs
+      // straight back in with full access. Deleting would therefore destroy the
+      // only working revocation for exactly the accounts that need one, and it
+      // cannot be undone from the panel.
+      //
+      // The lookup CANNOT be made to fail closed on a missing row instead:
+      // before seed-admin-users.mjs has run there is no row at all, and the env
+      // fallback has to keep working. Absent must mean "no opinion".
+      const target = (await sql`
+        SELECT email FROM admin_users WHERE id = ${userId} LIMIT 1
+      `) as Array<{ email: string }>;
+      if (target[0] && envBackedEmails().includes(target[0].email.trim().toLowerCase())) {
+        return res.status(409).json({
+          success: false,
+          error:
+            'This account is tied to a Vercel environment variable, so deleting it would not remove access. Disable it instead.',
+        });
+      }
+
+      // Same last-active-super guard as disabling, and for the same reason:
+      // deleting the only super leaves nobody who can manage accounts. Written
+      // as one statement so the check cannot go stale between reading and
+      // acting.
+      const removed = (await sql`
+        DELETE FROM admin_users
+        WHERE id = ${userId}
+          AND (
+            level <> 'super'
+            OR is_active = FALSE
+            OR EXISTS (
+              SELECT 1 FROM admin_users other
+              WHERE other.level = 'super' AND other.is_active = TRUE AND other.id <> ${userId}
+            )
+          )
+        RETURNING email
+      `) as Array<{ email: string }>;
+
+      if (removed.length === 0) {
+        const exists = (await sql`SELECT 1 FROM admin_users WHERE id = ${userId}`) as unknown[];
+        return exists.length > 0
+          ? res.status(409).json({
+              success: false,
+              error: 'That is the last active super-admin. Promote someone else first.',
+            })
+          : res.status(404).json({ success: false, error: 'Unknown account.' });
+      }
+
+      // Sessions cascade with the row, so access ends with the delete.
+      console.log(`[admin/users] deleted account ${removed[0].email}`);
       return res.status(200).json({ success: true });
     }
 

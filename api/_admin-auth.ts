@@ -129,6 +129,13 @@ async function loginFromDb(
  * problem can never lock anyone out of their own admin panel. A failed lookup
  * therefore means "no opinion", not "deny".
  */
+/** The lower-cased emails that the env-var credentials correspond to. */
+export function envBackedEmails(): string[] {
+  return [process.env.LOGIN_SUPER_EMAIL, process.env.LOGIN_ADMIN_EMAIL]
+    .map((e) => e?.trim().toLowerCase())
+    .filter((e): e is string => !!e);
+}
+
 export async function lookupEnvAccount(
   level: AdminLevel,
 ): Promise<{ id: string; isActive: boolean } | null> {
