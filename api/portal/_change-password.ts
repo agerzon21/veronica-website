@@ -20,6 +20,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { checkPortalPassword, hashPortalPassword } from './_password.js';
 import { getDb } from '../_db.js';
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -61,22 +62,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Verify credentials against the current password. Same lookup shape
     // as /api/portal/client so behavior stays consistent.
     const rows = (await sql`
-      select id
+      select id, client_password, client_password_hash
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
-        and client_password = ${currentPassword}
       limit 1
-    `) as Array<{ id: string }>;
+    `) as Array<{ id: string; client_password: string | null; client_password_hash: string | null }>;
 
-    if (rows.length === 0) {
+    // Password verified in code, not SQL — it is hashed now. Same 401 and
+    // same delay either way so this cannot enumerate client addresses.
+    if (
+      !rows[0] ||
+      !checkPortalPassword(currentPassword, rows[0].client_password_hash, rows[0].client_password).ok
+    ) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
     }
 
     await sql`
       update client_portals
-      set client_password = ${newPassword},
+      set client_password_hash = ${hashPortalPassword(newPassword)},
+          -- Clear the legacy plaintext for this row. Once a client changes
+          -- their password there is no reason to keep a readable copy, and it
+          -- shrinks the set of rows the eventual DROP has to wait on.
+          client_password = null,
           updated_at = now()
       where id = ${rows[0].id}
     `;

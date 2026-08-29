@@ -18,6 +18,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { checkPortalPassword } from './_password.js';
 import { get as getBlob } from '@vercel/blob';
 import { getDb } from '../_db.js';
 
@@ -25,6 +26,9 @@ const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Row = {
+  // Selected only to authenticate — never returned to the client.
+  client_password: string | null;
+  client_password_hash: string | null;
   client_display_name: string | null;
   client_email: string;
   contract_signed_pdf_url: string | null;
@@ -50,15 +54,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select client_display_name, client_email, contract_signed_pdf_url, contract_signed_at
+      select client_display_name, client_email, contract_signed_pdf_url, contract_signed_at,
+             client_password, client_password_hash
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
-        and client_password = ${password}
       limit 1
     `) as Row[];
 
-    if (rows.length === 0) {
+
+    // Password is verified in code now, not in SQL — it is hashed. Same 401 and
+    // same delay whether the email is unknown or the password is wrong, so this
+    // cannot be used to discover which addresses belong to clients.
+    const authRow = rows[0];
+    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash, authRow.client_password).ok) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }

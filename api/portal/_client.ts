@@ -19,6 +19,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { checkPortalPassword, hashPortalPassword } from './_password.js';
 import { getDb } from '../_db.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
@@ -27,6 +28,10 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type ClientPortalRow = {
   id: string;
+  // Selected only to authenticate. Never returned — check the response object
+  // below; neither field appears in it.
+  client_password: string | null;
+  client_password_hash: string | null;
   client_display_name: string | null;
   client_email: string | null;
   drive_url: string | null;
@@ -84,17 +89,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              contract_total_amount, contract_retainer_amount, paid_to_date, payment_plan_enabled,
              gallery_password, gallery_enabled,
              gallery_delivered_at, gallery_expires_at,
+             client_password, client_password_hash,
              coalesce(favorite_photo_ids, '{}') as favorite_photo_ids
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
-        and client_password = ${password}
       limit 1
     `) as ClientPortalRow[];
 
-    if (rows.length === 0) {
+    // The password is no longer compared in SQL — it is hashed now, so the
+    // check has to happen in code. Same 401 and same delay whether the email
+    // was unknown or the password was wrong, so this cannot be used to
+    // enumerate which addresses are clients.
+    const candidate = rows[0];
+    const check = candidate
+      ? checkPortalPassword(password, candidate.client_password_hash, candidate.client_password)
+      : { ok: false, needsUpgrade: false };
+
+    if (!candidate || !check.ok) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
+    }
+
+    // Legacy row that still only had plaintext: upgrade it now that we have
+    // verified the password. This is the whole backfill — no script, no reset.
+    if (check.needsUpgrade) {
+      try {
+        await sql`
+          update client_portals
+          set client_password_hash = ${hashPortalPassword(password)}
+          where id = ${candidate.id}
+        `;
+      } catch (err) {
+        // Never fail a valid login because the upgrade write failed; it will
+        // simply be retried on the next sign-in.
+        console.error('[portal/client] password hash upgrade failed:', err);
+      }
     }
 
     const row = rows[0];
