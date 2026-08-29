@@ -39,6 +39,7 @@ interface ConversationRow {
   // the inbox to fold promotional / unrelated mail out of the way.
   classification: string | null;
   is_promotional: boolean;
+  is_personal: boolean;
   has_draft: boolean;
 }
 
@@ -84,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         last_msg.sender    AS last_message_sender,
         c.summary_json->>'classification' AS classification,
         c.is_promotional,
+        c.is_personal,
         EXISTS (
           SELECT 1 FROM messages d
           WHERE d.conversation_id = c.id AND d.status = 'draft'
@@ -121,6 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         last_message_sender: r.last_message_sender,
         classification: r.classification,
         is_promotional: r.is_promotional,
+      is_personal: r.is_personal,
         has_draft: r.has_draft,
         // Truncate the preview so the inbox rail stays tidy. Full
         // body is fetched via messages-detail when Vero opens the
