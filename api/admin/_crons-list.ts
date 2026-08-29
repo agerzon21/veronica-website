@@ -19,6 +19,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin, requireSuper } from '../_admin-auth.js';
 import { getDb } from '../_db.js';
+import { UNSCHEDULED_CRON_META } from '../cron.js';
 
 interface Row {
   id: string;
@@ -48,6 +49,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+
+    // Seed rows for jobs that have no vercel.json schedule entry. Without this
+    // they can never appear here: the list reads cron_jobs, only runGuarded
+    // writes cron_jobs, and runGuarded only runs when the job runs — which for
+    // an unscheduled job can only be triggered from this list. ON CONFLICT keeps
+    // the operator's `enabled` choice intact and only refreshes the metadata.
+    for (const meta of UNSCHEDULED_CRON_META) {
+      await sql`
+        INSERT INTO cron_jobs (name, path, schedule, description)
+        VALUES (${meta.name}, ${meta.path}, ${meta.schedule}, ${meta.description})
+        ON CONFLICT (name) DO UPDATE SET
+          path = EXCLUDED.path,
+          schedule = EXCLUDED.schedule,
+          description = EXCLUDED.description
+      `;
+    }
+
     const rows = (await sql`
       SELECT
         c.id, c.name, c.path, c.schedule, c.description, c.enabled,

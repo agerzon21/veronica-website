@@ -1,6 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { fetchIgProfile } from '../_ig-profile.js';
+import { runGuarded, type CronTrigger } from './_guard.js';
+
+// Exported so api/cron.ts can surface it in the registry — see the comment
+// there. Without a registry entry this job could never appear in the admin
+// Crons list, because that list reads cron_jobs rows and only runGuarded
+// creates them: a job had to run before it could be listed, and it could only
+// be run from the list.
+export const CRON_META = {
+  name: 'ig-avatar-refresh',
+  path: '/api/cron/ig-avatar-refresh',
+  schedule: 'chained daily after instagram-check',
+  description:
+    'Re-fetches Instagram profile pictures so they do not expire. Meta pre-signs those URLs and they die in 24-72h; nothing refreshed them, so every avatar in Messages eventually went blank. Runs inside instagram-check, and can be run on demand here.',
+} as const;
 
 /**
  * Refresh Instagram contact avatars.
@@ -109,16 +123,22 @@ export async function refreshIgAvatars(): Promise<{
   return { attempted: rows.length, refreshed, failed, skipped: rows.length - refreshed - failed };
 }
 
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
-  try {
-    const result = await refreshIgAvatars();
-    console.log(
-      `[cron/ig-avatar-refresh] attempted=${result.attempted} refreshed=${result.refreshed} failed=${result.failed}`,
-    );
-    return res.status(200).json({ success: true, ...result });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[cron/ig-avatar-refresh] failed:', message);
-    return res.status(500).json({ success: false, error: message });
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const trigger: CronTrigger = req.headers['x-vercel-cron'] ? 'schedule' : 'manual';
+  // Through runGuarded so this gets the same enable toggle, timing and run
+  // history as every other job when invoked directly or via "Run now". The
+  // chained call from instagram-check deliberately calls refreshIgAvatars()
+  // raw instead — that work belongs to instagram-check's own run record, not
+  // a second one.
+  const result = await runGuarded({ ...CRON_META, trigger }, refreshIgAvatars);
+
+  // GuardResult's payload field is `ok` (the work() return value), not `value`,
+  // and errors surface on `error`. Matches _instagram-check.ts's handler.
+  if (result.skipped) {
+    return res.status(200).json({ ok: true, action: 'skipped-cron-disabled' });
   }
+  if (result.error) {
+    return res.status(500).json({ ok: false, error: result.error });
+  }
+  return res.status(200).json({ ok: true, ...(result.ok ?? {}) });
 }

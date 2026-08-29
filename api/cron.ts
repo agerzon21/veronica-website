@@ -28,7 +28,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import instagramCheckHandler from './cron/_instagram-check.js';
 import gallerySyncHandler from './cron/_gallery-sync.js';
-import igAvatarRefreshHandler from './cron/_ig-avatar-refresh.js';
+import igAvatarRefreshHandler, { CRON_META as IG_AVATAR_META } from './cron/_ig-avatar-refresh.js';
 
 // Exported so the admin "Run now" endpoint (api/admin/_crons-run-now.ts)
 // can look a handler up by name and invoke it in-process, instead of
@@ -46,6 +46,21 @@ export const HANDLERS: Record<
   // through this same HANDLERS map.
   'ig-avatar-refresh': igAvatarRefreshHandler,
 };
+
+/**
+ * Metadata for jobs that have NO vercel.json cron entry.
+ *
+ * The admin Crons list reads cron_jobs rows, and the only thing that creates a
+ * row is runGuarded — which runs when the job runs. For a scheduled job that is
+ * fine: Vercel invokes it and it appears. For a job with no schedule entry it is
+ * a deadlock — it cannot appear until it runs, and it can only be run from the
+ * list it cannot appear in. ig-avatar-refresh hit exactly that and was invisible
+ * in the panel despite being registered and working.
+ *
+ * _crons-list.ts seeds from this so any such job shows up immediately, with its
+ * real enable toggle, Run-now button and run history.
+ */
+export const UNSCHEDULED_CRON_META = [IG_AVATAR_META] as const;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expected = process.env.CRON_SECRET;
