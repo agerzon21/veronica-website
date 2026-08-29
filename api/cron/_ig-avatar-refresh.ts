@@ -124,7 +124,18 @@ export async function refreshIgAvatars(): Promise<{
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const trigger: CronTrigger = req.headers['x-vercel-cron'] ? 'schedule' : 'manual';
+  // req.query.trigger, NOT req.headers. The admin "Run now" path builds its
+  // request as { ...req, query: { ...req.query, trigger: 'manual' } } in
+  // api/admin/_crons-run-now.ts — and spreading a VercelRequest does NOT carry
+  // `headers`, which is a prototype getter on IncomingMessage. Reading
+  // req.headers there threw "Cannot read properties of undefined", so Run now
+  // failed before the job did any work. Every other cron already uses
+  // req.query?.trigger; this one was the odd man out.
+  const rawTrigger = req.query?.trigger;
+  const trigger: CronTrigger =
+    (Array.isArray(rawTrigger) ? rawTrigger[0] : rawTrigger) === 'manual'
+      ? 'manual'
+      : 'schedule';
   // Through runGuarded so this gets the same enable toggle, timing and run
   // history as every other job when invoked directly or via "Run now". The
   // chained call from instagram-check deliberately calls refreshIgAvatars()
