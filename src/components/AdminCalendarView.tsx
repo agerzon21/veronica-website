@@ -6,6 +6,7 @@ import type { AdminPortalSummary } from './AdminDashboard';
 interface Props {
   portals: AdminPortalSummary[];
   onOpenPortal: (id: string) => void;
+
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -90,6 +91,11 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
   // can be used on a phone (handy for seeing a whole month at a glance) and
   // the agenda list on desktop (handy for reading the next few bookings in
   // order). Persisted so the choice survives a reload.
+  //
+  // The toggle is rendered twice: in the header row on desktop (where it sits
+  // under Table/Calendar rather than down by the legend, which read as part of
+  // the key) and next to the legend on mobile, where that header row is too
+  // tight to take another control.
   const [viewMode, setViewMode] = useState<'auto' | 'month' | 'agenda'>(() => {
     if (typeof window === 'undefined') return 'auto';
     try {
@@ -117,7 +123,7 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
       {/* Month nav — bigger nav buttons on mobile so the chevrons are
           real tap targets, and Today gets a border so it reads as a
           button rather than orphaned text. */}
-      <Flex align="center" justify="space-between" mb={4} gap={3}>
+      <Flex align="center" justify="space-between" mb={4} gap={3} flexWrap="wrap">
         <HStack spacing={{ base: 2, md: 3 }}>
           <NavButton onClick={goPrev}>
             <Icon as={FaChevronLeft} boxSize={{ base: 4, md: 3 }} />
@@ -157,6 +163,44 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
         >
           Today
         </Box>
+
+        {/* Month/Agenda. Desktop only — it sits up here in the control row
+            rather than down by the legend, where it read as part of the key.
+            Mobile renders its own copy next to the legend, since this row is
+            tight on a phone. */}
+        <HStack
+          spacing={0}
+          border="1px solid"
+          borderColor="gray.200"
+          borderRadius="sm"
+          overflow="hidden"
+          display={{ base: 'none', md: 'inline-flex' }}
+          ml={2}
+        >
+          {(['month', 'agenda'] as const).map((v) => (
+            <Box
+              key={v}
+              as="button"
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={effectiveView === v}
+              px={3}
+              py={1.5}
+              minH="32px"
+              fontSize="2xs"
+              letterSpacing="0.12em"
+              textTransform="uppercase"
+              cursor="pointer"
+              bg={effectiveView === v ? 'brand.accent' : 'white'}
+              color={effectiveView === v ? 'white' : 'gray.500'}
+              _hover={effectiveView === v ? {} : { color: 'brand.accentText', bg: 'gray.50' }}
+              transition="all 0.15s"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              {v === 'month' ? 'Month' : 'Agenda'}
+            </Box>
+          ))}
+        </HStack>
       </Flex>
 
       {/* Agenda list — only days with events. Default on mobile, available on
@@ -306,7 +350,16 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
           <LegendDot color="orange.400" label="Pending" />
         </HStack>
 
-        <HStack spacing={0} borderRadius="sm" overflow="hidden" border="1px solid" borderColor="gray.200">
+        <HStack
+          spacing={0}
+          borderRadius="sm"
+          overflow="hidden"
+          border="1px solid"
+          borderColor="gray.200"
+          // Desktop shows this beside Table/Calendar in the dashboard header
+          // instead — down here next to the legend it read as part of the key.
+          display={{ base: 'inline-flex', md: 'none' }}
+        >
           {(['month', 'agenda'] as const).map((v) => (
             <Box
               key={v}
