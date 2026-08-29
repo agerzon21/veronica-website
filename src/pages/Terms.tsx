@@ -108,7 +108,7 @@ const Terms = () => {
           </P>
           <P>
             Send an email to{' '}
-            <Text as="a" href="mailto:vero@vero.photography" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">
               vero@vero.photography
             </Text>{' '}
             with the subject line{' '}
@@ -135,7 +135,7 @@ const Terms = () => {
             on the Site (for example, a photograph you own that appears
             here without authorization), send a DMCA-style takedown
             notice to{' '}
-            <Text as="a" href="mailto:vero@vero.photography" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">
               vero@vero.photography
             </Text>{' '}
             with the subject line <Term>&ldquo;DMCA takedown&rdquo;</Term>{' '}
@@ -182,7 +182,7 @@ const Terms = () => {
             The Site integrates with a small number of third-party
             services (Google, Meta / Instagram, Resend, Neon, Google
             Drive, Vercel) as described in the{' '}
-            <Text as="a" href="/privacy" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="/privacy" color="brand.accentText" textDecoration="underline">
               Privacy Policy
             </Text>
             . Those services have their own terms and privacy policies
@@ -248,7 +248,7 @@ const Terms = () => {
         <PolicySection title="11. Contact">
           <P>
             Questions about these Terms:{' '}
-            <Text as="a" href="mailto:vero@vero.photography" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">
               vero@vero.photography
             </Text>
             .

@@ -47,6 +47,17 @@ const templatePath = join(distDir, 'index.html');
 
 const TITLE_SUFFIX = ' | Vero Photography';
 
+/**
+ * Remove the site-name suffix that photos.ts appends to every title.
+ *
+ * This used to be an inline /  \\| Vero Photography$/ — in which `\\|` is an
+ * escaped backslash followed by ALTERNATION, so it matched " Vero Photography"
+ * at the end and left the pipe behind. All 227 breadcrumbs shipped a name
+ * ending in " |". Slicing the constant cannot drift from it.
+ */
+const stripSuffix = (title) =>
+  title.endsWith(TITLE_SUFFIX) ? title.slice(0, -TITLE_SUFFIX.length) : title;
+
 // Neon setup — accepts either POSTGRES_URL (matches api/_db.ts
 // convention) or DATABASE_URL (common in local .env). No URL → skip.
 const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
@@ -202,7 +213,7 @@ for (const photo of photos) {
         { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://vero.photography" },
         { "@type": "ListItem", "position": 2, "name": "Gallery", "item": "https://vero.photography/gallery" },
         { "@type": "ListItem", "position": 3, "name": "${photo.category.charAt(0).toUpperCase() + photo.category.slice(1)}", "item": "https://vero.photography/gallery/${photo.category}" },
-        { "@type": "ListItem", "position": 4, "name": "${photo.title.replace(/ \\| Vero Photography$/, '').replace(/"/g, '\\"')}", "item": "${fullUrl}" }
+        { "@type": "ListItem", "position": 4, "name": "${stripSuffix(photo.title).replace(/"/g, '\\"')}", "item": "${fullUrl}" }
       ]
     }
     </script>`;

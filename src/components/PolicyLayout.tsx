@@ -131,9 +131,9 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
             <Text
               as="a"
               href="mailto:vero@vero.photography"
-              color="brand.accent"
+              color="brand.accentText"
               fontWeight="400"
-              _hover={{ textDecoration: 'underline' }}
+              textDecoration="underline"
             >
               vero@vero.photography
             </Text>

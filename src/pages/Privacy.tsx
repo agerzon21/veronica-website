@@ -52,7 +52,7 @@ const Privacy = () => {
             The Site is owned and operated by Veronika Gerzon, a wedding
             and portrait photographer based in Scranton, Pennsylvania,
             available worldwide. For any privacy-related question, contact{' '}
-            <Text as="a" href="mailto:vero@vero.photography" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">
               vero@vero.photography
             </Text>
             .
@@ -197,7 +197,7 @@ const Privacy = () => {
           />
           <P>
             To exercise any of these rights, email{' '}
-            <Text as="a" href="mailto:vero@vero.photography" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">
               vero@vero.photography
             </Text>{' '}
             with a description of what you&rsquo;d like us to do. We
@@ -209,7 +209,7 @@ const Privacy = () => {
           <P>
             To request deletion of your personal information from the
             Site, email{' '}
-            <Text as="a" href="mailto:vero@vero.photography" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">
               vero@vero.photography
             </Text>{' '}
             with the subject line <Term>&ldquo;Data deletion request&rdquo;</Term>{' '}
@@ -261,7 +261,7 @@ const Privacy = () => {
         <PolicySection title="Contact">
           <P>
             Questions, requests, or complaints about this policy:{' '}
-            <Text as="a" href="mailto:vero@vero.photography" color="brand.accent" _hover={{ textDecoration: 'underline' }}>
+            <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">
               vero@vero.photography
             </Text>
             .
@@ -281,8 +281,8 @@ function PolicyLink({ href }: { href: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer nofollow"
-      color="brand.accent"
-      _hover={{ textDecoration: 'underline' }}
+      color="brand.accentText"
+      textDecoration="underline"
     >
       {href.replace(/^https?:\/\//, '')}
     </Text>
