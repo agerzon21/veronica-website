@@ -682,6 +682,56 @@ const dict = {
   },
 
   gallery: {
+    // ─── Bulk selection ───────────────────────────────
+    // ─── Drafts waiting callout ───────────────────────
+    draftsWaitingTitle: {
+      en: (n: number) => (n === 1 ? '1 new photo waiting' : `${n} new photos waiting`),
+      ru: (n: number) => `Новых фото ожидает: ${n}`,
+    },
+    draftsWaitingBody: {
+      en: 'The sync added these from Drive with a generated title and description. They are not on the public site until you publish them.',
+      ru: 'Синхронизация добавила их из Drive со сгенерированным названием и описанием. Они не появятся на сайте, пока вы их не опубликуете.',
+    },
+    draftsWaitingAction: { en: 'Review and publish', ru: 'Просмотреть и опубликовать' },
+
+    bulkSelect: { en: 'Select', ru: 'Выбрать' },
+    bulkCancel: { en: 'Cancel', ru: 'Отмена' },
+    bulkSelectAll: { en: 'Select all shown', ru: 'Выбрать все показанные' },
+    bulkClear: { en: 'Clear', ru: 'Снять выделение' },
+    bulkSelected: {
+      en: (n: number) => (n === 1 ? '1 selected' : `${n} selected`),
+      ru: (n: number) => `Выбрано: ${n}`,
+    },
+    bulkPublish: { en: 'Publish', ru: 'Опубликовать' },
+    bulkUnpublish: { en: 'Unpublish', ru: 'Снять с публикации' },
+    bulkMoveTo: { en: 'Move to…', ru: 'Переместить в…' },
+    bulkDelete: { en: 'Delete', ru: 'Удалить' },
+    bulkWorking: { en: 'Working…', ru: 'Выполняется…' },
+    bulkDone: {
+      en: (n: number) => (n === 1 ? '1 photo updated' : `${n} photos updated`),
+      ru: (n: number) => `Обновлено фото: ${n}`,
+    },
+    bulkSkipped: {
+      en: (n: number) => ` (${n} skipped)`,
+      ru: (n: number) => ` (пропущено: ${n})`,
+    },
+    bulkFailed: { en: 'That bulk action failed.', ru: 'Массовое действие не удалось.' },
+    bulkDeleteTitle: {
+      en: (n: number) => (n === 1 ? 'Delete 1 photo?' : `Delete ${n} photos?`),
+      ru: (n: number) => `Удалить фото: ${n}?`,
+    },
+    // Says plainly that a photo still in Drive comes back on the next sync.
+    // That is existing behaviour, and it is exactly the thing that looks like
+    // a bug if nobody tells you.
+    bulkDeleteBody: {
+      en: 'They disappear from the public gallery straight away. Any of them still in the Drive folder will be restored by the next sync — remove the file from Drive too if you want it gone for good.',
+      ru: 'Они сразу исчезнут из публичной галереи. Те, что остались в папке Drive, вернутся при следующей синхронизации — удалите файл и из Drive, если нужно навсегда.',
+    },
+    bulkDeleteConfirm: { en: 'Delete', ru: 'Удалить' },
+    bulkSuperOnly: {
+      en: 'Deleting photos requires super-admin access.',
+      ru: 'Удаление фото доступно только супер-админу.',
+    },
     tabTitle: { en: 'Gallery', ru: 'Галерея' },
     photoCount: {
       en: (n: number, drafts: number) =>

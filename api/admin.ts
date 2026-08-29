@@ -61,6 +61,7 @@ import galleryUpdateHandler from './admin/_gallery-update.js';
 import galleryDeleteHandler from './admin/_gallery-delete.js';
 import gallerySyncNowHandler from './admin/_gallery-sync-now.js';
 import gallerySettingsHandler from './admin/_gallery-settings.js';
+import galleryBulkHandler from './admin/_gallery-bulk.js';
 import assistantChatHandler from './admin/_assistant-chat.js';
 import transcribeHandler from './admin/_transcribe.js';
 import cronsListHandler from './admin/_crons-list.js';
@@ -122,6 +123,7 @@ const HANDLERS: Record<
   'gallery-delete': galleryDeleteHandler,
   'gallery-sync-now': gallerySyncNowHandler,
   'gallery-settings': gallerySettingsHandler,
+  'gallery-bulk': galleryBulkHandler,
   'assistant-chat': assistantChatHandler,
   transcribe: transcribeHandler,
   'crons-list': cronsListHandler,

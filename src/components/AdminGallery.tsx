@@ -7,9 +7,10 @@ import {
 import { useEffect, useState, useCallback } from 'react';
 import {
   FaSyncAlt, FaEdit, FaTrash, FaExternalLinkAlt, FaImage, FaExclamationTriangle,
-  FaGoogleDrive, FaCog,
+  FaGoogleDrive, FaCog, FaCheckSquare, FaCheck,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
 
 /**
@@ -106,6 +107,13 @@ const AdminGallery = ({ adminPassword }: Props) => {
     }
   }, [adminPassword]);
 
+  // Bulk selection. Off by default: the card grid is also how Vero browses,
+  // and permanent checkboxes on every card would clutter that.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
   const loadPhotos = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -165,6 +173,69 @@ const AdminGallery = ({ adminPassword }: Props) => {
       toast({ title: t.common.couldNotReach, status: 'error', duration: 4000 });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  /**
+   * Run a bulk op, then reload.
+   *
+   * Reloads rather than patching local state: recategorising can move a photo
+   * out of the active filter and publishing changes the sort, so recomputing
+   * from the server is both simpler and correct. The list is a few hundred
+   * rows, so the refetch is cheap.
+   */
+  const runBulk = async (
+    op: 'publish' | 'unpublish' | 'recategorize' | 'delete',
+    extra: Record<string, unknown> = {},
+  ) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/admin/gallery-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, op, ids, ...extra }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({
+          title:
+            t.gallery.bulkDone(data.affected) +
+            (data.skipped > 0 ? t.gallery.bulkSkipped(data.skipped) : ''),
+          status: 'success',
+          duration: 4000,
+          isClosable: true,
+        });
+        exitSelectMode();
+        await loadPhotos();
+      } else {
+        toast({
+          title: res.status === 403 ? t.gallery.bulkSuperOnly : data.error || t.gallery.bulkFailed,
+          status: 'error',
+          duration: 6000,
+          isClosable: true,
+        });
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 5000, isClosable: true });
+    } finally {
+      setBulkBusy(false);
+      setConfirmBulkDelete(false);
     }
   };
 
@@ -361,10 +432,84 @@ const AdminGallery = ({ adminPassword }: Props) => {
             <option value="published">{t.gallery.statusPublished}</option>
           </Select>
         </HStack>
-        <Text fontSize="xs" color="gray.500">
-          {t.gallery.resultsCount(filtered.length, photos?.length ?? 0)}
-        </Text>
+        <HStack justify="space-between" w="100%" flexWrap="wrap" gap={2}>
+          <Text fontSize="xs" color="gray.500">
+            {t.gallery.resultsCount(filtered.length, photos?.length ?? 0)}
+          </Text>
+          {(photos?.length ?? 0) > 0 && (
+            <HStack spacing={2}>
+              {selectMode && filtered.length > 0 && (
+                <CTAButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    // "All shown" means the current filter, not the whole
+                    // library — selecting 227 photos behind a Drafts filter
+                    // would be a nasty surprise.
+                    setSelectedIds(new Set(filtered.map((r) => r.id)))
+                  }
+                >
+                  {t.gallery.bulkSelectAll}
+                </CTAButton>
+              )}
+              <CTAButton
+                variant={selectMode ? 'outline' : 'ghost'}
+                size="sm"
+                icon={selectMode ? undefined : FaCheckSquare}
+                onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+              >
+                {selectMode ? t.gallery.bulkCancel : t.gallery.bulkSelect}
+              </CTAButton>
+            </HStack>
+          )}
+        </HStack>
       </VStack>
+
+      {/* Drafts-waiting callout. New photos arrive as drafts and are invisible
+          on the public site until published, which is easy to miss when the
+          only signal is a number in the subtitle. One tap filters to drafts and
+          turns on select mode, so publishing a batch is: tap here, Select all
+          shown, Publish. */}
+      {!loading && draftCount > 0 && !(statusFilter === 'draft' && selectMode) && (
+        <Box
+          mb={4}
+          bg="brand.surfaceSunken"
+          border="1px solid"
+          borderColor="brand.accentBorder"
+          borderRadius="sm"
+          p={4}
+        >
+          <Stack
+            direction={{ base: 'column', md: 'row' }}
+            spacing={3}
+            align={{ base: 'stretch', md: 'center' }}
+            justify="space-between"
+          >
+            <Box minW={0}>
+              <Text fontSize="sm" fontWeight="500" color="gray.800">
+                {t.gallery.draftsWaitingTitle(draftCount)}
+              </Text>
+              <Text fontSize="xs" color="gray.600" fontWeight="300" mt={0.5}>
+                {t.gallery.draftsWaitingBody}
+              </Text>
+            </Box>
+            <Box flexShrink={0}>
+              <CTAButton
+                variant="solid"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter('draft');
+                  setCategoryFilter('all');
+                  setSelectMode(true);
+                  setSelectedIds(new Set());
+                }}
+              >
+                {t.gallery.draftsWaitingAction}
+              </CTAButton>
+            </Box>
+          </Stack>
+        </Box>
+      )}
 
       {error && (
         <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">
@@ -384,12 +529,100 @@ const AdminGallery = ({ adminPassword }: Props) => {
             <PhotoCard
               key={row.id}
               row={row}
+              selectMode={selectMode}
+              selected={selectedIds.has(row.id)}
+              onToggleSelected={() => toggleSelected(row.id)}
               onEdit={() => setEditing(row)}
               onDelete={() => handleDelete(row)}
             />
           ))}
         </SimpleGrid>
       )}
+
+      {/* Sticky bulk bar. Only present when something is selected, so it never
+          covers content during ordinary browsing. Sits above the mobile bottom
+          nav rather than behind it. */}
+      {selectMode && selectedIds.size > 0 && (
+        <Box
+          position="fixed"
+          bottom={{ base: '72px', md: 6 }}
+          left={{ base: 2, md: '50%' }}
+          right={{ base: 2, md: 'auto' }}
+          transform={{ base: 'none', md: 'translateX(-50%)' }}
+          zIndex={20}
+          bg="white"
+          border="1px solid"
+          borderColor="brand.accentBorder"
+          borderRadius="md"
+          boxShadow="lg"
+          px={{ base: 3, md: 4 }}
+          py={3}
+        >
+          <Stack
+            direction={{ base: 'column', md: 'row' }}
+            spacing={{ base: 2, md: 3 }}
+            align={{ base: 'stretch', md: 'center' }}
+          >
+            <Text fontSize="sm" fontWeight="500" color="gray.800" whiteSpace="nowrap">
+              {t.gallery.bulkSelected(selectedIds.size)}
+            </Text>
+
+            <HStack spacing={2} flexWrap="wrap">
+              <CTAButton
+                variant="solid" size="sm"
+                isLoading={bulkBusy}
+                onClick={() => void runBulk('publish')}
+              >
+                {t.gallery.bulkPublish}
+              </CTAButton>
+              <CTAButton
+                variant="outline" size="sm"
+                isDisabled={bulkBusy}
+                onClick={() => void runBulk('unpublish')}
+              >
+                {t.gallery.bulkUnpublish}
+              </CTAButton>
+              <Select
+                size="sm"
+                borderRadius="sm"
+                maxW="150px"
+                value=""
+                isDisabled={bulkBusy}
+                onChange={(e) => {
+                  if (e.target.value) void runBulk('recategorize', { category: e.target.value });
+                }}
+              >
+                <option value="">{t.gallery.bulkMoveTo}</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{t.gallery.categoryNames[c]}</option>
+                ))}
+              </Select>
+              <CTAButton
+                variant="danger" size="sm"
+                isDisabled={bulkBusy}
+                onClick={() => setConfirmBulkDelete(true)}
+              >
+                {t.gallery.bulkDelete}
+              </CTAButton>
+              <CTAButton variant="ghost" size="sm" isDisabled={bulkBusy} onClick={exitSelectMode}>
+                {t.gallery.bulkClear}
+              </CTAButton>
+            </HStack>
+          </Stack>
+        </Box>
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmBulkDelete}
+        title={t.gallery.bulkDeleteTitle(selectedIds.size)}
+        body={t.gallery.bulkDeleteBody}
+        confirmLabel={t.gallery.bulkDeleteConfirm}
+        cancelLabel={t.gallery.bulkCancel}
+        danger
+        isLoading={bulkBusy}
+        onConfirm={() => void runBulk('delete')}
+        onCancel={() => setConfirmBulkDelete(false)}
+      />
 
       {/* Edit modal */}
       {editing && (
@@ -561,14 +794,33 @@ function SettingsModal({
  * Draft photos get a prominent "Draft" badge and a bordered
  * highlight so they visually pull for review.
  */
-function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => void; onDelete: () => void }) {
+function PhotoCard({
+  row,
+  selectMode,
+  selected,
+  onToggleSelected,
+  onEdit,
+  onDelete,
+}: {
+  row: GalleryRow;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelected: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const { t } = useAdminLang();
   const isDraft = row.status === 'draft';
   return (
     <Box
       bg="white"
       border="1px solid"
-      borderColor={isDraft ? 'rgba(201, 169, 110, 0.5)' : 'gray.200'}
+      borderColor={
+        selected ? 'brand.accent' : isDraft ? 'rgba(201, 169, 110, 0.5)' : 'gray.200'
+      }
+      // A selected card reads as selected from the border and tint alone, so
+      // the state survives scrolling past the checkbox on a narrow screen.
+      boxShadow={selected ? '0 0 0 2px rgba(201,169,110,0.45)' : undefined}
       borderRadius="sm"
       overflow="hidden"
       transition="all 0.15s"
@@ -577,7 +829,27 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
       flexDirection="column"
     >
       {/* Thumbnail */}
-      <Box position="relative" pb="66%" bg="gray.100" overflow="hidden">
+      <Box
+        position="relative" pb="66%" bg="gray.100" overflow="hidden"
+        // In select mode the whole thumbnail is the hit target — checkbox-sized
+        // taps on a phone are miserable.
+        onClick={selectMode ? onToggleSelected : undefined}
+        cursor={selectMode ? 'pointer' : undefined}
+        sx={selectMode ? { WebkitTapHighlightColor: 'transparent' } : undefined}
+      >
+        {selectMode && (
+          <Flex
+            position="absolute" top={2} left={2} zIndex={2}
+            w="28px" h="28px" borderRadius="sm"
+            align="center" justify="center"
+            bg={selected ? 'brand.accent' : 'blackAlpha.600'}
+            border="2px solid"
+            borderColor={selected ? 'brand.accent' : 'whiteAlpha.800'}
+            aria-hidden
+          >
+            {selected && <Icon as={FaCheck} boxSize={3} color="white" />}
+          </Flex>
+        )}
         <Image
           src={row.preview_url}
           alt={row.alt || row.title || row.slug}
