@@ -67,6 +67,7 @@ import cronsListHandler from './admin/_crons-list.js';
 import cronsToggleHandler from './admin/_crons-toggle.js';
 import cronsRunNowHandler from './admin/_crons-run-now.js';
 import cronsHistoryHandler from './admin/_crons-history.js';
+import configHealthHandler from './admin/_config-health.js';
 
 const HANDLERS: Record<
   string,
@@ -127,6 +128,7 @@ const HANDLERS: Record<
   'crons-toggle': cronsToggleHandler,
   'crons-run-now': cronsRunNowHandler,
   'crons-history': cronsHistoryHandler,
+  'config-health': configHealthHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

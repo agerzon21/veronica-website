@@ -1,6 +1,8 @@
 import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, useToast } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaInstagram, FaCheck, FaExternalLinkAlt, FaExclamationTriangle, FaTerminal, FaCopy } from 'react-icons/fa';
+import {
+  FaInstagram, FaCheck, FaExternalLinkAlt, FaExclamationTriangle, FaTerminal, FaCopy, FaSyncAlt,
+} from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import { useAdminLang } from '../i18n/admin';
 
@@ -52,9 +54,183 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
       </VStack>
 
       <InstagramCard adminPassword={adminPassword} />
+      <ConfigHealthCard adminPassword={adminPassword} />
     </Box>
   );
 };
+
+interface ConfigCheck {
+  key: string;
+  severity: 'critical' | 'feature' | 'optional';
+  purpose: string;
+  ifMissing: string;
+  set: boolean;
+}
+
+/**
+ * Configuration card — which environment variables the RUNNING deployment can
+ * actually see, and what silently stops working when one is missing.
+ *
+ * This exists because the failure mode here is never a crash. VERCEL_DEPLOY_HOOK_URL
+ * has never been set, so the gallery sync's redeploy trigger has always logged
+ * one line and returned false, and new photos have never been prerendered. That
+ * was invisible until someone went looking. Now it is on a screen.
+ *
+ * Shows problems first and collapses the healthy rows, so the card is quiet
+ * when there is nothing to do.
+ */
+function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
+  const { t } = useAdminLang();
+  const [checks, setChecks] = useState<ConfigCheck[] | null>(null);
+  const [environment, setEnvironment] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/config-health', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setChecks(data.checks);
+        setEnvironment(data.environment);
+      } else {
+        setError(data.error || t.integrations.configLoadFailed);
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminPassword]);
+
+  const missing = checks?.filter((c) => !c.set) ?? [];
+  const visible = showAll ? checks ?? [] : missing;
+
+  const toneFor = (severity: ConfigCheck['severity']) =>
+    severity === 'critical' ? 'red' : severity === 'feature' ? 'orange' : 'gray';
+  const labelFor = (severity: ConfigCheck['severity']) =>
+    severity === 'critical'
+      ? t.integrations.configCritical
+      : severity === 'feature'
+        ? t.integrations.configFeature
+        : t.integrations.configOptional;
+
+  return (
+    <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="sm" p={{ base: 4, md: 6 }} mt={4}>
+      <Flex justify="space-between" align="flex-start" gap={3} mb={2}>
+        <Box minW={0}>
+          <HStack spacing={2} mb={1} flexWrap="wrap">
+            <Text fontSize="md" fontWeight="500" color="gray.800">
+              {t.integrations.configTitle}
+            </Text>
+            {environment && (
+              <Badge fontSize="0.65rem" textTransform="none" fontWeight="400" colorScheme="gray">
+                {t.integrations.configEnvLabel}: {environment}
+              </Badge>
+            )}
+            {checks && (
+              <Badge
+                fontSize="0.65rem" textTransform="none" fontWeight="500"
+                colorScheme={
+                  missing.some((m) => m.severity === 'critical')
+                    ? 'red'
+                    : missing.length > 0
+                      ? 'orange'
+                      : 'green'
+                }
+              >
+                {missing.length === 0
+                  ? t.integrations.configAllSet
+                  : t.integrations.configMissing(missing.length)}
+              </Badge>
+            )}
+          </HStack>
+          <Text fontSize="sm" color="gray.500" fontWeight="300">
+            {t.integrations.configSubtitle}
+          </Text>
+        </Box>
+        <IconButton
+          aria-label={t.integrations.configRefreshAria}
+          icon={<Icon as={FaSyncAlt} boxSize={3.5} />}
+          onClick={load}
+          variant="ghost" size="sm" minW="44px" minH="44px"
+          color="gray.400" _hover={{ color: 'brand.accent' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+          flexShrink={0}
+        />
+      </Flex>
+
+      {loading && <Text fontSize="sm" color="gray.400" fontWeight="300" mt={3}>…</Text>}
+      {error && <Text fontSize="sm" color="red.600" mt={3}>{error}</Text>}
+
+      {checks && (
+        <>
+          <VStack align="stretch" spacing={2} mt={4}>
+            {visible.map((c) => (
+              <Box
+                key={c.key}
+                bg={c.set ? 'transparent' : 'brand.surfaceSunken'}
+                border="1px solid"
+                borderColor={c.set ? 'gray.100' : 'brand.accentBorder'}
+                borderRadius="sm"
+                px={3} py={2}
+              >
+                <HStack spacing={2} flexWrap="wrap" mb={0.5}>
+                  <Icon
+                    as={c.set ? FaCheck : FaExclamationTriangle}
+                    boxSize={3}
+                    color={c.set ? 'green.500' : `${toneFor(c.severity)}.500`}
+                  />
+                  <Text fontSize="xs" fontFamily="mono" color="gray.800" fontWeight="500">
+                    {c.key}
+                  </Text>
+                  <Badge fontSize="0.6rem" textTransform="none" fontWeight="400" colorScheme={toneFor(c.severity)}>
+                    {labelFor(c.severity)}
+                  </Badge>
+                  <Text fontSize="xs" color={c.set ? 'green.600' : 'gray.500'} fontWeight="300">
+                    {c.set ? t.integrations.configSet : t.integrations.configNotSet}
+                  </Text>
+                </HStack>
+                <Text fontSize="xs" color="gray.600" fontWeight="300">{c.purpose}</Text>
+                {!c.set && (
+                  <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1}>
+                    {c.ifMissing}
+                  </Text>
+                )}
+              </Box>
+            ))}
+          </VStack>
+
+          <HStack spacing={3} mt={4} flexWrap="wrap">
+            <CTAButton variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)}>
+              {showAll ? t.integrations.configShowProblems : t.integrations.configShowAll}
+            </CTAButton>
+            {missing.length > 0 && (
+              <CTAButton
+                variant="outline" size="sm" icon={FaExternalLinkAlt}
+                href={VERCEL_ENV_LINK} newTab
+              >
+                Vercel
+              </CTAButton>
+            )}
+          </HStack>
+        </>
+      )}
+    </Box>
+  );
+}
 
 /**
  * Instagram integration card. Shows days-since-last-rotation, a rotation

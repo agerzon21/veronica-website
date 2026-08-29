@@ -66,6 +66,19 @@ const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'mat
 // How many new photos to process per cron run. Bounded so a big
 // initial import doesn't blow past Vercel's function timeout in
 // one shot — leftovers get picked up on the next scheduled run.
+/**
+ * Mass-deletion guard thresholds. A run will not soft-delete more than
+ * MAX_FRACTION of the live photos, and never trips below MIN_ABS so that
+ * ordinary pruning of a handful of photos is unaffected.
+ *
+ * At the current 227 live photos the ceiling is 45, so removing any one
+ * category (the smallest is 19, the largest 97) still passes for maternity and
+ * family but stops weddings and portraits — which is the intent: the guard is
+ * for "a whole chunk vanished at once", not for routine edits.
+ */
+const SOFT_DELETE_MAX_FRACTION = 0.2;
+const SOFT_DELETE_MIN_ABS = 10;
+
 const MAX_NEW_PER_RUN = 20;
 
 // Concurrency for the OpenAI Vision fan-out. Vision calls take
@@ -77,6 +90,7 @@ interface ExistingRow {
   id: string;
   drive_file_id: string;
   deleted_at: string | null;
+  category: string;
 }
 
 // Sentinel error thrown for a misconfigured Drive folder. The guard
@@ -153,7 +167,7 @@ async function doGallerySync() {
 
   // ── 2. Pull all existing rows in one query for diffing ──
   const existingRows = (await sql`
-    SELECT id, drive_file_id, deleted_at FROM gallery_photos
+    SELECT id, drive_file_id, deleted_at, category FROM gallery_photos
   `) as ExistingRow[];
   const byDriveId = new Map<string, ExistingRow>();
   for (const r of existingRows) byDriveId.set(r.drive_file_id, r);
@@ -176,9 +190,66 @@ async function doGallerySync() {
 
   // Anything in DB but NOT in Drive today = soft delete
   const seenDriveIds = new Set(driveFiles.map((d) => d.file.id));
-  const toSoftDelete = existingRows
+  const missingFromDrive = existingRows
     .filter((r) => !seenDriveIds.has(r.drive_file_id) && !r.deleted_at)
     .map((r) => r.drive_file_id);
+
+  // ── Mass-deletion guard ───────────────────────────────────────────────
+  //
+  // "Not in the Drive listing" is trusted to mean "deleted from Drive", but a
+  // short listing looks exactly the same. Ways that happens WITHOUT anyone
+  // deleting a photo:
+  //
+  //   - a category subfolder is renamed or moved (listFolderTree matches
+  //     sections by name, so it silently stops contributing files)
+  //   - a subfolder listing succeeds but comes back empty; listFolderTree
+  //     drops empty sections, so the whole category vanishes from the tree
+  //   - permissions or sharing change on one folder
+  //
+  // Any of those would soft-delete an entire category on the 2am cron, and the
+  // public gallery would be missing a third of its photos until someone
+  // noticed. A thrown error is safe (the run aborts before this point); a
+  // quietly-short listing is not.
+  //
+  // So: refuse implausibly large deletions rather than perform them. Small
+  // prunes pass untouched. Genuine bulk removal is done from the admin gallery
+  // screen, which is explicit and immediate.
+  const liveRows = existingRows.filter((r) => !r.deleted_at);
+  const liveCount = liveRows.length;
+
+  // A whole category disappearing in one run is the folder-rename signature,
+  // and it is not caught by the percentage ceiling — maternity is only 19 of
+  // 227 photos, well under it, yet losing all of maternity is exactly the
+  // failure this guard exists for. So treat "every live photo in some category
+  // is suddenly missing" as blocking on its own, at any size.
+  const missingSet = new Set(missingFromDrive);
+  const wipedCategories = [...new Set(liveRows.map((r) => r.category))].filter(
+    (category) => {
+      const live = liveRows.filter((r) => r.category === category);
+      return live.length > 0 && live.every((r) => missingSet.has(r.drive_file_id));
+    },
+  );
+  const softDeleteCeiling = Math.max(
+    SOFT_DELETE_MIN_ABS,
+    Math.floor(liveCount * SOFT_DELETE_MAX_FRACTION),
+  );
+  // An empty listing is always suspect when we hold photos: it is what a total
+  // listing failure looks like when it does not throw.
+  const listingLooksEmpty = driveFiles.length === 0 && liveCount > 0;
+  const softDeleteBlocked =
+    listingLooksEmpty ||
+    wipedCategories.length > 0 ||
+    missingFromDrive.length > softDeleteCeiling;
+
+  const toSoftDelete = softDeleteBlocked ? [] : missingFromDrive;
+  if (softDeleteBlocked) {
+    console.error(
+      `[gallery-sync] REFUSED to soft-delete ${missingFromDrive.length} of ${liveCount} live photos ` +
+        `(ceiling ${softDeleteCeiling}, drive listing had ${driveFiles.length} files` +
+        `${wipedCategories.length ? `, categories wiped: ${wipedCategories.join(', ')}` : ''}). ` +
+        `Nothing was deleted.`,
+    );
+  }
 
   // ── 3. Refresh + restore in a single pass ──
   if (toRefresh.length > 0) {
@@ -241,12 +312,31 @@ async function doGallerySync() {
     deployTriggered = await triggerDeployHook();
   }
 
+  // Raised AFTER every safe operation (refresh, restore, insert) has already
+  // been committed, so a tripped guard never blocks the harmless work.
+  //
+  // Thrown rather than returned because runGuarded only records 'ok' or
+  // 'error': a returned flag would finalize the run green with no message, and
+  // the whole point is that someone has to SEE this. It surfaces in the Crons
+  // panel as a failed run with this text.
+  if (softDeleteBlocked) {
+    throw new Error(
+      `Refused to soft-delete ${missingFromDrive.length} of ${liveCount} live photos ` +
+        `(ceiling ${softDeleteCeiling}; Drive listing returned ${driveFiles.length} files` +
+        `${wipedCategories.length ? `; entire categories missing: ${wipedCategories.join(', ')}` : ''}). ` +
+        `Nothing was deleted. Check that no category subfolder in Drive was renamed, ` +
+        `moved, or had its sharing changed. If the removal is intentional, delete the ` +
+        `photos from the admin Gallery screen instead.`,
+    );
+  }
+
   return {
     driveFilesSeen: driveFiles.length,
     inserted: inserted.length,
     insertedSlugs: inserted,
     restored: toRestore.length,
     softDeleted: toSoftDelete.length,
+    softDeleteBlocked,
     refreshed: toRefresh.length,
     insertFailures,
     remainingNewNextRun: remainingNew,

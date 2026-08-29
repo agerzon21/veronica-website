@@ -154,17 +154,49 @@ function isMediaFile(f: { mimeType?: string | null }): boolean {
 const naturalNameCompare = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
+/**
+ * Drains every page of a Drive files.list query.
+ *
+ * pageSize maxes out at 1000 and Drive does NOT error when there is more — it
+ * just returns a nextPageToken. Ignoring that token silently truncates the
+ * listing, and for the public gallery sync a short listing is indistinguishable
+ * from "those files were deleted from Drive", which soft-deletes them. So this
+ * has to be exhaustive, not best-effort.
+ *
+ * PAGE_CAP is a runaway guard, not a limit anyone should hit: 50 pages is
+ * 50,000 files in one folder.
+ */
+const PAGE_CAP = 50;
+
+async function listAllPages(
+  drive: drive_v3.Drive,
+  params: drive_v3.Params$Resource$Files$List,
+): Promise<drive_v3.Schema$File[]> {
+  const out: drive_v3.Schema$File[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < PAGE_CAP; page++) {
+    const res = await drive.files.list({ ...params, pageSize: 1000, pageToken });
+    out.push(...(res.data.files ?? []));
+    pageToken = res.data.nextPageToken ?? undefined;
+    if (!pageToken) return out;
+  }
+  // Falling out of the loop means there was still more to fetch. Loud, because
+  // a partial listing here causes photos to disappear from the public gallery.
+  throw new Error(
+    `Drive listing exceeded ${PAGE_CAP} pages (${out.length}+ files). Refusing to continue with a partial listing.`,
+  );
+}
+
 async function listMediaInFolder(
   drive: drive_v3.Drive,
   folderId: string,
 ): Promise<DriveFile[]> {
-  const res = await drive.files.list({
+  const files = await listAllPages(drive, {
     q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed = false`,
-    fields: 'files(id, name, mimeType, size, imageMediaMetadata(width, height), videoMediaMetadata(width, height))',
-    pageSize: 1000,
+    fields: 'nextPageToken, files(id, name, mimeType, size, imageMediaMetadata(width, height), videoMediaMetadata(width, height))',
     orderBy: 'name',
   });
-  return (res.data.files ?? [])
+  return files
     .filter((f): f is { id: string; name: string; mimeType: string; size?: string | null } =>
       Boolean(f.id && f.name && f.mimeType),
     )
@@ -188,13 +220,11 @@ export async function listFolderTree(parentFolderId: string): Promise<FolderTree
   const drive = getDrive();
 
   // 1. List immediate children (both folders + media files in one call).
-  const rootRes = await drive.files.list({
+  const items = await listAllPages(drive, {
     q: `'${parentFolderId}' in parents and trashed = false`,
-    fields: 'files(id, name, mimeType, size, imageMediaMetadata(width, height), videoMediaMetadata(width, height))',
-    pageSize: 1000,
+    fields: 'nextPageToken, files(id, name, mimeType, size, imageMediaMetadata(width, height), videoMediaMetadata(width, height))',
     orderBy: 'name',
   });
-  const items = rootRes.data.files ?? [];
 
   const subFolders = items
     .filter((f) => f.mimeType === FOLDER_MIME)

@@ -1698,6 +1698,27 @@ const dict = {
   },
 
   integrations: {
+    // ─── Config health ────────────────────────────────
+    configTitle: { en: 'Configuration', ru: 'Конфигурация' },
+    configSubtitle: {
+      en: 'Environment variables this deployment reads, and what stops working when one is not set.',
+      ru: 'Переменные окружения этого деплоя и что перестаёт работать, если какая-то не задана.',
+    },
+    configAllSet: { en: 'Everything is configured', ru: 'Всё настроено' },
+    configMissing: {
+      en: (n: number) => (n === 1 ? '1 not set' : `${n} not set`),
+      ru: (n: number) => `${n} не задано`,
+    },
+    configCritical: { en: 'Required', ru: 'Обязательно' },
+    configFeature: { en: 'Feature', ru: 'Функция' },
+    configOptional: { en: 'Optional', ru: 'Необязательно' },
+    configSet: { en: 'Set', ru: 'Задана' },
+    configNotSet: { en: 'Not set', ru: 'Не задана' },
+    configShowAll: { en: 'Show all', ru: 'Показать все' },
+    configShowProblems: { en: 'Show only problems', ru: 'Только проблемы' },
+    configRefreshAria: { en: 'Recheck configuration', ru: 'Перепроверить конфигурацию' },
+    configLoadFailed: { en: 'Could not load configuration.', ru: 'Не удалось загрузить конфигурацию.' },
+    configEnvLabel: { en: 'Environment', ru: 'Окружение' },
     // ─── Header ───────────────────────────────────────
     subtitle: {
       en: 'Third-party services that power the site.',
