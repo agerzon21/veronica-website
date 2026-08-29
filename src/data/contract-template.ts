@@ -362,7 +362,13 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     key: 'event_location',
     label: 'Event Location',
     placeholder: 'Venue name and full address',
-    helpText: 'Where the shoot happens. Include the full address.',
+    // Deliberately guidance, not validation. Address autocomplete was
+    // considered and rejected — a Google Cloud project and an API key for ~10
+    // addresses a month — and hard-validating would block the real case where
+    // all we have is a venue name. So the check is Vero's, and this tells her
+    // exactly what to check.
+    helpText:
+      'Full address, not just the venue name. Look it up in Google Maps or Waze first — confirm the street, city and state are right, and check the drive time so there are no surprises on the day.',
     required: true,
   },
   {

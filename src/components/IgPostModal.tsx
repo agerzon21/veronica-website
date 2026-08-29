@@ -1,7 +1,7 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { Box, Flex, Text, Icon, HStack, VStack, Image } from '@chakra-ui/react';
 import { CloseIcon, ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
-import { FaHeart, FaRegComment, FaInstagram, FaFilm, FaImages } from 'react-icons/fa';
+import { FaHeart, FaRegComment, FaInstagram, FaFilm, FaImages, FaExternalLinkAlt } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import CTAButton from './ui/CTAButton';
 
@@ -37,6 +37,9 @@ interface Props {
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
+  /** 0-based position, for the "first/last" end-cap. */
+  index?: number;
+  total?: number;
 }
 
 const MotionDiv = motion.div;
@@ -58,7 +61,28 @@ const formatFullDate = (iso: string): string => {
   });
 };
 
-const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
+/** Duplicated from InstagramFeed rather than imported — that module imports
+ *  this one, so importing back would be circular. */
+const PROFILE_URL = 'https://www.instagram.com/vero.art.photo';
+
+const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => {
+  // Swipe between posts on touch devices. Arrows exist on mobile now too, but
+  // swiping is what people actually reach for in a photo lightbox.
+  const touchStartX = useRef<number | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartX.current;
+    touchStartX.current = null;
+    if (start == null) return;
+    const dx = (e.changedTouches[0]?.clientX ?? start) - start;
+    // 60px threshold so a slightly-diagonal scroll does not paginate.
+    if (Math.abs(dx) < 60) return;
+    if (dx > 0) onPrev?.();
+    else onNext?.();
+  };
+
   // Keyboard shortcuts. Attaching once per mount rather than per
   // handler-change so a rapid arrow-key sequence doesn't miss keys
   // in the tiny window between event listener swaps.
@@ -135,12 +159,19 @@ const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
           <CloseIcon boxSize={3} />
         </Box>
 
-        {/* Prev / Next chevrons — only rendered if the caller wired them */}
-        {onPrev && (
+        {/* Prev / Next. Where there is no neighbour — first or last post — the
+            slot is not left empty: it becomes a quiet vertical link to the
+            profile, so the dead edge does something useful instead of just
+            ending. */}
+        {onPrev ? (
           <NavArrow direction="prev" onClick={onPrev} />
+        ) : (
+          <EndCap direction="prev" />
         )}
-        {onNext && (
+        {onNext ? (
           <NavArrow direction="next" onClick={onNext} />
+        ) : (
+          <EndCap direction="next" />
         )}
 
         {/* Modal card — click stops propagation so tapping inside
@@ -151,6 +182,8 @@ const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
           exit={{ opacity: 0, y: 20, scale: 0.98 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
           style={{ maxWidth: 960, width: '100%', maxHeight: '90vh' }}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
         >
           <Flex
@@ -224,6 +257,44 @@ const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
                 >
                   @vero.art.photo
                 </Text>
+
+                {typeof index === 'number' && typeof total === 'number' && total > 1 && (
+                  <Text fontSize="2xs" color="gray.400" letterSpacing="0.1em" ml={2}>
+                    {index + 1}/{total}
+                  </Text>
+                )}
+
+                {/* MOBILE ONLY. The bottom CTA sits after the caption, so on a
+                    long post it is below the fold and reads as absent. This is
+                    a small ghost link pinned to the header instead — kept
+                    deliberately light (no fill, no border) so it does not
+                    compete with the handle beside it. Desktop keeps the proper
+                    button at the bottom, where there is room for it. */}
+                {post.permalink && (
+                  <Box
+                    as="a"
+                    href={post.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    ml="auto"
+                    display={{ base: 'inline-flex', md: 'none' }}
+                    alignItems="center"
+                    gap={1.5}
+                    fontSize="2xs"
+                    fontWeight="500"
+                    letterSpacing="0.12em"
+                    textTransform="uppercase"
+                    color="brand.accentText"
+                    px={2}
+                    py={1}
+                    borderRadius="sm"
+                    _active={{ bg: 'brand.surface' }}
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    View
+                    <Icon as={FaExternalLinkAlt} boxSize={2.5} />
+                  </Box>
+                )}
               </HStack>
 
               {/* Engagement stats */}
@@ -277,7 +348,10 @@ const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
               {/* CTA at the bottom — canonical CTAButton so it matches
                   every other button on the site */}
               {post.permalink && (
-                <Box pt={2} mt="auto">
+                // Centred, and desktop-only. CTAButton is display:inline-flex
+                // with no width, so inside this stretched VStack it hugged the
+                // left edge. The mobile equivalent lives in the header above.
+                <Flex pt={2} mt="auto" justify="center" display={{ base: 'none', md: 'flex' }}>
                   <CTAButton
                     href={post.permalink}
                     newTab
@@ -287,7 +361,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
                   >
                     View on Instagram
                   </CTAButton>
-                </Box>
+                </Flex>
               )}
             </VStack>
           </Flex>
@@ -296,6 +370,52 @@ const IgPostModal = ({ post, onClose, onPrev, onNext }: Props) => {
     </AnimatePresence>
   );
 };
+
+/**
+ * Fills the slot where a prev/next arrow would be on the first and last post.
+ *
+ * Leaving it empty made the gallery feel like it had simply stopped. This is a
+ * low-key vertical label pointing at the full profile — the natural next thing
+ * to do once you have reached the end — styled to read as an edge affordance
+ * rather than a button competing with the arrows.
+ */
+function EndCap({ direction }: { direction: 'prev' | 'next' }) {
+  return (
+    <Box
+      as="a"
+      href={PROFILE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      position="absolute"
+      top="50%"
+      transform="translateY(-50%)"
+      {...(direction === 'prev' ? { left: { base: 1, md: 4 } } : { right: { base: 1, md: 4 } })}
+      display={{ base: 'none', sm: 'flex' }}
+      alignItems="center"
+      justifyContent="center"
+      py={4}
+      px={1.5}
+      borderRadius="full"
+      color="whiteAlpha.600"
+      fontSize="2xs"
+      letterSpacing="0.22em"
+      textTransform="uppercase"
+      transition="color 0.2s"
+      _hover={{ color: 'whiteAlpha.900' }}
+      zIndex={2}
+      sx={{
+        writingMode: 'vertical-rl',
+        textOrientation: 'mixed',
+        WebkitTapHighlightColor: 'transparent',
+        ...(direction === 'prev' ? { transform: 'translateY(-50%) rotate(180deg)' } : {}),
+      }}
+      aria-label="See more on Instagram"
+    >
+      More on Instagram
+    </Box>
+  );
+}
 
 function NavArrow({ direction, onClick }: { direction: 'prev' | 'next'; onClick: () => void }) {
   return (
@@ -315,7 +435,10 @@ function NavArrow({ direction, onClick }: { direction: 'prev' | 'next'; onClick:
       borderRadius="full"
       bg="rgba(255, 255, 255, 0.1)"
       color="whiteAlpha.900"
-      display={{ base: 'none', md: 'flex' }}
+      // Was desktop-only, which left mobile with no way to move between posts
+      // at all. Now shown everywhere; sized down on small screens so it does
+      // not cover the photo.
+      display="flex"
       alignItems="center"
       justifyContent="center"
       transition="all 0.2s"
