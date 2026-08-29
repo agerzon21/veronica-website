@@ -86,17 +86,41 @@ function PrefetchPublicRoutes() {
       prefetchChunk(() => import('./pages/Privacy'));
       prefetchChunk(() => import('./pages/Terms'));
     };
-    const ric = (window as any).requestIdleCallback as
-      | ((cb: () => void, opts?: { timeout: number }) => number)
-      | undefined;
-    if (ric) {
-      const id = ric(warm, { timeout: 4000 });
-      return () => (window as any).cancelIdleCallback?.(id);
+    // ── Wait for `load` BEFORE even asking for idle time ──
+    //
+    // This used to be requestIdleCallback(warm, { timeout: 4000 }) on mount.
+    // On a slow phone the main thread is never idle during startup, so the
+    // TIMEOUT is what fired — at 4s, which is squarely inside the LCP window.
+    // A DebugBear trace caught the result: eleven route chunks downloading
+    // 4015-6250ms at HIGH priority while the hero photograph, at LOW priority,
+    // was trying to download 4924-5935ms. The warm-up was competing with the
+    // thing it should never delay.
+    //
+    // `load` fires only after the hero image has finished, so this can no
+    // longer collide with it. The cost is that a cold click on About/Gallery a
+    // second or two after landing may not be warmed yet; that is a far better
+    // trade than pushing out the first paint for every visitor.
+    let idleId: number | undefined;
+    const schedule = () => {
+      const ric = (window as any).requestIdleCallback as
+        | ((cb: () => void, opts?: { timeout: number }) => number)
+        | undefined;
+      // Safari has no requestIdleCallback — a plain timeout is close enough for
+      // work this small.
+      idleId = ric ? ric(warm, { timeout: 3000 }) : window.setTimeout(warm, 300);
+    };
+
+    if (document.readyState === 'complete') {
+      schedule();
+      return () => {
+        if (idleId !== undefined) (window as any).cancelIdleCallback?.(idleId);
+      };
     }
-    // Safari has no requestIdleCallback — a plain timeout is close enough for
-    // work this small.
-    const t = window.setTimeout(warm, 2500);
-    return () => clearTimeout(t);
+    window.addEventListener('load', schedule, { once: true });
+    return () => {
+      window.removeEventListener('load', schedule);
+      if (idleId !== undefined) (window as any).cancelIdleCallback?.(idleId);
+    };
   }, []);
   return null;
 }

@@ -38,6 +38,8 @@ const Footer = () => {
           <Link as={RouterLink} to="/" _hover={{ opacity: 0.85 }} transition="opacity 0.3s">
             <Image
               src="/assets/images/logo.svg"
+              htmlWidth={460}
+              htmlHeight={70}
               alt="Vero Photography"
               h={{ base: '36px', md: '44px' }}
               objectFit="contain"

@@ -340,6 +340,8 @@ const InstagramFeed = () => {
               ) : (
                 <Image
                   src="/assets/images/logo.svg"
+                  htmlWidth={460}
+                  htmlHeight={70}
                   alt="Vero Photography logo"
                   objectFit="contain"
                   width="80%"

@@ -1,0 +1,44 @@
+# Vero Photography
+
+Wedding, portrait, family and maternity photography by Veronika Gerzon,
+based in Scranton, Pennsylvania and available for travel.
+
+Photographs are delivered through a private client portal. The public gallery
+is organised into four categories, each photograph having its own page with a
+description and related work.
+
+## Pages
+
+- [Home](https://vero.photography/): Featured work and an introduction to the studio.
+- [About](https://vero.photography/about): Veronika's background and approach.
+- [Gallery](https://vero.photography/gallery): The complete portfolio.
+- [Contact](https://vero.photography/contact): Enquiry form for bookings.
+- [Journal](https://vero.photography/journal): Writing about recent sessions.
+
+## Galleries by category
+
+- [Weddings](https://vero.photography/gallery/weddings): Ceremonies, receptions and bridal portraits.
+- [Portraits](https://vero.photography/gallery/portraits): Individual and couples portraiture.
+- [Family](https://vero.photography/gallery/family): Family sessions, indoors and on location.
+- [Maternity](https://vero.photography/gallery/maternity): Maternity and expecting-parent sessions.
+
+## Individual photographs
+
+Every published photograph has a page at
+`https://vero.photography/photo/{category}/{slug}` — for example
+[a beach wedding celebration](https://vero.photography/photo/weddings/beach-wedding-celebration).
+The full list is enumerated in the [sitemap](https://vero.photography/sitemap.xml).
+
+## Policies
+
+- [Privacy policy](https://vero.photography/privacy): What is collected, and how to request removal.
+- [Terms](https://vero.photography/terms): Booking, licensing and usage terms.
+
+## Notes for agents
+
+- Photographs are served through an image proxy at `/api/photo?id=...`. That
+  endpoint is explicitly allowed in [robots.txt](https://vero.photography/robots.txt);
+  the rest of `/api/` is not, and should not be crawled.
+- `/admin` and `/portal` are private and carry a `noindex` header.
+- Images are copyright Veronika Gerzon and are not licensed for reuse or for
+  training without written permission.

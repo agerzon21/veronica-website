@@ -56,6 +56,8 @@ const Navbar = () => {
         >
           <Image 
             src="/assets/images/logo.svg" 
+            htmlWidth={460}
+            htmlHeight={70}
             alt="Vero Photography" 
             height="40px"
             objectFit="contain"
