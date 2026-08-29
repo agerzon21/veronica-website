@@ -11,29 +11,31 @@
 -- It has been that way ever since. Anyone with database access can read every
 -- client's portal password — and people reuse passwords.
 --
--- ─── Why there is no backfill in this file ───────────────────────────────
+-- ─── The backfill ────────────────────────────────────────────────────────
 --
--- SQL cannot hash these: you need the plaintext, and hashing it here would mean
--- reading every client's password out of the database into a process, which is
--- the exact exposure we are removing.
+-- scripts/hash-client-passwords.mjs hashes every existing plaintext password
+-- and nulls the column, in one pass. It has been run: 4 rows hashed, 0
+-- plaintext remaining.
 --
--- Instead the application upgrades lazily. api/portal/_password.ts verifies
--- against the hash when there is one, falls back to the plaintext column when
--- there is not, and writes a hash on the next successful login. Every active
--- client migrates the next time they sign in, using the password they already
--- have. Nothing to announce, no forced resets.
+-- The first version of this file argued AGAINST a backfill, on the grounds that
+-- a script would mean "reading every client's password out of the database".
+-- That was wrong, and the owner caught it. The plaintext is already in the
+-- database — that IS the exposure. Reading it once in a script that immediately
+-- replaces it with a hash is how the exposure ends. Relying on lazy upgrade
+-- instead would have left those passwords readable indefinitely for any client
+-- who never signs in again, which is most of them once a wedding is delivered.
 --
--- ─── Why client_password is NOT dropped here ─────────────────────────────
+-- api/portal/_password.ts still supports the plaintext fallback. After this
+-- backfill it should never fire; it stays only as a safety net for a row
+-- written between deploy and the backfill run.
 --
--- Until a client has logged in once, plaintext is still the only credential
--- that row has. Dropping it now would lock those clients out. That is a
--- separate migration, once this shows the backfill is effectively done:
+-- ─── Dropping client_password ────────────────────────────────────────────
 --
---   SELECT
---     count(*) FILTER (WHERE client_password_hash IS NOT NULL) AS migrated,
---     count(*) FILTER (WHERE client_password IS NOT NULL
---                        AND client_password_hash IS NULL)     AS still_plaintext
---   FROM client_portals WHERE mode = 'full';
+-- Now safe. Left in place for one release as a rollback path, then dropped in
+-- its own migration. Confirm first:
+--
+--   SELECT count(*) FROM client_portals WHERE client_password IS NOT NULL;
+--   -- must be 0
 --
 -- ─── gallery_password is deliberately untouched ──────────────────────────
 --
