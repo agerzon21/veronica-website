@@ -32,6 +32,8 @@ import welcomeCompleteHandler from './portal/_welcome-complete.js';
 import shareGalleryHandler from './portal/_share-gallery.js';
 import changePasswordHandler from './portal/_change-password.js';
 import favoriteHandler from './portal/_favorite.js';
+import requestResetHandler from './portal/_request-reset.js';
+import resetPasswordHandler from './portal/_reset-password.js';
 
 const HANDLERS: Record<
   string,
@@ -47,6 +49,8 @@ const HANDLERS: Record<
   'share-gallery': shareGalleryHandler,
   'change-password': changePasswordHandler,
   favorite: favoriteHandler,
+  'request-reset': requestResetHandler,
+  'reset-password': resetPasswordHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

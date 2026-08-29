@@ -22,6 +22,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const ThankYou = lazy(() => import('./pages/ThankYou'));
 const Portal = lazy(() => import('./pages/Portal'));
 const Welcome = lazy(() => import('./pages/Welcome'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Journal = lazy(() => import('./pages/Journal'));
 const Privacy = lazy(() => import('./pages/Privacy'));
@@ -153,6 +154,9 @@ function AppShell() {
         <Route path="/portal" element={<Portal />} />
         <Route path="/portal/pass" element={<Portal />} />
         <Route path="/portal/welcome" element={<Welcome />} />
+        {/* Reached only from an emailed reset link. Inherits noindex from
+            vercel.json's /portal/:path* header block. */}
+        <Route path="/portal/reset" element={<ResetPassword />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/journal" element={<Journal />} />
         <Route path="/journal/:slug" element={<Journal />} />

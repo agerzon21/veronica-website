@@ -67,10 +67,42 @@ const Portal = () => {
   const [error, setError] = useState('');
   const [autoSubmittedGallery, setAutoSubmittedGallery] = useState(false);
   const [showClientPassword, setShowClientPassword] = useState(false);
+
+  // Forgot-password. This only became necessary once passwords were hashed —
+  // before that Vero could read a client's password in the admin panel and just
+  // tell them. Now nobody can, and the only other recovery is her manually
+  // overriding it, which requires the client to reach her first.
+  const [resetRequested, setResetRequested] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
   const [showGalleryPassword, setShowGalleryPassword] = useState(false);
 
   // Post-login state — one of these gets set on a successful auth, which
   // unmounts the form and renders the corresponding view.
+  const handleForgotPassword = async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Enter your email address first, then tap this again.');
+      return;
+    }
+    setResetSending(true);
+    setError('');
+    try {
+      await fetch('/api/portal/request-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      });
+    } catch {
+      // Swallowed on purpose. The endpoint always returns a uniform 200 so it
+      // cannot be used to test whether an address belongs to a client, and
+      // surfacing a network error here would undo that: "error" vs "sent" would
+      // become the very signal the uniform response exists to remove.
+    } finally {
+      setResetSending(false);
+      setResetRequested(true);
+    }
+  };
+
   const [clientData, setClientData] = useState<ClientPortalData | null>(null);
   const [galleryData, setGalleryData] = useState<GalleryData | null>(null);
 
@@ -400,6 +432,38 @@ const Portal = () => {
                           >
                             Sign In
                           </CTAButton>
+
+                          {/* Deliberately understated — it should be findable
+                              when needed without competing with Sign In. */}
+                          {resetRequested ? (
+                            <Text
+                              fontSize="xs"
+                              color="whiteAlpha.700"
+                              textAlign="center"
+                              pt={1}
+                              lineHeight="1.6"
+                            >
+                              If that email is on file, a reset link is on its way.
+                              It works for one hour.
+                            </Text>
+                          ) : (
+                            <Text
+                              as="button"
+                              type="button"
+                              onClick={handleForgotPassword}
+                              fontSize="xs"
+                              color="whiteAlpha.600"
+                              textAlign="center"
+                              pt={1}
+                              alignSelf="center"
+                              bg="transparent"
+                              _hover={{ color: 'brand.accent' }}
+                              transition="color 0.2s"
+                              sx={{ WebkitTapHighlightColor: 'transparent' }}
+                            >
+                              {resetSending ? 'Sending…' : 'Forgot your password?'}
+                            </Text>
+                          )}
 
                           <Text fontSize="xs" color="whiteAlpha.500" textAlign="center" pt={1}>
                             Full access — contract, payments, photos
