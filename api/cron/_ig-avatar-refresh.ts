@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from '../_db.js';
+import { getDb } from '../_db.js';
 import { fetchIgProfile } from '../_ig-profile.js';
 
 /**
@@ -53,6 +53,7 @@ export async function refreshIgAvatars(): Promise<{
   failed: number;
   skipped: number;
 }> {
+  const sql = getDb();
   const startedAt = Date.now();
   let refreshed = 0;
   let failed = 0;

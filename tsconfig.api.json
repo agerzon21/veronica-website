@@ -1,0 +1,36 @@
+{
+  /*
+   * Typechecks the serverless functions.
+   *
+   * tsconfig.json only includes "src", so nothing under api/ was ever
+   * typechecked — `npm run build` runs `tsc` against the app and Vercel builds
+   * each function without a project-wide check. That gap shipped a broken
+   * import (`import { sql }` from a module that only exports `getDb`) straight
+   * to production. It took /api/admin down completely, because api/admin.ts
+   * transitively imports api/cron.ts via _crons-run-now.ts, so a module that
+   * fails to load takes the whole admin function with it.
+   *
+   * Wired into `npm run build` as `tsc -p tsconfig.api.json`, so this class of
+   * mistake is now a failed build instead of a production outage.
+   *
+   * Deliberately looser than the app config: no noUnusedLocals/noUnusedParameters,
+   * since handlers legitimately ignore `req`, and these files were never written
+   * under those rules. The point is to catch imports and types, not to relitigate
+   * style across 40+ existing files.
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noEmit": true,
+    "baseUrl": "."
+  },
+  "include": ["api"]
+}
