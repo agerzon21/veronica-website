@@ -22,6 +22,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { checkPortalPassword } from './_password.js';
 import { getDb } from '../_db.js';
 import { sendEmail } from '../_auto-reply.js';
 
@@ -30,6 +31,9 @@ const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type PortalRow = {
+  // Selected only to authenticate the email+password branch; never returned.
+  client_password: string | null;
+  client_password_hash: string | null;
   id: string;
   client_display_name: string | null;
   gallery_password: string;
@@ -73,15 +77,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           limit 1
         `) as PortalRow[])
       : ((await sql`
-          select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at
+          select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at,
+                 client_password, client_password_hash
           from client_portals
           where mode = 'full'
             and lower(client_email) = ${email}
-            and client_password = ${password}
           limit 1
         `) as PortalRow[]);
 
-    if (rows.length === 0) {
+    // Password verified in code, not SQL — it is hashed now. Same 401 and
+    // same delay either way so this cannot enumerate client addresses.
+    // Only the email+password branch needs a code-side check — the gallery
+    // branch matches on gallery_password, which is deliberately still plaintext
+    // (it is a bearer token in a shareable URL, see migration 025).
+    const shareRow = rows[0];
+    const shareOk =
+      !!shareRow &&
+      (galleryPassword
+        ? true
+        : checkPortalPassword(password, shareRow.client_password_hash, shareRow.client_password).ok);
+
+    if (!shareOk) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({
         success: false,

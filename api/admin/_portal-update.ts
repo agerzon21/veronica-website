@@ -20,6 +20,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { hashPortalPassword } from '../portal/_password.js';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import {
@@ -137,7 +138,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       await sql`
         update client_portals
-        set client_password = ${v},
+        set client_password_hash = ${hashPortalPassword(v)},
+            client_password = null,
             setup_token = null,
             setup_token_expires_at = null,
             updated_at = now()

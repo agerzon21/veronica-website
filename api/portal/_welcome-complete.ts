@@ -11,6 +11,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { hashPortalPassword } from './_password.js';
 import { getDb } from '../_db.js';
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -40,7 +41,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // RETURNING gives us the email so the client UI can auto-login.
     const rows = (await sql`
       update client_portals
-      set client_password = ${password},
+      set client_password_hash = ${hashPortalPassword(password)},
+          -- Explicitly null, not merely unset: a brand-new client should never
+          -- have a plaintext password row at all.
+          client_password = null,
           setup_token = null,
           setup_token_expires_at = null,
           updated_at = now()

@@ -61,10 +61,6 @@ const formatFullDate = (iso: string): string => {
   });
 };
 
-/** Duplicated from InstagramFeed rather than imported — that module imports
- *  this one, so importing back would be circular. */
-const PROFILE_URL = 'https://www.instagram.com/vero.art.photo';
-
 const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => {
   // Swipe between posts on touch devices. Arrows exist on mobile now too, but
   // swiping is what people actually reach for in a photo lightbox.
@@ -159,20 +155,9 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
           <CloseIcon boxSize={3} />
         </Box>
 
-        {/* Prev / Next. Where there is no neighbour — first or last post — the
-            slot is not left empty: it becomes a quiet vertical link to the
-            profile, so the dead edge does something useful instead of just
-            ending. */}
-        {onPrev ? (
-          <NavArrow direction="prev" onClick={onPrev} />
-        ) : (
-          <EndCap direction="prev" />
-        )}
-        {onNext ? (
-          <NavArrow direction="next" onClick={onNext} />
-        ) : (
-          <EndCap direction="next" />
-        )}
+        {/* Prev / Next chevrons — only rendered if the caller wired them */}
+        {onPrev && <NavArrow direction="prev" onClick={onPrev} />}
+        {onNext && <NavArrow direction="next" onClick={onNext} />}
 
         {/* Modal card — click stops propagation so tapping inside
             doesn't close */}
@@ -370,62 +355,6 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
     </AnimatePresence>
   );
 };
-
-/**
- * Fills the slot where a prev/next arrow would be on the first and last post.
- *
- * Leaving it empty made the gallery feel like it had simply stopped. This is a
- * low-key vertical label pointing at the full profile — the natural next thing
- * to do once you have reached the end — styled to read as an edge affordance
- * rather than a button competing with the arrows.
- */
-function EndCap({ direction }: { direction: 'prev' | 'next' }) {
-  return (
-    <Box
-      as="a"
-      href={PROFILE_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      position="absolute"
-      top="50%"
-      transform="translateY(-50%)"
-      {...(direction === 'prev' ? { left: { base: 1, md: 4 } } : { right: { base: 1, md: 4 } })}
-      // Shown at every size now — mobile had no end-cap at all, so the first
-      // and last post just had dead space where the arrow would be.
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      py={5}
-      px={2}
-      borderRadius="full"
-      // Gold, and lit. A plain white label read as disabled chrome; this is the
-      // one thing to do once you have reached the end of the set, so it should
-      // look deliberate. The glow is a soft radial behind the text rather than
-      // a border, so it reads as a light source instead of a button.
-      color="brand.accent"
-      fontSize="2xs"
-      letterSpacing="0.25em"
-      textTransform="uppercase"
-      textShadow="0 0 12px rgba(201, 169, 110, 0.55)"
-      bg="radial-gradient(ellipse at center, rgba(201,169,110,0.16) 0%, rgba(201,169,110,0.06) 45%, transparent 72%)"
-      opacity={0.85}
-      transition="opacity 0.25s, text-shadow 0.25s"
-      _hover={{ opacity: 1, textShadow: '0 0 18px rgba(201, 169, 110, 0.85)' }}
-      _active={{ opacity: 1 }}
-      zIndex={2}
-      sx={{
-        writingMode: 'vertical-rl',
-        textOrientation: 'mixed',
-        WebkitTapHighlightColor: 'transparent',
-        ...(direction === 'prev' ? { transform: 'translateY(-50%) rotate(180deg)' } : {}),
-      }}
-      aria-label="See more on Instagram"
-    >
-      More on Instagram
-    </Box>
-  );
-}
 
 function NavArrow({ direction, onClick }: { direction: 'prev' | 'next'; onClick: () => void }) {
   return (

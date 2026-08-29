@@ -15,6 +15,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { checkPortalPassword } from './_password.js';
 import { getDb } from '../_db.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -92,14 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 1. Authenticate
     const auth = (await sql`
-      select id from client_portals
+      select id, client_password, client_password_hash from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
-        and client_password = ${password}
       limit 1
-    `) as Array<{ id: string }>;
+    `) as Array<{ id: string; client_password: string | null; client_password_hash: string | null }>;
 
-    if (auth.length === 0) {
+    // Password verified in code, not SQL — it is hashed now. Same 401 and
+    // same delay either way so this cannot enumerate client addresses.
+    if (!auth[0] || !checkPortalPassword(password, auth[0].client_password_hash, auth[0].client_password).ok) {
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }
