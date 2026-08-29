@@ -117,6 +117,52 @@ async function loginFromDb(
   }
 }
 
+/**
+ * The admin_users row that an ENV-VAR login corresponds to, if there is one.
+ *
+ * requireAdmin only ever returns 'super' for SUPER_ADMIN_PASSWORD and 'admin'
+ * for ADMIN_PASSWORD, so the level identifies which LOGIN_*_EMAIL is meant.
+ *
+ * Returns null when there is no such row, when the emails are unconfigured, or
+ * when the lookup FAILS. That last case is deliberate: this function gates the
+ * env-var fallback, and the whole point of that fallback is that a database
+ * problem can never lock anyone out of their own admin panel. A failed lookup
+ * therefore means "no opinion", not "deny".
+ */
+export async function lookupEnvAccount(
+  level: AdminLevel,
+): Promise<{ id: string; isActive: boolean } | null> {
+  const email = (
+    level === 'super' ? process.env.LOGIN_SUPER_EMAIL : process.env.LOGIN_ADMIN_EMAIL
+  )
+    ?.trim()
+    .toLowerCase();
+  if (!email) return null;
+  try {
+    const sql = getDb();
+    const rows = (await sql`
+      SELECT id, is_active FROM admin_users WHERE LOWER(email) = ${email} LIMIT 1
+    `) as Array<{ id: string; is_active: boolean }>;
+    return rows[0] ? { id: rows[0].id, isActive: rows[0].is_active } : null;
+  } catch (err) {
+    console.error('[admin] env-account lookup failed, treating as unknown:', err);
+    return null;
+  }
+}
+
+/**
+ * True only when the env-var account has been explicitly DISABLED in the panel.
+ *
+ * Without this, "Disable access" is a lie for the two env-backed accounts:
+ * flipping is_active stops the database login path, but the env password keeps
+ * working and hands back full access. Unknown/absent/errored all mean "not
+ * disabled", so the fallback stays lockout-proof.
+ */
+async function envAccountDisabled(level: AdminLevel): Promise<boolean> {
+  const account = await lookupEnvAccount(level);
+  return account !== null && !account.isActive;
+}
+
 export async function loginAdmin(
   email: unknown,
   password: unknown,
@@ -149,9 +195,17 @@ export async function loginAdmin(
     emailLc === expectedSuperEmail.toLowerCase() &&
     password === expectedSuper
   ) {
+    if (await envAccountDisabled('super')) {
+      await sleep(WRONG_AUTH_DELAY_MS);
+      return { ok: false, status: 401, error: 'Incorrect email or password' };
+    }
     return { ok: true, level: 'super' };
   }
   if (emailLc === expectedAdminEmail.toLowerCase() && password === expectedAdmin) {
+    if (await envAccountDisabled('admin')) {
+      await sleep(WRONG_AUTH_DELAY_MS);
+      return { ok: false, status: 401, error: 'Incorrect email or password' };
+    }
     return { ok: true, level: 'admin' };
   }
   await sleep(WRONG_AUTH_DELAY_MS);
@@ -194,9 +248,17 @@ export async function requireAdmin(
   }
 
   if (expectedSuper && password === expectedSuper) {
+    if (await envAccountDisabled('super')) {
+      await sleep(WRONG_AUTH_DELAY_MS);
+      return { ok: false, status: 401, error: 'Incorrect password' };
+    }
     return { ok: true, level: 'super' };
   }
   if (password === expectedAdmin) {
+    if (await envAccountDisabled('admin')) {
+      await sleep(WRONG_AUTH_DELAY_MS);
+      return { ok: false, status: 401, error: 'Incorrect password' };
+    }
     return { ok: true, level: 'admin' };
   }
   await sleep(WRONG_AUTH_DELAY_MS);

@@ -107,6 +107,7 @@ const dict = {
     reviews: { en: 'Reviews', ru: 'Отзывы' },
     integrations: { en: 'Integrations', ru: 'Интеграции' },
     crons: { en: 'Crons', ru: 'Задачи' },
+    users: { en: 'Admin users', ru: 'Администраторы' },
     table: { en: 'Table', ru: 'Таблица' },
     calendar: { en: 'Calendar', ru: 'Календарь' },
   },
@@ -2354,6 +2355,155 @@ const dict = {
     migrationRequired: {
       en: 'The cron_jobs table has not been created yet. Run db/migrations/013-cron-jobs.sql against production Neon.',
       ru: 'Таблица cron_jobs ещё не создана. Запусти db/migrations/013-cron-jobs.sql на продакшн-базе Neon.',
+    },
+  },
+
+  users: {
+    // ─── Header ───────────────────────────────────────
+    tabTitle: { en: 'Admin users', ru: 'Администраторы' },
+    selfTabTitle: { en: 'Your account', ru: 'Ваш аккаунт' },
+    selfSubtitle: {
+      en: 'Your password and where you are signed in.',
+      ru: 'Ваш пароль и активные устройства.',
+    },
+    subtitle: {
+      en: 'Who can sign in to this panel, and what they can do.',
+      ru: 'Кто может входить в панель и что может делать.',
+    },
+    // Russian plural: 1 аккаунт, 2/3/4 аккаунта, 5+ аккаунтов.
+    userCount: {
+      en: (n: number) => `${n} ${n === 1 ? 'account' : 'accounts'}`,
+      ru: (n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return `${n} аккаунт`;
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} аккаунта`;
+        return `${n} аккаунтов`;
+      },
+    },
+    refreshAria: { en: 'Refresh users', ru: 'Обновить список' },
+    loadFailed: { en: 'Could not load admin users.', ru: 'Не удалось загрузить список.' },
+
+    // ─── Level + status pills ─────────────────────────
+    levelSuper: { en: 'Super', ru: 'Супер' },
+    levelAdmin: { en: 'Admin', ru: 'Админ' },
+    levelSuperHint: {
+      en: 'Full access, including deleting clients and managing these accounts.',
+      ru: 'Полный доступ, включая удаление клиентов и управление аккаунтами.',
+    },
+    levelAdminHint: {
+      en: 'Can view and edit everything day-to-day, but cannot delete or manage accounts.',
+      ru: 'Может просматривать и редактировать всё по работе, но не может удалять и управлять аккаунтами.',
+    },
+    disabled: { en: 'Disabled', ru: 'Отключён' },
+    you: { en: 'You', ru: 'Вы' },
+    signedInNow: {
+      en: (n: number) => (n === 1 ? 'Signed in on 1 device' : `Signed in on ${n} devices`),
+      ru: (n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return `Вход с ${n} устройства`;
+        return `Вход с ${n} устройств`;
+      },
+    },
+    neverSignedIn: { en: 'Never signed in', ru: 'Ни разу не входил' },
+    lastSignIn: { en: (when: string) => `Last sign-in ${when}`, ru: (when: string) => `Последний вход ${when}` },
+
+    // ─── Enable / disable ─────────────────────────────
+    disableAction: { en: 'Disable access', ru: 'Отключить доступ' },
+    enableAction: { en: 'Enable access', ru: 'Включить доступ' },
+    disableTitle: { en: 'Disable this account?', ru: 'Отключить аккаунт?' },
+    disableBody: {
+      en: (email: string) =>
+        `${email} will be signed out everywhere immediately and will not be able to sign back in. ` +
+        `Nothing they have done is deleted, and you can turn access back on at any time.`,
+      ru: (email: string) =>
+        `${email} будет немедленно разлогинен на всех устройствах и больше не сможет войти. ` +
+        `Ничего из сделанного не удаляется, доступ можно вернуть в любой момент.`,
+    },
+    disableConfirm: { en: 'Disable access', ru: 'Отключить' },
+    disabledToast: { en: 'Access disabled', ru: 'Доступ отключён' },
+    enabledToast: { en: 'Access restored', ru: 'Доступ восстановлен' },
+
+    // ─── Add a person ─────────────────────────────────
+    addTitle: { en: 'Add someone', ru: 'Добавить человека' },
+    addOpen: { en: 'Add someone', ru: 'Добавить' },
+    emailLabel: { en: 'Email', ru: 'Эл. почта' },
+    nameLabel: { en: 'Name', ru: 'Имя' },
+    nameOptional: { en: 'optional', ru: 'необязательно' },
+    levelLabel: { en: 'Access level', ru: 'Уровень доступа' },
+    addSubmit: { en: 'Create account', ru: 'Создать аккаунт' },
+    cancel: { en: 'Cancel', ru: 'Отмена' },
+    addFailed: { en: 'Could not create that account.', ru: 'Не удалось создать аккаунт.' },
+
+    // Shown once, after creation. There is no way to see it again, which is
+    // the point — so the copy has to say so plainly.
+    tempTitle: { en: 'Account created', ru: 'Аккаунт создан' },
+    tempBody: {
+      en: 'Give them this one-time password. It will not be shown again — if it gets lost, disable the account and make a new one.',
+      ru: 'Передайте им этот одноразовый пароль. Он больше не будет показан — если потеряется, отключите аккаунт и создайте новый.',
+    },
+    tempCopy: { en: 'Copy password', ru: 'Скопировать пароль' },
+    tempCopied: { en: 'Copied', ru: 'Скопировано' },
+    tempDone: { en: 'Done', ru: 'Готово' },
+
+    // ─── Your own password ────────────────────────────
+    ownTitle: { en: 'Your password', ru: 'Ваш пароль' },
+    ownBody: {
+      en: 'Changing this signs you out on every other device.',
+      ru: 'После смены вы выйдете из аккаунта на всех других устройствах.',
+    },
+    ownOpen: { en: 'Change password', ru: 'Сменить пароль' },
+    currentLabel: { en: 'Current password', ru: 'Текущий пароль' },
+    newLabel: { en: 'New password', ru: 'Новый пароль' },
+    confirmLabel: { en: 'Repeat new password', ru: 'Повторите новый пароль' },
+    tooShort: {
+      en: 'Use at least 8 characters.',
+      ru: 'Минимум 8 символов.',
+    },
+    mismatch: { en: 'Those two do not match.', ru: 'Пароли не совпадают.' },
+    wrongCurrent: { en: 'Current password is incorrect.', ru: 'Текущий пароль неверен.' },
+    ownSubmit: { en: 'Change password', ru: 'Сменить пароль' },
+    ownDone: { en: 'Password changed', ru: 'Пароль изменён' },
+    // Only reachable on an env-var login, which has no database row behind it.
+    // ─── Other devices ────────────────────────────────
+    othersTitle: { en: 'Other devices', ru: 'Другие устройства' },
+    othersBody: {
+      en: 'Signs you out everywhere except here. Your password stays the same.',
+      ru: 'Выход из аккаунта на всех устройствах, кроме этого. Пароль не меняется.',
+    },
+    othersAction: { en: 'Sign out other devices', ru: 'Выйти на других устройствах' },
+    othersNone: { en: 'No other devices are signed in.', ru: 'Других активных устройств нет.' },
+    othersNoAccount: {
+      en: 'This session is not tied to a database account, so there are no other sessions to end.',
+      ru: 'Эта сессия не привязана к аккаунту в базе, других сессий нет.',
+    },
+    othersDone: {
+      en: (n: number) => (n === 1 ? 'Signed out 1 other device' : `Signed out ${n} other devices`),
+      ru: (n: number) => `Выполнен выход на ${n} устр.`,
+    },
+
+    // Recovery. The env-var branch in requireAdmin() is deliberately kept as
+    // the way back in, so a forgotten database password is never a lockout.
+    recoveryTitle: { en: 'If you forget your password', ru: 'Если забыли пароль' },
+    // Shown to non-supers, who have no env-var password of their own.
+    recoveryOther: {
+      en: 'Ask a super-admin. They cannot read or set your password, so they will disable this account and create you a new one.',
+      ru: 'Обратитесь к супер-админу. Он не может прочитать или задать ваш пароль, поэтому отключит этот аккаунт и создаст новый.',
+    },
+    recoveryBody: {
+      en:
+        'The passwords in the Vercel environment variables (SUPER_ADMIN_PASSWORD, ADMIN_PASSWORD) keep working as a way back in, ' +
+        'even after you change your password here. Sign in with one of those, then change your password on this screen — ' +
+        'enter that same environment-variable password as your current password.',
+      ru:
+        'Пароли из переменных окружения Vercel (SUPER_ADMIN_PASSWORD, ADMIN_PASSWORD) продолжают работать как запасной вход, ' +
+        'даже после смены пароля здесь. Войдите с одним из них и смените пароль на этом экране — ' +
+        'в поле «текущий пароль» введите тот же пароль из переменной окружения.',
+    },
+    ownNoAccount: {
+      en: 'This session is not tied to a database account, so there is no password to change here.',
+      ru: 'Эта сессия не привязана к аккаунту в базе, менять пароль здесь нечего.',
     },
   },
 } as const;
