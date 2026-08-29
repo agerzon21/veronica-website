@@ -133,7 +133,7 @@ export async function runGuarded<T>(
   const startedMs = Date.now();
   try {
     const ok = await work();
-    await finalizeRun(runId, 'ok', Date.now() - startedMs, null);
+    await finalizeRun(runId, 'ok', Date.now() - startedMs, null, ok);
     return { skipped: false, ok };
   } catch (workErr) {
     const msg = firstLine(workErr);
@@ -175,21 +175,63 @@ async function insertRunWithId(
   `;
 }
 
+/**
+ * Serialize a work() return value for the cron_runs.result column.
+ *
+ * Bounded on purpose: a cron that returns something enormous (a full file
+ * listing, say) must not write a multi-megabyte row on every run. Anything that
+ * is not a plain object is wrapped so the column shape stays predictable.
+ */
+function serializeResult(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  try {
+    const payload =
+      typeof value === 'object' && !Array.isArray(value) ? value : { value };
+    const json = JSON.stringify(payload);
+    if (json.length > 8000) {
+      return JSON.stringify({ truncated: true, bytes: json.length });
+    }
+    return json;
+  } catch {
+    // Circular or otherwise unserializable. Not worth failing the run over.
+    return null;
+  }
+}
+
 async function finalizeRun(
   runId: string,
   status: 'ok' | 'error',
   durationMs: number,
   errorMessage: string | null,
+  result?: unknown,
 ): Promise<void> {
   const sql = getDb();
-  await sql`
-    UPDATE cron_runs
-    SET status = ${status},
-        finished_at = NOW(),
-        duration_ms = ${durationMs},
-        error_message = ${errorMessage}
-    WHERE id = ${runId}
-  `;
+  const serialized = serializeResult(result);
+  try {
+    await sql`
+      UPDATE cron_runs
+      SET status = ${status},
+          finished_at = NOW(),
+          duration_ms = ${durationMs},
+          error_message = ${errorMessage},
+          result = ${serialized}::jsonb
+      WHERE id = ${runId}
+    `;
+  } catch (err) {
+    // Migration 028 adds cron_runs.result, and migrations here are applied BY
+    // HAND — so this code can legitimately be live before the column exists.
+    // Retry without it rather than failing the run: losing the summary is a
+    // cosmetic regression, a thrown finalize is a broken cron.
+    console.error('[cron-guard] result write failed, retrying without it:', err);
+    await sql`
+      UPDATE cron_runs
+      SET status = ${status},
+          finished_at = NOW(),
+          duration_ms = ${durationMs},
+          error_message = ${errorMessage}
+      WHERE id = ${runId}
+    `;
+  }
 }
 
 /**

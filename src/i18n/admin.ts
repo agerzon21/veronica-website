@@ -1704,10 +1704,20 @@ const dict = {
       en: 'Environment variables this deployment reads, and what stops working when one is not set.',
       ru: 'Переменные окружения этого деплоя и что перестаёт работать, если какая-то не задана.',
     },
-    configAllSet: { en: 'Everything is configured', ru: 'Всё настроено' },
-    configMissing: {
-      en: (n: number) => (n === 1 ? '1 not set' : `${n} not set`),
-      ru: (n: number) => `${n} не задано`,
+    configAllSet: { en: 'Nothing needs attention', ru: 'Всё в порядке' },
+    configBroken: {
+      en: (n: number) => (n === 1 ? '1 needs attention' : `${n} need attention`),
+      ru: (n: number) => `${n} требует внимания`,
+    },
+    configCovered: {
+      en: (n: number) => (n === 1 ? '1 unset, covered' : `${n} unset, covered`),
+      ru: (n: number) => `${n} не задано, есть запасной вариант`,
+    },
+    configUsingFallback: { en: 'Using fallback', ru: 'Запасной вариант' },
+    configNoFallback: { en: 'Nothing covers for this', ru: 'Ничего не подменяет' },
+    configCoveredExplain: {
+      en: 'Unset, but something else covers for it — this is fine and needs no action.',
+      ru: 'Не задана, но есть замена — это нормально, ничего делать не нужно.',
     },
     configCritical: { en: 'Required', ru: 'Обязательно' },
     configFeature: { en: 'Feature', ru: 'Функция' },
@@ -2327,6 +2337,8 @@ const dict = {
     historyStatus: { en: 'Status', ru: 'Статус' },
     historyTrigger: { en: 'Trigger', ru: 'Источник' },
     historyError: { en: 'Error', ru: 'Ошибка' },
+    // Same column: the error when there is one, otherwise what the run did.
+    historyOutcome: { en: 'Result', ru: 'Результат' },
 
     // Toggle-confirm — we DON'T actually pop a modal on toggle (the
     // switch flip is instant + reversible), but on Run Now we do
@@ -2378,6 +2390,30 @@ const dict = {
     migrationRequired: {
       en: 'The cron_jobs table has not been created yet. Run db/migrations/013-cron-jobs.sql against production Neon.',
       ru: 'Таблица cron_jobs ещё не создана. Запусти db/migrations/013-cron-jobs.sql на продакшн-базе Neon.',
+    },
+  },
+
+  cronResult: {
+    heading: { en: 'What it did', ru: 'Что сделано' },
+    none: { en: 'This run recorded no details.', ru: 'Детали не записаны.' },
+    // Friendly names for the keys gallery-sync and the other jobs return.
+    // Anything not listed here is shown with its raw key, so a new cron does
+    // not need this table updated before its numbers become visible.
+    labels: {
+      driveFilesSeen: { en: 'Files in Drive', ru: 'Файлов в Drive' },
+      inserted: { en: 'Added', ru: 'Добавлено' },
+      restored: { en: 'Restored', ru: 'Восстановлено' },
+      softDeleted: { en: 'Removed', ru: 'Удалено' },
+      refreshed: { en: 'Unchanged', ru: 'Без изменений' },
+      remainingNewNextRun: { en: 'Queued for next run', ru: 'В очереди на след. запуск' },
+      deployTriggered: { en: 'Redeploy triggered', ru: 'Пересборка запущена' },
+      softDeleteBlocked: { en: 'Deletion blocked', ru: 'Удаление заблокировано' },
+      checked: { en: 'Checked', ru: 'Проверено' },
+      updated: { en: 'Updated', ru: 'Обновлено' },
+      skipped: { en: 'Skipped', ru: 'Пропущено' },
+      failed: { en: 'Failed', ru: 'Ошибок' },
+      insertFailures: { en: 'Failed to add', ru: 'Не удалось добавить' },
+      emailed: { en: 'Emailed', ru: 'Отправлено писем' },
     },
   },
 

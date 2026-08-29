@@ -1,0 +1,29 @@
+-- 028 — Record what a cron run actually DID, not just that it finished.
+--
+-- Run BY HAND against production Neon. Safe to re-run. ADDITIVE ONLY: adds one
+-- nullable column and touches nothing existing, so it is safe to apply before
+-- OR after deploying the code that writes to it.
+--
+-- ─── Why ─────────────────────────────────────────────────────────────────
+--
+-- cron_runs records status, trigger, duration and an error message. That
+-- answers "did it work", never "what did it do". gallery-sync already returns
+-- a full summary — files seen, inserted, restored, soft-deleted, refreshed,
+-- per-file failures — and runGuarded discarded all of it. So a successful sync
+-- read "ok, 711ms" and there was no way to tell whether it published four new
+-- photos or did nothing at all.
+--
+-- That matters most for the run you least want to be vague: gallery-sync is
+-- the job that can soft-delete published photos.
+--
+-- JSONB rather than columns because each cron returns a different shape, and
+-- the panel renders whatever keys it finds.
+--
+-- ─── Order of operations ─────────────────────────────────────────────────
+--
+-- The code tolerates this column not existing: finalizeRun attempts the write
+-- WITH result and silently retries without it if the column is missing. So
+-- deploying first and migrating later degrades to today's behaviour rather
+-- than breaking every cron.
+
+ALTER TABLE cron_runs ADD COLUMN IF NOT EXISTS result JSONB;

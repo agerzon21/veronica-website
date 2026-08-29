@@ -3,7 +3,10 @@
  *
  * POST { password, name, limit? }
  *   → 200 { success, runs: [{ startedAt, finishedAt, status, trigger,
- *           durationMs, errorMessage }] }
+ *           durationMs, errorMessage, result }] }
+ *
+ * `result` is whatever the cron's work() returned — see migration 028. Null for
+ * runs recorded before that migration, and for crons that return nothing.
  *   → 400 missing/invalid input
  *   → 401 wrong password
  *   → 403 admin-level (not super)
@@ -25,6 +28,7 @@ interface Row {
   status: string;
   trigger: string;
   duration_ms: number | null;
+  result: Record<string, unknown> | null;
   error_message: string | null;
 }
 
@@ -54,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      SELECT started_at, finished_at, status, trigger, duration_ms, error_message
+      SELECT started_at, finished_at, status, trigger, duration_ms, error_message, result
       FROM cron_runs
       WHERE cron_job_id = (SELECT id FROM cron_jobs WHERE name = ${name})
       ORDER BY started_at DESC
@@ -67,6 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: r.status,
       trigger: r.trigger,
       durationMs: r.duration_ms,
+      result: r.result ?? null,
       errorMessage: r.error_message,
     }));
 

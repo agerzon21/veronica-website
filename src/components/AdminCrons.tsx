@@ -54,6 +54,65 @@ interface HistoryRun {
   trigger: string;
   durationMs: number | null;
   errorMessage: string | null;
+  /** Whatever the cron's work() returned. Null for runs before migration 028. */
+  result: Record<string, unknown> | null;
+}
+
+/**
+ * Renders a cron's returned summary as readable text.
+ *
+ * Before this, a successful run showed "ok, 711ms" and nothing else — there
+ * was no way to tell a sync that published four photos from one that did
+ * nothing. That is a bad property for the job that can also DELETE photos.
+ *
+ * Zero-valued counts are dropped so the common "nothing changed" run stays
+ * short. Unknown keys fall through with their raw name rather than being
+ * hidden, so a new cron's numbers show up without editing the label table.
+ */
+function ResultSummary({ result }: { result: Record<string, unknown> | null }) {
+  const { t } = useAdminLang();
+  if (!result) return <Text as="span" color="gray.300">—</Text>;
+
+  const labels = t.cronResult.labels as Record<string, string>;
+  const parts: string[] = [];
+
+  // Keys whose length just restates a count already shown — insertedSlugs is
+  // always the same length as `inserted`.
+  const REDUNDANT = new Set(['insertedSlugs']);
+
+  for (const [key, value] of Object.entries(result)) {
+    if (value === null || value === undefined || REDUNDANT.has(key)) continue;
+    const label = labels[key] ?? key;
+
+    if (typeof value === 'number') {
+      // Drop zeros — "0 added, 0 removed, 0 restored" is noise on the runs
+      // where nothing happened, which is most of them.
+      if (value !== 0) parts.push(`${label}: ${value}`);
+    } else if (typeof value === 'boolean') {
+      if (value) parts.push(label);
+    } else if (Array.isArray(value)) {
+      if (value.length > 0) parts.push(`${label}: ${value.length}`);
+    }
+  }
+
+  if (parts.length === 0) {
+    // Everything was zero, which is itself the answer: it ran and changed
+    // nothing. Say so rather than showing a dash that reads as "no data".
+    const seen = result.driveFilesSeen;
+    return (
+      <Text as="span" color="gray.500" fontSize="xs">
+        {typeof seen === 'number'
+          ? `${labels.driveFilesSeen ?? 'driveFilesSeen'}: ${seen} · no changes`
+          : 'no changes'}
+      </Text>
+    );
+  }
+
+  return (
+    <Text as="span" color="gray.600" fontSize="xs">
+      {parts.join(' · ')}
+    </Text>
+  );
 }
 
 const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
@@ -523,7 +582,7 @@ function HistoryPanel({ adminPassword, name }: { adminPassword: string; name: st
             <HistoryTh>{t.crons.historyDuration}</HistoryTh>
             <HistoryTh>{t.crons.historyStatus}</HistoryTh>
             <HistoryTh>{t.crons.historyTrigger}</HistoryTh>
-            <HistoryTh>{t.crons.historyError}</HistoryTh>
+            <HistoryTh>{t.crons.historyOutcome}</HistoryTh>
           </Box>
         </Box>
         <Box as="tbody">
@@ -549,7 +608,7 @@ function HistoryPanel({ adminPassword, name }: { adminPassword: string; name: st
                     {r.errorMessage.split('\n')[0].slice(0, 160)}
                   </Text>
                 ) : (
-                  <Text as="span" color="gray.300">—</Text>
+                  <ResultSummary result={r.result} />
                 )}
               </HistoryTd>
             </Box>

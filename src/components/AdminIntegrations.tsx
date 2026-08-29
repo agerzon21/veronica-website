@@ -64,6 +64,8 @@ interface ConfigCheck {
   severity: 'critical' | 'feature' | 'optional';
   purpose: string;
   ifMissing: string;
+  /** What covers for this when unset. null = nothing does. */
+  fallback: string | null;
   set: boolean;
 }
 
@@ -115,8 +117,13 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminPassword]);
 
-  const missing = checks?.filter((c) => !c.set) ?? [];
-  const visible = showAll ? checks ?? [] : missing;
+  // "Not set" is only a problem when nothing covers for it. Most unset
+  // variables here have a hardcoded default or a database value, which is why
+  // the site runs fine with several unset — so those are reported separately
+  // rather than counted as failures.
+  const broken = checks?.filter((c) => !c.set && c.fallback === null) ?? [];
+  const covered = checks?.filter((c) => !c.set && c.fallback !== null) ?? [];
+  const visible = showAll ? checks ?? [] : [...broken, ...covered];
 
   const toneFor = (severity: ConfigCheck['severity']) =>
     severity === 'critical' ? 'red' : severity === 'feature' ? 'orange' : 'gray';
@@ -141,20 +148,27 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
               </Badge>
             )}
             {checks && (
-              <Badge
-                fontSize="0.65rem" textTransform="none" fontWeight="500"
-                colorScheme={
-                  missing.some((m) => m.severity === 'critical')
-                    ? 'red'
-                    : missing.length > 0
-                      ? 'orange'
-                      : 'green'
-                }
-              >
-                {missing.length === 0
-                  ? t.integrations.configAllSet
-                  : t.integrations.configMissing(missing.length)}
-              </Badge>
+              <>
+                <Badge
+                  fontSize="0.65rem" textTransform="none" fontWeight="500"
+                  colorScheme={
+                    broken.some((b) => b.severity === 'critical')
+                      ? 'red'
+                      : broken.length > 0
+                        ? 'orange'
+                        : 'green'
+                  }
+                >
+                  {broken.length === 0
+                    ? t.integrations.configAllSet
+                    : t.integrations.configBroken(broken.length)}
+                </Badge>
+                {covered.length > 0 && (
+                  <Badge fontSize="0.65rem" textTransform="none" fontWeight="400" colorScheme="gray">
+                    {t.integrations.configCovered(covered.length)}
+                  </Badge>
+                )}
+              </>
             )}
           </HStack>
           <Text fontSize="sm" color="gray.500" fontWeight="300">
@@ -181,17 +195,19 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
             {visible.map((c) => (
               <Box
                 key={c.key}
-                bg={c.set ? 'transparent' : 'brand.surfaceSunken'}
+                bg={!c.set && c.fallback === null ? 'brand.surfaceSunken' : 'transparent'}
                 border="1px solid"
-                borderColor={c.set ? 'gray.100' : 'brand.accentBorder'}
+                borderColor={!c.set && c.fallback === null ? 'brand.accentBorder' : 'gray.100'}
                 borderRadius="sm"
                 px={3} py={2}
               >
                 <HStack spacing={2} flexWrap="wrap" mb={0.5}>
                   <Icon
-                    as={c.set ? FaCheck : FaExclamationTriangle}
+                    as={c.set || c.fallback !== null ? FaCheck : FaExclamationTriangle}
                     boxSize={3}
-                    color={c.set ? 'green.500' : `${toneFor(c.severity)}.500`}
+                    color={
+                      c.set ? 'green.500' : c.fallback !== null ? 'gray.400' : `${toneFor(c.severity)}.500`
+                    }
                   />
                   <Text fontSize="xs" fontFamily="mono" color="gray.800" fontWeight="500">
                     {c.key}
@@ -199,12 +215,25 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
                   <Badge fontSize="0.6rem" textTransform="none" fontWeight="400" colorScheme={toneFor(c.severity)}>
                     {labelFor(c.severity)}
                   </Badge>
-                  <Text fontSize="xs" color={c.set ? 'green.600' : 'gray.500'} fontWeight="300">
-                    {c.set ? t.integrations.configSet : t.integrations.configNotSet}
+                  <Text
+                    fontSize="xs"
+                    color={c.set ? 'green.600' : c.fallback !== null ? 'gray.400' : 'gray.500'}
+                    fontWeight="300"
+                  >
+                    {c.set
+                      ? t.integrations.configSet
+                      : c.fallback !== null
+                        ? t.integrations.configUsingFallback
+                        : t.integrations.configNotSet}
                   </Text>
                 </HStack>
                 <Text fontSize="xs" color="gray.600" fontWeight="300">{c.purpose}</Text>
-                {!c.set && (
+                {!c.set && c.fallback !== null && (
+                  <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1}>
+                    {c.fallback}
+                  </Text>
+                )}
+                {!c.set && c.fallback === null && (
                   <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1}>
                     {c.ifMissing}
                   </Text>
@@ -217,7 +246,7 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
             <CTAButton variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)}>
               {showAll ? t.integrations.configShowProblems : t.integrations.configShowAll}
             </CTAButton>
-            {missing.length > 0 && (
+            {broken.length > 0 && (
               <CTAButton
                 variant="outline" size="sm" icon={FaExternalLinkAlt}
                 href={VERCEL_ENV_LINK} newTab
