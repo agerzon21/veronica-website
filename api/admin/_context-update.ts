@@ -53,9 +53,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (req.body?.content !== undefined) {
     if (typeof req.body.content !== 'string') return res.status(400).json({ success: false, error: 'content must be a string' });
-    content = req.body.content;
-    if (!content.trim()) return res.status(400).json({ success: false, error: 'content cannot be empty' });
-    if (content.length > MAX_CONTENT_LEN) return res.status(400).json({ success: false, error: 'content too long' });
+    // Assign through a local so TS narrows: `content` is declared string|null
+    // and assigning from req.body (any) does not narrow it on its own.
+    const nextContent: string = req.body.content;
+    content = nextContent;
+    if (!nextContent.trim()) return res.status(400).json({ success: false, error: 'content cannot be empty' });
+    if (nextContent.length > MAX_CONTENT_LEN) return res.status(400).json({ success: false, error: 'content too long' });
   }
   if (req.body?.active !== undefined) {
     if (typeof req.body.active !== 'boolean') return res.status(400).json({ success: false, error: 'active must be boolean' });

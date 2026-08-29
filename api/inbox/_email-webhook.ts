@@ -446,11 +446,14 @@ async function parseResend(req: VercelRequest, rawBody: string): Promise<ParseRe
   const resend = new Resend(apiKey);
   let payload: Record<string, unknown>;
   try {
+    // verify() returns Resend's typed WebhookEventPayload; we treat it as a
+    // bag of fields below, so go through unknown rather than asserting an
+    // overlap TypeScript cannot see.
     payload = resend.webhooks.verify({
       payload: rawBody,
       headers: { id, timestamp, signature },
       webhookSecret,
-    }) as Record<string, unknown>;
+    }) as unknown as Record<string, unknown> as Record<string, unknown>;
   } catch (err) {
     return { ok: false, status: 403, reason: `Bad signature: ${(err as Error).message}` };
   }

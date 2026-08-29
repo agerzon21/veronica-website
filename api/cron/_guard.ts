@@ -101,7 +101,11 @@ export async function runGuarded<T>(
   // ── 2. Disabled? Record + short-circuit. ──
   if (!enabled) {
     try {
-      await insertRun(cronJobId, 'skipped', trigger, null, null);
+      // cronJobId is null only when the upsert above failed (e.g. the table
+      // does not exist yet). There is nothing to attach a run row to in that
+      // case, so skip the bookkeeping rather than crash the job — this guard
+      // is fail-open by design, see the note at the top of the file.
+      if (cronJobId) await insertRun(cronJobId, 'skipped', trigger, null, null);
     } catch (err) {
       console.error(`[cron-guard/${name}] skipped-row insert failed:`, err);
     }
@@ -113,7 +117,7 @@ export async function runGuarded<T>(
   //     killed). Then run work, then UPDATE with the outcome. ──
   const runId = randomUUID();
   try {
-    await insertRunWithId(runId, cronJobId, 'running', trigger);
+    if (cronJobId) await insertRunWithId(runId, cronJobId, 'running', trigger);
   } catch (err) {
     // Even the running-marker insert failed. Still run the work —
     // fail-open — but we won't be able to record the outcome either.

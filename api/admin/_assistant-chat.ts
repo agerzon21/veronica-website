@@ -284,7 +284,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           role: 'tool',
           content: toolResponseText,
           tool_call_id: toolCall.id,
-          name: toolCall.function.name,
+          // Same union narrowing as executeToolCall — only function calls have
+          // `.function`, and we never register custom tools.
+          name: toolCall.type === 'function' ? toolCall.function.name : 'unknown',
         });
         openaiMessages.push({
           role: 'tool',
@@ -480,6 +482,13 @@ async function executeToolCall(
   toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
   dbWrites: DbWrite[],
 ): Promise<unknown> {
+  // The SDK's ChatCompletionMessageToolCall is a union: function calls and
+  // custom tool calls. Only function calls carry `.function`. We never register
+  // custom tools, so anything else is a protocol surprise rather than something
+  // to handle.
+  if (toolCall.type !== 'function') {
+    return { error: `Unsupported tool call type: ${toolCall.type}` };
+  }
   const name = toolCall.function.name;
   let args: Record<string, unknown> = {};
   try {
