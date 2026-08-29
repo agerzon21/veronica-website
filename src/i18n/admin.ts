@@ -1314,9 +1314,17 @@ const dict = {
       en: 'Sent, but not confirmed yet. It may still arrive.',
       ru: 'Отправлено, доставка не подтверждена. Возможно, ещё придёт.',
     },
+    // Deliberately says nothing about whether the portal exists — see
+    // inviteFailedPortalExists below. Claiming "the portal was created anyway"
+    // unconditionally was wrong: Vero went back to the client list after a
+    // bounce and the client was not there.
     inviteSendFailed: {
-      en: 'The invite did not go through. The client portal was still created.',
-      ru: 'Приглашение не доставлено. Портал клиента всё равно создан.',
+      en: 'The invite did not reach that address.',
+      ru: 'Приглашение не дошло до этого адреса.',
+    },
+    inviteFailedPortalExists: {
+      en: 'The portal itself was created — only the email failed. Retry, or continue and send the link another way.',
+      ru: 'Портал создан — не отправилось только письмо. Повтори или продолжи и отправь ссылку иначе.',
     },
     inviteRetry: { en: 'Try sending again', ru: 'Отправить ещё раз' },
     inviteRetryNote: {

@@ -896,6 +896,15 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 {deliveryStatus === 'failed' && t.newClient.inviteSendFailed}
               </Text>
 
+              {/* Only claim the portal exists when we actually got an id back.
+                  Saying it unconditionally was wrong — Vero hit a bounce, went
+                  to the client list, and the client was not there. */}
+              {deliveryStatus === 'failed' && createdPortalId && (
+                <Text fontSize="xs" color="gray.600">
+                  {t.newClient.inviteFailedPortalExists}
+                </Text>
+              )}
+
               {(deliveryStatus === 'failed' || deliveryStatus === 'pending') && (
                 <>
                   {outOfRetries ? (
