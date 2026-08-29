@@ -23,7 +23,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  // TRIMMED, and trimmed BEFORE the length check.
+  //
+  // Login trims (api/portal/_client.ts:75) and so does the change-password
+  // form, but these two set-a-password paths stored the raw value. A password
+  // ending in a space — a paste, or a mobile keyboard adding one after
+  // autocomplete — was therefore hashed WITH the space and compared WITHOUT it,
+  // so it could never sign in. The client sees "Incorrect email or password"
+  // for the password they just chose.
+  //
+  // Trimming before the length check also closes the follow-on: six spaces used
+  // to satisfy a six-character minimum, hash successfully, and leave an account
+  // no input can ever unlock.
+  const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
 
   if (!token) {
     return res.status(400).json({ success: false, error: 'token required' });

@@ -623,8 +623,12 @@ async function executeToolCall(
     const contentSummary =
       String(args.content_summary ?? args.content_ru_summary ?? '').trim() || 'entry deleted';
     if (!id) return { error: 'id is required' };
+    // The guard above already returns for source='system', so this predicate is
+    // belt-and-braces — the two statements are separate, and this is the only
+    // thing standing between a race and the assistant erasing its own
+    // documentation. _context-delete.ts carries the same clause.
     const deleted = (await sql`
-      DELETE FROM ai_context WHERE id = ${id}
+      DELETE FROM ai_context WHERE id = ${id} AND source <> 'system'
       RETURNING id, category, label
     `) as Array<{ id: string; category: string; label: string }>;
     if (deleted.length === 0) return { error: `No entry with id ${id}` };
