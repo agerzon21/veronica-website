@@ -1306,6 +1306,27 @@ const dict = {
       en: 'Retainer cannot exceed total.',
       ru: 'Задаток не может быть больше общей суммы.',
     },
+    // ── Invite delivery ──────────────────────────────────────────
+    inviteSending: { en: 'Sending invite…', ru: 'Отправляем приглашение…' },
+    inviteDelivered: { en: 'Invite delivered', ru: 'Приглашение доставлено' },
+    invitePending: {
+      en: 'Sent, but not confirmed yet. It may still arrive.',
+      ru: 'Отправлено, доставка не подтверждена. Возможно, ещё придёт.',
+    },
+    inviteSendFailed: {
+      en: 'The invite did not go through. The client portal was still created.',
+      ru: 'Приглашение не доставлено. Портал клиента всё равно создан.',
+    },
+    inviteRetry: { en: 'Try sending again', ru: 'Отправить ещё раз' },
+    inviteRetryNote: {
+      en: 'This makes a new link — any earlier one stops working.',
+      ru: 'Будет создана новая ссылка — старая перестанет работать.',
+    },
+    inviteGiveUp: {
+      en: 'Still not sending. Message Alex — the portal exists, only the email failed.',
+      ru: 'Всё ещё не отправляется. Напиши Алексу — портал создан, не ушло только письмо.',
+    },
+    inviteSkip: { en: 'Continue anyway', ru: 'Продолжить всё равно' },
     serverErrorStatus: {
       en: (status: number) => `Server error (${status}).`,
       ru: (status: number) => `Ошибка сервера (${status}).`,

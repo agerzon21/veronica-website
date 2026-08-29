@@ -73,23 +73,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       where id = ${id}
     `;
 
+    // Hoisted out of the try so the id is still in scope at the response.
+    let sentId: string | null = null;
     try {
       const siteOrigin =
         process.env.SITE_ORIGIN ||
         (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
       const inviteUrl = `${siteOrigin}/portal/welcome?token=${newToken}`;
-      await sendEmail({
+      const sent = await sendEmail({
         to: portal.client_email,
         subject: 'Your client portal is ready — Vero Photography',
         text: buildInviteText(portal.client_display_name, inviteUrl),
         html: buildInviteHtml(portal.client_display_name, inviteUrl),
       });
+      sentId = sent?.id ?? null;
     } catch (err) {
       console.error('[admin/resend-invite] email send failed:', err);
       return res.status(500).json({ success: false, error: 'Token was regenerated, but the email failed to send. Try again.' });
     }
 
-    return res.status(200).json({ success: true });
+    // Return the Resend id so the admin UI can poll /api/email-status and show
+    // a real Delivered state on a retry, exactly as it does on first create.
+    return res.status(200).json({ success: true, invite_email_id: sentId });
   } catch (err) {
     console.error('[admin/resend-invite] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

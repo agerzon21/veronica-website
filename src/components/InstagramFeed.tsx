@@ -581,6 +581,8 @@ const InstagramFeed = () => {
           onClose={() => setOpenIdx(null)}
           onPrev={openIdx > 0 ? () => setOpenIdx(openIdx - 1) : undefined}
           onNext={openIdx < PHOTOS.length - 1 ? () => setOpenIdx(openIdx + 1) : undefined}
+          index={openIdx}
+          total={PHOTOS.length}
         />
       )}
     </Box>

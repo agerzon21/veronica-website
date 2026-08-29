@@ -1,5 +1,6 @@
 import { Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
+import { useEmailDelivery } from '../hooks/useEmailDelivery';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import SessionTypePicker from './SessionTypePicker';
@@ -209,6 +210,54 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   const eventTitle = eventTitleOverride ?? derivedEventTitle;
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Invite-delivery tracking. Creating a full portal sends an activation email,
+  // and on Resend's free tier that send can be rejected or bounced minutes
+  // later because the shared sending IP is blocklisted. The endpoint used to
+  // swallow that and return 200, so Vero was told it worked and the client
+  // never got their link. Now we hold her here until Resend confirms delivery.
+  const [inviteEmailId, setInviteEmailId] = useState<string | null>(null);
+  const [createdPortalId, setCreatedPortalId] = useState<string | null>(null);
+  const [sendAttempts, setSendAttempts] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+  const deliveryStatus = useEmailDelivery(inviteEmailId);
+
+  // The original send counts as attempt 1, so this is the original plus two
+  // retries — the budget the owner asked for.
+  const MAX_SEND_ATTEMPTS = 3;
+  const outOfRetries = sendAttempts >= MAX_SEND_ATTEMPTS;
+
+  // Delivered → she is done here; drop back to the client list.
+  useEffect(() => {
+    if (deliveryStatus === 'delivered') {
+      const t = setTimeout(() => onCreated(), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [deliveryStatus, onCreated]);
+
+  const handleRetryInvite = async () => {
+    if (!createdPortalId || outOfRetries) return;
+    setRetrying(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/resend-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, portal_id: createdPortalId }),
+      });
+      const data = await res.json();
+      setSendAttempts((n) => n + 1);
+      if (res.ok && data.success) {
+        setInviteEmailId(data.invite_email_id ?? null);
+      } else {
+        setError(data.error || t.newClient.serverErrorStatus(res.status));
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setRetrying(false);
+    }
+  };
   const [error, setError] = useState('');
   // Set of field ids that failed the last submit attempt. Drives
   // per-field red highlighting via <Field hasError={...}> — much
@@ -386,7 +435,21 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        onCreated();
+        setCreatedPortalId(data.portal_id ?? null);
+        setSendAttempts(1);
+        if (data.invite_email_id) {
+          // Hold here and poll — the portal exists, but she should not walk
+          // away until we know the client actually received the link.
+          setInviteEmailId(data.invite_email_id);
+        } else {
+          // No id means the send threw outright (invite_email_error) or no
+          // invite was due. Either way there is nothing to poll.
+          if (data.invite_email_error) {
+            setError(t.newClient.inviteSendFailed);
+          } else {
+            onCreated();
+          }
+        }
       } else {
         setError(data.error || t.newClient.serverErrorStatus(res.status));
       }
@@ -799,17 +862,80 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
             </Text>
           )}
 
-          <CTAButton
-            type="submit"
-            variant="solid"
-            size="lg"
-            fullWidth
-            wrapText
-            isLoading={submitting}
-            loadingText={t.newClient.submitting}
-          >
-            {t.newClient.submit}
-          </CTAButton>
+          {/* Once the portal exists we stop showing the submit button and show
+              the delivery state instead. She has just filled a long form; the
+              panel lands where her eyes already are, rather than bouncing her
+              to a list that cannot tell her whether the client got the link.
+              Precedent: AdminNewGalleryOnly holds on a success screen too. */}
+          {inviteEmailId || deliveryStatus !== 'idle' ? (
+            <VStack
+              spacing={3}
+              align="stretch"
+              p={4}
+              borderRadius="sm"
+              bg={
+                deliveryStatus === 'delivered'
+                  ? 'green.50'
+                  : deliveryStatus === 'failed'
+                    ? 'red.50'
+                    : 'brand.surface'
+              }
+              border="1px solid"
+              borderColor={
+                deliveryStatus === 'delivered'
+                  ? 'green.200'
+                  : deliveryStatus === 'failed'
+                    ? 'red.200'
+                    : 'brand.accentBorder'
+              }
+            >
+              <Text fontSize="sm" fontWeight="500" color="gray.700">
+                {deliveryStatus === 'sending' && t.newClient.inviteSending}
+                {deliveryStatus === 'delivered' && t.newClient.inviteDelivered}
+                {deliveryStatus === 'pending' && t.newClient.invitePending}
+                {deliveryStatus === 'failed' && t.newClient.inviteSendFailed}
+              </Text>
+
+              {(deliveryStatus === 'failed' || deliveryStatus === 'pending') && (
+                <>
+                  {outOfRetries ? (
+                    <Text fontSize="xs" color="red.600">
+                      {t.newClient.inviteGiveUp}
+                    </Text>
+                  ) : (
+                    <>
+                      <CTAButton
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRetryInvite}
+                        isLoading={retrying}
+                      >
+                        {t.newClient.inviteRetry}
+                      </CTAButton>
+                      <Text fontSize="xs" color="gray.500">
+                        {t.newClient.inviteRetryNote}
+                      </Text>
+                    </>
+                  )}
+                  <CTAButton variant="ghost" size="sm" onClick={onCreated}>
+                    {t.newClient.inviteSkip}
+                  </CTAButton>
+                </>
+              )}
+            </VStack>
+          ) : (
+            <CTAButton
+              type="submit"
+              variant="solid"
+              size="lg"
+              fullWidth
+              wrapText
+              isLoading={submitting}
+              loadingText={t.newClient.submitting}
+            >
+              {t.newClient.submit}
+            </CTAButton>
+          )}
         </VStack>
       </Box>
     </Box>

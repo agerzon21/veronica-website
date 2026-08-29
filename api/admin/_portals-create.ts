@@ -281,21 +281,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Send invite email for full-mode portals. Email is non-blocking-ish —
-    // we'd rather log a failure than fail the portal creation itself.
+    // Send invite email for full-mode portals. Still non-blocking — a failed
+    // send must not lose the portal row — but the outcome is no longer
+    // swallowed. Previously a hard Resend rejection was logged server-side and
+    // reported to Vero as success, so she had no way to know the client never
+    // got their link. The id lets the admin UI poll /api/email-status and show
+    // Sending -> Delivered, and the error string tells her it never left.
+    let inviteEmailId: string | null = null;
+    let inviteEmailError: string | null = null;
     if (mode === 'full' && setupToken && clientEmail) {
       try {
         const siteOrigin =
           process.env.SITE_ORIGIN ||
           (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
         const inviteUrl = `${siteOrigin}/portal/welcome?token=${setupToken}`;
-        await sendEmail({
+        const sent = await sendEmail({
           to: clientEmail,
           subject: 'Your client portal is ready — Vero Photography',
           text: buildInviteText(clientDisplayName, inviteUrl),
           html: buildInviteHtml(clientDisplayName, inviteUrl),
         });
+        inviteEmailId = sent?.id ?? null;
       } catch (err) {
+        inviteEmailError = err instanceof Error ? err.message : String(err);
         console.error('[admin/portals-create] invite email failed (portal was still created):', err);
       }
     }
@@ -323,6 +331,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       portal_id: portalId,
       setup_token: setupToken,
+      // null when no invite was due (gallery-only mode) OR when the send threw.
+      // invite_email_error disambiguates those two.
+      invite_email_id: inviteEmailId,
+      invite_email_error: inviteEmailError,
     });
   } catch (err) {
     console.error('[admin/portals-create] handler failed:', err);
