@@ -73,12 +73,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           publish_date DESC NULLS LAST,
           created_at DESC
         LIMIT ${limit}
-      ` as Promise<PublicReview[]>,
+      ` as unknown as Promise<PublicReview[]>,
       sql`
         SELECT key, value
         FROM system_state
         WHERE key IN ('google_review_rating', 'google_review_count')
-      ` as Promise<Array<{ key: string; value: string | null }>>,
+      ` as unknown as Promise<Array<{ key: string; value: string | null }>>,
     ]);
 
     // Parse the aggregate; if either row is missing or malformed we

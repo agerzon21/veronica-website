@@ -97,8 +97,19 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
       return res.status(502).json({ error: 'Instagram API error' });
     }
 
-    const mediaJson = await mediaRes.json();
-    const profileJson = await profileRes.json();
+    // res.json() is `unknown`. These are external Graph API payloads we
+    // already access defensively (?? null on every field), so a narrow shape
+    // here is honest about what we rely on without pretending to validate.
+    const mediaJson = (await mediaRes.json()) as { data?: IgMedia[] };
+    const profileJson = (await profileRes.json()) as {
+      username?: string;
+      name?: string;
+      biography?: string;
+      profile_picture_url?: string;
+      followers_count?: number;
+      media_count?: number;
+      account_type?: string;
+    };
 
     const posts = ((mediaJson.data ?? []) as IgMedia[])
       // VIDEO posts give us thumbnail_url; IMAGE posts give us media_url.

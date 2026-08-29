@@ -91,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sql`update client_portals set client_display_name = ${setStr('client_display_name', patch.client_display_name)}, updated_at = now() where id = ${id}`;
     }
     if (typeof patch.client_email === 'string') {
-      await sql`update client_portals set client_email = ${setStr('client_email', patch.client_email).toLowerCase()}, updated_at = now() where id = ${id}`;
+      await sql`update client_portals set client_email = ${setStr('client_email', patch.client_email)?.toLowerCase() ?? null}, updated_at = now() where id = ${id}`;
     }
     if (typeof patch.event_date === 'string') {
       const v = patch.event_date.trim() || null;
