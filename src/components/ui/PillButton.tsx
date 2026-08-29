@@ -40,9 +40,9 @@ const PillButton = ({ label, isActive, onClick, icon, disabled = false }: Props)
       fontWeight="500"
       letterSpacing="0.02em"
       color={isActive ? 'white' : disabled ? 'gray.400' : 'gray.700'}
-      bg={isActive ? '#c9a96e' : 'white'}
+      bg={isActive ? 'brand.accent' : 'white'}
       border="1px solid"
-      borderColor={isActive ? '#c9a96e' : 'gray.300'}
+      borderColor={isActive ? 'brand.accent' : 'gray.300'}
       borderRadius="full"
       cursor={disabled ? 'not-allowed' : 'pointer'}
       opacity={disabled ? 0.5 : 1}

@@ -199,7 +199,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
   if (loading) {
     return (
       <Flex justify="center" py={16}>
-        <Spinner color="#c9a96e" />
+        <Spinner color="brand.accent" />
       </Flex>
     );
   }
@@ -259,7 +259,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
             href={`/journal/${existingSlug}`}
             target="_blank"
             rel="noopener noreferrer"
-            color="#c9a96e"
+            color="brand.accent"
             display="inline-flex"
             alignItems="center"
             gap={1}
@@ -448,7 +448,7 @@ const inputStyles = {
   fontSize: { base: 'md', md: 'sm' },
   _hover: { borderColor: 'gray.400' },
   _focus: {
-    borderColor: '#c9a96e',
+    borderColor: 'brand.accent',
     boxShadow: '0 0 0 1px #c9a96e',
   },
 } as const;
@@ -474,7 +474,7 @@ function Field({
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing={{ base: '0.15em', md: '0.22em' }}
-          color="#c9a96e"
+          color="brand.accent"
         >
           {label}
           {required && (

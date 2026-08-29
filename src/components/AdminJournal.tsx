@@ -113,7 +113,7 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.common.adminKicker}
           </Text>
@@ -135,7 +135,7 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
             minW="44px"
             minH="44px"
             color="gray.500"
-            _hover={{ color: '#c9a96e' }}
+            _hover={{ color: 'brand.accent' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           />
           <CTAButton
@@ -158,7 +158,7 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
 
       {loading ? (
         <Flex justify="center" py={16}>
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       ) : !posts || posts.length === 0 ? (
         <EmptyState onNew={() => setView({ kind: 'editor', id: null })} />
@@ -209,7 +209,7 @@ function PostRow({
       p={{ base: 4, md: 5 }}
       align="center"
       gap={4}
-      _hover={{ borderColor: '#c9a96e', transform: 'translateY(-1px)' }}
+      _hover={{ borderColor: 'brand.accent', transform: 'translateY(-1px)' }}
       transition="all 0.15s"
       cursor="pointer"
       sx={{ WebkitTapHighlightColor: 'transparent' }}
@@ -220,14 +220,14 @@ function PostRow({
         w={{ base: '56px', md: '72px' }}
         h={{ base: '56px', md: '72px' }}
         flexShrink={0}
-        bg={post.cover_image_url ? 'transparent' : '#fdf9f0'}
+        bg={post.cover_image_url ? 'transparent' : 'brand.surface'}
         borderRadius="sm"
         overflow="hidden"
         display="flex"
         alignItems="center"
         justifyContent="center"
         border={post.cover_image_url ? 'none' : '1px solid'}
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
       >
         {post.cover_image_url ? (
           <Box
@@ -239,7 +239,7 @@ function PostRow({
             objectFit="cover"
           />
         ) : (
-          <Icon as={FaBookOpen} color="#c9a96e" boxSize={5} />
+          <Icon as={FaBookOpen} color="brand.accent" boxSize={5} />
         )}
       </Box>
 
@@ -310,7 +310,7 @@ function PostRow({
             alignItems="center"
             justifyContent="center"
             color="gray.500"
-            _hover={{ color: '#c9a96e' }}
+            _hover={{ color: 'brand.accent' }}
             minW={{ base: '44px', md: 'auto' }}
             minH={{ base: '44px', md: 'auto' }}
             px={2}
@@ -370,12 +370,12 @@ function EmptyState({ onNew }: { onNew: () => void }) {
         h="72px"
         mx="auto"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
         mb={5}
       >
         <Icon as={FaBookOpen} boxSize={7} />

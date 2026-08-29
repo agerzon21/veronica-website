@@ -523,12 +523,12 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing="0.25em"
-          color="#c9a96e"
+          color="brand.accent"
           mb={3}
         >
           Your Portal
         </Text>
-        <Box w="40px" h="1px" bg="#c9a96e" mx="auto" mb={5} />
+        <Box w="40px" h="1px" bg="brand.accent" mx="auto" mb={5} />
         <Text
           as="h1"
           fontSize={{ base: '2xl', md: '3xl' }}
@@ -594,7 +594,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
             bg="#fff8e6"
             borderTop="1px solid"
             borderBottom="1px solid"
-            borderColor="#e8d9a8"
+            borderColor="brand.accentBorder"
             maxW="fit-content"
             mx="auto"
           >
@@ -686,11 +686,11 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
               fontWeight="500"
               textTransform="uppercase"
               letterSpacing="0.25em"
-              color="#c9a96e"
+              color="brand.accentText"
             >
               Balance
             </Text>
-            <Box w="30px" h="1px" bg="#c9a96e" />
+            <Box w="30px" h="1px" bg="brand.accent" />
             {/* Equal-width grid keeps the four stats aligned even when
                 the Retainer column drops out. On mobile we go to 2x2
                 so amounts don't truncate; desktop sits on one row. */}
@@ -729,7 +729,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.25em"
-                  color="#c9a96e"
+                  color="brand.accent"
                   mb={4}
                 >
                   Payments Received
@@ -791,7 +791,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.25em"
-                  color="#c9a96e"
+                  color="brand.accent"
                   mb={4}
                 >
                   Payment Schedule
@@ -939,12 +939,12 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                 fontWeight="500"
                 textTransform="uppercase"
                 letterSpacing="0.25em"
-                color="#c9a96e"
+                color="brand.accent"
                 mb={3}
               >
                 Your Photos
               </Text>
-              <Box w="30px" h="1px" bg="#c9a96e" mx="auto" mb={5} />
+              <Box w="30px" h="1px" bg="brand.accent" mx="auto" mb={5} />
               <Text fontSize="sm" color="gray.500" fontWeight="300" lineHeight="1.7">
                 Your gallery will appear here once Veronika delivers your photos.
               </Text>
@@ -980,11 +980,11 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
               fontWeight="500"
               textTransform="uppercase"
               letterSpacing="0.25em"
-              color="#c9a96e"
+              color="brand.accentText"
             >
               Share these photos
             </Text>
-            <Box w="30px" h="1px" bg="#c9a96e" />
+            <Box w="30px" h="1px" bg="brand.accent" />
           </VStack>
 
           {!data.gallery_enabled ? (
@@ -1018,9 +1018,9 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
               {/* HERO — one-click link with big Copy button */}
               <Box
                 w="100%"
-                bg="#fdf9f0"
+                bg="brand.surface"
                 border="1px solid"
-                borderColor="#e8d9a8"
+                borderColor="brand.accentBorder"
                 borderRadius="md"
                 px={{ base: 5, md: 7 }}
                 py={{ base: 6, md: 7 }}
@@ -1031,7 +1031,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.25em"
-                  color="#c9a96e"
+                  color="brand.accentText"
                   mb={4}
                 >
                   Easiest — one-click link
@@ -1096,7 +1096,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                       h="40px"
                       bg="white"
                       fontSize="sm"
-                      _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                      _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
                     />
                     <CTAButton
                       onClick={handleSendInvite}
@@ -1165,7 +1165,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                       borderRadius="sm"
                       color="gray.500"
                       cursor="pointer"
-                      _hover={{ color: '#c9a96e', bg: 'gray.100' }}
+                      _hover={{ color: 'brand.accent', bg: 'gray.100' }}
                       sx={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       <Icon as={gpCopied ? FaCheck : FaCopy} boxSize={3} />
@@ -1233,7 +1233,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                         fontFamily="'SFMono-Regular', Menlo, Consolas, monospace"
                         fontSize="sm"
                         letterSpacing="0.05em"
-                        _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                        _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
                       />
                       <CTAButton
                         onClick={handleSetCustom}
@@ -1282,7 +1282,7 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
       fontWeight="500"
       textTransform="uppercase"
       letterSpacing="0.22em"
-      color="#c9a96e"
+      color="brand.accent"
       flexShrink={0}
     >
       {label}
@@ -1315,7 +1315,7 @@ const BalanceStat = ({
       fontWeight="500"
       textTransform="uppercase"
       letterSpacing="0.25em"
-      color={emphasize ? '#c9a96e' : 'gray.400'}
+      color={emphasize ? 'brand.accent' : 'gray.400'}
     >
       {label}
     </Text>
@@ -1398,10 +1398,10 @@ function NextStepsPanel({
     >
       <VStack maxW="560px" mx="auto" spacing={5}>
         <VStack spacing={2}>
-          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
             {sectionLabel}
           </Text>
-          <Box w="30px" h="1px" bg="#c9a96e" />
+          <Box w="30px" h="1px" bg="brand.accent" />
         </VStack>
 
         {retainerOutstanding ? (
@@ -1459,12 +1459,12 @@ function NextStepsPanel({
               w="100%"
               bg="white"
               border="1px solid"
-              borderColor="#e8d9a8"
+              borderColor="brand.accentBorder"
               borderRadius="md"
               px={5}
               py={4}
             >
-              <Text fontSize="2xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.2em" color="#c9a96e" mb={2}>
+              <Text fontSize="2xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.2em" color="brand.accentText" mb={2}>
                 Per your contract
               </Text>
               <Text fontSize="sm" color="gray.700" lineHeight="1.7" fontStyle="italic">
@@ -1580,7 +1580,7 @@ function PaymentMethodRow({ label, value, href }: { label: string; value: string
       gap={3}
     >
       <HStack spacing={3}>
-        <Text fontSize="xs" fontWeight="500" letterSpacing="0.15em" textTransform="uppercase" color="#c9a96e" minW="64px">
+        <Text fontSize="xs" fontWeight="500" letterSpacing="0.15em" textTransform="uppercase" color="brand.accentText" minW="64px">
           {label}
         </Text>
         <Text fontSize="sm" color="gray.700" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
@@ -1600,7 +1600,7 @@ function PaymentMethodRow({ label, value, href }: { label: string; value: string
         borderRadius="sm"
         color="gray.500"
         cursor="pointer"
-        _hover={{ color: '#c9a96e', bg: 'gray.50' }}
+        _hover={{ color: 'brand.accent', bg: 'gray.50' }}
         sx={{ WebkitTapHighlightColor: 'transparent' }}
       >
         <Icon as={copied ? FaCheck : FaCopy} boxSize={3} />
@@ -1689,11 +1689,11 @@ function SignedContractSection({
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing="0.25em"
-          color="#c9a96e"
+          color="brand.accent"
         >
           Contract
         </Text>
-        <Box w="30px" h="1px" bg="#c9a96e" />
+        <Box w="30px" h="1px" bg="brand.accent" />
         <Icon as={FaCheck} color="green.500" boxSize={6} />
         <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
           Signed electronically on {formatDate(signedAt)}.
@@ -1868,11 +1868,11 @@ function ContractSignSection({
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             Contract
           </Text>
-          <Box w="30px" h="1px" bg="#c9a96e" />
+          <Box w="30px" h="1px" bg="brand.accent" />
           <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
             Your contract is being prepared. We'll let you know as soon as it's
             ready to sign.
@@ -1896,11 +1896,11 @@ function ContractSignSection({
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             Your Contract
           </Text>
-          <Box w="35px" h="1px" bg="#c9a96e" />
+          <Box w="35px" h="1px" bg="brand.accent" />
         </VStack>
 
         <Text
@@ -1937,11 +1937,11 @@ function ContractSignSection({
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             Sign Below
           </Text>
-          <Box w="35px" h="1px" bg="#c9a96e" />
+          <Box w="35px" h="1px" bg="brand.accent" />
         </VStack>
 
         {/* Typed full name — required for the audit trail */}
@@ -1954,7 +1954,7 @@ function ContractSignSection({
             fontWeight="500"
             letterSpacing="0.2em"
             textTransform="uppercase"
-            color="#c9a96e"
+            color="brand.accent"
             mb={2}
           >
             Full Name
@@ -1966,7 +1966,7 @@ function ContractSignSection({
             placeholder="Type your full name"
             h="48px"
             bg="white"
-            _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
           />
         </Box>
 
@@ -1978,7 +1978,7 @@ function ContractSignSection({
               fontWeight="500"
               letterSpacing="0.2em"
               textTransform="uppercase"
-              color="#c9a96e"
+              color="brand.accentText"
             >
               Draw Your Signature
             </Text>
@@ -1994,7 +1994,7 @@ function ContractSignSection({
               display="inline-flex"
               alignItems="center"
               gap={1.5}
-              _hover={{ color: '#c9a96e' }}
+              _hover={{ color: 'brand.accent' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <Icon as={FaUndo} boxSize={2.5} />
@@ -2104,7 +2104,7 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
                 fontWeight="600"
                 letterSpacing="0.15em"
                 textTransform="uppercase"
-                color="#c9a96e"
+                color="brand.accent"
                 mb={2}
               >
                 {section.number ? `${section.number}. ` : ''}
@@ -2131,7 +2131,7 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
                       <VStack key={i} spacing={1.5} align="stretch" pl={4}>
                         {p.items.map((item, j) => (
                           <HStack key={j} align="flex-start" spacing={2.5}>
-                            <Text color="#c9a96e" fontSize="sm" lineHeight="1.7">
+                            <Text color="brand.accent" fontSize="sm" lineHeight="1.7">
                               •
                             </Text>
                             <Text
@@ -2299,11 +2299,11 @@ function ChangePasswordSection({
           fontWeight="500"
           textTransform="uppercase"
           letterSpacing="0.25em"
-          color="#c9a96e"
+          color="brand.accent"
         >
           Login Password
         </Text>
-        <Box w="30px" h="1px" bg="#c9a96e" />
+        <Box w="30px" h="1px" bg="brand.accent" />
         <Text fontSize="sm" color="gray.600" lineHeight="1.8" fontWeight="300">
           The password you use to sign in to this portal.
           {' '}
@@ -2334,7 +2334,7 @@ function ChangePasswordSection({
               h="42px"
               bg="white"
               fontSize="sm"
-              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
             />
             <Input
               type="password"
@@ -2345,7 +2345,7 @@ function ChangePasswordSection({
               h="42px"
               bg="white"
               fontSize="sm"
-              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
             />
             <Input
               type="password"
@@ -2356,7 +2356,7 @@ function ChangePasswordSection({
               h="42px"
               bg="white"
               fontSize="sm"
-              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
             />
             <CTAButton
               onClick={handleSave}
@@ -2650,11 +2650,11 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
                 letterSpacing="0.2em"
                 textTransform="uppercase"
                 color={active ? 'white' : emphasized ? 'red.500' : 'gray.700'}
-                bg={active ? '#c9a96e' : 'transparent'}
+                bg={active ? 'brand.accent' : 'transparent'}
                 border="1px solid"
                 borderColor={
                   active
-                    ? '#c9a96e'
+                    ? 'brand.accent'
                     : emphasized
                     ? 'red.400'
                     : 'gray.200'
@@ -2664,15 +2664,15 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
                 cursor="pointer"
                 _hover={
                   active
-                    ? { bg: '#b8964f', borderColor: '#b8964f' }
+                    ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
                     : emphasized
                     ? {
                         borderColor: 'red.500',
                         bg: 'rgba(229, 62, 62, 0.06)',
                       }
                     : {
-                        borderColor: '#c9a96e',
-                        color: '#c9a96e',
+                        borderColor: 'brand.accent',
+                        color: 'brand.accent',
                         bg: 'rgba(201, 169, 110, 0.06)',
                       }
                 }
@@ -2735,16 +2735,16 @@ function ScrollChevron({
       borderRadius="full"
       bg="rgba(255, 255, 255, 0.9)"
       backdropFilter="blur(6px)"
-      color="#c9a96e"
+      color="brand.accent"
       border="1px solid"
       borderColor="rgba(201, 169, 110, 0.35)"
       boxShadow="0 2px 6px rgba(0, 0, 0, 0.08)"
       cursor="pointer"
       transition="all 0.2s"
       _hover={{
-        bg: '#c9a96e',
+        bg: 'brand.accent',
         color: 'white',
-        borderColor: '#c9a96e',
+        borderColor: 'brand.accent',
       }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >

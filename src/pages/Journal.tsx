@@ -411,7 +411,7 @@ function TimelineCard({
           flexShrink={0}
           align="center"
           justify="center"
-          color={expanded ? '#c9a96e' : 'gray.400'}
+          color={expanded ? 'brand.accent' : 'gray.400'}
         >
           <Icon as={expanded ? FaChevronUp : FaChevronDown} boxSize={3} />
         </Flex>

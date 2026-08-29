@@ -196,7 +196,7 @@ const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.common.adminKicker}
           </Text>
@@ -218,7 +218,7 @@ const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
             minW="44px"
             minH="44px"
             color="gray.500"
-            _hover={{ color: '#c9a96e' }}
+            _hover={{ color: 'brand.accent' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           />
         </HStack>
@@ -238,7 +238,7 @@ const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
 
       {loading ? (
         <Flex justify="center" py={16}>
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       ) : !items || items.length === 0 ? (
         <EmptyState />
@@ -294,7 +294,7 @@ function CronCard({
       borderColor="gray.200"
       borderRadius="sm"
       p={{ base: 4, md: 5 }}
-      _hover={{ borderColor: '#c9a96e' }}
+      _hover={{ borderColor: 'brand.accent' }}
       transition="all 0.15s"
     >
       {/* Top row — icon + name + enabled Switch */}
@@ -304,7 +304,7 @@ function CronCard({
           h="40px"
           borderRadius="sm"
           bg="rgba(201, 169, 110, 0.12)"
-          color="#c9a96e"
+          color="brand.accent"
           align="center"
           justify="center"
           flexShrink={0}
@@ -495,7 +495,7 @@ function HistoryPanel({ adminPassword, name }: { adminPassword: string; name: st
   if (!runs) {
     return (
       <Flex mt={4} justify="center" py={4}>
-        <Spinner size="sm" color="#c9a96e" />
+        <Spinner size="sm" color="brand.accent" />
       </Flex>
     );
   }

@@ -269,11 +269,11 @@ const Portal = () => {
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.25em"
-                  color="#c9a96e"
+                  color="brand.accent"
                 >
                   Welcome
                 </Text>
-                <Box w="40px" h="1px" bg="#c9a96e" />
+                <Box w="40px" h="1px" bg="brand.accent" />
                 <Text
                   as="h1"
                   fontSize={{ base: '2xl', md: '3xl' }}
@@ -318,9 +318,9 @@ const Portal = () => {
                       fontWeight="500"
                       letterSpacing="0.2em"
                       textTransform="uppercase"
-                      color={active ? '#c9a96e' : 'whiteAlpha.600'}
+                      color={active ? 'brand.accent' : 'whiteAlpha.600'}
                       transition="color 0.3s"
-                      _hover={{ color: active ? '#c9a96e' : 'whiteAlpha.800' }}
+                      _hover={{ color: active ? 'brand.accent' : 'whiteAlpha.800' }}
                       sx={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       {t.label}
@@ -461,10 +461,10 @@ const Portal = () => {
                   to="/gallery"
                   fontSize="xs"
                   fontWeight="500"
-                  color="#c9a96e"
+                  color="brand.accent"
                   letterSpacing="0.2em"
                   textTransform="uppercase"
-                  _hover={{ color: '#d4b87a' }}
+                  _hover={{ color: 'brand.accentSoft' }}
                   transition="color 0.3s"
                 >
                   Browse the public portfolio →
@@ -488,7 +488,7 @@ const FieldLabel = ({ htmlFor, children }: { htmlFor: string; children: React.Re
     w="100%"
     fontSize="2xs"
     fontWeight="500"
-    color="#c9a96e"
+    color="brand.accent"
     letterSpacing="0.2em"
     textTransform="uppercase"
     mb={-2}
@@ -515,7 +515,7 @@ const PortalInput = (
     _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
     _hover={{ borderColor: 'whiteAlpha.500' }}
     _focus={{
-      borderColor: '#c9a96e',
+      borderColor: 'brand.accent',
       boxShadow: '0 0 0 1px #c9a96e',
       bg: 'blackAlpha.600',
     }}
@@ -566,7 +566,7 @@ function PortalPasswordInput({
         _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
         _hover={{ borderColor: 'whiteAlpha.500' }}
         _focus={{
-          borderColor: '#c9a96e',
+          borderColor: 'brand.accent',
           boxShadow: '0 0 0 1px #c9a96e',
           bg: 'blackAlpha.600',
         }}
@@ -578,7 +578,7 @@ function PortalPasswordInput({
           onClick={onToggleShow}
           aria-label={show ? 'Hide password' : 'Show password'}
           color="whiteAlpha.600"
-          _hover={{ color: '#c9a96e' }}
+          _hover={{ color: 'brand.accent' }}
           bg="transparent"
           border="none"
           cursor="pointer"

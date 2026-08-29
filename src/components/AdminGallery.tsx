@@ -204,7 +204,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
           filter/grid tight instead of stacking three chunky rows. */}
       <Flex align="flex-end" justify="space-between" mb={{ base: 4, md: 6 }} gap={3}>
         <VStack align="flex-start" spacing={1} minW={0}>
-          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
             {t.common.adminKicker}
           </Text>
           <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
@@ -284,7 +284,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
           color="gray.500"
           fontWeight="300"
         >
-          <Icon as={FaGoogleDrive} boxSize={3} color="#c9a96e" />
+          <Icon as={FaGoogleDrive} boxSize={3} color="brand.accent" />
           <Text>
             {t.gallery.connectedToDrive}
             {settings.folderIdSource === 'env' && t.gallery.connectedViaEnv}
@@ -374,7 +374,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
 
       {loading ? (
         <Flex justify="center" py={16}>
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       ) : filtered.length === 0 ? (
         <EmptyState hasAny={(photos?.length ?? 0) > 0} />
@@ -572,7 +572,7 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
       borderRadius="sm"
       overflow="hidden"
       transition="all 0.15s"
-      _hover={{ borderColor: '#c9a96e', boxShadow: '0 4px 12px -6px rgba(201,169,110,0.35)' }}
+      _hover={{ borderColor: 'brand.accent', boxShadow: '0 4px 12px -6px rgba(201,169,110,0.35)' }}
       display="flex"
       flexDirection="column"
     >
@@ -593,7 +593,7 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
             position="absolute"
             top={2}
             left={2}
-            bg="#c9a96e"
+            bg="brand.accent"
             color="white"
             fontSize="2xs"
             letterSpacing="0.1em"
@@ -637,11 +637,11 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
             gap={1.5}
             fontSize={{ base: 'sm', md: 'xs' }}
             fontWeight="500"
-            color="#8a6e35"
+            color="brand.accentText"
             bg="rgba(201, 169, 110, 0.12)"
             border="1px solid"
             borderColor="rgba(201, 169, 110, 0.4)"
-            _hover={{ bg: 'rgba(201, 169, 110, 0.22)', borderColor: '#c9a96e' }}
+            _hover={{ bg: 'rgba(201, 169, 110, 0.22)', borderColor: 'brand.accent' }}
             _active={{ bg: 'rgba(201, 169, 110, 0.28)' }}
             px={3}
             py={{ base: 3, md: 1.5 }}
@@ -665,8 +665,8 @@ function PhotoCard({ row, onEdit, onDelete }: { row: GalleryRow; onEdit: () => v
               w={{ base: '44px', md: '32px' }}
               h={{ base: '44px', md: '32px' }}
               color="gray.500"
-              _hover={{ color: '#c9a96e' }}
-              _active={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.08)' }}
+              _hover={{ color: 'brand.accent' }}
+              _active={{ color: 'brand.accent', bg: 'rgba(201, 169, 110, 0.08)' }}
               cursor="pointer"
               aria-label={t.gallery.ariaOpenLive}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
@@ -970,12 +970,12 @@ function EmptyState({ hasAny }: { hasAny: boolean }) {
         h="72px"
         mx="auto"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
         mb={5}
       >
         <Icon as={FaImage} boxSize={7} />

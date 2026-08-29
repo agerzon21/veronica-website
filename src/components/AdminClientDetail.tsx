@@ -204,7 +204,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       <AdminBackButton onClick={onBack} label={t.common.back} />
 
       <VStack align="flex-start" spacing={2} mb={6}>
-        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
           {/* Session type comes from user input via a fixed enum; the
               value itself is UI-visible copy that stays English on the
               wire, so only the fallback needs translating. */}
@@ -595,7 +595,7 @@ function InlineField({
 
   return (
     <Box>
-      <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" color="#c9a96e" letterSpacing={{ base: '0.15em', md: '0.2em' }} textTransform="uppercase" mb={2}>
+      <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" color="brand.accent" letterSpacing={{ base: '0.15em', md: '0.2em' }} textTransform="uppercase" mb={2}>
         {label}
       </Text>
       <Flex gap={2} align="stretch">
@@ -610,14 +610,14 @@ function InlineField({
           h="44px"
           bg="white"
           border="1px solid"
-          borderColor={dirty ? '#c9a96e' : 'gray.300'}
+          borderColor={dirty ? 'brand.accent' : 'gray.300'}
           color="gray.800"
           // iOS Safari zooms on focus for any input <16px. Bump to md
           // (16px) on mobile, keep sm (14px) desktop-side.
           fontSize={{ base: 'md', sm: 'sm' }}
           borderRadius="sm"
-          _hover={{ borderColor: dirty ? '#c9a96e' : 'gray.400' }}
-          _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+          _hover={{ borderColor: dirty ? 'brand.accent' : 'gray.400' }}
+          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
         />
         {dirty && (
           <CTAButton
@@ -725,7 +725,7 @@ function AddPaymentForm({
               bg="white"
               fontSize={{ base: 'md', sm: 'sm' }}
               borderRadius="sm"
-              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
             />
           </Box>
           <Box>
@@ -738,7 +738,7 @@ function AddPaymentForm({
               bg="white"
               fontSize={{ base: 'md', sm: 'sm' }}
               borderRadius="sm"
-              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
             />
           </Box>
           <Box>
@@ -751,7 +751,7 @@ function AddPaymentForm({
               bg="white"
               fontSize={{ base: 'md', sm: 'sm' }}
               borderRadius="sm"
-              _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
             />
           </Box>
         </SimpleGrid>
@@ -764,7 +764,7 @@ function AddPaymentForm({
             rows={2}
             bg="white"
             fontSize={{ base: 'md', sm: 'sm' }}
-            focusBorderColor="#c9a96e"
+            focusBorderColor="brand.accent"
           />
         </Box>
         {err && <Text fontSize="sm" color="red.500">{err}</Text>}
@@ -1049,7 +1049,7 @@ function AccountSection({
                 h={{ base: '44px', sm: '40px' }}
                 bg="white"
                 fontSize={{ base: 'md', sm: 'sm' }}
-                _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
               />
               <CTAButton
                 onClick={handleOverride}
@@ -1167,7 +1167,7 @@ function EditContractVariables({
           fontSize="xs"
           letterSpacing="0.15em"
           textTransform="uppercase"
-          color="#c9a96e"
+          color="brand.accent"
           bg="transparent"
           border="none"
           cursor="pointer"
@@ -1187,7 +1187,7 @@ function EditContractVariables({
             const isLong = value.length > 80 || k === 'additional_notes';
             return (
               <Box key={k}>
-                <Text fontSize={{ base: 'xs', md: '2xs' }} color="#c9a96e" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
+                <Text fontSize={{ base: 'xs', md: '2xs' }} color="brand.accent" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
                   {k}
                 </Text>
                 {isLong ? (
@@ -1197,7 +1197,7 @@ function EditContractVariables({
                     rows={3}
                     bg="white"
                     fontSize={{ base: 'md', sm: 'sm' }}
-                    focusBorderColor="#c9a96e"
+                    focusBorderColor="brand.accent"
                   />
                 ) : (
                   <Input
@@ -1206,7 +1206,7 @@ function EditContractVariables({
                     h={{ base: '44px', sm: '38px' }}
                     bg="white"
                     fontSize={{ base: 'md', sm: 'sm' }}
-                    _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
                   />
                 )}
               </Box>

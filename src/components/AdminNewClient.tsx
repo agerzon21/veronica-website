@@ -405,7 +405,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={6}>
-        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="#c9a96e">
+        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
           {t.newClient.kicker}
         </Text>
         <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
@@ -439,7 +439,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               }}
               size={{ base: 'md', md: 'sm' } as any}
               fontSize={{ base: 'md', md: 'sm' } as any}
-              focusBorderColor="#c9a96e"
+              focusBorderColor="brand.accent"
             >
               {templateKeys.map((k) => (
                 <option key={k} value={k}>
@@ -575,16 +575,16 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                   px={3}
                   py={{ base: 3, md: 1.5 }}
                   minH={{ base: '44px', md: 'auto' }}
-                  bg={coverage === opt.key ? '#c9a96e' : 'white'}
+                  bg={coverage === opt.key ? 'brand.accent' : 'white'}
                   color={coverage === opt.key ? 'white' : 'gray.700'}
                   border="1px solid"
-                  borderColor={coverage === opt.key ? '#c9a96e' : 'gray.300'}
+                  borderColor={coverage === opt.key ? 'brand.accent' : 'gray.300'}
                   borderRadius="sm"
                   fontSize="xs"
                   fontWeight="500"
                   letterSpacing="0.05em"
                   cursor="pointer"
-                  _hover={{ borderColor: '#c9a96e' }}
+                  _hover={{ borderColor: 'brand.accent' }}
                   sx={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   {opt.label}
@@ -660,7 +660,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
                 onChange={(e) => { setCustomCoverage(e.target.value); clearFieldError('customCoverage'); }}
                 placeholder={t.newClient.customCoveragePlaceholder}
                 rows={2}
-                focusBorderColor="#c9a96e"
+                focusBorderColor="brand.accent"
                 fontSize={{ base: 'md', md: 'sm' }}
               />
             </Field>
@@ -787,7 +787,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
               value={additionalNotes}
               onChange={(e) => setAdditionalNotes(e.target.value)}
               placeholder={t.newClient.customClausesPlaceholder}
-              focusBorderColor="#c9a96e"
+              focusBorderColor="brand.accent"
               rows={4}
               fontSize={{ base: 'md', md: 'sm' }}
             />
@@ -832,7 +832,7 @@ function FieldRow({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          focusBorderColor="#c9a96e"
+          focusBorderColor="brand.accent"
           rows={3}
           fontSize={{ base: 'md', md: 'sm' }}
         />
@@ -886,7 +886,7 @@ const Field = ({
       gap={1.5}
       fontSize={{ base: 'xs', md: '2xs' }}
       fontWeight="500"
-      color={hasError ? 'red.500' : '#c9a96e'}
+      color={hasError ? 'red.500' : 'brand.accent'}
       letterSpacing={{ base: '0.15em', md: '0.2em' }}
       textTransform="uppercase"
       mb={2}
@@ -955,7 +955,7 @@ const FormInput = (props: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'siz
     fontSize={{ base: 'md', md: 'sm' }}
     borderRadius="sm"
     _hover={{ borderColor: 'gray.400' }}
-    _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
   />
 );
 

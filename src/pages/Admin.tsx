@@ -447,11 +447,11 @@ const Admin = () => {
                   fontWeight="500"
                   textTransform="uppercase"
                   letterSpacing="0.25em"
-                  color="#c9a96e"
+                  color="brand.accent"
                 >
                   {loginT.adminKicker}
                 </Text>
-                <Box w="40px" h="1px" bg="#c9a96e" />
+                <Box w="40px" h="1px" bg="brand.accent" />
                 <Text
                   as="h1"
                   fontSize={{ base: '2xl', md: '3xl' }}
@@ -521,7 +521,7 @@ const Admin = () => {
                     w="100%"
                     fontSize="2xs"
                     fontWeight="500"
-                    color="#c9a96e"
+                    color="brand.accent"
                     letterSpacing="0.2em"
                     textTransform="uppercase"
                     mb={-2}
@@ -549,7 +549,7 @@ const Admin = () => {
                     _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
                     _hover={{ borderColor: 'whiteAlpha.500' }}
                     _focus={{
-                      borderColor: '#c9a96e',
+                      borderColor: 'brand.accent',
                       boxShadow: '0 0 0 1px #c9a96e',
                       bg: 'blackAlpha.600',
                     }}
@@ -561,7 +561,7 @@ const Admin = () => {
                     w="100%"
                     fontSize="2xs"
                     fontWeight="500"
-                    color="#c9a96e"
+                    color="brand.accent"
                     letterSpacing="0.2em"
                     textTransform="uppercase"
                     mb={-2}
@@ -586,7 +586,7 @@ const Admin = () => {
                     _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
                     _hover={{ borderColor: 'whiteAlpha.500' }}
                     _focus={{
-                      borderColor: '#c9a96e',
+                      borderColor: 'brand.accent',
                       boxShadow: '0 0 0 1px #c9a96e',
                       bg: 'blackAlpha.600',
                     }}
@@ -687,18 +687,18 @@ function AdminTabStrip({
                 letterSpacing="0.2em"
                 textTransform="uppercase"
                 color={isActive ? 'white' : 'gray.700'}
-                bg={isActive ? '#c9a96e' : 'transparent'}
+                bg={isActive ? 'brand.accent' : 'transparent'}
                 border="1px solid"
-                borderColor={isActive ? '#c9a96e' : 'gray.200'}
+                borderColor={isActive ? 'brand.accent' : 'gray.200'}
                 borderRadius="full"
                 transition="all 0.2s ease"
                 cursor="pointer"
                 _hover={
                   isActive
-                    ? { bg: '#b8964f', borderColor: '#b8964f' }
+                    ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
                     : {
-                        borderColor: '#c9a96e',
-                        color: '#c9a96e',
+                        borderColor: 'brand.accent',
+                        color: 'brand.accent',
                         bg: 'rgba(201, 169, 110, 0.06)',
                       }
                 }
@@ -732,7 +732,7 @@ function AdminTabStrip({
           borderRadius="full"
           cursor="pointer"
           transition="all 0.2s ease"
-          _hover={{ borderColor: '#c9a96e', color: '#c9a96e' }}
+          _hover={{ borderColor: 'brand.accent', color: 'brand.accent' }}
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
           <Icon as={FaBars} boxSize={3} />
@@ -925,12 +925,12 @@ function AdminMobileNav({
                   letterSpacing="0.12em"
                   textTransform="uppercase"
                   color={s.isActive ? 'white' : 'gray.600'}
-                  bg={s.isActive ? '#c9a96e' : 'transparent'}
+                  bg={s.isActive ? 'brand.accent' : 'transparent'}
                   borderRadius="full"
                   border="none"
                   cursor="pointer"
                   transition="all 0.15s"
-                  _active={s.isActive ? { bg: '#b8964f' } : { bg: 'rgba(201, 169, 110, 0.08)' }}
+                  _active={s.isActive ? { bg: 'brand.accentStrong' } : { bg: 'rgba(201, 169, 110, 0.08)' }}
                   sx={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   {s.label}
@@ -984,8 +984,8 @@ function AdminMobileNav({
                 bg="transparent"
                 border="none"
                 borderTop="2px solid"
-                borderTopColor={isActive && g.id !== 'menu' ? '#c9a96e' : 'transparent'}
-                color={isActive && g.id !== 'menu' ? '#c9a96e' : 'gray.500'}
+                borderTopColor={isActive && g.id !== 'menu' ? 'brand.accent' : 'transparent'}
+                color={isActive && g.id !== 'menu' ? 'brand.accent' : 'gray.500'}
                 cursor="pointer"
                 transition="color 0.15s, background 0.15s"
                 _active={{ bg: 'rgba(201, 169, 110, 0.08)' }}
@@ -1001,7 +1001,7 @@ function AdminMobileNav({
                     left="50%"
                     transform={`translateX(-50%) rotate(${isOpen ? 180 : 0}deg)`}
                     transition="transform 0.2s ease"
-                    color={isActive ? '#c9a96e' : 'gray.300'}
+                    color={isActive ? 'brand.accent' : 'gray.300'}
                     fontSize="8px"
                     lineHeight="1"
                     pointerEvents="none"
@@ -1067,7 +1067,7 @@ function AdminMenuDrawer({
             fontWeight="500"
             textTransform="uppercase"
             letterSpacing="0.25em"
-            color="#c9a96e"
+            color="brand.accent"
           >
             {t.common.adminKicker}
           </Text>
@@ -1148,7 +1148,7 @@ function MenuLanguageToggle({
             fontWeight="600"
             letterSpacing="0.12em"
             color={active ? 'white' : 'gray.500'}
-            bg={active ? '#c9a96e' : 'transparent'}
+            bg={active ? 'brand.accent' : 'transparent'}
             borderRadius="full"
             border="none"
             cursor="pointer"
@@ -1206,11 +1206,11 @@ function MenuLink({
       color="gray.700"
       textDecoration="none"
       transition="background 0.15s"
-      _hover={{ bg: 'rgba(201, 169, 110, 0.06)', color: '#c9a96e' }}
+      _hover={{ bg: 'rgba(201, 169, 110, 0.06)', color: 'brand.accent' }}
       _active={{ bg: 'rgba(201, 169, 110, 0.12)' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      <Icon as={icon} boxSize={4} color="#c9a96e" />
+      <Icon as={icon} boxSize={4} color="brand.accent" />
       <Text fontSize="sm" fontWeight="400">{label}</Text>
       {newTab && <Icon as={FaExternalLinkAlt} boxSize={2.5} color="gray.400" ml="auto" />}
     </Box>
@@ -1250,7 +1250,7 @@ function MenuButton({
       _active={{ bg: danger ? 'red.100' : 'rgba(201, 169, 110, 0.12)' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      <Icon as={icon} boxSize={4} color={danger ? 'red.500' : '#c9a96e'} />
+      <Icon as={icon} boxSize={4} color={danger ? 'red.500' : 'brand.accent'} />
       <Text fontSize="sm" fontWeight="400">{label}</Text>
     </Box>
   );

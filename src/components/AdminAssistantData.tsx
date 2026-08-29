@@ -132,7 +132,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
             fontSize={{ base: 'md', md: 'sm' } as any}
             borderColor="gray.300"
             _hover={{ borderColor: 'gray.400' }}
-            _focus={{ borderColor: '#c9a96e', boxShadow: '0 0 0 1px #c9a96e' }}
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
           />
         </InputGroup>
         <CTAButton
@@ -154,7 +154,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
             <>
               <Text>·</Text>
               <HStack spacing={1.5}>
-                <Icon as={FaMagic} boxSize={2.5} color="#c9a96e" />
+                <Icon as={FaMagic} boxSize={2.5} color="brand.accent" />
                 <Text>{t.assistantData.chatbotAddedCount(chatbotCount)}</Text>
               </HStack>
             </>
@@ -170,7 +170,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
 
       {loading ? (
         <Flex justify="center" py={16}>
-          <Spinner color="#c9a96e" />
+          <Spinner color="brand.accent" />
         </Flex>
       ) : !entries || entries.length === 0 ? (
         <EmptyState onAdd={() => setEditing('new')} />
@@ -187,7 +187,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
                 fontWeight="600"
                 letterSpacing={{ base: '0.15em', md: '0.2em' }}
                 textTransform="uppercase"
-                color="#8a6e35"
+                color="brand.accentText"
                 mb={2}
               >
                 {category.replace(/_/g, ' ')}
@@ -242,18 +242,18 @@ function FactCard({ entry, onEdit }: { entry: ContextEntry; onEdit: () => void }
       cursor="pointer"
       transition="all 0.12s"
       _hover={{
-        borderColor: '#c9a96e',
+        borderColor: 'brand.accent',
         boxShadow: '0 2px 8px -4px rgba(201, 169, 110, 0.35)',
       }}
       opacity={inactive ? 0.6 : 1}
       minH={{ base: '72px', md: 'auto' }}
-      _active={{ borderColor: '#c9a96e', bg: '#fdf9f0' }}
+      _active={{ borderColor: 'brand.accent', bg: 'brand.surface' }}
       sx={{
         WebkitTapHighlightColor: 'transparent',
         // Hover only on real pointer devices so mobile taps don't stick.
         '@media (hover: hover)': {
           _hover: {
-            borderColor: '#c9a96e',
+            borderColor: 'brand.accent',
             boxShadow: '0 2px 8px -4px rgba(201, 169, 110, 0.35)',
           },
         },
@@ -268,7 +268,7 @@ function FactCard({ entry, onEdit }: { entry: ContextEntry; onEdit: () => void }
             {entry.source === 'chatbot' && (
               <Badge
                 bg="rgba(201, 169, 110, 0.15)"
-                color="#8a6e35"
+                color="brand.accentText"
                 fontSize="2xs"
                 fontWeight="600"
                 letterSpacing="0.06em"
@@ -405,7 +405,7 @@ function EditModal({
             <Badge
               ml={2}
               bg="rgba(201, 169, 110, 0.15)"
-              color="#8a6e35"
+              color="brand.accentText"
               fontSize="2xs"
               fontWeight="600"
               letterSpacing="0.06em"
@@ -598,19 +598,19 @@ function BuiltInBehaviorCard() {
       borderRadius="sm"
     >
       <HStack spacing={2} mb={2.5}>
-        <Icon as={FaLock} boxSize={2.5} color="#8a6e35" />
+        <Icon as={FaLock} boxSize={2.5} color="brand.accentText" />
         <Text
           fontSize="2xs"
           fontWeight="600"
           letterSpacing="0.2em"
           textTransform="uppercase"
-          color="#8a6e35"
+          color="brand.accentText"
         >
           {t.assistantData.builtInBehaviorHeader}
         </Text>
         <Badge
           bg="rgba(138, 110, 53, 0.12)"
-          color="#8a6e35"
+          color="brand.accentText"
           fontSize="2xs"
           fontWeight="500"
           textTransform="uppercase"
@@ -625,7 +625,7 @@ function BuiltInBehaviorCard() {
       <VStack align="flex-start" spacing={1.5}>
         {facts.map((f) => (
           <HStack key={f} spacing={2} align="flex-start">
-            <Text color="#c9a96e" mt="1px" fontSize="xs" flexShrink={0}>
+            <Text color="brand.accent" mt="1px" fontSize="xs" flexShrink={0}>
               •
             </Text>
             <Text fontSize="xs" color="gray.700" lineHeight="1.6">
@@ -658,12 +658,12 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         h="72px"
         mx="auto"
         borderRadius="full"
-        bg="#fdf9f0"
+        bg="brand.surface"
         border="1px solid"
-        borderColor="#e8d9a8"
+        borderColor="brand.accentBorder"
         align="center"
         justify="center"
-        color="#c9a96e"
+        color="brand.accentText"
         mb={5}
       >
         <Icon as={FaHandPaper} boxSize={7} />

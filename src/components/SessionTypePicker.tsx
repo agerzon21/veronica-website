@@ -79,10 +79,10 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
       // fight the 1.5-line desktop rhythm.
       py={{ base: 3, md: 1.5 }}
       minH={{ base: '44px', md: 'auto' }}
-      bg={selected ? '#c9a96e' : 'white'}
+      bg={selected ? 'brand.accent' : 'white'}
       color={selected ? 'white' : 'gray.700'}
       border="1px solid"
-      borderColor={selected ? '#c9a96e' : 'gray.300'}
+      borderColor={selected ? 'brand.accent' : 'gray.300'}
       borderRadius="sm"
       fontSize="xs"
       fontWeight="500"
@@ -91,7 +91,7 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
       transition="all 0.15s"
       _hover={{
         borderColor: 'brand.accent',
-        color: selected ? 'white' : '#c9a96e',
+        color: selected ? 'white' : 'brand.accent',
       }}
       _active={{
         borderColor: 'brand.accent',

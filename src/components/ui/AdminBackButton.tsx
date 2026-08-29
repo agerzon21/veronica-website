@@ -43,7 +43,7 @@ const AdminBackButton = ({ onClick, label = 'Back', 'aria-label': ariaLabel }: P
       borderRadius="sm"
       cursor="pointer"
       transition="all 0.15s"
-      _hover={{ color: '#c9a96e', bg: 'rgba(201, 169, 110, 0.06)' }}
+      _hover={{ color: 'brand.accent', bg: 'rgba(201, 169, 110, 0.06)' }}
       _active={{ bg: 'rgba(201, 169, 110, 0.12)' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
