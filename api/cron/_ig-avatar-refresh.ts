@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { put } from '@vercel/blob';
+import sharp from 'sharp';
 import { getDb } from '../_db.js';
 import { fetchIgProfile } from '../_ig-profile.js';
 import { runGuarded, type CronTrigger } from './_guard.js';
 
 /**
- * Mirror Instagram contact avatars into Vercel Blob, permanently.
+ * Store Instagram contact avatars in our own database, permanently.
  *
  * THE PROBLEM
  * Meta never gives out a stable image URL. `profile_pic` comes back as a
@@ -15,20 +15,20 @@ import { runGuarded, type CronTrigger } from './_guard.js';
  * inbox eventually 403'd and rendered as a broken image. Nothing "broke": the
  * value was always on a timer.
  *
- * WHY MIRRORING, NOT A DAILY RE-FETCH
- * The first version of this job re-fetched a fresh signed URL every day. It
- * worked, but it is the wrong shape — it needs a cron forever, it can drift,
- * and a URL can still die between runs. Downloading the bytes ONCE and hosting
- * them ourselves is permanent: after a row is mirrored it never needs touching
- * again, so this job drains its own queue and then does nothing. A run
- * reporting "0 mirrored" is the intended end state, not a failure.
+ * THE FIX, AND WHY IT IS THIS BORING
+ * Download each avatar once, shrink it to 96px WebP (~2-4KB — they render in a
+ * 44px circle), and store it inline as a base64 data URI in the column. It
+ * comes back with the conversation row and renders directly. Never expires.
  *
- * QUOTA SAFETY
- * api/photo.ts's header records that proxying image bytes through a Function
- * "blew our Vercel Hobby quota in two days". That was a READ path — every
- * gallery view streamed megabytes through the origin. This is a WRITE path that
- * runs at most a few dozen times ever, at ~8-14KB per avatar, and reads go
- * browser -> Blob CDN directly, never through us. Different shape entirely.
+ * Two more elaborate versions were tried first and both were the wrong amount
+ * of machinery:
+ *   - A daily job re-fetching a fresh signed URL. Works, but needs a cron
+ *     forever and still leaves a gap when Meta rotates a URL early.
+ *   - Mirroring the bytes to Vercel Blob. Failed outright: `access` is a
+ *     STORE-level setting and this store is private because it holds signed
+ *     contracts, which must stay private. It would have needed a whole second
+ *     Blob store to hold a couple dozen thumbnails.
+ * Total storage for every contact Vero has: under 100KB of text.
  *
  * SLOT COST: zero. Underscore-prefixed inside api/cron/, registered in the
  * HANDLERS map in api/cron.ts, and chained from instagram-check. No new
@@ -86,11 +86,6 @@ export async function refreshIgAvatars(): Promise<{
   let mirrored = 0;
   let failed = 0;
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    console.warn('[cron/ig-avatar-refresh] BLOB_READ_WRITE_TOKEN missing — skipping');
-    return { pending: 0, mirrored: 0, failed: 0 };
-  }
-
   // Only rows with no permanent avatar yet. Once mirrored, a row leaves this
   // queue forever — which is why this job trends to zero.
   const rows = (await sql`
@@ -132,25 +127,24 @@ export async function refreshIgAvatars(): Promise<{
       const contentType = res.headers.get('content-type') ?? 'image/jpeg';
       if (!contentType.startsWith('image/')) throw new Error(`not an image: ${contentType}`);
 
-      // Deterministic pathname keyed on the IGSID, so re-mirroring a contact
-      // overwrites in place rather than accumulating orphans.
+      // Downscale hard, then store the bytes INLINE as a data URI.
       //
-      // access:'public' so reads go browser -> Blob CDN directly. A private
-      // blob would have to be proxied through a Function on every inbox render
-      // — exactly the pattern that blew the Hobby quota once already.
-      // NOTE: every other blob in this store is 'private'; this is the first
-      // public write. If the store rejects it, the throw is caught per-row
-      // below and surfaces in the run history rather than killing the job.
+      // These render in a 44px circle. Meta hands back ~14KB at full size; at
+      // 96px (2x for retina) WebP lands around 2-4KB, so all of Vero's contacts
+      // together are well under 100KB of text in the database.
       //
-      // allowOverwrite is mandatory: @vercel/blob v2 defaults it to false and
-      // throws "This blob already exists" on any retry.
-      const { url } = await put(`ig-avatars/${row.external_user_id}`, buf, {
-        access: 'public',
-        contentType,
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        cacheControlMaxAge: 60 * 60 * 24 * 30,
-      });
+      // No Blob store, no CDN, no proxy endpoint, no dashboard setup. The
+      // earlier Blob attempt failed because access is a STORE-level setting and
+      // this store is private (it holds signed contracts, which must stay
+      // private) — so it would have needed a second store just to hold a
+      // handful of thumbnails. That was the wrong amount of machinery for the
+      // problem.
+      const resized = await sharp(buf)
+        .resize(96, 96, { fit: 'cover', position: 'attention' })
+        .webp({ quality: 80 })
+        .toBuffer();
+
+      const url = `data:image/webp;base64,${resized.toString('base64')}`;
 
       await sql`
         UPDATE conversations
