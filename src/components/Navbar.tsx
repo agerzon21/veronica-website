@@ -58,6 +58,11 @@ const Navbar = () => {
             src="/assets/images/logo.svg" 
             htmlWidth={460}
             htmlHeight={70}
+            // Lighthouse names this as the mobile LCP element; it is preloaded
+            // in index.html and this keeps the priority consistent once React
+            // renders, so the two do not fight over it.
+            fetchPriority="high"
+            decoding="async"
             alt="Vero Photography" 
             height="40px"
             objectFit="contain"

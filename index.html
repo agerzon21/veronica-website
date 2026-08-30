@@ -77,6 +77,20 @@
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="preconnect" href="https://www.googletagmanager.com" />
 
+    <!-- The mobile LCP element. It lived only inside the JSON-LD below, so it
+         could not be fetched until React had rendered the navbar — the
+         waterfall showed the request starting at 3558ms, at Low priority,
+         with the main bundle already finished at 2274ms. Preloading moves
+         discovery into the first HTML pass. 11KB, so the cost is trivial and
+         it is needed on every page. -->
+    <link
+      rel="preload"
+      as="image"
+      href="/assets/images/logo.svg"
+      type="image/svg+xml"
+      fetchpriority="high"
+    />
+
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Vero Photography" />
@@ -127,6 +141,10 @@
       "image": "https://vero.photography/assets/photos/site/contact-bg.webp",
       "logo": "https://vero.photography/assets/images/logo.svg",
       "url": "https://vero.photography",
+      "sameAs": [
+        "https://g.page/r/CSNq8ccyWt_wEAE",
+        "https://www.instagram.com/vero.art.photo"
+      ],
       "telephone": "+1-570-909-5707",
       "priceRange": "$$",
       "description": "Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide.",
