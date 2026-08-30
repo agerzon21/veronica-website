@@ -71,7 +71,10 @@ const PRIMARY = 1600; // the plain `src` fallback for anything without srcset
 // screen can show — several originals are only 2000px wide and are already
 // being upscaled today, so they get no rung at all (the size guard skips any
 // re-encode that is not actually smaller).
-const DESKTOP_WIDTHS = [1920, 2560];
+// 1680 exists because Lighthouse measured the desktop hero being served at
+// 1895x1419 for a 1642x1213 display box — 97KB wasted on pixels nobody sees.
+// With only 1920 and 2560 on offer the browser had nothing closer to pick.
+const DESKTOP_WIDTHS = [1680, 1920, 2560];
 const DESKTOP_QUALITY = 78;
 const QUALITY = 72;
 

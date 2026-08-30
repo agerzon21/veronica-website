@@ -1,46 +1,58 @@
 {
   "rungs": {
     "/assets/photos/portraits/tropical-bikini-pose-bamboo.webp": {
+      "1680": "/assets/hero/tropical-bikini-pose-bamboo-d1680.webp",
       "1920": "/assets/hero/tropical-bikini-pose-bamboo-d1920.webp"
     },
     "/assets/photos/portraits/shadow-play-portrait.webp": {
+      "1680": "/assets/hero/shadow-play-portrait-d1680.webp",
       "1920": "/assets/hero/shadow-play-portrait-d1920.webp",
       "2560": "/assets/hero/shadow-play-portrait-d2560.webp"
     },
     "/assets/photos/portraits/ocean-swimming-joy.webp": {
+      "1680": "/assets/hero/ocean-swimming-joy-d1680.webp",
       "1920": "/assets/hero/ocean-swimming-joy-d1920.webp"
     },
     "/assets/photos/weddings/winged-couple-fantasy-portrait.webp": {
+      "1680": "/assets/hero/winged-couple-fantasy-portrait-d1680.webp",
       "1920": "/assets/hero/winged-couple-fantasy-portrait-d1920.webp"
     },
     "/assets/photos/weddings/wedding-party-seafoam.webp": {
+      "1680": "/assets/hero/wedding-party-seafoam-d1680.webp",
       "1920": "/assets/hero/wedding-party-seafoam-d1920.webp",
       "2560": "/assets/hero/wedding-party-seafoam-d2560.webp"
     },
     "/assets/photos/family/elegant-family-studio-portrait-black.webp": {
+      "1680": "/assets/hero/elegant-family-studio-portrait-black-d1680.webp",
       "1920": "/assets/hero/elegant-family-studio-portrait-black-d1920.webp",
       "2560": "/assets/hero/elegant-family-studio-portrait-black-d2560.webp"
     },
     "/assets/photos/weddings/couple-back-camera-ocean-view.webp": {
+      "1680": "/assets/hero/couple-back-camera-ocean-view-d1680.webp",
       "1920": "/assets/hero/couple-back-camera-ocean-view-d1920.webp",
       "2560": "/assets/hero/couple-back-camera-ocean-view-d2560.webp"
     },
     "/assets/photos/weddings/wedding-kiss-pink-sunset.webp": {
+      "1680": "/assets/hero/wedding-kiss-pink-sunset-d1680.webp",
       "1920": "/assets/hero/wedding-kiss-pink-sunset-d1920.webp",
       "2560": "/assets/hero/wedding-kiss-pink-sunset-d2560.webp"
     },
     "/assets/photos/weddings/confident-bride-bouquet.webp": {
+      "1680": "/assets/hero/confident-bride-bouquet-d1680.webp",
       "1920": "/assets/hero/confident-bride-bouquet-d1920.webp",
       "2560": "/assets/hero/confident-bride-bouquet-d2560.webp"
     },
     "/assets/photos/family/family-camping-adventure.webp": {
+      "1680": "/assets/hero/family-camping-adventure-d1680.webp",
       "1920": "/assets/hero/family-camping-adventure-d1920.webp"
     },
     "/assets/photos/weddings/lotus-pond-reflection-newlyweds.webp": {
+      "1680": "/assets/hero/lotus-pond-reflection-newlyweds-d1680.webp",
       "1920": "/assets/hero/lotus-pond-reflection-newlyweds-d1920.webp",
       "2560": "/assets/hero/lotus-pond-reflection-newlyweds-d2560.webp"
     },
     "/assets/photos/portraits/yellow-tank-top-sunflower-field.webp": {
+      "1680": "/assets/hero/yellow-tank-top-sunflower-field-d1680.webp",
       "1920": "/assets/hero/yellow-tank-top-sunflower-field-d1920.webp",
       "2560": "/assets/hero/yellow-tank-top-sunflower-field-d2560.webp"
     }
