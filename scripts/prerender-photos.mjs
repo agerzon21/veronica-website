@@ -349,7 +349,7 @@ const staticUrls = [
   // Highest-priority commercial page after the homepage: weddings are 35% of
   // all inquiries, and this is the only page that answers what coverage,
   // travel and delivery actually look like.
-  { loc: '/weddings', changefreq: 'monthly', priority: '0.9' },
+  { loc: '/wedding-photography', changefreq: 'monthly', priority: '0.9' },
   { loc: '/gallery', changefreq: 'weekly', priority: '0.9' },
   { loc: '/gallery/portraits', changefreq: 'weekly', priority: '0.85' },
   { loc: '/gallery/weddings', changefreq: 'weekly', priority: '0.85' },

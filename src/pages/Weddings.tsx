@@ -73,13 +73,13 @@ const Weddings = () => {
           name="description"
           content="Wedding photography by Veronika Gerzon — from a few hours to several days, local or destination. Every wedding is quoted individually. Request a quote."
         />
-        <link rel="canonical" href="https://vero.photography/weddings" />
+        <link rel="canonical" href="https://vero.photography/wedding-photography" />
         <meta property="og:title" content="Wedding Photography | Vero Photography" />
         <meta
           property="og:description"
           content="From a few hours to several days, local or destination. Every wedding is quoted individually."
         />
-        <meta property="og:url" content="https://vero.photography/weddings" />
+        <meta property="og:url" content="https://vero.photography/wedding-photography" />
         {hero && (
           <meta property="og:image" content={`https://vero.photography${photoUrl(hero.id)}`} />
         )}

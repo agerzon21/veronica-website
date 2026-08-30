@@ -172,7 +172,7 @@ function AppShell() {
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/contact/thank-you" element={<ThankYou />} />
-        <Route path="/weddings" element={<Weddings />} />
+        <Route path="/wedding-photography" element={<Weddings />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/gallery/:category" element={<Gallery />} />
         <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />
