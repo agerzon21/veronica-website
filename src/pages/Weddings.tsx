@@ -4,6 +4,7 @@ import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
+import PageHeader from '../components/ui/PageHeader';
 
 /**
  * The weddings page.
@@ -104,30 +105,19 @@ const Weddings = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
           >
-            <VStack spacing={4} textAlign="center" px={6} maxW="720px">
-              <Text
-                fontSize="sm"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                color="brand.accent"
-              >
-                Weddings
-              </Text>
-              <Box w="35px" h="1px" bg="brand.accent" />
-              <Text
-                as="h1"
-                fontSize={{ base: '2xl', md: '4xl' }}
-                fontWeight="200"
-                color="white"
-                lineHeight="1.35"
-                m={0}
-              >
-                No two weddings are the same.
-                <br />
-                Neither is the way I photograph them.
-              </Text>
-            </VStack>
+            <Box px={6} maxW="720px">
+              <PageHeader
+                onDark
+                eyebrow="Weddings"
+                title={
+                  <>
+                    No two weddings are the same.
+                    <br />
+                    Neither is the way I photograph them.
+                  </>
+                }
+              />
+            </Box>
           </MotionDiv>
         </Flex>
       </Box>
@@ -177,19 +167,9 @@ const Weddings = () => {
               },
             ].map((c) => (
               <VStack key={c.title} align="flex-start" spacing={3}>
-                <Text
-                  fontSize="xs"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.2em"
-                  color="brand.accentText"
-                >
-                  {c.title}
-                </Text>
+                <Text textStyle="eyebrow">{c.title}</Text>
                 <Box w="28px" h="1px" bg="brand.accent" />
-                <Text fontSize="sm" fontWeight="300" color="gray.700" lineHeight="1.9">
-                  {c.body}
-                </Text>
+                <Text textStyle="bodyCopy">{c.body}</Text>
               </VStack>
             ))}
           </SimpleGrid>
@@ -199,15 +179,7 @@ const Weddings = () => {
       {/* ─── Selected work. Real links to the photo pages. ─── */}
       <Box bg="white" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} ref={workRef}>
         <VStack spacing={3} mb={{ base: 10, md: 14 }} textAlign="center">
-          <Text
-            fontSize="xs"
-            fontWeight="500"
-            textTransform="uppercase"
-            letterSpacing="0.25em"
-            color="brand.accentText"
-          >
-            Selected Work
-          </Text>
+          <Text textStyle="eyebrow">Selected Work</Text>
           <Box w="35px" h="1px" bg="brand.accent" />
         </VStack>
 
@@ -265,10 +237,10 @@ const Weddings = () => {
             transition={{ duration: 0.7, ease: 'easeOut' }}
           >
             <VStack spacing={6} textAlign="center" maxW="560px">
-              <Text as="h2" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="200" color="gray.800" m={0}>
+              <Text as="h2" textStyle="sectionTitle">
                 Tell me about your day
               </Text>
-              <Text fontSize="md" fontWeight="300" color="gray.600" lineHeight="1.9">
+              <Text textStyle="bodyLead">
                 Where you're getting married, roughly when, and how much of it you'd like
                 photographed. That's enough for me to come back with a quote.
               </Text>
