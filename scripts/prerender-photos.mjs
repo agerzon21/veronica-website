@@ -104,6 +104,49 @@ if (lastErr) {
 // from the old CSV path (id, url, title-with-suffix, etc.). The
 // url now points at the /api/photo proxy since photos live in
 // Drive, not the repo.
+/**
+ * Same scoring as findRelatedPhotos in src/data/photos.ts: keyword overlap
+ * first, same-category as the tiebreak. Duplicated rather than imported
+ * because this script is plain .mjs and photos.ts is TypeScript inside the
+ * Vite graph — keep the two in sync if either changes.
+ *
+ * ONE deliberate difference: the app drops candidates with zero keyword
+ * overlap, because showing a visitor an unrelated photo under "Related" is
+ * worse than showing fewer. Here the list is a crawl path, and a photo whose
+ * keywords match nothing would otherwise end up with no inbound links at all —
+ * 16 of the 227 did. Falling back to same-category keeps every page reachable.
+ */
+function relatedTo(photo, all, count = 6) {
+  const keys = new Set(photo.keywords);
+  return all
+    .filter((p) => p.id !== photo.id)
+    .map((p) => {
+      let overlap = 0;
+      for (const k of p.keywords) if (keys.has(k)) overlap++;
+      return { p, overlap, same: p.category === photo.category ? 1 : 0 };
+    })
+    .sort((a, b) => b.overlap - a.overlap || b.same - a.same)
+    .slice(0, count)
+    .map((s) => s.p);
+}
+
+/**
+ * Previous and next photo within the same category, as a closed ring.
+ *
+ * The keyword-related list leaves gaps: relatedness is not symmetric, so 16 of
+ * the 227 photos were never in anybody's top 6 and ended up with no inbound
+ * links at all. A ring is the cheap guarantee — every photo has exactly one
+ * predecessor, so every photo is reachable no matter how unusual its keywords.
+ */
+function ringNeighbours(photo, all) {
+  const siblings = all.filter((p) => p.category === photo.category);
+  if (siblings.length < 2) return [];
+  const i = siblings.findIndex((p) => p.id === photo.id);
+  const prev = siblings[(i - 1 + siblings.length) % siblings.length];
+  const next = siblings[(i + 1) % siblings.length];
+  return prev.id === next.id ? [prev] : [prev, next];
+}
+
 const photos = rows
   .filter((r) => r.title && r.title.length > 0)
   .map((r) => ({
@@ -227,6 +270,32 @@ for (const photo of photos) {
         <img src="${photo.url}" alt="${photo.alt}" style="width:100%;height:auto;" />
         <p>${photo.description}</p>
         <p><a href="/gallery/${photo.category}">Back to ${photo.category} gallery</a></p>
+        <h2>Related photographs</h2>
+        <ul>
+${relatedTo(photo, photos)
+  .map(
+    (r) =>
+      `          <li><a href="/photo/${r.category}/${r.id}">${stripSuffix(r.title).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</a></li>`,
+  )
+  .join('\n')}
+        </ul>
+        <h2>More in ${photo.category}</h2>
+        <ul>
+${ringNeighbours(photo, photos)
+  .map(
+    (r) =>
+      `          <li><a href="/photo/${r.category}/${r.id}">${stripSuffix(r.title).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</a></li>`,
+  )
+  .join('\n')}
+        </ul>
+        <h2>Browse</h2>
+        <ul>
+          <li><a href="/gallery">All work</a></li>
+          <li><a href="/gallery/weddings">Weddings</a></li>
+          <li><a href="/gallery/portraits">Portraits</a></li>
+          <li><a href="/gallery/family">Family</a></li>
+          <li><a href="/gallery/maternity">Maternity</a></li>
+        </ul>
       </div>
     </noscript>`;
 
