@@ -1,11 +1,11 @@
 import {
-  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Collapse, SimpleGrid,
+  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Grid,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
-import { FaBookOpen, FaChevronDown, FaChevronUp, FaArrowRight } from 'react-icons/fa';
+import { FaBookOpen } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import JournalPost from './JournalPost';
 
@@ -211,7 +211,6 @@ function YearMarker({ year }: { year: number }) {
  * alternation was the part costing half the canvas.
  */
 function TimelineEntry({ post }: { post: PostSummary }) {
-  const [expanded, setExpanded] = useState(false);
   const dateLabel = formatDate(post.published_at);
 
   return (
@@ -231,226 +230,125 @@ function TimelineEntry({ post }: { post: PostSummary }) {
         zIndex={2}
       />
 
-      {/* The card itself. Mobile pl clears the rail (at 12px) with a
-          comfortable gap; desktop pl/pr pushes the card away from the
-          center rail on the appropriate side. */}
-      <Box w="100%" pl={{ base: '40px', md: '56px' }}>
-        <TimelineCard
-          post={post}
-          expanded={expanded}
-          onToggle={() => setExpanded((v) => !v)}
-          // On mobile the date lives inside the card since the opposite
-          // side is off-screen.
-          showInlineDate={dateLabel}
-        />
+      {/* pl clears the rail at 12px with a comfortable gutter. */}
+      <Box w="100%" pl={{ base: '32px', md: '56px' }}>
+        <TimelineCard post={post} showInlineDate={dateLabel} />
       </Box>
     </Flex>
   );
 }
+/**
+ * One post: a dense cluster of its photographs, then the words.
+ *
+ * This replaced an accordion. Each post ships FIVE photos in the list payload
+ * and the card showed one — the other four sat behind a chevron, so a page
+ * about photography displayed six photographs and a lot of cream.
+ *
+ * The reference site Alex keeps pointing at (jovanarikalo.com) is dense:
+ * "minimal spacing between grid items, creating a dense, compact
+ * presentation". That is the thing his does that ours did not. Six posts now
+ * put thirty photographs on the page at a 2px gutter, which reads as one
+ * composed block per post rather than a row of cards floating in space.
+ *
+ * The accordion is gone entirely. It existed to preview without navigating,
+ * but the cluster IS the preview, and the whole block is one link to the post.
+ */
+function TimelineCard({ post, showInlineDate }: { post: PostSummary; showInlineDate: string }) {
+  const photos = post.photos ?? [];
+  const lead = photos[0];
+  // Up to four supporting frames. Fewer is fine — the grid just gets shorter,
+  // and a post with a single photo still reads correctly as one image.
+  const rest = photos.slice(1, 5);
 
-function TimelineCard({
-  post,
-  expanded,
-  onToggle,
-  showInlineDate,
-}: {
-  post: PostSummary;
-  expanded: boolean;
-  onToggle: () => void;
-  showInlineDate: string;
-}) {
   return (
     <Box
-      bg="white"
-      border="1px solid"
-      borderColor={expanded ? 'rgba(201, 169, 110, 0.5)' : 'gray.200'}
-      borderRadius="sm"
-      overflow="hidden"
-      transition="all 0.25s ease"
-      _hover={{ borderColor: 'rgba(201, 169, 110, 0.7)', transform: 'translateY(-1px)' }}
-      boxShadow={expanded ? '0 4px 20px -8px rgba(201, 169, 110, 0.3)' : '0 1px 3px rgba(0,0,0,0.03)'}
+      as={RouterLink}
+      to={`/journal/${post.slug}`}
+      display="block"
+      textDecoration="none"
+      role="group"
+      _hover={{ textDecoration: 'none' }}
     >
-      {/* Clickable summary strip — cover thumb + title + date + chevron */}
-      <Flex
-        as="button"
-        type="button"
-        onClick={onToggle}
-        w="100%"
-        align="stretch"
-        textAlign="left"
-        bg="transparent"
-        border="none"
-        p={0}
-        cursor="pointer"
-        _hover={{ bg: 'rgba(201, 169, 110, 0.04)' }}
-        sx={{ WebkitTapHighlightColor: 'transparent' }}
-      >
-        {/* Cover thumbnail — square, left side */}
-        {post.cover_image_url ? (
+      {/* The cluster. 2px gutters on purpose: at this spacing the photographs
+          read as one object, which is what stops the page feeling scattered. */}
+      {lead && (
+        <Flex gap="2px" mb={4} align="stretch">
           <Box
-            w={{ base: '128px', md: '38%' }}
-            flexShrink={0}
-            bg="gray.100"
+            flex={rest.length ? '0 0 62%' : '1 1 100%'}
             overflow="hidden"
+            bg="gray.100"
             sx={{ aspectRatio: '4 / 3' }}
           >
             <Image
-              src={post.cover_image_url}
-              alt={post.cover_image_alt ?? post.title}
+              src={lead.url}
+              alt={lead.alt ?? post.title}
               w="100%"
               h="100%"
               objectFit="cover"
               loading="lazy"
+              transition="transform 0.7s ease"
+              _groupHover={{ transform: 'scale(1.03)' }}
             />
           </Box>
-        ) : (
-          <Flex
-            w={{ base: '128px', md: '38%' }}
-            flexShrink={0}
-            bg="brand.surface"
-            align="center"
-            justify="center"
-            sx={{ aspectRatio: '4 / 3' }}
-            color="brand.accentText"
-          >
-            <Icon as={FaBookOpen} boxSize={5} />
-          </Flex>
-        )}
 
-        {/* Title + meta */}
-        <VStack
-          flex={1}
-          align="flex-start"
-          spacing={1.5}
-          p={{ base: 3, md: 4 }}
-          justify="center"
-          minW={0}
-        >
-          <Text textStyle="metaCaption">{showInlineDate}</Text>
-          <Text
-            as="h2"
-            textStyle="cardTitle"
-            m={0}
-            noOfLines={2}
-          >
-            {post.title}
-          </Text>
-          {post.session_type && (
-            <Text
-              textStyle="metaCaption"
-              color="brand.accentText"
+          {rest.length > 0 && (
+            <Grid
+              flex="1 1 auto"
+              templateColumns={rest.length > 2 ? 'repeat(2, 1fr)' : '1fr'}
+              gap="2px"
             >
+              {rest.map((ph, i) => (
+                <Box key={i} overflow="hidden" bg="gray.100" minH={0}>
+                  <Image
+                    src={ph.url}
+                    alt={ph.alt ?? ''}
+                    w="100%"
+                    h="100%"
+                    objectFit="cover"
+                    loading="lazy"
+                    transition="transform 0.7s ease"
+                    _groupHover={{ transform: 'scale(1.03)' }}
+                  />
+                </Box>
+              ))}
+            </Grid>
+          )}
+        </Flex>
+      )}
+
+      {/* The words sit under the pictures, held to a readable measure rather
+          than stretching the full width of the cluster. */}
+      <Box maxW="measure">
+        <HStack spacing={3} mb={1.5} flexWrap="wrap">
+          <Text textStyle="metaCaption">{showInlineDate}</Text>
+          {post.session_type && (
+            <Text textStyle="metaCaption" color="brand.accentText">
               {post.session_type}
             </Text>
           )}
-        </VStack>
+        </HStack>
 
-        {/* Chevron */}
-        <Flex
-          w={{ base: '36px', md: '44px' }}
-          flexShrink={0}
-          align="center"
-          justify="center"
-          color={expanded ? 'brand.accent' : 'gray.400'}
+        <Text
+          as="h2"
+          textStyle="cardTitle"
+          m={0}
+          mb={2}
+          transition="color 0.3s"
+          _groupHover={{ color: 'brand.accentText' }}
         >
-          <Icon as={expanded ? FaChevronUp : FaChevronDown} boxSize={3} />
-        </Flex>
-      </Flex>
+          {post.title}
+        </Text>
 
-      {/* Expanded body — excerpt + preview photo grid + tags + read link.
-          Preview shows up to 4 photos (skipping index 0 which is already
-          the header thumb) so people get a taste without clicking through. */}
-      <Collapse in={expanded} animateOpacity>
-        <Box
-          borderTop="1px solid"
-          borderColor="gray.100"
-          bg="brand.surface"
-          px={{ base: 4, md: 5 }}
-          py={{ base: 4, md: 5 }}
-        >
-          {post.excerpt && (
-            <Text
-              fontSize={{ base: 'sm', md: 'md' }}
-              color="gray.700"
-              fontWeight="300"
-              lineHeight="1.8"
-              mb={4}
-            >
-              {post.excerpt}
-            </Text>
-          )}
+        {post.excerpt && (
+          <Text textStyle="bodyCopy" noOfLines={2} mb={3}>
+            {post.excerpt}
+          </Text>
+        )}
 
-          {post.photos.length > 1 && (
-            <SimpleGrid
-              columns={{ base: 2, sm: 3, md: 4 }}
-              spacing={{ base: 2, md: 2.5 }}
-              mb={4}
-            >
-              {post.photos.slice(1, 5).map((photo, i) => (
-                <RouterLink key={i} to={`/journal/${post.slug}`}>
-                  <Box
-                    aspectRatio={1}
-                    bg="gray.100"
-                    overflow="hidden"
-                    borderRadius="sm"
-                    position="relative"
-                    sx={{
-                      '& > img': { transition: 'transform 0.4s ease' },
-                    }}
-                    _hover={{ '& > img': { transform: 'scale(1.05)' } }}
-                  >
-                    <Image
-                      src={photo.url}
-                      alt={photo.alt}
-                      w="100%"
-                      h="100%"
-                      objectFit="cover"
-                      loading="lazy"
-                    />
-                  </Box>
-                </RouterLink>
-              ))}
-            </SimpleGrid>
-          )}
-
-          {post.tags.length > 0 && (
-            <HStack spacing={2} wrap="wrap" mb={4}>
-              {post.tags.slice(0, 6).map((tag) => (
-                <Text
-                  key={tag}
-                  textStyle="metaCaption"
-                  textTransform="lowercase"
-                  color="brand.accentText"
-                  bg="white"
-                  border="1px solid"
-                  borderColor="brand.accentBorder"
-                  px={2}
-                  py={0.5}
-                  borderRadius="sm"
-                >
-                  {tag}
-                </Text>
-              ))}
-            </HStack>
-          )}
-
-          <RouterLink to={`/journal/${post.slug}`}>
-            <Box
-              as="span"
-              display="inline-flex"
-              alignItems="center"
-              gap={2}
-              textStyle="metaCaption"
-              color="brand.accent"
-              _hover={{ color: 'brand.accentText' }}
-              transition="color 0.15s"
-            >
-              See the full post
-              <Icon as={FaArrowRight} boxSize={2.5} />
-            </Box>
-          </RouterLink>
-        </Box>
-      </Collapse>
+        <Text textStyle="ctaLabel" color="brand.accentText">
+          Read the post
+        </Text>
+      </Box>
     </Box>
   );
 }

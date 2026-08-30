@@ -49,7 +49,11 @@ const GalleryCategories = () => {
       >
         <Flex
           direction={{ base: 'column', md: 'row' }}
-          gap={{ base: 4, md: 5 }}
+          // Near-flush, deliberately. The reference the owner keeps citing
+          // runs "minimal spacing between grid items, creating a dense,
+          // compact presentation" — at 16/20px these read as four detached
+          // cards; at 2px they read as one band of work.
+          gap="2px"
           justify="center"
         >
           {categories.map((category, index) => (

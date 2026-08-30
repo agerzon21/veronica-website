@@ -447,7 +447,7 @@ const IndividualPhoto: React.FC = () => {
 
                 <SimpleGrid
                   columns={{ base: 2, md: 3 }}
-                  spacing={{ base: 3, md: 4 }}
+                  spacing="2px"
                   w="100%"
                 >
                   {relatedPhotos.map((rp) => (

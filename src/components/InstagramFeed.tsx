@@ -407,7 +407,9 @@ const InstagramFeed = () => {
         maxW="1100px"
         mx="auto"
         templateColumns={{ base: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' }}
-        gap={{ base: 2, md: 3 }}
+        // 8/12px between Instagram tiles read as a grid of cards; near-flush
+        // reads as a single feed, which is how Instagram itself presents it.
+        gap="2px"
       >
         {PHOTOS.map((photo, i) => {
           const isHero = i === 0;
