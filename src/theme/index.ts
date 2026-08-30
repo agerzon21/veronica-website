@@ -103,8 +103,11 @@ const theme = extendTheme({
    *
    * SCALE CONTRAST IS DELIBERATE. The old range ran 48px down to 12px, roughly
    * 4:1, with everything bunched in the middle — which reads as unfinished
-   * rather than minimal. pageTitle tops out at 92px against an 11px eyebrow,
-   * about 8:1. The white space is unchanged; the commitment is not.
+   * rather than minimal. pageTitle now runs 40 / 64 / 80px against an 11px
+   * eyebrow, about 7:1. The white space is unchanged; the commitment is not.
+   *
+   * 80 rather than the 92 first tried: Alex found 92 slightly too loud, and
+   * the ramp stays a clean 1.25 step at every breakpoint (40 / 64 / 80).
    *
    * fontFamily is set EXPLICITLY on every display token. Chakra's <Text>
    * resolves fonts.body, and 32 of the site's 34 headings are <Text as="h1">,
@@ -118,7 +121,7 @@ const theme = extendTheme({
     // ── Display: Cormorant Garamond, one ramp, sentence case ──
     pageTitle: {
       fontFamily: 'heading',
-      fontSize: { base: '2.75rem', md: '4.5rem', lg: '5.75rem' },
+      fontSize: { base: '2.5rem', md: '4rem', lg: '5rem' },
       fontWeight: '300',
       letterSpacing: { base: '0.005em', md: '0em' },
       lineHeight: 1.02,

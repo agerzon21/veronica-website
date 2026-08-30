@@ -95,7 +95,7 @@ function JournalIndex() {
 
       <Box bg="white" minH="100vh" pt={{ base: 20, md: 28 }} pb={{ base: 20, md: 24 }} px={4}>
         {/* Page header */}
-        <Box maxW="46ch" mx="auto" mb={{ base: 12, md: 20 }}>
+        <Box maxW="46ch" mx="auto" mb={{ base: 10, md: 14 }}>
           <PageHeader
             eyebrow="Journal"
             title="Behind the lens"
@@ -151,7 +151,7 @@ function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
       {grouped.map(([year, yearPosts]) => (
         <Box key={year} position="relative" pt={{ base: 8, md: 12 }} pb={2}>
           <YearMarker year={year} />
-          <VStack spacing={{ base: 8, md: 12 }} align="stretch">
+          <VStack spacing={{ base: 6, md: 8 }} align="stretch">
             {yearPosts.map((post, i) => (
               <TimelineEntry key={post.slug} post={post} side={i % 2 === 0 ? 'right' : 'left'} />
             ))}
@@ -309,10 +309,11 @@ function TimelineCard({
         {/* Cover thumbnail — square, left side */}
         {post.cover_image_url ? (
           <Box
-            w={{ base: '90px', md: '140px' }}
+            w={{ base: '120px', md: '260px' }}
             flexShrink={0}
             bg="gray.100"
             overflow="hidden"
+            sx={{ aspectRatio: '4 / 3' }}
           >
             <Image
               src={post.cover_image_url}
@@ -325,11 +326,12 @@ function TimelineCard({
           </Box>
         ) : (
           <Flex
-            w={{ base: '90px', md: '140px' }}
+            w={{ base: '120px', md: '260px' }}
             flexShrink={0}
             bg="brand.surface"
             align="center"
             justify="center"
+            sx={{ aspectRatio: '4 / 3' }}
             color="brand.accentText"
           >
             <Icon as={FaBookOpen} boxSize={5} />
@@ -357,11 +359,7 @@ function TimelineCard({
           </Text>
           <Text
             as="h2"
-            fontSize={{ base: 'md', md: 'lg' }}
-            fontWeight="400"
-            color="gray.800"
-            letterSpacing="0.01em"
-            lineHeight="1.3"
+            textStyle="cardTitle"
             m={0}
             noOfLines={2}
           >
