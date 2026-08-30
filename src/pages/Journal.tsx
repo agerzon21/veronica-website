@@ -2,6 +2,7 @@ import {
   Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Collapse, SimpleGrid,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
+import PageHeader from '../components/ui/PageHeader';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { FaBookOpen, FaChevronDown, FaChevronUp, FaArrowRight } from 'react-icons/fa';
@@ -94,39 +95,13 @@ function JournalIndex() {
 
       <Box bg="white" minH="100vh" pt={{ base: 20, md: 28 }} pb={{ base: 20, md: 24 }} px={4}>
         {/* Page header */}
-        <VStack maxW="620px" mx="auto" spacing={4} textAlign="center" mb={{ base: 12, md: 20 }}>
-          <Text
-            fontSize="xs"
-            fontWeight="500"
-            textTransform="uppercase"
-            letterSpacing="0.3em"
-            color="brand.accentText"
-          >
-            Journal
-          </Text>
-          <Box w="40px" h="1px" bg="brand.accent" />
-          <Text
-            as="h1"
-            fontSize={{ base: '3xl', md: '5xl' }}
-            fontWeight="200"
-            color="gray.800"
-            letterSpacing="0.02em"
-            lineHeight="1.1"
-            m={0}
-          >
-            Behind the lens
-          </Text>
-          <Text
-            fontSize={{ base: 'sm', md: 'md' }}
-            color="gray.600"
-            fontWeight="300"
-            lineHeight="1.8"
-            maxW="480px"
-          >
-            Recent sessions with the stories, favorite frames, and small
-            moments that made them.
-          </Text>
-        </VStack>
+        <Box maxW="46ch" mx="auto" mb={{ base: 12, md: 20 }}>
+          <PageHeader
+            eyebrow="Journal"
+            title="Behind the lens"
+            lead="Stories from recent sessions, and the occasional thought about photographing people."
+          />
+        </Box>
 
         {/* Timeline body */}
         <Box maxW="1000px" mx="auto">

@@ -2,6 +2,7 @@ import { Box, VStack, Text, Icon, Flex, Input, Textarea, Select } from '@chakra-
 import CTAButton from '../components/ui/CTAButton';
 import { FaWhatsapp, FaInstagram, FaRegEnvelope } from 'react-icons/fa';
 import { Helmet } from 'react-helmet-async';
+import PageHeader from '../components/ui/PageHeader';
 import { motion, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -187,31 +188,12 @@ const Contact = () => {
           >
             <VStack spacing={10}>
               {/* Heading */}
-              <VStack spacing={4}>
-                <Text
-                  as="h1"
-                  fontSize={{ base: '3xl', md: '4xl' }}
-                  fontWeight="200"
-                  color="white"
-                  textTransform="uppercase"
-                  letterSpacing="0.3em"
-                  textAlign="center"
-                  m={0}
-                >
-                  Book a Session
-                </Text>
-                <Box w="40px" h="1px" bg="brand.accent" />
-                <Text
-                  fontSize={{ base: 'sm', md: 'md' }}
-                  color="whiteAlpha.900"
-                  textAlign="center"
-                  fontWeight="300"
-                  lineHeight="1.9"
-                  maxW="400px"
-                >
-                  Tell me about your vision and let's create something beautiful together.
-                </Text>
-              </VStack>
+              <PageHeader
+                onDark
+                eyebrow="Get in touch"
+                title="Book a session"
+                lead="Tell me about your vision and let's create something beautiful together."
+              />
 
               {/* Form — wrapped in a dark backdrop card so fields read consistently
                   regardless of what's behind on the photo. Padded, subtle border

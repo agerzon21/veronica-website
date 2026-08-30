@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import { Helmet } from 'react-helmet-async';
+import PageHeader from '../components/ui/PageHeader';
 import { motion } from 'framer-motion';
 import GalleryCategories from '../components/GalleryCategories';
 import GalleryGrid from '../components/GalleryGrid';
@@ -132,28 +133,13 @@ const Gallery = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              <VStack spacing={4} textAlign="center" px={6}>
-                <Text
-                  fontSize="xs"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.2em"
-                  color="brand.accent"
-                >
-                  Portfolio
-                </Text>
-                <Box w="35px" h="1px" bg="brand.accent" />
-                <Text
-                  as="h1"
-                  fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
-                  fontWeight="200"
-                  color="white"
-                  lineHeight="1.4"
-                  m={0}
-                >
-                  A collection of my recent work
-                </Text>
-              </VStack>
+              <Box px={6}>
+                <PageHeader
+                  onDark
+                  eyebrow="Portfolio"
+                  title="A collection of my recent work"
+                />
+              </Box>
             </MotionDiv>
           </Flex>
         </Box>
