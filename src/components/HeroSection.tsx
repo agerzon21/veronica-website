@@ -435,7 +435,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
 
   const footerContent = (
     <VStack spacing={4} align="center">
-      <Flex gap={{ base: 6, md: 10, lg: 14 }} align="center">
+      {/* gap was 6 (24px) at base. Three cardTitle values (20px Cormorant)
+          plus two dividers need more than the 343px a 375px screen leaves, so
+          "Scranton, PA" wrapped and knocked the three blocks out of vertical
+          alignment. On main this row fit by a single pixel. */}
+      <Flex gap={{ base: 3, md: 10, lg: 14 }} align="center">
         {STATS.map((stat, i) => (
           <React.Fragment key={stat.label}>
             <VStack spacing={2} minW={{ base: '80px', md: '100px' }}>
@@ -627,8 +631,8 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           {/* Small label. The token's negative marginRight cancels the
               trailing letter-space, which is what the old pl="0.3em" was
               faking by hand. */}
-          // The rail sits on the WHITE sticky container, not the photo, so this
-          // needs accentText. eyebrowOnDark here was 2.24:1 on white.
+          {/* eyebrow, not eyebrowOnDark: the rail sits on the WHITE sticky
+              container, not the photograph. eyebrowOnDark here was 2.24:1. */}
           <Text textStyle="eyebrow" mt={3}>
             Scroll
           </Text>

@@ -89,6 +89,12 @@ const Navbar = () => {
             decoding="async"
             alt="Vero Photography"
             height="40px"
+            // The nav group opposite grew (an extra link, uppercase tracked
+            // labels, a real CTA), and as the shrinkable flex item the
+            // wordmark was being crushed — measured 229px down to 45px at
+            // 768px. objectFit="contain" rescales rather than crops, so it
+            // lost height too. This is also the mobile LCP element.
+            flexShrink={0}
             objectFit="contain"
           />
         </Link>

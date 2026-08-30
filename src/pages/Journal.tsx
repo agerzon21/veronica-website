@@ -266,15 +266,29 @@ function TimelineCard({ post, showInlineDate }: { post: PostSummary; showInlineD
       to={`/journal/${post.slug}`}
       display="block"
       textDecoration="none"
-      role="group"
+      // data-group, NOT role="group": this renders as an <a>, and an
+      // explicit ARIA role overrides the implicit link role, dropping every
+      // card out of a screen reader's links list. Chakra's _groupHover matches
+      // data-group just as well — the pattern already used elsewhere here.
+      data-group
       _hover={{ textDecoration: 'none' }}
     >
       {/* The cluster. 2px gutters on purpose: at this spacing the photographs
           read as one object, which is what stops the page feeling scattered. */}
       {lead && (
-        <Flex gap="2px" mb={4} align="stretch">
+        <Flex
+          gap="2px"
+          mb={4}
+          align="stretch"
+          // Column on phones. Side by side, the four supporting frames would
+          // share the 38% left over from the lead — roughly 60px each on a
+          // 375px screen, which is a swatch rather than a photograph. Stacked,
+          // the lead runs full width and the rest become a strip beneath it at
+          // about 85px.
+          direction={{ base: 'column', md: 'row' }}
+        >
           <Box
-            flex={rest.length ? '0 0 62%' : '1 1 100%'}
+            flex={{ base: '1 1 auto', md: rest.length ? '0 0 62%' : '1 1 100%' }}
             overflow="hidden"
             bg="gray.100"
             sx={{ aspectRatio: '4 / 3' }}
@@ -294,8 +308,19 @@ function TimelineCard({ post, showInlineDate }: { post: PostSummary; showInlineD
           {rest.length > 0 && (
             <Grid
               flex="1 1 auto"
-              templateColumns={rest.length > 2 ? 'repeat(2, 1fr)' : '1fr'}
+              // A strip across the bottom on phones, a block beside the lead
+              // from md up. The aspect ratio keeps the strip from collapsing
+              // to zero height when the parent is a column.
+              templateColumns={{
+                base: `repeat(${rest.length}, 1fr)`,
+                md: rest.length > 2 ? 'repeat(2, 1fr)' : '1fr',
+              }}
               gap="2px"
+              sx={{
+                '@media (max-width: 47.99em)': {
+                  aspectRatio: `${rest.length * 4} / 3`,
+                },
+              }}
             >
               {rest.map((ph, i) => (
                 <Box key={i} overflow="hidden" bg="gray.100" minH={0}>
