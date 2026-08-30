@@ -106,8 +106,13 @@ const theme = extendTheme({
    * rather than minimal. pageTitle now runs 40 / 64 / 80px against an 11px
    * eyebrow, about 7:1. The white space is unchanged; the commitment is not.
    *
-   * 80 rather than the 92 first tried: Alex found 92 slightly too loud, and
-   * the ramp stays a clean 1.25 step at every breakpoint (40 / 64 / 80).
+   * Sized down twice from the first attempt at 44/72/92. 80px still read as
+   * "exactly the same" as 92 — which it nearly is, a 13% step. Now 36/52/68,
+   * a 26% cut from 92 at the top and a real reduction at every breakpoint.
+   *
+   * Worth knowing when judging this: Chakra's lg breakpoint is 62em/992px, so
+   * a browser window narrower than that never sees the lg size at all. Between
+   * 48em and 62em the title is the md value.
    *
    * fontFamily is set EXPLICITLY on every display token. Chakra's <Text>
    * resolves fonts.body, and 32 of the site's 34 headings are <Text as="h1">,
@@ -121,7 +126,7 @@ const theme = extendTheme({
     // ── Display: Cormorant Garamond, one ramp, sentence case ──
     pageTitle: {
       fontFamily: 'heading',
-      fontSize: { base: '2.5rem', md: '4rem', lg: '5rem' },
+      fontSize: { base: '2.25rem', md: '3.25rem', lg: '4.25rem' },
       fontWeight: '300',
       letterSpacing: { base: '0.005em', md: '0em' },
       lineHeight: 1.02,

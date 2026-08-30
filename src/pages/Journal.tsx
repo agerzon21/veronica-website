@@ -141,10 +141,10 @@ function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
         position="absolute"
         top={0}
         bottom={0}
-        left={{ base: '12px', md: '50%' }}
+        left="12px"
         w="1px"
         bg="rgba(201, 169, 110, 0.35)"
-        transform={{ base: 'none', md: 'translateX(-0.5px)' }}
+        transform="none"
         zIndex={0}
       />
 
@@ -152,8 +152,8 @@ function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
         <Box key={year} position="relative" pt={{ base: 8, md: 12 }} pb={2}>
           <YearMarker year={year} />
           <VStack spacing={{ base: 6, md: 8 }} align="stretch">
-            {yearPosts.map((post, i) => (
-              <TimelineEntry key={post.slug} post={post} side={i % 2 === 0 ? 'right' : 'left'} />
+            {yearPosts.map((post) => (
+              <TimelineEntry key={post.slug} post={post} />
             ))}
           </VStack>
         </Box>
@@ -202,19 +202,32 @@ function YearMarker({ year }: { year: number }) {
   );
 }
 
-function TimelineEntry({ post, side }: { post: PostSummary; side: 'left' | 'right' }) {
+/**
+ * A single post on the rail.
+ *
+ * This used to be a CENTRE-rail timeline with entries alternating left and
+ * right at w="50%". That is the right shape for a company history or a CV —
+ * many short entries, where the alternation carries the eye. For six
+ * photograph-led posts it meant half the page was blank on every row, by
+ * construction, which is why the journal read as empty no matter how much the
+ * spacing was tuned.
+ *
+ * The rail now runs down the left on every breakpoint and each entry takes the
+ * full column, so the covers get roughly twice the width they had. The rail,
+ * the dots and the year markers stay — that was the characterful part; the
+ * alternation was the part costing half the canvas.
+ */
+function TimelineEntry({ post }: { post: PostSummary }) {
   const [expanded, setExpanded] = useState(false);
   const dateLabel = formatDate(post.published_at);
 
-  // On mobile, EVERY entry is on the right side of the rail (single
-  // column). On desktop we honor the alternating side.
   return (
     <Flex position="relative" align="stretch" zIndex={1}>
       {/* Dot on the rail — anchors the entry visually */}
       <Box
         position="absolute"
         top={{ base: '18px', md: '24px' }}
-        left={{ base: '12px', md: '50%' }}
+        left="12px"
         transform="translateX(-50%)"
         w="9px"
         h="9px"
@@ -225,37 +238,10 @@ function TimelineEntry({ post, side }: { post: PostSummary; side: 'left' | 'righ
         zIndex={2}
       />
 
-      {/* Date label opposite the card (desktop only) */}
-      <Flex
-        display={{ base: 'none', md: 'flex' }}
-        w="50%"
-        pr={side === 'right' ? 12 : 0}
-        pl={side === 'left' ? 12 : 0}
-        justify={side === 'right' ? 'flex-end' : 'flex-start'}
-        align="flex-start"
-        pt={5}
-        order={side === 'right' ? 0 : 1}
-      >
-        <Text
-          fontSize="xs"
-          fontWeight="500"
-          letterSpacing="0.16em"
-          textTransform="uppercase"
-          color="gray.500"
-        >
-          {dateLabel}
-        </Text>
-      </Flex>
-
       {/* The card itself. Mobile pl clears the rail (at 12px) with a
           comfortable gap; desktop pl/pr pushes the card away from the
           center rail on the appropriate side. */}
-      <Box
-        w={{ base: '100%', md: '50%' }}
-        pl={{ base: '40px', md: side === 'right' ? 12 : 0 }}
-        pr={{ base: 0, md: side === 'left' ? 12 : 0 }}
-        order={{ base: 0, md: side === 'right' ? 1 : 0 }}
-      >
+      <Box w="100%" pl={{ base: '40px', md: '56px' }}>
         <TimelineCard
           post={post}
           expanded={expanded}
@@ -309,7 +295,7 @@ function TimelineCard({
         {/* Cover thumbnail — square, left side */}
         {post.cover_image_url ? (
           <Box
-            w={{ base: '120px', md: '260px' }}
+            w={{ base: '128px', md: '38%' }}
             flexShrink={0}
             bg="gray.100"
             overflow="hidden"
@@ -326,7 +312,7 @@ function TimelineCard({
           </Box>
         ) : (
           <Flex
-            w={{ base: '120px', md: '260px' }}
+            w={{ base: '128px', md: '38%' }}
             flexShrink={0}
             bg="brand.surface"
             align="center"
@@ -347,16 +333,7 @@ function TimelineCard({
           justify="center"
           minW={0}
         >
-          <Text
-            display={{ base: 'block', md: 'none' }}
-            fontSize="2xs"
-            fontWeight="500"
-            letterSpacing="0.16em"
-            textTransform="uppercase"
-            color="gray.500"
-          >
-            {showInlineDate}
-          </Text>
+          <Text textStyle="metaCaption">{showInlineDate}</Text>
           <Text
             as="h2"
             textStyle="cardTitle"
