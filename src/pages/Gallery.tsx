@@ -1,4 +1,4 @@
-import { Box, Text, Flex, VStack, Image, Spinner } from '@chakra-ui/react';
+import { Box, Text, Flex, Image, Spinner } from '@chakra-ui/react';
 import { useParams, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
@@ -184,28 +184,9 @@ const Gallery = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            <VStack spacing={4} textAlign="center" px={6}>
-              <Text
-                fontSize="xs"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                color="brand.accent"
-              >
-                Gallery
-              </Text>
-              <Box w="35px" h="1px" bg="brand.accent" />
-              <Text
-                as="h1"
-                fontSize={{ base: '2xl', md: '3xl', lg: '4xl' }}
-                fontWeight="200"
-                color="white"
-                lineHeight="1.4"
-                m={0}
-              >
-                {categoryInfo.title}
-              </Text>
-            </VStack>
+            <Box px={6}>
+              <PageHeader onDark eyebrow="Gallery" title={categoryInfo.title} />
+            </Box>
           </MotionDiv>
         </Flex>
 
@@ -227,14 +208,7 @@ const Gallery = () => {
               gap={2}
             >
               <ArrowBackIcon />
-              <Text
-                fontSize="xs"
-                fontWeight="400"
-                letterSpacing="0.15em"
-                textTransform="uppercase"
-              >
-                Back
-              </Text>
+              <Text textStyle="ctaLabel">Back</Text>
             </Flex>
           </Link>
         </Box>
@@ -252,11 +226,8 @@ const Gallery = () => {
           <Flex justify="center" align="center" direction="column" gap={3} py={20}>
             <Spinner color="brand.accent" size="lg" thickness="2px" />
             <Text
-              fontSize="xs"
+              textStyle="metaCaption"
               color="gray.400"
-              fontWeight="300"
-              letterSpacing="0.2em"
-              textTransform="uppercase"
             >
               Loading gallery…
             </Text>

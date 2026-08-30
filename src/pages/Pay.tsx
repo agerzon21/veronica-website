@@ -1,8 +1,9 @@
-import { Box, VStack, Text, Flex, Button, Icon } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, Icon } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { useCopyNotification } from '../components/CopyNotification';
+import CTAButton from '../components/ui/CTAButton';
 import { FaHeart } from 'react-icons/fa';
 
 const MotionDiv = motion.div;
@@ -35,7 +36,7 @@ const Pay = () => {
   };
 
   return (
-    <Box h="100vh" overflow="hidden" bg="white">
+    <Box minH="100vh" bg="white">
       <CopyNotification />
       <Helmet>
         <meta name="robots" content="noindex, nofollow" />
@@ -45,10 +46,10 @@ const Pay = () => {
       <Flex
         justify="center"
         px={6}
-        pt={{ base: 32, md: 28 }}
+        layerStyle="pageTop"
         pb={10}
       >
-        <Box ref={contentRef} w="100%" maxW="420px">
+        <Box ref={contentRef} w="100%" maxW="measure">
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
@@ -72,7 +73,7 @@ const Pay = () => {
                 {/* Watermark heart */}
                 <Icon
                   as={FaHeart}
-                  color="brand.accentText"
+                  color="brand.accent"
                   opacity={0.06}
                   boxSize={{ base: '90px', md: '110px' }}
                   position="absolute"
@@ -82,7 +83,7 @@ const Pay = () => {
                   pointerEvents="none"
                 />
                 <VStack spacing={2} position="relative">
-                  <Text as="h1" textStyle="sectionTitle">
+                  <Text as="h1" textStyle="contentTitle" m={0}>
                     Thank you
                   </Text>
                   <Text textStyle="bodyLead">
@@ -104,65 +105,34 @@ const Pay = () => {
                 <VStack spacing={6}>
                   <VStack spacing={3}>
                     <ZelleLogo width={140} />
-                    <Text
-                      fontSize="xs"
-                      color="gray.400"
-                      fontWeight="300"
-                      letterSpacing="0.15em"
-                      textTransform="uppercase"
-                    >
-                      Send via Zelle
-                    </Text>
+                    <Text textStyle="metaCaption">Send via Zelle</Text>
                   </VStack>
 
                   <Box w="100%" h="1px" bg="gray.100" />
 
-                  <VStack spacing={1}>
+                  <VStack spacing={2}>
+                    <Text textStyle="metaCaption">Phone Number</Text>
+                    {/* Deliberately NOT a textStyle. This is a number to be
+                        read off the screen and retyped into a banking app, and
+                        no token covers "large data value" — the display tokens
+                        are all Cormorant, whose lining figures are harder to
+                        tell apart at a glance (5/6/8/9) than the body sans. */}
                     <Text
-                      fontSize="xs"
-                      color="gray.400"
+                      fontFamily="body"
+                      fontSize={{ base: '1.5rem', md: '1.75rem' }}
                       fontWeight="300"
-                      letterSpacing="0.1em"
-                      textTransform="uppercase"
-                    >
-                      Phone Number
-                    </Text>
-                    <Text
-                      fontSize={{ base: '2xl', md: '3xl' }}
-                      fontWeight="200"
+                      letterSpacing="0.04em"
                       color="gray.800"
-                      letterSpacing="0.05em"
                     >
                       {ZELLE_PHONE}
                     </Text>
                   </VStack>
 
-                  <Button
-                    onClick={handleCopy}
-                    bg="brand.accent"
-                    color="white"
-                    fontSize="xs"
-                    fontWeight="400"
-                    letterSpacing="0.15em"
-                    textTransform="uppercase"
-                    h="44px"
-                    w="100%"
-                    borderRadius="sm"
-                    _hover={{ bg: 'brand.accentSoft', transform: 'translateY(-1px)' }}
-                    _active={{ bg: 'brand.accentStrong', transform: 'translateY(0)' }}
-                    transition="all 0.3s"
-                  >
+                  <CTAButton onClick={handleCopy} variant="solid" fullWidth>
                     Copy Number
-                  </Button>
+                  </CTAButton>
 
-                  <Text
-                    fontSize="xs"
-                    color="gray.400"
-                    fontWeight="300"
-                    letterSpacing="0.03em"
-                    textAlign="center"
-                    lineHeight="1.8"
-                  >
+                  <Text textStyle="bodyCopy" color="gray.500" textAlign="center">
                     Open your banking app, select Zelle,
                     <br />
                     and send to the number above.

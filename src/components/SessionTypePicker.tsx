@@ -60,7 +60,7 @@ const SessionTypePicker = ({ value, onChange }: Props) => {
           color="gray.800"
           fontSize="sm"
           borderRadius="sm"
-          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+          _focus={{ borderColor: 'brand.accent', boxShadow: 'accentFocus' }}
         />
       )}
     </Box>

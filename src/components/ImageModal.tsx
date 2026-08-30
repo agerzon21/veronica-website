@@ -143,30 +143,43 @@ const DownloadMenu = ({
   onMenuOpen,
   driveViewUrl,
 }: DownloadMenuProps) => {
-  const GOLD = '#c9a96e';
+  // Chakra's MenuButton owns the popper reference ref and the aria-expanded
+  // wiring, and CTAButton is not a forwardRef component — passing it as
+  // `as={CTAButton}` drops the ref and the menu loses its anchor. So this
+  // trigger stays a MenuButton, but every value below is now the CTAButton
+  // `variant="outline" tone="dark" size="sm"` recipe verbatim (plus the one
+  // thing CTAButton has no concept of, `_expanded`), so it renders identically
+  // to the CTAButtons sitting beside it in the bottom bar — including the
+  // 44px mobile touch target it was previously missing.
   const triggerStyles = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
     px: { base: 4, md: 5 },
-    py: 2,
-    fontSize: '2xs',
+    py: { base: 3, md: 2 },
+    minH: { base: '44px', md: 'auto' },
+    fontSize: { base: 'xs', md: '2xs' },
     fontWeight: 400,
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.18em',
+    letterSpacing: { base: '0.15em', md: '0.18em' },
     lineHeight: 1,
     borderRadius: 0,
     border: '1px solid',
-    borderColor: GOLD,
-    color: GOLD,
+    borderColor: 'brand.accent',
+    color: 'brand.accent',
     bg: 'transparent',
     cursor: 'pointer',
     transition: 'all 0.4s ease',
     whiteSpace: 'nowrap' as const,
-    _hover: { bg: GOLD, color: 'white', transform: 'translateY(-2px)' },
-    _active: { bg: 'brand.accentStrong', transform: 'translateY(0)' },
-    _expanded: { bg: GOLD, color: 'white' },
+    _hover: { bg: 'brand.accent', color: 'white', transform: 'translateY(-2px)' },
+    _active: {
+      bg: 'brand.accentStrong',
+      borderColor: 'brand.accentStrong',
+      color: 'white',
+      transform: 'translateY(0)',
+    },
+    _expanded: { bg: 'brand.accent', color: 'white' },
     sx: { WebkitTapHighlightColor: 'transparent' },
   };
   const listStyles = {
@@ -193,7 +206,7 @@ const DownloadMenu = ({
         {/* MenuButton wraps children in an inner span, so flex `gap` on
             the trigger doesn't propagate down to the icon/label/chevron.
             Wrap in our own Flex so the gap actually applies. */}
-        <Flex as="span" align="center" gap={2.5}>
+        <Flex as="span" align="center" gap={2}>
           <Icon as={FaDownload} boxSize={3.5} />
           <Box as="span">{triggerLabel}</Box>
           <ChevronDownIcon boxSize={3.5} />
@@ -788,10 +801,8 @@ const ImageModal = ({
         pointerEvents={showUI ? 'auto' : 'none'}
       >
         <Text
-          fontSize="xs"
-          fontWeight="400"
+          textStyle="metaCaption"
           color="whiteAlpha.600"
-          letterSpacing="0.15em"
           userSelect="none"
           onClick={(e) => e.stopPropagation()}
         >
@@ -860,10 +871,11 @@ const ImageModal = ({
         >
           {photoTitle && (
             <Text
-              fontSize={{ base: 'xs', md: 'sm' }}
-              fontWeight="300"
-              color="whiteAlpha.800"
-              letterSpacing="0.05em"
+              // bodyCopy, not cardTitle: this sits in a fixed-height control
+              // bar beside the Favourite and Save pills. At 20px the title had
+              // roughly 110px on a 375px screen — about seven characters.
+              textStyle="bodyCopy"
+              color="whiteAlpha.900"
               noOfLines={1}
               flex="1 1 auto"
               minW={0}

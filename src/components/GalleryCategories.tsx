@@ -41,7 +41,7 @@ const GalleryCategories = () => {
   const isInView = useInView(ref, { once: true, amount: 0.1 });
 
   return (
-    <Box ref={ref} py={{ base: 10, md: 16 }} px={{ base: 4, md: 8, lg: 12 }}>
+    <Box ref={ref} layerStyle="sectionTight" px={{ base: 4, md: 8, lg: 12 }}>
       <MotionDiv
         initial={{ opacity: 0, y: 25 }}
         animate={isInView ? { opacity: 1, y: 0 } : {}}
@@ -91,30 +91,39 @@ const GalleryCategories = () => {
                     spacing={3}
                     zIndex={1}
                   >
+                    {/* These tiles are 65vh panels, not cards in a grid — the
+                        title carries the whole section, so it takes the
+                        sectionTitle ramp. Colour is the only override.
+                        The old hover animated letterSpacing 0.2em → 0.3em,
+                        which interpolated straight through the tracking values
+                        the label system is built on and left the type at a
+                        value no token defines for the length of the
+                        transition. The lift does the same job without
+                        touching the type. */}
                     <Text
-                      fontSize={{ base: 'xl', md: 'xl', lg: '2xl' }}
-                      fontWeight="200"
+                      textStyle="sectionTitle"
                       color="white"
-                      textTransform="uppercase"
-                      letterSpacing="0.2em"
-                      transition="all 0.4s ease"
-                      _groupHover={{ letterSpacing: '0.3em' }}
+                      textAlign="center"
+                      transition="transform 0.4s ease"
+                      _groupHover={{ transform: 'translateY(-4px)' }}
                     >
                       {category.title}
                     </Text>
+                    {/* 40px is the site's rule width (see PageHeader). It was
+                        animating 30px → 50px, so the resting state matched
+                        nothing and the "correct" width existed only mid-
+                        transition. Fixed width, opacity does the hover. */}
                     <Box
-                      w="30px"
+                      w="40px"
                       h="1px"
                       bg="brand.accent"
-                      transition="all 0.4s ease"
-                      _groupHover={{ w: '50px' }}
+                      opacity={0.8}
+                      transition="opacity 0.4s ease"
+                      _groupHover={{ opacity: 1 }}
                     />
                     <Text
-                      fontSize="xs"
-                      fontWeight="400"
-                      color="whiteAlpha.700"
-                      letterSpacing="0.15em"
-                      textTransform="uppercase"
+                      textStyle="ctaLabel"
+                      color="whiteAlpha.800"
                       opacity={0}
                       transform="translateY(5px)"
                       transition="all 0.4s ease"

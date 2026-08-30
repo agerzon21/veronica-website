@@ -98,7 +98,7 @@ const Privacy = () => {
               </>,
               <>
                 <Term>Instagram feed cache.</Term> Public posts from
-                <Text as="span" fontWeight="500" color="gray.800"> @vero.art.photo </Text>
+                <Term> @vero.art.photo </Term>
                 are fetched and briefly cached on our servers for display
                 on the homepage. This is public content — nothing private
                 is stored.

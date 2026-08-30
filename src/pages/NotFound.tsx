@@ -1,5 +1,6 @@
 import { Box, VStack, Text, Flex } from '@chakra-ui/react';
 import CTAButton from '../components/ui/CTAButton';
+import PageHeader from '../components/ui/PageHeader';
 import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
@@ -23,7 +24,7 @@ const NotFound = () => {
         justify="center"
         px={6}
       >
-        <Box ref={contentRef} w="100%" maxW="500px">
+        <Box ref={contentRef} w="100%" maxW="measure">
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
@@ -36,21 +37,13 @@ const NotFound = () => {
                 404
               </Text>
 
-              <VStack spacing={3}>
-                <Text as="h1" textStyle="sectionTitle" textAlign="center">
-                  Page not found
-                </Text>
-                <Box w="40px" h="1px" bg="brand.accent" />
-                <Text
-                  fontSize={{ base: 'sm', md: 'md' }}
-                  color="gray.500"
-                  textAlign="center"
-                  fontWeight="300"
-                  lineHeight="1.9"
-                >
-                  The page you're looking for doesn't exist or has been moved.
-                </Text>
-              </VStack>
+              {/* Same eyebrow-less header block every other page uses — the
+                  rule sits above the title, not under it. */}
+              <PageHeader
+                size="content"
+                title="Page not found"
+                lead="The page you're looking for doesn't exist or has been moved."
+              />
 
               <Flex gap={4} direction={{ base: 'column', sm: 'row' }}>
                 <CTAButton to="/" variant="solid">Go Home</CTAButton>

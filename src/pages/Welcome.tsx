@@ -137,7 +137,7 @@ const Welcome = () => {
           >
             <VStack spacing={8}>
               <VStack spacing={4}>
-                <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
+                <Text textStyle="eyebrowOnDark">
                   Welcome
                 </Text>
                 <Box w="40px" h="1px" bg="brand.accent" />
@@ -188,7 +188,7 @@ const Welcome = () => {
                 >
                   <VStack align="stretch" spacing={5}>
                     <Box>
-                      <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.2em" color="brand.accent" mb={3}>
+                      <Text textStyle="eyebrowOnDark" mb={3}>
                         Your Booking
                       </Text>
                       <VStack align="stretch" spacing={2}>
@@ -384,7 +384,7 @@ function WelcomePasswordInput({
         _hover={{ borderColor: 'whiteAlpha.500' }}
         _focus={{
           borderColor: 'brand.accent',
-          boxShadow: '0 0 0 1px #c9a96e',
+          boxShadow: 'accentFocus',
           bg: 'blackAlpha.600',
         }}
       />

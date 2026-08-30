@@ -122,6 +122,37 @@ const theme = extendTheme({
    * so centred labels are optically centred. It replaces the hand-tuned
    * `pl="0.3em"` nudges that were doing this by eye.
    */
+  /**
+   * Layout scale. The audit found seven text-column widths (400 / 440 / 480 /
+   * 500 / 620 / 720 / 820px), four header top-paddings (80 / 96 / 112 / 128px)
+   * and section padding chosen per page. Contact and ThankYou — the same flow,
+   * one click apart — used 400px and 440px.
+   *
+   * Measures are in `ch` so the column follows the type size rather than
+   * approximating it in pixels.
+   */
+  sizes: {
+    measure: '46ch',
+    measureWide: '68ch',
+    contentNarrow: '45rem',
+    content: '62.5rem',
+    contentWide: '75rem',
+  },
+
+  /**
+   * Vertical rhythm. Two section sizes and one page-top, applied everywhere,
+   * so the eye learns the interval instead of meeting a new one per page.
+   *
+   * `pageTop` clears the fixed 72px navbar with room to spare — that height
+   * was hardcoded in three separate files and halved in a fourth.
+   */
+  layerStyles: {
+    pageTop: { pt: { base: '5.5rem', md: '7rem' } },
+    section: { py: { base: '3.5rem', md: '6rem' } },
+    sectionTight: { py: { base: '2.5rem', md: '4rem' } },
+    sectionFlush: { py: { base: '2rem', md: '3rem' } },
+  },
+
   textStyles: {
     // ── Display: Cormorant Garamond, one ramp, sentence case ──
     pageTitle: {
@@ -223,6 +254,24 @@ const theme = extendTheme({
       lineHeight: 1,
       marginRight: '-0.2em',
     },
+    /**
+     * A link in the full-screen mobile menu.
+     *
+     * The sweep initially reused ctaLabel here, which is a 13px desktop-navbar
+     * treatment. In a full-screen overlay that shrinks content inside an
+     * already-empty column — the opposite of the brief — and, with no padding
+     * on the links, left roughly 13px tap targets against a 44px minimum.
+     *
+     * Sentence case, not uppercase: at this size tracked caps read as shouting.
+     */
+    menuLink: {
+      fontFamily: 'body',
+      fontSize: { base: '1.5rem', md: '1.75rem' },
+      fontWeight: '300',
+      letterSpacing: '0.01em',
+      lineHeight: 1.2,
+    },
+
     formLabel: {
       fontFamily: 'body',
       fontSize: '0.6875rem',

@@ -207,14 +207,12 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                   px={2}
                   py={1}
                   borderRadius="sm"
-                  fontSize="2xs"
-                  fontWeight="500"
-                  letterSpacing="0.15em"
-                  textTransform="uppercase"
                   backdropFilter="blur(6px)"
                 >
                   <Icon as={badge.icon} boxSize={2.5} />
-                  <Text as="span">{badge.label}</Text>
+                  <Text as="span" textStyle="metaCaption" color="white">
+                    {badge.label}
+                  </Text>
                 </Flex>
               )}
             </Box>
@@ -233,18 +231,11 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                   as part of the same visual language. */}
               <HStack spacing={2} pb={2} borderBottom="1px solid" borderColor="gray.100">
                 <Icon as={FaInstagram} color="brand.accent" boxSize={4} />
-                <Text
-                  fontSize="xs"
-                  fontWeight="500"
-                  letterSpacing="0.18em"
-                  textTransform="uppercase"
-                  color="brand.accent"
-                >
-                  @vero.art.photo
-                </Text>
+                {/* eyebrow, not eyebrowOnDark — the meta column is white. */}
+                <Text textStyle="eyebrow">@vero.art.photo</Text>
 
                 {typeof index === 'number' && typeof total === 'number' && total > 1 && (
-                  <Text fontSize="2xs" color="gray.400" letterSpacing="0.1em" ml={2}>
+                  <Text textStyle="metaCaption" ml={2}>
                     {index + 1}/{total}
                   </Text>
                 )}
@@ -256,7 +247,9 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                     compete with the handle beside it. Desktop keeps the proper
                     button at the bottom, where there is room for it. */}
                 {post.permalink && (
-                  <Box
+                  // The Flex carries the placement; CTAButton takes no layout
+                  // props. Was a hand-rolled Box-as-anchor with its own type.
+                  <Text
                     as="a"
                     href={post.permalink}
                     target="_blank"
@@ -265,20 +258,14 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                     display={{ base: 'inline-flex', md: 'none' }}
                     alignItems="center"
                     gap={1.5}
-                    fontSize="2xs"
-                    fontWeight="500"
-                    letterSpacing="0.12em"
-                    textTransform="uppercase"
+                    py={2}
+                    textStyle="ctaLabel"
                     color="brand.accentText"
-                    px={2}
-                    py={1}
-                    borderRadius="sm"
-                    _active={{ bg: 'brand.surface' }}
-                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                    whiteSpace="nowrap"
                   >
                     View
                     <Icon as={FaExternalLinkAlt} boxSize={2.5} />
-                  </Box>
+                  </Text>
                 )}
               </HStack>
 
@@ -287,8 +274,8 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                 <HStack spacing={5} color="gray.700">
                   {post.likeCount != null && (
                     <HStack spacing={2}>
-                      <Icon as={FaHeart} boxSize={3.5} color="#ff4c68" />
-                      <Text fontSize="sm" fontWeight="500">
+                      <Icon as={FaHeart} boxSize={3.5} color="red.400" />
+                      <Text textStyle="metaCaption" color="gray.700">
                         {formatCount(post.likeCount)}
                       </Text>
                     </HStack>
@@ -296,7 +283,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                   {post.commentsCount != null && (
                     <HStack spacing={2}>
                       <Icon as={FaRegComment} boxSize={3.5} color="gray.500" />
-                      <Text fontSize="sm" fontWeight="500">
+                      <Text textStyle="metaCaption" color="gray.700">
                         {formatCount(post.commentsCount)}
                       </Text>
                     </HStack>
@@ -306,28 +293,14 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
 
               {/* Caption — full text, scrollable if long */}
               {post.caption && (
-                <Text
-                  fontSize={{ base: 'sm', md: 'sm' }}
-                  color="gray.700"
-                  lineHeight="1.7"
-                  fontWeight="300"
-                  whiteSpace="pre-wrap"
-                >
+                <Text textStyle="bodyCopy" whiteSpace="pre-wrap">
                   {post.caption}
                 </Text>
               )}
 
               {/* Timestamp footer */}
               {post.timestamp && (
-                <Text
-                  fontSize="2xs"
-                  color="gray.500"
-                  fontWeight="300"
-                  letterSpacing="0.12em"
-                  textTransform="uppercase"
-                >
-                  {formatFullDate(post.timestamp)}
-                </Text>
+                <Text textStyle="metaCaption">{formatFullDate(post.timestamp)}</Text>
               )}
 
               {/* CTA at the bottom — canonical CTAButton so it matches

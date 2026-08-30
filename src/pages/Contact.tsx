@@ -24,7 +24,9 @@ const inputStyles = {
   _hover: { borderColor: 'whiteAlpha.500' },
   _focus: {
     borderColor: 'brand.accent',
-    boxShadow: '0 0 0 1px #c9a96e',
+    // shadows.accentFocus — a token cannot be named inside a CSS string, which
+  // is exactly why that shadow token exists.
+  boxShadow: 'accentFocus',
     bg: 'blackAlpha.600',
   },
   fontSize: 'sm',
@@ -32,14 +34,17 @@ const inputStyles = {
   borderRadius: 'sm',
 };
 
+/**
+ * Spread onto every form label. Now just the formLabel token plus the one
+ * layout prop the token does not own.
+ *
+ * The gold also moves off brand.accent: these labels sit on a light panel,
+ * where #c9a96e is 2.24:1. formLabel carries accentText.
+ */
 const labelStyles = {
-  fontSize: '2xs',
-  fontWeight: '500',
-  color: 'brand.accent',
-  letterSpacing: '0.2em',
-  textTransform: 'uppercase' as const,
+  textStyle: 'formLabel',
   mb: 1.5,
-};
+} as const;
 
 const Contact = () => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -333,7 +338,7 @@ const Contact = () => {
               {/* Divider with "or" */}
               <Flex align="center" w="100%" gap={4}>
                 <Box flex={1} h="1px" bg="whiteAlpha.400" />
-                <Text fontSize="xs" color="whiteAlpha.900" fontWeight="400" letterSpacing="0.2em" textTransform="uppercase">
+                <Text textStyle="metaCaption" color="whiteAlpha.900">
                   or reach out directly
                 </Text>
                 <Box flex={1} h="1px" bg="whiteAlpha.400" />
@@ -387,20 +392,10 @@ const Contact = () => {
                       flexShrink={0}
                     />
                     <VStack spacing={0.5} align={{ base: 'flex-start', md: 'center' }}>
+                      <Text textStyle="eyebrowOnDark">{method.label}</Text>
                       <Text
-                        color="brand.accent"
-                        fontSize="2xs"
-                        fontWeight="500"
-                        letterSpacing="0.2em"
-                        textTransform="uppercase"
-                      >
-                        {method.label}
-                      </Text>
-                      <Text
+                        textStyle="bodyCopy"
                         color="whiteAlpha.900"
-                        fontSize="xs"
-                        fontWeight="300"
-                        letterSpacing="0.02em"
                         _groupHover={{ color: 'white' }}
                         transition="color 0.3s"
                       >
@@ -413,11 +408,8 @@ const Contact = () => {
 
               {/* Location */}
               <Text
-                fontSize="xs"
+                textStyle="metaCaption"
                 color="whiteAlpha.900"
-                fontWeight="300"
-                letterSpacing="0.15em"
-                textTransform="uppercase"
                 textAlign="center"
               >
                 Scranton, PA · Available Worldwide

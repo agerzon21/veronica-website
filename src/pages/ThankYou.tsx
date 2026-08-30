@@ -220,7 +220,7 @@ const ThankYou = () => {
                   px={5}
                   py={4}
                 >
-                  <Text fontSize="xs" color="whiteAlpha.900" fontWeight="500" letterSpacing="0.1em" textTransform="uppercase" mb={2}>
+                  <Text textStyle="metaCaption" color="whiteAlpha.900" mb={2}>
                     Heads up
                   </Text>
                   <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
@@ -237,7 +237,7 @@ const ThankYou = () => {
 
               <Flex align="center" w="100%" gap={4}>
                 <Box flex={1} h="1px" bg="whiteAlpha.200" />
-                <Text fontSize="xs" color="whiteAlpha.700" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase">
+                <Text textStyle="metaCaption" color="whiteAlpha.700">
                   or message me directly
                 </Text>
                 <Box flex={1} h="1px" bg="whiteAlpha.200" />
@@ -276,7 +276,7 @@ const ContactPill = ({ icon, label, iconSize, onClick }: ContactPillProps) => (
     data-group
   >
     <Flex h="24px" align="center"><Icon as={icon} color="brand.accent" boxSize={iconSize} transition="all 0.4s" /></Flex>
-    <Text color="whiteAlpha.800" fontSize="xs" fontWeight="300" letterSpacing="0.15em" textTransform="uppercase"
+    <Text textStyle="metaCaption" color="whiteAlpha.800"
       _groupHover={{ color: 'brand.accent' }} transition="all 0.4s"
     >
       {label}
@@ -298,11 +298,8 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
         <Flex align="center" gap={3} mb={2}>
           <Spinner size="sm" color="brand.accentText" thickness="2px" speed="0.8s" />
           <Text
-            fontSize="xs"
+            textStyle="metaCaption"
             color="whiteAlpha.900"
-            fontWeight="500"
-            letterSpacing="0.1em"
-            textTransform="uppercase"
           >
             Delivering Confirmation…
           </Text>
@@ -331,11 +328,8 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
           <Flex align="center" gap={3} mb={2}>
             <Icon as={FaCheckCircle} color="#68d391" boxSize={4} />
             <Text
-              fontSize="xs"
+              textStyle="metaCaption"
               color="whiteAlpha.900"
-              fontWeight="500"
-              letterSpacing="0.1em"
-              textTransform="uppercase"
             >
               Confirmation Sent
             </Text>
@@ -365,11 +359,8 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
           <Flex align="center" gap={3} mb={2}>
             <Icon as={FaRegEnvelope} color="brand.accentText" boxSize={4} />
             <Text
-              fontSize="xs"
+              textStyle="metaCaption"
               color="whiteAlpha.900"
-              fontWeight="500"
-              letterSpacing="0.1em"
-              textTransform="uppercase"
             >
               Confirmation On Its Way
             </Text>
@@ -399,11 +390,8 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
           <Flex align="center" gap={3} mb={2}>
             <Icon as={FaExclamationCircle} color="#f6ad55" boxSize={4} />
             <Text
-              fontSize="xs"
+              textStyle="metaCaption"
               color="whiteAlpha.900"
-              fontWeight="500"
-              letterSpacing="0.1em"
-              textTransform="uppercase"
             >
               Confirmation Couldn't Send
             </Text>

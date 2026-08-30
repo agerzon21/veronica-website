@@ -189,14 +189,7 @@ function YearMarker({ year }: { year: number }) {
         left={{ base: '12px', md: 'auto' }}
         transform={{ base: 'translateX(-50%)', md: 'none' }}
       >
-        <Text
-          fontSize={{ base: 'xs', md: 'sm' }}
-          fontWeight="500"
-          letterSpacing="0.2em"
-          color="brand.accentText"
-        >
-          {year}
-        </Text>
+        <Text textStyle="eyebrow">{year}</Text>
       </Box>
     </Flex>
   );
@@ -344,10 +337,7 @@ function TimelineCard({
           </Text>
           {post.session_type && (
             <Text
-              fontSize="2xs"
-              fontWeight="500"
-              letterSpacing="0.14em"
-              textTransform="uppercase"
+              textStyle="metaCaption"
               color="brand.accentText"
             >
               {post.session_type}
@@ -428,14 +418,12 @@ function TimelineCard({
               {post.tags.slice(0, 6).map((tag) => (
                 <Text
                   key={tag}
-                  fontSize="2xs"
-                  fontWeight="500"
-                  letterSpacing="0.08em"
+                  textStyle="metaCaption"
                   textTransform="lowercase"
                   color="brand.accentText"
                   bg="white"
                   border="1px solid"
-                  borderColor="rgba(201, 169, 110, 0.35)"
+                  borderColor="brand.accentBorder"
                   px={2}
                   py={0.5}
                   borderRadius="sm"
@@ -452,10 +440,7 @@ function TimelineCard({
               display="inline-flex"
               alignItems="center"
               gap={2}
-              fontSize="xs"
-              fontWeight="500"
-              letterSpacing="0.14em"
-              textTransform="uppercase"
+              textStyle="metaCaption"
               color="brand.accent"
               _hover={{ color: 'brand.accentText' }}
               transition="color 0.15s"

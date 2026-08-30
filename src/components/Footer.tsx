@@ -6,6 +6,12 @@ import { FaInstagram, FaWhatsapp, FaRegEnvelope } from 'react-icons/fa';
 // site. Four quiet bands — logo → connect → legal → meta — separated by
 // whitespace rather than dark color blocks, so the footer reads as a
 // natural extension of the page above instead of an abrupt dark slab.
+//
+// Every piece of text below is micro-metadata, so all of it is one token:
+// `metaCaption`. It used to be three near-identical treatments stacked
+// within fifteen lines (2xs/400/0.15em/uppercase, 2xs/500/0.25em/uppercase,
+// 2xs/300/0.1em/sentence case), which read as three accidents rather than
+// one deliberate register.
 
 const SOCIALS = [
   { label: 'Instagram', href: 'https://www.instagram.com/vero.art.photo', icon: FaInstagram, external: true },
@@ -31,17 +37,22 @@ const Footer = () => {
           Matches the visual weight of the other section dividers on the site. */}
       <Box h="1px" bg="gray.100" />
 
-      <Box py={{ base: 10, md: 14 }} px={6}>
-        <VStack spacing={{ base: 6, md: 7 }} maxW="container.md" mx="auto">
-          {/* Logo — same SVG mark as the navbar, slightly smaller. Clicking
-              it returns to home. */}
+      {/* One rhythm token instead of a per-footer padding pair. */}
+      <Box layerStyle="sectionTight" px={6}>
+        {/* A single VStack spacing governs every gap in the footer. The old
+            version layered ad-hoc pt values on top of the stack spacing, so
+            no two bands were the same distance apart. */}
+        <VStack spacing={{ base: 6, md: 8 }} maxW="contentNarrow" mx="auto">
+          {/* Logo — same SVG mark as the navbar. It is the footer's only
+              focal point, so it carries the size rather than leaning on
+              extra whitespace around it. Clicking it returns to home. */}
           <Link as={RouterLink} to="/" _hover={{ opacity: 0.85 }} transition="opacity 0.3s">
             <Image
               src="/assets/images/logo.svg"
               htmlWidth={460}
               htmlHeight={70}
               alt="Vero Photography"
-              h={{ base: '36px', md: '44px' }}
+              h={{ base: '40px', md: '48px' }}
               objectFit="contain"
             />
           </Link>
@@ -57,7 +68,8 @@ const Footer = () => {
                 aria-label={s.label}
                 w={{ base: '42px', md: '44px' }}
                 h={{ base: '42px', md: '44px' }}
-                border="1px solid #c9a96e"
+                border="1px solid"
+                borderColor="brand.accent"
                 borderRadius="full"
                 display="flex"
                 alignItems="center"
@@ -76,7 +88,6 @@ const Footer = () => {
               the copyright reads as the final closing beat of the page. */}
           <HStack
             spacing={{ base: 3, md: 4 }}
-            pt={{ base: 1, md: 2 }}
             wrap="wrap"
             justify="center"
             divider={
@@ -96,12 +107,8 @@ const Footer = () => {
                 key={l.to}
                 as={RouterLink}
                 to={l.to}
-                fontSize="2xs"
-                fontWeight="400"
-                color="gray.600"
-                letterSpacing="0.15em"
-                textTransform="uppercase"
-                _hover={{ color: 'brand.accent', textDecoration: 'none' }}
+                textStyle="metaCaption"
+                _hover={{ color: 'brand.accentText', textDecoration: 'none' }}
                 transition="color 0.3s"
               >
                 {l.label}
@@ -109,24 +116,12 @@ const Footer = () => {
             ))}
           </HStack>
 
-          {/* Meta — location + copyright, very quiet typographic weight */}
-          <VStack spacing={1.5} pt={{ base: 2, md: 3 }}>
-            <Text
-              fontSize="2xs"
-              fontWeight="500"
-              color="gray.600"
-              textTransform="uppercase"
-              letterSpacing="0.25em"
-              textAlign="center"
-            >
+          {/* Meta — location + copyright, same register as the legal row. */}
+          <VStack spacing={2}>
+            <Text textStyle="metaCaption" textAlign="center">
               Scranton, PA · Available Worldwide
             </Text>
-            <Text
-              fontSize="2xs"
-              color="gray.600"
-              fontWeight="300"
-              letterSpacing="0.1em"
-            >
+            <Text textStyle="metaCaption" textAlign="center">
               © {year} Vero Photography · Photographs © Veronika Gerzon
             </Text>
           </VStack>

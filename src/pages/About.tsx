@@ -16,7 +16,7 @@ const PORTRAIT_AVATAR = (
     width={{ base: '200px', md: '350px' }}
     height={{ base: '200px', md: '350px' }}
     borderRadius="full"
-    border="2px solid #c9a96e"
+    border="2px solid" borderColor="brand.accent"
     padding="4px"
   >
     <Box width="100%" height="100%" borderRadius="full" overflow="hidden">
@@ -96,11 +96,7 @@ const About = () => {
                 <VStack spacing={6} textAlign="center">
                   {PORTRAIT_AVATAR}
                   <Text
-                    fontSize="sm"
-                    fontWeight="500"
-                    textTransform="uppercase"
-                    letterSpacing="0.2em"
-                    color="brand.accentText"
+                    textStyle="eyebrow"
                   >
                     My Approach
                   </Text>
@@ -192,11 +188,7 @@ const About = () => {
               <VStack spacing={6} textAlign="center">
                 {PORTRAIT_AVATAR}
                 <Text
-                  fontSize="sm"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.2em"
-                  color="brand.accentText"
+                  textStyle="eyebrow"
                 >
                   My Approach
                 </Text>
@@ -232,11 +224,7 @@ const About = () => {
               transition={{ duration: 0.8, ease: 'easeOut' }}
             >
               <Text
-                fontSize="sm"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                color="brand.accent"
+                textStyle="eyebrow"
                 mb={4}
                 textAlign="center"
               >
@@ -288,20 +276,11 @@ const About = () => {
           ].map((stat) => (
             <VStack key={stat.label} spacing={1.5}>
               <Text
-                fontSize="xs"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                color="brand.accent"
+                textStyle="eyebrow"
               >
                 {stat.label}
               </Text>
-              <Text
-                fontSize="lg"
-                fontWeight="200"
-                color="gray.700"
-                letterSpacing="0.05em"
-              >
+              <Text textStyle="sectionTitle" color="gray.700">
                 {stat.value}
               </Text>
             </VStack>
@@ -325,11 +304,7 @@ const About = () => {
               <VStack spacing={6}>
                 <VStack spacing={3}>
                   <Text
-                    fontSize="sm"
-                    fontWeight="500"
-                    textTransform="uppercase"
-                    letterSpacing="0.25em"
-                    color="brand.accentText"
+                    textStyle="eyebrow"
                   >
                     Work With Me
                   </Text>

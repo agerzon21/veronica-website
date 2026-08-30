@@ -50,10 +50,7 @@ export function useCopyNotification(label = 'Link Copied') {
             <CheckIcon boxSize={2.5} color="white" />
           </Box>
           <Text
-            fontSize="xs"
-            fontWeight="400"
-            letterSpacing="0.15em"
-            textTransform="uppercase"
+            textStyle="metaCaption"
             color="gray.600"
           >
             {label}

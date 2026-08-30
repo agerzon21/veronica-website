@@ -1,8 +1,29 @@
 import { Box, HStack, Link, Image } from '@chakra-ui/react';
+import type { LinkProps } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import BurgerMenu from './BurgerMenu';
 import MobileNav from './MobileNav';
+import CTAButton from './ui/CTAButton';
+
+// One nav-link treatment, shared by the main links and the Client Portal
+// utility link — and the same `ctaLabel` token MobileNav uses, so the menu
+// does not change personality when the viewport narrows.
+const navLinkProps: LinkProps = {
+  textStyle: 'ctaLabel',
+  color: 'gray.700',
+  textDecoration: 'none',
+  textUnderlineOffset: '6px',
+  transition: 'color 0.3s',
+  _hover: {
+    // Gold TEXT on white must be accentText — the signature accent is 2.24:1
+    // and fails AA. The decorative accent stays for rules and borders.
+    color: 'brand.accentText',
+    textDecoration: 'underline',
+    textDecorationColor: 'brand.accentText',
+    textDecorationThickness: '1px',
+  },
+};
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -35,19 +56,21 @@ const Navbar = () => {
   };
 
   return (
-    <Box 
-      as="nav" 
-      position="fixed" 
-      top="0" 
-      left="0" 
-      right="0" 
-      bg="white" 
+    <Box
+      as="nav"
+      position="fixed"
+      top="0"
+      left="0"
+      right="0"
+      bg="white"
       zIndex={1500}
       px={{ base: 4, md: 8 }}
       py={4}
       boxShadow="sm"
     >
-      <HStack justify="space-between" align="center" maxW="container.xl" mx="auto">
+      {/* contentWide is the site's outer container token — the nav now shares
+          an edge with the page content instead of running 80px wider. */}
+      <HStack justify="space-between" align="center" maxW="contentWide" mx="auto">
         <Link
           as={RouterLink}
           to="/"
@@ -55,8 +78,8 @@ const Navbar = () => {
           zIndex={2000}
           onClick={handleLogoClick}
         >
-          <Image 
-            src="/assets/images/logo.svg" 
+          <Image
+            src="/assets/images/logo.svg"
             htmlWidth={460}
             htmlHeight={70}
             // Lighthouse names this as the mobile LCP element; it is preloaded
@@ -64,7 +87,7 @@ const Navbar = () => {
             // renders, so the two do not fight over it.
             fetchPriority="high"
             decoding="async"
-            alt="Vero Photography" 
+            alt="Vero Photography"
             height="40px"
             objectFit="contain"
           />
@@ -74,54 +97,20 @@ const Navbar = () => {
             renders first, then a thin gold separator, then Client Portal
             as a utility link — so it reads as "for existing clients"
             rather than another nav peer without losing accessibility.
-            Contact gets a subtle gold pill outline to mark it as the
-            conversion path. Selection is by NAME (not array index) so
-            reordering / inserting menu items can't accidentally hide the
-            utility link or steal Contact's pill treatment. */}
+            Contact is the conversion path and therefore a real CTAButton,
+            not a Link wearing a border. Selection is by NAME (not array
+            index) so reordering / inserting menu items can't accidentally
+            hide the utility link or steal Contact's button treatment. */}
         <HStack spacing={{ base: 5, md: 6 }} display={{ base: 'none', md: 'flex' }}>
           {menuItems
             .filter((item) => item.name !== 'Client Portal')
             .map((item) =>
               item.name === 'Contact' ? (
-                <Link
-                  key={item.path}
-                  as={RouterLink}
-                  to={item.path}
-                  fontSize="md"
-                  fontWeight="light"
-                  color="gray.800"
-                  textDecoration="none"
-                  border="1px solid #c9a96e"
-                  borderRadius="sm"
-                  px={4}
-                  py={1.5}
-                  transition="all 0.3s"
-                  _hover={{
-                    color: 'white',
-                    bg: 'brand.accent',
-                    textDecoration: 'none',
-                  }}
-                >
+                <CTAButton key={item.path} to={item.path} variant="outline" size="md">
                   {item.name}
-                </Link>
+                </CTAButton>
               ) : (
-                <Link
-                  key={item.path}
-                  as={RouterLink}
-                  to={item.path}
-                  fontSize="md"
-                  fontWeight="light"
-                  color="gray.800"
-                  textDecoration="none"
-                  textUnderlineOffset="6px"
-                  transition="color 0.3s"
-                  _hover={{
-                    color: 'brand.accent',
-                    textDecoration: 'underline',
-                    textDecorationColor: 'brand.accent',
-                    textDecorationThickness: '1px',
-                  }}
-                >
+                <Link key={item.path} as={RouterLink} to={item.path} {...navLinkProps}>
                   {item.name}
                 </Link>
               ),
@@ -134,25 +123,11 @@ const Navbar = () => {
                 <Box
                   w="1px"
                   h="16px"
-                  bg="rgba(201, 169, 110, 0.35)"
+                  bg="brand.accent"
+                  opacity={0.35}
                   aria-hidden="true"
                 />
-                <Link
-                  as={RouterLink}
-                  to={portal.path}
-                  fontSize="md"
-                  fontWeight="light"
-                  color="gray.800"
-                  textDecoration="none"
-                  textUnderlineOffset="6px"
-                  transition="color 0.3s"
-                  _hover={{
-                    color: 'brand.accent',
-                    textDecoration: 'underline',
-                    textDecorationColor: 'brand.accent',
-                    textDecorationThickness: '1px',
-                  }}
-                >
+                <Link as={RouterLink} to={portal.path} {...navLinkProps}>
                   {portal.name}
                 </Link>
               </>
@@ -170,4 +145,4 @@ const Navbar = () => {
   );
 };
 
-export default Navbar; 
+export default Navbar;
