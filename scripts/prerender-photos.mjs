@@ -315,11 +315,41 @@ if (totalPages === 0) {
 }
 
 // Regenerate sitemap.xml from the same DB data so it never drifts.
+/**
+ * src/pages/Weddings.tsx inlines six curated slugs rather than importing
+ * photos.ts, because that module pulls photos.csv?raw (65KB) into the route
+ * chunk. The tradeoff is that a renamed slug would 404 a tile on a commercial
+ * page with nothing to catch it. This catches it, at build time.
+ */
+const WEDDINGS_PAGE_SLUGS = [
+  'ocean-vows-ceremony',
+  'loving-wedding-embrace-bw',
+  'graceful-bride-bouquet',
+  'wedding-champagne-celebration',
+  'bride-greenhouse-serenity',
+  'floral-wedding-kiss',
+];
+{
+  const known = new Set(photos.filter((p) => p.category === 'weddings').map((p) => p.id));
+  const missing = WEDDINGS_PAGE_SLUGS.filter((slug) => !known.has(slug));
+  if (missing.length > 0) {
+    failProd(
+      `Weddings page references ${missing.length} slug(s) not in photos.csv: ${missing.join(', ')}. ` +
+        `Update FEATURED in src/pages/Weddings.tsx and this list.`,
+    );
+    console.warn(`[prerender] weddings page slugs missing: ${missing.join(', ')}`);
+  }
+}
+
 const SITE = 'https://vero.photography';
 const staticUrls = [
   { loc: '/', changefreq: 'weekly', priority: '1.0' },
   { loc: '/about', changefreq: 'monthly', priority: '0.8' },
   { loc: '/contact', changefreq: 'monthly', priority: '0.8' },
+  // Highest-priority commercial page after the homepage: weddings are 35% of
+  // all inquiries, and this is the only page that answers what coverage,
+  // travel and delivery actually look like.
+  { loc: '/weddings', changefreq: 'monthly', priority: '0.9' },
   { loc: '/gallery', changefreq: 'weekly', priority: '0.9' },
   { loc: '/gallery/portraits', changefreq: 'weekly', priority: '0.85' },
   { loc: '/gallery/weddings', changefreq: 'weekly', priority: '0.85' },
