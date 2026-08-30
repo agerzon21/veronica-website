@@ -30,25 +30,15 @@ const NotFound = () => {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <VStack spacing={8}>
-              <Text
-                fontSize={{ base: '6xl', md: '8xl' }}
-                fontWeight="100"
-                color="gray.200"
-                lineHeight="1"
-              >
+              {/* The numeral is decoration, not the heading — aria-hidden so a
+                  screen reader gets "Page not found", not "four hundred four". */}
+              <Text textStyle="pageTitle" color="gray.200" aria-hidden="true">
                 404
               </Text>
 
               <VStack spacing={3}>
-                <Text
-                  fontSize={{ base: 'xl', md: '2xl' }}
-                  fontWeight="200"
-                  color="gray.800"
-                  textTransform="uppercase"
-                  letterSpacing="0.3em"
-                  textAlign="center"
-                >
-                  Page Not Found
+                <Text as="h1" textStyle="sectionTitle" textAlign="center">
+                  Page not found
                 </Text>
                 <Box w="40px" h="1px" bg="brand.accent" />
                 <Text

@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import CTAButton from '../components/ui/CTAButton';
+import PageHeader from '../components/ui/PageHeader';
 
 const MotionDiv = motion.div;
 
@@ -51,10 +52,6 @@ const About = () => {
       <Helmet>
         <meta property="og:image" content="https://vero.photography/assets/photos/site/about-bg.webp" />
       </Helmet>
-      <Box as="h1" position="absolute" left="-10000px" w="1px" h="1px" overflow="hidden">
-        About Veronika Gerzon — Vero Photography
-      </Box>
-
       {/* ─── Mobile: stacked hero ─── */}
       <Box display={{ base: 'block', lg: 'none' }}>
         <Box position="relative" h="60vh" overflow="hidden">
@@ -74,17 +71,9 @@ const About = () => {
               transition={{ duration: 0.8, ease: 'easeOut' }}
             >
               <VStack spacing={4} textAlign="center" px={6}>
-                <Text
-                  fontSize="sm"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.2em"
-                  color="brand.accent"
-                >
-                  About Me
-                </Text>
+                <Text textStyle="eyebrowOnDark">About Me</Text>
                 <Box w="35px" h="1px" bg="brand.accent" />
-                <Text fontSize="2xl" fontWeight="200" color="white" lineHeight="1.4">
+                <Text as="h1" textStyle="pageTitle" color="white" m={0}>
                   Creating images that feel as
                   <br />
                   natural as the moment itself.
@@ -159,28 +148,28 @@ const About = () => {
               animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.8, ease: 'easeOut' }}
             >
-              <VStack spacing={4} textAlign="center" px={10}>
-                <Text
-                  fontSize="sm"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.2em"
-                  color="brand.accent"
-                >
-                  About Me
-                </Text>
-                <Box w="35px" h="1px" bg="brand.accent" />
-                <Text
-                  fontSize={{ lg: '3xl', xl: '4xl' }}
-                  fontWeight="200"
-                  color="white"
-                  lineHeight="1.4"
-                >
-                  Creating images that feel as
-                  <br />
-                  natural as the moment itself.
-                </Text>
-              </VStack>
+              <Box px={10}>
+                {/* Desktop twin of the mobile hero above. BOTH are in the DOM —
+                    display:none does not unmount — so the raw HTML carries two
+                    h1s with identical text. That is fine: display:none also
+                    removes an element from the accessibility tree, so exactly
+                    one is announced at any viewport, and Google is explicit
+                    that multiple h1s are not a problem. The alternative, one
+                    shared header, means rebuilding both heroes into one
+                    responsive layout — worth doing, but not inside a
+                    typography change. */}
+                <PageHeader
+                  onDark
+                  eyebrow="About Me"
+                  title={
+                    <>
+                      Creating images that feel as
+                      <br />
+                      natural as the moment itself.
+                    </>
+                  }
+                />
+              </Box>
             </MotionDiv>
           </Flex>
         </Box>

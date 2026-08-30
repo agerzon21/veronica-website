@@ -82,20 +82,10 @@ const Pay = () => {
                   pointerEvents="none"
                 />
                 <VStack spacing={2} position="relative">
-                  <Text
-                    fontSize={{ base: 'xl', md: '2xl' }}
-                    fontWeight="200"
-                    color="gray.800"
-                    textTransform="uppercase"
-                    letterSpacing="0.25em"
-                  >
-                    Thank You!
+                  <Text as="h1" textStyle="sectionTitle">
+                    Thank you
                   </Text>
-                  <Text
-                    fontSize="sm"
-                    color="gray.500"
-                    fontWeight="300"
-                  >
+                  <Text textStyle="bodyLead">
                     Your support means the world to me.
                   </Text>
                 </VStack>

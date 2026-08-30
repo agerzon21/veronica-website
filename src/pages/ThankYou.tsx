@@ -1,9 +1,10 @@
-import { Box, VStack, Text, Flex, Button, Icon, Spinner } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, Icon, Spinner } from '@chakra-ui/react';
 import { FaWhatsapp, FaInstagram, FaRegEnvelope, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
 import { Helmet } from 'react-helmet-async';
+import CTAButton from '../components/ui/CTAButton';
 import { motion, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import ReactGA from 'react-ga4';
 import { ensureAnalytics, trackAdsLeadConversion, trackContactSubmission } from '../utils/analytics';
 
@@ -182,22 +183,14 @@ const ThankYou = () => {
             <VStack spacing={10}>
               {/* Header */}
               <VStack spacing={4}>
-                <Text
-                  fontSize={{ base: '3xl', md: '4xl' }}
-                  fontWeight="200"
-                  color="white"
-                  textTransform="uppercase"
-                  letterSpacing="0.3em"
-                  textAlign="center"
-                >
-                  Thank You
+                <Text as="h1" textStyle="pageTitle" color="white" textAlign="center" m={0}>
+                  Thank you
                 </Text>
                 <Box w="40px" h="1px" bg="brand.accent" />
                 <Text
-                  fontSize={{ base: 'sm', md: 'md' }}
+                  textStyle="bodyLead"
                   color="whiteAlpha.800"
                   textAlign="center"
-                  fontWeight="300"
                   lineHeight="1.9"
                   maxW="440px"
                 >
@@ -236,25 +229,11 @@ const ThankYou = () => {
                 </Box>
               )}
 
-              <Button
-                as={Link}
-                to="/"
-                w="100%"
-                maxW="320px"
-                h="52px"
-                bg="brand.accent"
-                color="white"
-                fontSize="sm"
-                fontWeight="400"
-                letterSpacing="0.2em"
-                textTransform="uppercase"
-                borderRadius="sm"
-                _hover={{ bg: 'brand.accentSoft', transform: 'translateY(-1px)' }}
-                _active={{ bg: 'brand.accentStrong', transform: 'translateY(0)' }}
-                transition="all 0.3s"
-              >
-                Back to Home
-              </Button>
+              <Box w="100%" maxW="320px">
+                <CTAButton to="/" variant="solid" size="lg" fullWidth>
+                  Back to home
+                </CTAButton>
+              </Box>
 
               <Flex align="center" w="100%" gap={4}>
                 <Box flex={1} h="1px" bg="whiteAlpha.200" />
