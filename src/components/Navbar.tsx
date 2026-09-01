@@ -25,6 +25,30 @@ const navLinkProps: LinkProps = {
   },
 };
 
+// --- Fluid desktop nav sizing -------------------------------------------
+// The full nav is 541px of links + a 137px Contact button. Together with the
+// wordmark and the 32px page gutters that needs ~1011px to sit still, so the
+// desktop layout only switches on at `lg` (992px) and has to run at its
+// tightest there. Rather than step between two fixed sizes, the wordmark and
+// the link gaps interpolate from their floor at 992px to their full size at
+// 1200px (where `contentWide` caps the container and extra width stops
+// mattering). Measured with the real Jost metrics, not estimated.
+//
+// Floor at 992px:  34px logo (223px wide) + 16px gaps  -> 52px breathing
+// Ceiling at 1200px: 40px logo (263px wide) + 24px gaps
+// Below `lg` the burger takes over and the wordmark returns to a full 40px,
+// so this floor never reaches phones.
+const LOGO_HEIGHT = 'clamp(2.125rem, 5.385px + 2.885vw, 2.5rem)';
+const NAV_GAP = 'clamp(1rem, -22.154px + 3.846vw, 1.5rem)';
+
+// Mobile has its own squeeze, and it is much tighter: 16px gutters + the
+// 48px burger leave `vw - 80` for the wordmark. A 40px logo is 263px wide,
+// which fits every common phone (375px and up) with room to spare but runs
+// 23px past a 320px screen and pushes the burger clean off the edge. So the
+// wordmark eases from 34px at 320px to its full 40px by 375px and stays
+// there. Every mainstream handset keeps the full-size logo.
+const LOGO_HEIGHT_MOBILE = 'clamp(2.125rem, -0.909px + 10.909vw, 2.5rem)';
+
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
@@ -77,24 +101,33 @@ const Navbar = () => {
           _hover={{ textDecoration: 'none' }}
           zIndex={2000}
           onClick={handleLogoClick}
-          // flexShrink belongs HERE, on the flex item. It was previously set
-          // on the <Image> inside, where it had no effect at all — the
-          // wordmark still collapsed to 45px at 768px, five times worse than
-          // before this branch, because the nav group opposite had grown.
+          // flexShrink belongs on the flex ITEM (this Link), not the <Image>
+          // inside it. But on its own it was actively harmful: while the box
+          // still carried 197px of phantom width it froze the logo at 460px
+          // and shoved the burger off-screen on every phone. It is only safe
+          // paired with the `width: auto` below, which makes the box the ink.
           flexShrink={0}
         >
           <Image
             src="/assets/images/logo.svg"
+            // The width/height ATTRIBUTES stay: they hand the browser the
+            // aspect ratio before the SVG lands, which is what stops the nav
+            // reflowing. But `width` is ALSO a presentational hint, so with no
+            // CSS width the box computed to 460px around a 263px wordmark and
+            // `contain` centred it inside ~98px of dead space per side. That
+            // phantom 197px — not the breakpoint — is what pushed Client
+            // Portal off the right edge. `width: auto` derives the box from
+            // height x ratio, so the box is now exactly the ink.
             htmlWidth={460}
             htmlHeight={70}
+            width="auto"
             // Lighthouse names this as the mobile LCP element; it is preloaded
             // in index.html and this keeps the priority consistent once React
             // renders, so the two do not fight over it.
             fetchPriority="high"
             decoding="async"
             alt="Vero Photography"
-            height="40px"
-            objectFit="contain"
+            height={{ base: LOGO_HEIGHT_MOBILE, lg: LOGO_HEIGHT }}
           />
         </Link>
 
@@ -106,12 +139,15 @@ const Navbar = () => {
             not a Link wearing a border. Selection is by NAME (not array
             index) so reordering / inserting menu items can't accidentally
             hide the utility link or steal Contact's button treatment. */}
-        {/* lg, not md. The nav grew by a link and a real CTA button, and the
-            set does not fit beside a 263px wordmark at 768px — that mismatch
-            is what was crushing the logo. The burger now holds until 992px,
-            and MobileNav carries the same links, so nothing becomes
-            unreachable in between. */}
-        <HStack spacing={{ lg: 5, xl: 6 }} display={{ base: 'none', lg: 'flex' }}>
+        {/* lg, not md. Measured, not guessed: 541px of links + a 137px Contact
+            button + the wordmark + 64px of gutters needs ~1011px at full size,
+            so this set genuinely cannot sit beside the logo at 768px. 992px is
+            the narrowest width where it all fits with real breathing room
+            (52px), which is why the switch lives here and the sizes above
+            interpolate rather than step. BurgerMenu and MobileNav are both
+            `lg` too — moving only this one would leave 768-991px with no
+            navigation at all. */}
+        <HStack spacing={NAV_GAP} display={{ base: 'none', lg: 'flex' }}>
           {menuItems
             .filter((item) => item.name !== 'Client Portal')
             .map((item) =>
