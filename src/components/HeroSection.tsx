@@ -485,7 +485,8 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         bg="white"
       >
         {/* HEADER — anchored CAMERA_GAP px above the camera's top edge. Symmetric
-            with the footer below. Whitespace between header and camera no longer
+            with the footer below, and now genuinely so: both stretch with
+            left:0/right:0 and centre their own content. Whitespace between header and camera no longer
             balloons on tall viewports because the position tracks the camera's
             final size, not the viewport top. */}
         <Box
@@ -564,11 +565,20 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           <Box
             position="absolute"
             top={`calc(50% + ${footerTopOffset}px)`}
-            left="50%"
-            transform="translateX(-50%)"
-            width={{ base: '100%', md: 'auto' }}
-            maxW="100vw"
-            px={{ base: 4, md: 0 }}
+            // Same fix as the header above, and it was NOT merely latent here.
+            // `left: 50%` + `width: auto` capped this box's layout width at
+            // vw/2; shrink-to-fit floors at min-content so it did not collapse
+            // as far as the header did, but it still landed BELOW the row's
+            // 543px max-content everywhere from 768px to 1055px. The row was
+            // squeezed by 15-17px, which is enough to wrap "Scranton, PA" onto
+            // a second line while "12+ Years" and "Worldwide" stayed on one —
+            // knocking the three stat blocks out of vertical alignment, the
+            // exact misalignment the gap comment below describes fixing on
+            // mobile. It also took the footer to 167px against FOOTER_RESERVED
+            // of 166. Stretching the box gives the row its real measure.
+            left="0"
+            right="0"
+            px={{ base: 4, md: 8 }}
             zIndex={3}
           >
             <MotionBox style={{ opacity: footerOpacity, y: footerY }}>
