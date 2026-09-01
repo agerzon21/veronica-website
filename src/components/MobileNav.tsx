@@ -30,7 +30,7 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
       bottom="0"
       bg="gray.900"
       zIndex={1000}
-      display={{ base: 'flex', md: 'none' }}
+      display={{ base: 'flex', lg: 'none' }}
       flexDirection="column"
       alignItems="center"
       justifyContent="center"

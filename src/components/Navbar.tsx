@@ -77,6 +77,11 @@ const Navbar = () => {
           _hover={{ textDecoration: 'none' }}
           zIndex={2000}
           onClick={handleLogoClick}
+          // flexShrink belongs HERE, on the flex item. It was previously set
+          // on the <Image> inside, where it had no effect at all — the
+          // wordmark still collapsed to 45px at 768px, five times worse than
+          // before this branch, because the nav group opposite had grown.
+          flexShrink={0}
         >
           <Image
             src="/assets/images/logo.svg"
@@ -89,12 +94,6 @@ const Navbar = () => {
             decoding="async"
             alt="Vero Photography"
             height="40px"
-            // The nav group opposite grew (an extra link, uppercase tracked
-            // labels, a real CTA), and as the shrinkable flex item the
-            // wordmark was being crushed — measured 229px down to 45px at
-            // 768px. objectFit="contain" rescales rather than crops, so it
-            // lost height too. This is also the mobile LCP element.
-            flexShrink={0}
             objectFit="contain"
           />
         </Link>
@@ -107,7 +106,12 @@ const Navbar = () => {
             not a Link wearing a border. Selection is by NAME (not array
             index) so reordering / inserting menu items can't accidentally
             hide the utility link or steal Contact's button treatment. */}
-        <HStack spacing={{ base: 5, md: 6 }} display={{ base: 'none', md: 'flex' }}>
+        {/* lg, not md. The nav grew by a link and a real CTA button, and the
+            set does not fit beside a 263px wordmark at 768px — that mismatch
+            is what was crushing the logo. The burger now holds until 992px,
+            and MobileNav carries the same links, so nothing becomes
+            unreachable in between. */}
+        <HStack spacing={{ lg: 5, xl: 6 }} display={{ base: 'none', lg: 'flex' }}>
           {menuItems
             .filter((item) => item.name !== 'Client Portal')
             .map((item) =>
