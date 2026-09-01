@@ -224,13 +224,18 @@ function YearMarker({ year }: { year: number }) {
  * alternation was the part costing half the canvas.
  */
 function TimelineEntry({ post }: { post: PostSummary }) {
+  const marked = markerDate(post.published_at);
+
   return (
     <Flex position="relative" align="stretch" zIndex={1}>
       {/* A dated marker on the rail, not a 9px dot.
           The dot said "something happened here"; it did not say WHEN, so the
           rail read as decoration rather than a timeline. The day sits in the
           disc and the month above it — the two together are what make the
-          spine legible as chronology while scrolling. */}
+          spine legible as chronology while scrolling.
+
+          published_at is nullable, so a post without one falls back to a plain
+          dot rather than printing a wrong-but-plausible date. */}
       <Flex
         position="absolute"
         top={0}
@@ -240,38 +245,51 @@ function TimelineEntry({ post }: { post: PostSummary }) {
         align="center"
         zIndex={2}
       >
-        <Text
-          textStyle="metaCaption"
-          color="brand.accentText"
-          fontSize="0.5625rem"
-          letterSpacing="0.1em"
-          mr="-0.1em"
-          mb={1}
-          bg="white"
-          px={1}
-        >
-          {monthOf(post.published_at)}
-        </Text>
-        <Flex
-          w={{ base: '34px', md: '38px' }}
-          h={{ base: '34px', md: '38px' }}
-          borderRadius="full"
-          bg="white"
-          border="1px solid"
-          borderColor="brand.accent"
-          align="center"
-          justify="center"
-        >
-          <Text
-            fontFamily="heading"
-            fontSize={{ base: '1rem', md: '1.125rem' }}
-            fontWeight="400"
-            lineHeight={1}
-            color="brand.accentText"
-          >
-            {dayOf(post.published_at)}
-          </Text>
-        </Flex>
+        {marked ? (
+          <>
+            <Text
+              textStyle="metaCaption"
+              color="brand.accentText"
+              fontSize="0.5625rem"
+              letterSpacing="0.1em"
+              mr="-0.1em"
+              mb={1}
+              bg="white"
+              px={1}
+            >
+              {marked.month}
+            </Text>
+            <Flex
+              w={{ base: '34px', md: '38px' }}
+              h={{ base: '34px', md: '38px' }}
+              borderRadius="full"
+              bg="white"
+              border="1px solid"
+              borderColor="brand.accent"
+              align="center"
+              justify="center"
+            >
+              <Text
+                fontFamily="heading"
+                fontSize={{ base: '1rem', md: '1.125rem' }}
+                fontWeight="400"
+                lineHeight={1}
+                color="brand.accentText"
+              >
+                {marked.day}
+              </Text>
+            </Flex>
+          </>
+        ) : (
+          <Box
+            mt="18px"
+            w="9px"
+            h="9px"
+            borderRadius="full"
+            bg="brand.accent"
+            border="2px solid white"
+          />
+        )}
       </Flex>
 
       {/* pl clears the 44px marker with a gutter. */}
@@ -538,14 +556,22 @@ function groupByYear(posts: PostSummary[]): Array<[number, PostSummary[]]> {
   return [...map.entries()].sort((a, b) => b[0] - a[0]);
 }
 
-/** "AUG" — the month for the rail marker. */
-function monthOf(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-}
-
-/** "9" — the day, set inside the disc. */
-function dayOf(iso: string): string {
-  return String(new Date(iso).getDate());
+/**
+ * The rail marker's month and day.
+ *
+ * journal_posts.published_at is NULLABLE. `new Date(null)` is the epoch rather
+ * than Invalid Date, so an unset date would quietly render "JAN / 1" — a wrong
+ * answer that looks like a right one. Both return null instead, and the marker
+ * falls back to a plain dot.
+ */
+function markerDate(iso: string | null | undefined): { month: string; day: string } | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+    day: String(d.getDate()),
+  };
 }
 
 
