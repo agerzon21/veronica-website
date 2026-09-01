@@ -132,6 +132,15 @@ const GalleryCategories = () => {
                       transform="translateY(5px)"
                       transition="all 0.4s ease"
                       _groupHover={{ opacity: 1, transform: 'translateY(0)' }}
+                      // Touch never fires hover, so on a phone this tile
+                      // showed a name and a rule with nothing saying it was a
+                      // link. Drawn at rest where hover is unavailable.
+                      sx={{
+                        '@media (hover: none)': {
+                          opacity: 1,
+                          transform: 'translateY(0)',
+                        },
+                      }}
                     >
                       View Gallery
                     </Text>

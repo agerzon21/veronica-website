@@ -501,6 +501,9 @@ const IndividualPhoto: React.FC = () => {
                         opacity={0}
                         transition="opacity 0.3s ease"
                         _groupHover={{ opacity: 1 }}
+                        // The scrim carries the title below it; both were
+                        // hover-only, so touch users got unlabelled thumbnails.
+                        sx={{ '@media (hover: none)': { opacity: 1 } }}
                         pointerEvents="none"
                       />
                       <Text
@@ -514,6 +517,12 @@ const IndividualPhoto: React.FC = () => {
                         transform="translateY(5px)"
                         transition="all 0.3s ease"
                         _groupHover={{ opacity: 1, transform: 'translateY(0)' }}
+                        sx={{
+                          '@media (hover: none)': {
+                            opacity: 1,
+                            transform: 'translateY(0)',
+                          },
+                        }}
                         pointerEvents="none"
                       >
                         {rp.title.replace(' | Vero Photography', '')}

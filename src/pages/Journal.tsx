@@ -419,17 +419,25 @@ function TimelineCard({ post }: { post: PostSummary }) {
         )}
 
         {/* Reads as the whole block's affordance, not a link inside it.
-            Everything here is driven by _groupHover on the card wrapper, so
-            hovering the photographs — or the title, or anywhere else — moves
-            the arrow and draws the underline. That is what tells you the
-            entire entry is the target, rather than this one line of text.
-            The rule animates from 0 so nothing is drawn at rest. */}
+            On a pointer device it is driven by _groupHover on the card
+            wrapper, so hovering the photographs — or the title, or anywhere
+            else in the entry — slides the arrow in and draws the rule. The
+            movement is what says the whole block is the target.
+            
+            TOUCH HAS NO HOVER, so that reveal never fires on a phone, which
+            is exactly where the large tap target matters most. Under
+            (hover: none) the arrow and rule are simply drawn at rest instead
+            — same affordance, no interaction needed to see it. Querying hover
+            capability rather than width is the point: a small laptop window
+            still gets the animation, a large tablet still gets the static
+            version. */}
         <Flex
           align="center"
           gap={2}
           color="brand.accentText"
           transition="gap 0.3s ease"
           _groupHover={{ gap: 3 }}
+          sx={{ '@media (hover: none)': { gap: 'var(--chakra-space-3)' } }}
         >
           <Text textStyle="ctaLabel">Read the post</Text>
           <Box
@@ -439,6 +447,7 @@ function TimelineCard({ post }: { post: PostSummary }) {
             opacity={0.5}
             transition="width 0.35s ease, opacity 0.35s ease"
             _groupHover={{ w: '38px', opacity: 1 }}
+            sx={{ '@media (hover: none)': { width: '28px', opacity: 1 } }}
           />
           <Box
             as="span"
@@ -448,6 +457,7 @@ function TimelineCard({ post }: { post: PostSummary }) {
             opacity={0}
             transition="transform 0.35s ease, opacity 0.35s ease"
             _groupHover={{ transform: 'translateX(0)', opacity: 1 }}
+            sx={{ '@media (hover: none)': { transform: 'translateX(0)', opacity: 1 } }}
             aria-hidden
           >
             →
