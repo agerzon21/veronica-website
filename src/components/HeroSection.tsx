@@ -491,11 +491,20 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         <Box
           position="absolute"
           bottom={`calc(50% + ${headerBottomOffset}px)`}
-          left="50%"
-          transform="translateX(-50%)"
-          width={{ base: '100%', md: 'auto' }}
-          maxW="100vw"
-          px={{ base: 4, md: 0 }}
+          // Full-bleed, and centred by PageHeader itself rather than by
+          // `left: 50%` + a translate. That combination looks equivalent but
+          // is not: with `width: auto` the shrink-to-fit AVAILABLE width of an
+          // absolutely positioned box starts at its `left` edge, so `left: 50%`
+          // capped this header's layout width at vw/2 while translateX only
+          // moved the result back to centre. The h1 was being wrapped inside
+          // half the screen it appeared to span, which forced a THIRD title
+          // line at 992-1054px and 768-806px. Because the header is anchored
+          // by its BOTTOM, that extra line grew upward and pushed the eyebrow
+          // and rule behind the fixed navbar. HEADER_CONTENT_* budgets for two
+          // lines; giving the title its real measure is what makes that true.
+          left="0"
+          right="0"
+          px={{ base: 4, md: 8 }}
           zIndex={3}
         >
           <MotionBox style={{ opacity: headerOpacity, y: headerY }}>
