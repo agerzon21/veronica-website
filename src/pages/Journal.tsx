@@ -418,9 +418,41 @@ function TimelineCard({ post }: { post: PostSummary }) {
           </Text>
         )}
 
-        <Text textStyle="ctaLabel" color="brand.accentText">
-          Read the post
-        </Text>
+        {/* Reads as the whole block's affordance, not a link inside it.
+            Everything here is driven by _groupHover on the card wrapper, so
+            hovering the photographs — or the title, or anywhere else — moves
+            the arrow and draws the underline. That is what tells you the
+            entire entry is the target, rather than this one line of text.
+            The rule animates from 0 so nothing is drawn at rest. */}
+        <Flex
+          align="center"
+          gap={2}
+          color="brand.accentText"
+          transition="gap 0.3s ease"
+          _groupHover={{ gap: 3 }}
+        >
+          <Text textStyle="ctaLabel">Read the post</Text>
+          <Box
+            h="1px"
+            bg="currentColor"
+            w={0}
+            opacity={0.5}
+            transition="width 0.35s ease, opacity 0.35s ease"
+            _groupHover={{ w: '38px', opacity: 1 }}
+          />
+          <Box
+            as="span"
+            fontSize="0.7rem"
+            lineHeight={1}
+            transform="translateX(-4px)"
+            opacity={0}
+            transition="transform 0.35s ease, opacity 0.35s ease"
+            _groupHover={{ transform: 'translateX(0)', opacity: 1 }}
+            aria-hidden
+          >
+            →
+          </Box>
+        </Flex>
       </Box>
     </Box>
   );

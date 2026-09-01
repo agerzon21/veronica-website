@@ -379,12 +379,24 @@ const IndividualPhoto: React.FC = () => {
                           size="sm"
                           variant="subtle"
                           textStyle="metaCaption"
-                          bg="brand.surface"
-                          px={3}
-                          py={1}
+                          // Quieter than the rest of the page on purpose:
+                          // these are metadata, not navigation. Cream fill and
+                          // gold border gave them more presence than the
+                          // photograph's own caption.
+                          bg="transparent"
+                          color="gray.500"
+                          fontSize="0.625rem"
+                          letterSpacing="0.12em"
+                          mr="-0.12em"
+                          px={2.5}
+                          py={0.5}
                           borderRadius="full"
                           border="1px solid"
-                          borderColor="brand.accentBorder"
+                          borderColor="gray.200"
+                          // A hyphenated keyword like "golden-hour" was
+                          // breaking at the hyphen and becoming a two-line
+                          // chip, twice the height of its neighbours.
+                          whiteSpace="nowrap"
                         >
                           {keyword}
                         </Tag>
