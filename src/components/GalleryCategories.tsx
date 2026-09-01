@@ -53,7 +53,7 @@ const GalleryCategories = () => {
           // runs "minimal spacing between grid items, creating a dense,
           // compact presentation" — at 16/20px these read as four detached
           // cards; at 2px they read as one band of work.
-          gap="2px"
+          gap={{ base: 2, md: 3 }}
           justify="center"
         >
           {categories.map((category, index) => (

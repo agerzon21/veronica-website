@@ -395,6 +395,11 @@ const Contact = () => {
                       <Text textStyle="eyebrowOnDark">{method.label}</Text>
                       <Text
                         textStyle="bodyCopy"
+                        // The phone number is the longest of the three values
+                        // and was wrapping while email and handle sat on one
+                        // line. A step down keeps all three on one row.
+                        fontSize={{ base: '0.875rem', md: '0.9375rem' }}
+                        whiteSpace="nowrap"
                         color="whiteAlpha.900"
                         _groupHover={{ color: 'white' }}
                         transition="color 0.3s"

@@ -40,8 +40,8 @@ const TARGET_ROW_HEIGHT_MOBILE = 260;
 //
 // Not zero: a hairline keeps two adjacent photographs from bleeding into each
 // other when both are dark at the seam.
-const GRID_GAP_DESKTOP = 4;
-const GRID_GAP_MOBILE = 3;
+const GRID_GAP_DESKTOP = 10;
+const GRID_GAP_MOBILE = 6;
 
 const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);

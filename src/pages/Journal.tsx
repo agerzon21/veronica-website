@@ -1,5 +1,5 @@
 import {
-  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Grid,
+  Box, VStack, Text, Icon, Flex, Spinner, Image, Grid,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
@@ -141,7 +141,7 @@ function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
         position="absolute"
         top={0}
         bottom={0}
-        left="12px"
+        left="22px"
         w="1px"
         bg="rgba(201, 169, 110, 0.35)"
         transform="none"
@@ -151,9 +151,22 @@ function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
       {grouped.map(([year, yearPosts]) => (
         <Box key={year} position="relative" pt={{ base: 8, md: 12 }} pb={2}>
           <YearMarker year={year} />
-          <VStack spacing={{ base: 6, md: 8 }} align="stretch">
-            {yearPosts.map((post) => (
-              <TimelineEntry key={post.slug} post={post} />
+          <VStack spacing={0} align="stretch">
+            {yearPosts.map((post, i) => (
+              <Box key={post.slug}>
+                {/* A hairline between entries, never above the first. It sits
+                    inside the content column (pl matches the card) so the rail
+                    stays the only thing crossing the left gutter. */}
+                {i > 0 && (
+                  <Box
+                    pl={{ base: '52px', md: '76px' }}
+                    my={{ base: 7, md: 10 }}
+                  >
+                    <Box h="1px" bg="brand.accentBorder" />
+                  </Box>
+                )}
+                <TimelineEntry post={post} />
+              </Box>
             ))}
           </VStack>
         </Box>
@@ -186,7 +199,7 @@ function YearMarker({ year }: { year: number }) {
         py={{ base: 1, md: 1.5 }}
         borderRadius="full"
         position={{ base: 'absolute', md: 'static' }}
-        left={{ base: '12px', md: 'auto' }}
+        left={{ base: '22px', md: 'auto' }}
         transform={{ base: 'translateX(-50%)', md: 'none' }}
       >
         <Text textStyle="eyebrow">{year}</Text>
@@ -211,28 +224,59 @@ function YearMarker({ year }: { year: number }) {
  * alternation was the part costing half the canvas.
  */
 function TimelineEntry({ post }: { post: PostSummary }) {
-  const dateLabel = formatDate(post.published_at);
-
   return (
     <Flex position="relative" align="stretch" zIndex={1}>
-      {/* Dot on the rail — anchors the entry visually */}
-      <Box
+      {/* A dated marker on the rail, not a 9px dot.
+          The dot said "something happened here"; it did not say WHEN, so the
+          rail read as decoration rather than a timeline. The day sits in the
+          disc and the month above it — the two together are what make the
+          spine legible as chronology while scrolling. */}
+      <Flex
         position="absolute"
-        top={{ base: '18px', md: '24px' }}
-        left="12px"
+        top={0}
+        left="22px"
         transform="translateX(-50%)"
-        w="9px"
-        h="9px"
-        borderRadius="full"
-        bg="brand.accent"
-        border="2px solid white"
-        boxShadow="0 0 0 1px rgba(201, 169, 110, 0.4)"
+        direction="column"
+        align="center"
         zIndex={2}
-      />
+      >
+        <Text
+          textStyle="metaCaption"
+          color="brand.accentText"
+          fontSize="0.5625rem"
+          letterSpacing="0.1em"
+          mr="-0.1em"
+          mb={1}
+          bg="white"
+          px={1}
+        >
+          {monthOf(post.published_at)}
+        </Text>
+        <Flex
+          w={{ base: '34px', md: '38px' }}
+          h={{ base: '34px', md: '38px' }}
+          borderRadius="full"
+          bg="white"
+          border="1px solid"
+          borderColor="brand.accent"
+          align="center"
+          justify="center"
+        >
+          <Text
+            fontFamily="heading"
+            fontSize={{ base: '1rem', md: '1.125rem' }}
+            fontWeight="400"
+            lineHeight={1}
+            color="brand.accentText"
+          >
+            {dayOf(post.published_at)}
+          </Text>
+        </Flex>
+      </Flex>
 
-      {/* pl clears the rail at 12px with a comfortable gutter. */}
-      <Box w="100%" pl={{ base: '32px', md: '56px' }}>
-        <TimelineCard post={post} showInlineDate={dateLabel} />
+      {/* pl clears the 44px marker with a gutter. */}
+      <Box w="100%" pl={{ base: '52px', md: '76px' }}>
+        <TimelineCard post={post} />
       </Box>
     </Flex>
   );
@@ -253,7 +297,7 @@ function TimelineEntry({ post }: { post: PostSummary }) {
  * The accordion is gone entirely. It existed to preview without navigating,
  * but the cluster IS the preview, and the whole block is one link to the post.
  */
-function TimelineCard({ post, showInlineDate }: { post: PostSummary; showInlineDate: string }) {
+function TimelineCard({ post }: { post: PostSummary }) {
   const photos = post.photos ?? [];
   const lead = photos[0];
   // Up to four supporting frames. Fewer is fine — the grid just gets shorter,
@@ -343,15 +387,16 @@ function TimelineCard({ post, showInlineDate }: { post: PostSummary; showInlineD
 
       {/* The words sit under the pictures, held to a readable measure rather
           than stretching the full width of the cluster. */}
-      <Box maxW="measure">
-        <HStack spacing={3} mb={1.5} flexWrap="wrap">
-          <Text textStyle="metaCaption">{showInlineDate}</Text>
-          {post.session_type && (
-            <Text textStyle="metaCaption" color="brand.accentText">
-              {post.session_type}
-            </Text>
-          )}
-        </HStack>
+      {/* Aligned to the lead frame's 62%, not the 46ch reading measure. At
+          46ch the title wrapped with a large blank to its right while the
+          photographs above ran much wider, which read as an arbitrary cut. On
+          phones the cluster is full width, so this is too. */}
+      <Box maxW={{ base: '100%', md: '62%' }}>
+        {post.session_type && (
+          <Text textStyle="metaCaption" color="brand.accentText" mb={1.5}>
+            {post.session_type}
+          </Text>
+        )}
 
         <Text
           as="h2"
@@ -364,8 +409,11 @@ function TimelineCard({ post, showInlineDate }: { post: PostSummary; showInlineD
           {post.title}
         </Text>
 
+        {/* No clamp on the excerpt. Every one in the database is 126-151
+            characters, which fits in two or three lines at this measure — the
+            ellipsis was truncating text that had room to finish. */}
         {post.excerpt && (
-          <Text textStyle="bodyCopy" noOfLines={2} mb={3}>
+          <Text textStyle="bodyCopy" mb={3}>
             {post.excerpt}
           </Text>
         )}
@@ -448,10 +496,15 @@ function groupByYear(posts: PostSummary[]): Array<[number, PostSummary[]]> {
   return [...map.entries()].sort((a, b) => b[0] - a[0]);
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+/** "AUG" — the month for the rail marker. */
+function monthOf(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
 }
+
+/** "9" — the day, set inside the disc. */
+function dayOf(iso: string): string {
+  return String(new Date(iso).getDate());
+}
+
 
 export default Journal;
