@@ -218,7 +218,6 @@
       "destination": "/photo/:category/:photoId.html"
     },
     {
-      "_comment": "Prerendered category galleries. Constrained to the four real categories on purpose: a bare /gallery/:category would send /gallery/anything-else to a .html that does not exist and 404, where today it falls through to the SPA. Keep this list in sync with CATEGORY_META in scripts/prerender-photos.mjs — the reachability check there will fail the build if a category page stops being reachable.",
       "source": "/gallery/:category(portraits|weddings|family|maternity)",
       "destination": "/gallery/:category.html"
     },

@@ -325,6 +325,14 @@ console.log(`Pre-rendered ${totalPages} individual photo pages.`);
 // difference.
 //
 // Descriptions follow the CLAUDE.md tone rules: no locations, no praise words.
+//
+// ROUTING: vercel.json rewrites /gallery/:category to /gallery/:category.html,
+// with the category list spelled out rather than a bare :category — an unknown
+// category would otherwise rewrite to a .html that does not exist and 404,
+// where today it falls through to the SPA. Keep that list and this object in
+// sync. (The note lives here because vercel.json is JSON and cannot hold a
+// comment: adding a "_comment" key fails Vercel's schema validation and the
+// deployment errors before the build starts.)
 // ---------------------------------------------------------------------------
 const CATEGORY_META = {
   weddings: {
