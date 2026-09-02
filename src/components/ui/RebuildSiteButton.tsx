@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Text, VStack } from '@chakra-ui/react';
+import { Box, HStack, Text, VStack } from '@chakra-ui/react';
 import { FaSyncAlt } from 'react-icons/fa';
 import CTAButton from './CTAButton';
 import { useAdminLang } from '../../i18n/admin';
@@ -72,25 +72,26 @@ const RebuildSiteButton = ({
     </CTAButton>
   );
 
-  // Compact placement sits in a header row that already owns its spacing, so it
-  // reports status through a title attribute instead of adding a second line
-  // that would shift the row.
+  // Compact = button and status side by side on one line. It sits on its own
+  // row in AdminJournal, so the status text can simply appear next to the
+  // button; an earlier version hid it in a title attribute to avoid reflowing
+  // the header, which both hid the message from touch users and did not
+  // actually prevent the reflow, because it rendered the text as well.
   if (compact) {
     return (
-      <Box title={msg?.text || undefined}>
+      <HStack spacing={3} align="center" wrap="wrap">
         {button}
         {msg && (
           <Text
-            fontSize="2xs"
-            mt={1}
+            fontSize="xs"
             color={msg.tone === 'ok' ? 'green.600' : 'red.500'}
             fontWeight="300"
-            maxW="200px"
+            maxW={{ base: '100%', md: '46ch' }}
           >
             {msg.text}
           </Text>
         )}
-      </Box>
+      </HStack>
     );
   }
 

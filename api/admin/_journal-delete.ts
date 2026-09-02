@@ -13,6 +13,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
+import { triggerDeployHookQuietly } from '../_deploy-hook.js';
 import { requireAdmin, requireSuper } from '../_admin-auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -40,6 +41,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Post not found' });
     }
+
+    // The post is gone from the database, but /journal/<slug> is answered by a
+    // prerendered file that Vercel serves from the filesystem before any
+    // rewrite — so without a rebuild the deleted article keeps returning 200
+    // with its full text, title and link preview. After a hard delete that file
+    // is the only remaining copy. Deleting must therefore also rebuild.
+    // Never allowed to fail the delete: an unset or unreachable hook must not
+    // leave the caller thinking the post survived.
+    await triggerDeployHookQuietly('journal-delete');
 
     return res.status(200).json({ success: true });
   } catch (err) {

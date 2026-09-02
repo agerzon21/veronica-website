@@ -127,7 +127,6 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
         </VStack>
 
         <HStack spacing={2} flexShrink={0}>
-          <RebuildSiteButton adminPassword={adminPassword} compact />
           <IconButton
             aria-label={t.journal.refreshAria}
             icon={<Icon as={FaSyncAlt} boxSize={4} />}
@@ -151,6 +150,20 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
           </CTAButton>
         </HStack>
       </Flex>
+
+      {/* Rebuild sits on its own row rather than in the header group above.
+          That header is `justify="space-between"` with a flexShrink={0} button
+          cluster and a minW={0} title column, so every pixel the buttons need
+          is taken from the title — a third control collapsed the h1 and post
+          count to nothing on phones, and worse between 480-767px where the
+          longer labels appear before the smaller type does. AdminDashboard
+          solves the same squeeze by hiding its third control below md; hiding
+          is wrong here, because the person who needs this button is the one
+          publishing posts and she works on a phone. Its own row costs one line
+          and keeps it reachable at every width. */}
+      <Box mb={{ base: 5, md: 6 }}>
+        <RebuildSiteButton adminPassword={adminPassword} compact />
+      </Box>
 
       {error && (
         <Box bg="red.50" border="1px solid" borderColor="red.200" p={3} mb={4} borderRadius="sm">

@@ -33,6 +33,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
 import { getDb } from '../_db.js';
+import { triggerDeployHook } from '../_deploy-hook.js';
 
 const STATE_KEY = 'last_rebuild_trigger';
 
@@ -50,8 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const auth = await requireAdmin(req.body?.password);
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
 
-  const url = process.env.VERCEL_DEPLOY_HOOK_URL;
-  if (!url) {
+  if (!process.env.VERCEL_DEPLOY_HOOK_URL) {
     return res.status(501).json({
       success: false,
       needsSetup: true,
@@ -90,21 +90,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  let hookRes: Response;
-  try {
-    hookRes = await fetch(url, { method: 'POST' });
-  } catch (err) {
-    console.error('[rebuild] deploy hook request failed:', err);
-    return res
-      .status(502)
-      .json({ success: false, error: 'Could not reach Vercel to start the build.' });
-  }
-
-  if (!hookRes.ok) {
-    console.error(`[rebuild] deploy hook returned ${hookRes.status}`);
-    return res.status(502).json({
+  const hook = await triggerDeployHook('admin-rebuild');
+  if (!hook.ok) {
+    if (hook.reason === 'unreachable') {
+      return res
+        .status(502)
+        .json({ success: false, error: 'Could not reach Vercel to start the build.' });
+    }
+    if (hook.reason === 'rejected') {
+      return res.status(502).json({
+        success: false,
+        error: `Vercel rejected the rebuild request (${hook.status}). The hook URL may have been deleted.`,
+      });
+    }
+    // Raced with the variable being removed between the check above and here.
+    return res.status(501).json({
       success: false,
-      error: `Vercel rejected the rebuild request (${hookRes.status}). The hook URL may have been deleted.`,
+      needsSetup: true,
+      error: 'No deploy hook configured.',
     });
   }
 

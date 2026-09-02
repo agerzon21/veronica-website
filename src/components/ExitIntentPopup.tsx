@@ -34,11 +34,21 @@ const MOBILE_TIME_THRESHOLD_MS = 3 * 60 * 1000;
 // been inside the page at least once.
 const DESKTOP_ARM_DELAY_MS = 20 * 1000;
 
-// Routes where the popup is suppressed entirely. Client-portal visitors are
-// already paying customers — offering them a discount for a new shoot reads
-// weirdly. Add other off-limits routes here (e.g. /portal/anything once we
-// have nested portal routes).
-const SUPPRESSED_PATH_PREFIXES = ['/portal'];
+// Routes where the popup is suppressed entirely.
+//
+//   /portal             already paying customers — offering them a discount
+//                       for a new shoot reads weirdly.
+//   /contact/thank-you  they have just submitted the enquiry. "Get 10% off"
+//                       is an offer to do the thing they have already done,
+//                       and it lands on the one page whose whole job is to
+//                       confirm the form worked.
+//
+// Matching is prefix-based (exact, or followed by "/"), so the real route
+// path matters: the thank-you page is /contact/thank-you, NOT /thank-you —
+// a wrong prefix here fails silently and looks like the popup is just broken.
+// Note this does NOT suppress /contact itself; adding '/contact' would, via
+// the startsWith arm.
+const SUPPRESSED_PATH_PREFIXES = ['/portal', '/contact/thank-you'];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

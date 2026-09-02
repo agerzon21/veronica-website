@@ -17,6 +17,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
+import { triggerDeployHookQuietly } from '../_deploy-hook.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { validateJournalInput } from './_journal-shared.js';
 
@@ -44,8 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Look up the existing published_at so we don't clobber the
     // original publish date on a re-save.
     const existing = (await sql`
-      SELECT published_at FROM journal_posts WHERE id = ${id} LIMIT 1
-    `) as Array<{ published_at: string | null }>;
+      SELECT published_at, status FROM journal_posts WHERE id = ${id} LIMIT 1
+    `) as Array<{ published_at: string | null; status: string }>;
     if (existing.length === 0) {
       return res.status(404).json({ success: false, error: 'Post not found' });
     }
@@ -83,6 +84,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updated_at: string;
       published_at: string | null;
     }>;
+
+    // Rebuild whenever this edit changes what the public site should serve —
+    // which includes UNpublishing, not just publishing. The prerendered page is
+    // filesystem-served and outlives the database change otherwise. A slug
+    // change matters too: it strands the old URL on a stale file.
+    // status, not published_at: published_at survives an unpublish, so it
+    // records "was published once", not "is on the public site right now".
+    const wasPublic = existing[0].status === 'published' && existing[0].published_at !== null;
+    const isPublic = rows[0]?.status === 'published' && rows[0]?.published_at !== null;
+    if (wasPublic || isPublic) {
+      await triggerDeployHookQuietly('journal-update');
+    }
 
     return res.status(200).json({ success: true, post: rows[0] });
   } catch (err) {
