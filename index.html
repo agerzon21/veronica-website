@@ -77,6 +77,41 @@
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="preconnect" href="https://www.googletagmanager.com" />
 
+    <!-- Typefaces. Self-hosted rather than Google-hosted: a third-party font
+         origin costs a DNS+TCP+TLS handshake inside the render path, which is
+         the same cost we deliberately avoided for the Instagram avatar.
+         Variable woff2, latin subset — 37KB + 26KB. Filenames carry a
+         content hash because vercel.json serves /assets/* as
+         "immutable, max-age=31536000" — an unhashed font could never be
+         replaced for returning visitors. Vite hashes its own output; these
+         live in public/ and bypass that, so the hash is manual.
+
+         Preloaded because CLS is currently 0 and that is worth 25 of the 100
+         Lighthouse points. A font that arrives after first paint reflows every
+         line of text on the page. Preloading plus a SERIF fallback for the
+         display face (Georgia, not the system sans) keeps any swap that does
+         happen to a small metric change rather than a large one. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="/assets/fonts/cormorant-garamond-latin.5d618c46.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="/assets/fonts/jost-latin.235d8f89.woff2" />
+    <style>
+      @font-face {
+        font-family: 'Cormorant Garamond';
+        font-style: normal;
+        font-weight: 300 700;
+        font-display: swap;
+        src: url('/assets/fonts/cormorant-garamond-latin.5d618c46.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Jost';
+        font-style: normal;
+        font-weight: 300 600;
+        font-display: swap;
+        src: url('/assets/fonts/jost-latin.235d8f89.woff2') format('woff2');
+      }
+    </style>
+
     <!-- The mobile LCP element. It lived only inside the JSON-LD below, so it
          could not be fetched until React had rendered the navbar — the
          waterfall showed the request starting at 3558ms, at Low priority,

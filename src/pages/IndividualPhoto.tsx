@@ -11,9 +11,12 @@ import {
   Wrap,
   WrapItem,
 } from '@chakra-ui/react';
-import { CopyIcon, ExternalLinkIcon, CloseIcon } from '@chakra-ui/icons';
+import { CloseIcon } from '@chakra-ui/icons';
+import { FaRegCopy, FaShareAlt } from 'react-icons/fa';
 import { useCopyNotification } from '../components/CopyNotification';
 import LoadingImage from '../components/ui/LoadingImage';
+import PageHeader from '../components/ui/PageHeader';
+import CTAButton from '../components/ui/CTAButton';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -226,7 +229,7 @@ const IndividualPhoto: React.FC = () => {
   if (loading) {
     return (
       <Flex minH="100vh" bg="white" align="center" justify="center">
-        <Text color="gray.500" fontWeight="300">Loading...</Text>
+        <Text textStyle="metaCaption">Loading...</Text>
       </Flex>
     );
   }
@@ -235,20 +238,10 @@ const IndividualPhoto: React.FC = () => {
     return (
       <Box minH="100vh" bg="white">
         <Flex minH="100vh" align="center" justify="center" direction="column" gap={6}>
-          <Text fontSize="xl" fontWeight="200" color="gray.700">Photo not found</Text>
-          <Text
-            as={Link as any}
-            to={`/gallery/${category}`}
-            fontSize="xs"
-            fontWeight="400"
-            textTransform="uppercase"
-            letterSpacing="0.2em"
-            color="brand.accentText"
-            _hover={{ color: 'gray.700' }}
-            transition="color 0.3s"
-          >
+          <Text as="h1" textStyle="sectionTitle" m={0}>Photo not found</Text>
+          <CTAButton to={`/gallery/${category}`} size="sm">
             Back to Gallery
-          </Text>
+          </CTAButton>
         </Flex>
       </Box>
     );
@@ -293,7 +286,7 @@ const IndividualPhoto: React.FC = () => {
         <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
       </Helmet>
 
-      <Box minH="100vh" bg="white" pt="72px">
+      <Box minH="100vh" bg="white" layerStyle="pageTop">
         {/* Breadcrumb — small, semantic. Real <a href> tags so they're
             crawlable and provide internal links INTO the photo pages from
             the perspective of Googlebot crawling the gallery → category → photo. */}
@@ -302,18 +295,14 @@ const IndividualPhoto: React.FC = () => {
           aria-label="Breadcrumb"
           px={{ base: 4, md: 8 }}
           py={3}
-          maxW="container.xl"
+          maxW="contentWide"
           mx="auto"
         >
           <Flex
             as="ol"
             listStyleType="none"
             gap={2}
-            fontSize="2xs"
-            fontWeight="400"
-            letterSpacing="0.1em"
-            textTransform="uppercase"
-            color="gray.400"
+            textStyle="metaCaption"
             flexWrap="wrap"
           >
             <Box as="li">
@@ -365,68 +354,49 @@ const IndividualPhoto: React.FC = () => {
         </Box>
 
         {/* Content */}
-        <Container maxW="container.md" py={{ base: 12, md: 16 }} px={6}>
+        <Container maxW="contentNarrow" layerStyle="sectionTight" px={6}>
           <Box>
             <MotionDiv
               initial={{ opacity: 0, y: 25 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              <VStack spacing={8} align="center" textAlign="center">
-                {/* Category label */}
-                <Text
-                  fontSize="xs"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.2em"
-                  color="brand.accent"
-                >
-                  {categoryLabel}
-                </Text>
-                <Box w="35px" h="1px" bg="brand.accent" />
-
-                {/* Title */}
-                <Text
-                  as="h1"
-                  fontSize={{ base: 'xl', md: '2xl' }}
-                  fontWeight="200"
-                  color="gray.800"
-                  lineHeight="1.5"
-                  m={0}
-                >
-                  {photo.title.replace(' | Vero Photography', '')}
-                </Text>
-
-                {/* Description */}
-                <Text
-                  fontSize="sm"
-                  color="gray.500"
-                  lineHeight="2"
-                  fontWeight="300"
-                  maxW="500px"
-                >
-                  {photo.description}
-                </Text>
+              <VStack spacing={{ base: 6, md: 8 }} align="center" textAlign="center">
+                {/* Eyebrow → rule → h1 → lead. One block, one component. */}
+                <PageHeader
+                  eyebrow={categoryLabel}
+                  title={titleNoSuffix}
+                  lead={photo.description}
+                  size="content"
+                />
 
                 {/* Keyword chips (display-only) */}
                 {photo.keywords.length > 0 && (
-                  <Wrap spacing={2} justify="center" maxW="500px">
+                  <Wrap spacing={2} justify="center" maxW="measure">
                     {photo.keywords.map((keyword) => (
                       <WrapItem key={keyword}>
                         <Tag
                           size="sm"
                           variant="subtle"
-                          bg="gray.50"
+                          textStyle="metaCaption"
+                          // Quieter than the rest of the page on purpose:
+                          // these are metadata, not navigation. Cream fill and
+                          // gold border gave them more presence than the
+                          // photograph's own caption.
+                          bg="transparent"
                           color="gray.500"
-                          fontWeight="400"
-                          fontSize="2xs"
-                          letterSpacing="0.1em"
-                          textTransform="uppercase"
-                          px={3}
-                          py={1}
+                          fontSize="0.625rem"
+                          letterSpacing="0.12em"
+                          mr="-0.12em"
+                          px={2.5}
+                          py={0.5}
                           borderRadius="full"
                           border="1px solid"
-                          borderColor="gray.100"
+                          borderColor="gray.200"
+                          // A hyphenated keyword like "golden-hour" was
+                          // breaking at the hyphen and becoming a two-line
+                          // chip, twice the height of its neighbours.
+                          whiteSpace="nowrap"
                         >
                           {keyword}
                         </Tag>
@@ -436,57 +406,36 @@ const IndividualPhoto: React.FC = () => {
                 )}
 
                 {/* Divider */}
-                <Box w="100%" maxW="400px" h="1px" bg="gray.200" />
+                <Box w="100%" maxW="measure" h="1px" bg="brand.accentBorder" />
 
                 {/* Actions */}
-                <Flex gap={8} align="center">
-                  <Flex
-                    as="button"
-                    align="center"
-                    gap={2}
+                <Flex gap={3} align="center" wrap="wrap" justify="center">
+                  <CTAButton
                     onClick={handleCopyLink}
-                    color="gray.400"
-                    transition="color 0.3s"
-                    _hover={{ color: 'brand.accent' }}
-                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                    icon={FaRegCopy}
+                    variant="ghost"
+                    size="sm"
                   >
-                    <CopyIcon boxSize={3.5} />
-                    <Text fontSize="xs" fontWeight="400" textTransform="uppercase" letterSpacing="0.15em">
-                      Copy Link
-                    </Text>
-                  </Flex>
-                  <Flex
-                    as="button"
-                    align="center"
-                    gap={2}
+                    Copy Link
+                  </CTAButton>
+                  <CTAButton
                     onClick={handleShare}
-                    color="gray.400"
-                    transition="color 0.3s"
-                    _hover={{ color: 'brand.accent' }}
-                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                    icon={FaShareAlt}
+                    variant="ghost"
+                    size="sm"
                   >
-                    <ExternalLinkIcon boxSize={3.5} />
-                    <Text fontSize="xs" fontWeight="400" textTransform="uppercase" letterSpacing="0.15em">
-                      Share
-                    </Text>
-                  </Flex>
+                    Share
+                  </CTAButton>
                 </Flex>
 
                 {/* Back to gallery */}
-                <Text
-                  as="button"
+                <CTAButton
                   onClick={() => navigate(`/gallery/${category}`)}
-                  fontSize="xs"
-                  fontWeight="400"
-                  textTransform="uppercase"
-                  letterSpacing="0.2em"
-                  color="gray.400"
-                  transition="color 0.3s"
-                  _hover={{ color: 'brand.accent' }}
-                  mt={4}
+                  variant="ghost"
+                  size="sm"
                 >
                   ← Back to {categoryLabel}
-                </Text>
+                </CTAButton>
               </VStack>
             </MotionDiv>
           </Box>
@@ -494,32 +443,23 @@ const IndividualPhoto: React.FC = () => {
 
         {/* Related photos */}
         {relatedPhotos.length > 0 && (
-          <Box bg="gray.50" py={{ base: 12, md: 16 }} px={{ base: 4, md: 8 }}>
-            <Container maxW="container.lg" px={0}>
-              <VStack spacing={8}>
-                <VStack spacing={3}>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="500"
-                    textTransform="uppercase"
-                    letterSpacing="0.2em"
-                    color="brand.accentText"
-                  >
-                    Related
-                  </Text>
-                  <Box w="30px" h="1px" bg="brand.accent" />
-                  <Text
-                    fontSize={{ base: 'lg', md: 'xl' }}
-                    fontWeight="200"
-                    color="gray.700"
-                  >
+          <Box bg="brand.surfaceSunken" layerStyle="sectionTight" px={{ base: 4, md: 8 }}>
+            <Container maxW="content" px={0}>
+              <VStack spacing={{ base: 8, md: 10 }}>
+                {/* Same eyebrow → rule → title arrangement as PageHeader, but
+                    the heading here is an h2 at sectionTitle — PageHeader only
+                    offers pageTitle/contentTitle, so it can't render this one. */}
+                <VStack spacing={{ base: 4, md: 5 }}>
+                  <Text textStyle="eyebrow">Related</Text>
+                  <Box w="40px" h="1px" bg="brand.accent" />
+                  <Text as="h2" textStyle="sectionTitle" m={0}>
                     More like this
                   </Text>
                 </VStack>
 
                 <SimpleGrid
                   columns={{ base: 2, md: 3 }}
-                  spacing={{ base: 3, md: 4 }}
+                  spacing={{ base: 1.5, md: 2 }}
                   w="100%"
                 >
                   {relatedPhotos.map((rp) => (
@@ -547,7 +487,7 @@ const IndividualPhoto: React.FC = () => {
                         src={rp.url}
                         alt={rp.alt}
                         w="100%"
-                        h={{ base: '180px', md: '240px' }}
+                        h={{ base: '220px', md: '300px' }}
                         imgObjectFit="cover"
                         spinnerSize="sm"
                         imgStyle={{
@@ -561,6 +501,9 @@ const IndividualPhoto: React.FC = () => {
                         opacity={0}
                         transition="opacity 0.3s ease"
                         _groupHover={{ opacity: 1 }}
+                        // The scrim carries the title below it; both were
+                        // hover-only, so touch users got unlabelled thumbnails.
+                        sx={{ '@media (hover: none)': { opacity: 1 } }}
                         pointerEvents="none"
                       />
                       <Text
@@ -568,15 +511,18 @@ const IndividualPhoto: React.FC = () => {
                         bottom={3}
                         left={3}
                         right={3}
-                        fontSize="2xs"
-                        fontWeight="400"
-                        textTransform="uppercase"
-                        letterSpacing="0.15em"
+                        textStyle="metaCaption"
                         color="white"
                         opacity={0}
                         transform="translateY(5px)"
                         transition="all 0.3s ease"
                         _groupHover={{ opacity: 1, transform: 'translateY(0)' }}
+                        sx={{
+                          '@media (hover: none)': {
+                            opacity: 1,
+                            transform: 'translateY(0)',
+                          },
+                        }}
                         pointerEvents="none"
                       >
                         {rp.title.replace(' | Vero Photography', '')}
@@ -676,10 +622,8 @@ const IndividualPhoto: React.FC = () => {
                 py={2}
               >
                 <Text
-                  fontSize="xs"
+                  textStyle="ctaLabel"
                   color="whiteAlpha.900"
-                  letterSpacing="0.15em"
-                  textTransform="uppercase"
                   transition="color 0.3s"
                   _hover={{ color: 'white' }}
                 >

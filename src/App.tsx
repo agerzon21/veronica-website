@@ -17,6 +17,7 @@ import IndividualPhoto from './pages/IndividualPhoto';
 const About = lazy(() => import('./pages/About'));
 const Contact = lazy(() => import('./pages/Contact'));
 const Gallery = lazy(() => import('./pages/Gallery'));
+const Weddings = lazy(() => import('./pages/Weddings'));
 const Pay = lazy(() => import('./pages/Pay'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const ThankYou = lazy(() => import('./pages/ThankYou'));
@@ -171,6 +172,7 @@ function AppShell() {
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/contact/thank-you" element={<ThankYou />} />
+        <Route path="/wedding-photography" element={<Weddings />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/gallery/:category" element={<Gallery />} />
         <Route path="/photo/:category/:photoId" element={<IndividualPhoto />} />

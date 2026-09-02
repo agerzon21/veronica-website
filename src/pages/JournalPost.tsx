@@ -1,11 +1,13 @@
 import {
-  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, useToast,
+  Box, HStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, useToast,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import { useEffect, useState, useCallback } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { FaArrowLeft, FaArrowRight, FaBookOpen, FaShareAlt, FaChevronLeft, FaChevronRight, FaTimes } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
+import PageHeader from '../components/ui/PageHeader';
+import CTAButton from '../components/ui/CTAButton';
 
 /**
  * Individual journal post page — rendered when the URL is
@@ -20,6 +22,12 @@ import ReactMarkdown from 'react-markdown';
  *
  * Cover is used for og:image so link previews on Instagram / Facebook /
  * iMessage render correctly.
+ *
+ * LAYOUT: the page column is `content` (1000px). Prose — back link,
+ * header, markdown body, tags, share, nav — is constrained to
+ * `contentNarrow` (720px) inside it so the reading measure is the
+ * site's, while the cover and the photo grid run the full column. The
+ * photographs are the point; they get the extra width, not the padding.
  */
 
 interface Photo {
@@ -176,16 +184,12 @@ const JournalPost = ({ slug }: { slug: string }) => {
           <title>Post not found | Vero Photography Journal</title>
           <meta name="robots" content="noindex" />
         </Helmet>
-        <Flex minH="80vh" align="center" justify="center" direction="column" gap={4} px={4}>
+        <Flex minH="80vh" align="center" justify="center" direction="column" gap={5} px={4}>
           <Icon as={FaBookOpen} boxSize={8} color="brand.accent" />
-          <Text fontSize="lg" color="gray.700" fontWeight="300">
+          <Text textStyle="bodyLead">
             That post doesn't exist (yet).
           </Text>
-          <RouterLink to="/journal">
-            <Text fontSize="xs" letterSpacing="0.2em" textTransform="uppercase" color="brand.accent">
-              ← Back to the journal
-            </Text>
-          </RouterLink>
+          <BackToJournalLink />
         </Flex>
       </>
     );
@@ -232,83 +236,41 @@ const JournalPost = ({ slug }: { slug: string }) => {
         {ogImage && <meta name="twitter:image" content={ogImage} />}
       </Helmet>
 
-      <Box bg="white" minH="100vh" pt={{ base: 20, md: 24 }} pb={{ base: 16, md: 24 }}>
-        <Box maxW="820px" mx="auto" px={{ base: 4, md: 6 }}>
-          {/* Back link */}
-          <RouterLink to="/journal">
-            <HStack
-              spacing={2}
-              color="gray.500"
-              _hover={{ color: 'brand.accent' }}
-              fontSize="xs"
-              fontWeight="500"
-              letterSpacing="0.2em"
-              textTransform="uppercase"
-              mb={{ base: 6, md: 8 }}
-            >
-              <Icon as={FaArrowLeft} boxSize={3} />
-              <Text>Back to the journal</Text>
-            </HStack>
-          </RouterLink>
+      <Box bg="white" minH="100vh" layerStyle="pageTop" pb={{ base: '3.5rem', md: '6rem' }}>
+        <Box maxW="content" mx="auto" px={{ base: 4, md: 6 }}>
+          {/* Back link + header — held to the reading measure */}
+          <Box maxW="contentNarrow" mx="auto">
+            <Box mb={{ base: 6, md: 8 }}>
+              <BackToJournalLink />
+            </Box>
 
-          {/* Header */}
-          <VStack align="stretch" spacing={4} mb={{ base: 8, md: 12 }}>
-            <HStack spacing={3}>
-              <Text
-                fontSize="2xs"
-                fontWeight="500"
-                letterSpacing="0.2em"
-                textTransform="uppercase"
-                color="brand.accent"
-              >
-                {dateLabel}
-              </Text>
-              {post.session_type && (
-                <>
-                  <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" />
-                  <Text
-                    fontSize="2xs"
-                    fontWeight="500"
-                    letterSpacing="0.2em"
-                    textTransform="uppercase"
-                    color="gray.500"
-                  >
-                    {post.session_type}
-                  </Text>
-                </>
-              )}
-            </HStack>
-            <Text
-              as="h1"
-              fontSize={{ base: '3xl', md: '5xl' }}
-              fontWeight="200"
-              color="gray.800"
-              letterSpacing="0.01em"
-              lineHeight="1.15"
-              m={0}
-            >
-              {post.title}
-            </Text>
-            {post.excerpt && (
-              <Text
-                fontSize={{ base: 'md', md: 'lg' }}
-                color="gray.600"
-                fontWeight="300"
-                lineHeight="1.7"
-              >
-                {post.excerpt}
-              </Text>
-            )}
-          </VStack>
+            <Box mb={{ base: 8, md: 12 }}>
+              <HStack spacing={3} mb={{ base: 4, md: 5 }}>
+                <Text textStyle="metaCaption">{dateLabel}</Text>
+                {post.session_type && (
+                  <>
+                    <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" />
+                    <Text textStyle="metaCaption">{post.session_type}</Text>
+                  </>
+                )}
+              </HStack>
+              <PageHeader
+                title={post.title}
+                lead={post.excerpt || undefined}
+                align="left"
+                size="content"
+              />
+            </Box>
+          </Box>
 
-          {/* Cover image */}
+          {/* Cover image — runs the full page column */}
           {coverPhoto && (
             <Box mb={{ base: 8, md: 12 }}>
               <Image
                 src={coverPhoto.url}
                 alt={coverPhoto.alt}
                 w="100%"
-                h={{ base: '260px', md: '520px' }}
+                h={{ base: '280px', md: '580px' }}
                 objectFit="cover"
                 borderRadius="sm"
               />
@@ -317,26 +279,26 @@ const JournalPost = ({ slug }: { slug: string }) => {
 
           {/* Markdown body */}
           {post.body_markdown && (
-            <Box className="journal-body" mb={{ base: 10, md: 14 }}>
+            <Box className="journal-body" maxW="contentNarrow" mx="auto" mb={{ base: 8, md: 12 }}>
               <ReactMarkdown
                 components={{
                   h1: ({ children }) => (
-                    <Text as="h2" fontSize={{ base: '2xl', md: '3xl' }} fontWeight="300" color="gray.800" mt={10} mb={4} lineHeight="1.2">
+                    <Text as="h2" textStyle="sectionTitle" mt={10} mb={4}>
                       {children}
                     </Text>
                   ),
                   h2: ({ children }) => (
-                    <Text as="h3" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="400" color="gray.800" mt={8} mb={3} lineHeight="1.3">
+                    <Text as="h3" textStyle="cardTitle" mt={8} mb={3}>
                       {children}
                     </Text>
                   ),
                   h3: ({ children }) => (
-                    <Text as="h4" fontSize={{ base: 'lg', md: 'xl' }} fontWeight="500" color="gray.800" mt={6} mb={2}>
+                    <Text as="h4" textStyle="cardTitle" mt={6} mb={2}>
                       {children}
                     </Text>
                   ),
                   p: ({ children }) => (
-                    <Text fontSize={{ base: 'md', md: 'lg' }} color="gray.700" fontWeight="300" lineHeight="1.85" mb={5}>
+                    <Text textStyle="bodyCopy" mb={5}>
                       {children}
                     </Text>
                   ),
@@ -344,11 +306,11 @@ const JournalPost = ({ slug }: { slug: string }) => {
                     <Box
                       as="a"
                       href={href}
-                      color="brand.accent"
+                      color="brand.accentText"
                       textDecoration="underline"
-                      textDecorationColor="rgba(201, 169, 110, 0.4)"
+                      textDecorationColor="brand.accentBorder"
                       textUnderlineOffset="3px"
-                      _hover={{ color: 'brand.accentText', textDecorationColor: 'brand.accentText' }}
+                      _hover={{ textDecorationColor: 'brand.accentText' }}
                       target={href?.startsWith('http') ? '_blank' : undefined}
                       rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
                     >
@@ -358,12 +320,12 @@ const JournalPost = ({ slug }: { slug: string }) => {
                   em: ({ children }) => <Box as="em" fontStyle="italic">{children}</Box>,
                   strong: ({ children }) => <Box as="strong" fontWeight="600" color="gray.800">{children}</Box>,
                   ul: ({ children }) => (
-                    <Box as="ul" pl={5} mb={5} sx={{ 'li': { fontSize: { base: 'md', md: 'lg' }, color: 'gray.700', fontWeight: 300, lineHeight: '1.8', mb: 1.5 } }}>
+                    <Box as="ul" textStyle="bodyCopy" pl={5} mb={5} sx={{ 'li': { mb: 1.5 } }}>
                       {children}
                     </Box>
                   ),
                   ol: ({ children }) => (
-                    <Box as="ol" pl={5} mb={5} sx={{ 'li': { fontSize: { base: 'md', md: 'lg' }, color: 'gray.700', fontWeight: 300, lineHeight: '1.8', mb: 1.5 } }}>
+                    <Box as="ol" textStyle="bodyCopy" pl={5} mb={5} sx={{ 'li': { mb: 1.5 } }}>
                       {children}
                     </Box>
                   ),
@@ -375,7 +337,6 @@ const JournalPost = ({ slug }: { slug: string }) => {
                       pl={5}
                       py={1}
                       my={6}
-                      color="gray.600"
                       fontStyle="italic"
                     >
                       {children}
@@ -389,112 +350,91 @@ const JournalPost = ({ slug }: { slug: string }) => {
             </Box>
           )}
 
-          {/* Photo gallery */}
+          {/* Photo gallery — full page column, same as the cover */}
           {post.photos.length > 0 && <PhotoGrid photos={post.photos} />}
 
-          {/* Tags footer */}
-          {post.tags.length > 0 && (
-            <HStack spacing={2} wrap="wrap" mt={{ base: 10, md: 14 }} pt={6} borderTop="1px solid" borderColor="gray.100">
-              {post.tags.map((tag) => (
-                <Text
-                  key={tag}
-                  fontSize="2xs"
-                  fontWeight="500"
-                  letterSpacing="0.1em"
-                  textTransform="lowercase"
-                  color="brand.accentText"
-                  bg="brand.surface"
-                  border="1px solid"
-                  borderColor="rgba(201, 169, 110, 0.35)"
-                  px={2}
-                  py={0.5}
-                  borderRadius="sm"
-                >
-                  {tag}
-                </Text>
-              ))}
-            </HStack>
-          )}
+          {/* Footer block — back to the reading measure */}
+          <Box maxW="contentNarrow" mx="auto">
+            {/* Tags footer */}
+            {post.tags.length > 0 && (
+              <HStack spacing={2} wrap="wrap" mt={{ base: 8, md: 12 }} pt={6} borderTop="1px solid" borderColor="gray.100">
+                {post.tags.map((tag) => (
+                  <Text
+                    key={tag}
+                    textStyle="metaCaption"
+                    bg="brand.surface"
+                    border="1px solid"
+                    borderColor="brand.accentBorder"
+                    px={2}
+                    py={1}
+                    borderRadius="sm"
+                  >
+                    {tag}
+                  </Text>
+                ))}
+              </HStack>
+            )}
 
-          {/* Share row */}
-          <Flex justify="center" mt={{ base: 8, md: 10 }}>
-            <Box
-              as="button"
-              type="button"
-              onClick={handleShare}
-              display="inline-flex"
-              alignItems="center"
-              gap={2}
-              fontSize="xs"
-              fontWeight="500"
-              letterSpacing="0.16em"
-              textTransform="uppercase"
-              color="brand.accentText"
-              bg="rgba(201, 169, 110, 0.1)"
-              border="1px solid"
-              borderColor="rgba(201, 169, 110, 0.4)"
-              _hover={{ bg: 'rgba(201, 169, 110, 0.2)', borderColor: 'brand.accent', color: '#6b5424' }}
-              px={5}
-              py={2.5}
-              borderRadius="sm"
-              cursor="pointer"
-              transition="all 0.2s"
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <Icon as={FaShareAlt} boxSize={3} />
-              Share this post
-            </Box>
-          </Flex>
+            {/* Share row */}
+            <Flex justify="center" mt={{ base: 6, md: 8 }}>
+              <CTAButton onClick={handleShare} icon={FaShareAlt} variant="outline" size="sm">
+                Share this post
+              </CTAButton>
+            </Flex>
 
-          {/* Chronological navigation — prev (newer) + next (older) posts.
-              Hidden entirely if neither exists. */}
-          {(siblings.prev || siblings.next) && (
-            <SimpleGrid
-              columns={{ base: 1, md: 2 }}
-              spacing={{ base: 3, md: 4 }}
-              mt={{ base: 10, md: 14 }}
-              pt={6}
-              borderTop="1px solid"
-              borderColor="gray.100"
-            >
-              <SiblingNavCard sibling={siblings.prev} direction="prev" />
-              <SiblingNavCard sibling={siblings.next} direction="next" />
-            </SimpleGrid>
-          )}
-
-          {/* Back-to-journal button */}
-          <Flex justify="center" mt={{ base: 8, md: 10 }}>
-            <RouterLink to="/journal">
-              <Box
-                as="span"
-                display="inline-flex"
-                alignItems="center"
-                gap={2}
-                fontSize="xs"
-                fontWeight="500"
-                letterSpacing="0.16em"
-                textTransform="uppercase"
-                color="gray.700"
-                bg="white"
-                border="1px solid"
-                borderColor="gray.300"
-                _hover={{ borderColor: 'brand.accent', color: 'brand.accentText' }}
-                px={5}
-                py={2.5}
-                borderRadius="sm"
-                cursor="pointer"
-                transition="all 0.2s"
+            {/* Chronological navigation — prev (newer) + next (older) posts.
+                Hidden entirely if neither exists. */}
+            {(siblings.prev || siblings.next) && (
+              <SimpleGrid
+                columns={{ base: 1, md: 2 }}
+                spacing={{ base: 3, md: 4 }}
+                mt={{ base: 8, md: 12 }}
+                pt={6}
+                borderTop="1px solid"
+                borderColor="gray.100"
               >
-                <Icon as={FaArrowLeft} boxSize={2.5} />
+                <SiblingNavCard sibling={siblings.prev} direction="prev" />
+                <SiblingNavCard sibling={siblings.next} direction="next" />
+              </SimpleGrid>
+            )}
+
+            {/* Back-to-journal button */}
+            <Flex justify="center" mt={{ base: 6, md: 8 }}>
+              <CTAButton to="/journal" icon={FaArrowLeft} variant="ghost" size="sm">
                 All journal posts
-              </Box>
-            </RouterLink>
-          </Flex>
+              </CTAButton>
+            </Flex>
+          </Box>
         </Box>
       </Box>
     </>
   );
 };
+
+/**
+ * The one "back to the journal" link. It used to exist twice in this
+ * file at two different weights, two sizes and two colours — one of
+ * them gold-on-white, which fails contrast. One component, one
+ * `ctaLabel`, one hover.
+ */
+function BackToJournalLink() {
+  return (
+    <RouterLink to="/journal">
+      <HStack
+        as="span"
+        display="inline-flex"
+        spacing={2}
+        textStyle="ctaLabel"
+        color="gray.500"
+        _hover={{ color: 'brand.accentText' }}
+        transition="color 0.2s"
+      >
+        <Icon as={FaArrowLeft} boxSize={3} />
+        <Text as="span">Back to the journal</Text>
+      </HStack>
+    </RouterLink>
+  );
+}
 
 /**
  * One prev/next card in the chronological nav row. If `sibling` is
@@ -521,10 +461,10 @@ function SiblingNavCard({
         bg="gray.50"
         opacity={0.6}
       >
-        <Text fontSize="2xs" fontWeight="500" letterSpacing="0.14em" textTransform="uppercase" color="gray.400" mb={1}>
+        <Text textStyle="metaCaption" mb={2}>
           {label}
         </Text>
-        <Text fontSize="sm" color="gray.400" fontWeight="300">
+        <Text textStyle="bodyCopy">
           {isNext ? 'You’ve reached the beginning.' : 'This is the most recent one.'}
         </Text>
       </Box>
@@ -552,16 +492,16 @@ function SiblingNavCard({
         <HStack
           spacing={2}
           justify={isNext ? 'flex-end' : 'flex-start'}
-          color="brand.accentText"
-          mb={1.5}
+          color="brand.accent"
+          mb={2}
         >
           {!isNext && <Icon as={FaArrowLeft} boxSize={2.5} />}
-          <Text fontSize="2xs" fontWeight="500" letterSpacing="0.14em" textTransform="uppercase">
+          <Text textStyle="metaCaption">
             {label}
           </Text>
           {isNext && <Icon as={FaArrowRight} boxSize={2.5} />}
         </HStack>
-        <Text fontSize={{ base: 'sm', md: 'md' }} fontWeight="400" color="gray.800" noOfLines={2} lineHeight="1.4">
+        <Text textStyle="cardTitle" noOfLines={2}>
           {sibling.title}
         </Text>
       </Box>
@@ -807,11 +747,10 @@ function Lightbox({
         />
         {photo.caption && (
           <Text
+            textStyle="bodyCopy"
             color="whiteAlpha.800"
-            fontSize="sm"
-            fontWeight="300"
             textAlign="center"
-            maxW="600px"
+            maxW="measure"
             px={4}
             onClick={(e) => e.stopPropagation()}
           >
@@ -819,10 +758,8 @@ function Lightbox({
           </Text>
         )}
         <Text
+          textStyle="metaCaption"
           color="whiteAlpha.600"
-          fontSize="2xs"
-          letterSpacing="0.2em"
-          textTransform="uppercase"
           onClick={(e) => e.stopPropagation()}
         >
           {activeIdx + 1} / {photos.length}

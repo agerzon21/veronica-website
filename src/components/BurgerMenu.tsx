@@ -20,7 +20,7 @@ const BurgerMenu = ({ isOpen, onClick }: BurgerMenuProps) => {
       type="button"
       aria-label={isOpen ? 'Close menu' : 'Open menu'}
       aria-expanded={isOpen}
-      display={{ base: 'block', md: 'none' }}
+      display={{ base: 'block', lg: 'none' }}
       onClick={onClick}
       cursor="pointer"
       zIndex={2000}

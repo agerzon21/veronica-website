@@ -277,17 +277,11 @@ const InstagramFeed = () => {
   const openPost = PHOTOS[openIdx ?? -1] as Photo | undefined;
 
   return (
-    <Box ref={sectionRef} py={{ base: 14, md: 20 }} px={4} bg="white">
-      <VStack spacing={5} mb={{ base: 10, md: 12 }}>
-        <Text
-          fontSize="xs"
-          fontWeight="500"
-          textTransform="uppercase"
-          letterSpacing="0.3em"
-          color="brand.accentText"
-        >
-          Follow Along
-        </Text>
+    <Box ref={sectionRef} layerStyle="section" px={4} bg="white">
+      {/* Eyebrow + 40px rule. Not PageHeader: this section has no title of its
+          own, and PageHeader requires one. Same tokens either way. */}
+      <VStack spacing={{ base: 4, md: 5 }} mb={{ base: 10, md: 12 }}>
+        <Text textStyle="eyebrow">Follow Along</Text>
         <Box w="40px" h="1px" bg="brand.accent" />
       </VStack>
 
@@ -307,7 +301,8 @@ const InstagramFeed = () => {
             width={{ base: '72px', md: '88px' }}
             height={{ base: '72px', md: '88px' }}
             borderRadius="full"
-            border="2px solid #c9a96e"
+            border="2px solid"
+            borderColor="brand.accent"
             padding="3px"
             transition="transform 0.3s ease"
             _hover={{ transform: 'scale(1.05)' }}
@@ -359,12 +354,7 @@ const InstagramFeed = () => {
             _hover={{ textDecoration: 'none', color: 'brand.accent' }}
           >
             <HStack spacing={2}>
-              <Text
-                fontSize={{ base: 'md', md: 'lg' }}
-                fontWeight="500"
-                color="gray.700"
-                transition="color 0.3s"
-              >
+              <Text textStyle="cardTitle" transition="color 0.3s">
                 {USERNAME}
               </Text>
               <Icon as={FaInstagram} color="brand.accent" boxSize={{ base: 4, md: 5 }} />
@@ -374,23 +364,18 @@ const InstagramFeed = () => {
           {/* Counts row — only renders if we have live data, so the
               fallback profile card stays clean. */}
           {(FOLLOWERS_COUNT != null || MEDIA_COUNT != null) && (
-            <HStack
-              spacing={{ base: 3, md: 4 }}
-              fontSize={{ base: 'xs', md: 'sm' }}
-              color="gray.600"
-              fontWeight="400"
-            >
+            <HStack spacing={{ base: 3, md: 4 }}>
               {MEDIA_COUNT != null && (
-                <Text>
-                  <Text as="span" fontWeight="600" color="gray.800">
+                <Text textStyle="metaCaption">
+                  <Text as="span" color="gray.800">
                     {formatCount(MEDIA_COUNT)}
                   </Text>{' '}
                   posts
                 </Text>
               )}
               {FOLLOWERS_COUNT != null && (
-                <Text>
-                  <Text as="span" fontWeight="600" color="gray.800">
+                <Text textStyle="metaCaption">
+                  <Text as="span" color="gray.800">
                     {formatCount(FOLLOWERS_COUNT)}
                   </Text>{' '}
                   followers
@@ -399,13 +384,7 @@ const InstagramFeed = () => {
             </HStack>
           )}
 
-          <Text
-            fontSize={{ base: 'xs', md: 'sm' }}
-            fontWeight="300"
-            color="gray.600"
-            letterSpacing="0.02em"
-            noOfLines={2}
-          >
+          <Text textStyle="bodyCopy" noOfLines={2}>
             {DISPLAY_NAME !== USERNAME ? `${DISPLAY_NAME} · ` : ''}
             {BIO}
           </Text>
@@ -428,7 +407,9 @@ const InstagramFeed = () => {
         maxW="1100px"
         mx="auto"
         templateColumns={{ base: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' }}
-        gap={{ base: 2, md: 3 }}
+        // 8/12px between Instagram tiles read as a grid of cards; near-flush
+        // reads as a single feed, which is how Instagram itself presents it.
+        gap="2px"
       >
         {PHOTOS.map((photo, i) => {
           const isHero = i === 0;
@@ -518,34 +499,42 @@ const InstagramFeed = () => {
                 p={isHero ? 5 : 3}
                 pointerEvents="none"
               >
+                {/* One size for every tile. This used to switch on `isHero`, a
+                    boolean, which is not a breakpoint — it meant the hero and
+                    its neighbours spoke in two different type sizes. */}
                 {(photo.likeCount != null || photo.commentsCount != null) && (
-                  <HStack
-                    spacing={4}
-                    color="white"
-                    fontSize={isHero ? 'sm' : 'xs'}
-                    fontWeight="500"
-                    mb={photo.caption ? 2 : 0}
-                  >
+                  <HStack spacing={4} color="white" mb={photo.caption ? 2 : 0}>
                     {photo.likeCount != null && (
                       <HStack spacing={1.5}>
-                        <Icon as={FaHeart} boxSize={isHero ? 3.5 : 3} />
-                        <Text>{formatCount(photo.likeCount)}</Text>
+                        <Icon as={FaHeart} boxSize={3.5} />
+                        <Text textStyle="metaCaption" color="white">
+                          {formatCount(photo.likeCount)}
+                        </Text>
                       </HStack>
                     )}
                     {photo.commentsCount != null && (
                       <HStack spacing={1.5}>
-                        <Icon as={FaRegComment} boxSize={isHero ? 3.5 : 3} />
-                        <Text>{formatCount(photo.commentsCount)}</Text>
+                        <Icon as={FaRegComment} boxSize={3.5} />
+                        <Text textStyle="metaCaption" color="white">
+                          {formatCount(photo.commentsCount)}
+                        </Text>
                       </HStack>
                     )}
                   </HStack>
                 )}
+                {/* Caption is deliberately NOT a textStyle. bodyCopy is prose
+                    at 15/16px; over a 266px thumbnail that filled roughly 40%
+                    of the tile. metaCaption is uppercase, which a sentence is
+                    not. The size still tracks isHero because the hero tile is
+                    genuinely ~2x the others — a real size difference, not a
+                    breakpoint. */}
                 {photo.caption && (
                   <Text
-                    color="white"
-                    fontSize={isHero ? 'sm' : '2xs'}
+                    fontFamily="body"
+                    fontSize={isHero ? '0.8125rem' : '0.6875rem'}
                     fontWeight="300"
-                    lineHeight="1.5"
+                    lineHeight={1.5}
+                    color="white"
                     noOfLines={isHero ? 3 : 2}
                   >
                     {photo.caption}
@@ -553,11 +542,8 @@ const InstagramFeed = () => {
                 )}
                 {photo.timestamp && (
                   <Text
+                    textStyle="metaCaption"
                     color="whiteAlpha.700"
-                    fontSize="2xs"
-                    fontWeight="300"
-                    letterSpacing="0.08em"
-                    textTransform="uppercase"
                     mt={photo.caption ? 2 : 0}
                   >
                     {formatRelativeTime(photo.timestamp)}
@@ -625,14 +611,15 @@ function MediaTypeBadge({ photo }: { photo: Photo }) {
         px={1.5}
         py={0.5}
         borderRadius="sm"
-        fontSize="2xs"
-        fontWeight="500"
-        letterSpacing="0.1em"
         pointerEvents="none"
         backdropFilter="blur(4px)"
       >
         <Icon as={FaFilm} boxSize={2.5} />
-        <Text as="span">REEL</Text>
+        {/* Sentence case in the source; metaCaption does the uppercasing.
+            It was written "REEL" so no type token could ever reach it. */}
+        <Text as="span" textStyle="metaCaption" color="white">
+          Reel
+        </Text>
       </Flex>
     );
   }

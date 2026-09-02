@@ -1,6 +1,5 @@
 import {
   Box,
-  Flex,
   Text,
   Input,
   VStack,
@@ -212,26 +211,20 @@ const ExitIntentPopup = () => {
                   >
                     <Icon as={FaCheck} boxSize={6} />
                   </Box>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="500"
-                    textTransform="uppercase"
-                    letterSpacing="0.25em"
-                    color="brand.accent"
-                  >
+                  <Text textStyle="eyebrow">
                     {submittedCode === 'already' ? 'Already on the list' : 'You’re in'}
                   </Text>
-                  <Text fontSize="xl" fontWeight="200" color="gray.800" lineHeight="1.4">
+                  <Text textStyle="bodyLead">
                     {submittedCode === 'already'
                       ? 'You signed up before — your code is in your inbox.'
                       : 'Check your inbox in a moment.'}
                   </Text>
-                  <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="340px" lineHeight="1.7">
+                  <Text textStyle="bodyCopy" maxW="measure">
                     {submittedCode === 'new'
                       ? 'Your 10% off code is on the way. Just mention it when you book.'
                       : ''}
                     {' '}
-                    <Box as="span" color="gray.500" fontWeight="400">
+                    <Box as="span" color="gray.500">
                       Don&rsquo;t see it? Check your spam or promotions folder.
                     </Box>
                   </Text>
@@ -241,29 +234,17 @@ const ExitIntentPopup = () => {
                 </VStack>
               ) : (
                 <VStack spacing={5} textAlign="center" pt={3}>
-                  <Text
-                    fontSize="xs"
-                    fontWeight="500"
-                    textTransform="uppercase"
-                    letterSpacing="0.25em"
-                    color="brand.accent"
-                  >
-                    Before you go
-                  </Text>
+                  {/* eyebrow → rule → h2 → lead. Deliberately NOT PageHeader:
+                      its title sizes are page scale (30–68px) and would swamp
+                      a 460px modal. Same tokens, modal-appropriate step. */}
+                  <Text textStyle="eyebrow">Before you go</Text>
                   <Box w="40px" h="1px" bg="brand.accent" />
-                  <Text
-                    as="h2"
-                    fontSize={{ base: '2xl', md: '3xl' }}
-                    fontWeight="200"
-                    color="gray.800"
-                    lineHeight="1.3"
-                    m={0}
-                  >
-                    Get <Box as="span" color="brand.accent" fontWeight="400">10% off</Box>
+                  <Text as="h2" textStyle="sectionTitle" m={0}>
+                    Get <Box as="span" color="brand.accentText">10% off</Box>
                     <br />
                     your next session
                   </Text>
-                  <Text fontSize="sm" color="gray.500" fontWeight="300" maxW="340px" lineHeight="1.7">
+                  <Text textStyle="bodyCopy" maxW="measure">
                     Pop in your email and I&rsquo;ll send you a code you can mention when you&rsquo;re ready to book.
                   </Text>
 
@@ -284,13 +265,13 @@ const ExitIntentPopup = () => {
                         color="gray.800"
                         _focus={{
                           borderColor: 'brand.accent',
-                          boxShadow: '0 0 0 1px #c9a96e',
+                          boxShadow: 'accentFocus',
                         }}
                         textAlign="center"
                       />
 
                       {error && (
-                        <Text fontSize="sm" color="red.500" fontWeight="300">
+                        <Text textStyle="bodyCopy" color="red.500">
                           {error}
                         </Text>
                       )}
@@ -308,22 +289,9 @@ const ExitIntentPopup = () => {
                     </VStack>
                   </Box>
 
-                  <Flex
-                    as="button"
-                    type="button"
-                    onClick={close}
-                    bg="transparent"
-                    color="gray.400"
-                    fontSize="xs"
-                    fontWeight="300"
-                    letterSpacing="0.05em"
-                    py={1}
-                    _hover={{ color: 'gray.600' }}
-                    transition="color 0.2s"
-                    sx={{ WebkitTapHighlightColor: 'transparent' }}
-                  >
+                  <CTAButton onClick={close} variant="ghost" size="sm">
                     No thanks
-                  </Flex>
+                  </CTAButton>
                 </VStack>
               )}
             </Box>

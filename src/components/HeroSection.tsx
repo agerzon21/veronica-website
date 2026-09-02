@@ -4,6 +4,11 @@ import { motion, useScroll, useTransform, useSpring, MotionValue } from 'framer-
 import { FaMapMarkerAlt, FaCamera, FaGlobe } from 'react-icons/fa';
 import ImageCarousel from './ImageCarousel';
 import CTAButton from './ui/CTAButton';
+import PageHeader from './ui/PageHeader';
+// The scroll-hint dot and its glow are plain framer-motion inline styles, not
+// Chakra props, so they can't resolve a theme token by name. Importing the raw
+// palette keeps them on the same source of truth as everything else.
+import { brand } from '../theme';
 
 const MotionBox = motion(Box);
 
@@ -35,11 +40,14 @@ const ViewfinderCorner: React.FC<{
   // is sized to 100lvh (chrome-hidden viewport), so anything measured from
   // its bottom lands BEHIND the chrome bar when chrome is showing —
   // pushing them up gets them back into the visible viewport.
+  // borderColor is declared AFTER the shorthands so it wins over the
+  // currentColor the shorthand would otherwise imply. Only the two sides that
+  // were given a width/style actually paint.
   const positions: Record<typeof corner, any> = {
-    tl: { top: '110px', left: { base: '24px', md: '40px' }, borderTop: '1px solid #c9a96e', borderLeft: '1px solid #c9a96e' },
-    tr: { top: '110px', right: { base: '24px', md: '40px' }, borderTop: '1px solid #c9a96e', borderRight: '1px solid #c9a96e' },
-    bl: { bottom: { base: '110px', md: '40px' }, left: { base: '24px', md: '40px' }, borderBottom: '1px solid #c9a96e', borderLeft: '1px solid #c9a96e' },
-    br: { bottom: { base: '110px', md: '40px' }, right: { base: '24px', md: '40px' }, borderBottom: '1px solid #c9a96e', borderRight: '1px solid #c9a96e' },
+    tl: { top: '110px', left: { base: '24px', md: '40px' }, borderTop: '1px solid', borderLeft: '1px solid', borderColor: 'brand.accent' },
+    tr: { top: '110px', right: { base: '24px', md: '40px' }, borderTop: '1px solid', borderRight: '1px solid', borderColor: 'brand.accent' },
+    bl: { bottom: { base: '110px', md: '40px' }, left: { base: '24px', md: '40px' }, borderBottom: '1px solid', borderLeft: '1px solid', borderColor: 'brand.accent' },
+    br: { bottom: { base: '110px', md: '40px' }, right: { base: '24px', md: '40px' }, borderBottom: '1px solid', borderRight: '1px solid', borderColor: 'brand.accent' },
   };
   return (
     <MotionBox
@@ -99,12 +107,26 @@ const MAX_NATURAL_WIDTH = 6000;
 // buffer to the viewport bottom. SAFE_BUFFER sits between navbar/header and
 // footer/viewport-bottom — what reads as "breathing room", not whitespace.
 const NAVBAR_HEIGHT = 72;
-const HEADER_CONTENT = 92;
-const FOOTER_CONTENT = 130;
 const SAFE_BUFFER = 16;
 const CAMERA_GAP = 24;
 
-const HEADER_RESERVED = NAVBAR_HEIGHT + SAFE_BUFFER + HEADER_CONTENT;
+// The hero header is now the shared PageHeader (eyebrow → 40px rule →
+// pageTitle h1). pageTitle is 36 / 52 / 68px against the old hand-rolled
+// 18 / 24 / 30px, and it wraps to two lines inside PageHeader's 18ch measure,
+// so the reservation can no longer be one number — it has to step with
+// Chakra's md (48em) and lg (62em) breakpoints the way the type does.
+// Each value = eyebrow (11) + rule (1) + two title lines + the two VStack
+// gaps (16 base / 20 md+), plus a couple of px of slack.
+const HEADER_CONTENT_BASE = 120;
+const HEADER_CONTENT_MD = 162;
+const HEADER_CONTENT_LG = 195;
+
+const headerContentFor = (vw: number) =>
+  vw >= 992 ? HEADER_CONTENT_LG : vw >= 768 ? HEADER_CONTENT_MD : HEADER_CONTENT_BASE;
+
+// Stat labels moved to metaCaption (11px/1.4) and stat values to cardTitle
+// (20/22px Cormorant), which is ~16px taller than the old 10px/14px pair.
+const FOOTER_CONTENT = 150;
 const FOOTER_RESERVED = FOOTER_CONTENT + SAFE_BUFFER;
 
 // CameraBody rendered at a configurable CSS-natural width (passed in as px).
@@ -243,11 +265,13 @@ const computeCameraSize = (
   // If the resulting camera would be cramped, switch to extracted-footer mode:
   // the camera only has to share the viewport with the header, and the footer
   // sits just below the sticky and is revealed by additional scroll.
-  const fullAvailableH = vh - HEADER_RESERVED - FOOTER_RESERVED - 2 * CAMERA_GAP;
+  const headerReserved = NAVBAR_HEIGHT + SAFE_BUFFER + headerContentFor(vw);
+
+  const fullAvailableH = vh - headerReserved - FOOTER_RESERVED - 2 * CAMERA_GAP;
   const extractFooter = fullAvailableH < MIN_FULL_LAYOUT_CAMERA_HEIGHT;
 
   const availableH = extractFooter
-    ? vh - HEADER_RESERVED - CAMERA_GAP - SAFE_BUFFER
+    ? vh - headerReserved - CAMERA_GAP - SAFE_BUFFER
     : fullAvailableH;
   const final = Math.max(
     FINAL_WIDTH_MIN,
@@ -259,8 +283,7 @@ const computeCameraSize = (
   // camera centered at vh/2 would push the header up behind the navbar, shift
   // the whole stack DOWN until the header clears it. On tall viewports
   // (desktop) this stays 0 and the stack sits at the visual center.
-  const minCameraCenterY =
-    NAVBAR_HEIGHT + SAFE_BUFFER + HEADER_CONTENT + CAMERA_GAP + finalHeight / 2;
+  const minCameraCenterY = headerReserved + CAMERA_GAP + finalHeight / 2;
   const verticalShiftPx = Math.max(0, minCameraCenterY - vh / 2);
 
   return { natural, final, finalHeight, isPortrait, verticalShiftPx, extractFooter };
@@ -412,23 +435,17 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
 
   const footerContent = (
     <VStack spacing={4} align="center">
-      <Flex gap={{ base: 6, md: 10, lg: 14 }} align="center">
+      {/* gap was 6 (24px) at base. Three cardTitle values (20px Cormorant)
+          plus two dividers need more than the 343px a 375px screen leaves, so
+          "Scranton, PA" wrapped and knocked the three blocks out of vertical
+          alignment. On main this row fit by a single pixel. */}
+      <Flex gap={{ base: 3, md: 10, lg: 14 }} align="center">
         {STATS.map((stat, i) => (
           <React.Fragment key={stat.label}>
             <VStack spacing={2} minW={{ base: '80px', md: '100px' }}>
               <Icon as={stat.icon} boxSize={4} color="brand.accent" />
-              <Text
-                fontSize="10px"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.2em"
-                color="brand.accent"
-              >
-                {stat.label}
-              </Text>
-              <Text fontSize="sm" fontWeight="200" color="gray.700">
-                {stat.value}
-              </Text>
+              <Text textStyle="metaCaption">{stat.label}</Text>
+              <Text textStyle="cardTitle">{stat.value}</Text>
             </VStack>
             {i < STATS.length - 1 && <Box w="1px" h="50px" bg="brand.accent" opacity={0.3} />}
           </React.Fragment>
@@ -468,45 +485,36 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         bg="white"
       >
         {/* HEADER — anchored CAMERA_GAP px above the camera's top edge. Symmetric
-            with the footer below. Whitespace between header and camera no longer
+            with the footer below, and now genuinely so: both stretch with
+            left:0/right:0 and centre their own content. Whitespace between header and camera no longer
             balloons on tall viewports because the position tracks the camera's
             final size, not the viewport top. */}
         <Box
           position="absolute"
           bottom={`calc(50% + ${headerBottomOffset}px)`}
-          left="50%"
-          transform="translateX(-50%)"
-          width={{ base: '100%', md: 'auto' }}
-          maxW="100vw"
-          px={{ base: 4, md: 0 }}
+          // Full-bleed, and centred by PageHeader itself rather than by
+          // `left: 50%` + a translate. That combination looks equivalent but
+          // is not: with `width: auto` the shrink-to-fit AVAILABLE width of an
+          // absolutely positioned box starts at its `left` edge, so `left: 50%`
+          // capped this header's layout width at vw/2 while translateX only
+          // moved the result back to centre. The h1 was being wrapped inside
+          // half the screen it appeared to span, which forced a THIRD title
+          // line at 992-1054px and 768-806px. Because the header is anchored
+          // by its BOTTOM, that extra line grew upward and pushed the eyebrow
+          // and rule behind the fixed navbar. HEADER_CONTENT_* budgets for two
+          // lines; giving the title its real measure is what makes that true.
+          left="0"
+          right="0"
+          px={{ base: 4, md: 8 }}
           zIndex={3}
         >
           <MotionBox style={{ opacity: headerOpacity, y: headerY }}>
-            <VStack spacing={3} align="center">
-              <Text
-                fontSize="xs"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.3em"
-                color="brand.accent"
-              >
-                Veronika Gerzon
-              </Text>
-              <Box w="40px" h="1px" bg="brand.accent" />
-              <Text
-                as="h1"
-                fontSize={{ base: 'lg', md: '2xl', lg: '3xl' }}
-                fontWeight="200"
-                fontStyle="italic"
-                color="gray.700"
-                letterSpacing="wide"
-                lineHeight="1.2"
-                textAlign="center"
-                m={0}
-              >
-                Wedding & Portrait Photographer
-              </Text>
-            </VStack>
+            {/* The homepage h1. Was a hand-rolled 18/24/30px italic block with
+                its own eyebrow tracking and its own rule; it is now the shared
+                PageHeader so it matches every other page's header exactly.
+                The vertical budget constants above were re-derived for the
+                larger pageTitle — see HEADER_CONTENT_*. */}
+            <PageHeader eyebrow="Veronika Gerzon" title="Wedding & Portrait Photographer" />
           </MotionBox>
         </Box>
 
@@ -557,11 +565,20 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           <Box
             position="absolute"
             top={`calc(50% + ${footerTopOffset}px)`}
-            left="50%"
-            transform="translateX(-50%)"
-            width={{ base: '100%', md: 'auto' }}
-            maxW="100vw"
-            px={{ base: 4, md: 0 }}
+            // Same fix as the header above, and it was NOT merely latent here.
+            // `left: 50%` + `width: auto` capped this box's layout width at
+            // vw/2; shrink-to-fit floors at min-content so it did not collapse
+            // as far as the header did, but it still landed BELOW the row's
+            // 543px max-content everywhere from 768px to 1055px. The row was
+            // squeezed by 15-17px, which is enough to wrap "Scranton, PA" onto
+            // a second line while "12+ Years" and "Worldwide" stayed on one —
+            // knocking the three stat blocks out of vertical alignment, the
+            // exact misalignment the gap comment below describes fixing on
+            // mobile. It also took the footer to 167px against FOOTER_RESERVED
+            // of 166. Stretching the box gives the row its real measure.
+            left="0"
+            right="0"
+            px={{ base: 4, md: 8 }}
             zIndex={3}
           >
             <MotionBox style={{ opacity: footerOpacity, y: footerY }}>
@@ -630,16 +647,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               style={{ top: progressThumbTop }}
             />
           </Box>
-          {/* Small label */}
-          <Text
-            fontSize="9px"
-            fontWeight="500"
-            color="brand.accent"
-            letterSpacing="0.3em"
-            textTransform="uppercase"
-            mt={3}
-            pl="0.3em"
-          >
+          {/* Small label. The token's negative marginRight cancels the
+              trailing letter-space, which is what the old pl="0.3em" was
+              faking by hand. */}
+          {/* eyebrow, not eyebrowOnDark: the rail sits on the WHITE sticky
+              container, not the photograph. eyebrowOnDark here was 2.24:1. */}
+          <Text textStyle="eyebrow" mt={3}>
             Scroll
           </Text>
         </MotionBox>
@@ -659,14 +672,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           style={{ opacity: scrollHintOpacity }}
         >
           <VStack spacing={3} align="center">
+            {/* Same label, same token — only the colour differs because this
+                one sits over the LCD photo. textShadow stays: it is a
+                legibility affordance, not a type treatment. */}
             <Text
-              fontSize="10px"
-              fontWeight="600"
-              textTransform="uppercase"
-              letterSpacing="0.4em"
+              textStyle="eyebrowOnDark"
               color="white"
               textShadow="0 1px 2px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6)"
-              pl="0.4em"
             >
               Scroll
             </Text>
@@ -674,7 +686,8 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               position="relative"
               width="22px"
               height="36px"
-              border="1.5px solid rgba(201, 169, 110, 0.95)"
+              border="1.5px solid"
+              borderColor="brand.accent"
               borderRadius="14px"
               boxShadow="0 1px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.15)"
             >
@@ -686,7 +699,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                   marginLeft: -1.5,
                   width: 3,
                   height: 7,
-                  background: '#c9a96e',
+                  background: brand.accent,
                   borderRadius: 2,
                   boxShadow: '0 0 8px rgba(201,169,110,1)',
                 }}

@@ -1,6 +1,7 @@
 import { Box, VStack, Text, Flex } from '@chakra-ui/react';
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
+import PageHeader from './ui/PageHeader';
 
 /**
  * Shared page shell for legal / policy pages (/privacy, /terms, and any
@@ -47,59 +48,28 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
   const isInView = useInView(heroRef, { once: true, amount: 0.2 });
 
   return (
-    <Box minH="100vh" bg="white" pt={{ base: 20, md: 24 }} pb={{ base: 20, md: 28 }} px={4}>
-      <Box maxW="720px" mx="auto">
-        {/* Header */}
-        <VStack ref={heroRef} spacing={4} mb={{ base: 10, md: 14 }} textAlign="center">
+    <Box minH="100vh" bg="white" layerStyle="pageTop" pb={{ base: 20, md: 28 }} px={4}>
+      <Box maxW="contentNarrow" mx="auto">
+        {/* Header. PageHeader owns the eyebrow → rule → h1 arrangement; the
+            effective date rides along as its child so it inherits the same
+            vertical rhythm instead of carrying its own margins. */}
+        <Box ref={heroRef} mb={{ base: 10, md: 14 }}>
           <MotionDiv
             initial={{ opacity: 0, y: 12 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, ease: 'easeOut' }}
           >
-            <Text
-              fontSize="xs"
-              fontWeight="500"
-              textTransform="uppercase"
-              letterSpacing="0.3em"
-              color="brand.accentText"
-              mb={4}
-            >
-              {kicker}
-            </Text>
-            <Box w="40px" h="1px" bg="brand.accent" mx="auto" mb={6} />
-            <Text
-              as="h1"
-              fontSize={{ base: '2xl', md: '4xl' }}
-              fontWeight="200"
-              color="gray.800"
-              letterSpacing="0.02em"
-              lineHeight="1.2"
-              m={0}
-              mb={3}
-            >
-              {title}
-            </Text>
-            <Text
-              fontSize="xs"
-              fontWeight="400"
-              color="gray.500"
-              letterSpacing="0.2em"
-              textTransform="uppercase"
-            >
-              Effective {formatDate(effectiveDate)}
-            </Text>
+            <PageHeader eyebrow={kicker} title={title} size="content">
+              <Text textStyle="metaCaption">Effective {formatDate(effectiveDate)}</Text>
+            </PageHeader>
           </MotionDiv>
-        </VStack>
+        </Box>
 
         {/* Optional lead paragraph */}
         {intro && (
           <Box
-            fontSize={{ base: 'sm', md: 'md' }}
-            color="gray.700"
-            fontWeight="300"
-            lineHeight="1.9"
+            textStyle="bodyLead"
             mb={{ base: 10, md: 14 }}
-            fontStyle="italic"
             borderLeft="2px solid"
             borderColor="brand.accent"
             pl={5}
@@ -126,13 +96,12 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
           borderTop="1px solid"
           borderColor="gray.100"
         >
-          <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center">
+          <Text textStyle="bodyCopy" color="gray.500" textAlign="center">
             Questions? Email{' '}
             <Text
               as="a"
               href="mailto:vero@vero.photography"
               color="brand.accentText"
-              fontWeight="400"
               textDecoration="underline"
             >
               vero@vero.photography
@@ -162,17 +131,16 @@ export const PolicySection = ({
   id?: string;
 }) => (
   <Box id={id} sx={{ scrollMarginTop: '90px' }}>
+    {/* mt/mb rather than `m={0}` + `mb` — the shorthand was cancelling the
+        bottom margin and padding depending on prop resolution order. */}
     <Text
       as="h2"
-      fontSize={{ base: 'lg', md: 'xl' }}
-      fontWeight="300"
-      color="gray.800"
-      letterSpacing="0.02em"
+      textStyle="sectionTitle"
+      mt={0}
       mb={4}
       pb={3}
       borderBottom="1px solid"
       borderColor="gray.100"
-      m={0}
     >
       {title}
     </Text>
@@ -187,9 +155,7 @@ export const PolicySection = ({
  * paragraph across every policy reads the same.
  */
 export const P = ({ children }: { children: React.ReactNode }) => (
-  <Text fontSize={{ base: 'sm', md: 'md' }} color="gray.700" fontWeight="300" lineHeight="1.9">
-    {children}
-  </Text>
+  <Text textStyle="bodyCopy">{children}</Text>
 );
 
 /**
@@ -209,14 +175,7 @@ export const PolicyList = ({ items }: { items: React.ReactNode[] }) => (
           mt={{ base: '10px', md: '12px' }}
           flexShrink={0}
         />
-        <Text
-          fontSize={{ base: 'sm', md: 'md' }}
-          color="gray.700"
-          fontWeight="300"
-          lineHeight="1.9"
-        >
-          {item}
-        </Text>
+        <Text textStyle="bodyCopy">{item}</Text>
       </Flex>
     ))}
   </Box>

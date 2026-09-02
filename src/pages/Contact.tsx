@@ -2,6 +2,7 @@ import { Box, VStack, Text, Icon, Flex, Input, Textarea, Select } from '@chakra-
 import CTAButton from '../components/ui/CTAButton';
 import { FaWhatsapp, FaInstagram, FaRegEnvelope } from 'react-icons/fa';
 import { Helmet } from 'react-helmet-async';
+import PageHeader from '../components/ui/PageHeader';
 import { motion, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -23,7 +24,9 @@ const inputStyles = {
   _hover: { borderColor: 'whiteAlpha.500' },
   _focus: {
     borderColor: 'brand.accent',
-    boxShadow: '0 0 0 1px #c9a96e',
+    // shadows.accentFocus — a token cannot be named inside a CSS string, which
+  // is exactly why that shadow token exists.
+  boxShadow: 'accentFocus',
     bg: 'blackAlpha.600',
   },
   fontSize: 'sm',
@@ -31,14 +34,17 @@ const inputStyles = {
   borderRadius: 'sm',
 };
 
+/**
+ * Spread onto every form label. Now just the formLabel token plus the one
+ * layout prop the token does not own.
+ *
+ * The gold also moves off brand.accent: these labels sit on a light panel,
+ * where #c9a96e is 2.24:1. formLabel carries accentText.
+ */
 const labelStyles = {
-  fontSize: '2xs',
-  fontWeight: '500',
-  color: 'brand.accent',
-  letterSpacing: '0.2em',
-  textTransform: 'uppercase' as const,
+  textStyle: 'formLabel',
   mb: 1.5,
-};
+} as const;
 
 const Contact = () => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -187,31 +193,12 @@ const Contact = () => {
           >
             <VStack spacing={10}>
               {/* Heading */}
-              <VStack spacing={4}>
-                <Text
-                  as="h1"
-                  fontSize={{ base: '3xl', md: '4xl' }}
-                  fontWeight="200"
-                  color="white"
-                  textTransform="uppercase"
-                  letterSpacing="0.3em"
-                  textAlign="center"
-                  m={0}
-                >
-                  Book a Session
-                </Text>
-                <Box w="40px" h="1px" bg="brand.accent" />
-                <Text
-                  fontSize={{ base: 'sm', md: 'md' }}
-                  color="whiteAlpha.900"
-                  textAlign="center"
-                  fontWeight="300"
-                  lineHeight="1.9"
-                  maxW="400px"
-                >
-                  Tell me about your vision and let's create something beautiful together.
-                </Text>
-              </VStack>
+              <PageHeader
+                onDark
+                eyebrow="Get in touch"
+                title="Book a session"
+                lead="Tell me about your vision and let's create something beautiful together."
+              />
 
               {/* Form — wrapped in a dark backdrop card so fields read consistently
                   regardless of what's behind on the photo. Padded, subtle border
@@ -351,7 +338,7 @@ const Contact = () => {
               {/* Divider with "or" */}
               <Flex align="center" w="100%" gap={4}>
                 <Box flex={1} h="1px" bg="whiteAlpha.400" />
-                <Text fontSize="xs" color="whiteAlpha.900" fontWeight="400" letterSpacing="0.2em" textTransform="uppercase">
+                <Text textStyle="metaCaption" color="whiteAlpha.900">
                   or reach out directly
                 </Text>
                 <Box flex={1} h="1px" bg="whiteAlpha.400" />
@@ -405,20 +392,15 @@ const Contact = () => {
                       flexShrink={0}
                     />
                     <VStack spacing={0.5} align={{ base: 'flex-start', md: 'center' }}>
+                      <Text textStyle="eyebrowOnDark">{method.label}</Text>
                       <Text
-                        color="brand.accent"
-                        fontSize="2xs"
-                        fontWeight="500"
-                        letterSpacing="0.2em"
-                        textTransform="uppercase"
-                      >
-                        {method.label}
-                      </Text>
-                      <Text
+                        textStyle="bodyCopy"
+                        // The phone number is the longest of the three values
+                        // and was wrapping while email and handle sat on one
+                        // line. A step down keeps all three on one row.
+                        fontSize={{ base: '0.875rem', md: '0.9375rem' }}
+                        whiteSpace="nowrap"
                         color="whiteAlpha.900"
-                        fontSize="xs"
-                        fontWeight="300"
-                        letterSpacing="0.02em"
                         _groupHover={{ color: 'white' }}
                         transition="color 0.3s"
                       >
@@ -431,11 +413,8 @@ const Contact = () => {
 
               {/* Location */}
               <Text
-                fontSize="xs"
+                textStyle="metaCaption"
                 color="whiteAlpha.900"
-                fontWeight="300"
-                letterSpacing="0.15em"
-                textTransform="uppercase"
                 textAlign="center"
               >
                 Scranton, PA · Available Worldwide

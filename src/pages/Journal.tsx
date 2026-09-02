@@ -1,10 +1,11 @@
 import {
-  Box, VStack, HStack, Text, Icon, Flex, Spinner, Image, Collapse, SimpleGrid,
+  Box, VStack, Text, Icon, Flex, Spinner, Image, Grid,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
+import PageHeader from '../components/ui/PageHeader';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
-import { FaBookOpen, FaChevronDown, FaChevronUp, FaArrowRight } from 'react-icons/fa';
+import { FaBookOpen } from 'react-icons/fa';
 import CTAButton from '../components/ui/CTAButton';
 import JournalPost from './JournalPost';
 
@@ -94,39 +95,13 @@ function JournalIndex() {
 
       <Box bg="white" minH="100vh" pt={{ base: 20, md: 28 }} pb={{ base: 20, md: 24 }} px={4}>
         {/* Page header */}
-        <VStack maxW="620px" mx="auto" spacing={4} textAlign="center" mb={{ base: 12, md: 20 }}>
-          <Text
-            fontSize="xs"
-            fontWeight="500"
-            textTransform="uppercase"
-            letterSpacing="0.3em"
-            color="brand.accentText"
-          >
-            Journal
-          </Text>
-          <Box w="40px" h="1px" bg="brand.accent" />
-          <Text
-            as="h1"
-            fontSize={{ base: '3xl', md: '5xl' }}
-            fontWeight="200"
-            color="gray.800"
-            letterSpacing="0.02em"
-            lineHeight="1.1"
-            m={0}
-          >
-            Behind the lens
-          </Text>
-          <Text
-            fontSize={{ base: 'sm', md: 'md' }}
-            color="gray.600"
-            fontWeight="300"
-            lineHeight="1.8"
-            maxW="480px"
-          >
-            Recent sessions with the stories, favorite frames, and small
-            moments that made them.
-          </Text>
-        </VStack>
+        <Box maxW="46ch" mx="auto" mb={{ base: 10, md: 14 }}>
+          <PageHeader
+            eyebrow="Journal"
+            title="Behind the lens"
+            lead="Stories from recent sessions, and the occasional thought about photographing people."
+          />
+        </Box>
 
         {/* Timeline body */}
         <Box maxW="1000px" mx="auto">
@@ -166,19 +141,32 @@ function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
         position="absolute"
         top={0}
         bottom={0}
-        left={{ base: '12px', md: '50%' }}
+        left="22px"
         w="1px"
         bg="rgba(201, 169, 110, 0.35)"
-        transform={{ base: 'none', md: 'translateX(-0.5px)' }}
+        transform="none"
         zIndex={0}
       />
 
       {grouped.map(([year, yearPosts]) => (
         <Box key={year} position="relative" pt={{ base: 8, md: 12 }} pb={2}>
           <YearMarker year={year} />
-          <VStack spacing={{ base: 8, md: 12 }} align="stretch">
+          <VStack spacing={0} align="stretch">
             {yearPosts.map((post, i) => (
-              <TimelineEntry key={post.slug} post={post} side={i % 2 === 0 ? 'right' : 'left'} />
+              <Box key={post.slug}>
+                {/* A hairline between entries, never above the first. It sits
+                    inside the content column (pl matches the card) so the rail
+                    stays the only thing crossing the left gutter. */}
+                {i > 0 && (
+                  <Box
+                    pl={{ base: '52px', md: '76px' }}
+                    my={{ base: 7, md: 10 }}
+                  >
+                    <Box h="1px" bg="brand.accentBorder" />
+                  </Box>
+                )}
+                <TimelineEntry post={post} />
+              </Box>
             ))}
           </VStack>
         </Box>
@@ -211,311 +199,289 @@ function YearMarker({ year }: { year: number }) {
         py={{ base: 1, md: 1.5 }}
         borderRadius="full"
         position={{ base: 'absolute', md: 'static' }}
-        left={{ base: '12px', md: 'auto' }}
+        left={{ base: '22px', md: 'auto' }}
         transform={{ base: 'translateX(-50%)', md: 'none' }}
       >
-        <Text
-          fontSize={{ base: 'xs', md: 'sm' }}
-          fontWeight="500"
-          letterSpacing="0.2em"
-          color="brand.accentText"
-        >
-          {year}
-        </Text>
+        <Text textStyle="eyebrow">{year}</Text>
       </Box>
     </Flex>
   );
 }
 
-function TimelineEntry({ post, side }: { post: PostSummary; side: 'left' | 'right' }) {
-  const [expanded, setExpanded] = useState(false);
-  const dateLabel = formatDate(post.published_at);
+/**
+ * A single post on the rail.
+ *
+ * This used to be a CENTRE-rail timeline with entries alternating left and
+ * right at w="50%". That is the right shape for a company history or a CV —
+ * many short entries, where the alternation carries the eye. For six
+ * photograph-led posts it meant half the page was blank on every row, by
+ * construction, which is why the journal read as empty no matter how much the
+ * spacing was tuned.
+ *
+ * The rail now runs down the left on every breakpoint and each entry takes the
+ * full column, so the covers get roughly twice the width they had. The rail,
+ * the dots and the year markers stay — that was the characterful part; the
+ * alternation was the part costing half the canvas.
+ */
+function TimelineEntry({ post }: { post: PostSummary }) {
+  const marked = markerDate(post.published_at);
 
-  // On mobile, EVERY entry is on the right side of the rail (single
-  // column). On desktop we honor the alternating side.
   return (
     <Flex position="relative" align="stretch" zIndex={1}>
-      {/* Dot on the rail — anchors the entry visually */}
-      <Box
-        position="absolute"
-        top={{ base: '18px', md: '24px' }}
-        left={{ base: '12px', md: '50%' }}
-        transform="translateX(-50%)"
-        w="9px"
-        h="9px"
-        borderRadius="full"
-        bg="brand.accent"
-        border="2px solid white"
-        boxShadow="0 0 0 1px rgba(201, 169, 110, 0.4)"
-        zIndex={2}
-      />
+      {/* A dated marker on the rail, not a 9px dot.
+          The dot said "something happened here"; it did not say WHEN, so the
+          rail read as decoration rather than a timeline. The day sits in the
+          disc and the month above it — the two together are what make the
+          spine legible as chronology while scrolling.
 
-      {/* Date label opposite the card (desktop only) */}
+          published_at is nullable, so a post without one falls back to a plain
+          dot rather than printing a wrong-but-plausible date. */}
       <Flex
-        display={{ base: 'none', md: 'flex' }}
-        w="50%"
-        pr={side === 'right' ? 12 : 0}
-        pl={side === 'left' ? 12 : 0}
-        justify={side === 'right' ? 'flex-end' : 'flex-start'}
-        align="flex-start"
-        pt={5}
-        order={side === 'right' ? 0 : 1}
+        position="absolute"
+        top={0}
+        left="22px"
+        transform="translateX(-50%)"
+        direction="column"
+        align="center"
+        zIndex={2}
       >
-        <Text
-          fontSize="xs"
-          fontWeight="500"
-          letterSpacing="0.16em"
-          textTransform="uppercase"
-          color="gray.500"
-        >
-          {dateLabel}
-        </Text>
+        {marked ? (
+          <>
+            <Text
+              textStyle="metaCaption"
+              color="brand.accentText"
+              fontSize="0.5625rem"
+              letterSpacing="0.1em"
+              mr="-0.1em"
+              mb={1}
+              bg="white"
+              px={1}
+            >
+              {marked.month}
+            </Text>
+            <Flex
+              w={{ base: '34px', md: '38px' }}
+              h={{ base: '34px', md: '38px' }}
+              borderRadius="full"
+              bg="white"
+              border="1px solid"
+              borderColor="brand.accent"
+              align="center"
+              justify="center"
+            >
+              <Text
+                fontFamily="heading"
+                fontSize={{ base: '1rem', md: '1.125rem' }}
+                fontWeight="400"
+                lineHeight={1}
+                color="brand.accentText"
+              >
+                {marked.day}
+              </Text>
+            </Flex>
+          </>
+        ) : (
+          <Box
+            mt="18px"
+            w="9px"
+            h="9px"
+            borderRadius="full"
+            bg="brand.accent"
+            border="2px solid white"
+          />
+        )}
       </Flex>
 
-      {/* The card itself. Mobile pl clears the rail (at 12px) with a
-          comfortable gap; desktop pl/pr pushes the card away from the
-          center rail on the appropriate side. */}
-      <Box
-        w={{ base: '100%', md: '50%' }}
-        pl={{ base: '40px', md: side === 'right' ? 12 : 0 }}
-        pr={{ base: 0, md: side === 'left' ? 12 : 0 }}
-        order={{ base: 0, md: side === 'right' ? 1 : 0 }}
-      >
-        <TimelineCard
-          post={post}
-          expanded={expanded}
-          onToggle={() => setExpanded((v) => !v)}
-          // On mobile the date lives inside the card since the opposite
-          // side is off-screen.
-          showInlineDate={dateLabel}
-        />
+      {/* pl clears the 44px marker with a gutter. */}
+      <Box w="100%" pl={{ base: '52px', md: '76px' }}>
+        <TimelineCard post={post} />
       </Box>
     </Flex>
   );
 }
+/**
+ * One post: a dense cluster of its photographs, then the words.
+ *
+ * This replaced an accordion. Each post ships FIVE photos in the list payload
+ * and the card showed one — the other four sat behind a chevron, so a page
+ * about photography displayed six photographs and a lot of cream.
+ *
+ * The reference site Alex keeps pointing at (jovanarikalo.com) is dense:
+ * "minimal spacing between grid items, creating a dense, compact
+ * presentation". That is the thing his does that ours did not. Six posts now
+ * put thirty photographs on the page at a 2px gutter, which reads as one
+ * composed block per post rather than a row of cards floating in space.
+ *
+ * The accordion is gone entirely. It existed to preview without navigating,
+ * but the cluster IS the preview, and the whole block is one link to the post.
+ */
+function TimelineCard({ post }: { post: PostSummary }) {
+  const photos = post.photos ?? [];
+  const lead = photos[0];
+  // Up to four supporting frames. Fewer is fine — the grid just gets shorter,
+  // and a post with a single photo still reads correctly as one image.
+  const rest = photos.slice(1, 5);
 
-function TimelineCard({
-  post,
-  expanded,
-  onToggle,
-  showInlineDate,
-}: {
-  post: PostSummary;
-  expanded: boolean;
-  onToggle: () => void;
-  showInlineDate: string;
-}) {
   return (
     <Box
-      bg="white"
-      border="1px solid"
-      borderColor={expanded ? 'rgba(201, 169, 110, 0.5)' : 'gray.200'}
-      borderRadius="sm"
-      overflow="hidden"
-      transition="all 0.25s ease"
-      _hover={{ borderColor: 'rgba(201, 169, 110, 0.7)', transform: 'translateY(-1px)' }}
-      boxShadow={expanded ? '0 4px 20px -8px rgba(201, 169, 110, 0.3)' : '0 1px 3px rgba(0,0,0,0.03)'}
+      as={RouterLink}
+      to={`/journal/${post.slug}`}
+      display="block"
+      textDecoration="none"
+      // data-group, NOT role="group": this renders as an <a>, and an
+      // explicit ARIA role overrides the implicit link role, dropping every
+      // card out of a screen reader's links list. Chakra's _groupHover matches
+      // data-group just as well — the pattern already used elsewhere here.
+      data-group
+      _hover={{ textDecoration: 'none' }}
     >
-      {/* Clickable summary strip — cover thumb + title + date + chevron */}
-      <Flex
-        as="button"
-        type="button"
-        onClick={onToggle}
-        w="100%"
-        align="stretch"
-        textAlign="left"
-        bg="transparent"
-        border="none"
-        p={0}
-        cursor="pointer"
-        _hover={{ bg: 'rgba(201, 169, 110, 0.04)' }}
-        sx={{ WebkitTapHighlightColor: 'transparent' }}
-      >
-        {/* Cover thumbnail — square, left side */}
-        {post.cover_image_url ? (
+      {/* The cluster. 2px gutters on purpose: at this spacing the photographs
+          read as one object, which is what stops the page feeling scattered. */}
+      {lead && (
+        <Flex
+          gap="2px"
+          mb={4}
+          align="stretch"
+          // Column on phones. Side by side, the four supporting frames would
+          // share the 38% left over from the lead — roughly 60px each on a
+          // 375px screen, which is a swatch rather than a photograph. Stacked,
+          // the lead runs full width and the rest become a strip beneath it at
+          // about 85px.
+          direction={{ base: 'column', md: 'row' }}
+        >
           <Box
-            w={{ base: '90px', md: '140px' }}
-            flexShrink={0}
-            bg="gray.100"
+            flex={{ base: '1 1 auto', md: rest.length ? '0 0 62%' : '1 1 100%' }}
             overflow="hidden"
+            bg="gray.100"
+            sx={{ aspectRatio: '4 / 3' }}
           >
             <Image
-              src={post.cover_image_url}
-              alt={post.cover_image_alt ?? post.title}
+              src={lead.url}
+              alt={lead.alt ?? post.title}
               w="100%"
               h="100%"
               objectFit="cover"
               loading="lazy"
+              transition="transform 0.7s ease"
+              _groupHover={{ transform: 'scale(1.03)' }}
             />
           </Box>
-        ) : (
-          <Flex
-            w={{ base: '90px', md: '140px' }}
-            flexShrink={0}
-            bg="brand.surface"
-            align="center"
-            justify="center"
-            color="brand.accentText"
-          >
-            <Icon as={FaBookOpen} boxSize={5} />
-          </Flex>
+
+          {rest.length > 0 && (
+            <Grid
+              flex="1 1 auto"
+              // A strip across the bottom on phones, a block beside the lead
+              // from md up. The aspect ratio keeps the strip from collapsing
+              // to zero height when the parent is a column.
+              templateColumns={{
+                base: `repeat(${rest.length}, 1fr)`,
+                md: rest.length > 2 ? 'repeat(2, 1fr)' : '1fr',
+              }}
+              gap="2px"
+              sx={{
+                '@media (max-width: 47.99em)': {
+                  aspectRatio: `${rest.length * 4} / 3`,
+                },
+              }}
+            >
+              {rest.map((ph, i) => (
+                <Box key={i} overflow="hidden" bg="gray.100" minH={0}>
+                  <Image
+                    src={ph.url}
+                    alt={ph.alt ?? ''}
+                    w="100%"
+                    h="100%"
+                    objectFit="cover"
+                    loading="lazy"
+                    transition="transform 0.7s ease"
+                    _groupHover={{ transform: 'scale(1.03)' }}
+                  />
+                </Box>
+              ))}
+            </Grid>
+          )}
+        </Flex>
+      )}
+
+      {/* The words sit under the pictures, held to a readable measure rather
+          than stretching the full width of the cluster. */}
+      {/* Aligned to the lead frame's 62%, not the 46ch reading measure. At
+          46ch the title wrapped with a large blank to its right while the
+          photographs above ran much wider, which read as an arbitrary cut. On
+          phones the cluster is full width, so this is too. */}
+      <Box maxW={{ base: '100%', md: '62%' }}>
+        {post.session_type && (
+          <Text textStyle="metaCaption" color="brand.accentText" mb={1.5}>
+            {post.session_type}
+          </Text>
         )}
 
-        {/* Title + meta */}
-        <VStack
-          flex={1}
-          align="flex-start"
-          spacing={1.5}
-          p={{ base: 3, md: 4 }}
-          justify="center"
-          minW={0}
+        <Text
+          as="h2"
+          textStyle="cardTitle"
+          m={0}
+          mb={2}
+          transition="color 0.3s"
+          _groupHover={{ color: 'brand.accentText' }}
         >
-          <Text
-            display={{ base: 'block', md: 'none' }}
-            fontSize="2xs"
-            fontWeight="500"
-            letterSpacing="0.16em"
-            textTransform="uppercase"
-            color="gray.500"
-          >
-            {showInlineDate}
-          </Text>
-          <Text
-            as="h2"
-            fontSize={{ base: 'md', md: 'lg' }}
-            fontWeight="400"
-            color="gray.800"
-            letterSpacing="0.01em"
-            lineHeight="1.3"
-            m={0}
-            noOfLines={2}
-          >
-            {post.title}
-          </Text>
-          {post.session_type && (
-            <Text
-              fontSize="2xs"
-              fontWeight="500"
-              letterSpacing="0.14em"
-              textTransform="uppercase"
-              color="brand.accentText"
-            >
-              {post.session_type}
-            </Text>
-          )}
-        </VStack>
+          {post.title}
+        </Text>
 
-        {/* Chevron */}
+        {/* No clamp on the excerpt. Every one in the database is 126-151
+            characters, which fits in two or three lines at this measure — the
+            ellipsis was truncating text that had room to finish. */}
+        {post.excerpt && (
+          <Text textStyle="bodyCopy" mb={3}>
+            {post.excerpt}
+          </Text>
+        )}
+
+        {/* Reads as the whole block's affordance, not a link inside it.
+            On a pointer device it is driven by _groupHover on the card
+            wrapper, so hovering the photographs — or the title, or anywhere
+            else in the entry — slides the arrow in and draws the rule. The
+            movement is what says the whole block is the target.
+            
+            TOUCH HAS NO HOVER, so that reveal never fires on a phone, which
+            is exactly where the large tap target matters most. Under
+            (hover: none) the arrow and rule are simply drawn at rest instead
+            — same affordance, no interaction needed to see it. Querying hover
+            capability rather than width is the point: a small laptop window
+            still gets the animation, a large tablet still gets the static
+            version. */}
         <Flex
-          w={{ base: '36px', md: '44px' }}
-          flexShrink={0}
           align="center"
-          justify="center"
-          color={expanded ? 'brand.accent' : 'gray.400'}
+          gap={2}
+          color="brand.accentText"
+          transition="gap 0.3s ease"
+          _groupHover={{ gap: 3 }}
+          sx={{ '@media (hover: none)': { gap: 'var(--chakra-space-3)' } }}
         >
-          <Icon as={expanded ? FaChevronUp : FaChevronDown} boxSize={3} />
+          <Text textStyle="ctaLabel">Read the post</Text>
+          <Box
+            h="1px"
+            bg="currentColor"
+            w={0}
+            opacity={0.5}
+            transition="width 0.35s ease, opacity 0.35s ease"
+            _groupHover={{ w: '38px', opacity: 1 }}
+            sx={{ '@media (hover: none)': { width: '28px', opacity: 1 } }}
+          />
+          <Box
+            as="span"
+            fontSize="0.7rem"
+            lineHeight={1}
+            transform="translateX(-4px)"
+            opacity={0}
+            transition="transform 0.35s ease, opacity 0.35s ease"
+            _groupHover={{ transform: 'translateX(0)', opacity: 1 }}
+            sx={{ '@media (hover: none)': { transform: 'translateX(0)', opacity: 1 } }}
+            aria-hidden
+          >
+            →
+          </Box>
         </Flex>
-      </Flex>
-
-      {/* Expanded body — excerpt + preview photo grid + tags + read link.
-          Preview shows up to 4 photos (skipping index 0 which is already
-          the header thumb) so people get a taste without clicking through. */}
-      <Collapse in={expanded} animateOpacity>
-        <Box
-          borderTop="1px solid"
-          borderColor="gray.100"
-          bg="brand.surface"
-          px={{ base: 4, md: 5 }}
-          py={{ base: 4, md: 5 }}
-        >
-          {post.excerpt && (
-            <Text
-              fontSize={{ base: 'sm', md: 'md' }}
-              color="gray.700"
-              fontWeight="300"
-              lineHeight="1.8"
-              mb={4}
-            >
-              {post.excerpt}
-            </Text>
-          )}
-
-          {post.photos.length > 1 && (
-            <SimpleGrid
-              columns={{ base: 2, sm: 3, md: 4 }}
-              spacing={{ base: 2, md: 2.5 }}
-              mb={4}
-            >
-              {post.photos.slice(1, 5).map((photo, i) => (
-                <RouterLink key={i} to={`/journal/${post.slug}`}>
-                  <Box
-                    aspectRatio={1}
-                    bg="gray.100"
-                    overflow="hidden"
-                    borderRadius="sm"
-                    position="relative"
-                    sx={{
-                      '& > img': { transition: 'transform 0.4s ease' },
-                    }}
-                    _hover={{ '& > img': { transform: 'scale(1.05)' } }}
-                  >
-                    <Image
-                      src={photo.url}
-                      alt={photo.alt}
-                      w="100%"
-                      h="100%"
-                      objectFit="cover"
-                      loading="lazy"
-                    />
-                  </Box>
-                </RouterLink>
-              ))}
-            </SimpleGrid>
-          )}
-
-          {post.tags.length > 0 && (
-            <HStack spacing={2} wrap="wrap" mb={4}>
-              {post.tags.slice(0, 6).map((tag) => (
-                <Text
-                  key={tag}
-                  fontSize="2xs"
-                  fontWeight="500"
-                  letterSpacing="0.08em"
-                  textTransform="lowercase"
-                  color="brand.accentText"
-                  bg="white"
-                  border="1px solid"
-                  borderColor="rgba(201, 169, 110, 0.35)"
-                  px={2}
-                  py={0.5}
-                  borderRadius="sm"
-                >
-                  {tag}
-                </Text>
-              ))}
-            </HStack>
-          )}
-
-          <RouterLink to={`/journal/${post.slug}`}>
-            <Box
-              as="span"
-              display="inline-flex"
-              alignItems="center"
-              gap={2}
-              fontSize="xs"
-              fontWeight="500"
-              letterSpacing="0.14em"
-              textTransform="uppercase"
-              color="brand.accent"
-              _hover={{ color: 'brand.accentText' }}
-              transition="color 0.15s"
-            >
-              See the full post
-              <Icon as={FaArrowRight} boxSize={2.5} />
-            </Box>
-          </RouterLink>
-        </Box>
-      </Collapse>
+      </Box>
     </Box>
   );
 }
@@ -590,10 +556,23 @@ function groupByYear(posts: PostSummary[]): Array<[number, PostSummary[]]> {
   return [...map.entries()].sort((a, b) => b[0] - a[0]);
 }
 
-function formatDate(iso: string): string {
+/**
+ * The rail marker's month and day.
+ *
+ * journal_posts.published_at is NULLABLE. `new Date(null)` is the epoch rather
+ * than Invalid Date, so an unset date would quietly render "JAN / 1" — a wrong
+ * answer that looks like a right one. Both return null instead, and the marker
+ * falls back to a plain dot.
+ */
+function markerDate(iso: string | null | undefined): { month: string; day: string } | null {
+  if (!iso) return null;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+    day: String(d.getDate()),
+  };
 }
+
 
 export default Journal;

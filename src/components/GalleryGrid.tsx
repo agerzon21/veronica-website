@@ -32,8 +32,16 @@ const MotionBox = motion(Box);
 // desktop (matching the bumagaz reference), portraits fit 3-4.
 const TARGET_ROW_HEIGHT_DESKTOP = 470;
 const TARGET_ROW_HEIGHT_MOBILE = 260;
-const GRID_GAP_DESKTOP = 20;
-const GRID_GAP_MOBILE = 12;
+// The main gallery. 20/12px put visible cream between every photograph, so a
+// wall of work read as a scatter of cards. The reference site the owner keeps
+// citing runs its grid near-flush — "minimal spacing between grid items,
+// creating a dense, compact presentation" — which is what makes a portfolio
+// read as a body of work rather than a list of files.
+//
+// Not zero: a hairline keeps two adjacent photographs from bleeding into each
+// other when both are dark at the seam.
+const GRID_GAP_DESKTOP = 10;
+const GRID_GAP_MOBILE = 6;
 
 const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
