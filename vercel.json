@@ -231,6 +231,22 @@
       "destination": "/gallery/:category.html"
     },
     {
+      "source": "/about",
+      "destination": "/about.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact.html"
+    },
+    {
+      "source": "/wedding-photography",
+      "destination": "/wedding-photography.html"
+    },
+    {
+      "source": "/gallery",
+      "destination": "/gallery.html"
+    },
+    {
       "source": "/journal",
       "destination": "/journal.html"
     },

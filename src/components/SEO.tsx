@@ -37,6 +37,15 @@ const ROUTE_META: Record<string, RouteMeta> = {
     description:
       'Your inquiry has been received — Veronika will be in touch shortly to discuss your photography session.',
   },
+  // Was missing entirely, so this route fell through to the home defaults and
+  // shipped the homepage's title, description and canonical — on the site's
+  // highest-intent commercial page.
+  '/wedding-photography': {
+    title: 'Wedding Photography Services | Vero Photography',
+    description:
+      'Wedding photography by Veronika Gerzon — what coverage includes, travel, and how your gallery is delivered. Based in Scranton, Pennsylvania; available worldwide.',
+    image: `${SITE_URL}/assets/photos/weddings/newlyweds-running-sea.webp`,
+  },
   '/gallery': {
     title: 'Photography Portfolio | Vero Photography',
     description:

@@ -102,6 +102,13 @@ const mustHaveOwnTitle = [
   ...sitemapPaths.filter((p) => /^\/gallery\/[^/]+$/.test(p)),
   ...sitemapPaths.filter((p) => /^\/journal\/[^/]+$/.test(p)),
   ...sitemapPaths.filter((p) => /^\/photo\//.test(p)).slice(0, 5),
+  // The static marketing pages. These shipped for months serving the
+  // HOMEPAGE's title and canonical because they were SPA-only, which tells
+  // Google they are duplicates of / and not to index them. Asserting their
+  // titles here is what stops that returning unnoticed.
+  ...['/about', '/contact', '/wedding-photography', '/gallery'].filter((p) =>
+    sitemapPaths.includes(p),
+  ),
 ];
 
 const list = [...routes];

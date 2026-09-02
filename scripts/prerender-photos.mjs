@@ -680,6 +680,154 @@ ${posts
 
 console.log(`Pre-rendered ${journalPages} journal posts + the journal index.`);
 
+// ---------------------------------------------------------------------------
+// Static marketing pages — /about, /contact, /wedding-photography, /gallery.
+//
+// These are SPA-only routes, so they are served the raw index.html, which
+// carries the HOMEPAGE's <title>, description and canonical. A canonical
+// pointing at / is an explicit instruction to Google not to index the page,
+// and it was being sent on four of the site's most commercial URLs. Verified
+// live as Googlebot before this existed:
+//
+//   /about                -> canonical https://vero.photography/
+//   /contact              -> canonical https://vero.photography/
+//   /wedding-photography  -> canonical https://vero.photography/
+//   /gallery              -> canonical https://vero.photography/
+//
+// react-helmet-async sets the right tags at runtime, but that only helps a
+// renderer, and only on a second pass. Putting them in the first-pass HTML
+// removes the dependency entirely — which is what the photo, category and
+// journal pages already do.
+//
+// Titles and descriptions are duplicated from ROUTE_META in
+// src/components/SEO.tsx rather than imported, because this is plain .mjs and
+// that is TypeScript. The assertion below fails the build if they ever drift,
+// so the duplication cannot rot silently.
+// ---------------------------------------------------------------------------
+const STATIC_PAGES = [
+  {
+    path: '/about',
+    heading: 'About Veronika Gerzon',
+    title: 'About Veronika Gerzon | Vero Photography',
+    description:
+      'About Veronika Gerzon — wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
+    image: `${SITE}/assets/photos/site/about-bg.webp`,
+  },
+  {
+    path: '/contact',
+    heading: 'Book a Session',
+    title: 'Book a Session | Vero Photography',
+    description:
+      'Get in touch to plan a wedding, portrait, family, or maternity session. Based in Scranton, Pennsylvania — available worldwide.',
+    image: `${SITE}/assets/photos/site/contact-bg.webp`,
+    extra:
+      '<p>Call or text <a href="tel:+15709095707">(570) 909-5707</a>.</p>',
+  },
+  {
+    path: '/wedding-photography',
+    heading: 'Wedding Photography Services',
+    title: 'Wedding Photography Services | Vero Photography',
+    description:
+      'Wedding photography by Veronika Gerzon — what coverage includes, travel, and how your gallery is delivered. Based in Scranton, Pennsylvania; available worldwide.',
+    image: `${SITE}/assets/photos/weddings/newlyweds-running-sea.webp`,
+  },
+  {
+    path: '/gallery',
+    heading: 'Photography Portfolio',
+    title: 'Photography Portfolio | Vero Photography',
+    description:
+      'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Gerzon.',
+    image: `${SITE}/assets/photos/site/home-cta-bg.webp`,
+  },
+];
+
+// Drift guard. If a title or description here stops matching SEO.tsx, the two
+// sources have diverged and one of them is now lying to Google.
+{
+  const seoSource = readFileSync(join(__dirname, '..', 'src/components/SEO.tsx'), 'utf-8');
+  const drifted = STATIC_PAGES.filter(
+    (pg) => !seoSource.includes(pg.title) || !seoSource.includes(pg.description),
+  ).map((pg) => pg.path);
+  if (drifted.length) {
+    console.error(
+      `[prerender] static page metadata no longer matches ROUTE_META in SEO.tsx: ${drifted.join(', ')}`,
+    );
+    failProd('static page metadata drifted from SEO.tsx.');
+  }
+}
+
+let staticPages = 0;
+for (const pg of STATIC_PAGES) {
+  const canonical = `${SITE}${pg.path}`;
+  let html = photoTemplate;
+  html = html.replace(/[ \t]*<title>[\s\S]*?<\/title>\n?/, '');
+  html = html.replace(/[ \t]*<meta name="description"[^>]*>\n?/, '');
+  html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/, '');
+  html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
+  html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
+
+  const meta = `
+    <title>${esc(pg.title)}</title>
+    <meta name="description" content="${esc(pg.description)}" />
+    <link rel="canonical" href="${canonical}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="${esc(pg.title)}" />
+    <meta property="og:description" content="${esc(pg.description)}" />
+    <meta property="og:image" content="${pg.image}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="${canonical}" />
+    <meta property="og:site_name" content="Vero Photography" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${esc(pg.title)}" />
+    <meta name="twitter:description" content="${esc(pg.description)}" />
+    <meta name="twitter:image" content="${pg.image}" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "url": "${canonical}",
+      "name": ${JSON.stringify(pg.title)},
+      "description": ${JSON.stringify(pg.description)},
+      "inLanguage": "en-US",
+      "primaryImageOfPage": {
+        "@type": "ImageObject",
+        "url": ${JSON.stringify(pg.image)},
+        "width": 1200,
+        "height": 630
+      }
+    }
+    </script>`;
+  html = html.replace('</head>', `${meta}\n  </head>`);
+
+  const noscript = `
+    <noscript>
+      <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:sans-serif;">
+        <h1>${esc(pg.heading)}</h1>
+        <p>${esc(pg.description)}</p>${pg.extra ? `\n        ${pg.extra}` : ''}
+        <h2>Browse</h2>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/gallery">All work</a></li>
+${Object.entries(CATEGORY_META)
+  .map(([c, m]) => `          <li><a href="/gallery/${c}">${esc(m.heading)}</a></li>`)
+  .join('\n')}
+          <li><a href="/wedding-photography">Wedding photography services</a></li>
+          <li><a href="/journal">Journal</a></li>
+          <li><a href="/about">About Veronika</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </div>
+    </noscript>`;
+  html = html.replace('<div id="root"></div>', `<div id="root"></div>${noscript}`);
+
+  writeFileSync(join(distDir, `${pg.path.replace(/^\//, '')}.html`), html);
+  staticPages++;
+}
+console.log(`Pre-rendered ${staticPages} static marketing pages.`);
+if (staticPages === 0) failProd('prerendered 0 static pages.');
+
 
 
 // A green build that produced zero SEO pages is the exact failure this
