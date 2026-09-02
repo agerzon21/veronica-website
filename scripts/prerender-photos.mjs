@@ -47,6 +47,10 @@ const templatePath = join(distDir, 'index.html');
 
 const TITLE_SUFFIX = ' | Vero Photography';
 
+// Canonical origin. Declared here rather than beside the sitemap because the
+// category pages generated further up need it too.
+const SITE = 'https://vero.photography';
+
 /**
  * Remove the site-name suffix that photos.ts appends to every title.
  *
@@ -307,6 +311,161 @@ ${ringNeighbours(photo, photos)
 
 console.log(`Pre-rendered ${totalPages} individual photo pages.`);
 
+// ---------------------------------------------------------------------------
+// Category gallery pages — the missing link.
+//
+// The 227 photo pages above are richly interlinked (related + ring neighbours)
+// and every one points UP to /gallery/<category>. Nothing pointed DOWN. The
+// category routes fell through to the SPA shell, whose tiles are fetched from
+// /api/gallery at runtime, so a crawler that does not execute JavaScript
+// walked: home -> nav -> category -> dead end. Semrush crawled exactly 13
+// pages against a 236-URL sitemap, and every build reported "227 prerendered,
+// 236 sitemap URLs" and went green, because those count what was GENERATED,
+// not what is REACHABLE. The check at the bottom of this file now measures the
+// difference.
+//
+// Descriptions follow the CLAUDE.md tone rules: no locations, no praise words.
+//
+// ROUTING: vercel.json rewrites /gallery/:category to /gallery/:category.html,
+// with the category list spelled out rather than a bare :category — an unknown
+// category would otherwise rewrite to a .html that does not exist and 404,
+// where today it falls through to the SPA. Keep that list and this object in
+// sync. (The note lives here because vercel.json is JSON and cannot hold a
+// comment: adding a "_comment" key fails Vercel's schema validation and the
+// deployment errors before the build starts.)
+// ---------------------------------------------------------------------------
+const CATEGORY_META = {
+  weddings: {
+    heading: 'Wedding Photography',
+    description: 'Wedding coverage, from getting ready through the last dance.',
+  },
+  portraits: {
+    heading: 'Portrait Photography',
+    description: 'Portrait sessions — individual, couple and editorial work.',
+  },
+  family: {
+    heading: 'Family Photography',
+    description: 'Family sessions, including newborn and milestone portraits.',
+  },
+  maternity: {
+    heading: 'Maternity Photography',
+    description: 'Maternity sessions, in the studio and outdoors.',
+  },
+};
+
+const esc = (t) =>
+  String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+let categoryPages = 0;
+for (const [category, meta] of Object.entries(CATEGORY_META)) {
+  const inCategory = photos.filter((p) => p.category === category);
+  // An empty category would ship a page advertising nothing. Skip it rather
+  // than publish a dead end, and let the reachability check below complain.
+  if (inCategory.length === 0) {
+    console.warn(`[prerender] category "${category}" has no published photos — skipping page.`);
+    continue;
+  }
+
+  const outputDir = join(distDir, 'gallery');
+  if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+
+  const canonical = `${SITE}/gallery/${category}`;
+  const pageTitle = `${meta.heading}${TITLE_SUFFIX}`;
+  // Real image, resolved from the DB through the same /api/photo proxy the
+  // photo pages use. The old categoryDetails image paths in Gallery.tsx still
+  // point at /assets/photos/..., which is where photos lived BEFORE they moved
+  // to Drive — pointing an og:image there would share a broken preview.
+  const ogImage = `${SITE}/api/photo?id=${inCategory[0].url.split('id=')[1]}`;
+  let html = photoTemplate;
+
+  // The SPA sets these client-side; a non-rendering crawler never sees that,
+  // so the category routes were all inheriting index.html's homepage meta.
+  const categoryMeta = `
+    <title>${esc(pageTitle)}</title>
+    <meta name="description" content="${esc(meta.description)}" />
+    <link rel="canonical" href="${canonical}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="${esc(pageTitle)}" />
+    <meta property="og:description" content="${esc(meta.description)}" />
+    <meta property="og:image" content="${ogImage}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="${esc(meta.heading)}" />
+    <meta property="og:url" content="${canonical}" />
+    <meta property="og:site_name" content="Vero Photography" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${esc(pageTitle)}" />
+    <meta name="twitter:description" content="${esc(meta.description)}" />
+    <meta name="twitter:image" content="${ogImage}" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      "name": ${JSON.stringify(meta.heading)},
+      "description": ${JSON.stringify(meta.description)},
+      "url": "${canonical}",
+      "hasPart": [
+${inCategory
+  .map(
+    (p) =>
+      `        { "@type": "ImageObject", "name": ${JSON.stringify(stripSuffix(p.title))}, "url": "${SITE}/photo/${p.category}/${p.id}" }`,
+  )
+  .join(',\n')}
+      ]
+    }
+    </script>`;
+
+  // index.html ships its own title/description/OG/canonical for the homepage.
+  // Leaving them gives two <title>s and — worse — two canonicals, which is the
+  // exact trap the photo loop above documents. Strip before injecting.
+  html = html.replace(/[ \t]*<title>[\s\S]*?<\/title>\n?/, '');
+  html = html.replace(/[ \t]*<meta name="description"[^>]*>\n?/, '');
+  html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/, '');
+  html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
+  html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
+  html = html.replace('</head>', `${categoryMeta}\n  </head>`);
+
+  const others = Object.keys(CATEGORY_META).filter((c) => c !== category);
+  const noscriptContent = `
+    <noscript>
+      <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:sans-serif;">
+        <h1>${esc(meta.heading)}</h1>
+        <p>${esc(meta.description)}</p>
+        <h2>Photographs</h2>
+        <ul>
+${inCategory
+  .map(
+    (p) =>
+      `          <li><a href="/photo/${p.category}/${p.id}">${esc(stripSuffix(p.title))}</a></li>`,
+  )
+  .join('\n')}
+        </ul>
+        <h2>Browse</h2>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/gallery">All work</a></li>
+${others
+  .map((c) => `          <li><a href="/gallery/${c}">${esc(CATEGORY_META[c].heading)}</a></li>`)
+  .join('\n')}
+          <li><a href="/wedding-photography">Wedding photography services</a></li>
+          <li><a href="/about">About Veronika</a></li>
+          <li><a href="/journal">Journal</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </div>
+    </noscript>`;
+
+  html = html.replace('<div id="root"></div>', `<div id="root"></div>${noscriptContent}`);
+  writeFileSync(join(outputDir, `${category}.html`), html);
+  categoryPages++;
+}
+
+console.log(`Pre-rendered ${categoryPages} category gallery pages.`);
+if (categoryPages === 0) failProd('prerendered 0 category pages.');
+
+
+
 // A green build that produced zero SEO pages is the exact failure this
 // script used to ship silently. Never again on production.
 if (totalPages === 0) {
@@ -341,7 +500,6 @@ const WEDDINGS_PAGE_SLUGS = [
   }
 }
 
-const SITE = 'https://vero.photography';
 const staticUrls = [
   { loc: '/', changefreq: 'weekly', priority: '1.0' },
   { loc: '/about', changefreq: 'monthly', priority: '0.8' },
@@ -350,6 +508,9 @@ const staticUrls = [
   // all inquiries, and this is the only page that answers what coverage,
   // travel and delivery actually look like.
   { loc: '/wedding-photography', changefreq: 'monthly', priority: '0.9' },
+  // Surfaced by the reachability check below: /journal was linked from every
+  // page's noscript nav but had never been listed here.
+  { loc: '/journal', changefreq: 'weekly', priority: '0.7' },
   { loc: '/gallery', changefreq: 'weekly', priority: '0.9' },
   { loc: '/gallery/portraits', changefreq: 'weekly', priority: '0.85' },
   { loc: '/gallery/weddings', changefreq: 'weekly', priority: '0.85' },
@@ -377,3 +538,85 @@ const sitemapXml =
 
 writeFileSync(join(distDir, 'sitemap.xml'), sitemapXml);
 console.log(`Wrote sitemap.xml with ${allUrls.length} URLs (${photoUrls.length} photos).`);
+
+// ---------------------------------------------------------------------------
+// Reachability check.
+//
+// The bug this exists to catch: for months every build printed "Pre-rendered
+// 227 individual photo pages" and "Wrote sitemap.xml with 236 URLs" and went
+// green, while exactly 13 pages were reachable by following links from the
+// homepage. Both numbers count what was GENERATED. Neither can fail when the
+// link graph is broken, because generating a page and linking to it are
+// different things.
+//
+// So walk the graph the way a crawler that does not run JavaScript does:
+// start at /, follow internal <a href>, resolve each URL to the file Vercel
+// would actually serve for it, and repeat. Then assert every sitemap URL was
+// discovered. Submitting a URL in a sitemap is a hint; being linked is what
+// crawlers weight.
+// ---------------------------------------------------------------------------
+const KNOWN_CATEGORIES = Object.keys(CATEGORY_META);
+
+/** Mirror of the vercel.json rewrite table. Keep the two in sync. */
+const fileFor = (urlPath) => {
+  const photo = urlPath.match(/^\/photo\/([^/]+)\/([^/]+)$/);
+  if (photo) return join(distDir, 'photo', photo[1], `${photo[2]}.html`);
+  const cat = urlPath.match(/^\/gallery\/([^/]+)$/);
+  if (cat && KNOWN_CATEGORIES.includes(cat[1])) return join(distDir, 'gallery', `${cat[1]}.html`);
+  // Everything else falls through to the SPA shell.
+  return join(distDir, 'index.html');
+};
+
+const internalLinks = (html) => {
+  const out = new Set();
+  for (const m of html.matchAll(/<a\b[^>]*\bhref="([^"]+)"/gi)) {
+    let href = m[1].trim();
+    if (!href.startsWith('/')) continue;              // external, mailto:, tel:, #
+    href = href.split('#')[0].split('?')[0];
+    if (!href || href.startsWith('/assets/') || href.startsWith('/api/')) continue;
+    if (href.length > 1 && href.endsWith('/')) href = href.slice(0, -1);
+    out.add(href);
+  }
+  return out;
+};
+
+const reachable = new Set();
+const queue = ['/'];
+while (queue.length) {
+  const urlPath = queue.shift();
+  if (reachable.has(urlPath)) continue;
+  reachable.add(urlPath);
+  const file = fileFor(urlPath);
+  if (!existsSync(file)) continue;
+  for (const next of internalLinks(readFileSync(file, 'utf-8'))) {
+    if (!reachable.has(next)) queue.push(next);
+  }
+}
+
+const sitemapPaths = allUrls.map((u) => u.loc);
+const unreachable = sitemapPaths.filter((loc) => !reachable.has(loc));
+const orphanedFromSitemap = [...reachable].filter((r) => !sitemapPaths.includes(r));
+
+console.log(
+  `Link-reachable from /: ${reachable.size} pages (sitemap lists ${sitemapPaths.length}).`,
+);
+
+if (unreachable.length) {
+  console.error(
+    `[prerender] ${unreachable.length} sitemap URL(s) are NOT reachable by following links:`,
+  );
+  for (const u of unreachable.slice(0, 15)) console.error(`  - ${u}`);
+  if (unreachable.length > 15) console.error(`  ... and ${unreachable.length - 15} more`);
+  failProd(`${unreachable.length} sitemap URL(s) unreachable by link-walking.`);
+} else {
+  console.log('Every sitemap URL is reachable by following links from the homepage.');
+}
+
+// Not fatal — a page can be legitimately linked without being a ranking
+// target. Worth surfacing so the sitemap does not quietly fall behind.
+if (orphanedFromSitemap.length) {
+  console.warn(
+    `[prerender] linked but absent from sitemap: ${orphanedFromSitemap.join(', ')}`,
+  );
+}
+

@@ -218,6 +218,10 @@
       "destination": "/photo/:category/:photoId.html"
     },
     {
+      "source": "/gallery/:category(portraits|weddings|family|maternity)",
+      "destination": "/gallery/:category.html"
+    },
+    {
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }
