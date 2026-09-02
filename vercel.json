@@ -222,6 +222,14 @@
       "destination": "/gallery/:category.html"
     },
     {
+      "source": "/journal",
+      "destination": "/journal.html"
+    },
+    {
+      "source": "/journal/:slug",
+      "destination": "/journal/:slug.html"
+    },
+    {
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }
