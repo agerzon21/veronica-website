@@ -22,7 +22,9 @@
  * idempotent and non-destructive — the worst case is one wasted build.
  *
  * POST { password }
- *   → 200 { success, triggeredAt }
+ *   → 200 { success, triggeredAt }        a build was started
+ *   → 200 { success, skipped, reason }    nothing has changed since the last
+ *                                         build; pass force:true to override
  *   → 401 / 403  auth
  *   → 405 non-POST
  *   → 409 still inside the cooldown  { retryInSeconds }
@@ -34,6 +36,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
 import { getDb } from '../_db.js';
 import { triggerDeployHook } from '../_deploy-hook.js';
+import { currentFingerprint, deployedFingerprint, diffReason } from './_rebuild-status.js';
 
 const STATE_KEY = 'last_rebuild_trigger';
 
@@ -60,6 +63,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'create one for the main branch, then add the URL as VERCEL_DEPLOY_HOOK_URL ' +
         'and redeploy once so the variable is available.',
     });
+  }
+
+  // Nothing to publish → don't spend a build. Any failure leaves the deployed
+  // manifest stale, so this stays "pending" and the button stays usable; it can
+  // only report up-to-date when a build genuinely captured the current content.
+  // `force` exists for the case where the output is wrong for a reason the
+  // fingerprint cannot see (a template change, a bad build).
+  if (req.body?.force !== true) {
+    const current = await currentFingerprint();
+    const deployed = await deployedFingerprint();
+    if (diffReason(deployed.ok ? deployed.manifest : null, current) === null) {
+      return res.status(200).json({ success: true, skipped: true, reason: 'no-changes' });
+    }
   }
 
   const sql = getDb();

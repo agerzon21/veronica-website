@@ -10,6 +10,15 @@
       ]
     },
     {
+      "source": "/build-manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(.*).html",
       "headers": [
         {

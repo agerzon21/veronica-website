@@ -70,6 +70,7 @@ import cronsRunNowHandler from './admin/_crons-run-now.js';
 import cronsHistoryHandler from './admin/_crons-history.js';
 import configHealthHandler from './admin/_config-health.js';
 import rebuildHandler from './admin/_rebuild.js';
+import rebuildStatusHandler from './admin/_rebuild-status.js';
 
 const HANDLERS: Record<
   string,
@@ -133,6 +134,7 @@ const HANDLERS: Record<
   'crons-history': cronsHistoryHandler,
   'config-health': configHealthHandler,
   rebuild: rebuildHandler,
+  'rebuild-status': rebuildStatusHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

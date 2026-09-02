@@ -764,6 +764,49 @@ console.log(
 );
 
 // ---------------------------------------------------------------------------
+// Build manifest — a fingerprint of exactly what content this build baked in.
+//
+// Prerendered pages are a snapshot, so the site can be silently behind the
+// database: a photo published in admin, or a journal post edited, changes
+// nothing on disk until someone rebuilds. Without a record of what the last
+// build contained there is no way to answer "is a rebuild needed?", so the
+// rebuild button had to fire unconditionally and spend a build either way.
+//
+// api/admin/_rebuild-status.ts computes the SAME fingerprint live and compares
+// it to this file. Counts catch publishes, unpublishes and deletions; the max
+// updated_at catches edits to something already published. If you change the
+// shape here, change it there — the two queries are deliberately identical and
+// are the only thing keeping the comparison honest.
+// ---------------------------------------------------------------------------
+let manifest = { builtAt: new Date().toISOString(), photos: null, journal: null };
+try {
+  const [ph] = await sql`
+    SELECT count(*)::int AS published, max(updated_at) AS latest
+    FROM gallery_photos
+    WHERE status = 'published' AND deleted_at IS NULL
+  `;
+  const [jo] = await sql`
+    SELECT count(*)::int AS published, max(updated_at) AS latest
+    FROM journal_posts
+    WHERE status = 'published' AND published_at IS NOT NULL
+  `;
+  manifest = {
+    builtAt: manifest.builtAt,
+    photos: { published: ph.published, latest: ph.latest ? new Date(ph.latest).toISOString() : null },
+    journal: { published: jo.published, latest: jo.latest ? new Date(jo.latest).toISOString() : null },
+  };
+} catch (err) {
+  // A manifest we could not build must not fail the deploy — the worst case is
+  // the button falls back to "unknown" and stays clickable, which is how it
+  // behaved before this existed.
+  console.warn(`[prerender] could not build content manifest: ${err.message}`);
+}
+writeFileSync(join(distDir, 'build-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+console.log(
+  `Wrote build-manifest.json (photos ${manifest.photos?.published ?? '?'}, journal ${manifest.journal?.published ?? '?'}).`,
+);
+
+// ---------------------------------------------------------------------------
 // Reachability check.
 //
 // The bug this exists to catch: for months every build printed "Pre-rendered

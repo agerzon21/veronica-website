@@ -1772,6 +1772,24 @@ const dict = {
       ru: 'Deploy Hook ещё не настроен, сборку запустить нельзя. Напишите Алексу.',
     },
     failed: { en: 'Could not start the build.', ru: 'Не удалось запустить сборку.' },
+    checking: { en: 'Checking…', ru: 'Проверка…' },
+    upToDate: {
+      en: 'Everything is published — nothing waiting.',
+      ru: 'Всё опубликовано — изменений нет.',
+    },
+    // Numeric rather than "3 new photos", so neither language needs plural
+    // agreement for a count that can be any number or negative (a removal).
+    waiting: {
+      en: (photos: number, journal: number) =>
+        `Waiting to publish — photos ${photos >= 0 ? '+' : ''}${photos} · journal ${journal >= 0 ? '+' : ''}${journal}`,
+      ru: (photos: number, journal: number) =>
+        `Ожидает публикации — фото ${photos >= 0 ? '+' : ''}${photos} · журнал ${journal >= 0 ? '+' : ''}${journal}`,
+    },
+    waitingEdits: {
+      en: 'Edits are waiting to be published.',
+      ru: 'Изменения ожидают публикации.',
+    },
+    nothingToDo: { en: 'Nothing to publish.', ru: 'Публиковать нечего.' },
   },
 
   integrations: {

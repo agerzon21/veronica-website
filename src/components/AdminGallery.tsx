@@ -10,6 +10,7 @@ import {
   FaGoogleDrive, FaCog, FaCheckSquare, FaCheck,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import RebuildSiteButton from './ui/RebuildSiteButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
 
@@ -313,6 +314,19 @@ const AdminGallery = ({ adminPassword }: Props) => {
           </CTAButton>
         </HStack>
       </Flex>
+
+      {/* Publishing photos writes to the database; the pages search engines
+          read are a build-time snapshot, so gallery edits do not reach them
+          until a rebuild. Nothing in the gallery flow triggers one — the
+          nightly Drive sync does, but a publish/unpublish/delete made here
+          does not. This row is where that becomes visible: it reports what is
+          waiting and is the only prompt to finish the job.
+          Its own row, not the header cluster above — that Flex gives the
+          title column minW={0} against a flexShrink={0} button group, so a
+          third control there collapses the heading on phones. */}
+      <Box mb={{ base: 4, md: 6 }}>
+        <RebuildSiteButton adminPassword={adminPassword} compact />
+      </Box>
 
       {/* Drive-connection status row. Prominent "Set up" prompt when
           no folder is configured yet, subtle "connected" indicator
