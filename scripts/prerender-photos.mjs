@@ -464,6 +464,222 @@ ${others
 console.log(`Pre-rendered ${categoryPages} category gallery pages.`);
 if (categoryPages === 0) failProd('prerendered 0 category pages.');
 
+// ---------------------------------------------------------------------------
+// Journal — listing page + one page per published post.
+//
+// Same defect the category pages had, and it mattered more: the posts carry
+// real venue and town names ("Malcolm Gross Rose Gardens", "Milford, PA"),
+// which is the strongest long-tail material on the site, and none of it was
+// reachable, prerendered, or in the sitemap. /journal served the SPA shell and
+// the posts load from /api/journal at runtime.
+//
+// Published predicate is copied verbatim from api/journal.ts handleList —
+// status = 'published' AND published_at IS NOT NULL. A draft must never get a
+// static page; getting this wrong publishes unfinished writing.
+// ---------------------------------------------------------------------------
+let journalRows = [];
+try {
+  journalRows = await sql`
+    SELECT slug, title, excerpt, body_markdown, cover_image_url, cover_image_alt,
+           session_type, tags, published_at
+    FROM journal_posts
+    WHERE status = 'published' AND published_at IS NOT NULL
+    ORDER BY published_at DESC
+    LIMIT 500
+  `;
+} catch (err) {
+  console.warn(`[prerender] journal query failed: ${err.message}`);
+  failProd('could not read journal posts.');
+}
+
+const posts = journalRows.filter((r) => r.slug && r.title);
+
+/**
+ * Deliberately tiny Markdown subset: "## heading" and blank-line-separated
+ * paragraphs, with inline [text](url) flattened to its text and everything
+ * escaped FIRST. This is the noscript body a crawler reads, not the rendered
+ * page — JournalPost.tsx still owns real rendering. A full parser here would
+ * be more surface area than the job needs, and mis-parsed Markdown would ship
+ * broken HTML into every post page.
+ */
+const markdownToBlocks = (md) =>
+  String(md || '')
+    .split(/\n{2,}/)
+    .map((raw) => raw.trim())
+    .filter(Boolean)
+    .map((blockRaw) => {
+      const text = esc(blockRaw)
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')       // images -> drop
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')    // links  -> their text
+        .replace(/[*_`]/g, '')
+        .trim();
+      if (!text) return '';
+      const h = text.match(/^#{2,6}\s+(.*)$/s);
+      if (h) return `        <h2>${h[1].replace(/\n/g, ' ')}</h2>`;
+      if (/^#\s+/.test(text)) return `        <h2>${text.replace(/^#\s+/, '').replace(/\n/g, ' ')}</h2>`;
+      return `        <p>${text.replace(/\n/g, ' ')}</p>`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+const journalDir = join(distDir, 'journal');
+if (!existsSync(journalDir)) mkdirSync(journalDir, { recursive: true });
+
+// cover_image_url is null on every current post, so fall back to the site
+// default rather than emitting an empty og:image (which renders as a broken
+// card on every share).
+const DEFAULT_OG = `${SITE}/assets/photos/site/contact-bg.webp`;
+
+let journalPages = 0;
+for (const post of posts) {
+  const canonical = `${SITE}/journal/${post.slug}`;
+  const pageTitle = `${post.title}${TITLE_SUFFIX}`;
+  const desc = (post.excerpt || '').trim() || post.title;
+  const ogImage = post.cover_image_url || DEFAULT_OG;
+  const published = new Date(post.published_at).toISOString();
+  const tags = Array.isArray(post.tags) ? post.tags : [];
+  const others = posts.filter((o) => o.slug !== post.slug).slice(0, 6);
+
+  let html = photoTemplate;
+  html = html.replace(/[ \t]*<title>[\s\S]*?<\/title>\n?/, '');
+  html = html.replace(/[ \t]*<meta name="description"[^>]*>\n?/, '');
+  html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/, '');
+  html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
+  html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
+
+  const meta = `
+    <title>${esc(pageTitle)}</title>
+    <meta name="description" content="${esc(desc)}" />
+    <link rel="canonical" href="${canonical}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="${esc(pageTitle)}" />
+    <meta property="og:description" content="${esc(desc)}" />
+    <meta property="og:image" content="${esc(ogImage)}" />
+    <meta property="og:image:alt" content="${esc(post.cover_image_alt || post.title)}" />
+    <meta property="og:url" content="${canonical}" />
+    <meta property="og:site_name" content="Vero Photography" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="article:published_time" content="${published}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${esc(pageTitle)}" />
+    <meta name="twitter:description" content="${esc(desc)}" />
+    <meta name="twitter:image" content="${esc(ogImage)}" />${tags.length ? `
+    <meta name="keywords" content="${esc(tags.join(', '))}" />` : ''}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": ${JSON.stringify(post.title)},
+      "description": ${JSON.stringify(desc)},
+      "url": "${canonical}",
+      "datePublished": "${published}",
+      "image": ${JSON.stringify(ogImage)},
+      "keywords": ${JSON.stringify(tags.join(', '))},
+      "author": { "@type": "Person", "name": "Veronika Gerzon" },
+      "publisher": { "@type": "Organization", "name": "Vero Photography", "url": "${SITE}" },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "${canonical}" }
+    }
+    </script>`;
+  html = html.replace('</head>', `${meta}\n  </head>`);
+
+  const noscript = `
+    <noscript>
+      <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:sans-serif;">
+        <h1>${esc(post.title)}</h1>
+        <p><time datetime="${published}">${new Date(post.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</time></p>
+        <p><em>${esc(desc)}</em></p>
+${markdownToBlocks(post.body_markdown)}
+        <p><a href="/journal">All journal entries</a></p>
+${others.length ? `        <h2>More from the journal</h2>
+        <ul>
+${others.map((o) => `          <li><a href="/journal/${o.slug}">${esc(o.title)}</a></li>`).join('\n')}
+        </ul>` : ''}
+        <h2>Browse</h2>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/gallery">All work</a></li>
+          <li><a href="/wedding-photography">Wedding photography services</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </div>
+    </noscript>`;
+  html = html.replace('<div id="root"></div>', `<div id="root"></div>${noscript}`);
+
+  writeFileSync(join(journalDir, `${post.slug}.html`), html);
+  journalPages++;
+}
+
+// The listing page — this is the edge that makes the posts reachable at all.
+{
+  const canonical = `${SITE}/journal`;
+  const pageTitle = `Journal${TITLE_SUFFIX}`;
+  const desc = 'Wedding and portrait stories, written after the gallery is delivered.';
+  let html = photoTemplate;
+  html = html.replace(/[ \t]*<title>[\s\S]*?<\/title>\n?/, '');
+  html = html.replace(/[ \t]*<meta name="description"[^>]*>\n?/, '');
+  html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/, '');
+  html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
+  html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
+
+  const meta = `
+    <title>${esc(pageTitle)}</title>
+    <meta name="description" content="${esc(desc)}" />
+    <link rel="canonical" href="${canonical}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="${esc(pageTitle)}" />
+    <meta property="og:description" content="${esc(desc)}" />
+    <meta property="og:image" content="${DEFAULT_OG}" />
+    <meta property="og:url" content="${canonical}" />
+    <meta property="og:site_name" content="Vero Photography" />
+    <meta property="og:locale" content="en_US" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Blog",
+      "name": "Vero Photography Journal",
+      "description": ${JSON.stringify(desc)},
+      "url": "${canonical}",
+      "blogPost": [
+${posts
+  .map(
+    (o) =>
+      `        { "@type": "BlogPosting", "headline": ${JSON.stringify(o.title)}, "url": "${SITE}/journal/${o.slug}" }`,
+  )
+  .join(',\n')}
+      ]
+    }
+    </script>`;
+  html = html.replace('</head>', `${meta}\n  </head>`);
+
+  const noscript = `
+    <noscript>
+      <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:sans-serif;">
+        <h1>Journal</h1>
+        <p>${esc(desc)}</p>
+        <ul>
+${posts
+  .map(
+    (o) =>
+      `          <li><a href="/journal/${o.slug}">${esc(o.title)}</a> — ${esc((o.excerpt || '').trim())}</li>`,
+  )
+  .join('\n')}
+        </ul>
+        <h2>Browse</h2>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/gallery">All work</a></li>
+          <li><a href="/wedding-photography">Wedding photography services</a></li>
+          <li><a href="/about">About Veronika</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </div>
+    </noscript>`;
+  html = html.replace('<div id="root"></div>', `<div id="root"></div>${noscript}`);
+  writeFileSync(join(distDir, 'journal.html'), html);
+}
+
+console.log(`Pre-rendered ${journalPages} journal posts + the journal index.`);
+
 
 
 // A green build that produced zero SEO pages is the exact failure this
@@ -524,7 +740,13 @@ const photoUrls = photos.map((p) => ({
   priority: '0.7',
 }));
 
-const allUrls = [...staticUrls, ...photoUrls];
+const journalUrls = posts.map((p) => ({
+  loc: `/journal/${p.slug}`,
+  changefreq: 'monthly',
+  priority: '0.75',
+}));
+
+const allUrls = [...staticUrls, ...journalUrls, ...photoUrls];
 const sitemapXml =
   `<?xml version="1.0" encoding="UTF-8"?>\n` +
   `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
@@ -537,7 +759,9 @@ const sitemapXml =
   `\n</urlset>\n`;
 
 writeFileSync(join(distDir, 'sitemap.xml'), sitemapXml);
-console.log(`Wrote sitemap.xml with ${allUrls.length} URLs (${photoUrls.length} photos).`);
+console.log(
+  `Wrote sitemap.xml with ${allUrls.length} URLs (${photoUrls.length} photos, ${journalUrls.length} journal posts).`,
+);
 
 // ---------------------------------------------------------------------------
 // Reachability check.
@@ -555,15 +779,17 @@ console.log(`Wrote sitemap.xml with ${allUrls.length} URLs (${photoUrls.length} 
 // discovered. Submitting a URL in a sitemap is a hint; being linked is what
 // crawlers weight.
 // ---------------------------------------------------------------------------
-const KNOWN_CATEGORIES = Object.keys(CATEGORY_META);
-
-/** Mirror of the vercel.json rewrite table. Keep the two in sync. */
+/**
+ * Mirror of how Vercel resolves a URL for this project. `cleanUrls: true` means
+ * the filesystem is consulted first and /a/b is served by dist/a/b.html when
+ * that file exists; anything with no matching file falls through the catch-all
+ * rewrite to the SPA shell. Modelling it generically (rather than listing the
+ * routes) is what keeps this honest when new prerendered sections are added.
+ */
 const fileFor = (urlPath) => {
-  const photo = urlPath.match(/^\/photo\/([^/]+)\/([^/]+)$/);
-  if (photo) return join(distDir, 'photo', photo[1], `${photo[2]}.html`);
-  const cat = urlPath.match(/^\/gallery\/([^/]+)$/);
-  if (cat && KNOWN_CATEGORIES.includes(cat[1])) return join(distDir, 'gallery', `${cat[1]}.html`);
-  // Everything else falls through to the SPA shell.
+  if (urlPath === '/') return join(distDir, 'index.html');
+  const candidate = join(distDir, `${urlPath.replace(/^\//, '')}.html`);
+  if (existsSync(candidate)) return candidate;
   return join(distDir, 'index.html');
 };
 

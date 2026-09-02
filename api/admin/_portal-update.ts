@@ -85,21 +85,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Apply each field individually with parameterized SQL. Using
     // multiple short statements keeps the dynamic-SQL footprint
     // minimal — much easier to keep safe than a query builder.
-    const setStr = (col: string, val: unknown) =>
-      typeof val === 'string' ? val.trim() : null;
+    const setStr = (val: unknown) => (typeof val === 'string' ? val.trim() : null);
 
     if (typeof patch.client_display_name === 'string') {
-      await sql`update client_portals set client_display_name = ${setStr('client_display_name', patch.client_display_name)}, updated_at = now() where id = ${id}`;
+      await sql`update client_portals set client_display_name = ${setStr(patch.client_display_name)}, updated_at = now() where id = ${id}`;
     }
     if (typeof patch.client_email === 'string') {
-      await sql`update client_portals set client_email = ${setStr('client_email', patch.client_email)?.toLowerCase() ?? null}, updated_at = now() where id = ${id}`;
+      await sql`update client_portals set client_email = ${setStr(patch.client_email)?.toLowerCase() ?? null}, updated_at = now() where id = ${id}`;
     }
     if (typeof patch.event_date === 'string') {
       const v = patch.event_date.trim() || null;
       await sql`update client_portals set event_date = ${v}, updated_at = now() where id = ${id}`;
     }
     if (typeof patch.session_type === 'string') {
-      await sql`update client_portals set session_type = ${setStr('session_type', patch.session_type)}, updated_at = now() where id = ${id}`;
+      await sql`update client_portals set session_type = ${setStr(patch.session_type)}, updated_at = now() where id = ${id}`;
     }
     if (typeof patch.drive_url === 'string') {
       const v = patch.drive_url.trim() || null;

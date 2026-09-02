@@ -4,6 +4,7 @@ import {
 import { useEffect, useState, type MouseEvent } from 'react';
 import { FaPlus, FaSyncAlt, FaBookOpen, FaExternalLinkAlt, FaEdit } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import RebuildSiteButton from './ui/RebuildSiteButton';
 import AdminJournalEditor from './AdminJournalEditor';
 import { useAdminLang } from '../i18n/admin';
 
@@ -126,6 +127,7 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
         </VStack>
 
         <HStack spacing={2} flexShrink={0}>
+          <RebuildSiteButton adminPassword={adminPassword} compact />
           <IconButton
             aria-label={t.journal.refreshAria}
             icon={<Icon as={FaSyncAlt} boxSize={4} />}
