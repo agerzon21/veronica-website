@@ -4,6 +4,7 @@ import {
   FaInstagram, FaCheck, FaExternalLinkAlt, FaExclamationTriangle, FaTerminal, FaCopy, FaSyncAlt,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
+import RebuildSiteButton from './ui/RebuildSiteButton';
 import { useAdminLang } from '../i18n/admin';
 
 /**
@@ -54,10 +55,38 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
       </VStack>
 
       <InstagramCard adminPassword={adminPassword} />
+      <RebuildCard adminPassword={adminPassword} />
       <ConfigHealthCard adminPassword={adminPassword} />
     </Box>
   );
 };
+
+
+/**
+ * Rebuild card — regenerate the prerendered pages from current database
+ * content. The same control is on the Journal screen in compact form, because
+ * this screen is super-only and the person publishing posts is not a super
+ * admin; both render the one RebuildSiteButton.
+ */
+function RebuildCard({ adminPassword }: { adminPassword: string }) {
+  const { t } = useAdminLang();
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderRadius="sm"
+      p={{ base: 5, md: 7 }}
+      maxW="720px"
+      mt={6}
+    >
+      <Text as="h2" fontSize="md" fontWeight="400" color="gray.800" mb={4} mt={0}>
+        {t.rebuild.title}
+      </Text>
+      <RebuildSiteButton adminPassword={adminPassword} />
+    </Box>
+  );
+}
 
 interface ConfigCheck {
   key: string;

@@ -1747,6 +1747,33 @@ const dict = {
     deleting: { en: 'Deleting...', ru: 'Удаляю...' },
   },
 
+  // Rebuild control. Lives in its own block rather than under `integrations`
+  // because the button appears on the Journal screen too — Integrations is
+  // super-only, and the person publishing journal posts is not a super admin.
+  rebuild: {
+    title: { en: 'Search engine pages', ru: 'Страницы для поисковиков' },
+    subtitle: {
+      en: 'New photos and journal entries appear on the site straight away. The separate pages search engines read are built when the site is published — rebuild after adding something so Google can find it.',
+      ru: 'Новые фотографии и записи журнала появляются на сайте сразу. Отдельные страницы, которые читают поисковики, создаются при публикации сайта — пересоберите его после добавления материалов, чтобы Google их нашёл.',
+    },
+    action: { en: 'Rebuild site', ru: 'Пересобрать сайт' },
+    actionShort: { en: 'Rebuild', ru: 'Пересобрать' },
+    starting: { en: 'Starting…', ru: 'Запуск…' },
+    started: {
+      en: 'Build started. It takes about four minutes.',
+      ru: 'Сборка запущена. Занимает около четырёх минут.',
+    },
+    cooldown: {
+      en: (s: number) => `Already building. Try again in ${s}s.`,
+      ru: (s: number) => `Сборка уже идёт. Повторите через ${s} с.`,
+    },
+    needsSetup: {
+      en: 'No deploy hook is set up yet, so this cannot start a build. Ask Alex.',
+      ru: 'Deploy Hook ещё не настроен, сборку запустить нельзя. Напишите Алексу.',
+    },
+    failed: { en: 'Could not start the build.', ru: 'Не удалось запустить сборку.' },
+  },
+
   integrations: {
     // ─── Config health ────────────────────────────────
     configTitle: { en: 'Configuration', ru: 'Конфигурация' },

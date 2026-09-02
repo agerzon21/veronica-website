@@ -22,11 +22,33 @@ const REPEAT_DELAY_DAYS = 30;
 // enough to catch engaged users, long enough not to feel pushy.
 const MOBILE_TIME_THRESHOLD_MS = 3 * 60 * 1000;
 
-// Routes where the popup is suppressed entirely. Client-portal visitors are
-// already paying customers — offering them a discount for a new shoot reads
-// weirdly. Add other off-limits routes here (e.g. /portal/anything once we
-// have nested portal routes).
-const SUPPRESSED_PATH_PREFIXES = ['/portal'];
+// Desktop exit-intent was armed the instant the component mounted, which made
+// it fire ~300ms after page load in testing. `mouseleave` at clientY <= 0 is
+// not by itself evidence of leaving: after you click a link in the address bar
+// or a bookmark, the cursor is ALREADY above the viewport, so the first twitch
+// of the mouse reads as an exit. Devtools and a responsive-mode viewport cross
+// that edge constantly too.
+//
+// Two guards, both required. Time on SITE (this component mounts above the
+// router, so navigating does not restart it) and proof the pointer has actually
+// been inside the page at least once.
+const DESKTOP_ARM_DELAY_MS = 20 * 1000;
+
+// Routes where the popup is suppressed entirely.
+//
+//   /portal             already paying customers — offering them a discount
+//                       for a new shoot reads weirdly.
+//   /contact/thank-you  they have just submitted the enquiry. "Get 10% off"
+//                       is an offer to do the thing they have already done,
+//                       and it lands on the one page whose whole job is to
+//                       confirm the form worked.
+//
+// Matching is prefix-based (exact, or followed by "/"), so the real route
+// path matters: the thank-you page is /contact/thank-you, NOT /thank-you —
+// a wrong prefix here fails silently and looks like the popup is just broken.
+// Note this does NOT suppress /contact itself; adding '/contact' would, via
+// the startsWith arm.
+const SUPPRESSED_PATH_PREFIXES = ['/portal', '/contact/thank-you'];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -64,6 +86,10 @@ const ExitIntentPopup = () => {
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const [error, setError] = useState('');
   const triggeredRef = useRef(false);
+  // Mounted above <Routes> in App.tsx, so this is time on the SITE and
+  // survives client-side navigation rather than resetting per page.
+  const mountedAtRef = useRef(Date.now());
+  const pointerWasInsideRef = useRef(false);
   const { pathname } = useLocation();
   const isSuppressedRoute = SUPPRESSED_PATH_PREFIXES.some((prefix) =>
     pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -84,16 +110,34 @@ const ExitIntentPopup = () => {
   }, [isSuppressedRoute]);
 
   // Desktop: mouse leaves top edge of viewport → likely going to close tab
-  // or hit the URL bar. Trigger the popup.
+  // or hit the URL bar. Trigger the popup — but only once the visit is old
+  // enough to be a visit, and only if the cursor has genuinely been in the
+  // page. See DESKTOP_ARM_DELAY_MS.
   useEffect(() => {
     if (isMobile()) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (e.clientY > 0) {
+        pointerWasInsideRef.current = true;
+        document.removeEventListener('mousemove', handleMouseMove);
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove, { passive: true });
+
     const handleMouseLeave = (e: MouseEvent) => {
       // Only count exits toward the TOP of the viewport. Leaving sideways
       // (e.g. to switch monitor) shouldn't trigger.
-      if (e.clientY <= 0) trigger();
+      if (e.clientY > 0) return;
+      if (!pointerWasInsideRef.current) return;
+      if (Date.now() - mountedAtRef.current < DESKTOP_ARM_DELAY_MS) return;
+      trigger();
     };
     document.addEventListener('mouseleave', handleMouseLeave);
-    return () => document.removeEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+    };
   }, [trigger]);
 
   // Mobile fallback: time on page only. Dropped the "50% scroll" trigger
