@@ -31,6 +31,12 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { config as loadEnv } from 'dotenv';
+
+// So the bypass secret can live in .env.local (or Vercel's env) and never has
+// to be pasted anywhere. Same convention as scripts/prerender-photos.mjs.
+loadEnv({ path: '.env.local', quiet: true });
+loadEnv({ quiet: true });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..');
