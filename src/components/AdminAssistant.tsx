@@ -1,3 +1,6 @@
+import { loadInitialLanguage, saveLanguage } from './assistantLanguage';
+export type { ChatLanguage } from './assistantLanguage';
+import type { ChatLanguage } from './assistantLanguage';
 import { Box, Flex, HStack, Text, Icon, VStack } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { FaComments, FaDatabase } from 'react-icons/fa';
@@ -30,15 +33,8 @@ interface Props {
 }
 
 type SubTab = 'chat' | 'data';
-export type ChatLanguage = 'ru' | 'en';
 
-const LANG_STORAGE_KEY = 'vero_assistant_lang';
 
-function loadInitialLanguage(): ChatLanguage {
-  if (typeof window === 'undefined') return 'ru';
-  const stored = window.localStorage.getItem(LANG_STORAGE_KEY);
-  return stored === 'en' ? 'en' : 'ru';
-}
 
 const AdminAssistant = ({ adminPassword }: Props) => {
   const { t } = useAdminLang();
@@ -47,7 +43,7 @@ const AdminAssistant = ({ adminPassword }: Props) => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(LANG_STORAGE_KEY, language);
+      saveLanguage(language);
     }
   }, [language]);
 

@@ -372,6 +372,13 @@ const dict = {
     duplicateConfirmButton: { en: 'Send anyway', ru: 'Всё равно отправить' },
 
     draftRefine: { en: 'Improve with assistant', ru: 'Доработать с ассистентом' },
+    // The refine panel — opens beside the thread instead of navigating to the
+    // Assistant tab, which used to throw away both the conversation context
+    // and anything already typed.
+    refinePanelTitle: { en: 'Refine reply', ru: 'Доработать ответ' },
+    refineClose: { en: 'Close refine panel', ru: 'Закрыть панель' },
+    railCollapse: { en: 'Collapse list', ru: 'Свернуть список' },
+    railExpand: { en: 'Expand list', ru: 'Развернуть список' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },
     draftDiscarded: { en: 'Draft discarded', ru: 'Черновик удалён' },
 
@@ -454,6 +461,10 @@ const dict = {
     summaryLangAria: { en: 'Summary language', ru: 'Язык сводки' },
     openSummary: { en: 'Open summary', ru: 'Открыть сводку' },
     closeSummaryOpenChat: { en: 'Close summary — open chat', ru: 'Закрыть сводку — открыть чат' },
+    // Short pair for the desktop fold control, which sits beside a chevron.
+    // closeSummaryOpenChat above is the mobile phrasing, where expanding the
+    // summary genuinely replaces the chat.
+    hideSummary: { en: 'Hide summary', ru: 'Скрыть сводку' },
     regenerateSummary: { en: 'Regenerate summary', ru: 'Пересчитать сводку' },
     // "Wipe conversation" test-reset action (super only). Deletes all
     // messages + clears the AI summary cache so the AI reads a fresh

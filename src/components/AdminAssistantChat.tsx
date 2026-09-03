@@ -42,6 +42,13 @@ import type { ChatLanguage } from './AdminAssistant';
 interface Props {
   adminPassword: string;
   language: ChatLanguage;
+  /**
+   * Rendered inside the Messages refine panel rather than as its own tab.
+   * The standalone sizing (78vh tall, 900px wide, centred) is right for a
+   * full page and wrong for a 420px column, so embedded mode just fills
+   * whatever box it is given.
+   */
+  embedded?: boolean;
 }
 
 interface ChatMessage {
@@ -190,7 +197,7 @@ const STRINGS: Record<ChatLanguage, Strings> = {
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, language }: Props) => {
+const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
@@ -424,9 +431,10 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
       // dvh (dynamic viewport height) plays nicely with iOS Safari's
       // collapsing address bar. minH removed so small phones don't
       // force page-scroll from a mismatched minimum.
-      h={{ base: 'calc(100dvh - 260px)', md: '78vh' }}
-      maxW="900px"
-      mx="auto"
+      h={embedded ? '100%' : { base: 'calc(100dvh - 260px)', md: '78vh' }}
+      maxW={embedded ? 'none' : '900px'}
+      mx={embedded ? 0 : 'auto'}
+      px={embedded ? 2 : 0}
       overflow="hidden"
     >
       {/* Header row — desktop shows the hint text; mobile keeps just
@@ -559,8 +567,13 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.placeholder}
-            rows={2}
-            resize="none"
+            // Was rows={2}: about two lines visible, which is unusable when
+            // you are drafting a reply to a client in here. Taller by default
+            // and vertically resizable so it can be dragged bigger still.
+            rows={6}
+            resize="vertical"
+            minH={{ base: '96px', md: '132px' }}
+            maxH="50vh"
             // 16px prevents iOS Safari from zooming the whole page in
             // when the textarea gets focused; matches the Messages tab.
             fontSize={{ base: '16px', md: 'sm' }}
