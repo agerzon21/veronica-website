@@ -80,7 +80,6 @@ interface Strings {
   micRecordAria: string;
   micStopAria: string;
   micRecordingHint: string;
-  submitHint: string;
   loadingEmpty: string;
   emptyTitle: string;
   emptyDescription: string;
@@ -105,7 +104,6 @@ const STRINGS: Record<ChatLanguage, Strings> = {
     micRecordAria: 'Записать голос',
     micStopAria: 'Остановить запись',
     micRecordingHint: '🎙 Говори… отпусти кнопку, когда закончишь',
-    submitHint: '⌘/Ctrl + Enter — отправить · Микрофон — голос',
     loadingEmpty: '',
     emptyTitle: 'Твой личный ассистент готов',
     emptyDescription:
@@ -155,7 +153,6 @@ const STRINGS: Record<ChatLanguage, Strings> = {
     micRecordAria: 'Record voice',
     micStopAria: 'Stop recording',
     micRecordingHint: '🎙 Speaking… release when done',
-    submitHint: '⌘/Ctrl + Enter — send · Mic — dictate',
     loadingEmpty: '',
     emptyTitle: 'Your personal assistant is ready',
     emptyDescription:
@@ -606,12 +603,17 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               children, so this row filled the panel and the send button grew
               with it (measured 303px). Shrinking the ROW to its content is what
               actually makes the button hug. */}
+          {/* Embedded on a phone: the row spans the panel and send fills
+              whatever the mic does not, because a hugging button left two
+              thirds of the row as dead space. From lg up the panel is a
+              420px column beside the thread, where a full-width send button
+              is the thing that looks wrong — so it hugs there instead. */}
           <Stack
             direction="row"
             spacing={2}
-            justify={embedded ? 'flex-end' : { base: 'stretch', md: 'flex-end' }}
-            alignSelf={embedded ? 'flex-end' : undefined}
-            w={embedded ? 'auto' : undefined}
+            justify={embedded ? { base: 'flex-start', lg: 'flex-end' } : { base: 'stretch', md: 'flex-end' }}
+            alignSelf={embedded ? { base: 'stretch', lg: 'flex-end' } : undefined}
+            w={embedded ? { base: '100%', lg: 'auto' } : undefined}
           >
             <VoiceInput
               adminPassword={adminPassword}
@@ -631,10 +633,8 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               icon={FaPaperPlane}
               variant="solid"
               size={embedded ? 'sm' : 'md'}
-              // Full-width on mobile so send stretches; hugs on desktop. In the
-              // panel it always hugs — a full-width slab there just steals room
-              // the message field needs.
-              fullWidth={embedded ? false : { base: true, md: false }}
+              // Fills the rest of the row on a phone; hugs from lg up.
+              fullWidth={embedded ? { base: true, lg: false } : { base: true, md: false }}
               isLoading={sending}
               loadingText="…"
               isDisabled={!input.trim()}
@@ -643,23 +643,11 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
             </CTAButton>
           </Stack>
         </Stack>
-        {/* The ⌘+Enter hint used to live here. Removed on mobile — it
-            cost a full line immediately above the send button to explain
-            a keyboard shortcut that doesn't exist on a phone. Kept on
-            desktop where it's both true and free. */}
-        <Text
-          fontSize="2xs"
-          color="gray.400"
-          mt={1.5}
-          px={1}
-          // Below lg, not md. There is no Cmd/Ctrl key on a phone OR a tablet,
-          // and this line sat directly above the send button costing a row that
-          // the message field can use instead.
-          display={{ base: 'none', lg: 'block' }}
-          noOfLines={1}
-        >
-          {t.submitHint}
-        </Text>
+        {/* The ⌘+Enter hint is gone. Two attempts to hide it by breakpoint
+            still left it on screen, and it was never worth a row directly
+            above the send button: it documented a shortcut that does not
+            exist on a phone and that nobody needs told twice on a desktop.
+            The shortcut itself still works — see the Textarea's onKeyDown. */}
       </Box>
     </Flex>
   );
