@@ -96,6 +96,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         SELECT body, direction, sender
         FROM messages m
         WHERE m.conversation_id = c.id
+          -- Drafts are proposed replies nobody has sent. Including them made
+          -- the rail read "You: ..." for a message that was never sent, so a
+          -- thread still waiting on Vero looked already answered. has_draft
+          -- above is how the rail signals an unsent draft exists.
+          AND m.status <> 'draft'
         ORDER BY m.sent_at DESC
         LIMIT 1
       ) last_msg ON TRUE

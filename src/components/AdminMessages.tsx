@@ -56,10 +56,13 @@ import {
   FaUserPlus,
   FaExternalLinkAlt,
   FaChevronLeft,
+  FaChevronRight,
   FaEraser,
   FaUserFriends,
   FaEllipsisV,
 } from 'react-icons/fa';
+import AdminAssistantChat from './AdminAssistantChat';
+import { loadInitialLanguage } from './assistantLanguage';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
@@ -231,6 +234,43 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Left rail fold. Default open; folds to avatars so the thread and the
+  // refine panel have room.
+  const [listCollapsed, setListCollapsed] = useState(false);
+  // Refine panel. Opens as a THIRD column beside the thread rather than
+  // navigating to the Assistant tab — that navigation lost the conversation
+  // you were reading and wiped anything already typed on the way back.
+  const [refineOpen, setRefineOpen] = useState(false);
+  // Remounts the chat so a second "improve" starts from the new draft.
+  const [refineNonce, setRefineNonce] = useState(0);
+  // Mobile only: roll the panel down to its header so the conversation behind
+  // it is readable, then roll back up and keep typing. Distinct from closing,
+  // which throws the chat away.
+  const [refineCollapsed, setRefineCollapsed] = useState(false);
+  // Restore whatever the rail was before the panel auto-folded it.
+  const railBeforeRefine = useRef(false);
+  const assistantLang = loadInitialLanguage();
+
+  const openRefinePanel = () => {
+    railBeforeRefine.current = listCollapsed;
+    setListCollapsed(true);
+    setRefineNonce((n) => n + 1);
+    setRefineCollapsed(false);
+    setRefineOpen(true);
+  };
+  const closeRefinePanel = () => {
+    setRefineOpen(false);
+    setRefineCollapsed(false);
+    setListCollapsed(railBeforeRefine.current);
+  };
+
+  // Switching threads invalidates the panel: it was seeded with a prompt about
+  // a specific person's draft, so leaving it open over a different conversation
+  // is worse than misleading — it would refine the wrong reply.
+  useEffect(() => {
+    setRefineOpen(false);
+    setRefineCollapsed(false);
+  }, [selectedId]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Confirm dialog state for the global AI pause. Replaces the old
@@ -431,7 +471,8 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
               thread is open so it doesn't stack awkwardly under the
               chat view. */}
           <Box
-            flex={{ base: '1', lg: '0 0 360px' }}
+            flex={{ base: '1', lg: listCollapsed ? '0 0 76px' : '0 0 360px' }}
+            transition="flex-basis 0.2s ease"
             bg="white"
             border="1px solid"
             borderColor="gray.200"
@@ -440,10 +481,36 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
             maxH={{ base: 'auto', lg: '100%' }}
             display={{ base: showListOnMobile ? 'block' : 'none', lg: 'block' }}
           >
+            {/* Fold control. Desktop only — on mobile the rail and the thread
+                are already separate screens, so there is nothing to fold. */}
+            <Flex
+              display={{ base: 'none', lg: 'flex' }}
+              justify={listCollapsed ? 'center' : 'flex-end'}
+              align="center"
+              px={2}
+              py={1.5}
+              position="sticky"
+              top={0}
+              bg="white"
+              zIndex={1}
+              borderBottom="1px solid"
+              borderColor="gray.100"
+            >
+              <IconButton
+                aria-label={listCollapsed ? t.messages.railExpand : t.messages.railCollapse}
+                title={listCollapsed ? t.messages.railExpand : t.messages.railCollapse}
+                icon={<Icon as={listCollapsed ? FaChevronRight : FaChevronLeft} boxSize={3} />}
+                size="xs"
+                variant="ghost"
+                color="gray.500"
+                onClick={() => setListCollapsed((v) => !v)}
+              />
+            </Flex>
             <ConversationList
               conversations={conversations}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              collapsed={listCollapsed}
             />
           </Box>
 
@@ -494,11 +561,125 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 onBack={() => setSelectedId(null)}
                 onRefreshList={loadList}
                 onOpenAssistant={onOpenAssistant}
+                onRefine={openRefinePanel}
+                onReplySent={closeRefinePanel}
+                refineDocked={refineOpen && refineCollapsed}
+                refineActive={refineOpen}
               />
             ) : (
               <SelectPrompt />
             )}
           </Box>
+
+          {/* Third column — refine the draft with the assistant WITHOUT
+              leaving the thread. Previously this navigated to the Assistant
+              tab, which meant losing sight of the conversation you were
+              answering, and coming back wiped whatever you had typed. Keyed
+              on a nonce so pressing "improve" again starts from the new
+              draft; the chat picks up the parked prompt on mount.
+              Full-screen on mobile, where a 420px column has nowhere to go. */}
+          {refineOpen && (
+            <Box
+              flex={{ lg: '0 0 420px' }}
+              bg="white"
+              border={{ base: 'none', lg: '1px solid' }}
+              borderColor="gray.200"
+              borderRadius={{ base: 0, lg: 'sm' }}
+              display="flex"
+              flexDirection="column"
+              overflow="hidden"
+              position={{ base: 'fixed', lg: 'static' }}
+              // Rolled down: unpin the top so the box is only as tall as its
+              // header and the thread shows through above it.
+              top={{ base: refineCollapsed ? 'auto' : 0, lg: 'auto' }}
+              left={{ base: 0, lg: 'auto' }}
+              right={{ base: 0, lg: 'auto' }}
+              // Ends exactly where the admin bottom nav starts instead of
+              // running underneath it (the nav is z-30 and paints over this
+              // pane). Sitting flush also stops the dead strip that a
+              // padding-based clearance leaves behind.
+              bottom={{ base: 'calc(80px + env(safe-area-inset-bottom))', lg: 'auto' }}
+              // Above the thread pane (25) so it covers it on mobile.
+              zIndex={{ base: 26, lg: 'auto' }}
+              h={{ base: 'auto', lg: 'auto' }}
+              maxH={{ lg: '100%' }}
+            >
+              <Flex
+                align="center"
+                justify="space-between"
+                px={3}
+                py={2}
+                borderBottom="1px solid"
+                borderColor="gray.100"
+                flexShrink={0}
+              >
+                {/* On mobile this row is the roll-up control: tap to drop the
+                    panel to its header and read the thread, tap again to come
+                    back to what you were typing. The chat is NOT unmounted, so
+                    the draft survives. Inert on desktop, where the panel is a
+                    column and nothing is covered. */}
+                <HStack
+                  as="button"
+                  type="button"
+                  spacing={2}
+                  minW={0}
+                  flex={1}
+                  bg="transparent"
+                  border="none"
+                  p={0}
+                  textAlign="left"
+                  cursor={{ base: 'pointer', lg: 'default' }}
+                  onClick={() => setRefineCollapsed((v) => !v)}
+                  aria-label={
+                    refineCollapsed ? t.messages.refineExpand : t.messages.refineCollapse
+                  }
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <Icon as={FaRobot} boxSize={3.5} color="brand.accentText" />
+                  <Text
+                    fontSize="2xs"
+                    fontWeight="600"
+                    letterSpacing="0.14em"
+                    textTransform="uppercase"
+                    color="brand.accentText"
+                    noOfLines={1}
+                  >
+                    {t.messages.refinePanelTitle}
+                  </Text>
+                  <Icon
+                    as={FaChevronDown}
+                    boxSize={2.5}
+                    color="gray.400"
+                    display={{ base: 'block', lg: 'none' }}
+                    transform={refineCollapsed ? 'rotate(180deg)' : 'rotate(0deg)'}
+                    transition="transform 0.2s ease"
+                  />
+                </HStack>
+                <IconButton
+                  aria-label={t.messages.refineClose}
+                  title={t.messages.refineClose}
+                  icon={<Icon as={FaTimes} boxSize={3} />}
+                  size="xs"
+                  variant="ghost"
+                  color="gray.500"
+                  onClick={closeRefinePanel}
+                />
+              </Flex>
+              <Box
+                flex="1"
+                minH={0}
+                overflow="hidden"
+                display={{ base: refineCollapsed ? 'none' : 'block', lg: 'block' }}
+              >
+                <AdminAssistantChat
+                  key={refineNonce}
+                  adminPassword={adminPassword}
+                  language={assistantLang}
+                  embedded
+                />
+              </Box>
+            </Box>
+          )}
         </Flex>
       )}
     </Box>
@@ -600,10 +781,13 @@ function ConversationList({
   conversations,
   selectedId,
   onSelect,
+  collapsed = false,
 }: {
   conversations: ConversationSummary[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Folded rail — drop the section chrome, it cannot fit in 76px. */
+  collapsed?: boolean;
 }) {
   const { t } = useAdminLang();
   const [showPromotional, setShowPromotional] = useState(false);
@@ -638,6 +822,25 @@ function ConversationList({
   const personal = conversations.filter(isPersonal);
   const primary = conversations.filter((c) => !isPersonal(c) && !isPromotional(c));
   const promotional = conversations.filter((c) => !isPersonal(c) && isPromotional(c));
+
+  if (collapsed) {
+    // Personal and promotional stay reachable — they are just not separated
+    // by headers, because a 76px rail has nowhere to put them.
+    const all = [...primary, ...personal, ...promotional];
+    return (
+      <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
+        {all.map((c) => (
+          <ConversationListRow
+            key={c.id}
+            conv={c}
+            isSelected={c.id === selectedId}
+            onClick={() => onSelect(c.id)}
+            compact
+          />
+        ))}
+      </VStack>
+    );
+  }
 
   return (
     <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
@@ -713,10 +916,13 @@ function ConversationListRow({
   conv,
   isSelected,
   onClick,
+  compact = false,
 }: {
   conv: ConversationSummary;
   isSelected: boolean;
   onClick: () => void;
+  /** Rail is folded: avatar only, so the thread gets the width back. */
+  compact?: boolean;
 }) {
   const { t } = useAdminLang();
   const displayName =
@@ -726,6 +932,50 @@ function ConversationListRow({
     (conv.platform === 'email'
       ? t.messages.emailSenderFallback(conv.external_user_id)
       : t.messages.instagramUserFallback(conv.external_user_id.slice(-6)));
+
+  if (compact) {
+    // Folded rail. Avatar plus an unread dot is enough to find a thread you
+    // were just in; the name and preview come back when it unfolds.
+    return (
+      <Box
+        as="button"
+        type="button"
+        onClick={onClick}
+        w="100%"
+        py={2.5}
+        display="flex"
+        justifyContent="center"
+        position="relative"
+        title={displayName}
+        aria-label={displayName}
+        bg={isSelected ? 'rgba(201, 169, 110, 0.08)' : 'transparent'}
+        borderLeft="3px solid"
+        borderLeftColor={isSelected ? 'brand.accent' : 'transparent'}
+        _hover={isSelected ? {} : { bg: 'gray.50' }}
+        cursor="pointer"
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+        transition="background 0.15s"
+      >
+        <PlatformAvatar
+          platform={conv.platform}
+          profilePicUrl={conv.contact_profile_pic_url}
+          displayName={displayName}
+        />
+        {conv.unread_count > 0 && (
+          <Box
+            position="absolute"
+            top="6px"
+            right="10px"
+            w="9px"
+            h="9px"
+            borderRadius="full"
+            bg="brand.accent"
+            border="2px solid white"
+          />
+        )}
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -936,10 +1186,23 @@ function ConversationView({
   onRefreshList,
   onBack,
   onOpenAssistant,
+  onRefine,
+  onReplySent,
+  refineDocked = false,
+  refineActive = false,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
   onRefreshList: () => void;
+  /** Open the refine panel beside this thread (desktop) instead of
+   *  navigating away to the Assistant tab. */
+  onRefine?: () => void;
+  /** A reply actually went out — the refine panel has served its purpose. */
+  onReplySent?: () => void;
+  /** The refine panel is rolled down to its bar, which sits over this pane. */
+  refineDocked?: boolean;
+  /** The refine panel is open at all (docked or not). */
+  refineActive?: boolean;
   // Mobile back-navigation. On desktop this is unused (SelectPrompt
   // handles the "no thread open" state), but on mobile the parent
   // uses it to close the drill-down.
@@ -974,7 +1237,10 @@ function ConversationView({
       ASSISTANT_HANDOFF_KEY,
       `Help me improve the reply to ${who}. Read the conversation first. Here's the draft I have:\n\n${draft}\n\nWhat I'd change: `,
     );
-    onOpenAssistant?.();
+    // Prefer the in-place panel; fall back to the Assistant tab only if the
+    // parent did not provide one.
+    if (onRefine) onRefine();
+    else onOpenAssistant?.();
   };
 
   // Is this thread currently folded out of the inbox — for EITHER reason?
@@ -1081,7 +1347,21 @@ function ConversationView({
   // chat + composer. On mobile this drives "focus mode": when
   // expanded, the chat + composer are hidden entirely so the summary
   // gets the full viewport.
-  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+  // Collapsed on open. Expanded, the summary card owned most of the pane and
+  // pushed the actual conversation below the fold — the thread is what you
+  // came to read. The header row stays visible with the one-line "asking"
+  // gist, so nothing is hidden, just folded.
+  const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+
+  // The AI draft card folds like the summary does. It folds ITSELF while the
+  // refine panel is open, because the panel already shows the same draft — two
+  // copies of it left almost no room for the conversation you opened the panel
+  // to re-read. Unfolds again when the panel closes; still togglable by hand
+  // in between.
+  const [draftCollapsed, setDraftCollapsed] = useState(false);
+  useEffect(() => {
+    setDraftCollapsed(refineActive);
+  }, [refineActive]);
   // Summary language toggle. Defaults to Russian since Vero speaks
   // Russian — but the toggle lets an admin flip to English when
   // helping her out. Persisted per-browser (localStorage) so the
@@ -1467,6 +1747,8 @@ function ConversationView({
         setReplyText('');
         await loadDetail();
         onRefreshList();
+        // The draft is out the door; the refine panel has nothing left to do.
+        onReplySent?.();
       } else if (res.status === 409) {
         // Not an error — the server noticed this repeats something just
         // sent. Ask rather than refuse; she may well mean it.
@@ -2163,24 +2445,68 @@ function ConversationView({
           flexShrink={0}
           display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
         >
-          <Flex align="center" gap={2} mb={1.5}>
-            <Icon as={FaRobot} boxSize={3} color="brand.accentText" />
+          {/* Whole row toggles, same as the summary card above it, with a
+              chevron and a verb so it reads as a control in both states. */}
+          <Flex
+            as="button"
+            type="button"
+            onClick={() => setDraftCollapsed((v) => !v)}
+            align="center"
+            gap={2}
+            mb={draftCollapsed ? 0 : 1.5}
+            w="100%"
+            bg="transparent"
+            border="none"
+            p={0}
+            textAlign="left"
+            cursor="pointer"
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            <Icon as={FaRobot} boxSize={3} color="brand.accentText" flexShrink={0} />
             <Text
               fontSize="2xs"
               fontWeight="500"
               color="brand.accentText"
               letterSpacing="0.08em"
               textTransform="uppercase"
+              flexShrink={0}
             >
               {t.messages.draftTitle}
             </Text>
+            {/* Folded: one line of the draft so it is not a blind box. */}
+            {draftCollapsed && (
+              <Text fontSize="xs" color="gray.500" noOfLines={1} minW={0}>
+                — {pendingDraft.body}
+              </Text>
+            )}
+            <Flex align="center" gap={1} ml="auto" flexShrink={0} pl={2}>
+              <Text
+                fontSize="2xs"
+                fontWeight="500"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+                color="gray.500"
+                display={{ base: 'none', md: 'block' }}
+              >
+                {draftCollapsed ? t.messages.draftShow : t.messages.draftHide}
+              </Text>
+              <Icon
+                as={FaChevronDown}
+                boxSize={3}
+                color="gray.500"
+                transform={draftCollapsed ? 'rotate(0deg)' : 'rotate(180deg)'}
+                transition="transform 0.2s ease"
+              />
+            </Flex>
           </Flex>
-          <Text fontSize="sm" color="gray.700" lineHeight="1.6" noOfLines={4} mb={2}>
-            {pendingDraft.body}
-          </Text>
-          <Text fontSize="2xs" color="gray.500" mb={2}>
-            {t.messages.draftHelp}
-          </Text>
+          {!draftCollapsed && (
+            <>
+              <Text fontSize="sm" color="gray.700" lineHeight="1.6" noOfLines={4} mb={2}>
+                {pendingDraft.body}
+              </Text>
+              <Text fontSize="2xs" color="gray.500" mb={2}>
+                {t.messages.draftHelp}
+              </Text>
           {/* Stacked on mobile, inline on desktop.
               As a single row on a phone these three read as one run-on
               string — a filled button immediately followed by two bare
@@ -2230,7 +2556,9 @@ function ConversationView({
             >
               {t.messages.draftDiscard}
             </Button>
-          </Stack>
+              </Stack>
+            </>
+          )}
         </Box>
       )}
 
@@ -2244,7 +2572,16 @@ function ConversationView({
         // exactly where the Send button sits, so Vero could type a reply
         // and have nowhere to tap. Matches the clearance the main admin
         // container already uses (src/pages/Admin.tsx).
-        pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 4 }}
+        // Clears the fixed bottom nav (80px). When the refine panel is rolled
+        // DOWN it parks its own 44px bar directly above that nav, on top of
+        // this composer — so the reply button needs to move up by that much
+        // too, or the thing you rolled the panel down to reach is covered.
+        pb={{
+          base: refineDocked
+            ? 'calc(124px + env(safe-area-inset-bottom))'
+            : 'calc(80px + env(safe-area-inset-bottom))',
+          md: 4,
+        }}
         borderTop="1px solid"
         borderColor="gray.100"
         bg="white"
@@ -2732,6 +3069,7 @@ function SummaryCard({
     tone: adminDict.messages.summaryTone[language],
     expandCta: adminDict.messages.closeSummaryOpenChat[language],
     collapseCta: adminDict.messages.openSummary[language],
+    hideCta: adminDict.messages.hideSummary[language],
     loadingLabel: adminDict.messages.summaryLoading[language],
     noSummary: adminDict.messages.summaryNone[language],
   };
@@ -2798,6 +3136,28 @@ function SummaryCard({
               — {formatPhoneNumbersInText(localized.asking)}
             </Text>
           )}
+          {/* The row was clickable with nothing to say so. A rotating chevron
+              plus a verb is the whole affordance: it reads as a control when
+              open AND when closed, which the bare row did not. */}
+          <Flex align="center" gap={1} ml="auto" flexShrink={0} pl={2}>
+            <Text
+              fontSize="2xs"
+              fontWeight="500"
+              letterSpacing="0.08em"
+              textTransform="uppercase"
+              color="gray.500"
+              display={{ base: 'none', md: 'block' }}
+            >
+              {collapsed ? strings.collapseCta : strings.hideCta}
+            </Text>
+            <Icon
+              as={FaChevronDown}
+              boxSize={3}
+              color="gray.500"
+              transform={collapsed ? 'rotate(0deg)' : 'rotate(180deg)'}
+              transition="transform 0.2s ease"
+            />
+          </Flex>
         </Flex>
 
         {/* RU/EN pill toggle — only visible when the summary is

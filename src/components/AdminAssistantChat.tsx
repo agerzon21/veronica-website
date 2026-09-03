@@ -42,6 +42,13 @@ import type { ChatLanguage } from './AdminAssistant';
 interface Props {
   adminPassword: string;
   language: ChatLanguage;
+  /**
+   * Rendered inside the Messages refine panel rather than as its own tab.
+   * The standalone sizing (78vh tall, 900px wide, centred) is right for a
+   * full page and wrong for a 420px column, so embedded mode just fills
+   * whatever box it is given.
+   */
+  embedded?: boolean;
 }
 
 interface ChatMessage {
@@ -73,7 +80,6 @@ interface Strings {
   micRecordAria: string;
   micStopAria: string;
   micRecordingHint: string;
-  submitHint: string;
   loadingEmpty: string;
   emptyTitle: string;
   emptyDescription: string;
@@ -98,7 +104,6 @@ const STRINGS: Record<ChatLanguage, Strings> = {
     micRecordAria: 'Записать голос',
     micStopAria: 'Остановить запись',
     micRecordingHint: '🎙 Говори… отпусти кнопку, когда закончишь',
-    submitHint: '⌘/Ctrl + Enter — отправить · Микрофон — голос',
     loadingEmpty: '',
     emptyTitle: 'Твой личный ассистент готов',
     emptyDescription:
@@ -148,7 +153,6 @@ const STRINGS: Record<ChatLanguage, Strings> = {
     micRecordAria: 'Record voice',
     micStopAria: 'Stop recording',
     micRecordingHint: '🎙 Speaking… release when done',
-    submitHint: '⌘/Ctrl + Enter — send · Mic — dictate',
     loadingEmpty: '',
     emptyTitle: 'Your personal assistant is ready',
     emptyDescription:
@@ -190,7 +194,7 @@ const STRINGS: Record<ChatLanguage, Strings> = {
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, language }: Props) => {
+const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
@@ -424,9 +428,10 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
       // dvh (dynamic viewport height) plays nicely with iOS Safari's
       // collapsing address bar. minH removed so small phones don't
       // force page-scroll from a mismatched minimum.
-      h={{ base: 'calc(100dvh - 260px)', md: '78vh' }}
-      maxW="900px"
-      mx="auto"
+      h={embedded ? '100%' : { base: 'calc(100dvh - 260px)', md: '78vh' }}
+      maxW={embedded ? 'none' : '900px'}
+      mx={embedded ? 0 : 'auto'}
+      px={embedded ? 2 : 0}
       overflow="hidden"
     >
       {/* Header row — desktop shows the hint text; mobile keeps just
@@ -550,17 +555,35 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
         // container already clears the fixed bottom nav.
         pb={{ base: 'max(env(safe-area-inset-bottom), 0px)', md: 0 }}
       >
+        {/* Chakra breakpoints measure the VIEWPORT, not this container — so
+            inside the 420px refine panel on a 1440px screen the composer was
+            still using the desktop ROW layout and the textarea collapsed to
+            181px (measured). Embedded always stacks, so the field gets the
+            panel's full width. */}
+        {/* Embedded from lg up: field on the left, send stacked over mic in a
+            narrow right column. The previous shape — field, then a button row
+            beneath it — left that whole row mostly empty however the button
+            was sized, which is the "wasted space" this replaces. Below lg the
+            panel is full-screen and the stacked shape is right. */}
         <Stack
-          direction={{ base: 'column', md: 'row' }}
-          spacing={{ base: 2, md: 2 }}
-          align={{ base: 'stretch', md: 'flex-end' }}
+          direction={embedded ? { base: 'column', lg: 'row' } : { base: 'column', md: 'row' }}
+          spacing={2}
+          align={embedded ? { base: 'stretch', lg: 'stretch' } : { base: 'stretch', md: 'flex-end' }}
         >
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.placeholder}
-            rows={2}
-            resize="none"
+            // Was rows={2}: about two lines visible, which is unusable when
+            // drafting a client reply. Height is driven by minH rather than
+            // rows so the two viewports can differ — the chat root is a FIXED
+            // height on mobile (calc(100dvh - 260px)), so every pixel the
+            // composer takes comes straight out of the message list. Desktop
+            // has the room; a phone does not.
+            rows={3}
+            resize="vertical"
+            minH={embedded ? { base: '112px', md: '148px' } : { base: '112px', md: '132px' }}
+            maxH={{ base: '40vh', md: '50vh' }}
             // 16px prevents iOS Safari from zooming the whole page in
             // when the textarea gets focused; matches the Messages tab.
             fontSize={{ base: '16px', md: 'sm' }}
@@ -581,7 +604,29 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
               which records via MediaRecorder and posts to OpenAI
               Whisper on release — much more reliable than the
               browser's SpeechRecognition API on iOS Safari. */}
-          <Stack direction="row" spacing={2} justify={{ base: 'stretch', md: 'flex-end' }}>
+          {/* alignSelf, not just justify: the parent column stack stretches its
+              children, so this row filled the panel and the send button grew
+              with it (measured 303px). Shrinking the ROW to its content is what
+              actually makes the button hug. */}
+          {/* Embedded on a phone: the row spans the panel and send fills
+              whatever the mic does not, because a hugging button left two
+              thirds of the row as dead space. From lg up the panel is a
+              420px column beside the thread, where a full-width send button
+              is the thing that looks wrong — so it hugs there instead. */}
+          {/* Desktop panel: a narrow icon column beside the field — send on the
+              top two thirds, mic on the bottom third, both icon-only. A labelled
+              send button was long and thin while the mic looked oversized for
+              something rarely used on a keyboard; dropping the labels gives the
+              field ~5/6 of the width. column-reverse keeps SEND on top without
+              reordering the JSX, so the mic stays first in tab order. */}
+          <Stack
+            direction={embedded ? { base: 'row', lg: 'column-reverse' } : 'row'}
+            spacing={2}
+            justify={embedded ? { base: 'flex-start', lg: 'flex-start' } : { base: 'stretch', md: 'flex-end' }}
+            w={embedded ? { base: '100%', lg: '68px' } : undefined}
+            flex={embedded ? { lg: '0 0 68px' } : undefined}
+            alignSelf={embedded ? { lg: 'stretch' } : undefined}
+          >
             <VoiceInput
               adminPassword={adminPassword}
               language={language}
@@ -591,39 +636,39 @@ const AdminAssistantChat = ({ adminPassword, language }: Props) => {
               ariaLabelUploading={language === 'ru' ? 'Расшифровываю…' : 'Transcribing…'}
               variant="outline"
               size="lg"
-              minW={{ base: '48px', md: 'auto' }}
+              minW={embedded ? { base: '48px', lg: '100%' } : { base: '48px', md: 'auto' }}
               minH={{ base: '48px', md: 'auto' }}
-              flex="0 0 auto"
+              // Bottom third of the icon column on desktop.
+              w={embedded ? { lg: '100%' } : undefined}
+              h={embedded ? { lg: '100%' } : undefined}
+              flex={embedded ? { base: '0 0 auto', lg: '1 1 0' } : '0 0 auto'}
             />
             <CTAButton
               onClick={handleSend}
               icon={FaPaperPlane}
               variant="solid"
-              size="md"
-              // Full-width on mobile so send stretches; hugs on desktop.
-              fullWidth={{ base: true, md: false }}
+              size={embedded ? 'sm' : 'md'}
+              fullWidth={embedded ? true : { base: true, md: false }}
+              // Top two thirds of the icon column on desktop.
+              h={embedded ? { lg: '100%' } : undefined}
+              flex={embedded ? { base: '1 1 auto', lg: '2 1 0' } : undefined}
+              aria-label={t.send}
               isLoading={sending}
               loadingText="…"
               isDisabled={!input.trim()}
             >
-              {t.send}
+              {/* Label on the phone row; icon-only in the desktop column. */}
+              <Box as="span" display={embedded ? { base: 'inline', lg: 'none' } : 'inline'}>
+                {t.send}
+              </Box>
             </CTAButton>
           </Stack>
         </Stack>
-        {/* The ⌘+Enter hint used to live here. Removed on mobile — it
-            cost a full line immediately above the send button to explain
-            a keyboard shortcut that doesn't exist on a phone. Kept on
-            desktop where it's both true and free. */}
-        <Text
-          fontSize="2xs"
-          color="gray.400"
-          mt={1.5}
-          px={1}
-          display={{ base: 'none', md: 'block' }}
-          noOfLines={1}
-        >
-          {t.submitHint}
-        </Text>
+        {/* The ⌘+Enter hint is gone. Two attempts to hide it by breakpoint
+            still left it on screen, and it was never worth a row directly
+            above the send button: it documented a shortcut that does not
+            exist on a phone and that nobody needs told twice on a desktop.
+            The shortcut itself still works — see the Textarea's onKeyDown. */}
       </Box>
     </Flex>
   );
