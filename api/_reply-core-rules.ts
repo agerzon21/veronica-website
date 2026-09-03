@@ -41,12 +41,12 @@ export const CORE_RULES: CoreRule[] = [
   {
     id: 'persona',
     summary:
-      'Replies are written as Vero\'s assistant, referring to Vero in the third person — unless the reply persona is set to first person.',
+      'Drafts Vero approves are written in the FIRST PERSON as her. Instagram replies, which auto-send unreviewed, are written as her assistant.',
     rationale:
-      'Whether a draft reads as Vero herself or as an assistant speaking for her is a preference, not a safety matter. Every draft is reviewed before it goes out.',
+      'A draft is reviewed and approved before it leaves, so by the time the customer reads it, it genuinely is from Vero — introducing an assistant there is noise. An Instagram reply goes out immediately with nobody having read it; claiming to be Vero would put words in her mouth she never saw.',
     adjustable: true,
     mechanism:
-      'Set the ai_context row category="identity", label="Reply persona" to "vero" (write as Vero, first person) or "assistant" (default). If switching to "vero", also rewrite category="identity", label="First-message intro" so it no longer introduces an assistant.',
+      'ai_context row category="identity", label="Reply persona". "auto" (default) applies the split above. "vero" forces first person everywhere INCLUDING unreviewed Instagram sends — only if Vero explicitly asks for that, and say what it means before doing it. "assistant" forces the assistant voice everywhere. If moving away from "auto", also check category="identity", label="First-message intro" still matches the voice.',
   },
   {
     id: 'never-confirm-dates',

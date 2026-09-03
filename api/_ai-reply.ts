@@ -567,6 +567,7 @@ export async function processInboundMessage(args: {
           history,
           aiMessageCount: outboundAiMessages.length,
           mentionsDate: matchesDateIntent(latestInboundBody),
+          reviewedBeforeSending: !autoSendsOnThisChannel,
         });
       } catch (err) {
         console.error('[ai-reply] generation failed:', err);
@@ -844,6 +845,16 @@ interface GenerateArgs {
    * rather than relying on a rule buried in a long prompt.
    */
   mentionsDate: boolean;
+  /**
+   * True when this reply becomes a DRAFT Vero approves before it goes out,
+   * false when the channel auto-sends it unreviewed (Instagram).
+   *
+   * This is what decides the voice. A draft she reads and approves is from
+   * her, so it is written in the first person. An Instagram reply leaves
+   * immediately with nobody having seen it — claiming to be Vero there would
+   * put words in her mouth, so it stays her assistant.
+   */
+  reviewedBeforeSending: boolean;
 }
 
 async function generateReply(args: GenerateArgs): Promise<string> {
@@ -853,6 +864,7 @@ async function generateReply(args: GenerateArgs): Promise<string> {
     args.contextRows,
     args.aiMessageCount,
     args.mentionsDate,
+    args.reviewedBeforeSending,
   );
 
   // Feed conversation history as alternating user/assistant messages.
@@ -887,6 +899,8 @@ export function buildSystemPrompt(
   contextRows: ContextRow[],
   aiMessageCount: number,
   mentionsDate: boolean,
+  /** See GenerateArgs.reviewedBeforeSending — this decides the voice. */
+  reviewedBeforeSending: boolean,
 ): string {
   // Group context rows by category for clean prompt structure.
   const byCategory = new Map<string, ContextRow[]>();
@@ -900,19 +914,33 @@ export function buildSystemPrompt(
     identityRows.find((r) => r.label === 'Assistant name')?.content ?? "Vero's Assistant";
   // First-message intro template — Vero edits this via the Assistant
   // tab. If empty, the AI just introduces itself with the name.
-  const firstMessageIntro =
+  // Two intros, because the two voices need different greetings and one
+  // template cannot serve both — a first-person opener under the assistant
+  // persona contradicts the voice block it sits beneath. Picked below, once
+  // the persona is resolved.
+  const veroIntro =
     identityRows.find((r) => r.label === 'First-message intro')?.content ?? '';
+  const assistantIntro =
+    identityRows.find((r) => r.label === 'First-message intro (assistant)')?.content ?? '';
 
   // Who the draft speaks AS. This used to be hard-coded ("You are NOT Vero"),
   // which meant no amount of knowledge-base editing could change it — Vero
   // asked three times and it silently could not take. Now it is a setting.
   // Defaults to 'assistant', so nothing changes until it is set deliberately.
   const replyPersona = (
-    identityRows.find((r) => r.label === 'Reply persona')?.content ?? 'assistant'
+    identityRows.find((r) => r.label === 'Reply persona')?.content ?? 'auto'
   )
     .trim()
     .toLowerCase();
-  const speakAsVero = replyPersona === 'vero' || replyPersona === 'first person';
+  // 'auto' is the default and the one that carries the nuance: a reply Vero
+  // approves before it is sent goes out AS her, and an Instagram reply that
+  // auto-sends with nobody having read it stays her assistant. A flat 'vero'
+  // would have Instagram claiming to be her, unreviewed — which is exactly
+  // the thing the assistant persona exists to avoid.
+  const speakAsVero =
+    replyPersona === 'vero' ||
+    replyPersona === 'first person' ||
+    (replyPersona === 'auto' && reviewedBeforeSending);
 
   const contextSections: string[] = [];
   for (const [cat, rows] of byCategory.entries()) {
@@ -935,6 +963,7 @@ export function buildSystemPrompt(
   // First-message greeting guidance — includes Vero's edited intro
   // template if she has one, so what she writes in the Assistant tab
   // actually shapes the greeting the customer receives.
+  const firstMessageIntro = speakAsVero ? veroIntro : assistantIntro;
   const introGuidance = firstMessageIntro
     ? `On your FIRST reply of the conversation, use this greeting template as your style/tone reference (adapt lightly for the specific message you're responding to, keep it brief, don't quote verbatim if it doesn't fit — but preserve the spirit):
 

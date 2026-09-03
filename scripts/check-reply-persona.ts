@@ -35,20 +35,27 @@ async function main() {
   const persona =
     rows.find((r) => r.category === 'identity' && r.label === 'Reply persona')?.content ??
     '(unset — defaults to assistant)';
-  const prompt = buildSystemPrompt(rows as never, 0, false);
-  const firstPerson = prompt.includes('You ARE Vero');
-  const thirdPerson = prompt.includes('You are NOT Vero');
+  // Both paths, because the whole point is that they differ: an email draft
+  // Vero approves goes out as her; an Instagram reply auto-sends unreviewed
+  // and must not claim to be her.
+  const draft = buildSystemPrompt(rows as never, 0, false, true);
+  const autoSend = buildSystemPrompt(rows as never, 0, false, false);
+  const voice = (p: string) =>
+    p.includes('You ARE Vero') ? 'Vero (first person)'
+      : p.includes('You are NOT Vero') ? "Vero's Assistant (third person)"
+      : 'AMBIGUOUS';
 
-  console.log(`knowledge rows loaded : ${rows.length}`);
-  console.log(`identity/Reply persona: ${persona}`);
-  console.log(`renders first person  : ${firstPerson}`);
-  console.log(`renders as assistant  : ${thirdPerson}`);
+  console.log(`knowledge rows loaded  : ${rows.length}`);
+  console.log(`identity/Reply persona : ${persona}`);
   console.log('');
-  const start = prompt.indexOf('## WHO YOU ARE');
-  console.log('--- the voice block the model receives ---');
-  console.log(prompt.slice(0, start + 520).split('\n').slice(0, 10).join('\n'));
+  console.log(`email / reviewed draft : ${voice(draft)}`);
+  console.log(`instagram / auto-send  : ${voice(autoSend)}`);
+  console.log('');
+  const start = draft.indexOf('## WHO YOU ARE');
+  console.log('--- voice block for a reviewed draft ---');
+  console.log(draft.slice(0, start + 400).split('\n').slice(0, 8).join('\n'));
 
-  if (firstPerson === thirdPerson) {
+  if (voice(draft) === 'AMBIGUOUS' || voice(autoSend) === 'AMBIGUOUS') {
     console.error('\nFAIL: the prompt is ambiguous about who it is speaking as.');
     process.exit(1);
   }
