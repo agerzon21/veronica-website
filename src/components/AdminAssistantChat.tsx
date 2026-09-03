@@ -560,10 +560,15 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
             still using the desktop ROW layout and the textarea collapsed to
             181px (measured). Embedded always stacks, so the field gets the
             panel's full width. */}
+        {/* Embedded from lg up: field on the left, send stacked over mic in a
+            narrow right column. The previous shape — field, then a button row
+            beneath it — left that whole row mostly empty however the button
+            was sized, which is the "wasted space" this replaces. Below lg the
+            panel is full-screen and the stacked shape is right. */}
         <Stack
-          direction={embedded ? 'column' : { base: 'column', md: 'row' }}
+          direction={embedded ? { base: 'column', lg: 'row' } : { base: 'column', md: 'row' }}
           spacing={2}
-          align={embedded ? 'stretch' : { base: 'stretch', md: 'flex-end' }}
+          align={embedded ? { base: 'stretch', lg: 'stretch' } : { base: 'stretch', md: 'flex-end' }}
         >
           <Textarea
             value={input}
@@ -609,11 +614,13 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               420px column beside the thread, where a full-width send button
               is the thing that looks wrong — so it hugs there instead. */}
           <Stack
-            direction="row"
+            // column-reverse so SEND sits on top and the mic below it without
+            // reordering the JSX (mic stays first for tab order).
+            direction={embedded ? { base: 'row', lg: 'column-reverse' } : 'row'}
             spacing={2}
-            justify={embedded ? { base: 'flex-start', lg: 'flex-end' } : { base: 'stretch', md: 'flex-end' }}
-            alignSelf={embedded ? { base: 'stretch', lg: 'flex-end' } : undefined}
-            w={embedded ? { base: '100%', lg: 'auto' } : undefined}
+            justify={embedded ? { base: 'flex-start', lg: 'flex-start' } : { base: 'stretch', md: 'flex-end' }}
+            w={embedded ? { base: '100%', lg: '112px' } : undefined}
+            flex={embedded ? { lg: '0 0 112px' } : undefined}
           >
             <VoiceInput
               adminPassword={adminPassword}
@@ -624,7 +631,7 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               ariaLabelUploading={language === 'ru' ? 'Расшифровываю…' : 'Transcribing…'}
               variant="outline"
               size="lg"
-              minW={{ base: '48px', md: 'auto' }}
+              minW={embedded ? { base: '48px', lg: '100%' } : { base: '48px', md: 'auto' }}
               minH={{ base: '48px', md: 'auto' }}
               flex="0 0 auto"
             />
@@ -634,7 +641,8 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               variant="solid"
               size={embedded ? 'sm' : 'md'}
               // Fills the rest of the row on a phone; hugs from lg up.
-              fullWidth={embedded ? { base: true, lg: false } : { base: true, md: false }}
+              // Fills the row on a phone and the narrow right column on desktop.
+              fullWidth={embedded ? true : { base: true, md: false }}
               isLoading={sending}
               loadingText="…"
               isDisabled={!input.trim()}

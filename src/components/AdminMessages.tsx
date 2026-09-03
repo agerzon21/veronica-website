@@ -563,6 +563,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 onOpenAssistant={onOpenAssistant}
                 onRefine={openRefinePanel}
                 onReplySent={closeRefinePanel}
+                refineDocked={refineOpen && refineCollapsed}
               />
             ) : (
               <SelectPrompt />
@@ -1186,6 +1187,7 @@ function ConversationView({
   onOpenAssistant,
   onRefine,
   onReplySent,
+  refineDocked = false,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
@@ -1195,6 +1197,8 @@ function ConversationView({
   onRefine?: () => void;
   /** A reply actually went out — the refine panel has served its purpose. */
   onReplySent?: () => void;
+  /** The refine panel is rolled down to its bar, which sits over this pane. */
+  refineDocked?: boolean;
   // Mobile back-navigation. On desktop this is unused (SelectPrompt
   // handles the "no thread open" state), but on mobile the parent
   // uses it to close the drill-down.
@@ -2508,7 +2512,16 @@ function ConversationView({
         // exactly where the Send button sits, so Vero could type a reply
         // and have nowhere to tap. Matches the clearance the main admin
         // container already uses (src/pages/Admin.tsx).
-        pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 4 }}
+        // Clears the fixed bottom nav (80px). When the refine panel is rolled
+        // DOWN it parks its own 44px bar directly above that nav, on top of
+        // this composer — so the reply button needs to move up by that much
+        // too, or the thing you rolled the panel down to reach is covered.
+        pb={{
+          base: refineDocked
+            ? 'calc(124px + env(safe-area-inset-bottom))'
+            : 'calc(80px + env(safe-area-inset-bottom))',
+          md: 4,
+        }}
         borderTop="1px solid"
         borderColor="gray.100"
         bg="white"
