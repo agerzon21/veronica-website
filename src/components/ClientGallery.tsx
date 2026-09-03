@@ -101,9 +101,59 @@ interface GridTileProps {
  * a broken-image icon. Video files also get a play-icon overlay so it's
  * clear they're not photos before the user even clicks.
  */
+/**
+ * Drive thumbnails are served straight from drive.google.com, and _drive.ts
+ * hard-codes sz=w800 — about 300KB each. A 163-file gallery is therefore ~36MB
+ * of thumbnails pulled from a third-party host, which is what was killing them
+ * on phones: iOS Safari cancels image requests under memory and connection
+ * pressure, the cancel surfaces as onError, and the tile went to a permanent
+ * placeholder. Same measured file at sz=w400 is 83KB and at w600 is 179KB, so
+ * letting the browser pick against `sizes` cuts a phone's payload 2-4x.
+ */
+const thumbAt = (url: string, width: number): string => {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('sz', `w${width}`);
+    return u.toString();
+  } catch {
+    // Not a URL we can parse — fall back to whatever the API gave us.
+    return url;
+  }
+};
+
+// Grid is 2 columns on phones, 3 at md, 4 at lg (see the SimpleGrid below).
+const THUMB_SIZES = '(min-width: 62em) 25vw, (min-width: 48em) 33vw, 50vw';
+
+// A failed thumbnail was permanent: one cancelled request and that tile showed
+// a placeholder for the rest of the session even though the file is fine. Retry
+// before giving up — the failures this is built for are transient.
+const MAX_THUMB_RETRIES = 2;
+
 const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite }: GridTileProps) => {
   const [thumbFailed, setThumbFailed] = useState(false);
+  // Bumping this remounts the <img>, which forces a fresh request; a failed
+  // response is not cached, so the retry actually goes back to the network.
+  const [attempt, setAttempt] = useState(0);
+  const retryTimer = useRef<number | null>(null);
   const isVideo = file.mimeType.startsWith('video/');
+
+  useEffect(
+    () => () => {
+      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+    },
+    [],
+  );
+
+  const handleThumbError = () => {
+    if (attempt >= MAX_THUMB_RETRIES) {
+      setThumbFailed(true);
+      return;
+    }
+    // Back off so a retry storm does not recreate the pressure that caused the
+    // failure. 400ms, then 800ms.
+    const delay = 400 * 2 ** attempt;
+    retryTimer.current = window.setTimeout(() => setAttempt((a) => a + 1), delay);
+  };
   const favoritesEnabled = Boolean(onToggleFavorite);
 
   const handleHeartClick = (e: React.MouseEvent) => {
@@ -166,15 +216,22 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
         ) : (
           <>
             <Image
-              src={file.thumbnailUrl}
+              key={attempt}
+              src={thumbAt(file.thumbnailUrl, 800)}
+              srcSet={`${thumbAt(file.thumbnailUrl, 400)} 400w, ${thumbAt(
+                file.thumbnailUrl,
+                600,
+              )} 600w, ${thumbAt(file.thumbnailUrl, 800)} 800w`}
+              sizes={THUMB_SIZES}
               alt={file.name}
-              onError={() => setThumbFailed(true)}
+              onError={handleThumbError}
               position="absolute"
               inset={0}
               w="100%"
               h="100%"
               objectFit="cover"
               loading="lazy"
+              decoding="async"
               transition="transform 0.5s ease"
               _groupHover={{ transform: 'scale(1.03)' }}
             />
