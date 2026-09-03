@@ -558,10 +558,15 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
         // container already clears the fixed bottom nav.
         pb={{ base: 'max(env(safe-area-inset-bottom), 0px)', md: 0 }}
       >
+        {/* Chakra breakpoints measure the VIEWPORT, not this container — so
+            inside the 420px refine panel on a 1440px screen the composer was
+            still using the desktop ROW layout and the textarea collapsed to
+            181px (measured). Embedded always stacks, so the field gets the
+            panel's full width. */}
         <Stack
-          direction={{ base: 'column', md: 'row' }}
-          spacing={{ base: 2, md: 2 }}
-          align={{ base: 'stretch', md: 'flex-end' }}
+          direction={embedded ? 'column' : { base: 'column', md: 'row' }}
+          spacing={2}
+          align={embedded ? 'stretch' : { base: 'stretch', md: 'flex-end' }}
         >
           <Textarea
             value={input}
@@ -575,7 +580,7 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
             // has the room; a phone does not.
             rows={3}
             resize="vertical"
-            minH={{ base: '84px', md: '132px' }}
+            minH={embedded ? { base: '112px', md: '148px' } : { base: '112px', md: '132px' }}
             maxH={{ base: '40vh', md: '50vh' }}
             // 16px prevents iOS Safari from zooming the whole page in
             // when the textarea gets focused; matches the Messages tab.
@@ -597,7 +602,17 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               which records via MediaRecorder and posts to OpenAI
               Whisper on release — much more reliable than the
               browser's SpeechRecognition API on iOS Safari. */}
-          <Stack direction="row" spacing={2} justify={{ base: 'stretch', md: 'flex-end' }}>
+          {/* alignSelf, not just justify: the parent column stack stretches its
+              children, so this row filled the panel and the send button grew
+              with it (measured 303px). Shrinking the ROW to its content is what
+              actually makes the button hug. */}
+          <Stack
+            direction="row"
+            spacing={2}
+            justify={embedded ? 'flex-end' : { base: 'stretch', md: 'flex-end' }}
+            alignSelf={embedded ? 'flex-end' : undefined}
+            w={embedded ? 'auto' : undefined}
+          >
             <VoiceInput
               adminPassword={adminPassword}
               language={language}
@@ -615,9 +630,11 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               onClick={handleSend}
               icon={FaPaperPlane}
               variant="solid"
-              size="md"
-              // Full-width on mobile so send stretches; hugs on desktop.
-              fullWidth={{ base: true, md: false }}
+              size={embedded ? 'sm' : 'md'}
+              // Full-width on mobile so send stretches; hugs on desktop. In the
+              // panel it always hugs — a full-width slab there just steals room
+              // the message field needs.
+              fullWidth={embedded ? false : { base: true, md: false }}
               isLoading={sending}
               loadingText="…"
               isDisabled={!input.trim()}
@@ -635,7 +652,10 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
           color="gray.400"
           mt={1.5}
           px={1}
-          display={{ base: 'none', md: 'block' }}
+          // Below lg, not md. There is no Cmd/Ctrl key on a phone OR a tablet,
+          // and this line sat directly above the send button costing a row that
+          // the message field can use instead.
+          display={{ base: 'none', lg: 'block' }}
           noOfLines={1}
         >
           {t.submitHint}

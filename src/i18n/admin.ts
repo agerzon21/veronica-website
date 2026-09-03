@@ -377,6 +377,8 @@ const dict = {
     // and anything already typed.
     refinePanelTitle: { en: 'Refine reply', ru: 'Доработать ответ' },
     refineClose: { en: 'Close refine panel', ru: 'Закрыть панель' },
+    refineCollapse: { en: 'Roll down — show the conversation', ru: 'Свернуть — показать переписку' },
+    refineExpand: { en: 'Back to the assistant', ru: 'Вернуться к ассистенту' },
     railCollapse: { en: 'Collapse list', ru: 'Свернуть список' },
     railExpand: { en: 'Expand list', ru: 'Развернуть список' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },

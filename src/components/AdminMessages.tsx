@@ -243,6 +243,10 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   const [refineOpen, setRefineOpen] = useState(false);
   // Remounts the chat so a second "improve" starts from the new draft.
   const [refineNonce, setRefineNonce] = useState(0);
+  // Mobile only: roll the panel down to its header so the conversation behind
+  // it is readable, then roll back up and keep typing. Distinct from closing,
+  // which throws the chat away.
+  const [refineCollapsed, setRefineCollapsed] = useState(false);
   // Restore whatever the rail was before the panel auto-folded it.
   const railBeforeRefine = useRef(false);
   const assistantLang = loadInitialLanguage();
@@ -251,12 +255,22 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
     railBeforeRefine.current = listCollapsed;
     setListCollapsed(true);
     setRefineNonce((n) => n + 1);
+    setRefineCollapsed(false);
     setRefineOpen(true);
   };
   const closeRefinePanel = () => {
     setRefineOpen(false);
+    setRefineCollapsed(false);
     setListCollapsed(railBeforeRefine.current);
   };
+
+  // Switching threads invalidates the panel: it was seeded with a prompt about
+  // a specific person's draft, so leaving it open over a different conversation
+  // is worse than misleading — it would refine the wrong reply.
+  useEffect(() => {
+    setRefineOpen(false);
+    setRefineCollapsed(false);
+  }, [selectedId]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Confirm dialog state for the global AI pause. Replaces the old
@@ -573,19 +587,20 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
               flexDirection="column"
               overflow="hidden"
               position={{ base: 'fixed', lg: 'static' }}
-              top={{ base: 0, lg: 'auto' }}
+              // Rolled down: unpin the top so the box is only as tall as its
+              // header and the thread shows through above it.
+              top={{ base: refineCollapsed ? 'auto' : 0, lg: 'auto' }}
               left={{ base: 0, lg: 'auto' }}
               right={{ base: 0, lg: 'auto' }}
-              bottom={{ base: 0, lg: 'auto' }}
+              // Ends exactly where the admin bottom nav starts instead of
+              // running underneath it (the nav is z-30 and paints over this
+              // pane). Sitting flush also stops the dead strip that a
+              // padding-based clearance leaves behind.
+              bottom={{ base: 'calc(80px + env(safe-area-inset-bottom))', lg: 'auto' }}
               // Above the thread pane (25) so it covers it on mobile.
               zIndex={{ base: 26, lg: 'auto' }}
-              h={{ base: '100dvh', lg: 'auto' }}
+              h={{ base: 'auto', lg: 'auto' }}
               maxH={{ lg: '100%' }}
-              // The admin bottom nav is z-30 and paints OVER this pane, so
-              // without this the composer and its send button sit underneath
-              // it. Same clearance the thread composer uses (see the pb on
-              // the reply box) rather than a second invented number.
-              pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', lg: 0 }}
             >
               <Flex
                 align="center"
@@ -596,7 +611,28 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 borderColor="gray.100"
                 flexShrink={0}
               >
-                <HStack spacing={2} minW={0}>
+                {/* On mobile this row is the roll-up control: tap to drop the
+                    panel to its header and read the thread, tap again to come
+                    back to what you were typing. The chat is NOT unmounted, so
+                    the draft survives. Inert on desktop, where the panel is a
+                    column and nothing is covered. */}
+                <HStack
+                  as="button"
+                  type="button"
+                  spacing={2}
+                  minW={0}
+                  flex={1}
+                  bg="transparent"
+                  border="none"
+                  p={0}
+                  textAlign="left"
+                  cursor={{ base: 'pointer', lg: 'default' }}
+                  onClick={() => setRefineCollapsed((v) => !v)}
+                  aria-label={
+                    refineCollapsed ? t.messages.refineExpand : t.messages.refineCollapse
+                  }
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                >
                   <Icon as={FaRobot} boxSize={3.5} color="brand.accentText" />
                   <Text
                     fontSize="2xs"
@@ -608,6 +644,14 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                   >
                     {t.messages.refinePanelTitle}
                   </Text>
+                  <Icon
+                    as={FaChevronDown}
+                    boxSize={2.5}
+                    color="gray.400"
+                    display={{ base: 'block', lg: 'none' }}
+                    transform={refineCollapsed ? 'rotate(180deg)' : 'rotate(0deg)'}
+                    transition="transform 0.2s ease"
+                  />
                 </HStack>
                 <IconButton
                   aria-label={t.messages.refineClose}
@@ -619,7 +663,12 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                   onClick={closeRefinePanel}
                 />
               </Flex>
-              <Box flex="1" minH={0} overflow="hidden">
+              <Box
+                flex="1"
+                minH={0}
+                overflow="hidden"
+                display={{ base: refineCollapsed ? 'none' : 'block', lg: 'block' }}
+              >
                 <AdminAssistantChat
                   key={refineNonce}
                   adminPassword={adminPassword}
