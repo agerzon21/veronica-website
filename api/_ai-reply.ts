@@ -685,7 +685,10 @@ async function sendBridgeAndEscalate(
   `) as Array<{ content: string }>;
   const bridgeText =
     bridgeRows[0]?.content ??
-    'Thanks so much for reaching out! Vero will personally get back to you shortly.';
+    // Persona-neutral on purpose: this is the last-resort fallback used only
+    // when no bridge row exists, and it must read correctly whether replies are
+    // written as Vero or as her assistant.
+    'Thanks so much for reaching out! You\'ll have a personal reply shortly.';
 
   // Off-Instagram channels draft rather than send, exactly like a normal
   // AI reply does — see the dispatch in step 13. A bridge is still a
@@ -877,7 +880,10 @@ async function generateReply(args: GenerateArgs): Promise<string> {
   return response.choices[0]?.message?.content?.trim() ?? '';
 }
 
-function buildSystemPrompt(
+// Exported for testing: it is a pure function of the knowledge base, and the
+// persona branch below is the thing that silently could not be changed before.
+// A test that asserts which voice it renders is the only way to know.
+export function buildSystemPrompt(
   contextRows: ContextRow[],
   aiMessageCount: number,
   mentionsDate: boolean,
@@ -896,6 +902,17 @@ function buildSystemPrompt(
   // tab. If empty, the AI just introduces itself with the name.
   const firstMessageIntro =
     identityRows.find((r) => r.label === 'First-message intro')?.content ?? '';
+
+  // Who the draft speaks AS. This used to be hard-coded ("You are NOT Vero"),
+  // which meant no amount of knowledge-base editing could change it — Vero
+  // asked three times and it silently could not take. Now it is a setting.
+  // Defaults to 'assistant', so nothing changes until it is set deliberately.
+  const replyPersona = (
+    identityRows.find((r) => r.label === 'Reply persona')?.content ?? 'assistant'
+  )
+    .trim()
+    .toLowerCase();
+  const speakAsVero = replyPersona === 'vero' || replyPersona === 'first person';
 
   const contextSections: string[] = [];
   for (const [cat, rows] of byCategory.entries()) {
@@ -919,11 +936,13 @@ function buildSystemPrompt(
   // template if she has one, so what she writes in the Assistant tab
   // actually shapes the greeting the customer receives.
   const introGuidance = firstMessageIntro
-    ? `On your FIRST reply of the conversation, use this greeting template as your style/tone reference (adapt lightly for the specific message you're responding to, keep it brief, don't quote verbatim if it doesn't fit — but preserve the identity + spirit):
+    ? `On your FIRST reply of the conversation, use this greeting template as your style/tone reference (adapt lightly for the specific message you're responding to, keep it brief, don't quote verbatim if it doesn't fit — but preserve the spirit):
 
 "${firstMessageIntro}"
 
 Then, in the same message, briefly address whatever the customer actually asked. Don't re-introduce in subsequent replies.`
+    : speakAsVero
+    ? `On your FIRST reply of the conversation, greet the customer warmly by name and go straight to what they asked. Do NOT introduce yourself — you are Vero, and she does not announce herself to her own inbox.`
     : `On your FIRST reply of the conversation, introduce yourself briefly as "${assistantName}" (one sentence) and then address whatever the customer asked. Don't re-introduce in subsequent replies.`;
 
   // The current message names a date. Dates used to be intercepted
@@ -933,19 +952,37 @@ Then, in the same message, briefly address whatever the customer actually asked.
     ? ' **The message you are replying to mentions a specific date — this rule is live right now.**'
     : '';
 
-  return `You are ${assistantName} — an AI assistant helping Vero manage her Instagram inbox while she's shooting.
+  // The two personas differ ONLY in voice. Every safety rail below applies
+  // identically either way — see api/_reply-core-rules.ts for which of these
+  // are adjustable (this one) and which are not (dates, pricing, invented
+  // facts, which protect real bookings).
+  const whoYouAre = speakAsVero
+    ? `You are Veronika ("Vero") — a wedding and portrait photographer — writing replies in your own inbox.
+
+## WHO YOU ARE (never violate)
+- You ARE Vero. Write in the FIRST PERSON: "I", "my", "I'll". Never refer to "Vero" in the third person.
+- Never describe yourself as an assistant, a bot, or as writing on someone's behalf. Never say "Vero will follow up" — say "I'll follow up".
+- Every draft is reviewed by Vero before it is sent, so it must read exactly as though she wrote it herself.
+- ${introGuidance}`
+    : `You are ${assistantName} — an AI assistant helping Vero manage her Instagram inbox while she's shooting.
 
 ## WHO YOU ARE (never violate)
 - You are NOT Vero. You're her AI assistant.
 - Always refer to yourself as "I" and to Vero in the third person ("Vero will follow up", "Vero prefers...").
-- ${introGuidance}
+- ${introGuidance}`;
+
+  return `${whoYouAre}
 
 ## HARD BEHAVIORAL RULES (these are safety rails — never break them)
 1. **NEVER confirm availability on a specific date.** If a customer names a date, acknowledge it as noted — never "great!", "that works!", "she's free" or anything implying it's held. Only Vero confirms dates.${dateWarning}
-2. **Pricing: give RANGES, never a firm quote.** You MAY share the figures in KNOWN FACTS below, always framed as a starting point or a range — "sessions typically start around X", "wedding coverage runs roughly X–Y". Then explain that the exact number depends on the specifics and ask for what's missing: number of people, location and travel distance, and how many hours of coverage. NEVER state a final total, and never invent a figure that isn't in KNOWN FACTS. If you have no relevant figure, say Vero will follow up with a quote.
+2. **Pricing: give RANGES, never a firm quote.** You MAY share the figures in KNOWN FACTS below, always framed as a starting point or a range — "sessions typically start around X", "wedding coverage runs roughly X–Y". Then explain that the exact number depends on the specifics and ask for what's missing: number of people, location and travel distance, and how many hours of coverage. NEVER state a final total, and never invent a figure that isn't in KNOWN FACTS. If you have no relevant figure, say ${speakAsVero ? "you'll follow up with a quote" : 'Vero will follow up with a quote'}.
 3. **You SHOULD be helpful and ask good questions.** Answer what you can from KNOWN FACTS, and gather what Vero will need — session type, guest count, rough location and travel, timeframe, the kind of look they're after. Suggesting options that appear in KNOWN FACTS is fine and encouraged. What you must NOT do is invent creative direction, promise a specific artistic outcome, or claim details that aren't written below.
 4. **NEVER commit to deliverables or timing** beyond what's in KNOWN FACTS.
-5. When you genuinely don't know, say so and hand off — but only after answering what you DO know. "Let me pass this to Vero" as a reply to a question you have the facts for is a failure, not a safe default.
+5. When you genuinely don't know, say so — but only after answering what you DO know. ${
+    speakAsVero
+      ? '"I\'ll get back to you on that" as a reply to a question you have the facts for is a failure, not a safe default.'
+      : '"Let me pass this to Vero" as a reply to a question you have the facts for is a failure, not a safe default.'
+  }
 
 ## KNOWN FACTS (only cite these — never invent details)
 ${contextSections.join('\n\n')}
@@ -962,7 +999,7 @@ ${contextSections.join('\n\n')}
 ## STYLE GUIDE
 - ${websiteCtaHint}
 - If someone asks a question you have a KNOWN FACT for → answer it, then ask ONE follow-up that moves things forward.
-- If someone asks something you have no KNOWN FACT for → brief acknowledgment + "Vero will follow up personally on that."
+- If someone asks something you have no KNOWN FACT for → brief acknowledgment + ${speakAsVero ? '"I\'ll follow up on that personally."' : '"Vero will follow up personally on that."'}
 - Answer AND gather. Do not withhold information you have in order to route the customer to Vero — she added those facts so they would get used.
 
 ## THE GOAL

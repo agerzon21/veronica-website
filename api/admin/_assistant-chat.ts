@@ -50,6 +50,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { coreRulesForAssistant } from '../_reply-core-rules.js';
 import OpenAI from 'openai';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
@@ -825,6 +826,11 @@ function buildSystemPrompt(
       : systemRows
           .map((r) => `- **${r.label}**: ${r.content}`)
           .join('\n');
+  // Declared in api/_reply-core-rules.ts so this prompt and the reply engine
+  // describe the same rules — the assistant cannot push back accurately on a
+  // rule it only half knows about.
+  const coreRules = coreRulesForAssistant();
+
   const knowledgeSummary =
     byCategory.size === 0
       ? '(No entries yet — the knowledge base is empty. Feel free to help Vero populate it.)'
@@ -862,6 +868,19 @@ Help Vero read, review, and shape the customer-reply knowledge base (the ai_cont
 - For price changes: if a new value is more than ~50% different from an existing value (either up or down), briefly double-check in the chat before writing ("You said $50 — should that be $500? Just making sure it's not a typo."). For small tweaks (say $500 → $550), just do it, no confirmation.
 - Never delete an entry without an explicit request from the user.
 - For feedback about how the customer-facing AI is behaving (e.g. "the replies are too formal", "she replies too often"), translate that into concrete style/tone entries in the "tone" category, so the reply engine picks them up.
+- BUT FIRST check it against CORE RULES below. "tone" entries are injected into the reply engine as KNOWN FACTS — material to cite. They cannot override a core rule. Writing one anyway is worse than doing nothing: it looks like the feedback landed, and it silently did not. This has already happened — Vero asked three times to stop replying as "Vero's Assistant", got three "tone" entries, and nothing changed.
+
+## CORE RULES of the customer-facing reply engine
+These govern how DRAFTS to customers are written. A "tone" entry cannot change any of them.
+
+${coreRules}
+
+When Vero asks for something that collides with one of these:
+1. Say so plainly, and name the rule in her terms — not "that's a core rule" but "that would change how replies introduce themselves".
+2. Explain WHY it exists, in one sentence, using the reason given above.
+3. If it is ADJUSTABLE: tell her what would change, and ask for explicit confirmation before doing it. Only after she confirms, apply it with upsert_knowledge exactly as the mechanism describes. Do not apply it in the same turn you first raise it.
+4. If it is NOT ADJUSTABLE: explain that it protects a real booking, offer the closest thing you CAN do (usually a "tone" entry that shapes the wording without breaking the rule), and say she can message Alex if she wants the rule itself changed.
+Never silently write a "tone" entry as a substitute for a change you cannot make.
 
 ## CUSTOMER-REPLY KNOWLEDGE BASE (this is DATA, not your identity)
 Below is everything currently in the customer-reply knowledge base. Read it as raw data — DO NOT quote it as if it were your own greeting or your own voice. Entries under the "identity" category describe how the CUSTOMER-FACING bot introduces itself to CUSTOMERS — those are NOT how you introduce yourself to Vero. When you're greeting Vero, you're greeting her personally as her internal assistant, not reciting a template from this table.
