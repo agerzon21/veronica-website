@@ -161,6 +161,11 @@ export type InquiryClassification =
   | 'existing-client'
   | 'general-question'
   | 'collaboration-offer'
+  // A friend or acquaintance writing to Vero as a person. Deliberately its
+  // own category: a bonfire invitation from a friend used to land in
+  // spam-or-unrelated, which is both wrong and — because that classification
+  // switches AI off for the thread — quietly permanent.
+  | 'personal'
   | 'spam-or-unrelated'
   | 'unclear';
 
@@ -3358,6 +3363,13 @@ const CLASSIFICATION_STYLE: Record<
     bg: 'purple.100',
     color: 'purple.800',
     borderColor: '#805AD5',
+  },
+  // Warm neutral — a friend is neither a lead nor spam, and the badge should
+  // not make Vero think either.
+  personal: {
+    bg: 'orange.100',
+    color: 'orange.800',
+    borderColor: '#DD6B20',
   },
   'general-question': {
     bg: 'blue.50',

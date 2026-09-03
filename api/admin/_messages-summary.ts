@@ -29,7 +29,7 @@
  * id = safe to serve cache.
  *
  * `classification` — one of booking-inquiry, existing-client,
- *              general-question, collaboration-offer, spam-or-unrelated,
+ *              general-question, collaboration-offer, personal, spam-or-unrelated,
  *              unclear. Lets Vero see at a glance whether to engage.
  * `asking` — one sentence: what the customer is fundamentally asking for
  * `gathered` — array of specific facts the customer has shared (dates,
@@ -70,6 +70,7 @@ type Classification =
   | 'existing-client'
   | 'general-question'
   | 'collaboration-offer'
+  | 'personal'
   | 'spam-or-unrelated'
   | 'unclear';
 
@@ -78,6 +79,7 @@ const VALID_CLASSIFICATIONS: readonly Classification[] = [
   'existing-client',
   'general-question',
   'collaboration-offer',
+  'personal',
   'spam-or-unrelated',
   'unclear',
 ] as const;
@@ -242,6 +244,7 @@ Return a JSON object with EXACTLY these keys:
     * "existing-client" — someone Vero is already working with (references a past shoot, a scheduled event, a delivered gallery, or is following up on something Vero personally started)
     * "general-question" — genuine but non-booking (e.g. asking about her camera gear, admiring her work with no ask)
     * "collaboration-offer" — a legitimate creative/brand collab proposal (rare — most "collab" DMs are actually spam)
+    * "personal" — a friend or acquaintance writing to Vero as a person: a social invitation, plans, catching up, personal chat. Warm and specific to her as a human rather than as a business. This is NOT spam — do not label a friend spam.
     * "spam-or-unrelated" — solicitation, sales pitch, agency outreach (web design, SEO, marketing services, "your website is outdated", "we can help you"), crypto/investment, unrelated to photography, or template mass-DM. When in doubt between this and collaboration-offer, prefer this — real collabs are extremely rare.
     * "unclear" — you genuinely cannot tell (e.g. just "hey" with no prior context)
 - "tone": ONE WORD (English) describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.

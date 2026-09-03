@@ -187,6 +187,10 @@ export interface ReplyResult {
     | 'skipped-rate-limit'
     | 'skipped-casual-message'
     | 'skipped-spam-solicitation'
+    // Judged not to be a business message at INBOUND time — see
+    // classifyInboundRelevance. Distinct from skipped-personal, which is
+    // Vero's manual flag on the whole conversation.
+    | 'skipped-not-business'
     // Cross-invocation race — another Vercel lambda already claimed
     // the ai_reply_intents row for this inbound (Meta shipped two
     // POSTs milliseconds apart to two different lambdas). See
@@ -544,6 +548,19 @@ export async function processInboundMessage(args: {
         };
       }
 
+      // ── 10c. Is this business at all? ────────────────────────
+      // See classifyInboundRelevance. Only personal and spam stay silent;
+      // anything ambiguous still gets answered. The thread and its summary
+      // stay fully visible either way — nothing is hidden, we just don't
+      // send a stranger's friend a brush-off about photography.
+      const relevance = await classifyInboundRelevance(history);
+      if (relevance === 'personal' || relevance === 'spam') {
+        return {
+          action: 'skipped-not-business',
+          reason: `classified ${relevance} at inbound — no reply sent`,
+        };
+      }
+
       // ── 11. Load ai_context for the system prompt ─────────────
       //
       // EXCLUDES source='system'. Those rows document how the admin
@@ -832,6 +849,72 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   for (const w of a) if (b.has(w)) intersection++;
   const union = a.size + b.size - intersection;
   return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Is this message worth replying to at all?
+ *
+ * WHY THIS EXISTS
+ * The pipeline had exactly two relevance filters: a regex list of agency
+ * sales pitches, and repeat-message detection. Everything else went straight
+ * to generation — and generation is only ever asked to WRITE a reply, so it
+ * has no way to decline. A friend messaging "we're doing a bonfire tomorrow
+ * at 6 if you want to come" got a polite brush-off explaining that Vero is
+ * unavailable for social events. The model understood perfectly well it
+ * wasn't business; it just had no option to stay silent.
+ *
+ * The summary classifier WOULD have caught it — spam-or-unrelated switches AI
+ * off — but that runs on demand when Vero opens the thread, which is after
+ * the reply has already auto-sent on Instagram.
+ *
+ * So the judgement moves to inbound, before generation.
+ *
+ * Deliberately biased toward replying: only 'personal' and 'spam' stay
+ * silent. Anything ambiguous — a bare "hey", an unclear one-liner — still
+ * gets a reply, because a missed client costs far more than a needless
+ * hello, and Vero's own stored guidance says to answer greetings.
+ *
+ * This does NOT set conversations.is_personal. That flag folds the thread
+ * into the Personal section, and auto-hiding someone on one guess is not a
+ * call this should make — Vero has a button for it.
+ */
+// Exported for testing: this gate decides whether a real person gets a reply
+// at all, so it needs to be checkable against actual messages.
+export async function classifyInboundRelevance(
+  history: Message[],
+): Promise<'business' | 'personal' | 'spam' | 'unclear'> {
+  const recent = history.slice(-6).map((m) => `${m.direction === 'inbound' ? 'THEM' : 'US'}: ${m.body}`);
+  try {
+    const res = await getOpenAI().chat.completions.create({
+      model: OPENAI_MODEL,
+      temperature: 0,
+      max_tokens: 6,
+      messages: [
+        {
+          role: 'system',
+          content: `Veronika is a wedding and portrait photographer. Classify the LAST message from THEM into exactly one word:
+
+business — any photography enquiry, an existing client, a question about her work, pricing, availability, a booking, or anything a paying customer would send.
+personal — a friend or acquaintance writing to her as a person: social invitations, catching up, plans, personal chat. Warm and specific to her as a human, not as a business.
+spam — sales pitches, agency or SEO outreach, crypto, mass-DM templates, anything soliciting HER.
+unclear — you genuinely cannot tell.
+
+Answer with ONE word and nothing else. When torn between business and unclear, answer unclear. When torn between personal and business, answer business.`,
+        },
+        { role: 'user', content: recent.join('\n') },
+      ],
+    });
+    const word = (res.choices[0]?.message?.content ?? '').trim().toLowerCase();
+    if (word.startsWith('business')) return 'business';
+    if (word.startsWith('personal')) return 'personal';
+    if (word.startsWith('spam')) return 'spam';
+    return 'unclear';
+  } catch (err) {
+    // A classifier that fails must not silence the inbox. Fall back to
+    // replying, which is the behaviour that existed before this gate.
+    console.warn('[ai-reply] relevance classify failed, replying anyway:', err);
+    return 'unclear';
+  }
 }
 
 interface GenerateArgs {

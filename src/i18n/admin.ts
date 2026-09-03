@@ -527,6 +527,7 @@ const dict = {
       'existing-client': { en: 'Existing client', ru: 'Постоянный клиент' },
       'general-question': { en: 'General question', ru: 'Общий вопрос' },
       'collaboration-offer': { en: 'Collab offer', ru: 'Предложение коллаба' },
+      personal: { en: 'Personal / friend', ru: 'Личное / друзья' },
       'spam-or-unrelated': { en: 'Spam / unrelated', ru: 'Спам' },
       unclear: { en: 'Unclear', ru: 'Непонятно' },
     },
