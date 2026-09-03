@@ -564,6 +564,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 onRefine={openRefinePanel}
                 onReplySent={closeRefinePanel}
                 refineDocked={refineOpen && refineCollapsed}
+                refineActive={refineOpen}
               />
             ) : (
               <SelectPrompt />
@@ -1188,6 +1189,7 @@ function ConversationView({
   onRefine,
   onReplySent,
   refineDocked = false,
+  refineActive = false,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
@@ -1199,6 +1201,8 @@ function ConversationView({
   onReplySent?: () => void;
   /** The refine panel is rolled down to its bar, which sits over this pane. */
   refineDocked?: boolean;
+  /** The refine panel is open at all (docked or not). */
+  refineActive?: boolean;
   // Mobile back-navigation. On desktop this is unused (SelectPrompt
   // handles the "no thread open" state), but on mobile the parent
   // uses it to close the drill-down.
@@ -1348,6 +1352,16 @@ function ConversationView({
   // came to read. The header row stays visible with the one-line "asking"
   // gist, so nothing is hidden, just folded.
   const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+
+  // The AI draft card folds like the summary does. It folds ITSELF while the
+  // refine panel is open, because the panel already shows the same draft — two
+  // copies of it left almost no room for the conversation you opened the panel
+  // to re-read. Unfolds again when the panel closes; still togglable by hand
+  // in between.
+  const [draftCollapsed, setDraftCollapsed] = useState(false);
+  useEffect(() => {
+    setDraftCollapsed(refineActive);
+  }, [refineActive]);
   // Summary language toggle. Defaults to Russian since Vero speaks
   // Russian — but the toggle lets an admin flip to English when
   // helping her out. Persisted per-browser (localStorage) so the
@@ -2431,24 +2445,68 @@ function ConversationView({
           flexShrink={0}
           display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
         >
-          <Flex align="center" gap={2} mb={1.5}>
-            <Icon as={FaRobot} boxSize={3} color="brand.accentText" />
+          {/* Whole row toggles, same as the summary card above it, with a
+              chevron and a verb so it reads as a control in both states. */}
+          <Flex
+            as="button"
+            type="button"
+            onClick={() => setDraftCollapsed((v) => !v)}
+            align="center"
+            gap={2}
+            mb={draftCollapsed ? 0 : 1.5}
+            w="100%"
+            bg="transparent"
+            border="none"
+            p={0}
+            textAlign="left"
+            cursor="pointer"
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            <Icon as={FaRobot} boxSize={3} color="brand.accentText" flexShrink={0} />
             <Text
               fontSize="2xs"
               fontWeight="500"
               color="brand.accentText"
               letterSpacing="0.08em"
               textTransform="uppercase"
+              flexShrink={0}
             >
               {t.messages.draftTitle}
             </Text>
+            {/* Folded: one line of the draft so it is not a blind box. */}
+            {draftCollapsed && (
+              <Text fontSize="xs" color="gray.500" noOfLines={1} minW={0}>
+                — {pendingDraft.body}
+              </Text>
+            )}
+            <Flex align="center" gap={1} ml="auto" flexShrink={0} pl={2}>
+              <Text
+                fontSize="2xs"
+                fontWeight="500"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+                color="gray.500"
+                display={{ base: 'none', md: 'block' }}
+              >
+                {draftCollapsed ? t.messages.draftShow : t.messages.draftHide}
+              </Text>
+              <Icon
+                as={FaChevronDown}
+                boxSize={3}
+                color="gray.500"
+                transform={draftCollapsed ? 'rotate(0deg)' : 'rotate(180deg)'}
+                transition="transform 0.2s ease"
+              />
+            </Flex>
           </Flex>
-          <Text fontSize="sm" color="gray.700" lineHeight="1.6" noOfLines={4} mb={2}>
-            {pendingDraft.body}
-          </Text>
-          <Text fontSize="2xs" color="gray.500" mb={2}>
-            {t.messages.draftHelp}
-          </Text>
+          {!draftCollapsed && (
+            <>
+              <Text fontSize="sm" color="gray.700" lineHeight="1.6" noOfLines={4} mb={2}>
+                {pendingDraft.body}
+              </Text>
+              <Text fontSize="2xs" color="gray.500" mb={2}>
+                {t.messages.draftHelp}
+              </Text>
           {/* Stacked on mobile, inline on desktop.
               As a single row on a phone these three read as one run-on
               string — a filled button immediately followed by two bare
@@ -2498,7 +2556,9 @@ function ConversationView({
             >
               {t.messages.draftDiscard}
             </Button>
-          </Stack>
+              </Stack>
+            </>
+          )}
         </Box>
       )}
 

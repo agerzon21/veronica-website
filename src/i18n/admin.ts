@@ -382,6 +382,8 @@ const dict = {
     railCollapse: { en: 'Collapse list', ru: 'Свернуть список' },
     railExpand: { en: 'Expand list', ru: 'Развернуть список' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },
+    draftShow: { en: 'Show draft', ru: 'Показать черновик' },
+    draftHide: { en: 'Hide draft', ru: 'Скрыть черновик' },
     draftDiscarded: { en: 'Draft discarded', ru: 'Черновик удалён' },
 
     // ── Promotional / unrelated threads ──────────────────────────
