@@ -581,6 +581,11 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
               zIndex={{ base: 26, lg: 'auto' }}
               h={{ base: '100dvh', lg: 'auto' }}
               maxH={{ lg: '100%' }}
+              // The admin bottom nav is z-30 and paints OVER this pane, so
+              // without this the composer and its send button sit underneath
+              // it. Same clearance the thread composer uses (see the pb on
+              // the reply box) rather than a second invented number.
+              pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', lg: 0 }}
             >
               <Flex
                 align="center"

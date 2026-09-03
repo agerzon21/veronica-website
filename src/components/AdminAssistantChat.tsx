@@ -568,12 +568,15 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.placeholder}
             // Was rows={2}: about two lines visible, which is unusable when
-            // you are drafting a reply to a client in here. Taller by default
-            // and vertically resizable so it can be dragged bigger still.
-            rows={6}
+            // drafting a client reply. Height is driven by minH rather than
+            // rows so the two viewports can differ — the chat root is a FIXED
+            // height on mobile (calc(100dvh - 260px)), so every pixel the
+            // composer takes comes straight out of the message list. Desktop
+            // has the room; a phone does not.
+            rows={3}
             resize="vertical"
-            minH={{ base: '96px', md: '132px' }}
-            maxH="50vh"
+            minH={{ base: '84px', md: '132px' }}
+            maxH={{ base: '40vh', md: '50vh' }}
             // 16px prevents iOS Safari from zooming the whole page in
             // when the textarea gets focused; matches the Messages tab.
             fontSize={{ base: '16px', md: 'sm' }}
