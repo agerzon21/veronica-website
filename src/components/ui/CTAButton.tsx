@@ -45,6 +45,14 @@ interface CTAButtonProps {
   wrapText?: boolean;
   // Accessibility label — used on icon-only buttons.
   'aria-label'?: string;
+  // Explicit height, for the rare CTA that has to fill a sized slot rather
+  // than size itself from its padding — e.g. the send button in the refine
+  // panel, which is two thirds of a fixed-height column beside the composer.
+  // Added here rather than hand-rolling that one button, per the note above.
+  h?: string | Record<string, string>;
+  // Flex sizing, for the same reason as `h` — a CTA that is one sized child
+  // of a column rather than a self-sizing button.
+  flex?: string | Record<string, string>;
 }
 
 const GOLD = '#c9a96e';
@@ -167,6 +175,8 @@ const CTAButton = ({
   download,
   wrapText = false,
   'aria-label': ariaLabel,
+  h,
+  flex,
 }: CTAButtonProps) => {
   // Either a pending action or an explicit `isDisabled` should kill clicks
   // and dim the button. We keep the cursor distinct (`wait` for loading,
@@ -189,6 +199,8 @@ const CTAButton = ({
     textAlign: 'center' as const,
     ...sizeStyles[size],
     ...variantStyles(variant, tone),
+    ...(h !== undefined ? { h } : {}),
+    ...(flex !== undefined ? { flex } : {}),
     ...(fullWidth
       ? typeof fullWidth === 'boolean'
         ? { w: '100%' }
@@ -209,7 +221,11 @@ const CTAButton = ({
       ) : (
         icon && <Icon as={icon} boxSize={size === 'sm' ? 3.5 : 4} />
       )}
-      <Box as="span">{isLoading && loadingText ? loadingText : children}</Box>
+      {/* Skip the label entirely when there is none — an empty span still
+          consumes the flex `gap`, which pushes an icon-only button off-centre. */}
+      {(children || (isLoading && loadingText)) && (
+        <Box as="span">{isLoading && loadingText ? loadingText : children}</Box>
+      )}
     </>
   );
 

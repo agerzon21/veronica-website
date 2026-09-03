@@ -613,14 +613,19 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               thirds of the row as dead space. From lg up the panel is a
               420px column beside the thread, where a full-width send button
               is the thing that looks wrong — so it hugs there instead. */}
+          {/* Desktop panel: a narrow icon column beside the field — send on the
+              top two thirds, mic on the bottom third, both icon-only. A labelled
+              send button was long and thin while the mic looked oversized for
+              something rarely used on a keyboard; dropping the labels gives the
+              field ~5/6 of the width. column-reverse keeps SEND on top without
+              reordering the JSX, so the mic stays first in tab order. */}
           <Stack
-            // column-reverse so SEND sits on top and the mic below it without
-            // reordering the JSX (mic stays first for tab order).
             direction={embedded ? { base: 'row', lg: 'column-reverse' } : 'row'}
             spacing={2}
             justify={embedded ? { base: 'flex-start', lg: 'flex-start' } : { base: 'stretch', md: 'flex-end' }}
-            w={embedded ? { base: '100%', lg: '112px' } : undefined}
-            flex={embedded ? { lg: '0 0 112px' } : undefined}
+            w={embedded ? { base: '100%', lg: '68px' } : undefined}
+            flex={embedded ? { lg: '0 0 68px' } : undefined}
+            alignSelf={embedded ? { lg: 'stretch' } : undefined}
           >
             <VoiceInput
               adminPassword={adminPassword}
@@ -633,21 +638,29 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               size="lg"
               minW={embedded ? { base: '48px', lg: '100%' } : { base: '48px', md: 'auto' }}
               minH={{ base: '48px', md: 'auto' }}
-              flex="0 0 auto"
+              // Bottom third of the icon column on desktop.
+              w={embedded ? { lg: '100%' } : undefined}
+              h={embedded ? { lg: '100%' } : undefined}
+              flex={embedded ? { base: '0 0 auto', lg: '1 1 0' } : '0 0 auto'}
             />
             <CTAButton
               onClick={handleSend}
               icon={FaPaperPlane}
               variant="solid"
               size={embedded ? 'sm' : 'md'}
-              // Fills the rest of the row on a phone; hugs from lg up.
-              // Fills the row on a phone and the narrow right column on desktop.
               fullWidth={embedded ? true : { base: true, md: false }}
+              // Top two thirds of the icon column on desktop.
+              h={embedded ? { lg: '100%' } : undefined}
+              flex={embedded ? { base: '1 1 auto', lg: '2 1 0' } : undefined}
+              aria-label={t.send}
               isLoading={sending}
               loadingText="…"
               isDisabled={!input.trim()}
             >
-              {t.send}
+              {/* Label on the phone row; icon-only in the desktop column. */}
+              <Box as="span" display={embedded ? { base: 'inline', lg: 'none' } : 'inline'}>
+                {t.send}
+              </Box>
             </CTAButton>
           </Stack>
         </Stack>
