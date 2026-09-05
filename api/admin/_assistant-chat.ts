@@ -276,7 +276,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const requestedLang = typeof req.body?.language === 'string' ? req.body.language : 'ru';
     const language: ChatLanguage = requestedLang === 'en' ? 'en' : 'ru';
 
-    const systemPrompt = buildSystemPrompt(contextRows, language);
+    // Resolve the open conversation so the prompt can name it. Only when the
+    // request is scoped to one; the general thread has no open conversation.
+    let openConversation: { id: string; name: string } | null = null;
+    if (slot !== GENERAL_SLOT) {
+      const convId = slot.slice('conv:'.length);
+      const [row] = (await sql`
+        SELECT id, contact_name FROM conversations WHERE id = ${convId} LIMIT 1
+      `) as Array<{ id: string; contact_name: string | null }>;
+      if (row) openConversation = { id: row.id, name: row.contact_name || 'this customer' };
+    }
+    const systemPrompt = buildSystemPrompt(contextRows, language, openConversation);
 
     // Assemble the message list we'll send to OpenAI.
     // Always leads with the fresh system prompt (regenerated each
@@ -502,7 +512,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'update_draft',
       description:
-        "Replace the pending AI draft for a conversation with an improved version, WITHOUT sending it. Call this whenever you produce a complete, ready-to-send rewrite of the draft Vero is refining, so the Reply tab shows your latest version instead of the original. Do NOT call it while discussing options, offering alternatives, or asking a question — only when the text you are handing over could be sent as-is. This does not send anything and does not touch whatever Vero has typed in her own reply box; use send_reply for sending.",
+        "Replace the pending AI draft for a conversation with an improved version, WITHOUT sending it. Call this whenever you produce a complete, ready-to-send rewrite of the draft Vero is refining, so the Reply tab shows your latest version instead of the original. Do NOT call it while discussing options, offering alternatives, or asking a question — only when the text you are handing over could be sent as-is. NEVER ask permission before calling this; updating an unsent draft is not sending it. This does not send anything and does not touch whatever Vero has typed in her own reply box; use send_reply for sending.",
       parameters: {
         type: 'object',
         properties: {
@@ -939,6 +949,14 @@ function buildSystemPrompt(
     active: boolean;
   }>,
   language: ChatLanguage,
+  /**
+   * The conversation the panel is open on, when there is one. Without this the
+   * assistant only knows the customer's NAME, from the prompt the panel seeds,
+   * and has no id to pass to read_thread / update_draft / send_reply. It would
+   * have to go looking, and in practice it just did not bother, so the draft it
+   * had rewritten never got written back.
+   */
+  openConversation?: { id: string; name: string } | null,
 ): string {
   // Group by category for readable rendering. Include ID so the
   // model can pass it to upsert_knowledge for updates without
@@ -992,9 +1010,32 @@ function buildSystemPrompt(
       ? '"Записал новую цену — $600 для семейных сессий"'
       : '"Saved new price — $600 for family sessions"';
 
+  const openConversationBlock = openConversation
+    ? `
+
+## THE CONVERSATION CURRENTLY OPEN
+Vero has this thread open and is working on it right now:
+- Customer: ${openConversation.name}
+- conversation_id: ${openConversation.id}
+
+Use that id directly for read_thread, update_draft and send_reply. Do NOT call
+list_conversations to find it and do NOT ask her which conversation she means:
+you already know. When she says "the draft", "this reply" or "the message", she
+means this conversation.
+
+When you rewrite the draft for her, call update_draft with this id in the SAME
+turn you show her the new version. Do not ask first. Updating an unsent draft
+is not sending it, she can still edit or discard it, and if you only put the
+new version in the chat then the Reply tab keeps showing the old one and your
+rewrite is lost the moment she looks away. Asking permission applies to
+send_reply and to nothing else.`
+    : '';
+
   return `You are Vero's INTERNAL personal AI assistant, talking privately to Vero (or Alex, her admin) inside her business admin panel. Vero is a professional photographer (portraits, weddings, families, maternity). This is a private back-office chat — NOT a customer-facing channel.
 
 You have full context that your only audience is Vero herself (or another admin helping her). Never introduce yourself as if you were meeting a stranger. Never talk ABOUT Vero in the third person to Vero. If she greets you with "hi" or "привет", greet her back naturally and briefly ("Привет! Что нужно?" / "Hey — what can I help with?"). Ask what she wants to work on, or offer a quick pointer if you know she's mid-way through something.
+
+${openConversationBlock}
 
 ## Your job
 Help Vero read, review, and shape the customer-reply knowledge base (the ai_context table) through natural conversation. That knowledge base drives a SEPARATE customer-facing AI that replies to Instagram DMs — you are NOT that customer-facing AI. When you edit an entry, you're editing the DATA that the OTHER AI uses to talk to customers.
