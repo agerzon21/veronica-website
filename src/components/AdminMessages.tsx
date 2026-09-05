@@ -394,6 +394,11 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
    * value alone would not change.
    */
   const [assistantSeed, setAssistantSeed] = useState<{ text: string; token: number } | null>(null);
+  /**
+   * Bumped to ask the open thread to reload. The thread owns its own detail
+   * fetch, so this is a signal rather than the data itself.
+   */
+  const [threadRefresh, setThreadRefresh] = useState(0);
   const seedCounter = useRef(0);
   const seedAssistant = (text: string) => {
     seedCounter.current += 1;
@@ -760,6 +765,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 onPanelDraftChange={setPanelHasDraft}
                 onPanelTabChange={setPanelTab}
                 onSeedAssistant={seedAssistant}
+                refreshToken={threadRefresh}
               />
             ) : (
               <SelectPrompt />
@@ -925,6 +931,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                     embedded
                     conversationId={selectedId}
                     seed={assistantSeed}
+                    onDraftUpdated={() => setThreadRefresh((n) => n + 1)}
                     onReplySent={handleReplySentFromPanel}
                   />
                 </Box>
@@ -1464,6 +1471,7 @@ function ConversationView({
   onPanelDraftChange,
   onPanelTabChange,
   onSeedAssistant,
+  refreshToken = 0,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
@@ -1484,6 +1492,8 @@ function ConversationView({
   onPanelTabChange?: (tab: AiPanelTab) => void;
   /** Hands "improve this draft" to the panel's assistant. */
   onSeedAssistant?: (text: string) => void;
+  /** Changes when something outside the thread modified it. */
+  refreshToken?: number;
   // Mobile back-navigation. On desktop this is unused (SelectPrompt
   // handles the "no thread open" state), but on mobile the parent
   // uses it to close the drill-down.
@@ -1763,6 +1773,16 @@ function ConversationView({
       setLoading(false);
     }
   }, [adminPassword, summary.id, t]);
+
+  // Reload when something outside this component changed the thread, currently
+  // the assistant replacing the pending draft via its update_draft tool. Skips
+  // the initial render so opening a conversation does not fetch twice.
+  const lastRefresh = useRef(refreshToken);
+  useEffect(() => {
+    if (refreshToken === lastRefresh.current) return;
+    lastRefresh.current = refreshToken;
+    void loadDetail();
+  }, [refreshToken, loadDetail]);
 
   // Load on mount + when selected conversation changes. Also mark
   // as read so the unread badge clears, and kick off the AI summary

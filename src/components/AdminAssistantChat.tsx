@@ -71,6 +71,11 @@ interface Props {
    * message is out the door — so the refine session should end either way.
    */
   onReplySent?: () => void;
+  /**
+   * Fired when the assistant replaced the pending draft via update_draft, so
+   * the thread can reload and the Reply tab stops showing the stale original.
+   */
+  onDraftUpdated?: () => void;
 }
 
 interface ChatMessage {
@@ -228,7 +233,7 @@ const STRINGS: Record<AdminLang, Strings> = {
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, seed = null, onReplySent }: Props) => {
+const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, seed = null, onReplySent, onDraftUpdated }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
@@ -575,6 +580,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         // session is finished for the same reason it is when she sends from
         // the draft card, so let the parent close the panel.
         if (writes.some((w) => w.label === 'Reply sent')) onReplySent?.();
+        if (writes.some((w) => w.category === 'draft')) onDraftUpdated?.();
       } else {
         setMessages((prev) => {
           const next = [...prev];

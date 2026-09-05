@@ -500,6 +500,30 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'update_draft',
+      description:
+        "Replace the pending AI draft for a conversation with an improved version, WITHOUT sending it. Call this whenever you produce a complete, ready-to-send rewrite of the draft Vero is refining, so the Reply tab shows your latest version instead of the original. Do NOT call it while discussing options, offering alternatives, or asking a question — only when the text you are handing over could be sent as-is. This does not send anything and does not touch whatever Vero has typed in her own reply box; use send_reply for sending.",
+      parameters: {
+        type: 'object',
+        properties: {
+          conversation_id: { type: 'string', description: 'UUID of the conversation whose draft to replace.' },
+          text: {
+            type: 'string',
+            description:
+              "The full replacement draft, in the language the CUSTOMER writes in (not the admin chat language). For email the signature is appended at send time — do not include one.",
+          },
+          content_summary: {
+            type: 'string',
+            description: "Short summary of what changed, in the admin chat's language.",
+          },
+        },
+        required: ['conversation_id', 'text', 'content_summary'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'send_reply',
       description:
         "Send a reply to a customer on whichever channel the conversation uses (Instagram or email — handled automatically). ONLY call this after showing Vero the draft and getting her explicit approval in the chat. Never call it in the same turn you first propose a draft. The message is sent as Vero herself, not as the AI.",
@@ -793,6 +817,46 @@ async function executeToolCall(
     };
   }
 
+  if (name === 'update_draft') {
+    const conversationId = String(args.conversation_id ?? '').trim();
+    const text = String(args.text ?? '').trim();
+    const contentSummary = String(args.content_summary ?? '').trim() || 'Draft updated';
+    if (!conversationId || !text) {
+      return { error: 'conversation_id and text are required' };
+    }
+
+    // Only the pending draft is replaceable. A sent message is a record of what
+    // the customer actually received and must never be rewritten under it.
+    const updated = (await sql`
+      UPDATE messages
+      SET body = ${text}
+      WHERE id = (
+        SELECT id FROM messages
+        WHERE conversation_id = ${conversationId}
+          AND status = 'draft'
+          AND direction = 'outbound'
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+      RETURNING id
+    `) as Array<{ id: string }>;
+
+    if (updated.length === 0) {
+      return {
+        error:
+          'There is no pending draft on that conversation to replace. It may have been sent or discarded already. Show Vero the improved text in the chat instead.',
+      };
+    }
+
+    dbWrites.push({
+      type: 'updated',
+      category: 'draft',
+      label: 'Draft updated',
+      content_summary: contentSummary,
+    });
+    return { success: true, action: 'draft_updated', message_id: updated[0].id };
+  }
+
   if (name === 'send_reply') {
     const conversationId = String(args.conversation_id ?? '').trim();
     const text = String(args.text ?? '').trim();
@@ -975,7 +1039,11 @@ She can ask to reply to someone — "help me answer Sarah", "draft a reply to th
 4. Write the draft IN THE CHAT so she can read it in full. Write it in the language the CUSTOMER uses, even if you and Vero are talking in another language. Use what you know — her pricing ranges, her services, her tone — and ask her for anything you'd need that isn't in the thread.
 5. Then ASK: would you like me to send this, or do you want to change something? Do NOT call send_reply in the same turn you first show a draft, ever.
 6. Only after she approves ("yes", "send it", "да, отправь") call send_reply with confirmed=true and the exact approved text.
-If she asks for changes, revise and show it again. If she'd rather send it herself, that's fine — the draft is right there in the chat for her to copy. It goes out as Vero herself, on whatever channel the conversation uses; you don't need to think about Instagram vs email, that's handled.
+If she asks for changes, revise and show it again.
+
+**Whenever you write a complete, ready-to-send rewrite of a draft she is already refining, also call update_draft with that exact text.** That replaces the pending draft behind the Reply tab so it shows your latest version rather than the original, which matters when she does not send straight away and comes back to it later. It sends nothing. Call it only when the text could go out as-is: not while you are offering options, asking a question, or thinking out loud. Do it in the same turn you show her the rewrite, and do not ask permission for it — updating an unsent draft is not sending, and she can still edit or discard it.
+
+If she'd rather send it herself, that's fine — the draft is right there in the chat for her to copy. It goes out as Vero herself, on whatever channel the conversation uses; you don't need to think about Instagram vs email, that's handled.
 
 ## HOW THE ADMIN PANEL WORKS (answer her questions from this)
 Vero will ask you how to DO things — "I finished a gallery, how do I give the client access?", "how do I add a photo to the site?". Answer from the facts below. These are maintained by Alex and you cannot edit or delete them; if she says one is wrong, tell her to message Alex rather than trying to change it.
