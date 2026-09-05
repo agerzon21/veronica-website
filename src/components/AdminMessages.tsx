@@ -388,6 +388,17 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   const [panelBodyEl, setPanelBodyEl] = useState<HTMLDivElement | null>(null);
   /** Only needed for the dot on the Reply tab; the content lives downstream. */
   const [panelHasDraft, setPanelHasDraft] = useState(false);
+  /**
+   * Prompt handed to the assistant by "Improve with assistant". The counter is
+   * what makes a second press re-seed: the text is often identical, so the
+   * value alone would not change.
+   */
+  const [assistantSeed, setAssistantSeed] = useState<{ text: string; token: number } | null>(null);
+  const seedCounter = useRef(0);
+  const seedAssistant = (text: string) => {
+    seedCounter.current += 1;
+    setAssistantSeed({ text, token: seedCounter.current });
+  };
   // Mobile only: roll the panel down to its header so the conversation behind
   // it is readable, then roll back up and keep typing. Distinct from closing,
   // which throws the chat away.
@@ -748,6 +759,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 panelBodyEl={panelBodyEl}
                 onPanelDraftChange={setPanelHasDraft}
                 onPanelTabChange={setPanelTab}
+                onSeedAssistant={seedAssistant}
               />
             ) : (
               <SelectPrompt />
@@ -912,6 +924,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                     adminPassword={adminPassword}
                     embedded
                     conversationId={selectedId}
+                    seed={assistantSeed}
                     onReplySent={handleReplySentFromPanel}
                   />
                 </Box>
@@ -1450,6 +1463,7 @@ function ConversationView({
   panelBodyEl = null,
   onPanelDraftChange,
   onPanelTabChange,
+  onSeedAssistant,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
@@ -1468,6 +1482,8 @@ function ConversationView({
   /** Lets the parent put a dot on the Reply tab without owning the draft. */
   onPanelDraftChange?: (hasDraft: boolean) => void;
   onPanelTabChange?: (tab: AiPanelTab) => void;
+  /** Hands "improve this draft" to the panel's assistant. */
+  onSeedAssistant?: (text: string) => void;
   // Mobile back-navigation. On desktop this is unused (SelectPrompt
   // handles the "no thread open" state), but on mobile the parent
   // uses it to close the drill-down.
@@ -1530,14 +1546,19 @@ function ConversationView({
   const handleRefineWithAssistant = () => {
     const who = displayName;
     const draft = pendingDraft?.body ?? '';
-    sessionStorage.setItem(
-      ASSISTANT_HANDOFF_KEY,
-      `Help me improve the reply to ${who}. Read the conversation first. Here's the draft I have:\n\n${draft}\n\nWhat I'd change: `,
-    );
-    // Prefer the in-place panel; fall back to the Assistant tab only if the
-    // parent did not provide one.
-    if (onRefine) onRefine('assistant');
-    else onOpenAssistant?.();
+    const prompt = `Help me improve the reply to ${who}. Read the conversation first. Here's the draft I have:\n\n${draft}\n\nWhat I'd change: `;
+    // In-panel: hand it over directly. The chat is already mounted behind the
+    // Reply tab by this point, so parking it for a mount-time read would never
+    // be collected and would leak into the next conversation instead.
+    if (onRefine) {
+      onSeedAssistant?.(prompt);
+      onRefine('assistant');
+      return;
+    }
+    // No panel: the standalone Assistant tab is a separate mount, so the
+    // park-and-navigate handoff is still the right mechanism there.
+    sessionStorage.setItem(ASSISTANT_HANDOFF_KEY, prompt);
+    onOpenAssistant?.();
   };
 
   // Is this thread currently folded out of the inbox — for EITHER reason?

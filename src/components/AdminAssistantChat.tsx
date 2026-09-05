@@ -56,6 +56,16 @@ interface Props {
    */
   conversationId?: string | null;
   /**
+   * A prompt to drop into the composer, e.g. "improve this draft".
+   *
+   * Delivered as a prop rather than read from sessionStorage on mount, because
+   * the chat is no longer mounted at the moment the request is made: the panel
+   * now opens on the Reply tab, which mounts this component hidden, so by the
+   * time "Improve with assistant" is pressed there is no mount left to hook.
+   * `token` changes on every request so pressing it twice re-seeds.
+   */
+  seed?: { text: string; token: number } | null;
+  /**
    * Fired when the assistant sends the reply itself, via its `send_reply`
    * tool, rather than Vero sending from the draft card. Same end state — the
    * message is out the door — so the refine session should end either way.
@@ -218,7 +228,7 @@ const STRINGS: Record<AdminLang, Strings> = {
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, onReplySent }: Props) => {
+const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, seed = null, onReplySent }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
@@ -246,10 +256,24 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     } catch {
       return;
     }
+    // Still consumed unconditionally on mount, even though the in-panel path
+    // uses the `seed` prop now: the standalone Assistant tab is still reached
+    // by parking a prompt and navigating, and an unread key would otherwise
+    // surface later in an unrelated conversation.
     if (parked) setInput(parked);
-    // Mount only; a handoff is parked immediately before this panel opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A fresh request outranks whatever is in the composer, which is what makes
+  // pressing Improve a second time start from the new draft rather than
+  // restoring stale text.
+  const seedToken = seed?.token ?? null;
+  useEffect(() => {
+    if (seedToken === null || !seed?.text) return;
+    setInput(seed.text);
+    // Keyed on the token so the same prompt can be re-seeded deliberately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedToken]);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
 
