@@ -247,6 +247,9 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
     return language === 'ru';
   });
   const [translations, setTranslations] = useState<Record<number, string>>({});
+  // Indices already translated or in flight. A ref, not state, so the effect
+  // below can consult it without listing it as a dependency.
+  const translatedTurns = useRef<Set<number>>(new Set());
 
   const toggleTranslations = () => {
     setShowTranslations((v) => {
@@ -275,7 +278,10 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
       for (let i = 0; i < messages.length; i++) {
         const m = messages[i];
         if (m.role !== 'assistant' || m.pending) continue;
-        if (translations[i] !== undefined || !needsIt(m.content)) continue;
+        if (translatedTurns.current.has(i) || !needsIt(m.content)) continue;
+        // Claim the index before awaiting, so the same turn is not fetched
+        // twice by overlapping runs.
+        translatedTurns.current.add(i);
         try {
           const res = await fetch('/api/admin/messages-translate', {
             method: 'POST',
@@ -288,14 +294,22 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
             setTranslations((prev) => ({ ...prev, [i]: data.translated }));
           }
         } catch {
-          // A failed translation just means no subtitle on that turn.
+          // A failed translation just means no subtitle on that turn. Release
+          // the claim so a later run (or the manual chip) can retry.
+          translatedTurns.current.delete(i);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [messages, showTranslations, embedded, language, adminPassword, translations]);
+    // `translations` is deliberately NOT a dependency. It was, and since this
+    // effect SETS it, every success re-ran the loop from index 0 and abandoned
+    // the in-flight fetch — each turn costing several duplicate paid calls. The
+    // already-done set lives in a ref precisely so it can be read here without
+    // retriggering.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, showTranslations, embedded, language, adminPassword]);
 
 
   // Load persisted history on mount so returning to the tab feels
@@ -493,6 +507,10 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
         body: JSON.stringify({ password: adminPassword, action: 'reset' }),
       });
       setMessages([]);
+      // Keyed by array index, so without this the old turn 0's translation
+      // reappears under whatever the new turn 0 turns out to be.
+      setTranslations({});
+      translatedTurns.current.clear();
     } catch {
       toast({ title: t.resetFailed, status: 'error', duration: 3000 });
     }

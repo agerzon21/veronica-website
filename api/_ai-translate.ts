@@ -58,10 +58,20 @@ export async function translateText(text: string, targetLang: string): Promise<s
       },
       { role: 'user', content: text },
     ],
-    max_tokens: 800,
+    // 800 clipped real content: the longest assistant turn in production is
+    // 2825 chars, and Russian output runs longer than the English input, so a
+    // translated draft could stop mid-sentence with nothing to signal it.
+    max_tokens: 2500,
     temperature: 0.2, // low for translation consistency
   });
-  return response.choices[0]?.message?.content?.trim() ?? text;
+  const choice = response.choices[0];
+  if (choice?.finish_reason === 'length') {
+    console.warn('[ai-translate] output hit the token cap and was truncated', {
+      inputChars: text.length,
+      targetLang,
+    });
+  }
+  return choice?.message?.content?.trim() ?? text;
 }
 
 /**

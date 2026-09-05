@@ -308,9 +308,17 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   // panel is bound to that thread, so it does not follow her to a different
   // one — it would be refining the wrong person's draft — but it is waiting
   // when she comes back.
+  // Mount only. The comment below used to claim that, but the effect re-ran on
+  // every change: pressing back on a phone sets selectedId to null and this
+  // instantly re-selected the thread, so the back button did nothing while a
+  // refine session was open. Desktop never showed it because there is no back
+  // button there. The ref makes the restore a one-shot on first commit, which
+  // is all it was ever meant to be.
+  const restoredRefineOnce = useRef(false);
   useEffect(() => {
+    if (restoredRefineOnce.current) return;
+    restoredRefineOnce.current = true;
     if (refineFor && selectedId === null) setSelectedId(refineFor);
-    // Only on mount / when a stored session appears.
   }, [refineFor, selectedId]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1709,8 +1717,16 @@ function ConversationView({
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        // Same post-send bookkeeping as handleSend. Without it a confirmed
+        // duplicate shipped the message but left the text sitting in the
+        // composer and the panel open, which reads as "it did not send" —
+        // and with translate-on-send the composer holds the UNtranslated
+        // text, so sending again produces a fresh translation that the
+        // server-side duplicate check will not recognise.
+        setReplyText('');
         await loadDetail();
         onRefreshList();
+        onReplySent?.();
       } else {
         toast({
           title: data.error || t.messages.sendFailed,
