@@ -1,8 +1,5 @@
-import { loadInitialLanguage, saveLanguage } from './assistantLanguage';
-export type { ChatLanguage } from './assistantLanguage';
-import type { ChatLanguage } from './assistantLanguage';
 import { Box, Flex, HStack, Text, Icon, VStack } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FaComments, FaDatabase } from 'react-icons/fa';
 import AdminAssistantChat from './AdminAssistantChat';
 import AdminAssistantData from './AdminAssistantData';
@@ -39,13 +36,6 @@ type SubTab = 'chat' | 'data';
 const AdminAssistant = ({ adminPassword }: Props) => {
   const { t } = useAdminLang();
   const [subTab, setSubTab] = useState<SubTab>('chat');
-  const [language, setLanguage] = useState<ChatLanguage>(loadInitialLanguage);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      saveLanguage(language);
-    }
-  }, [language]);
 
   return (
     <Box maxW="1200px" mx="auto">
@@ -79,7 +69,6 @@ const AdminAssistant = ({ adminPassword }: Props) => {
             {t.assistant.subtitle}
           </Text>
         </VStack>
-        <LanguageToggle value={language} onChange={setLanguage} />
       </Flex>
 
       {/* Sub-tab strip. Full-width flex on mobile so each tab gets an
@@ -101,87 +90,13 @@ const AdminAssistant = ({ adminPassword }: Props) => {
       </Flex>
 
       {subTab === 'chat' ? (
-        <AdminAssistantChat adminPassword={adminPassword} language={language} />
+        <AdminAssistantChat adminPassword={adminPassword} />
       ) : (
         <AdminAssistantData adminPassword={adminPassword} />
       )}
     </Box>
   );
 };
-
-/**
- * Two-pill segmented control for the chat language. Sits at the top
- * of the Assistant tab. Persists per-browser via localStorage.
- *
- * Applies to the Chat sub-tab only — Data is admin-facing and stays
- * English-only for now (the labels + form copy are English; the
- * *content* of entries can be any language). Vero uses Chat; the
- * Data view is for admins.
- */
-function LanguageToggle({
-  value,
-  onChange,
-}: {
-  value: ChatLanguage;
-  onChange: (next: ChatLanguage) => void;
-}) {
-  const { t } = useAdminLang();
-  return (
-    <HStack
-      spacing={0}
-      bg="white"
-      border="1px solid"
-      borderColor="gray.200"
-      borderRadius="full"
-      p="3px"
-      role="group"
-      aria-label={t.assistant.chatLanguageAria}
-    >
-      <LangPill active={value === 'ru'} onClick={() => onChange('ru')}>
-        RU
-      </LangPill>
-      <LangPill active={value === 'en'} onClick={() => onChange('en')}>
-        EN
-      </LangPill>
-    </HStack>
-  );
-}
-
-function LangPill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Box
-      as="button"
-      type="button"
-      onClick={onClick}
-      px={{ base: 4, md: 3 }}
-      py={{ base: 2, md: 1 }}
-      minH={{ base: '36px', md: 'auto' }}
-      minW={{ base: '52px', md: 'auto' }}
-      fontSize={{ base: 'xs', md: '2xs' }}
-      fontWeight="600"
-      letterSpacing="0.14em"
-      borderRadius="full"
-      bg={active ? 'brand.accent' : 'transparent'}
-      color={active ? 'white' : 'gray.500'}
-      cursor="pointer"
-      border="none"
-      transition="all 0.15s"
-      _hover={active ? {} : { color: 'gray.700' }}
-      _active={active ? { bg: 'brand.accentStrong' } : { bg: 'rgba(201, 169, 110, 0.08)' }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      {children}
-    </Box>
-  );
-}
 
 function SubTabButton({
   active,

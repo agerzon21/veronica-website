@@ -22,7 +22,15 @@ import { FaMicrophone } from 'react-icons/fa';
 
 interface Props extends Omit<IconButtonProps, 'aria-label' | 'onClick' | 'icon'> {
   adminPassword: string;
+  /** Hint passed to Whisper: the language the SPEAKER is speaking. */
   language?: 'ru' | 'en';
+  /**
+   * Language for this component's own error toasts: the language the READER
+   * reads. Separate from `language` because Vero dictates in Russian while an
+   * admin helping her may be reading English, and one prop cannot be both.
+   * Falls back to `language` so existing callers are unchanged.
+   */
+  uiLang?: 'ru' | 'en';
   onTranscript: (text: string) => void;
   ariaLabelIdle?: string;
   ariaLabelRecording?: string;
@@ -34,12 +42,14 @@ type MicState = 'idle' | 'recording' | 'uploading';
 const VoiceInput = ({
   adminPassword,
   language,
+  uiLang,
   onTranscript,
   ariaLabelIdle = 'Record voice',
   ariaLabelRecording = 'Release to stop',
   ariaLabelUploading = 'Transcribing…',
   ...iconButtonProps
 }: Props) => {
+  const toastLang = uiLang ?? language;
   const [state, setState] = useState<MicState>('idle');
   const [supported, setSupported] = useState(true);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -108,20 +118,20 @@ const VoiceInput = ({
       // Distinct copy for the two most common failure modes so Vero
       // knows what to do instead of guessing.
       const description = name === 'NotAllowedError' || name === 'PermissionDeniedError'
-        ? language === 'ru'
+        ? toastLang === 'ru'
           ? 'Разреши сайту доступ к микрофону в настройках браузера, затем попробуй снова.'
           : 'Grant microphone permission for this site in your browser settings, then try again.'
         : err instanceof Error
           ? err.message
           : String(err);
       toast({
-        title: language === 'ru' ? 'Микрофон недоступен' : 'Microphone unavailable',
+        title: toastLang === 'ru' ? 'Микрофон недоступен' : 'Microphone unavailable',
         description,
         status: 'warning',
         duration: 4500,
       });
     }
-  }, [state, language, toast, teardown]);
+  }, [state, toastLang, toast, teardown]);
 
   const stop = useCallback(async () => {
     const recorder = recorderRef.current;
@@ -152,7 +162,7 @@ const VoiceInput = ({
       teardown();
       setState('idle');
       toast({
-        title: language === 'ru' ? 'Не удалось остановить запись' : 'Could not stop recording',
+        title: toastLang === 'ru' ? 'Не удалось остановить запись' : 'Could not stop recording',
         description: err instanceof Error ? err.message : String(err),
         status: 'warning',
         duration: 3500,
@@ -176,7 +186,7 @@ const VoiceInput = ({
       const data = await res.json();
       if (!res.ok || !data.success) {
         toast({
-          title: language === 'ru' ? 'Не удалось расшифровать' : 'Transcription failed',
+          title: toastLang === 'ru' ? 'Не удалось расшифровать' : 'Transcription failed',
           description: data.error || `Server error (${res.status})`,
           status: 'warning',
           duration: 4000,

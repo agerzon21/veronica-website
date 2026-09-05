@@ -10,7 +10,7 @@ import {
 import CTAButton from './ui/CTAButton';
 import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
 import VoiceInput from './ui/VoiceInput';
-import type { ChatLanguage } from './AdminAssistant';
+import { useAdminLang, type AdminLang } from '../i18n/admin';
 
 /**
  * "Chat" panel of the Assistant tab.
@@ -41,7 +41,6 @@ import type { ChatLanguage } from './AdminAssistant';
 
 interface Props {
   adminPassword: string;
-  language: ChatLanguage;
   /**
    * Rendered inside the Messages refine panel rather than as its own tab.
    * The standalone sizing (78vh tall, 900px wide, centred) is right for a
@@ -79,6 +78,7 @@ interface DbWrite {
 interface Strings {
   translateOn: string;
   translateOff: string;
+  translatingTurn: string;
   headerHint: string;
   newConversation: string;
   resetConfirm: string;
@@ -104,10 +104,11 @@ interface Strings {
 /** Whether the refine panel shows a translation under each assistant turn. */
 const TRANSLATE_KEY = 'vero_refine_translate';
 
-const STRINGS: Record<ChatLanguage, Strings> = {
+const STRINGS: Record<AdminLang, Strings> = {
   ru: {
     translateOn: 'Показывать перевод',
     translateOff: 'Скрыть перевод',
+    translatingTurn: 'Перевожу…',
     headerHint: 'Разговор с личным ассистентом. Пиши по-русски.',
     newConversation: 'Новый разговор',
     resetConfirm: 'Стереть весь текущий разговор?',
@@ -159,6 +160,7 @@ const STRINGS: Record<ChatLanguage, Strings> = {
   en: {
     translateOn: 'Show translation',
     translateOff: 'Hide translation',
+    translatingTurn: 'Translating…',
     headerHint: 'Chatting with your personal assistant. Write in English.',
     newConversation: 'New conversation',
     resetConfirm: 'Erase the entire current conversation?',
@@ -209,7 +211,7 @@ const STRINGS: Record<ChatLanguage, Strings> = {
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReplySent }: Props) => {
+const AdminAssistantChat = ({ adminPassword, embedded = false, onReplySent }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
@@ -228,7 +230,12 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
-  const t = STRINGS[language];
+  // Indexed by the GLOBAL admin language. It used to be indexed by a separate
+  // `vero_assistant_lang` key that defaulted to 'ru' and could only be changed
+  // from a toggle on the Assistant tab, so every string here stayed Russian for
+  // an English admin who had never visited that tab.
+  const { lang } = useAdminLang();
+  const t = STRINGS[lang];
 
   // Vero reads Russian; the drafts are written in the CUSTOMER's language,
   // usually English. She cannot improve a reply she cannot read, and asking
@@ -244,12 +251,42 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
     } catch {
       /* private browsing */
     }
-    return language === 'ru';
+    return embedded;
   });
   const [translations, setTranslations] = useState<Record<number, string>>({});
   // Indices already translated or in flight. A ref, not state, so the effect
   // below can consult it without listing it as a dependency.
   const translatedTurns = useRef<Set<number>>(new Set());
+  const [translatingTurn, setTranslatingTurn] = useState<number | null>(null);
+
+  // One routine, used by both the automatic pass and the per-turn button, so
+  // they cannot drift apart. `force` skips the already-claimed check because a
+  // manual press is an explicit retry.
+  const translateTurn = useCallback(
+    async (i: number, text: string, force = false) => {
+      if (!force && translatedTurns.current.has(i)) return;
+      translatedTurns.current.add(i);
+      if (force) setTranslatingTurn(i);
+      try {
+        const res = await fetch('/api/admin/messages-translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, text, targetLang: lang }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success && typeof data.translated === 'string') {
+          setTranslations((prev) => ({ ...prev, [i]: data.translated }));
+        } else {
+          translatedTurns.current.delete(i);
+        }
+      } catch {
+        translatedTurns.current.delete(i);
+      } finally {
+        if (force) setTranslatingTurn(null);
+      }
+    },
+    [adminPassword, lang],
+  );
 
   const toggleTranslations = () => {
     setShowTranslations((v) => {
@@ -268,48 +305,39 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
   // translator for no reason.
   useEffect(() => {
     if (!embedded || !showTranslations) return;
-    const cyrillic = /[\u0400-\u04FF]/;
-    const latin = /[A-Za-z]/;
+    // Count foreign-script characters rather than demanding the turn contain
+    // NONE of the reader's own script. The old test was
+    //   lang === 'ru' ? latin.test(t) && !cyrillic.test(t) : cyrillic.test(t)
+    // which required a Russian reader's turn to be pure Latin. But the backend
+    // deliberately produces the opposite shape: it answers in the UI language
+    // and writes the draft inside it in the CUSTOMER's language. So every
+    // reply-drafting turn is Russian prose wrapping an English draft, and
+    // `!cyrillic` was false for every one. Measured against the live
+    // transcript: 0 of 99 assistant turns passed, including 0 of the 54 that
+    // actually carried a draft to read.
+    const countMatches = (text: string, re: RegExp) => (text.match(re) || []).length;
+    // Enough foreign text to be a sentence, not a stray "OK" or a signature.
+    const MIN_FOREIGN_CHARS = 20;
     const needsIt = (text: string) =>
-      language === 'ru' ? latin.test(text) && !cyrillic.test(text) : cyrillic.test(text);
+      lang === 'ru'
+        ? countMatches(text, /[A-Za-z]/g) >= MIN_FOREIGN_CHARS
+        : countMatches(text, /[\u0400-\u04FF]/g) >= MIN_FOREIGN_CHARS;
 
-    let cancelled = false;
     (async () => {
       for (let i = 0; i < messages.length; i++) {
         const m = messages[i];
         if (m.role !== 'assistant' || m.pending) continue;
-        if (translatedTurns.current.has(i) || !needsIt(m.content)) continue;
-        // Claim the index before awaiting, so the same turn is not fetched
-        // twice by overlapping runs.
-        translatedTurns.current.add(i);
-        try {
-          const res = await fetch('/api/admin/messages-translate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: adminPassword, text: m.content, targetLang: language }),
-          });
-          const data = await res.json();
-          if (cancelled) return;
-          if (res.ok && data.success && typeof data.translated === 'string') {
-            setTranslations((prev) => ({ ...prev, [i]: data.translated }));
-          }
-        } catch {
-          // A failed translation just means no subtitle on that turn. Release
-          // the claim so a later run (or the manual chip) can retry.
-          translatedTurns.current.delete(i);
-        }
+        if (!needsIt(m.content)) continue;
+        await translateTurn(i, m.content);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
     // `translations` is deliberately NOT a dependency. It was, and since this
     // effect SETS it, every success re-ran the loop from index 0 and abandoned
     // the in-flight fetch — each turn costing several duplicate paid calls. The
     // already-done set lives in a ref precisely so it can be read here without
     // retriggering.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, showTranslations, embedded, language, adminPassword]);
+  }, [messages, showTranslations, embedded, lang, translateTurn]);
 
 
   // Load persisted history on mount so returning to the tab feels
@@ -446,7 +474,7 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
           // Sent every turn so the server prompt matches whatever
           // language the toggle is on at send time. Language changes
           // mid-thread flip the NEXT reply, not old ones.
-          language,
+          language: lang,
         }),
       });
       const data = await res.json();
@@ -677,6 +705,14 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
                 // "hide" button only stopped fetching NEW ones and left every
                 // translation already on screen sitting there.
                 translation={embedded && showTranslations ? translations[i] : undefined}
+                onTranslate={
+                  embedded && m.role === 'assistant'
+                    ? () => translateTurn(i, m.content, true)
+                    : undefined
+                }
+                translating={translatingTurn === i}
+                translateLabel={t.translateOn}
+                translatingLabel={t.translatingTurn}
               />
             ))}
           </VStack>
@@ -768,11 +804,11 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
           >
             <VoiceInput
               adminPassword={adminPassword}
-              language={language}
+              language={lang}
               onTranscript={handleTranscript}
               ariaLabelIdle={t.micRecordAria}
               ariaLabelRecording={t.micStopAria}
-              ariaLabelUploading={language === 'ru' ? 'Расшифровываю…' : 'Transcribing…'}
+              ariaLabelUploading={lang === 'ru' ? 'Расшифровываю…' : 'Transcribing…'}
               variant="outline"
               size="lg"
               minW={embedded ? { base: '48px', lg: '100%' } : { base: '48px', md: 'auto' }}
@@ -816,11 +852,24 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReply
 function MessageBubble({
   msg,
   translation,
+  onTranslate,
+  translating,
+  translateLabel,
+  translatingLabel,
 }: {
   msg: ChatMessage;
   /** Shown beneath the original, so both the sendable text and its meaning
    *  are visible at once. */
   translation?: string;
+  /**
+   * Manual trigger. The automatic pass uses a script heuristic, and a
+   * heuristic can always be wrong about one turn; this makes "translate this"
+   * reachable regardless, which is what was missing.
+   */
+  onTranslate?: () => void;
+  translating?: boolean;
+  translateLabel?: string;
+  translatingLabel?: string;
 }) {
   const isUser = msg.role === 'user';
   return (
@@ -851,6 +900,32 @@ function MessageBubble({
             fontStyle="italic"
           >
             {translation}
+          </Box>
+        )}
+        {!translation && !msg.pending && onTranslate && (
+          <Box
+            as="button"
+            type="button"
+            onClick={onTranslate}
+            disabled={translating}
+            mt={2}
+            // The bubble is whiteSpace:pre-wrap, so an inline-flex chip flows
+            // straight after the last word of the message. It needs its own row.
+            display="flex"
+            width="fit-content"
+            alignItems="center"
+            gap={1.5}
+            fontSize="2xs"
+            fontWeight="500"
+            color={translating ? 'gray.400' : 'brand.accentText'}
+            opacity={0.85}
+            _hover={translating ? undefined : { opacity: 1, textDecoration: 'underline' }}
+            cursor={translating ? 'default' : 'pointer'}
+            minH={{ base: '32px', md: 'auto' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            <Icon as={FaLanguage} boxSize={2.5} />
+            {translating ? translatingLabel : translateLabel}
           </Box>
         )}
       </Box>

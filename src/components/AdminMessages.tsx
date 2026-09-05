@@ -62,17 +62,110 @@ import {
   FaEllipsisV,
 } from 'react-icons/fa';
 import AdminAssistantChat from './AdminAssistantChat';
-import { loadInitialLanguage } from './assistantLanguage';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
-import { useAdminLang, adminDict, type AdminT, type AdminLang } from '../i18n/admin';
+import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 
 // Vero speaks Russian natively — customer messages (usually English)
 // get translated to Russian; her replies get translated to English
 // before sending. If we ever localize this UI properly, flip this to
 // a per-user setting.
 const VERO_LANG = 'ru';
+
+/**
+ * On-demand translation of one piece of text.
+ *
+ * Extracted verbatim out of MessageBubble so the AI draft card can reuse it.
+ * The draft card never had any way to translate itself: the Translate chip
+ * lived only inside MessageBubble, and the draft is deliberately filtered out
+ * of the bubble list, so the one message Vero has to read before approving it
+ * was the one message she could not read.
+ *
+ * `targetLang` is the READER's language, not Vero's. It used to be the module
+ * constant VERO_LANG, which is right for translate-on-send (what language the
+ * outbound was composed in) and wrong here (what language the person looking
+ * at the screen reads).
+ */
+function useTextTranslation(text: string, adminPassword: string, targetLang: string, t: AdminT) {
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [detectedLang, setDetectedLang] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const translate = async () => {
+    if (translation || translating) return;
+    setTranslating(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/messages-translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, text, targetLang }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTranslation(data.translated);
+        setDetectedLang(data.detectedLang || null);
+      } else {
+        setError(data.error || t.messages.translationFailed);
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  return { translation, detectedLang, translating, error, translate };
+}
+
+/** The Translate chip. Same treatment everywhere it appears. */
+function TranslateChip({
+  translating,
+  onClick,
+  label,
+  busyLabel,
+}: {
+  translating: boolean;
+  onClick: () => void;
+  label: string;
+  busyLabel: string;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      display="inline-flex"
+      alignItems="center"
+      gap={1.5}
+      fontSize="xs"
+      fontWeight="500"
+      color={translating ? 'gray.400' : 'brand.accentText'}
+      bg={translating ? 'gray.50' : 'rgba(201, 169, 110, 0.12)'}
+      border="1px solid"
+      borderColor={translating ? 'gray.200' : 'rgba(201, 169, 110, 0.4)'}
+      _hover={translating ? undefined : {
+        bg: 'rgba(201, 169, 110, 0.22)',
+        borderColor: 'brand.accent',
+        color: '#6b5424',
+      }}
+      cursor={translating ? 'default' : 'pointer'}
+      // Mobile: taller + roomier so it actually clears the
+      // 40px tap-target floor without ballooning on desktop.
+      minH={{ base: '40px', md: 'auto' }}
+      px={{ base: 3, md: 2.5 }}
+      py={{ base: 1.5, md: 1 }}
+      borderRadius="sm"
+      disabled={translating}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Icon as={FaLanguage} boxSize={3} />
+      {translating ? busyLabel : label}
+    </Box>
+  );
+}
 
 /**
  * "Messages" tab in /admin — the unified inbox for Instagram DMs
@@ -278,7 +371,6 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   const [refineCollapsed, setRefineCollapsed] = useState(false);
   // Restore whatever the rail was before the panel auto-folded it.
   const railBeforeRefine = useRef(false);
-  const assistantLang = loadInitialLanguage();
 
   const openRefinePanel = () => {
     if (!selectedId) return;
@@ -723,7 +815,6 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 <AdminAssistantChat
                   key={refineNonce}
                   adminPassword={adminPassword}
-                  language={assistantLang}
                   embedded
                   onReplySent={closeRefinePanel}
                 />
@@ -1259,7 +1350,7 @@ function ConversationView({
   onBack?: () => void;
   onOpenAssistant?: () => void;
 }) {
-  const { t } = useAdminLang();
+  const { t, lang: adminLang } = useAdminLang();
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1272,6 +1363,14 @@ function ConversationView({
   // The AI's unsent suggestion, if it left one. Only ever present on
   // non-Instagram channels — see the dispatch in api/_ai-reply.ts.
   const pendingDraft = messages.find((m) => m.status === 'draft') ?? null;
+  // Keyed on the draft body via the hook's own state: a new draft arrives as a
+  // different ConversationView render, and discarding clears the card entirely.
+  const {
+    translation: draftTranslation,
+    translating: draftTranslating,
+    error: draftTranslateError,
+    translate: translateDraft,
+  } = useTextTranslation(pendingDraft?.body ?? '', adminPassword, adminLang, t);
 
   // "This draft isn't right" → hand the whole situation to the Assistant.
   //
@@ -1416,15 +1515,24 @@ function ConversationView({
   // Russian — but the toggle lets an admin flip to English when
   // helping her out. Persisted per-browser (localStorage) so the
   // choice sticks across sessions.
+  // Follows the global admin language unless she has explicitly overridden it
+  // for the summary content. It used to default to a hardcoded 'ru' AND persist
+  // on mount, so the key was populated on the very first render and the
+  // "nothing stored, follow the global language" path could never run.
+  // Persisting now happens in the change handler, not on mount.
   const [summaryLang, setSummaryLang] = useState<SummaryLang>(() => {
-    if (typeof window === 'undefined') return 'ru';
-    return (window.localStorage.getItem('vero_summary_lang') as SummaryLang) || 'ru';
+    if (typeof window === 'undefined') return adminLang;
+    const stored = window.localStorage.getItem('vero_summary_lang');
+    return stored === 'ru' || stored === 'en' ? stored : adminLang;
   });
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('vero_summary_lang', summaryLang);
+  const changeSummaryLang = (l: SummaryLang) => {
+    setSummaryLang(l);
+    try {
+      window.localStorage.setItem('vero_summary_lang', l);
+    } catch {
+      /* private mode */
     }
-  }, [summaryLang]);
+  };
   // AI-off banner dismiss state — the banner auto-opens whenever a
   // conversation with AI disabled is opened, but Vero can dismiss it
   // for the current session (state resets when the ConversationView
@@ -2411,7 +2519,7 @@ function ConversationView({
           collapsed={summaryCollapsed}
           onToggleCollapsed={() => setSummaryCollapsed((c) => !c)}
           language={summaryLang}
-          onChangeLanguage={setSummaryLang}
+          onChangeLanguage={changeSummaryLang}
           // Force=true so the Regenerate button always bypasses
           // the server-side cache. The initial auto-load on
           // conversation open (loadAiSummary() with no args) uses
@@ -2562,6 +2670,37 @@ function ConversationView({
               <Text fontSize="sm" color="gray.700" lineHeight="1.6" noOfLines={4} mb={2}>
                 {pendingDraft.body}
               </Text>
+              {/* The draft is generated in the CUSTOMER's language, so this is
+                  the one message Vero has to understand before approving it and
+                  the one message that had no way to be read. Same chip, same
+                  behaviour as every other message in the thread. */}
+              {draftTranslation && (
+                <Box
+                  mb={2}
+                  pl={3}
+                  borderLeft="2px solid"
+                  borderColor="rgba(201, 169, 110, 0.5)"
+                >
+                  <Text fontSize="sm" color="gray.700" lineHeight="1.6" whiteSpace="pre-wrap">
+                    {draftTranslation}
+                  </Text>
+                </Box>
+              )}
+              {draftTranslateError && (
+                <Text fontSize="2xs" color="red.500" mb={2}>
+                  {draftTranslateError}
+                </Text>
+              )}
+              {!draftTranslation && (
+                <Box mb={2}>
+                  <TranslateChip
+                    translating={draftTranslating}
+                    onClick={translateDraft}
+                    label={t.messages.translateAction}
+                    busyLabel={t.messages.translating}
+                  />
+                </Box>
+              )}
               <Text fontSize="2xs" color="gray.500" mb={2}>
                 {t.messages.draftHelp}
               </Text>
@@ -2709,6 +2848,7 @@ function ConversationView({
               // Vero speaks Russian; hint Whisper accordingly. On
               // English-typing days the translate step still runs.
               language="ru"
+              uiLang={adminLang}
               onTranscript={(text) => setReplyText((prev) => (prev ? `${prev} ${text}` : text))}
               ariaLabelIdle={t.messages.micRecordReply}
               ariaLabelRecording={t.messages.micReleaseStop}
@@ -2868,38 +3008,15 @@ function MessageBubble({
     ? FaRobot
     : FaUser;
 
-  const [translation, setTranslation] = useState<string | null>(null);
-  const [detectedLang, setDetectedLang] = useState<string | null>(null);
-  const [translating, setTranslating] = useState(false);
-  const [translateError, setTranslateError] = useState<string | null>(null);
-
-  const handleTranslate = async () => {
-    if (translation || translating) return;
-    setTranslating(true);
-    setTranslateError(null);
-    try {
-      const res = await fetch('/api/admin/messages-translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: adminPassword,
-          text: msg.body,
-          targetLang: VERO_LANG,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTranslation(data.translated);
-        setDetectedLang(data.detectedLang || null);
-      } else {
-        setTranslateError(data.error || t.messages.translationFailed);
-      }
-    } catch {
-      setTranslateError(t.common.couldNotReach);
-    } finally {
-      setTranslating(false);
-    }
-  };
+  // Targets the admin's reading language. This was VERO_LANG, so an English
+  // admin pressing Translate on a Russian message got Russian back.
+  const {
+    translation,
+    detectedLang,
+    translating,
+    error: translateError,
+    translate: handleTranslate,
+  } = useTextTranslation(msg.body, adminPassword, lang, t);
 
   return (
     <Flex justify={isInbound ? 'flex-start' : 'flex-end'}>
@@ -2975,37 +3092,12 @@ function MessageBubble({
           direction={isInbound ? 'row' : 'row-reverse'}
         >
           {!translation && (
-            <Box
-              as="button"
-              type="button"
+            <TranslateChip
+              translating={translating}
               onClick={handleTranslate}
-              display="inline-flex"
-              alignItems="center"
-              gap={1.5}
-              fontSize="xs"
-              fontWeight="500"
-              color={translating ? 'gray.400' : 'brand.accentText'}
-              bg={translating ? 'gray.50' : 'rgba(201, 169, 110, 0.12)'}
-              border="1px solid"
-              borderColor={translating ? 'gray.200' : 'rgba(201, 169, 110, 0.4)'}
-              _hover={translating ? undefined : {
-                bg: 'rgba(201, 169, 110, 0.22)',
-                borderColor: 'brand.accent',
-                color: '#6b5424',
-              }}
-              cursor={translating ? 'default' : 'pointer'}
-              // Mobile: taller + roomier so it actually clears the
-              // 40px tap-target floor without ballooning on desktop.
-              minH={{ base: '40px', md: 'auto' }}
-              px={{ base: 3, md: 2.5 }}
-              py={{ base: 1.5, md: 1 }}
-              borderRadius="sm"
-              disabled={translating}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <Icon as={FaLanguage} boxSize={3} />
-              {translating ? t.messages.translating : t.messages.translateAction}
-            </Box>
+              label={t.messages.translateAction}
+              busyLabel={t.messages.translating}
+            />
           )}
           <Text
             fontSize={{ base: 'xs', md: '2xs' }}
@@ -3115,21 +3207,22 @@ function SummaryCard({
   const classLabel = t.messages.classification[classification];
   const localized = readSummaryLocale(summary, language);
 
-  // Label copy that changes with the SUMMARY-language toggle so the
-  // section labels around the content read naturally on both sides of
-  // the RU/EN switch — sourced from the shared dict so translations
-  // live in one place.
+  // These are CHROME, so they follow the admin panel language like every other
+  // label. They used to be indexed by `language`, the summary CONTENT toggle,
+  // which is why an English admin saw "СВОДКА" and "ОТКРЫТЬ СВОДКУ" sitting
+  // next to an English BOOKING INQUIRY badge inside the same card. The summary
+  // text itself still follows the content toggle; only the labels moved.
   const strings = {
-    header: adminDict.messages.summaryTitle[language],
-    asking: adminDict.messages.summaryAsking[language],
-    gathered: adminDict.messages.summaryGathered[language],
-    nextStep: adminDict.messages.summaryNextStep[language],
-    tone: adminDict.messages.summaryTone[language],
-    expandCta: adminDict.messages.closeSummaryOpenChat[language],
-    collapseCta: adminDict.messages.openSummary[language],
-    hideCta: adminDict.messages.hideSummary[language],
-    loadingLabel: adminDict.messages.summaryLoading[language],
-    noSummary: adminDict.messages.summaryNone[language],
+    header: t.messages.summaryTitle,
+    asking: t.messages.summaryAsking,
+    gathered: t.messages.summaryGathered,
+    nextStep: t.messages.summaryNextStep,
+    tone: t.messages.summaryTone,
+    expandCta: t.messages.closeSummaryOpenChat,
+    collapseCta: t.messages.openSummary,
+    hideCta: t.messages.hideSummary,
+    loadingLabel: t.messages.summaryLoading,
+    noSummary: t.messages.summaryNone,
   };
 
   return (
