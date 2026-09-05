@@ -66,6 +66,7 @@ import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
+import { loadDraft, saveDraft, clearDraft } from './draftStore';
 
 // Vero speaks Russian natively — customer messages (usually English)
 // get translated to Russian; her replies get translated to English
@@ -816,6 +817,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                   key={refineNonce}
                   adminPassword={adminPassword}
                   embedded
+                  conversationId={selectedId}
                   onReplySent={closeRefinePanel}
                 />
               </Box>
@@ -1355,7 +1357,27 @@ function ConversationView({
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
+  // Restored per conversation. ConversationView is already keyed by
+  // conversation, so this remounts on every thread switch and the scoping
+  // falls out of that for free.
+  const [replyText, setReplyText] = useState(() => loadDraft('reply', summary.id));
+
+  useEffect(() => {
+    const id = window.setTimeout(() => saveDraft('reply', summary.id, replyText), 400);
+    return () => window.clearTimeout(id);
+  }, [replyText, summary.id]);
+
+  const replyTextRef = useRef(replyText);
+  replyTextRef.current = replyText;
+  useEffect(() => {
+    const flush = () => saveDraft('reply', summary.id, replyTextRef.current);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, [summary.id]);
   const [discardingDraft, setDiscardingDraft] = useState(false);
   // Text the server flagged as a repeat, held while Vero decides.
   const [duplicateText, setDuplicateText] = useState<string | null>(null);
@@ -1832,6 +1854,7 @@ function ConversationView({
         // text, so sending again produces a fresh translation that the
         // server-side duplicate check will not recognise.
         setReplyText('');
+        clearDraft('reply', summary.id);
         await loadDetail();
         onRefreshList();
         onReplySent?.();
@@ -1911,6 +1934,7 @@ function ConversationView({
       const data = await res.json();
       if (res.ok && data.success) {
         setReplyText('');
+        clearDraft('reply', summary.id);
         await loadDetail();
         onRefreshList();
         // The draft is out the door; the refine panel has nothing left to do.

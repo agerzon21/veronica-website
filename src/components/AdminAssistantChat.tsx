@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
+import { loadDraft, saveDraft, clearDraft, sweepDrafts } from './draftStore';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminLang } from '../i18n/admin';
 
@@ -48,6 +49,11 @@ interface Props {
    * whatever box it is given.
    */
   embedded?: boolean;
+  /**
+   * Which conversation this panel is refining. Scopes the unsent-text draft,
+   * so switching threads and coming back restores the right one.
+   */
+  conversationId?: string | null;
   /**
    * Fired when the assistant sends the reply itself, via its `send_reply`
    * tool, rather than Vero sending from the draft card. Same end state — the
@@ -211,23 +217,67 @@ const STRINGS: Record<AdminLang, Strings> = {
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, embedded = false, onReplySent }: Props) => {
+const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, onReplySent }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
   // tabs. Read once on mount and clear, so it can't reappear later.
   // Prefills rather than sends: the prompt ends mid-sentence on purpose,
   // waiting for Vero to say what she'd change.
-  const [input, setInput] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    const parked = sessionStorage.getItem(ASSISTANT_HANDOFF_KEY);
-    if (!parked) return '';
-    sessionStorage.removeItem(ASSISTANT_HANDOFF_KEY);
-    return parked;
-  });
+  const draftScope = conversationId ?? 'general';
+  const [input, setInput] = useState(() => loadDraft('assistant', draftScope));
+
+  // The parked handoff prompt is consumed in an effect, not in the useState
+  // initializer above. StrictMode double-invokes initializers: the first call
+  // read the key and removed it, and the second call — whose return value React
+  // actually keeps — found nothing, so the prompt silently vanished. An effect
+  // runs after the state is settled, and a StrictMode re-run finds the key
+  // already gone and no-ops.
+  //
+  // A fresh handoff is an explicit "refine THIS draft" and outranks whatever
+  // was left in the composer, which is what makes a second Improve press reset
+  // rather than restore stale text.
+  useEffect(() => {
+    let parked: string | null = null;
+    try {
+      parked = sessionStorage.getItem(ASSISTANT_HANDOFF_KEY);
+      if (parked) sessionStorage.removeItem(ASSISTANT_HANDOFF_KEY);
+    } catch {
+      return;
+    }
+    if (parked) setInput(parked);
+    // Mount only; a handoff is parked immediately before this panel opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Debounced so typing does not hit localStorage on every keystroke.
+  useEffect(() => {
+    const id = window.setTimeout(() => saveDraft('assistant', draftScope, input), 400);
+    return () => window.clearTimeout(id);
+  }, [input, draftScope]);
+
+  // A pull-to-refresh does not reliably fire `beforeunload` on iOS Safari,
+  // which is exactly how this was lost. `pagehide` and `visibilitychange` do.
+  useEffect(() => {
+    const flush = () => saveDraft('assistant', draftScope, inputRef.current);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, [draftScope]);
+
+  useEffect(() => {
+    sweepDrafts();
+  }, []);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // The pagehide listener is registered once; without this it would flush
+  // whatever `input` was when it was registered.
+  const inputRef = useRef(input);
+  inputRef.current = input;
   const toast = useToast();
 
   // Indexed by the GLOBAL admin language. It used to be indexed by a separate
@@ -455,6 +505,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, onReplySent }: Pr
     if (!text || sending) return;
     setSending(true);
     setInput('');
+    clearDraft('assistant', draftScope);
     // Optimistically show the user's turn + a pending assistant turn
     // so the UI doesn't sit blank while OpenAI is thinking.
     setMessages((prev) => [
@@ -521,6 +572,12 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, onReplySent }: Pr
         }
         return next;
       });
+      // The network never carried it, so nothing was persisted server-side and
+      // giving the words back is safe. Only on the catch: a non-ok RESPONSE may
+      // mean the turn was already stored, and restoring there would invite a
+      // duplicate. She types offline, sends, and gets her message back.
+      setInput(text);
+      saveDraft('assistant', draftScope, text);
     } finally {
       setSending(false);
     }

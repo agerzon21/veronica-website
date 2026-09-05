@@ -26,6 +26,7 @@ import AdminGallery from '../components/AdminGallery';
 import AdminReviews from '../components/AdminReviews';
 import AdminLeads from '../components/AdminLeads';
 import AdminMessages, { REFINE_SESSION_KEY } from '../components/AdminMessages';
+import { clearAllDrafts } from '../components/draftStore';
 import AdminAssistant from '../components/AdminAssistant';
 import AdminCrons from '../components/AdminCrons';
 import AdminUsers from '../components/AdminUsers';
@@ -285,6 +286,15 @@ const Admin = () => {
       sessionStorage.removeItem(ADMIN_SESSION_KEY);
     } catch {
       // Private-mode Safari; the state reset below still signs them out here.
+    }
+    // Unsent reply text is customer correspondence sitting in localStorage,
+    // which outlives the session by design. Handing the laptop to a client is
+    // the exact scenario this button exists for, so it goes too.
+    clearAllDrafts();
+    try {
+      localStorage.removeItem(REFINE_SESSION_KEY);
+    } catch {
+      /* ignore */
     }
 
     setPortals(null);
