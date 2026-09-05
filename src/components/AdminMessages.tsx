@@ -234,6 +234,14 @@ const POLL_INTERVAL_MS = 30_000;
  */
 export const ASSISTANT_HANDOFF_KEY = 'assistant-handoff-prompt';
 
+/**
+ * Which conversation has an open refine session. Survives a reload.
+ * Exported because the Admin shell has to read it before this component
+ * mounts: `dashTab` starts at 'clients' on every load, so without that check
+ * a refresh would drop her on Clients and the restore below would never run.
+ */
+export const REFINE_SESSION_KEY = 'vero_refine_session';
+
 const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) => {
   const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
@@ -243,9 +251,25 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   // refine panel have room.
   const [listCollapsed, setListCollapsed] = useState(false);
   // Refine panel. Opens as a THIRD column beside the thread rather than
-  // navigating to the Assistant tab — that navigation lost the conversation
-  // you were reading and wiped anything already typed on the way back.
-  const [refineOpen, setRefineOpen] = useState(false);
+  // navigating to the Assistant tab, which lost the conversation you were
+  // reading and wiped anything already typed on the way back.
+  //
+  // The session is stored as the conversation it belongs to, in localStorage,
+  // rather than as a boolean in React state. Vero was mid-refine on her phone,
+  // scrolled, triggered a pull-to-refresh, and lost the panel: the transcript
+  // itself survives (it lives in assistant_chats server-side) but she landed
+  // back in Messages with no way to it except the Assistant tab. Now a reload
+  // reopens the same conversation with the panel still up, and switching to
+  // another thread and back restores it rather than discarding it. It ends
+  // only when she closes it or the reply is sent.
+  const [refineFor, setRefineFor] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(REFINE_SESSION_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const refineOpen = refineFor !== null && refineFor === selectedId;
   // Remounts the chat so a second "improve" starts from the new draft.
   const [refineNonce, setRefineNonce] = useState(0);
   // Mobile only: roll the panel down to its header so the conversation behind
@@ -257,25 +281,37 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   const assistantLang = loadInitialLanguage();
 
   const openRefinePanel = () => {
+    if (!selectedId) return;
     railBeforeRefine.current = listCollapsed;
     setListCollapsed(true);
     setRefineNonce((n) => n + 1);
     setRefineCollapsed(false);
-    setRefineOpen(true);
+    setRefineFor(selectedId);
+    try {
+      localStorage.setItem(REFINE_SESSION_KEY, selectedId);
+    } catch {
+      // Private browsing. The panel still works for this page view.
+    }
   };
   const closeRefinePanel = () => {
-    setRefineOpen(false);
+    setRefineFor(null);
     setRefineCollapsed(false);
     setListCollapsed(railBeforeRefine.current);
+    try {
+      localStorage.removeItem(REFINE_SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
   };
 
-  // Switching threads invalidates the panel: it was seeded with a prompt about
-  // a specific person's draft, so leaving it open over a different conversation
-  // is worse than misleading — it would refine the wrong reply.
+  // On a reload, reopen the conversation the refine session belongs to. The
+  // panel is bound to that thread, so it does not follow her to a different
+  // one — it would be refining the wrong person's draft — but it is waiting
+  // when she comes back.
   useEffect(() => {
-    setRefineOpen(false);
-    setRefineCollapsed(false);
-  }, [selectedId]);
+    if (refineFor && selectedId === null) setSelectedId(refineFor);
+    // Only on mount / when a stored session appears.
+  }, [refineFor, selectedId]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Confirm dialog state for the global AI pause. Replaces the old
@@ -681,6 +717,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                   adminPassword={adminPassword}
                   language={assistantLang}
                   embedded
+                  onReplySent={closeRefinePanel}
                 />
               </Box>
             </Box>

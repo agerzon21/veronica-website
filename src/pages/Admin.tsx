@@ -25,7 +25,7 @@ import AdminJournal from '../components/AdminJournal';
 import AdminGallery from '../components/AdminGallery';
 import AdminReviews from '../components/AdminReviews';
 import AdminLeads from '../components/AdminLeads';
-import AdminMessages from '../components/AdminMessages';
+import AdminMessages, { REFINE_SESSION_KEY } from '../components/AdminMessages';
 import AdminAssistant from '../components/AdminAssistant';
 import AdminCrons from '../components/AdminCrons';
 import AdminUsers from '../components/AdminUsers';
@@ -144,7 +144,17 @@ const Admin = () => {
   const [portals, setPortals] = useState<AdminPortalSummary[] | null>(null);
   const [adminLevel, setAdminLevel] = useState<'admin' | 'super'>('admin');
   const [view, setView] = useState<View>({ kind: 'dashboard' });
-  const [dashTab, setDashTab] = useState<DashTab>('clients');
+  // Clients is the normal landing tab, but an open refine session outranks it:
+  // if she was mid-refine on a reply and the page reloaded (a phone
+  // pull-to-refresh is the way this actually happens), coming back to Clients
+  // strands the panel AdminMessages is about to restore.
+  const [dashTab, setDashTab] = useState<DashTab>(() => {
+    try {
+      return localStorage.getItem(REFINE_SESSION_KEY) ? 'messages' : 'clients';
+    } catch {
+      return 'clients';
+    }
+  });
   // Clients sub-view (Table / Calendar) lives at the shell level so
   // the mobile sub-nav strip can toggle it. AdminDashboard reads it
   // as a prop instead of owning its own internal state.

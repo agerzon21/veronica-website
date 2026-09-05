@@ -5,7 +5,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  FaPaperPlane, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb, FaChevronDown,
+  FaPaperPlane, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb, FaChevronDown, FaLanguage,
 } from 'react-icons/fa';
 import CTAButton from './ui/CTAButton';
 import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
@@ -49,6 +49,12 @@ interface Props {
    * whatever box it is given.
    */
   embedded?: boolean;
+  /**
+   * Fired when the assistant sends the reply itself, via its `send_reply`
+   * tool, rather than Vero sending from the draft card. Same end state — the
+   * message is out the door — so the refine session should end either way.
+   */
+  onReplySent?: () => void;
 }
 
 interface ChatMessage {
@@ -71,6 +77,8 @@ interface DbWrite {
 }
 
 interface Strings {
+  translateOn: string;
+  translateOff: string;
   headerHint: string;
   newConversation: string;
   resetConfirm: string;
@@ -93,8 +101,13 @@ interface Strings {
   looping: string;
 }
 
+/** Whether the refine panel shows a translation under each assistant turn. */
+const TRANSLATE_KEY = 'vero_refine_translate';
+
 const STRINGS: Record<ChatLanguage, Strings> = {
   ru: {
+    translateOn: 'Показывать перевод',
+    translateOff: 'Скрыть перевод',
     headerHint: 'Разговор с личным ассистентом. Пиши по-русски.',
     newConversation: 'Новый разговор',
     resetConfirm: 'Стереть весь текущий разговор?',
@@ -144,6 +157,8 @@ const STRINGS: Record<ChatLanguage, Strings> = {
     looping: '(Ассистент продолжал вызывать инструменты без ответа. Попробуй перефразировать.)',
   },
   en: {
+    translateOn: 'Show translation',
+    translateOff: 'Hide translation',
     headerHint: 'Chatting with your personal assistant. Write in English.',
     newConversation: 'New conversation',
     resetConfirm: 'Erase the entire current conversation?',
@@ -194,7 +209,7 @@ const STRINGS: Record<ChatLanguage, Strings> = {
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props) => {
+const AdminAssistantChat = ({ adminPassword, language, embedded = false, onReplySent }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
@@ -214,6 +229,74 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
   const toast = useToast();
 
   const t = STRINGS[language];
+
+  // Vero reads Russian; the drafts are written in the CUSTOMER's language,
+  // usually English. She cannot improve a reply she cannot read, and asking
+  // her to hit Translate on every revision would be a click per version. So
+  // inside the refine panel each assistant turn carries its translation
+  // underneath, and she sees both the version that will be sent and what it
+  // says. Off by default in English, and switchable either way, because for
+  // an English-speaking admin it is pure noise.
+  const [showTranslations, setShowTranslations] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(TRANSLATE_KEY);
+      if (stored !== null) return stored === '1';
+    } catch {
+      /* private browsing */
+    }
+    return language === 'ru';
+  });
+  const [translations, setTranslations] = useState<Record<number, string>>({});
+
+  const toggleTranslations = () => {
+    setShowTranslations((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(TRANSLATE_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  // Translate assistant turns as they arrive. Skips anything already mostly in
+  // the target script, so a Russian reply is not round-tripped through a
+  // translator for no reason.
+  useEffect(() => {
+    if (!embedded || !showTranslations) return;
+    const cyrillic = /[\u0400-\u04FF]/;
+    const latin = /[A-Za-z]/;
+    const needsIt = (text: string) =>
+      language === 'ru' ? latin.test(text) && !cyrillic.test(text) : cyrillic.test(text);
+
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        if (m.role !== 'assistant' || m.pending) continue;
+        if (translations[i] !== undefined || !needsIt(m.content)) continue;
+        try {
+          const res = await fetch('/api/admin/messages-translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: adminPassword, text: m.content, targetLang: language }),
+          });
+          const data = await res.json();
+          if (cancelled) return;
+          if (res.ok && data.success && typeof data.translated === 'string') {
+            setTranslations((prev) => ({ ...prev, [i]: data.translated }));
+          }
+        } catch {
+          // A failed translation just means no subtitle on that turn.
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, showTranslations, embedded, language, adminPassword, translations]);
+
 
   // Load persisted history on mount so returning to the tab feels
   // continuous. The server returns just the user + assistant text
@@ -366,9 +449,14 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
           return next;
         });
         // One toast per DB write the assistant made this turn.
-        for (const write of (data.dbWrites ?? []) as DbWrite[]) {
+        const writes = (data.dbWrites ?? []) as DbWrite[];
+        for (const write of writes) {
           showAchievementToast(write);
         }
+        // The assistant can send the reply itself. When it does, the refine
+        // session is finished for the same reason it is when she sends from
+        // the draft card, so let the parent close the panel.
+        if (writes.some((w) => w.label === 'Reply sent')) onReplySent?.();
       } else {
         setMessages((prev) => {
           const next = [...prev];
@@ -445,6 +533,22 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
             It used to sit on its own line above the composer, which on a
             phone was a whole row spent on one chip. */}
         <HStack spacing={3} minW={0}>
+          {/* Translation toggle. Only in the refine panel, and only an icon:
+              the header is already busy, and this is a preference she sets
+              once rather than a control she works. */}
+          {embedded && (
+            <IconButton
+              aria-label={showTranslations ? t.translateOff : t.translateOn}
+              title={showTranslations ? t.translateOff : t.translateOn}
+              icon={<Icon as={FaLanguage} boxSize={4} />}
+              size="xs"
+              variant={showTranslations ? 'solid' : 'ghost'}
+              bg={showTranslations ? 'brand.surface' : 'transparent'}
+              color={showTranslations ? 'brand.accentText' : 'gray.400'}
+              onClick={toggleTranslations}
+              flexShrink={0}
+            />
+          )}
   <Menu placement="bottom-start" autoSelect={false}>
             <MenuButton
               as={Box}
@@ -463,6 +567,7 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               px={3}
               py={1.5}
               minH="32px"
+              whiteSpace="nowrap"
               _hover={{ borderColor: 'brand.accent', color: 'brand.accentText' }}
               sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
@@ -485,16 +590,23 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
               ))}
             </MenuList>
           </Menu>
-          <Text
-            fontSize="xs"
-            color="gray.500"
-            fontWeight="400"
-            letterSpacing="0.06em"
-            display={{ base: 'none', lg: 'block' }}
-            noOfLines={1}
-          >
-            {t.headerHint}
-          </Text>
+          {/* Standalone tab only. Chakra breakpoints measure the VIEWPORT, not
+              this column, so on a 1440px screen the `lg` hint still rendered
+              inside a ~370px panel and shoved the quick-actions chip onto two
+              lines. The hint is redundant there anyway — the panel header
+              already says what the panel is. */}
+          {!embedded && (
+            <Text
+              fontSize="xs"
+              color="gray.500"
+              fontWeight="400"
+              letterSpacing="0.06em"
+              display={{ base: 'none', lg: 'block' }}
+              noOfLines={1}
+            >
+              {t.headerHint}
+            </Text>
+          )}
         </HStack>
         {messages.length > 0 && (
           <IconButton
@@ -538,7 +650,16 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
         ) : (
           <VStack spacing={4} align="stretch">
             {messages.map((m, i) => (
-              <MessageBubble key={i} msg={m} />
+              <MessageBubble
+                key={i}
+                msg={m}
+                // Gated on showTranslations, not just on `embedded`: the cache
+                // is kept across a toggle so flipping back is instant, which
+                // means the render has to be what hides them. Without this the
+                // "hide" button only stopped fetching NEW ones and left every
+                // translation already on screen sitting there.
+                translation={embedded && showTranslations ? translations[i] : undefined}
+              />
             ))}
           </VStack>
         )}
@@ -674,7 +795,15 @@ const AdminAssistantChat = ({ adminPassword, language, embedded = false }: Props
   );
 };
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  translation,
+}: {
+  msg: ChatMessage;
+  /** Shown beneath the original, so both the sendable text and its meaning
+   *  are visible at once. */
+  translation?: string;
+}) {
   const isUser = msg.role === 'user';
   return (
     <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
@@ -693,6 +822,19 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         wordBreak="break-word"
       >
         {msg.pending ? <TypingDots /> : msg.content}
+        {translation && !msg.pending && (
+          <Box
+            mt={2.5}
+            pt={2.5}
+            borderTop="1px solid"
+            borderColor="rgba(201, 169, 110, 0.35)"
+            fontSize="xs"
+            color="gray.600"
+            fontStyle="italic"
+          >
+            {translation}
+          </Box>
+        )}
       </Box>
     </Flex>
   );
