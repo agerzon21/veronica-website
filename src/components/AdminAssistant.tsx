@@ -1,4 +1,5 @@
-import { Box, Flex, HStack, Text, Icon, VStack } from '@chakra-ui/react';
+import SubTabButton from './ui/SubTabButton';
+import { Box, Flex, Text, VStack } from '@chakra-ui/react';
 import { useState } from 'react';
 import { FaComments, FaDatabase } from 'react-icons/fa';
 import AdminAssistantChat from './AdminAssistantChat';
@@ -98,51 +99,5 @@ const AdminAssistant = ({ adminPassword }: Props) => {
   );
 };
 
-function SubTabButton({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: typeof FaComments;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Box
-      as="button"
-      type="button"
-      onClick={onClick}
-      px={{ base: 5, md: 4 }}
-      py={{ base: 3.5, md: 2.5 }}
-      minH={{ base: '48px', md: 'auto' }}
-      flex={{ base: '1', md: 'none' }}
-      mb="-1px"
-      bg="transparent"
-      border="none"
-      borderBottom="2px solid"
-      borderColor={active ? 'brand.accent' : 'transparent'}
-      cursor="pointer"
-      transition="all 0.15s"
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-      _hover={{ borderColor: active ? 'brand.accent' : 'gray.300' }}
-      _active={{ bg: 'rgba(201, 169, 110, 0.06)' }}
-    >
-      <HStack spacing={2} justify="center">
-        <Icon as={icon} boxSize={{ base: 3.5, md: 3 }} color={active ? 'brand.accent' : 'gray.500'} />
-        <Text
-          fontSize={{ base: 'xs', md: 'xs' }}
-          fontWeight="500"
-          letterSpacing="0.14em"
-          textTransform="uppercase"
-          color={active ? 'gray.800' : 'gray.500'}
-        >
-          {label}
-        </Text>
-      </HStack>
-    </Box>
-  );
-}
 
 export default AdminAssistant;

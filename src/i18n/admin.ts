@@ -375,10 +375,21 @@ const dict = {
     // The refine panel — opens beside the thread instead of navigating to the
     // Assistant tab, which used to throw away both the conversation context
     // and anything already typed.
-    refinePanelTitle: { en: 'Refine reply', ru: 'Доработать ответ' },
-    refineClose: { en: 'Close refine panel', ru: 'Закрыть панель' },
+    refinePanelTitle: { en: 'AI', ru: 'AI' },
+    refineClose: { en: 'Close AI panel', ru: 'Закрыть панель AI' },
     refineCollapse: { en: 'Roll down — show the conversation', ru: 'Свернуть — показать переписку' },
-    refineExpand: { en: 'Back to the assistant', ru: 'Вернуться к ассистенту' },
+    refineExpand: { en: 'Back to the AI panel', ru: 'Вернуться к панели AI' },
+    // One panel per conversation, cycling the three AI surfaces that used to
+    // be scattered down the thread as separate cards.
+    aiTabSummary: { en: 'Summary', ru: 'Сводка' },
+    aiTabReply: { en: 'Reply', ru: 'Ответ' },
+    aiTabAssistant: { en: 'Assistant', ru: 'Ассистент' },
+    aiPanelOpen: { en: 'Open the AI panel', ru: 'Открыть панель AI' },
+    aiNoDraft: {
+      en: 'No draft right now. The AI writes one when a new message arrives.',
+      ru: 'Черновика пока нет. AI напишет его, когда придёт новое сообщение.',
+    },
+    aiDraftWaiting: { en: 'Draft ready', ru: 'Есть черновик' },
     railCollapse: { en: 'Collapse list', ru: 'Свернуть список' },
     railExpand: { en: 'Expand list', ru: 'Развернуть список' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },

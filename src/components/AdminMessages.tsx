@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+import SubTabButton from './ui/SubTabButton';
 import {
   Box,
   VStack,
@@ -285,6 +287,9 @@ export interface AiSummary {
 
 type SummaryLang = 'ru' | 'en';
 
+/** The three AI surfaces, cycled inside one panel per conversation. */
+type AiPanelTab = 'summary' | 'reply' | 'assistant';
+
 /**
  * Read the localized asking/gathered/nextStep for a given language,
  * falling back through: requested lang → other lang → legacy flat.
@@ -364,8 +369,19 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
     }
   });
   const refineOpen = refineFor !== null && refineFor === selectedId;
-  // Remounts the chat so a second "improve" starts from the new draft.
-  const [refineNonce, setRefineNonce] = useState(0);
+  /**
+   * Which AI surface the panel is showing. Summary and the generated reply used
+   * to be separate cards stacked down the thread; they are tabs of one panel
+   * now, so there is a single place the AI lives.
+   */
+  const [panelTab, setPanelTab] = useState<AiPanelTab>('summary');
+  /**
+   * Where ConversationView portals the Summary and Reply tab bodies. State, not
+   * a ref, so the portal re-renders once the node exists.
+   */
+  const [panelBodyEl, setPanelBodyEl] = useState<HTMLDivElement | null>(null);
+  /** Only needed for the dot on the Reply tab; the content lives downstream. */
+  const [panelHasDraft, setPanelHasDraft] = useState(false);
   // Mobile only: roll the panel down to its header so the conversation behind
   // it is readable, then roll back up and keep typing. Distinct from closing,
   // which throws the chat away.
@@ -377,8 +393,9 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
     if (!selectedId) return;
     railBeforeRefine.current = listCollapsed;
     setListCollapsed(true);
-    setRefineNonce((n) => n + 1);
     setRefineCollapsed(false);
+    // "Improve with assistant" means the assistant, specifically.
+    setPanelTab('assistant');
     setRefineFor(selectedId);
     try {
       localStorage.setItem(REFINE_SESSION_KEY, selectedId);
@@ -386,6 +403,16 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
       // Private browsing. The panel still works for this page view.
     }
   };
+  /**
+   * A sent reply ends the drafting, not the session. Closing the panel here
+   * would throw away the very thing that was asked for: a panel that stays put
+   * until it is closed by hand. Fall back to the summary, which is now
+   * regenerating against the message that just went out.
+   */
+  const handleReplySentFromPanel = () => {
+    setPanelTab('summary');
+  };
+
   const closeRefinePanel = () => {
     setRefineFor(null);
     setRefineCollapsed(false);
@@ -706,7 +733,10 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 onRefine={openRefinePanel}
                 onReplySent={closeRefinePanel}
                 refineDocked={refineOpen && refineCollapsed}
-                refineActive={refineOpen}
+                panelTab={panelTab}
+                panelBodyEl={panelBodyEl}
+                onPanelDraftChange={setPanelHasDraft}
+                onPanelTabChange={setPanelTab}
               />
             ) : (
               <SelectPrompt />
@@ -807,19 +837,73 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                   onClick={closeRefinePanel}
                 />
               </Flex>
+              {/* The segmented control lives INSIDE the collapsible body, not
+                  in the header. The composer's mobile clearance math assumes
+                  the rolled-down bar is one header tall; a strip in the header
+                  would push Send back underneath it. */}
               <Box
                 flex="1"
                 minH={0}
                 overflow="hidden"
-                display={{ base: refineCollapsed ? 'none' : 'block', lg: 'block' }}
+                display={{ base: refineCollapsed ? 'none' : 'flex', lg: 'flex' }}
+                flexDirection="column"
               >
-                <AdminAssistantChat
-                  key={refineNonce}
-                  adminPassword={adminPassword}
-                  embedded
-                  conversationId={selectedId}
-                  onReplySent={closeRefinePanel}
+                <Flex borderBottom="1px solid" borderColor="gray.200" flexShrink={0}>
+                  <SubTabButton
+                    active={panelTab === 'summary'}
+                    icon={FaLightbulb}
+                    label={t.messages.aiTabSummary}
+                    onClick={() => setPanelTab('summary')}
+                  />
+                  <SubTabButton
+                    active={panelTab === 'reply'}
+                    icon={FaPaperPlane}
+                    label={t.messages.aiTabReply}
+                    onClick={() => setPanelTab('reply')}
+                    badge={
+                      panelHasDraft ? (
+                        <Box w="6px" h="6px" borderRadius="full" bg="brand.accent" flexShrink={0} />
+                      ) : undefined
+                    }
+                  />
+                  <SubTabButton
+                    active={panelTab === 'assistant'}
+                    icon={FaRobot}
+                    label={t.messages.aiTabAssistant}
+                    onClick={() => setPanelTab('assistant')}
+                  />
+                </Flex>
+
+                {/* Summary and Reply are rendered by ConversationView, which
+                    owns that state, and portalled in here. A portal follows the
+                    REACT tree, so context still resolves, while the DOM node
+                    stays a sibling of the thread pane — which it has to be:
+                    inside the pane it would inherit a fixed, z-25, overflow
+                    hidden stacking context and the bottom-clearance math would
+                    stop holding. */}
+                <Box
+                  ref={setPanelBodyEl}
+                  flex="1"
+                  minH={0}
+                  overflowY="auto"
+                  display={panelTab === 'assistant' ? 'none' : 'block'}
                 />
+                {/* The chat stays mounted across tab switches. Unmounting it
+                    would throw away whatever was typed, which is the whole
+                    thing this panel was failing at. */}
+                <Box
+                  flex="1"
+                  minH={0}
+                  overflow="hidden"
+                  display={panelTab === 'assistant' ? 'block' : 'none'}
+                >
+                  <AdminAssistantChat
+                    adminPassword={adminPassword}
+                    embedded
+                    conversationId={selectedId}
+                    onReplySent={handleReplySentFromPanel}
+                  />
+                </Box>
               </Box>
             </Box>
           )}
@@ -1172,6 +1256,25 @@ function ConversationListRow({
               : t.messages.noMessagesYet}
           </Text>
           <HStack spacing={2} wrap="wrap" mt={0.5}>
+            {/* The field was already on the type and already returned by
+                _messages-list; nothing rendered it, so a waiting draft was
+                invisible from the inbox and you had to open each thread to
+                find one. */}
+            {conv.has_draft && (
+              <Badge
+                bg="brand.accent"
+                color="white"
+                fontSize={{ base: 'xs', md: '2xs' }}
+                fontWeight="500"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+                px={1.5}
+                py={0}
+                borderRadius="sm"
+              >
+                {t.messages.aiDraftWaiting}
+              </Badge>
+            )}
             {!conv.ai_enabled && (
               <Badge
                 bg="orange.100"
@@ -1332,7 +1435,10 @@ function ConversationView({
   onRefine,
   onReplySent,
   refineDocked = false,
-  refineActive = false,
+  panelTab = 'summary',
+  panelBodyEl = null,
+  onPanelDraftChange,
+  onPanelTabChange,
 }: {
   summary: ConversationSummary;
   adminPassword: string;
@@ -1344,8 +1450,13 @@ function ConversationView({
   onReplySent?: () => void;
   /** The refine panel is rolled down to its bar, which sits over this pane. */
   refineDocked?: boolean;
-  /** The refine panel is open at all (docked or not). */
-  refineActive?: boolean;
+  /** Which AI tab the panel is showing. Drives what gets portalled. */
+  panelTab?: AiPanelTab;
+  /** Portal target inside the panel, owned by the parent. */
+  panelBodyEl?: HTMLDivElement | null;
+  /** Lets the parent put a dot on the Reply tab without owning the draft. */
+  onPanelDraftChange?: (hasDraft: boolean) => void;
+  onPanelTabChange?: (tab: AiPanelTab) => void;
   // Mobile back-navigation. On desktop this is unused (SelectPrompt
   // handles the "no thread open" state), but on mobile the parent
   // uses it to close the drill-down.
@@ -1393,6 +1504,10 @@ function ConversationView({
     error: draftTranslateError,
     translate: translateDraft,
   } = useTextTranslation(pendingDraft?.body ?? '', adminPassword, adminLang, t);
+
+  useEffect(() => {
+    onPanelDraftChange?.(!!pendingDraft);
+  }, [pendingDraft, onPanelDraftChange]);
 
   // "This draft isn't right" → hand the whole situation to the Assistant.
   //
@@ -1522,17 +1637,7 @@ function ConversationView({
   // pushed the actual conversation below the fold — the thread is what you
   // came to read. The header row stays visible with the one-line "asking"
   // gist, so nothing is hidden, just folded.
-  const [summaryCollapsed, setSummaryCollapsed] = useState(true);
 
-  // The AI draft card folds like the summary does. It folds ITSELF while the
-  // refine panel is open, because the panel already shows the same draft — two
-  // copies of it left almost no room for the conversation you opened the panel
-  // to re-read. Unfolds again when the panel closes; still togglable by hand
-  // in between.
-  const [draftCollapsed, setDraftCollapsed] = useState(false);
-  useEffect(() => {
-    setDraftCollapsed(refineActive);
-  }, [refineActive]);
   // Summary language toggle. Defaults to Russian since Vero speaks
   // Russian — but the toggle lets an admin flip to English when
   // helping her out. Persisted per-browser (localStorage) so the
@@ -2529,28 +2634,49 @@ function ConversationView({
           being off-screen. When collapsed, only the header row shows
           and the chat + composer become visible — a big obvious
           "Show summary" button doubles as the collapse affordance. */}
-      <Box
-        flex={{ base: summaryCollapsed ? '0 0 auto' : '1 1 auto', lg: '0 0 auto' }}
-        overflowY={{ base: summaryCollapsed ? 'visible' : 'auto', lg: 'visible' }}
-        borderBottom="1px solid"
-        borderColor="gray.100"
-        bg="white"
-      >
-        <SummaryCard
-          summary={aiSummary}
-          loading={aiSummaryLoading}
-          error={aiSummaryError}
-          collapsed={summaryCollapsed}
-          onToggleCollapsed={() => setSummaryCollapsed((c) => !c)}
-          language={summaryLang}
-          onChangeLanguage={changeSummaryLang}
-          // Force=true so the Regenerate button always bypasses
-          // the server-side cache. The initial auto-load on
-          // conversation open (loadAiSummary() with no args) uses
-          // the cached summary whenever it's still valid.
-          onRegenerate={() => loadAiSummary({ force: true })}
-        />
-      </Box>
+      {/* Summary and the generated reply now live in the AI panel, which is a
+          sibling of this pane rather than a child. They are rendered here,
+          where their state already is, and portalled there. Portals follow the
+          React tree, so useAdminLang and the Chakra theme still resolve. */}
+      {panelBodyEl &&
+        createPortal(
+          panelTab === 'summary' ? (
+            <SummaryCard
+              summary={aiSummary}
+              loading={aiSummaryLoading}
+              error={aiSummaryError}
+              // The panel owns collapsing now, so the card is always open
+              // inside it and its own collapse affordance is gone.
+              collapsed={false}
+              onToggleCollapsed={() => {}}
+              inPanel
+              language={summaryLang}
+              onChangeLanguage={changeSummaryLang}
+              // Force=true so the Regenerate button always bypasses
+              // the server-side cache. The initial auto-load on
+              // conversation open (loadAiSummary() with no args) uses
+              // the cached summary whenever it's still valid.
+              onRegenerate={() => loadAiSummary({ force: true })}
+            />
+          ) : (
+            <DraftPanel
+              draft={pendingDraft}
+              t={t}
+              translation={draftTranslation}
+              translating={draftTranslating}
+              translateError={draftTranslateError}
+              onTranslate={translateDraft}
+              onUse={() => {
+                setReplyText(pendingDraft?.body ?? '');
+                onPanelTabChange?.('summary');
+              }}
+              onRefine={handleRefineWithAssistant}
+              onDiscard={handleDiscardDraft}
+              discarding={discardingDraft}
+            />
+          ),
+          panelBodyEl,
+        )}
 
       {/* Message history — hidden on mobile when the summary is
           expanded (focus mode). On desktop it always renders. */}
@@ -2560,7 +2686,6 @@ function ConversationView({
         overflowY="auto"
         p={{ base: 4, md: 6 }}
         bg="gray.50"
-        display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
       >
         <VStack spacing={3} align="stretch">
           {/* Email conversations get a small Gmail-style subject
@@ -2623,165 +2748,78 @@ function ConversationView({
           home indicator. Hidden on mobile when the summary is expanded
           (focus mode) — the collapse affordance is Vero's way back to
           the composer. */}
-      {/* AI draft awaiting review. Email conversations only — Instagram
-          sends automatically, so a draft never exists there. */}
-      {pendingDraft && (
-        <Box
-          bg="brand.surface"
-          borderTop="1px solid"
-          borderColor="#e8d9b8"
-          px={{ base: 3, md: 4 }}
-          py={3}
+      {/* One AI entry point per conversation, in the slot the draft card used
+          to occupy: directly above the composer, where she is already looking
+          when deciding what to send. The classification badge stays on this row
+          rather than moving inside the panel, because it is the at-a-glance
+          spam-versus-booking read and burying it behind a tap loses it. */}
+      <Flex
+        as="button"
+        type="button"
+        onClick={() => { onPanelTabChange?.('summary'); onRefine?.(); }}
+        aria-label={t.messages.aiPanelOpen}
+        align="center"
+        gap={2}
+        w="100%"
+        textAlign="left"
+        bg="brand.surface"
+        borderTop="1px solid"
+        borderColor="#e8d9b8"
+        px={{ base: 3, md: 4 }}
+        py={2.5}
+        minH="44px"
+        flexShrink={0}
+        cursor="pointer"
+        _hover={{ bg: 'rgba(201, 169, 110, 0.16)' }}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        <Icon as={FaLightbulb} boxSize={3.5} color="brand.accentText" flexShrink={0} />
+        <Text
+          fontSize="2xs"
+          fontWeight="600"
+          letterSpacing="0.14em"
+          textTransform="uppercase"
+          color="brand.accentText"
           flexShrink={0}
-          display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
         >
-          {/* Whole row toggles, same as the summary card above it, with a
-              chevron and a verb so it reads as a control in both states. */}
-          <Flex
-            as="button"
-            type="button"
-            onClick={() => setDraftCollapsed((v) => !v)}
-            align="center"
-            gap={2}
-            mb={draftCollapsed ? 0 : 1.5}
-            w="100%"
-            bg="transparent"
-            border="none"
-            p={0}
-            textAlign="left"
-            cursor="pointer"
-            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          {t.messages.refinePanelTitle}
+        </Text>
+        {aiSummary && (
+          <Badge
+            flexShrink={0}
+            fontSize="2xs"
+            textTransform="uppercase"
+            letterSpacing="0.08em"
+            px={2}
+            py={0.5}
+            borderRadius="sm"
+            bg={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).bg}
+            color={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).color}
           >
-            <Icon as={FaRobot} boxSize={3} color="brand.accentText" flexShrink={0} />
-            <Text
-              fontSize="2xs"
-              fontWeight="500"
-              color="brand.accentText"
-              letterSpacing="0.08em"
-              textTransform="uppercase"
-              flexShrink={0}
-            >
-              {t.messages.draftTitle}
-            </Text>
-            {/* Folded: one line of the draft so it is not a blind box. */}
-            {draftCollapsed && (
-              <Text fontSize="xs" color="gray.500" noOfLines={1} minW={0}>
-                — {pendingDraft.body}
-              </Text>
-            )}
-            <Flex align="center" gap={1} ml="auto" flexShrink={0} pl={2}>
-              <Text
-                fontSize="2xs"
-                fontWeight="500"
-                letterSpacing="0.08em"
-                textTransform="uppercase"
-                color="gray.500"
-                display={{ base: 'none', md: 'block' }}
-              >
-                {draftCollapsed ? t.messages.draftShow : t.messages.draftHide}
-              </Text>
-              <Icon
-                as={FaChevronDown}
-                boxSize={3}
-                color="gray.500"
-                transform={draftCollapsed ? 'rotate(0deg)' : 'rotate(180deg)'}
-                transition="transform 0.2s ease"
-              />
-            </Flex>
-          </Flex>
-          {!draftCollapsed && (
-            <>
-              <Text fontSize="sm" color="gray.700" lineHeight="1.6" noOfLines={4} mb={2}>
-                {pendingDraft.body}
-              </Text>
-              {/* The draft is generated in the CUSTOMER's language, so this is
-                  the one message Vero has to understand before approving it and
-                  the one message that had no way to be read. Same chip, same
-                  behaviour as every other message in the thread. */}
-              {draftTranslation && (
-                <Box
-                  mb={2}
-                  pl={3}
-                  borderLeft="2px solid"
-                  borderColor="rgba(201, 169, 110, 0.5)"
-                >
-                  <Text fontSize="sm" color="gray.700" lineHeight="1.6" whiteSpace="pre-wrap">
-                    {draftTranslation}
-                  </Text>
-                </Box>
-              )}
-              {draftTranslateError && (
-                <Text fontSize="2xs" color="red.500" mb={2}>
-                  {draftTranslateError}
-                </Text>
-              )}
-              {!draftTranslation && (
-                <Box mb={2}>
-                  <TranslateChip
-                    translating={draftTranslating}
-                    onClick={translateDraft}
-                    label={t.messages.translateAction}
-                    busyLabel={t.messages.translating}
-                  />
-                </Box>
-              )}
-              <Text fontSize="2xs" color="gray.500" mb={2}>
-                {t.messages.draftHelp}
-              </Text>
-          {/* Stacked on mobile, inline on desktop.
-              As a single row on a phone these three read as one run-on
-              string — a filled button immediately followed by two bare
-              text buttons, with no boundary between "Improve with
-              assistant" and "Discard". Full-width stacked rows give each
-              action its own line and hit target; the secondaries get
-              outlines so they read as buttons rather than prose. */}
-          <Stack
-            direction={{ base: 'column', md: 'row' }}
-            spacing={2}
-            align="stretch"
+            {t.messages.classification[aiSummary.classification]}
+          </Badge>
+        )}
+        {pendingDraft && (
+          <Badge
+            flexShrink={0}
+            fontSize="2xs"
+            textTransform="uppercase"
+            letterSpacing="0.08em"
+            px={2}
+            py={0.5}
+            borderRadius="sm"
+            bg="brand.accent"
+            color="white"
           >
-            <CTAButton
-              onClick={() => setReplyText(pendingDraft.body)}
-              variant="solid"
-              size="sm"
-              icon={FaPaperPlane}
-              fullWidth={{ base: true, md: false }}
-            >
-              {t.messages.draftUse}
-            </CTAButton>
-            {onOpenAssistant && (
-              <Button
-                variant="outline"
-                size="sm"
-                minH={{ base: '40px', md: 'auto' }}
-                borderColor="#e8d9b8"
-                color="brand.accentText"
-                bg="white"
-                _hover={{ bg: 'brand.surface', borderColor: 'brand.accent' }}
-                leftIcon={<Icon as={FaRobot} boxSize={3} />}
-                onClick={handleRefineWithAssistant}
-              >
-                {t.messages.draftRefine}
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              minH={{ base: '40px', md: 'auto' }}
-              borderColor="gray.300"
-              color="gray.600"
-              bg="white"
-              _hover={{ bg: 'gray.50' }}
-              onClick={handleDiscardDraft}
-              isLoading={discardingDraft}
-            >
-              {t.messages.draftDiscard}
-            </Button>
-              </Stack>
-            </>
-          )}
-        </Box>
-      )}
+            {t.messages.aiDraftWaiting}
+          </Badge>
+        )}
+        <Text fontSize="xs" color="gray.600" noOfLines={1} flex="1" minW={0}>
+          {readSummaryLocale(aiSummary, summaryLang)?.asking ?? ''}
+        </Text>
+        <Icon as={FaChevronDown} boxSize={2.5} color="gray.400" flexShrink={0} transform="rotate(-90deg)" />
+      </Flex>
+
 
       <Box
         p={{ base: 3, md: 4 }}
@@ -2807,7 +2845,6 @@ function ConversationView({
         borderColor="gray.100"
         bg="white"
         flexShrink={0}
-        display={{ base: summaryCollapsed ? 'block' : 'none', lg: 'block' }}
       >
         <Textarea
           value={replyText}
@@ -3196,6 +3233,119 @@ function EmptyState() {
 }
 
 /**
+ * The Reply tab: the AI's generated draft and what to do with it.
+ *
+ * This is the old inline draft card, moved into the panel. Same actions, same
+ * translate affordance, but it no longer sits between the conversation and the
+ * composer competing for the screen.
+ */
+function DraftPanel({
+  draft,
+  t,
+  translation,
+  translating,
+  translateError,
+  onTranslate,
+  onUse,
+  onRefine,
+  onDiscard,
+  discarding,
+}: {
+  draft: Message | null;
+  t: AdminT;
+  translation: string | null;
+  translating: boolean;
+  translateError: string | null;
+  onTranslate: () => void;
+  onUse: () => void;
+  onRefine: () => void;
+  onDiscard: () => void;
+  discarding: boolean;
+}) {
+  if (!draft) {
+    return (
+      <Flex direction="column" align="center" justify="center" h="100%" px={6} py={10}>
+        <Icon as={FaRobot} boxSize={5} color="gray.300" mb={3} />
+        <Text fontSize="sm" color="gray.500" textAlign="center" lineHeight="1.6">
+          {t.messages.aiNoDraft}
+        </Text>
+      </Flex>
+    );
+  }
+
+  return (
+    <Box px={4} py={4}>
+      <Text fontSize="sm" color="gray.700" lineHeight="1.6" whiteSpace="pre-wrap" mb={3}>
+        {draft.body}
+      </Text>
+
+      {/* The draft is written in the CUSTOMER's language, so this is the one
+          message that has to be understood before it is approved. */}
+      {translation && (
+        <Box mb={3} pl={3} borderLeft="2px solid" borderColor="rgba(201, 169, 110, 0.5)">
+          <Text fontSize="sm" color="gray.700" lineHeight="1.6" whiteSpace="pre-wrap">
+            {translation}
+          </Text>
+        </Box>
+      )}
+      {translateError && (
+        <Text fontSize="2xs" color="red.500" mb={2}>
+          {translateError}
+        </Text>
+      )}
+      {!translation && (
+        <Box mb={3}>
+          <TranslateChip
+            translating={translating}
+            onClick={onTranslate}
+            label={t.messages.translateAction}
+            busyLabel={t.messages.translating}
+          />
+        </Box>
+      )}
+
+      <Text fontSize="2xs" color="gray.500" mb={3}>
+        {t.messages.draftHelp}
+      </Text>
+
+      {/* Stacked: the panel column is ~420px on desktop and full width on a
+          phone, so one action per row reads cleanly at both. */}
+      <Stack direction="column" spacing={2} align="stretch">
+        <CTAButton onClick={onUse} variant="solid" size="sm" icon={FaPaperPlane} fullWidth>
+          {t.messages.draftUse}
+        </CTAButton>
+        <Button
+          variant="outline"
+          size="sm"
+          minH="40px"
+          borderColor="#e8d9b8"
+          color="brand.accentText"
+          bg="white"
+          _hover={{ bg: 'brand.surface', borderColor: 'brand.accent' }}
+          leftIcon={<Icon as={FaRobot} boxSize={3} />}
+          onClick={onRefine}
+        >
+          {t.messages.draftRefine}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          minH="40px"
+          borderColor="gray.300"
+          color="gray.600"
+          bg="white"
+          _hover={{ bg: 'gray.50' }}
+          onClick={onDiscard}
+          isLoading={discarding}
+        >
+          {t.messages.draftDiscard}
+        </Button>
+      </Stack>
+    </Box>
+  );
+}
+
+/**
  * AI-generated summary of the conversation so far — pinned above the
  * message thread so Vero can see what the customer wants, what
  * she's gathered, what to do next, and (critically) whether it's
@@ -3212,6 +3362,7 @@ function SummaryCard({
   language,
   onChangeLanguage,
   onRegenerate,
+  inPanel = false,
 }: {
   summary: AiSummary | null;
   loading: boolean;
@@ -3222,6 +3373,8 @@ function SummaryCard({
   language: SummaryLang;
   onChangeLanguage: (l: SummaryLang) => void;
   onRegenerate: () => void;
+  /** Rendered inside the AI panel, which owns opening and closing. */
+  inPanel?: boolean;
 }) {
   const { t } = useAdminLang();
   const classification = summary?.classification ?? 'unclear';
@@ -3314,7 +3467,10 @@ function SummaryCard({
           {/* The row was clickable with nothing to say so. A rotating chevron
               plus a verb is the whole affordance: it reads as a control when
               open AND when closed, which the bare row did not. */}
-          <Flex align="center" gap={1} ml="auto" flexShrink={0} pl={2}>
+          {/* Inside the AI panel the card is always open and the panel owns
+              closing, so its own collapse affordance would be a control that
+              does nothing. */}
+          <Flex align="center" gap={1} ml="auto" flexShrink={0} pl={2} display={inPanel ? 'none' : 'flex'}>
             <Text
               fontSize="2xs"
               fontWeight="500"
