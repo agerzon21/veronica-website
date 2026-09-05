@@ -69,6 +69,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
+import { translationTargetFor } from './translationDirection';
 
 // Vero speaks Russian natively — customer messages (usually English)
 // get translated to Russian; her replies get translated to English
@@ -85,12 +86,11 @@ const VERO_LANG = 'ru';
  * of the bubble list, so the one message Vero has to read before approving it
  * was the one message she could not read.
  *
- * `targetLang` is the READER's language, not Vero's. It used to be the module
- * constant VERO_LANG, which is right for translate-on-send (what language the
- * outbound was composed in) and wrong here (what language the person looking
- * at the screen reads).
+ * The direction comes from the text itself, via translationTargetFor. It was
+ * briefly the reader's UI language, which meant an admin running the panel in
+ * English pressed Translate on an English draft and got English back.
  */
-function useTextTranslation(text: string, adminPassword: string, targetLang: string, t: AdminT) {
+function useTextTranslation(text: string, adminPassword: string, t: AdminT) {
   const [translation, setTranslation] = useState<string | null>(null);
   const [detectedLang, setDetectedLang] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
@@ -104,7 +104,13 @@ function useTextTranslation(text: string, adminPassword: string, targetLang: str
       const res = await fetch('/api/admin/messages-translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, text, targetLang }),
+        body: JSON.stringify({
+          password: adminPassword,
+          text,
+          // From the TEXT, not the panel language. English goes to Russian and
+          // Russian goes to English; the chrome setting has no say here.
+          targetLang: translationTargetFor(text),
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -389,13 +395,18 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
   // Restore whatever the rail was before the panel auto-folded it.
   const railBeforeRefine = useRef(false);
 
-  const openRefinePanel = () => {
+  /**
+   * `tab` is what the caller wants shown. The launcher passes nothing and gets
+   * whatever has content: a waiting draft is the thing you opened it for, so
+   * Reply wins when one exists, otherwise Summary. "Improve with assistant"
+   * asks for the assistant explicitly.
+   */
+  const openRefinePanel = (tab?: AiPanelTab) => {
     if (!selectedId) return;
+    setPanelTab(tab ?? (panelHasDraft ? 'reply' : 'summary'));
     railBeforeRefine.current = listCollapsed;
     setListCollapsed(true);
     setRefineCollapsed(false);
-    // "Improve with assistant" means the assistant, specifically.
-    setPanelTab('assistant');
     setRefineFor(selectedId);
     try {
       localStorage.setItem(REFINE_SESSION_KEY, selectedId);
@@ -1445,7 +1456,7 @@ function ConversationView({
   onRefreshList: () => void;
   /** Open the refine panel beside this thread (desktop) instead of
    *  navigating away to the Assistant tab. */
-  onRefine?: () => void;
+  onRefine?: (tab?: AiPanelTab) => void;
   /** A reply actually went out — the refine panel has served its purpose. */
   onReplySent?: () => void;
   /** The refine panel is rolled down to its bar, which sits over this pane. */
@@ -1503,7 +1514,7 @@ function ConversationView({
     translating: draftTranslating,
     error: draftTranslateError,
     translate: translateDraft,
-  } = useTextTranslation(pendingDraft?.body ?? '', adminPassword, adminLang, t);
+  } = useTextTranslation(pendingDraft?.body ?? '', adminPassword, t);
 
   useEffect(() => {
     onPanelDraftChange?.(!!pendingDraft);
@@ -1525,7 +1536,7 @@ function ConversationView({
     );
     // Prefer the in-place panel; fall back to the Assistant tab only if the
     // parent did not provide one.
-    if (onRefine) onRefine();
+    if (onRefine) onRefine('assistant');
     else onOpenAssistant?.();
   };
 
@@ -2678,6 +2689,80 @@ function ConversationView({
           panelBodyEl,
         )}
 
+      {/* One AI entry point per conversation, in the slot the draft card used
+          to occupy: directly below the contact header,
+          where the summary strip used to be. It sat above the composer at first,
+          which put it between the conversation and the reply box on a phone,
+          exactly the crowding the panel exists to remove. The classification badge stays on this row
+          rather than moving inside the panel, because it is the at-a-glance
+          spam-versus-booking read and burying it behind a tap loses it. */}
+      <Flex
+        as="button"
+        type="button"
+        onClick={() => onRefine?.()}
+        aria-label={t.messages.aiPanelOpen}
+        align="center"
+        gap={2}
+        w="100%"
+        textAlign="left"
+        bg="brand.surface"
+        borderTop="1px solid"
+        borderColor="#e8d9b8"
+        px={{ base: 3, md: 4 }}
+        py={2.5}
+        minH="44px"
+        flexShrink={0}
+        cursor="pointer"
+        _hover={{ bg: 'rgba(201, 169, 110, 0.16)' }}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        <Icon as={FaLightbulb} boxSize={3.5} color="brand.accentText" flexShrink={0} />
+        <Text
+          fontSize="2xs"
+          fontWeight="600"
+          letterSpacing="0.14em"
+          textTransform="uppercase"
+          color="brand.accentText"
+          flexShrink={0}
+        >
+          {t.messages.refinePanelTitle}
+        </Text>
+        {aiSummary && (
+          <Badge
+            flexShrink={0}
+            fontSize="2xs"
+            textTransform="uppercase"
+            letterSpacing="0.08em"
+            px={2}
+            py={0.5}
+            borderRadius="sm"
+            bg={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).bg}
+            color={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).color}
+          >
+            {t.messages.classification[aiSummary.classification]}
+          </Badge>
+        )}
+        {pendingDraft && (
+          <Badge
+            flexShrink={0}
+            fontSize="2xs"
+            textTransform="uppercase"
+            letterSpacing="0.08em"
+            px={2}
+            py={0.5}
+            borderRadius="sm"
+            bg="brand.accent"
+            color="white"
+          >
+            {t.messages.aiDraftWaiting}
+          </Badge>
+        )}
+        <Text fontSize="xs" color="gray.600" noOfLines={1} flex="1" minW={0}>
+          {readSummaryLocale(aiSummary, summaryLang)?.asking ?? ''}
+        </Text>
+        <Icon as={FaChevronDown} boxSize={2.5} color="gray.400" flexShrink={0} transform="rotate(-90deg)" />
+      </Flex>
+
       {/* Message history — hidden on mobile when the summary is
           expanded (focus mode). On desktop it always renders. */}
       <Box
@@ -2748,77 +2833,6 @@ function ConversationView({
           home indicator. Hidden on mobile when the summary is expanded
           (focus mode) — the collapse affordance is Vero's way back to
           the composer. */}
-      {/* One AI entry point per conversation, in the slot the draft card used
-          to occupy: directly above the composer, where she is already looking
-          when deciding what to send. The classification badge stays on this row
-          rather than moving inside the panel, because it is the at-a-glance
-          spam-versus-booking read and burying it behind a tap loses it. */}
-      <Flex
-        as="button"
-        type="button"
-        onClick={() => { onPanelTabChange?.('summary'); onRefine?.(); }}
-        aria-label={t.messages.aiPanelOpen}
-        align="center"
-        gap={2}
-        w="100%"
-        textAlign="left"
-        bg="brand.surface"
-        borderTop="1px solid"
-        borderColor="#e8d9b8"
-        px={{ base: 3, md: 4 }}
-        py={2.5}
-        minH="44px"
-        flexShrink={0}
-        cursor="pointer"
-        _hover={{ bg: 'rgba(201, 169, 110, 0.16)' }}
-        sx={{ WebkitTapHighlightColor: 'transparent' }}
-      >
-        <Icon as={FaLightbulb} boxSize={3.5} color="brand.accentText" flexShrink={0} />
-        <Text
-          fontSize="2xs"
-          fontWeight="600"
-          letterSpacing="0.14em"
-          textTransform="uppercase"
-          color="brand.accentText"
-          flexShrink={0}
-        >
-          {t.messages.refinePanelTitle}
-        </Text>
-        {aiSummary && (
-          <Badge
-            flexShrink={0}
-            fontSize="2xs"
-            textTransform="uppercase"
-            letterSpacing="0.08em"
-            px={2}
-            py={0.5}
-            borderRadius="sm"
-            bg={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).bg}
-            color={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).color}
-          >
-            {t.messages.classification[aiSummary.classification]}
-          </Badge>
-        )}
-        {pendingDraft && (
-          <Badge
-            flexShrink={0}
-            fontSize="2xs"
-            textTransform="uppercase"
-            letterSpacing="0.08em"
-            px={2}
-            py={0.5}
-            borderRadius="sm"
-            bg="brand.accent"
-            color="white"
-          >
-            {t.messages.aiDraftWaiting}
-          </Badge>
-        )}
-        <Text fontSize="xs" color="gray.600" noOfLines={1} flex="1" minW={0}>
-          {readSummaryLocale(aiSummary, summaryLang)?.asking ?? ''}
-        </Text>
-        <Icon as={FaChevronDown} boxSize={2.5} color="gray.400" flexShrink={0} transform="rotate(-90deg)" />
-      </Flex>
 
 
       <Box
@@ -3077,7 +3091,7 @@ function MessageBubble({
     translating,
     error: translateError,
     translate: handleTranslate,
-  } = useTextTranslation(msg.body, adminPassword, lang, t);
+  } = useTextTranslation(msg.body, adminPassword, t);
 
   return (
     <Flex justify={isInbound ? 'flex-start' : 'flex-end'}>
@@ -3440,6 +3454,7 @@ function SummaryCard({
             textTransform="uppercase"
             color="brand.accentText"
             flexShrink={0}
+            display={inPanel ? { base: 'none', sm: 'block' } : 'block'}
           >
             {strings.header}
           </Text>
@@ -3454,7 +3469,13 @@ function SummaryCard({
               px={2}
               py={0.5}
               borderRadius="sm"
-              flexShrink={0}
+              // Inside the panel this row is a ~390px column carrying the
+              // heading, this badge, the RU/EN toggle and Regenerate. Held at
+              // flexShrink 0 the badge ran under the toggle. The heading is the
+              // fixed part; the badge is what gives.
+              flexShrink={inPanel ? 1 : 0}
+              minW={0}
+              noOfLines={1}
             >
               {classLabel}
             </Badge>
@@ -3635,7 +3656,9 @@ function SummaryCard({
           there and let the chevron alone drive collapse. */}
       <Box
         mt={collapsed ? 2 : 3}
-        display={{ base: 'block', lg: 'none' }}
+        // Dead inside the AI panel: there is no chat to "close the summary for"
+        // any more, the segments do that, and the panel owns collapsing.
+        display={{ base: inPanel ? 'none' : 'block', lg: 'none' }}
       >
         <Box
           as="button"

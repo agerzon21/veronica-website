@@ -10,6 +10,7 @@ import {
 import CTAButton from './ui/CTAButton';
 import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
 import { loadDraft, saveDraft, clearDraft, sweepDrafts } from './draftStore';
+import { translationTargetFor, shouldAutoTranslate } from './translationDirection';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminLang } from '../i18n/admin';
 
@@ -321,7 +322,10 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         const res = await fetch('/api/admin/messages-translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: adminPassword, text, targetLang: lang }),
+          // Direction comes from the text, not the panel language, so a
+          // generated English reply always renders in Russian for Vero rather
+          // than being "translated" into the language it is already in.
+          body: JSON.stringify({ password: adminPassword, text, targetLang: translationTargetFor(text) }),
         });
         const data = await res.json();
         if (res.ok && data.success && typeof data.translated === 'string') {
@@ -335,7 +339,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         if (force) setTranslatingTurn(null);
       }
     },
-    [adminPassword, lang],
+    [adminPassword],
   );
 
   const toggleTranslations = () => {
@@ -355,29 +359,14 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   // translator for no reason.
   useEffect(() => {
     if (!embedded || !showTranslations) return;
-    // Count foreign-script characters rather than demanding the turn contain
-    // NONE of the reader's own script. The old test was
-    //   lang === 'ru' ? latin.test(t) && !cyrillic.test(t) : cyrillic.test(t)
-    // which required a Russian reader's turn to be pure Latin. But the backend
-    // deliberately produces the opposite shape: it answers in the UI language
-    // and writes the draft inside it in the CUSTOMER's language. So every
-    // reply-drafting turn is Russian prose wrapping an English draft, and
-    // `!cyrillic` was false for every one. Measured against the live
-    // transcript: 0 of 99 assistant turns passed, including 0 of the 54 that
-    // actually carried a draft to read.
-    const countMatches = (text: string, re: RegExp) => (text.match(re) || []).length;
-    // Enough foreign text to be a sentence, not a stray "OK" or a signature.
-    const MIN_FOREIGN_CHARS = 20;
-    const needsIt = (text: string) =>
-      lang === 'ru'
-        ? countMatches(text, /[A-Za-z]/g) >= MIN_FOREIGN_CHARS
-        : countMatches(text, /[\u0400-\u04FF]/g) >= MIN_FOREIGN_CHARS;
-
+    // Auto-translate only English content; see translationDirection.ts for why
+    // the test counts characters instead of asking whether the turn is purely
+    // one script.
     (async () => {
       for (let i = 0; i < messages.length; i++) {
         const m = messages[i];
         if (m.role !== 'assistant' || m.pending) continue;
-        if (!needsIt(m.content)) continue;
+        if (!shouldAutoTranslate(m.content)) continue;
         await translateTurn(i, m.content);
       }
     })();
@@ -387,7 +376,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     // already-done set lives in a ref precisely so it can be read here without
     // retriggering.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, showTranslations, embedded, lang, translateTurn]);
+  }, [messages, showTranslations, embedded, translateTurn]);
 
 
   // Load persisted history on mount so returning to the tab feels
