@@ -68,6 +68,15 @@ const MAX_TOOL_ROUNDS = 8;
  * it is now that it is no longer the only one. Migration, applied by hand:
  *   UPDATE assistant_chats SET slot = 'general' WHERE slot = 'default';
  */
+/**
+ * A turn the UI can render: real text, not a bare tool call or tool result.
+ * Shared by the history read and the send response so the transcript the client
+ * shows live is the same one it gets back after a reload.
+ */
+function isDisplayableTurn(m: { role: string; content?: unknown }): boolean {
+  return typeof m.content === 'string' && m.content.length > 0;
+}
+
 const GENERAL_SLOT = 'general';
 /**
  * What the shared thread was called before it had siblings. Migration 029
@@ -212,7 +221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Filter down to just user + assistant text turns for the UI —
       // tool_calls / tool responses / system prompt are noise.
       const displayable = messages.filter(
-        (m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content,
+        (m) => (m.role === 'user' || m.role === 'assistant') && isDisplayableTurn(m),
       );
       return res.status(200).json({ success: true, messages: displayable });
     }
@@ -360,6 +369,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!finalReply) {
       finalReply =
         '(The assistant kept calling tools without giving a final answer. Try rephrasing.)';
+      // Persist it too. The client renders the turns below rather than `reply`,
+      // so without this the notice would be shown and then vanish on reload,
+      // and if any earlier round had prose it would never be shown at all.
+      newlyPersistedMessages.push({ role: 'assistant', content: finalReply });
     }
 
     // Persist the thread, bounded. Vero keeps far more scrollback than
@@ -375,9 +388,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         SET messages = ${JSON.stringify(updatedThread)}::jsonb, updated_at = NOW()
     `;
 
+    // Every assistant turn this send produced, not just the last one.
+    //
+    // A turn that carries a tool call usually carries prose too — the rewritten
+    // draft, typically — and the response only ever returned `finalReply`, the
+    // turn AFTER the tool ran. So the rewrite was stored but never rendered,
+    // and only appeared once a reload re-read the transcript, which looked like
+    // the messages had reordered themselves.
+    //
+    // Same predicate as the history filter, via one helper, so the live view
+    // and the reloaded view cannot drift apart again.
+    const assistantTurns = newlyPersistedMessages
+      .filter(isDisplayableTurn)
+      .map((m) => ({ role: 'assistant' as const, content: m.content as string }));
+
     return res.status(200).json({
       success: true,
       reply: finalReply,
+      assistantTurns,
       dbWrites,
       messageCount: updatedThread.filter((m) => m.role === 'user' || m.role === 'assistant').length,
     });
@@ -807,9 +835,15 @@ async function executeToolCall(
     `) as Array<Record<string, unknown>>;
     if (!convo) return { error: 'No conversation with that id' };
 
+    // Drafts excluded. This reads what was ACTUALLY said, and a draft was never
+    // sent. Without the filter the assistant saw every pending draft as an
+    // ordinary AI message already in the thread, with no way to tell it was
+    // unsent or which one Vero was refining — so on a thread with two drafts it
+    // was reasoning about the wrong text before it even called update_draft.
     const msgs = (await sql`
       SELECT direction, sender, channel, body, subject, sent_at
-      FROM messages WHERE conversation_id = ${conversationId}
+      FROM messages
+      WHERE conversation_id = ${conversationId} AND status <> 'draft'
       ORDER BY sent_at ASC LIMIT 40
     `) as Array<Record<string, unknown>>;
 
@@ -845,7 +879,9 @@ async function executeToolCall(
         WHERE conversation_id = ${conversationId}
           AND status = 'draft'
           AND direction = 'outbound'
-        ORDER BY created_at DESC
+        -- sent_at, not created_at: it is the platform clock every other messages
+        -- query and the partial index use, and the two can diverge.
+        ORDER BY sent_at DESC, created_at DESC, id DESC
         LIMIT 1
       )
       RETURNING id

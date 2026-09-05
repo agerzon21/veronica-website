@@ -1532,7 +1532,16 @@ function ConversationView({
 
   // The AI's unsent suggestion, if it left one. Only ever present on
   // non-Instagram channels — see the dispatch in api/_ai-reply.ts.
-  const pendingDraft = messages.find((m) => m.status === 'draft') ?? null;
+  // The NEWEST outbound draft.
+  //
+  // This was `.find(m => m.status === 'draft')`, which takes the FIRST match in
+  // a list the detail endpoint returns oldest-first, so it rendered the OLDEST
+  // draft while the assistant's update_draft tool wrote the newest. On a thread
+  // holding two drafts they were simply different rows, which is why refining a
+  // reply appeared to do nothing: it worked, on the row nobody was looking at.
+  // `direction` is checked too, so both sides use the same predicate.
+  const pendingDraft =
+    messages.filter((m) => m.status === 'draft' && m.direction === 'outbound').at(-1) ?? null;
   // Keyed on the draft body via the hook's own state: a new draft arrives as a
   // different ConversationView render, and discarding clears the card entirely.
   const {

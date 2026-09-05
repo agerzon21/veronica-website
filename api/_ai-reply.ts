@@ -487,6 +487,33 @@ export async function processInboundMessage(args: {
     // this inbound?") or the 60s rate-limit gate — because our
     // outbound is now in the DB.
     try {
+      // ── 7b. Don't stack drafts ────────────────────────────────
+      //
+      // This used to live at 10b, BELOW the three sendBridgeAndEscalate calls
+      // in steps 8, 9 and 10. The bridge writes its own draft and never
+      // consulted the guard, so a conversation already holding a draft grew a
+      // second one the moment a later message tripped booking, spam or wrap-up.
+      // That is how two drafts ended up on the same thread, and with the reader
+      // and the writer disagreeing about which one was "the" draft, refining a
+      // reply looked like it did nothing.
+      //
+      // Skipping is deliberately the whole behaviour here. The tempting
+      // alternative, having a new draft REPLACE the pending one, would throw
+      // away a draft Vero had just refined with the assistant the moment an
+      // unrelated marketing blast arrived, and nothing in the UI would ever
+      // show that it had existed.
+      const pendingDraft = (await sql`
+        SELECT id FROM messages
+        WHERE conversation_id = ${convo.id} AND status = 'draft'
+        LIMIT 1
+      `) as Array<{ id: string }>;
+      if (pendingDraft.length > 0) {
+        return {
+          action: 'skipped-draft-pending',
+          reason: 'an unsent AI draft is already waiting on this conversation',
+        };
+      }
+
       // ── 8. Booking COMMITMENT → bridge + disable ──────────────
       //
       // Narrowed hard. This used to also fire on any date mention and
@@ -533,20 +560,7 @@ export async function processInboundMessage(args: {
         );
       }
 
-      // ── 10b. Don't stack drafts ───────────────────────────────
-      // If Vero hasn't dealt with the last draft yet, writing another
-      // one on top helps nobody and burns an OpenAI call.
-      const pendingDraft = (await sql`
-        SELECT id FROM messages
-        WHERE conversation_id = ${convo.id} AND status = 'draft'
-        LIMIT 1
-      `) as Array<{ id: string }>;
-      if (pendingDraft.length > 0) {
-        return {
-          action: 'skipped-draft-pending',
-          reason: 'an unsent AI draft is already waiting on this conversation',
-        };
-      }
+      // (The anti-stack guard now runs at 7b, above the bridge calls.)
 
       // ── 10c. Is this business at all? ────────────────────────
       // See classifyInboundRelevance. Only personal and spam stay silent;

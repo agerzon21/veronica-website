@@ -561,14 +561,23 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
       const data = await res.json();
       if (res.ok && data.success) {
         setMessages((prev) => {
-          // Replace the trailing pending assistant turn with the real reply.
+          // Splice in EVERY assistant turn this send produced, not just the
+          // last one. A turn that carries a tool call usually carries prose
+          // too — the rewritten draft — and rendering only the final turn meant
+          // the rewrite was invisible until a reload pulled the stored
+          // transcript, which read as the messages reordering themselves.
+          const turns: ChatMessage[] =
+            Array.isArray(data.assistantTurns) && data.assistantTurns.length > 0
+              ? data.assistantTurns.map((m: { content: string }) => ({
+                  role: 'assistant' as const,
+                  content: m.content,
+                }))
+              : [{ role: 'assistant', content: data.reply }];
           const next = [...prev];
           const lastIdx = next.length - 1;
-          if (next[lastIdx]?.pending) {
-            next[lastIdx] = { role: 'assistant', content: data.reply };
-          } else {
-            next.push({ role: 'assistant', content: data.reply });
-          }
+          // The splice consumes the pending bubble, so no thinking dots linger.
+          if (next[lastIdx]?.pending) next.splice(lastIdx, 1, ...turns);
+          else next.push(...turns);
           return next;
         });
         // One toast per DB write the assistant made this turn.
