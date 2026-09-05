@@ -117,6 +117,7 @@ interface Strings {
   quickActionsLabel: string;
   quickActions: Array<{ label: string; prompt: string }>;
   toastLabels: { created: string; updated: string; deleted: string };
+  draftToastLabel: string;
   errorReply: (detail: string) => string;
   serverUnreachable: string;
   serverError: string;
@@ -174,6 +175,7 @@ const STRINGS: Record<AdminLang, Strings> = {
       },
     ],
     toastLabels: { created: 'Записал', updated: 'Обновил', deleted: 'Удалил' },
+    draftToastLabel: 'Черновик обновлён — вкладка «Ответ»',
     errorReply: (detail) => `(Что-то пошло не так: ${detail})`,
     serverUnreachable: '(Не удалось связаться с сервером.)',
     serverError: 'ошибка сервера',
@@ -226,6 +228,7 @@ const STRINGS: Record<AdminLang, Strings> = {
       },
     ],
     toastLabels: { created: 'Saved', updated: 'Updated', deleted: 'Deleted' },
+    draftToastLabel: 'Draft updated — see the Reply tab',
     errorReply: (detail) => `(Something went wrong: ${detail})`,
     serverUnreachable: '(Could not reach the server.)',
     serverError: 'server error',
@@ -472,7 +475,10 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   const showAchievementToast = useCallback(
     (write: DbWrite) => {
       const meta = TOAST_META[write.type];
-      const label = t.toastLabels[write.type];
+      // A draft update says where to look, since the panel may be showing a
+      // different tab. Knowledge writes keep the plain saved/updated wording.
+      const isDraft = write.category === 'draft';
+      const label = isDraft ? t.draftToastLabel : t.toastLabels[write.type];
       // Old server rows sent `content_ru`; new ones send
       // `content_summary`. Accept either.
       const summary = write.content_summary ?? write.content_ru ?? write.label;
@@ -517,16 +523,18 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
                 <Text fontSize="sm" color="gray.800" fontWeight="400" lineHeight="1.4">
                   {summary}
                 </Text>
-                <Text fontSize="2xs" color="gray.500" fontWeight="300">
-                  {write.category} · {write.label}
-                </Text>
+                {!isDraft && (
+                  <Text fontSize="2xs" color="gray.500" fontWeight="300">
+                    {write.category} · {write.label}
+                  </Text>
+                )}
               </VStack>
             </HStack>
           </Box>
         ),
       });
     },
-    [toast, t.toastLabels],
+    [toast, t.toastLabels, t.draftToastLabel],
   );
 
   const handleSend = async () => {

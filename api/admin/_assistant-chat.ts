@@ -74,6 +74,13 @@ const MAX_TOOL_ROUNDS = 8;
  * shows live is the same one it gets back after a reload.
  */
 function isDisplayableTurn(m: { role: string; content?: unknown }): boolean {
+  // The role check lives HERE, not at the call sites. It was at one call site
+  // and not the other, so the send response happily returned tool RESULTS as
+  // chat turns: a raw read_thread dump of the customer's email, and the literal
+  // {"success":true,"action":"draft_updated",...} payload, both rendered as
+  // assistant bubbles. Reload looked fine because the history filter still had
+  // its own role check.
+  if (m.role !== 'user' && m.role !== 'assistant') return false;
   return typeof m.content === 'string' && m.content.length > 0;
 }
 
@@ -221,7 +228,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Filter down to just user + assistant text turns for the UI —
       // tool_calls / tool responses / system prompt are noise.
       const displayable = messages.filter(
-        (m) => (m.role === 'user' || m.role === 'assistant') && isDisplayableTurn(m),
+        (m) => isDisplayableTurn(m),
       );
       return res.status(200).json({ success: true, messages: displayable });
     }
@@ -366,7 +373,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    if (!finalReply) {
+    // Only when nothing useful happened. Ending a turn silently right after a
+    // successful tool call is now the REQUESTED behaviour — the panel shows the
+    // result and a toast announces it — so treating that as a failure would put
+    // a spurious error in the chat.
+    if (!finalReply && dbWrites.length === 0) {
       finalReply =
         '(The assistant kept calling tools without giving a final answer. Try rephrasing.)';
       // Persist it too. The client renders the turns below rather than `reply`,
@@ -399,7 +410,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Same predicate as the history filter, via one helper, so the live view
     // and the reloaded view cannot drift apart again.
     const assistantTurns = newlyPersistedMessages
-      .filter(isDisplayableTurn)
+      .filter((m) => m.role === 'assistant' && isDisplayableTurn(m))
       .map((m) => ({ role: 'assistant' as const, content: m.content as string }));
 
     return res.status(200).json({
@@ -1060,7 +1071,14 @@ you already know. When she says "the draft", "this reply" or "the message", she
 means this conversation.
 
 When you rewrite the draft for her, call update_draft with this id in the SAME
-turn you show her the new version. Do not ask first. Updating an unsent draft
+turn you show her the new version. Do not ask first.
+
+Put the rewritten reply in that same message, then STOP. After the tool comes
+back, do not send another message saying you updated it: the panel pops up its
+own confirmation and repeats it in the Reply tab, so a second message from you
+is noise in a small column. Ending your turn silently there is correct and is
+not an error. Only write again if you actually have something new to say, like
+a question you could not resolve. Updating an unsent draft
 is not sending it, she can still edit or discard it, and if you only put the
 new version in the chat then the Reply tab keeps showing the old one and your
 rewrite is lost the moment she looks away. Asking permission applies to
