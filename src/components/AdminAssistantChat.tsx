@@ -400,7 +400,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         const res = await fetch('/api/admin/assistant-chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: adminPassword, action: 'history' }),
+          body: JSON.stringify({ password: adminPassword, action: 'history', conversationId }),
         });
         const data = await res.json();
         if (cancelled) return;
@@ -416,7 +416,18 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     return () => {
       cancelled = true;
     };
-  }, [adminPassword]);
+    // conversationId is a dependency now that transcripts are per-conversation:
+    // without it, opening the panel on a second thread would keep showing the
+    // first thread's history. Translations are keyed by array index, so they
+    // have to be dropped with it or they would caption the wrong turns.
+  }, [adminPassword, conversationId]);
+
+  useEffect(() => {
+    setMessages([]);
+    setTranslations({});
+    translatedTurns.current.clear();
+    setLoading(true);
+  }, [conversationId]);
 
   // Chat scroll behavior — the first render after history loads
   // should be scrolled to the TOP of whatever exists (so Vero sees
@@ -521,6 +532,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         body: JSON.stringify({
           password: adminPassword,
           action: 'send',
+          conversationId,
           message: text,
           // Sent every turn so the server prompt matches whatever
           // language the toggle is on at send time. Language changes
@@ -589,7 +601,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
       await fetch('/api/admin/assistant-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, action: 'reset' }),
+        body: JSON.stringify({ password: adminPassword, action: 'reset', conversationId }),
       });
       setMessages([]);
       // Keyed by array index, so without this the old turn 0's translation

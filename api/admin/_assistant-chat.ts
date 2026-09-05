@@ -58,7 +58,36 @@ import { deliverReply } from '../_reply-delivery.js';
 
 const MODEL = 'gpt-4o-mini';
 const MAX_TOOL_ROUNDS = 8;
-const CHAT_SLOT = 'default';
+/**
+ * Transcripts are keyed by `slot`, which is already a UNIQUE text column, so
+ * scoping a chat to one conversation needs no schema change: it is just a
+ * different string. A conversation gets `conv:<uuid>`; anything else, including
+ * every existing client that sends no conversationId, gets the shared thread.
+ *
+ * The shared one is named 'general' rather than 'default' so the name says what
+ * it is now that it is no longer the only one. Migration, applied by hand:
+ *   UPDATE assistant_chats SET slot = 'general' WHERE slot = 'default';
+ */
+const GENERAL_SLOT = 'general';
+/**
+ * What the shared thread was called before it had siblings. Migration 029
+ * renames it, but reads fall back to it so the deploy does not have to wait for
+ * the migration: until it runs, the general thread still finds its 392
+ * messages under the old name instead of looking empty.
+ */
+const LEGACY_GENERAL_SLOT = 'default';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Slots to read from, most specific first. */
+function readSlots(slot: string): string[] {
+  return slot === GENERAL_SLOT ? [GENERAL_SLOT, LEGACY_GENERAL_SLOT] : [slot];
+}
+
+function resolveSlot(conversationId: unknown): string {
+  return typeof conversationId === 'string' && UUID_RE.test(conversationId)
+    ? `conv:${conversationId.toLowerCase()}`
+    : GENERAL_SLOT;
+}
 
 /**
  * How many prior turns get replayed to the model, and how many are kept
@@ -95,7 +124,14 @@ const CHAT_SLOT = 'default';
  * keeps far more of it than the model is given.
  */
 const MAX_HISTORY_SENT = 80;
-const MAX_HISTORY_STORED = 400;
+/**
+ * 400 was tuned for one shared rope holding every conversation at once. A
+ * per-conversation thread does not need anything like that, and 66 of them at
+ * 400 would be several megabytes of jsonb for nothing. The general thread keeps
+ * the larger budget because it genuinely is the long one.
+ */
+const MAX_HISTORY_STORED_GENERAL = 400;
+const MAX_HISTORY_STORED_CONVERSATION = 120;
 
 /**
  * Trim to at most `limit` trailing messages, starting at a 'user' turn.
@@ -160,15 +196,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
 
   const action = req.body?.action;
+  const slot = resolveSlot(req.body?.conversationId);
+  const maxStored =
+    slot === GENERAL_SLOT ? MAX_HISTORY_STORED_GENERAL : MAX_HISTORY_STORED_CONVERSATION;
 
   try {
     const sql = getDb();
 
     if (action === 'history') {
       const rows = (await sql`
-        SELECT messages FROM assistant_chats WHERE slot = ${CHAT_SLOT} LIMIT 1
-      `) as Array<{ messages: StoredMessage[] }>;
-      const messages = rows[0]?.messages ?? [];
+        SELECT slot, messages FROM assistant_chats WHERE slot = ANY(${readSlots(slot)})
+      `) as Array<{ slot: string; messages: StoredMessage[] }>;
+      const messages =
+        rows.find((r) => r.slot === slot)?.messages ?? rows[0]?.messages ?? [];
       // Filter down to just user + assistant text turns for the UI —
       // tool_calls / tool responses / system prompt are noise.
       const displayable = messages.filter(
@@ -180,7 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'reset') {
       await sql`
         INSERT INTO assistant_chats (slot, messages)
-        VALUES (${CHAT_SLOT}, '[]'::jsonb)
+        VALUES (${slot}, '[]'::jsonb)
         ON CONFLICT (slot) DO UPDATE SET messages = '[]'::jsonb, updated_at = NOW()
       `;
       return res.status(200).json({ success: true });
@@ -197,15 +237,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Load thread history (or bootstrap an empty row).
     const existing = (await sql`
-      SELECT messages FROM assistant_chats WHERE slot = ${CHAT_SLOT} LIMIT 1
-    `) as Array<{ messages: StoredMessage[] }>;
-    const priorMessages: StoredMessage[] = existing[0]?.messages ?? [];
+      SELECT slot, messages FROM assistant_chats WHERE slot = ANY(${readSlots(slot)})
+    `) as Array<{ slot: string; messages: StoredMessage[] }>;
+    const priorMessages: StoredMessage[] =
+      existing.find((r) => r.slot === slot)?.messages ?? existing[0]?.messages ?? [];
 
     // Load the full ai_context table into the system prompt so the
     // assistant has instant reference for everything it knows,
     // without needing to burn a tool call for basic questions. The
     // search_knowledge_base tool is still available for structured
     // lookups by category.
+    // Names currently in the inbox. Cheap, and it is what the guard in
+    // executeToolCall matches labels against.
+    const contactNames = (
+      (await sql`
+        SELECT DISTINCT contact_name FROM conversations
+        WHERE contact_name IS NOT NULL AND contact_name <> ''
+      `) as Array<{ contact_name: string }>
+    ).map((r) => r.contact_name);
+
     const contextRows = (await sql`
       SELECT id, category, label, content, source, active, updated_at
       FROM ai_context
@@ -279,7 +329,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Execute each tool call and record the response.
       for (const toolCall of msg.tool_calls) {
-        const toolResult = await executeToolCall(sql, toolCall, dbWrites);
+        const toolResult = await executeToolCall(sql, toolCall, dbWrites, contactNames);
         const toolResponseText = JSON.stringify(toolResult);
         newlyPersistedMessages.push({
           role: 'tool',
@@ -306,11 +356,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // the model is given, but not an unbounded amount.
     const updatedThread = trimHistory(
       [...priorMessages, ...newlyPersistedMessages],
-      MAX_HISTORY_STORED,
+      maxStored,
     );
     await sql`
       INSERT INTO assistant_chats (slot, messages)
-      VALUES (${CHAT_SLOT}, ${JSON.stringify(updatedThread)}::jsonb)
+      VALUES (${slot}, ${JSON.stringify(updatedThread)}::jsonb)
       ON CONFLICT (slot) DO UPDATE
         SET messages = ${JSON.stringify(updatedThread)}::jsonb, updated_at = NOW()
     `;
@@ -482,6 +532,8 @@ async function executeToolCall(
   sql: ReturnType<typeof getDb>,
   toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
   dbWrites: DbWrite[],
+  /** Contact names in the inbox, used to reject per-customer knowledge rows. */
+  knownContactNames: string[] = [],
 ): Promise<unknown> {
   // The SDK's ChatCompletionMessageToolCall is a union: function calls and
   // custom tool calls. Only function calls carry `.function`. We never register
@@ -537,6 +589,31 @@ async function executeToolCall(
     const providedId = typeof args.id === 'string' ? args.id.trim() : '';
     if (!category || !label || !content) {
       return { error: 'category, label, content are required' };
+    }
+
+    // Reject per-customer rows.
+    //
+    // The dedupe guard below matches on category + label, and labels like
+    // "Response example for <name> with a personal touch" embed a customer name
+    // plus a freeform phrase, so they never collide and every one inserts. 24 of
+    // 26 tone rows were that shape. It matters because ai_context is loaded
+    // WHOLE into the prompt that replies to customers, so one customer's name
+    // and situation ends up in the context used to answer everyone else.
+    //
+    // Until now the single shared transcript was an accidental brake: the model
+    // could see it had already written a similar row. Per-conversation threads
+    // start blind, so each one would mint another. The guard has to exist
+    // before the scoping does.
+    const namesInPlay = knownContactNames.map((n) => n.toLowerCase()).filter((n) => n.length > 2);
+    const labelLower = label.toLowerCase();
+    const offendingName = namesInPlay.find((n) => labelLower.includes(n));
+    if (offendingName) {
+      return {
+        error:
+          'That label names a specific person, which would put one customer in the context used to answer every other customer. ' +
+          'Store the general rule instead: what should be true of EVERY reply, with no names, no one-off details, and no verbatim example. ' +
+          'If there is no general rule to draw, do not store anything.',
+      };
     }
 
     if (providedId) {
@@ -861,6 +938,7 @@ Help Vero read, review, and shape the customer-reply knowledge base (the ai_cont
 ## LANGUAGE RULES (critical)
 - The user has set their interface language to ${langName}. ALWAYS respond in ${langName}, regardless of what language the incoming message was in. If they message in English but the UI language is Russian, still reply in Russian.
 - The knowledge base itself is stored in ENGLISH (because the customer-facing AI needs English text to reply to customers correctly). When you call upsert_knowledge, the "content" argument MUST be in English — translate whatever the user says into clean, concise English before storing.
+- Everything in the knowledge base is loaded WHOLE into the prompt that replies to every customer. So store GENERAL RULES, never per-customer material. Never write a label containing a person's name. Never store a verbatim reply as an "example". Never store one-off details about a specific booking. Ask yourself: would this still be correct for a customer who has not written yet? If not, do not store it. If Vero's feedback is about one particular reply, extract the general principle behind it and store that, or store nothing.
 - Every upsert/delete call includes a "content_summary" argument — a very short paraphrase (5-12 words) of what changed, in ${langName} (matching the current UI language). This is what shows up in the achievement toast, so it needs to read naturally in ${langName}.
 
 ## SAFETY RULES for knowledge base writes

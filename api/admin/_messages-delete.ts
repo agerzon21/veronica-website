@@ -79,6 +79,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Single statement — messages and any reply-intent claim cascade.
+    // The assistant transcript for this thread is keyed by slot, not by a
+    // foreign key, so nothing cascades. Without this the row outlives the
+    // conversation it discusses, forever.
+    await sql`DELETE FROM assistant_chats WHERE slot = ${'conv:' + String(conversationId).toLowerCase()}`;
     await sql`DELETE FROM conversations WHERE id = ${conversationId}`;
 
     console.log(
