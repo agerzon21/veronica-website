@@ -386,6 +386,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       newlyPersistedMessages.push({ role: 'assistant', content: finalReply });
     }
 
+    // Drop a trailing "I've updated the draft" turn.
+    //
+    // The prompt asks for the rewrite and then silence, and the model mostly
+    // complies but still tacks on a one-line confirmation. In a 390px column
+    // beside a toast saying the same thing and a Reply tab already showing the
+    // result, that is three announcements of one event. Enforced here rather
+    // than left to the prompt, because the prompt does not reliably hold.
+    //
+    // Bounded on purpose: only after a draft write, only when an earlier turn
+    // carried the actual rewrite, and only if the trailing turn is short. A
+    // long final turn is saying something else and is kept. Dropped from what
+    // is PERSISTED as well as what is returned, so a reload shows the same
+    // thing as the live view.
+    if (dbWrites.some((w) => w.category === 'draft')) {
+      const displayed = newlyPersistedMessages.filter(
+        (m) => m.role === 'assistant' && isDisplayableTurn(m),
+      );
+      const last = displayed.at(-1);
+      const earlierHasRewrite = displayed.slice(0, -1).some(
+        (m) => typeof m.content === 'string' && m.content.length > 120,
+      );
+      if (last && earlierHasRewrite && (last.content as string).length < 240) {
+        const idx = newlyPersistedMessages.lastIndexOf(last);
+        if (idx !== -1) newlyPersistedMessages.splice(idx, 1);
+      }
+    }
+
     // Persist the thread, bounded. Vero keeps far more scrollback than
     // the model is given, but not an unbounded amount.
     const updatedThread = trimHistory(
