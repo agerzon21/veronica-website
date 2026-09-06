@@ -87,22 +87,33 @@ function PrefetchPublicRoutes() {
       prefetchChunk(() => import('./pages/Privacy'));
       prefetchChunk(() => import('./pages/Terms'));
     };
-    // ── Wait for `load` BEFORE even asking for idle time ──
+    // ── Warm route chunks on INTENT, not on a timer ──
     //
-    // This used to be requestIdleCallback(warm, { timeout: 4000 }) on mount.
-    // On a slow phone the main thread is never idle during startup, so the
-    // TIMEOUT is what fired — at 4s, which is squarely inside the LCP window.
-    // A DebugBear trace caught the result: eleven route chunks downloading
-    // 4015-6250ms at HIGH priority while the hero photograph, at LOW priority,
-    // was trying to download 4924-5935ms. The warm-up was competing with the
-    // thing it should never delay.
+    // History: this was requestIdleCallback(warm, {timeout: 4000}) on mount. A
+    // slow phone is never idle during startup so the timeout fired, at 4s,
+    // inside the LCP window, and eleven route chunks downloaded at high
+    // priority while the hero photograph crawled at low priority.
     //
-    // `load` fires only after the hero image has finished, so this can no
-    // longer collide with it. The cost is that a cold click on About/Gallery a
-    // second or two after landing may not be warmed yet; that is a far better
-    // trade than pushing out the first paint for every visitor.
+    // The fix then was to wait for `load` first, on the assumption that load
+    // fires after the hero image. It does not. React inserts that <img> after
+    // hydration, so `load` fires BEFORE it exists: measured at 1772-2003 ms
+    // against a hero inserted at ~2061 ms. A PageSpeed run confirmed the chunks
+    // still landing at 2810-2888 ms with a 3065 ms critical path, against a
+    // 3.2 s LCP. Same collision, just moved.
+    //
+    // So stop guessing when the page is "done" and key off the visitor instead.
+    // Any real interaction means they are engaged and a click is plausible, and
+    // by definition the first paint is already behind us. The long fallback
+    // covers someone who reads without touching anything. Nothing about this is
+    // visible: it only changes when already-lazy chunks are fetched, and a
+    // click still works whether or not the chunk was warmed.
     let idleId: number | undefined;
-    const schedule = () => {
+    let fallbackId: number | undefined;
+    let done = false;
+
+    const run = () => {
+      if (done) return;
+      done = true;
       const ric = (window as any).requestIdleCallback as
         | ((cb: () => void, opts?: { timeout: number }) => number)
         | undefined;
@@ -111,15 +122,18 @@ function PrefetchPublicRoutes() {
       idleId = ric ? ric(warm, { timeout: 3000 }) : window.setTimeout(warm, 300);
     };
 
-    if (document.readyState === 'complete') {
-      schedule();
-      return () => {
-        if (idleId !== undefined) (window as any).cancelIdleCallback?.(idleId);
-      };
-    }
-    window.addEventListener('load', schedule, { once: true });
+    const events = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
+    events.forEach((e) => window.addEventListener(e, run, { once: true, passive: true }));
+    // Scroll is the common one on a phone and is not in the list above because
+    // it fires on the document, not the window, in some browsers.
+    document.addEventListener('scroll', run, { once: true, passive: true });
+    // Well clear of the LCP window on a slow device.
+    fallbackId = window.setTimeout(run, 8000);
+
     return () => {
-      window.removeEventListener('load', schedule);
+      events.forEach((e) => window.removeEventListener(e, run));
+      document.removeEventListener('scroll', run);
+      if (fallbackId !== undefined) clearTimeout(fallbackId);
       if (idleId !== undefined) (window as any).cancelIdleCallback?.(idleId);
     };
   }, []);
