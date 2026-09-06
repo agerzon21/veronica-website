@@ -147,7 +147,11 @@
          image was winning Google's automated picker on visual prominence
          alone — this gives Google an explicit pointer to contact-bg.webp
          as the page's representative image. -->
-    <script type="application/ld+json">
+    <!-- The homepage's WebPage entity. Prerendered pages emit their own and
+         strip this one (see scripts/prerender-photos.mjs): without that, every
+         page carried a second WebPage claiming to be the homepage, with the
+         homepage's URL and title. -->
+    <script type="application/ld+json" data-default-webpage>
     {
       "@context": "https://schema.org",
       "@type": "WebPage",
@@ -176,10 +180,6 @@
       "image": "https://vero.photography/assets/photos/site/contact-bg.webp",
       "logo": "https://vero.photography/assets/images/logo.svg",
       "url": "https://vero.photography",
-      "sameAs": [
-        "https://g.page/r/CSNq8ccyWt_wEAE",
-        "https://www.instagram.com/vero.art.photo"
-      ],
       "telephone": "+1-570-909-5707",
       "priceRange": "$$",
       "description": "Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide.",
@@ -212,7 +212,8 @@
         "Destination Photography"
       ],
       "sameAs": [
-        "https://www.instagram.com/vero.art.photo/"
+        "https://g.page/r/CSNq8ccyWt_wEAE",
+        "https://www.instagram.com/vero.art.photo"
       ]
     }
     </script>

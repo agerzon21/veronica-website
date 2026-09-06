@@ -120,6 +120,22 @@ if (lastErr) {
  * keywords match nothing would otherwise end up with no inbound links at all —
  * 16 of the 227 did. Falling back to same-category keeps every page reachable.
  */
+/**
+ * Remove the homepage's default WebPage entity.
+ *
+ * index.html carries one so the homepage has a WebPage in its markup, but it is
+ * hardcoded to the homepage URL and title. Every prerendered page inherited it
+ * on top of its own, so /about shipped two WebPage entities: one correctly
+ * describing /about, and one insisting the page was the homepage. Any page that
+ * emits its own page-level entity strips it.
+ */
+function stripDefaultWebPage(html) {
+  return html.replace(
+    /\n?\s*<!--[^>]*?-->\s*<script type="application\/ld\+json" data-default-webpage>[\s\S]*?<\/script>/,
+    '',
+  );
+}
+
 function relatedTo(photo, all, count = 6) {
   const keys = new Set(photo.keywords);
   return all
@@ -265,7 +281,7 @@ for (const photo of photos) {
     }
     </script>`;
 
-  html = html.replace('</head>', `${photoMeta}\n  </head>`);
+  html = stripDefaultWebPage(html).replace('</head>', `${photoMeta}\n  </head>`);
 
   const noscriptContent = `
     <noscript>
@@ -424,7 +440,7 @@ ${inCategory
   html = html.replace(/\s*<!-- Open Graph -->[\s\S]*?(?=\n\s*<!--(?! Open Graph)|\n\s*<script)/, '');
   html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
   html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
-  html = html.replace('</head>', `${categoryMeta}\n  </head>`);
+  html = stripDefaultWebPage(html).replace('</head>', `${categoryMeta}\n  </head>`);
 
   const others = Object.keys(CATEGORY_META).filter((c) => c !== category);
   const noscriptContent = `
@@ -580,7 +596,7 @@ for (const post of posts) {
       "mainEntityOfPage": { "@type": "WebPage", "@id": "${canonical}" }
     }
     </script>`;
-  html = html.replace('</head>', `${meta}\n  </head>`);
+  html = stripDefaultWebPage(html).replace('</head>', `${meta}\n  </head>`);
 
   const noscript = `
     <noscript>
@@ -649,7 +665,7 @@ ${posts
       ]
     }
     </script>`;
-  html = html.replace('</head>', `${meta}\n  </head>`);
+  html = stripDefaultWebPage(html).replace('</head>', `${meta}\n  </head>`);
 
   const noscript = `
     <noscript>
@@ -799,7 +815,7 @@ for (const pg of STATIC_PAGES) {
       }
     }
     </script>`;
-  html = html.replace('</head>', `${meta}\n  </head>`);
+  html = stripDefaultWebPage(html).replace('</head>', `${meta}\n  </head>`);
 
   const noscript = `
     <noscript>
