@@ -7,7 +7,7 @@ import FaHeart from '../icons/fa/FaHeart';
 import FaImages from '../icons/fa/FaImages';
 import FaInstagram from '../icons/fa/FaInstagram';
 import FaRegComment from '../icons/fa/FaRegComment';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import CTAButton from './ui/CTAButton';
 
 /**
@@ -47,7 +47,7 @@ interface Props {
   total?: number;
 }
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const formatCount = (n: number): string => {
   if (n < 1000) return n.toString();

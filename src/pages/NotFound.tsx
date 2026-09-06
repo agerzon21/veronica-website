@@ -2,10 +2,10 @@ import { Box, VStack, Text, Flex } from '@chakra-ui/react';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
 import { Helmet } from 'react-helmet-async';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useRef } from 'react';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const NotFound = () => {
   const contentRef = useRef<HTMLDivElement>(null);

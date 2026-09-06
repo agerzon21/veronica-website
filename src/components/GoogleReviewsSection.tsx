@@ -2,12 +2,12 @@
 // TESTIMONIAL_POOL — see git history.
 import { useState, useEffect } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon, Image } from '@chakra-ui/react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import FaGoogle from '../icons/fa/FaGoogle';
 import FaStar from '../icons/fa/FaStar';
 import CTAButton from './ui/CTAButton';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const GOOGLE_PROFILE_URL = 'https://g.page/r/CSNq8ccyWt_wEAE';
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';

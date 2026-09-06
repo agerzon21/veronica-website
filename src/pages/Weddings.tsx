@@ -1,6 +1,6 @@
 import { Box, VStack, HStack, Text, Flex, Image, SimpleGrid } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
@@ -28,7 +28,7 @@ import PageHeader from '../components/ui/PageHeader';
  * those pages real inbound links from a page that is not the gallery.
  */
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 /**
  * Hand-picked for range: ceremony, portrait, detail, celebration — so the grid

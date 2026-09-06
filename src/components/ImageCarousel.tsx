@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Box, Image, Flex, Text, Button, useBreakpointValue } from '@chakra-ui/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 
 interface ImageCarouselProps {
   images: Array<{
@@ -81,7 +81,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
   // The rotation used to start immediately and never stop, pulling a fresh
   // full-resolution original every 5s (~8MB/minute) while the page was still
   // loading — it held the load event open to 19.2s. Now it waits for load,
-  // pauses when the tab is hidden, and respects reduced-motion.
+  // pauses when the tab is hidden, and respects reduced-m.
   useEffect(() => {
     if (isPaused || images.length <= 1) return; // % 0 would be NaN
 
@@ -165,7 +165,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
       overflow="hidden"
     >
       <AnimatePresence initial={false}>
-        <motion.div
+        <m.div
           key={currentIndex}
           variants={variants}
           initial="enter"
@@ -206,7 +206,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
               }
             }}
           />
-        </motion.div>
+        </m.div>
       </AnimatePresence>
 
       {/* Dev controls — rendered via a Portal to document.body so they escape

@@ -1,5 +1,5 @@
 import { Box, Spinner } from '@chakra-ui/react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import ImageModal from './ImageModal';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { justifyLayout } from '../utils/justifyLayout';
@@ -23,7 +23,7 @@ interface GalleryGridProps {
   category?: string;
 }
 
-const MotionBox = motion(Box);
+const MotionBox = m(Box);
 
 // Justified-layout tuning. Target row height is what each row
 // approaches when items don't have to be squished/stretched — bigger

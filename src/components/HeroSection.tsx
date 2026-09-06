@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, Flex, VStack, Text, Icon, Image } from '@chakra-ui/react';
-import { motion, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
+import { m, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
 import FaCamera from '../icons/fa/FaCamera';
 import FaGlobe from '../icons/fa/FaGlobe';
 import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
@@ -12,7 +12,7 @@ import PageHeader from './ui/PageHeader';
 // palette keeps them on the same source of truth as everything else.
 import { brand } from '../theme';
 
-const MotionBox = motion(Box);
+const MotionBox = m(Box);
 
 interface HeroSectionProps {
   images: Array<{
@@ -693,7 +693,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               borderRadius="14px"
               boxShadow="0 1px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.15)"
             >
-              <motion.div
+              <m.div
                 style={{
                   position: 'absolute',
                   top: 6,

@@ -1,9 +1,9 @@
 import { Box, VStack, Link } from '@chakra-ui/react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from './ui/CTAButton';
 
-const MotionBox = motion(Box);
+const MotionBox = m(Box);
 
 interface MobileNavProps {
   isOpen: boolean;

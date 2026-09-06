@@ -1,7 +1,7 @@
 import { Box, Text, Flex, VStack } from '@chakra-ui/react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const StatsSection = () => {
   return (

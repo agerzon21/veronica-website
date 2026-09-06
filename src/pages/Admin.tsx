@@ -7,7 +7,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import FaBars from '../icons/fa/FaBars';
 import FaBookOpen from '../icons/fa/FaBookOpen';
 import FaClock from '../icons/fa/FaClock';
@@ -46,7 +46,7 @@ import AdminCrons from '../components/AdminCrons';
 import AdminUsers from '../components/AdminUsers';
 import { AdminI18nProvider, useAdminLang, readAdminLang, adminDict, type AdminLang } from '../i18n/admin';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
@@ -85,7 +85,7 @@ const TAB_TO_GROUP: Record<
 // user picks the sub-tab explicitly — no default is needed. Kept as
 // a comment for the archaeology.)
 
-const MotionBox = motion(Box);
+const MotionBox = m(Box);
 
 // localStorage key + helper for the "remember last signed-in email"
 // autofill on the login screen. Written on successful sign-in and

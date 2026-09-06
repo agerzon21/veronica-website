@@ -16,7 +16,7 @@ import FaHeart from '../icons/fa/FaHeart';
 import FaRegHeart from '../icons/fa/FaRegHeart';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import React from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useCopyNotification } from './CopyNotification';
 import CTAButton from './ui/CTAButton';
@@ -477,7 +477,7 @@ const ImageModal = ({
     if (photoPageUrl) navigate(photoPageUrl, { replace: true });
   }, [navigate, photoPageUrl]);
 
-  // The motion.div lives at a FIXED base rect (centered in viewport)
+  // The m.div lives at a FIXED base rect (centered in viewport)
   // and we animate CSS TRANSFORMS on top of it — scaleX/scaleY/x/y —
   // instead of animating top/left/width/height directly. Transforms
   // are composited on the GPU and don't trigger layout on each frame;
@@ -491,7 +491,7 @@ const ImageModal = ({
   };
 
   // Convert a viewport-relative Rect to the transform values needed to
-  // make the (openPos-sized, openPos-positioned) motion.div visually
+  // make the (openPos-sized, openPos-positioned) m.div visually
   // land on that rect. Because transform-origin is set to top-left,
   // scale shrinks the container from the top-left corner and x/y then
   // slide it into place.
@@ -776,7 +776,7 @@ const ImageModal = ({
           the two motions land together — otherwise the backdrop finished
           fading first and the user could see the still-shrinking image
           floating over the underlying page, which read as ghostly. */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0 }}
         animate={{ opacity: backdropOpacity }}
         transition={{ duration: isClosing ? 0.55 : 0.3, ease: [0.16, 1, 0.3, 1] }}
@@ -1039,7 +1039,7 @@ const ImageModal = ({
           "aligned to left edge of openPos" — so the transform math is
           intuitive (see rectToTransform). will-change hints the browser to
           composite this layer on the GPU. */}
-      <motion.div
+      <m.div
         initial={initialPos}
         animate={animTarget}
         transition={animTransition}
@@ -1101,7 +1101,7 @@ const ImageModal = ({
             />
           </Box>
         )}
-      </motion.div>
+      </m.div>
       <CopyNotification />
     </Box>
   );

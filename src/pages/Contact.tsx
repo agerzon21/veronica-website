@@ -5,13 +5,13 @@ import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
 import FaWhatsapp from '../icons/fa/FaWhatsapp';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { trackContactSubmission } from '../utils/analytics';
 import { prefetchChunk } from '../components/ChunkErrorBoundary';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const inputStyles = {
   // Higher-contrast fields. The old whiteAlpha.100/200 combo blended into any

@@ -20,7 +20,7 @@ import PageHeader from '../components/ui/PageHeader';
 import CTAButton from '../components/ui/CTAButton';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 
 // Photo shape mirrors what /api/gallery/post returns. Kept local so
 // this component doesn't need photos.ts at all (which used to
@@ -40,7 +40,7 @@ interface Photo {
   height: number | null;
 }
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const IndividualPhoto: React.FC = () => {
   const { category, photoId } = useParams<{ category: string; photoId: string }>();
@@ -539,7 +539,7 @@ const IndividualPhoto: React.FC = () => {
         {/* Fullscreen inspect modal */}
         <AnimatePresence>
           {isFullscreen && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -631,7 +631,7 @@ const IndividualPhoto: React.FC = () => {
                   Reset View · {Math.round(scale * 100)}%
                 </Text>
               </Flex>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
       </Box>

@@ -1,5 +1,5 @@
 import { Box, VStack, Text, Flex } from '@chakra-ui/react';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import PageHeader from './ui/PageHeader';
 
@@ -18,7 +18,7 @@ import PageHeader from './ui/PageHeader';
  *   </PolicyLayout>
  */
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 interface PolicyLayoutProps {
   title: string;

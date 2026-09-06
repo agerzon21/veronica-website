@@ -1,12 +1,12 @@
 import { Box, VStack, Text, Flex, Icon } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { useCopyNotification } from '../components/CopyNotification';
 import CTAButton from '../components/ui/CTAButton';
 import FaHeart from '../icons/fa/FaHeart';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const ZELLE_PHONE = '(570) 909-5707';
 

@@ -5,6 +5,12 @@ import { Box, Spinner } from '@chakra-ui/react';
 // framer-motion's full feature set at module scope. The three routes that use
 // toasts mount <ToastHost> themselves; see those files.
 import AppChakraProvider from './components/ui/AppChakraProvider';
+// `m` + LazyMotion instead of `motion`. The full `motion` component statically
+// pulls framer-motion's entire feature set, including drag and layout
+// projection, which nothing on the public site uses. domAnimation covers
+// animation, variants, exit animations and AnimatePresence, which is
+// everything the public pages do. Portal loads the full set itself; see there.
+import { LazyMotion, domAnimation } from 'framer-motion';
 import { lazy, Suspense, useEffect } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 // Home and IndividualPhoto stay EAGER on purpose.
@@ -224,6 +230,7 @@ function App() {
           was eventually deleted as dead code. If tokens ever stop applying,
           check this prop first. */}
       <AppChakraProvider theme={theme}>
+        <LazyMotion features={domAnimation} strict>
         {/* Outside <Router> so a chunk failure during the very first route
             resolution is still caught. */}
         <ChunkErrorBoundary>
@@ -231,6 +238,7 @@ function App() {
             <AppShell />
           </Router>
         </ChunkErrorBoundary>
+        </LazyMotion>
       </AppChakraProvider>
     </HelmetProvider>
   );

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import GalleryCategories from '../components/GalleryCategories';
 import GalleryGrid from '../components/GalleryGrid';
 
@@ -29,7 +29,7 @@ interface PublicPhoto {
   height: number | null;
 }
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const GALLERY_HERO_IMAGE = '/assets/photos/portraits/sunset-sunflower-field-joy.webp';
 

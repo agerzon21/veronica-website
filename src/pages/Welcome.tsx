@@ -2,12 +2,12 @@ import { Box, Flex, VStack, Text, Input, InputGroup, InputRightElement, Icon } f
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 interface WelcomeSummary {
   client_display_name: string | null;

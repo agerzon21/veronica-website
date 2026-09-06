@@ -1,9 +1,9 @@
 import { Box, Text, Link as ChakraLink, VStack, Flex } from '@chakra-ui/react';
 import { Link } from 'react-router-dom';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useRef } from 'react';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 const categories = [
   {

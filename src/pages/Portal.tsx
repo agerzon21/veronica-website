@@ -1,16 +1,21 @@
 import ToastHost from '../components/ui/ToastHost';
+// domMax, not domAnimation: the tab underline at `layoutId="portal-tab-underline"`
+// needs layout projection, which the light feature set does not include. This
+// nests inside the app's LazyMotion and wins for this subtree. Because Portal is
+// code-split, the extra features land in Portal's chunk, not the homepage's.
+import { LazyMotion, domMax } from 'framer-motion';
 import { Box, Flex, VStack, Text, Input, HStack, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
 import ClientGallery, { type DriveFile, type FolderSection } from '../components/ClientGallery';
 import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 type Tab = 'client' | 'gallery';
 
@@ -673,7 +678,9 @@ const ErrorText = ({ children }: { children: React.ReactNode }) => (
 export default function PortalWithToasts(props: Record<string, never>) {
   return (
     <ToastHost>
-      <Portal {...props} />
+      <LazyMotion features={domMax} strict>
+        <Portal {...props} />
+      </LazyMotion>
     </ToastHost>
   );
 }

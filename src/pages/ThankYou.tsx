@@ -6,13 +6,13 @@ import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
 import FaWhatsapp from '../icons/fa/FaWhatsapp';
 import { Helmet } from 'react-helmet-async';
 import CTAButton from '../components/ui/CTAButton';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ReactGA from 'react-ga4';
 import { ensureAnalytics, trackAdsLeadConversion, trackContactSubmission } from '../utils/analytics';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 // idle      → direct visit / back-navigation; nothing was submitted here
 // sending   → waiting on Resend to confirm the recipient accepted it

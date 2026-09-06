@@ -8,7 +8,7 @@ import {
 } from '@chakra-ui/react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { CloseIcon } from '@chakra-ui/icons';
 import FaCheck from '../icons/fa/FaCheck';
 import CTAButton from './ui/CTAButton';
@@ -194,7 +194,7 @@ const ExitIntentPopup = () => {
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -211,7 +211,7 @@ const ExitIntentPopup = () => {
           }}
           onClick={close}
         >
-          <motion.div
+          <m.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -339,8 +339,8 @@ const ExitIntentPopup = () => {
                 </VStack>
               )}
             </Box>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

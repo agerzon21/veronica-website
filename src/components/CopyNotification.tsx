@@ -1,9 +1,9 @@
 import { Box, Text } from '@chakra-ui/react';
 import { CheckIcon } from '@chakra-ui/icons';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { useState, useCallback, useRef } from 'react';
 
-const MotionBox = motion(Box);
+const MotionBox = m(Box);
 
 export function useCopyNotification(label = 'Link Copied') {
   const [visible, setVisible] = useState(false);

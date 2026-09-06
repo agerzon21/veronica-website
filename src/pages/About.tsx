@@ -1,11 +1,11 @@
 import { Box, VStack, Text, Flex, Image } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import { motion, useInView } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
 
-const MotionDiv = motion.div;
+const MotionDiv = m.div;
 
 // Small portrait avatar — the hero action shot doesn't show Veronika's face
 // (she's photographing on the floor at a wedding), so this introduces who
