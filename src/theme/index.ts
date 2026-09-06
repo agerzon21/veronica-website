@@ -239,7 +239,13 @@ const theme = extendTheme({
       letterSpacing: '0.14em',
       textTransform: 'uppercase',
       lineHeight: 1.4,
-      color: 'gray.500',
+      // gray.600, not gray.500. At 11px on white, gray.500 measures 4.02:1
+      // against WCAG AA's 4.5:1 floor and Lighthouse flags it: the footer's
+      // location and copyright lines and the Instagram post/follower counts all
+      // failed on it. gray.600 is 7.53:1. Every dark-background use of this
+      // style already overrides the colour explicitly (color="white" or
+      // whiteAlpha.*), so darkening the default only touches the light ones.
+      color: 'gray.600',
       marginRight: '-0.14em',
     },
     ctaLabel: {
