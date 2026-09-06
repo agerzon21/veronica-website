@@ -108,7 +108,6 @@ function PrefetchPublicRoutes() {
     // visible: it only changes when already-lazy chunks are fetched, and a
     // click still works whether or not the chunk was warmed.
     let idleId: number | undefined;
-    let fallbackId: number | undefined;
     let done = false;
 
     const run = () => {
@@ -128,12 +127,12 @@ function PrefetchPublicRoutes() {
     // it fires on the document, not the window, in some browsers.
     document.addEventListener('scroll', run, { once: true, passive: true });
     // Well clear of the LCP window on a slow device.
-    fallbackId = window.setTimeout(run, 8000);
+    const fallbackId = window.setTimeout(run, 8000);
 
     return () => {
       events.forEach((e) => window.removeEventListener(e, run));
       document.removeEventListener('scroll', run);
-      if (fallbackId !== undefined) clearTimeout(fallbackId);
+      clearTimeout(fallbackId);
       if (idleId !== undefined) (window as any).cancelIdleCallback?.(idleId);
     };
   }, []);
