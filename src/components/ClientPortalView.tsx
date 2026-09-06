@@ -1,6 +1,12 @@
 import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast, Collapse } from '@chakra-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FaCopy, FaSync, FaCheck, FaUndo, FaChevronLeft, FaChevronRight, FaChevronUp } from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaChevronLeft from '../icons/fa/FaChevronLeft';
+import FaChevronRight from '../icons/fa/FaChevronRight';
+import FaChevronUp from '../icons/fa/FaChevronUp';
+import FaCopy from '../icons/fa/FaCopy';
+import FaSync from '../icons/fa/FaSync';
+import FaUndo from '../icons/fa/FaUndo';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
 import ClientGallery, { type DriveFile, type FolderSection } from './ClientGallery';

@@ -1,6 +1,8 @@
 import { Box, VStack, Text, Icon, Flex, Input, Textarea, Select } from '@chakra-ui/react';
 import CTAButton from '../components/ui/CTAButton';
-import { FaWhatsapp, FaInstagram, FaRegEnvelope } from 'react-icons/fa';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
+import FaWhatsapp from '../icons/fa/FaWhatsapp';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
 import { motion, useInView } from 'framer-motion';

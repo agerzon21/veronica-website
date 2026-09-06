@@ -35,34 +35,33 @@ import {
   } from '@chakra-ui/react'; import { useEffect,
   useState,
   useCallback,
-  useRef } from 'react'; import {   FaInstagram,
-  FaRobot,
-  FaUser,
-  FaSync,
-  FaPaperPlane,
-  FaPowerOff,
-  FaCommentDots,
-  FaExclamationTriangle,
-  FaTimes,
-  FaEnvelope,
-  FaClipboardList,
-  FaPenNib,
-  FaCheckCircle,
-  FaTrash,
-  FaEye,
-  FaEyeSlash,
-  FaLanguage,
-  FaLightbulb,
-  FaChevronDown,
-  FaChevronUp,
-  FaUserPlus,
-  FaExternalLinkAlt,
-  FaChevronLeft,
-  FaChevronRight,
-  FaEraser,
-  FaUserFriends,
-  FaEllipsisV,
-} from 'react-icons/fa';
+  useRef } from 'react'; import FaCheckCircle from '../icons/fa/FaCheckCircle';
+import FaChevronDown from '../icons/fa/FaChevronDown';
+import FaChevronLeft from '../icons/fa/FaChevronLeft';
+import FaChevronRight from '../icons/fa/FaChevronRight';
+import FaChevronUp from '../icons/fa/FaChevronUp';
+import FaClipboardList from '../icons/fa/FaClipboardList';
+import FaCommentDots from '../icons/fa/FaCommentDots';
+import FaEllipsisV from '../icons/fa/FaEllipsisV';
+import FaEnvelope from '../icons/fa/FaEnvelope';
+import FaEraser from '../icons/fa/FaEraser';
+import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaEye from '../icons/fa/FaEye';
+import FaEyeSlash from '../icons/fa/FaEyeSlash';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaLanguage from '../icons/fa/FaLanguage';
+import FaLightbulb from '../icons/fa/FaLightbulb';
+import FaPaperPlane from '../icons/fa/FaPaperPlane';
+import FaPenNib from '../icons/fa/FaPenNib';
+import FaPowerOff from '../icons/fa/FaPowerOff';
+import FaRobot from '../icons/fa/FaRobot';
+import FaSync from '../icons/fa/FaSync';
+import FaTimes from '../icons/fa/FaTimes';
+import FaTrash from '../icons/fa/FaTrash';
+import FaUser from '../icons/fa/FaUser';
+import FaUserFriends from '../icons/fa/FaUserFriends';
+import FaUserPlus from '../icons/fa/FaUserPlus';
 import AdminAssistantChat from './AdminAssistantChat';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';

@@ -1,6 +1,7 @@
 import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
-import { FaCheck, FaCopy } from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaCopy from '../icons/fa/FaCopy';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import SessionTypePicker from './SessionTypePicker';

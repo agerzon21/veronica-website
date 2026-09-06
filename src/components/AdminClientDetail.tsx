@@ -1,6 +1,8 @@
 import { Box, VStack, HStack, Text, Input, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaCheck, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import { CONTRACT_TEMPLATES, extractVariableKeys } from '../data/contract-template';

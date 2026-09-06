@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import FaEye from '../icons/fa/FaEye';
+import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
 
 const MotionDiv = motion.div;

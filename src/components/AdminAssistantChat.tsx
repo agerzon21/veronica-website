@@ -4,9 +4,14 @@ import {
   useToast, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  FaPaperPlane, FaRedo, FaCheck, FaPlus, FaTrash, FaRegLightbulb, FaChevronDown, FaLanguage,
-} from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaChevronDown from '../icons/fa/FaChevronDown';
+import FaLanguage from '../icons/fa/FaLanguage';
+import FaPaperPlane from '../icons/fa/FaPaperPlane';
+import FaPlus from '../icons/fa/FaPlus';
+import FaRedo from '../icons/fa/FaRedo';
+import FaRegLightbulb from '../icons/fa/FaRegLightbulb';
+import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
 import { loadDraft, saveDraft, clearDraft, sweepDrafts } from './draftStore';

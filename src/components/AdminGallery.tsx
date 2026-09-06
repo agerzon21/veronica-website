@@ -5,10 +5,16 @@ import {
   SimpleGrid, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback } from 'react';
-import {
-  FaSyncAlt, FaEdit, FaTrash, FaExternalLinkAlt, FaImage, FaExclamationTriangle,
-  FaGoogleDrive, FaCog, FaCheckSquare, FaCheck,
-} from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaCheckSquare from '../icons/fa/FaCheckSquare';
+import FaCog from '../icons/fa/FaCog';
+import FaEdit from '../icons/fa/FaEdit';
+import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaGoogleDrive from '../icons/fa/FaGoogleDrive';
+import FaImage from '../icons/fa/FaImage';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
+import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import RebuildSiteButton from './ui/RebuildSiteButton';
 import ConfirmDialog from './ui/ConfirmDialog';

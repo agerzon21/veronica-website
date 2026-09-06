@@ -1,5 +1,6 @@
 import { Box, VStack, Text, SimpleGrid, Icon, Flex } from '@chakra-ui/react';
-import { FaFileSignature, FaImages } from 'react-icons/fa';
+import FaFileSignature from '../icons/fa/FaFileSignature';
+import FaImages from '../icons/fa/FaImages';
 import AdminBackButton from './ui/AdminBackButton';
 import { useAdminLang } from '../i18n/admin';
 

@@ -10,7 +10,10 @@ import {
   Spinner,
 } from '@chakra-ui/react';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
-import { FaDownload, FaExternalLinkAlt, FaHeart, FaRegHeart } from 'react-icons/fa';
+import FaDownload from '../icons/fa/FaDownload';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaHeart from '../icons/fa/FaHeart';
+import FaRegHeart from '../icons/fa/FaRegHeart';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import React from 'react';
 import { motion } from 'framer-motion';

@@ -5,7 +5,13 @@ import {
   Badge, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { FaSearch, FaPlus, FaTrash, FaEdit, FaMagic, FaHandPaper, FaLock } from 'react-icons/fa';
+import FaEdit from '../icons/fa/FaEdit';
+import FaHandPaper from '../icons/fa/FaHandPaper';
+import FaLock from '../icons/fa/FaLock';
+import FaMagic from '../icons/fa/FaMagic';
+import FaPlus from '../icons/fa/FaPlus';
+import FaSearch from '../icons/fa/FaSearch';
+import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import { useAdminLang } from '../i18n/admin';
 

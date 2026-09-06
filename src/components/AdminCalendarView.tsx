@@ -1,6 +1,7 @@
 import { Box, VStack, HStack, Text, Flex, Icon, SimpleGrid, useBreakpointValue } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
-import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import FaChevronLeft from '../icons/fa/FaChevronLeft';
+import FaChevronRight from '../icons/fa/FaChevronRight';
 import type { AdminPortalSummary } from './AdminDashboard';
 
 interface Props {

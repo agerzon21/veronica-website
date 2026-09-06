@@ -3,10 +3,16 @@ import {
   Switch, Input, Textarea, Select, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  FaPlus, FaSyncAlt, FaStar, FaEdit, FaTrash, FaGoogle, FaYelp,
-  FaInstagram, FaEnvelope, FaUser,
-} from 'react-icons/fa';
+import FaEdit from '../icons/fa/FaEdit';
+import FaEnvelope from '../icons/fa/FaEnvelope';
+import FaGoogle from '../icons/fa/FaGoogle';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaPlus from '../icons/fa/FaPlus';
+import FaStar from '../icons/fa/FaStar';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
+import FaTrash from '../icons/fa/FaTrash';
+import FaUser from '../icons/fa/FaUser';
+import FaYelp from '../icons/fa/FaYelp';
 import CTAButton from './ui/CTAButton';
 import MobileSheetModal, { MobileSheetFooter } from './ui/MobileSheetModal';
 import ConfirmDialog from './ui/ConfirmDialog';

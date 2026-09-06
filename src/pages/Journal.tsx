@@ -5,7 +5,7 @@ import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
-import { FaBookOpen } from 'react-icons/fa';
+import FaBookOpen from '../icons/fa/FaBookOpen';
 import CTAButton from '../components/ui/CTAButton';
 import JournalPost from './JournalPost';
 

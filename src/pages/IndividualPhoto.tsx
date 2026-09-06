@@ -12,7 +12,8 @@ import {
   WrapItem,
 } from '@chakra-ui/react';
 import { CloseIcon } from '@chakra-ui/icons';
-import { FaRegCopy, FaShareAlt } from 'react-icons/fa';
+import FaRegCopy from '../icons/fa/FaRegCopy';
+import FaShareAlt from '../icons/fa/FaShareAlt';
 import { useCopyNotification } from '../components/CopyNotification';
 import LoadingImage from '../components/ui/LoadingImage';
 import PageHeader from '../components/ui/PageHeader';

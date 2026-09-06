@@ -1,6 +1,8 @@
 import { Box, VStack, Text, HStack, Icon, Link, Image } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
-import { FaInstagram, FaWhatsapp, FaRegEnvelope } from 'react-icons/fa';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
+import FaWhatsapp from '../icons/fa/FaWhatsapp';
 
 // Light footer using the same logo + gold accent palette as the rest of the
 // site. Four quiet bands — logo → connect → legal → meta — separated by

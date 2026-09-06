@@ -3,9 +3,13 @@ import {
   Input, Select, FormControl, FormLabel, Collapse, Divider,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import {
-  FaSyncAlt, FaUserPlus, FaKey, FaCopy, FaCheck, FaSignOutAlt, FaTrash,
-} from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaCopy from '../icons/fa/FaCopy';
+import FaKey from '../icons/fa/FaKey';
+import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
+import FaTrash from '../icons/fa/FaTrash';
+import FaUserPlus from '../icons/fa/FaUserPlus';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import AdminCard from './ui/AdminCard';

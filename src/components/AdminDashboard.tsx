@@ -1,5 +1,8 @@
 import { Box, HStack, VStack, Text, Flex, Badge, Icon, SimpleGrid, IconButton } from '@chakra-ui/react';
-import { FaPlus, FaSyncAlt, FaTable, FaCalendarAlt } from 'react-icons/fa';
+import FaCalendarAlt from '../icons/fa/FaCalendarAlt';
+import FaPlus from '../icons/fa/FaPlus';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
+import FaTable from '../icons/fa/FaTable';
 import CTAButton from './ui/CTAButton';
 import AdminCalendarView from './AdminCalendarView';
 import { useAdminLang } from '../i18n/admin';

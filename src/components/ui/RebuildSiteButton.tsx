@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Box, HStack, Text, VStack } from '@chakra-ui/react';
-import { FaSyncAlt } from 'react-icons/fa';
+import FaSyncAlt from '../../icons/fa/FaSyncAlt';
 import CTAButton from './CTAButton';
 import { useAdminLang } from '../../i18n/admin';
 

@@ -4,7 +4,13 @@ import {
 import { Helmet } from 'react-helmet-async';
 import { useEffect, useState, useCallback } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { FaArrowLeft, FaArrowRight, FaBookOpen, FaShareAlt, FaChevronLeft, FaChevronRight, FaTimes } from 'react-icons/fa';
+import FaArrowLeft from '../icons/fa/FaArrowLeft';
+import FaArrowRight from '../icons/fa/FaArrowRight';
+import FaBookOpen from '../icons/fa/FaBookOpen';
+import FaChevronLeft from '../icons/fa/FaChevronLeft';
+import FaChevronRight from '../icons/fa/FaChevronRight';
+import FaShareAlt from '../icons/fa/FaShareAlt';
+import FaTimes from '../icons/fa/FaTimes';
 import ReactMarkdown from 'react-markdown';
 import PageHeader from '../components/ui/PageHeader';
 import CTAButton from '../components/ui/CTAButton';

@@ -4,7 +4,7 @@ import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { useCopyNotification } from '../components/CopyNotification';
 import CTAButton from '../components/ui/CTAButton';
-import { FaHeart } from 'react-icons/fa';
+import FaHeart from '../icons/fa/FaHeart';
 
 const MotionDiv = motion.div;
 

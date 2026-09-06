@@ -1,5 +1,9 @@
 import { Box, VStack, Text, Flex, Icon, Spinner } from '@chakra-ui/react';
-import { FaWhatsapp, FaInstagram, FaRegEnvelope, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
+import FaCheckCircle from '../icons/fa/FaCheckCircle';
+import FaExclamationCircle from '../icons/fa/FaExclamationCircle';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
+import FaWhatsapp from '../icons/fa/FaWhatsapp';
 import { Helmet } from 'react-helmet-async';
 import CTAButton from '../components/ui/CTAButton';
 import { motion, useInView } from 'framer-motion';

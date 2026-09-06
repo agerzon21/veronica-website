@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CloseIcon } from '@chakra-ui/icons';
-import { FaCheck } from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
 import CTAButton from './ui/CTAButton';
 
 const STORAGE_KEY = 'vero_exit_popup_shown_at';

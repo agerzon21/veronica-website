@@ -1,7 +1,12 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { Box, Flex, Text, Icon, HStack, VStack, Image } from '@chakra-ui/react';
 import { CloseIcon, ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
-import { FaHeart, FaRegComment, FaInstagram, FaFilm, FaImages, FaExternalLinkAlt } from 'react-icons/fa';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaFilm from '../icons/fa/FaFilm';
+import FaHeart from '../icons/fa/FaHeart';
+import FaImages from '../icons/fa/FaImages';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaRegComment from '../icons/fa/FaRegComment';
 import { motion, AnimatePresence } from 'framer-motion';
 import CTAButton from './ui/CTAButton';
 

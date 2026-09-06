@@ -3,10 +3,15 @@ import {
   Textarea, Select, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useState, type ReactNode } from 'react';
-import {
-  FaSyncAlt, FaTrash, FaEnvelope, FaCalendarAlt, FaMapMarkerAlt,
-  FaCamera, FaReply, FaUser, FaChevronRight,
-} from 'react-icons/fa';
+import FaCalendarAlt from '../icons/fa/FaCalendarAlt';
+import FaCamera from '../icons/fa/FaCamera';
+import FaChevronRight from '../icons/fa/FaChevronRight';
+import FaEnvelope from '../icons/fa/FaEnvelope';
+import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
+import FaReply from '../icons/fa/FaReply';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
+import FaTrash from '../icons/fa/FaTrash';
+import FaUser from '../icons/fa/FaUser';
 import CTAButton from './ui/CTAButton';
 import MobileSheetModal, { MobileSheetFooter } from './ui/MobileSheetModal';
 import ConfirmDialog from './ui/ConfirmDialog';

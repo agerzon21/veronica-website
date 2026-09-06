@@ -2,7 +2,9 @@ import {
   Box, VStack, HStack, Stack, Text, Flex, Icon, Input, Textarea, Select, Spinner, useToast,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaSave, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaSave from '../icons/fa/FaSave';
+import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import { useAdminLang } from '../i18n/admin';

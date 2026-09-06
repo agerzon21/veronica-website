@@ -1,7 +1,8 @@
 import SubTabButton from './ui/SubTabButton';
 import { Box, Flex, Text, VStack } from '@chakra-ui/react';
 import { useState } from 'react';
-import { FaComments, FaDatabase } from 'react-icons/fa';
+import FaComments from '../icons/fa/FaComments';
+import FaDatabase from '../icons/fa/FaDatabase';
 import AdminAssistantChat from './AdminAssistantChat';
 import AdminAssistantData from './AdminAssistantData';
 import { useAdminLang } from '../i18n/admin';

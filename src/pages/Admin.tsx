@@ -7,11 +7,24 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  FaUsers, FaPlug, FaBookOpen, FaCommentDots, FaRobot, FaImage,
-  FaInbox, FaFolder, FaBars, FaSignOutAlt, FaHome, FaExternalLinkAlt,
-  FaStar, FaClock, FaEnvelopeOpenText, FaUsersCog, FaEye, FaEyeSlash,
-} from 'react-icons/fa';
+import FaBars from '../icons/fa/FaBars';
+import FaBookOpen from '../icons/fa/FaBookOpen';
+import FaClock from '../icons/fa/FaClock';
+import FaCommentDots from '../icons/fa/FaCommentDots';
+import FaEnvelopeOpenText from '../icons/fa/FaEnvelopeOpenText';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaEye from '../icons/fa/FaEye';
+import FaEyeSlash from '../icons/fa/FaEyeSlash';
+import FaFolder from '../icons/fa/FaFolder';
+import FaHome from '../icons/fa/FaHome';
+import FaImage from '../icons/fa/FaImage';
+import FaInbox from '../icons/fa/FaInbox';
+import FaPlug from '../icons/fa/FaPlug';
+import FaRobot from '../icons/fa/FaRobot';
+import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
+import FaStar from '../icons/fa/FaStar';
+import FaUsers from '../icons/fa/FaUsers';
+import FaUsersCog from '../icons/fa/FaUsersCog';
 import CTAButton from '../components/ui/CTAButton';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';

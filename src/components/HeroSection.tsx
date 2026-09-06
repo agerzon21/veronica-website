@@ -1,7 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, Flex, VStack, Text, Icon, Image } from '@chakra-ui/react';
 import { motion, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
-import { FaMapMarkerAlt, FaCamera, FaGlobe } from 'react-icons/fa';
+import FaCamera from '../icons/fa/FaCamera';
+import FaGlobe from '../icons/fa/FaGlobe';
+import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
 import ImageCarousel from './ImageCarousel';
 import CTAButton from './ui/CTAButton';
 import PageHeader from './ui/PageHeader';

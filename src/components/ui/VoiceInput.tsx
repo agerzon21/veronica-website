@@ -1,6 +1,6 @@
 import { Icon, IconButton, useToast, type IconButtonProps } from '@chakra-ui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FaMicrophone } from 'react-icons/fa';
+import FaMicrophone from '../../icons/fa/FaMicrophone';
 
 /**
  * Press-and-hold microphone button that records audio via

@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon, Image } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
-import { FaGoogle, FaStar } from 'react-icons/fa';
+import FaGoogle from '../icons/fa/FaGoogle';
+import FaStar from '../icons/fa/FaStar';
 import CTAButton from './ui/CTAButton';
 
 const MotionDiv = motion.div;

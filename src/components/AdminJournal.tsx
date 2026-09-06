@@ -2,7 +2,11 @@ import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, Wrap, IconButton,
 } from '@chakra-ui/react';
 import { useEffect, useState, type MouseEvent } from 'react';
-import { FaPlus, FaSyncAlt, FaBookOpen, FaExternalLinkAlt, FaEdit } from 'react-icons/fa';
+import FaBookOpen from '../icons/fa/FaBookOpen';
+import FaEdit from '../icons/fa/FaEdit';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaPlus from '../icons/fa/FaPlus';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
 import CTAButton from './ui/CTAButton';
 import RebuildSiteButton from './ui/RebuildSiteButton';
 import AdminJournalEditor from './AdminJournalEditor';

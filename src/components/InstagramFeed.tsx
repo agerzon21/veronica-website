@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Box, VStack, HStack, Text, Link, Grid, AspectRatio, Image, Icon, Flex } from '@chakra-ui/react';
-import { FaInstagram, FaHeart, FaRegComment, FaPlay, FaFilm, FaImages } from 'react-icons/fa';
+import FaFilm from '../icons/fa/FaFilm';
+import FaHeart from '../icons/fa/FaHeart';
+import FaImages from '../icons/fa/FaImages';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaPlay from '../icons/fa/FaPlay';
+import FaRegComment from '../icons/fa/FaRegComment';
 import instagramData from '../data/instagram.json';
 import igFallbackVariants from '../data/ig-fallback-variants.json';
 import CTAButton from './ui/CTAButton';

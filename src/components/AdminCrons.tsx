@@ -3,7 +3,11 @@ import {
   Switch, Collapse,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { FaSyncAlt, FaClock, FaPlay, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import FaChevronDown from '../icons/fa/FaChevronDown';
+import FaChevronUp from '../icons/fa/FaChevronUp';
+import FaClock from '../icons/fa/FaClock';
+import FaPlay from '../icons/fa/FaPlay';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';

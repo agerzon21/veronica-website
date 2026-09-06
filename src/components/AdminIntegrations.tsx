@@ -1,8 +1,12 @@
 import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, useToast } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import {
-  FaInstagram, FaCheck, FaExternalLinkAlt, FaExclamationTriangle, FaTerminal, FaCopy, FaSyncAlt,
-} from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaCopy from '../icons/fa/FaCopy';
+import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaInstagram from '../icons/fa/FaInstagram';
+import FaSyncAlt from '../icons/fa/FaSyncAlt';
+import FaTerminal from '../icons/fa/FaTerminal';
 import CTAButton from './ui/CTAButton';
 import RebuildSiteButton from './ui/RebuildSiteButton';
 import { useAdminLang } from '../i18n/admin';

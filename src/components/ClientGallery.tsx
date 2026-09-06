@@ -16,7 +16,26 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { FaDownload, FaExternalLinkAlt, FaPlay, FaImage, FaGoogle, FaCopy, FaCheck, FaStar, FaShareAlt, FaChevronUp, FaChevronLeft, FaChevronRight, FaListUl, FaHeart, FaRegHeart, FaMobileAlt, FaInfoCircle, FaClock, FaEye, FaEyeSlash } from 'react-icons/fa';
+import FaCheck from '../icons/fa/FaCheck';
+import FaChevronLeft from '../icons/fa/FaChevronLeft';
+import FaChevronRight from '../icons/fa/FaChevronRight';
+import FaChevronUp from '../icons/fa/FaChevronUp';
+import FaClock from '../icons/fa/FaClock';
+import FaCopy from '../icons/fa/FaCopy';
+import FaDownload from '../icons/fa/FaDownload';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaEye from '../icons/fa/FaEye';
+import FaEyeSlash from '../icons/fa/FaEyeSlash';
+import FaGoogle from '../icons/fa/FaGoogle';
+import FaHeart from '../icons/fa/FaHeart';
+import FaImage from '../icons/fa/FaImage';
+import FaInfoCircle from '../icons/fa/FaInfoCircle';
+import FaListUl from '../icons/fa/FaListUl';
+import FaMobileAlt from '../icons/fa/FaMobileAlt';
+import FaPlay from '../icons/fa/FaPlay';
+import FaRegHeart from '../icons/fa/FaRegHeart';
+import FaShareAlt from '../icons/fa/FaShareAlt';
+import FaStar from '../icons/fa/FaStar';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
 
