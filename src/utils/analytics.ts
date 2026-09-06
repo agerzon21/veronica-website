@@ -21,6 +21,48 @@ let booted = false;
 // by then is whatever page the visitor has since navigated to.
 const pendingPageViews: { path: string; location: string }[] = [];
 
+let adsConfigured = false;
+
+/**
+ * Configure the Google Ads destination. Assumes gtag already exists.
+ *
+ * Deliberately NOT part of the default boot. `gtag('config', 'AW-…')` makes
+ * gtag.js fetch and evaluate a whole second container, and measured on the
+ * throttled profile that is 157.8 KB and 709 ms of script evaluation, which is
+ * 53% of the page's entire Total Blocking Time. Every organic visitor was
+ * paying that for a destination most of them will never trigger.
+ *
+ * The three cases that DO need it, all preserved:
+ *  - a paid click (IS_PAID_CLICK) configures it immediately, so the click id is
+ *    read off the landing URL and attribution is never lost;
+ *  - the /contact funnel, which ends in the conversion, configures it on entry;
+ *  - any real interaction configures it, which is what keeps remarketing
+ *    audiences working for organic visitors who actually engage.
+ *
+ * What is genuinely given up: an organic visitor who lands, never touches the
+ * page, and leaves is no longer added to a remarketing audience. Conversions
+ * and attribution are unaffected, because both require one of the three above.
+ */
+const configureAds = () => {
+  if (adsConfigured || typeof window === 'undefined') return;
+  const gtag = (window as any).gtag;
+  if (typeof gtag !== 'function') return;
+  adsConfigured = true;
+  // The pinned landing URL is what lets the conversion linker read the click id
+  // even on a late boot.
+  gtag('config', ADS_ID, { page_location: LANDING_URL });
+};
+
+/**
+ * Bring up gtag AND the Ads destination. Use before anything that must reach
+ * Google Ads; ensureAnalytics alone no longer guarantees it.
+ */
+export const ensureAdsDestination = () => {
+  if (typeof window === 'undefined') return;
+  ensureAnalytics();
+  configureAds();
+};
+
 /**
  * Load gtag now. Idempotent and synchronous — safe to call from anywhere,
  * including immediately before sending a conversion.
@@ -40,12 +82,9 @@ export const ensureAnalytics = () => {
   // on each page_view event instead — see trackPageView.
   ReactGA.initialize(GA_ID, { gtagOptions: { send_page_view: false } });
 
-  // The Ads destination DOES want the pinned landing URL: that is what lets
-  // the conversion linker read the click id even on a late boot. Must land
-  // before any conversion event — gtag.js silently drops events for a
-  // destination that has no config yet.
-  const gtag = (window as any).gtag;
-  if (typeof gtag === 'function') gtag('config', ADS_ID, { page_location: LANDING_URL });
+  // The Ads destination is configured separately, and NOT on every load. See
+  // configureAds below.
+  if (IS_PAID_CLICK || LANDING_PATH.startsWith('/contact')) configureAds();
 
   // Flush anything ScrollToTop queued while we were waiting, each with the URL
   // it was actually captured at.
@@ -74,8 +113,9 @@ export const scheduleAnalytics = () => {
   const delay = Math.max(0, 1500 - performance.now());
   const timer = window.setTimeout(ensureAnalytics, delay);
 
-  // Any real interaction means a session worth measuring; boot immediately.
-  const boot = () => ensureAnalytics();
+  // Any real interaction means a session worth measuring, and worth
+  // remarketing to, so this brings up the Ads destination as well.
+  const boot = () => ensureAdsDestination();
   const events = ['pointerdown', 'keydown'] as const;
   events.forEach((e) => window.addEventListener(e, boot, { once: true, passive: true }));
 
@@ -95,9 +135,10 @@ export const scheduleAnalytics = () => {
 // a contact-form lead has no inherent monetary value at submission time.
 export const trackAdsLeadConversion = () => {
   if (typeof window === 'undefined') return;
-  // Force gtag up before sending. Without this the event can reach dataLayer
-  // ahead of its config and be dropped on the floor.
-  ensureAnalytics();
+  // Force gtag AND the Ads destination up before sending. Without the second,
+  // the event reaches dataLayer ahead of its config and gtag.js drops it on the
+  // floor, which is a silent revenue-reporting failure.
+  ensureAdsDestination();
   const gtag = (window as any).gtag;
   if (typeof gtag === 'function') {
     gtag('event', 'conversion', {
