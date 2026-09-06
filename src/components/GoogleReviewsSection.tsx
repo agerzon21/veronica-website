@@ -1,8 +1,8 @@
 // Reviews now come from the DB (admin panel Reviews tab). Was hardcoded
 // TESTIMONIAL_POOL — see git history.
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon, Image } from '@chakra-ui/react';
-import { m } from 'framer-motion';
+import { m, useInView } from 'framer-motion';
 import FaGoogle from '../icons/fa/FaGoogle';
 import FaStar from '../icons/fa/FaStar';
 import CTAButton from './ui/CTAButton';
@@ -83,7 +83,23 @@ const GoogleReviewsSection = () => {
   const [reviewCount, setReviewCount] = useState<number>(FALLBACK_REVIEW_COUNT);
   const [loading, setLoading] = useState(true);
 
+  // Only fetch once this section is near the viewport.
+  //
+  // This ran on mount, which put /api/reviews on the homepage's critical
+  // request chain — a PageSpeed run measured it as the longest pole there at
+  // 891 ms — for a strip that sits well below the fold. The score barely cares
+  // (that audit is unscored and the payload is 2 KiB), but every homepage visit
+  // was invoking a serverless function for data most visitors never scroll to,
+  // and function calls are the scarce resource on this plan.
+  //
+  // rootMargin starts the fetch before the section is actually visible, so it
+  // is still loaded by the time it is scrolled into view. Same useInView the
+  // rest of the site already uses for reveal animations.
+  const sectionRef = useRef<HTMLDivElement | null>(null);
+  const nearViewport = useInView(sectionRef, { once: true, margin: '600px 0px' });
+
   useEffect(() => {
+    if (!nearViewport) return;
     let cancelled = false;
     (async () => {
       try {
@@ -118,14 +134,14 @@ const GoogleReviewsSection = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [nearViewport]);
 
   return (
     // layerStyle="section" supplies the bottom padding on the site's one
     // vertical interval; pt stays 0 because InstagramFeed already owns the
     // gap above this section and doubling it is exactly the "spacey" the
     // brief is about. Declared after layerStyle so it wins.
-    <Box bg="white" layerStyle="section" pt={{ base: 0, md: 0 }} px={6}>
+    <Box ref={sectionRef} bg="white" layerStyle="section" pt={{ base: 0, md: 0 }} px={6}>
       <MotionDiv
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
