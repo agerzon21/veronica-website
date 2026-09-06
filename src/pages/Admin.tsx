@@ -1,3 +1,4 @@
+import ToastHost from '../components/ui/ToastHost';
 import {
   Box, Flex, HStack, VStack, Text, Input, Icon,
   InputGroup, InputRightElement, IconButton, Spinner,
@@ -1453,4 +1454,16 @@ function MenuButton({
   );
 }
 
-export default Admin;
+/**
+ * Wrapped so anything in this route can raise a toast. The app root uses
+ * Chakra's toast-free provider to keep the toast component's framer-motion
+ * import off the public bundle, so each route that needs toasts mounts the
+ * machinery itself. Without this, useToast here would silently render nothing.
+ */
+export default function AdminWithToasts(props: Record<string, never>) {
+  return (
+    <ToastHost>
+      <Admin {...props} />
+    </ToastHost>
+  );
+}

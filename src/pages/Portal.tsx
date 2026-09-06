@@ -1,3 +1,4 @@
+import ToastHost from '../components/ui/ToastHost';
 import { Box, Flex, VStack, Text, Input, HStack, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -663,4 +664,16 @@ const ErrorText = ({ children }: { children: React.ReactNode }) => (
   </Text>
 );
 
-export default Portal;
+/**
+ * Wrapped so anything in this route can raise a toast. The app root uses
+ * Chakra's toast-free provider to keep the toast component's framer-motion
+ * import off the public bundle, so each route that needs toasts mounts the
+ * machinery itself. Without this, useToast here would silently render nothing.
+ */
+export default function PortalWithToasts(props: Record<string, never>) {
+  return (
+    <ToastHost>
+      <Portal {...props} />
+    </ToastHost>
+  );
+}

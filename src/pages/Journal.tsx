@@ -1,3 +1,4 @@
+import ToastHost from '../components/ui/ToastHost';
 import {
   Box, VStack, Text, Icon, Flex, Spinner, Image, Grid,
 } from '@chakra-ui/react';
@@ -575,4 +576,16 @@ function markerDate(iso: string | null | undefined): { month: string; day: strin
 }
 
 
-export default Journal;
+/**
+ * Wrapped so anything in this route can raise a toast. The app root uses
+ * Chakra's toast-free provider to keep the toast component's framer-motion
+ * import off the public bundle, so each route that needs toasts mounts the
+ * machinery itself. Without this, useToast here would silently render nothing.
+ */
+export default function JournalWithToasts(props: Record<string, never>) {
+  return (
+    <ToastHost>
+      <Journal {...props} />
+    </ToastHost>
+  );
+}

@@ -1,5 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { Box, ChakraProvider, Spinner } from '@chakra-ui/react';
+import { Box, Spinner } from '@chakra-ui/react';
+// ChakraProvider without the toast machinery, composed from Chakra's public
+// exports. ChakraProvider always mounts ToastProvider, whose component imports
+// framer-motion's full feature set at module scope. The three routes that use
+// toasts mount <ToastHost> themselves; see those files.
+import AppChakraProvider from './components/ui/AppChakraProvider';
 import { lazy, Suspense, useEffect } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 // Home and IndividualPhoto stay EAGER on purpose.
@@ -218,7 +223,7 @@ function App() {
           never passed here, so it silently did nothing for its entire life and
           was eventually deleted as dead code. If tokens ever stop applying,
           check this prop first. */}
-      <ChakraProvider theme={theme}>
+      <AppChakraProvider theme={theme}>
         {/* Outside <Router> so a chunk failure during the very first route
             resolution is still caught. */}
         <ChunkErrorBoundary>
@@ -226,7 +231,7 @@ function App() {
             <AppShell />
           </Router>
         </ChunkErrorBoundary>
-      </ChakraProvider>
+      </AppChakraProvider>
     </HelmetProvider>
   );
 }
