@@ -43,6 +43,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { google } from 'googleapis';
 import sharp from 'sharp';
+import { getDb } from './_db.js';
+import { extractFolderId } from './_drive.js';
 
 const DISPLAY_MAX_WIDTH = 2400;
 const DISPLAY_WEBP_QUALITY = 82;
@@ -78,15 +80,74 @@ function attachmentHeader(filename: string): string {
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`;
 }
 
+/** The only query params this endpoint understands. */
+const ALLOWED_PARAMS = new Set(['id', 'full', 'filename']);
+
+/**
+ * Is this file one of ours to serve?
+ *
+ * The regex below only checks that an id LOOKS like a Drive id, not that it
+ * belongs to us, and the service account holds drive.readonly across the whole
+ * account. So without this check, anyone holding any readable file id could
+ * pull it through the proxy — including a client gallery photo, bypassing the
+ * gallery password entirely.
+ *
+ * Two ways to qualify: it is a published public-gallery photo, or it lives in
+ * one of the client gallery folders.
+ */
+async function isOurFile(fileId: string): Promise<boolean> {
+  const sql = getDb();
+  const [row] = (await sql`
+    SELECT 1 AS ok FROM gallery_photos WHERE drive_file_id = ${fileId} LIMIT 1
+  `) as Array<{ ok: number }>;
+  if (row) return true;
+
+  const galleries = (await sql`
+    SELECT drive_url FROM client_galleries WHERE drive_url IS NOT NULL
+  `) as Array<{ drive_url: string }>;
+  const folderIds = new Set(
+    galleries.map((g) => extractFolderId(g.drive_url)).filter(Boolean),
+  );
+  if (folderIds.size === 0) return false;
+
+  try {
+    const authClient = await getAuthClient();
+    const drive = google.drive({ version: 'v3', auth: authClient as any });
+    const meta = await drive.files.get({ fileId, fields: 'parents' });
+    return (meta.data.parents || []).some((p) => folderIds.has(p));
+  } catch {
+    return false;
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fileId = typeof req.query.id === 'string' ? req.query.id : '';
   const wantFull = req.query.full === '1';
   const filename = typeof req.query.filename === 'string' ? req.query.filename : '';
 
+  // Reject unknown query params.
+  //
+  // Vercel's CDN keys its cache on the FULL url, so `?id=X&anything=1` is a
+  // cache miss and re-runs the whole Drive fetch + resize. Measured: any junk
+  // param turned a HIT into a MISS, which meant ~532 KB of origin transfer per
+  // request and a trivial way for anyone to drain the account's quota from a
+  // photo id lifted out of the page source. Unknown params now cost a few bytes
+  // instead of half a megabyte.
+  const unknown = Object.keys(req.query).filter((k) => !ALLOWED_PARAMS.has(k));
+  if (unknown.length > 0) {
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(400).json({ error: `Unexpected parameter: ${unknown[0]}` });
+  }
+
   // Drive file IDs are 28-44 chars of [A-Za-z0-9_-]. Reject anything else
   // to avoid using this endpoint as an open redirect / SSRF vector.
   if (!/^[A-Za-z0-9_-]{20,80}$/.test(fileId)) {
     return res.status(400).json({ error: 'Invalid file ID' });
+  }
+
+  if (!(await isOurFile(fileId))) {
+    // 404, not 403: a caller probing for valid ids learns nothing from this.
+    return res.status(404).json({ error: 'Not found' });
   }
 
   try {
