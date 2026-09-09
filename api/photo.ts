@@ -102,19 +102,32 @@ async function isOurFile(fileId: string): Promise<boolean> {
   `) as Array<{ ok: number }>;
   if (row) return true;
 
-  const galleries = (await sql`
-    SELECT drive_url FROM client_galleries WHERE drive_url IS NOT NULL
-  `) as Array<{ drive_url: string }>;
-  const folderIds = new Set(
-    galleries.map((g) => extractFolderId(g.drive_url)).filter(Boolean),
+  // Client gallery roots. BOTH tables: client_portals is where real delivered
+  // galleries live, client_galleries holds a few older/test rows. Checking only
+  // the latter 404'd every genuine client download.
+  const [portals, legacy] = (await Promise.all([
+    sql`SELECT drive_url FROM client_portals WHERE drive_url IS NOT NULL`,
+    sql`SELECT drive_url FROM client_galleries WHERE drive_url IS NOT NULL`,
+  ])) as Array<Array<{ drive_url: string }>>;
+  const roots = new Set(
+    [...portals, ...legacy].map((g) => extractFolderId(g.drive_url)).filter(Boolean),
   );
-  if (folderIds.size === 0) return false;
+  if (roots.size === 0) return false;
 
   try {
     const authClient = await getAuthClient();
     const drive = google.drive({ version: 'v3', auth: authClient as any });
     const meta = await drive.files.get({ fileId, fields: 'parents' });
-    return (meta.data.parents || []).some((p) => folderIds.has(p));
+    const parents = meta.data.parents || [];
+    if (parents.some((id) => roots.has(id))) return true;
+
+    // Galleries are organised into section subfolders, so a photo's immediate
+    // parent is usually the section, not the gallery root. Walk one level up.
+    for (const parentId of parents) {
+      const up = await drive.files.get({ fileId: parentId, fields: 'parents' });
+      if ((up.data.parents || []).some((id) => roots.has(id))) return true;
+    }
+    return false;
   } catch {
     return false;
   }
