@@ -33,9 +33,18 @@ import { useAdminLang } from '../../i18n/admin';
 const RebuildSiteButton = ({
   adminPassword,
   compact = false,
+  refreshToken = 0,
 }: {
   adminPassword: string;
   compact?: boolean;
+  /**
+   * Bump to re-check whether a rebuild is pending.
+   *
+   * The status was fetched once on mount and never again, so publishing a photo
+   * left this reading "everything is published, nothing waiting" until the whole
+   * page was reloaded by hand — the one moment it most needs to be right.
+   */
+  refreshToken?: number;
 }) => {
   const { t } = useAdminLang();
   const [busy, setBusy] = useState(false);
@@ -67,7 +76,7 @@ const RebuildSiteButton = ({
 
   useEffect(() => {
     loadStatus();
-  }, [loadStatus]);
+  }, [loadStatus, refreshToken]);
 
   const run = async () => {
     setBusy(true);

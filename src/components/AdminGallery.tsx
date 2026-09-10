@@ -121,6 +121,12 @@ const AdminGallery = ({ adminPassword }: Props) => {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
+  /**
+   * Bumped alongside every photo-list reload so the rebuild banner re-checks
+   * too. Publishing a photo is exactly when "nothing waiting" stops being true.
+   */
+  const [rebuildToken, setRebuildToken] = useState(0);
+
   const loadPhotos = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -168,6 +174,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
           isClosable: true,
         });
         void loadPhotos();
+        setRebuildToken((n) => n + 1);
       } else {
         toast({
           title: data.error || t.gallery.toastSyncFailed,
@@ -230,6 +237,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
         });
         exitSelectMode();
         await loadPhotos();
+        setRebuildToken((n) => n + 1);
       } else {
         toast({
           title: res.status === 403 ? t.gallery.bulkSuperOnly : data.error || t.gallery.bulkFailed,
@@ -258,6 +266,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
       if (res.ok && data.success) {
         toast({ title: t.gallery.toastPhotoRemoved, status: 'success', duration: 3000 });
         void loadPhotos();
+        setRebuildToken((n) => n + 1);
       } else {
         toast({ title: data.error || t.gallery.toastDeleteFailed, status: 'error', duration: 4000 });
       }
@@ -331,7 +340,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
           title column minW={0} against a flexShrink={0} button group, so a
           third control there collapses the heading on phones. */}
       <Box mb={{ base: 4, md: 6 }}>
-        <RebuildSiteButton adminPassword={adminPassword} compact />
+        <RebuildSiteButton adminPassword={adminPassword} compact refreshToken={rebuildToken} />
       </Box>
 
       {/* Drive-connection status row. Prominent "Set up" prompt when
@@ -653,6 +662,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
           onSaved={() => {
             setEditing(null);
             void loadPhotos();
+        setRebuildToken((n) => n + 1);
           }}
         />
       )}
