@@ -175,7 +175,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       SELECT direction, sender, body, sent_at
       FROM messages
-      WHERE conversation_id = ${conversationId}
+      -- Unsent drafts excluded. Without this the summariser treats an AI draft
+      -- Vero never sent as something that was actually said, and states it back
+      -- as fact. Live example found in the data: a conversation whose cached
+      -- summary carries a price of 300 taken from an unsent draft, sitting next
+      -- to the 200 that was really quoted. _assistant-chat.ts already filters
+      -- this way, which is part of why the two disagree.
+      WHERE conversation_id = ${conversationId} AND status <> 'draft'
       ORDER BY sent_at ASC
       LIMIT 100
     `) as MessageRow[];
