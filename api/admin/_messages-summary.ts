@@ -59,7 +59,7 @@ const MODEL = 'gpt-4o-mini';
  * looking at one. A version number rather than a presence check on some key,
  * because presence checks only ever retire one generation.
  */
-const SUMMARY_VERSION = 2;
+const SUMMARY_VERSION = 3;
 
 let cachedClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -116,7 +116,10 @@ interface ThreadContact {
 interface LocalizedSummary {
   asking: string;
   gathered: string[];
+  /** Gaps only the customer can fill. */
   missing: string[];
+  /** Gaps Vero fills herself — the price and the retainer. */
+  decide: string[];
   nextStep: string;
 }
 
@@ -179,43 +182,64 @@ export const EMPTY_BOOKING: BookingFields = {
 const COUPLE_SESSION_TYPES = new Set(['wedding', 'engagement', 'elopement', 'anniversary']);
 
 /**
- * What "Still needed" can list, in the order it renders. Labels live here in
- * both languages rather than coming back from the model, so the wording stays
+ * What a contract needs, in the order it renders. Labels live here in both
+ * languages rather than coming back from the model, so the wording stays
  * identical between threads and between regenerations.
+ *
+ * `source` splits the list into the two genuinely different things it used to
+ * conflate. Only the customer can say when the wedding is or how to spell her
+ * partner's surname. The price and the retainer are Vero's own decisions, and
+ * showing them under a heading that reads as "ask them for this" produced
+ * advice like "ask Daria for the amount of the advance payment" — telling a
+ * photographer to ask a client what deposit she would like to be charged.
  */
 const BOOKING_REQUIREMENTS: Array<{
   key: keyof BookingFields;
   en: string;
   ru: string;
+  source: 'client' | 'vero';
   coupleOnly?: boolean;
 }> = [
-  { key: 'session_type', en: 'Type of session', ru: 'Тип съёмки' },
-  { key: 'event_date', en: 'Event date', ru: 'Дата съёмки' },
-  { key: 'event_time', en: 'Coverage hours', ru: 'Часы съёмки' },
-  { key: 'event_location', en: 'Location', ru: 'Место съёмки' },
-  { key: 'client_full_name', en: "Client's full name", ru: 'Полное имя клиента' },
+  { key: 'session_type', en: 'Type of session', ru: 'Тип съёмки', source: 'client' },
+  { key: 'event_date', en: 'Event date', ru: 'Дата съёмки', source: 'client' },
+  { key: 'event_time', en: 'Coverage hours', ru: 'Часы съёмки', source: 'client' },
+  { key: 'event_location', en: 'Location', ru: 'Место съёмки', source: 'client' },
+  {
+    key: 'client_full_name',
+    en: "Client's full name",
+    ru: 'Полное имя клиента',
+    source: 'client',
+  },
   {
     key: 'partner_full_name',
     en: "Partner's full name",
     ru: 'Полное имя партнёра',
+    source: 'client',
     coupleOnly: true,
   },
-  { key: 'client_email', en: 'Client email address', ru: 'Электронная почта клиента' },
-  { key: 'total_amount', en: 'Total price', ru: 'Итоговая стоимость' },
-  { key: 'retainer_amount', en: 'Retainer amount', ru: 'Размер предоплаты' },
+  {
+    key: 'client_email',
+    en: 'Client email address',
+    ru: 'Электронная почта клиента',
+    source: 'client',
+  },
+  { key: 'total_amount', en: 'Total price', ru: 'Итоговая стоимость', source: 'vero' },
+  { key: 'retainer_amount', en: 'Retainer amount', ru: 'Размер предоплаты', source: 'vero' },
 ];
 
 /** Only these threads are heading toward a contract; the rest need nothing. */
 const BOOKING_CLASSIFICATIONS = new Set(['booking-inquiry', 'existing-client']);
 
-export function computeMissing(
+export function computeGaps(
   booking: BookingFields,
   classification: Classification,
   locale: 'en' | 'ru',
+  source: 'client' | 'vero',
 ): string[] {
   if (!BOOKING_CLASSIFICATIONS.has(classification)) return [];
   const couple = COUPLE_SESSION_TYPES.has(booking.session_type ?? '');
-  return BOOKING_REQUIREMENTS.filter((f) => !f.coupleOnly || couple)
+  return BOOKING_REQUIREMENTS.filter((f) => f.source === source)
+    .filter((f) => !f.coupleOnly || couple)
     .filter((f) => !booking[f.key])
     .map((f) => f[locale]);
 }
@@ -470,7 +494,7 @@ Fill "booking" BEFORE writing "gathered" — decide the facts first, then descri
 - "en": an object with:
     - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
     - "gathered": array of concrete facts ESTABLISHED ANYWHERE IN THIS THREAD, in English, no matter who said them. Include what the customer shared AND what Vero quoted or committed to — a price Vero gave IS a gathered fact and is one of the most important ones. Cover: session type, event date, event time or coverage hours, location, headcount, the price/total quoted, any retainer or deposit, what's included, full names, email addresses, phone numbers, deadlines, styles and constraints. Where a number came from Vero rather than the customer, say so plainly, e.g. "Price quoted: $500 for 3 hours (quoted by Vero)". If the same thing was said more than once with different values, give the MOST RECENT and note it changed, e.g. "Price quoted: $1,400 (revised from $1,000)". Empty array if nothing concrete or if it's spam. Format phone numbers with proper grouping like "(555) 123-4567" — never as one long digit string.
-    - "nextStep": one English sentence — what should Vero do next. If details are still needed before a contract could be written, say which ones to ask for.
+    - "nextStep": one English sentence — what should Vero do next. If details are still needed from the customer before a contract could be written, say which ones to ask for. NEVER suggest asking the customer for the price or the retainer/deposit amount: those are Vero's to set, and asking a client what she would like to be charged reads as amateurish. If the only thing outstanding is a figure Vero has not named yet, tell her to decide and quote it, not to ask.
 - "ru": an object with the SAME keys ("asking", "gathered", "nextStep") but in RUSSIAN. Preserve phone-number formatting, proper names, and specific dates/times unchanged (e.g. "9:30am" stays "9:30am", "Bushkill Falls" stays "Bushkill Falls").
 
 Reply with ONLY the JSON object — no preamble, no markdown code fences, no explanation.
@@ -512,9 +536,10 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
     gathered: Array.isArray(src?.gathered)
       ? src.gathered.filter((g: unknown): g is string => typeof g === 'string')
       : [],
-    // Filled in below from `booking`, not read from the model. See
-    // BookingFields for why the model is not trusted to write this list.
+    // Both filled in below from `booking`, not read from the model. See
+    // BookingFields for why the model is not trusted to write these lists.
     missing: [],
+    decide: [],
     nextStep: typeof src?.nextStep === 'string' ? src.nextStep : fallbackNext,
   });
 
@@ -580,8 +605,10 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
   // frequently wrong field depending on the model noticing a metadata block.
   if (!booking.client_email && contact.address) booking.client_email = contact.address;
 
-  en.missing = computeMissing(booking, classification, 'en');
-  ru.missing = computeMissing(booking, classification, 'ru');
+  en.missing = computeGaps(booking, classification, 'en', 'client');
+  ru.missing = computeGaps(booking, classification, 'ru', 'client');
+  en.decide = computeGaps(booking, classification, 'en', 'vero');
+  ru.decide = computeGaps(booking, classification, 'ru', 'vero');
 
   return {
     classification,

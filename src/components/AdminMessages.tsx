@@ -273,8 +273,10 @@ export type InquiryClassification =
 interface LocalizedSummary {
   asking: string;
   gathered: string[];
-  /** What is still needed before a contract can be written. */
+  /** Gaps only the customer can fill. */
   missing?: string[];
+  /** Gaps Vero fills herself — the price and the retainer. */
+  decide?: string[];
   nextStep: string;
 }
 
@@ -290,6 +292,7 @@ export interface AiSummary {
   asking?: string;
   gathered?: string[];
   missing?: string[];
+  decide?: string[];
   nextStep?: string;
 }
 
@@ -305,13 +308,14 @@ type AiPanelTab = 'summary' | 'reply' | 'assistant';
  * a bunch of `?? ''` boilerplate.
  */
 function readSummaryLocale(s: AiSummary | null, lang: SummaryLang): LocalizedSummary {
-  if (!s) return { asking: '', gathered: [], missing: [], nextStep: '' };
+  if (!s) return { asking: '', gathered: [], missing: [], decide: [], nextStep: '' };
   const primary = s[lang];
   const other = s[lang === 'ru' ? 'en' : 'ru'];
   return {
     asking: primary?.asking ?? other?.asking ?? s.asking ?? '',
     gathered: primary?.gathered ?? other?.gathered ?? s.gathered ?? [],
     missing: primary?.missing ?? other?.missing ?? s.missing ?? [],
+    decide: primary?.decide ?? other?.decide ?? s.decide ?? [],
     nextStep: primary?.nextStep ?? other?.nextStep ?? s.nextStep ?? '',
   };
 }
@@ -3461,6 +3465,7 @@ function SummaryCard({
     asking: t.messages.summaryAsking,
     gathered: t.messages.summaryGathered,
     missing: t.messages.summaryMissing,
+    decide: t.messages.summaryDecide,
     nextStep: t.messages.summaryNextStep,
     tone: t.messages.summaryTone,
     expandCta: t.messages.closeSummaryOpenChat,
@@ -3665,26 +3670,36 @@ function SummaryCard({
                 </Box>
               )}
 
-              {/* What is still needed before a contract can be written. Marked
-                  in the accent colour rather than red: these are things to ask
-                  for, not errors. Absent on older cached summaries, which
+              {/* The two gap lists, kept apart on purpose. "Ask the client"
+                  is information only the customer has; "For you to set" is
+                  Vero's own decision. Collapsed into one list they produced
+                  advice like "ask Daria for the amount of the advance
+                  payment", i.e. asking a client what deposit to charge her.
+                  Muted rather than red throughout: these are next actions,
+                  not errors. Both absent on older cached summaries, which
                   simply render nothing. */}
-              {(localized.missing?.length ?? 0) > 0 && (
-                <Box>
-                  <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
-                    {strings.missing}
-                  </Text>
-                  <VStack align="stretch" spacing={0.5}>
-                    {(localized.missing ?? []).map((item, i) => (
-                      <Flex key={i} gap={2} align="flex-start">
-                        <Text fontSize="sm" color="gray.400" lineHeight="1.5">○</Text>
-                        <Text fontSize="sm" color="gray.600" lineHeight="1.5">
-                          {item}
-                        </Text>
-                      </Flex>
-                    ))}
-                  </VStack>
-                </Box>
+              {([
+                { label: strings.missing, items: localized.missing, marker: '○' },
+                { label: strings.decide, items: localized.decide, marker: '◆' },
+              ] as const).map(
+                (group) =>
+                  (group.items?.length ?? 0) > 0 && (
+                    <Box key={group.label}>
+                      <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
+                        {group.label}
+                      </Text>
+                      <VStack align="stretch" spacing={0.5}>
+                        {(group.items ?? []).map((item, i) => (
+                          <Flex key={i} gap={2} align="flex-start">
+                            <Text fontSize="sm" color="gray.400" lineHeight="1.5">{group.marker}</Text>
+                            <Text fontSize="sm" color="gray.600" lineHeight="1.5">
+                              {item}
+                            </Text>
+                          </Flex>
+                        ))}
+                      </VStack>
+                    </Box>
+                  ),
               )}
 
               <Box>
