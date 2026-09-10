@@ -469,6 +469,7 @@ const dict = {
     summaryTitle: { en: 'Thread summary', ru: 'Сводка' },
     summaryAsking: { en: 'Asking', ru: 'Спрашивает' },
     summaryGathered: { en: 'Gathered', ru: 'Собрали' },
+    summaryMissing: { en: 'Still needed', ru: 'Ещё нужно' },
     summaryNextStep: { en: 'Next step', ru: 'Далее' },
     summaryTone: { en: 'Tone', ru: 'Тон' },
     summaryLoading: { en: 'Reading the thread…', ru: 'Читаю переписку…' },

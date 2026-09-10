@@ -273,6 +273,8 @@ export type InquiryClassification =
 interface LocalizedSummary {
   asking: string;
   gathered: string[];
+  /** What is still needed before a contract can be written. */
+  missing?: string[];
   nextStep: string;
 }
 
@@ -287,6 +289,7 @@ export interface AiSummary {
   // they get regenerated on the next new message.
   asking?: string;
   gathered?: string[];
+  missing?: string[];
   nextStep?: string;
 }
 
@@ -302,12 +305,13 @@ type AiPanelTab = 'summary' | 'reply' | 'assistant';
  * a bunch of `?? ''` boilerplate.
  */
 function readSummaryLocale(s: AiSummary | null, lang: SummaryLang): LocalizedSummary {
-  if (!s) return { asking: '', gathered: [], nextStep: '' };
+  if (!s) return { asking: '', gathered: [], missing: [], nextStep: '' };
   const primary = s[lang];
   const other = s[lang === 'ru' ? 'en' : 'ru'];
   return {
     asking: primary?.asking ?? other?.asking ?? s.asking ?? '',
     gathered: primary?.gathered ?? other?.gathered ?? s.gathered ?? [],
+    missing: primary?.missing ?? other?.missing ?? s.missing ?? [],
     nextStep: primary?.nextStep ?? other?.nextStep ?? s.nextStep ?? '',
   };
 }
@@ -3456,6 +3460,7 @@ function SummaryCard({
     header: t.messages.summaryTitle,
     asking: t.messages.summaryAsking,
     gathered: t.messages.summaryGathered,
+    missing: t.messages.summaryMissing,
     nextStep: t.messages.summaryNextStep,
     tone: t.messages.summaryTone,
     expandCta: t.messages.closeSummaryOpenChat,
@@ -3653,6 +3658,28 @@ function SummaryCard({
                         <Text fontSize="sm" color="brand.accent" lineHeight="1.5">•</Text>
                         <Text fontSize="sm" color="gray.700" lineHeight="1.5">
                           {formatPhoneNumbersInText(fact)}
+                        </Text>
+                      </Flex>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+
+              {/* What is still needed before a contract can be written. Marked
+                  in the accent colour rather than red: these are things to ask
+                  for, not errors. Absent on older cached summaries, which
+                  simply render nothing. */}
+              {(localized.missing?.length ?? 0) > 0 && (
+                <Box>
+                  <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
+                    {strings.missing}
+                  </Text>
+                  <VStack align="stretch" spacing={0.5}>
+                    {(localized.missing ?? []).map((item, i) => (
+                      <Flex key={i} gap={2} align="flex-start">
+                        <Text fontSize="sm" color="gray.400" lineHeight="1.5">○</Text>
+                        <Text fontSize="sm" color="gray.600" lineHeight="1.5">
+                          {item}
                         </Text>
                       </Flex>
                     ))}

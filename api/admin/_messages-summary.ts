@@ -87,6 +87,7 @@ const VALID_CLASSIFICATIONS: readonly Classification[] = [
 interface LocalizedSummary {
   asking: string;
   gathered: string[];
+  missing: string[];
   nextStep: string;
 }
 
@@ -103,6 +104,7 @@ interface Summary {
   // Kept in the type so the JSON round-trip stays lossless.
   asking?: string;
   gathered?: string[];
+  missing?: string[];
   nextStep?: string;
 }
 
@@ -256,9 +258,10 @@ Return a JSON object with EXACTLY these keys:
 - "tone": ONE WORD (English) describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.
 - "en": an object with:
     - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
-    - "gathered": array of concrete facts the customer has shared in English — dates, locations, session types, headcounts, styles they like, constraints, budget mentions, deadlines, phone numbers. Empty array if nothing concrete or if it's spam. Format phone numbers with proper grouping like "(555) 123-4567" — never as one long digit string.
-    - "nextStep": one English sentence — what should Vero do next.
-- "ru": an object with the SAME keys ("asking", "gathered", "nextStep") but in RUSSIAN. Preserve phone-number formatting, proper names, and specific dates/times unchanged (e.g. "9:30am" stays "9:30am", "Bushkill Falls" stays "Bushkill Falls").
+    - "gathered": array of concrete facts ESTABLISHED ANYWHERE IN THIS THREAD, in English, no matter who said them. Include what the customer shared AND what Vero quoted or committed to — a price Vero gave IS a gathered fact and is one of the most important ones. Cover: session type, event date, event time or coverage hours, location, headcount, the price/total quoted, any retainer or deposit, what's included, full names, email addresses, phone numbers, deadlines, styles and constraints. Where a number came from Vero rather than the customer, say so plainly, e.g. "Price quoted: $500 for 3 hours (quoted by Vero)". If the same thing was said more than once with different values, give the MOST RECENT and note it changed, e.g. "Price quoted: $1,400 (revised from $1,000)". Empty array if nothing concrete or if it's spam. Format phone numbers with proper grouping like "(555) 123-4567" — never as one long digit string.
+    - "missing": array of short English phrases naming what is STILL NEEDED before Vero could write a contract and open a client portal for this booking. Consider: session type, event date, event time or coverage hours, event location, both partners' full names (for a wedding, engagement, elopement or anniversary — otherwise just the client's full name), client email address, total price, retainer or deposit amount. List ONLY the ones genuinely not established anywhere in the thread, phrased as the thing to ask for, e.g. "Client's email address", "Retainer amount". If everything needed is present, return an empty array. Return an empty array for spam, personal chat, or anything that is not a booking.
+    - "nextStep": one English sentence — what should Vero do next. If "missing" is non-empty and this is a real booking, say which details to ask for.
+- "ru": an object with the SAME keys ("asking", "gathered", "missing", "nextStep") but in RUSSIAN. Preserve phone-number formatting, proper names, and specific dates/times unchanged (e.g. "9:30am" stays "9:30am", "Bushkill Falls" stays "Bushkill Falls").
 
 Reply with ONLY the JSON object — no preamble, no markdown code fences, no explanation.
 
@@ -298,6 +301,11 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
     asking: typeof src?.asking === 'string' ? src.asking : fallbackAsking,
     gathered: Array.isArray(src?.gathered)
       ? src.gathered.filter((g: unknown): g is string => typeof g === 'string')
+      : [],
+    // Older cached rows predate this field, so it is optional everywhere and
+    // simply renders as nothing rather than breaking the card.
+    missing: Array.isArray(src?.missing)
+      ? src.missing.filter((g: unknown): g is string => typeof g === 'string')
       : [],
     nextStep: typeof src?.nextStep === 'string' ? src.nextStep : fallbackNext,
   });
