@@ -46,8 +46,20 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+import { FROM_ADDRESS } from '../_auto-reply.js';
 
 const MODEL = 'gpt-4o-mini';
+
+/**
+ * Bump whenever the booking spec or the transcript we send the model changes.
+ *
+ * A cached summary is otherwise only rebuilt when a NEW MESSAGE ARRIVES, so a
+ * thread that has gone quiet serves its old "Still needed" list forever. That
+ * is exactly how the pre-`booking` rows survived long enough for Vero to be
+ * looking at one. A version number rather than a presence check on some key,
+ * because presence checks only ever retire one generation.
+ */
+const SUMMARY_VERSION = 2;
 
 let cachedClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -83,6 +95,23 @@ const VALID_CLASSIFICATIONS: readonly Classification[] = [
   'spam-or-unrelated',
   'unclear',
 ] as const;
+
+/**
+ * Identity the platform hands us that the message bodies never carry.
+ *
+ * An email thread knows the customer's address before a single word is typed:
+ * conversations.external_user_id IS the lowercased From address, and it is the
+ * exact string every reply is delivered to. The model only ever saw
+ * `${role}: ${body}`, so it could not know that, and duly told Vero to ask a
+ * client for the address she was already writing to.
+ */
+interface ThreadContact {
+  /** The customer's email address, when the platform knows it. Null on Instagram. */
+  address: string | null;
+  /** Display name from the platform, when there is one. */
+  name: string | null;
+  platform: string | null;
+}
 
 interface LocalizedSummary {
   asking: string;
@@ -203,6 +232,9 @@ interface Summary {
   // Language-neutral contract details. Optional because summaries cached
   // before this existed do not have it.
   booking?: BookingFields;
+  // Which generation of the summariser wrote this row. Absent on every row
+  // written before it existed, which is what retires them.
+  summaryVersion?: number;
   // Legacy fields — populated on old cache rows, unused on new ones.
   // Kept in the type so the JSON round-trip stays lossless.
   asking?: string;
@@ -238,6 +270,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SELECT
         c.summary_json,
         c.summary_message_id,
+        c.platform,
+        c.external_user_id,
+        c.contact_name,
         (
           SELECT id FROM messages
           WHERE conversation_id = c.id
@@ -250,6 +285,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as Array<{
       summary_json: Summary | null;
       summary_message_id: string | null;
+      platform: string | null;
+      external_user_id: string | null;
+      contact_name: string | null;
       latest_message_id: string | null;
     }>;
 
@@ -264,10 +302,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Cache hit — nothing new since the last summary, no force flag.
-    // Skip OpenAI entirely, return instantly.
+    // Cache hit — nothing new since the last summary, no force flag, and the
+    // cached row was written by this version of the summariser.
+    //
+    // That last condition matters. Summaries cached before `booking` existed
+    // carry a "Still needed" list the MODEL wrote as free text, which is
+    // exactly the thing that used to contradict the facts listed right above
+    // it — one row named the client and her partner as gathered facts and then
+    // asked for both again. Those rows are otherwise immortal: a summary is
+    // only rebuilt when a new message arrives, so a settled thread would show
+    // the old contradictory list indefinitely. Treating a row with no
+    // `booking` as a miss retires them the first time anyone opens the thread.
+    const cachedSchemaIsCurrent =
+      (cacheRow.summary_json as Summary | null)?.summaryVersion === SUMMARY_VERSION;
     if (
       !force &&
+      cachedSchemaIsCurrent &&
       cacheRow.summary_json &&
       cacheRow.summary_message_id === cacheRow.latest_message_id
     ) {
@@ -291,7 +341,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       LIMIT 100
     `) as MessageRow[];
 
-    const summary = await generateSummary(rows);
+    // For platform='email', conversations.external_user_id is the lowercased
+    // From address and the exact string every reply is delivered to. On
+    // Instagram it is an IGSID, so it stays null there and the email genuinely
+    // does still need asking for.
+    const rawAddress = cacheRow.platform === 'email' ? cacheRow.external_user_id : null;
+    const contact: ThreadContact = {
+      address:
+        rawAddress && rawAddress.includes('@') && rawAddress.toLowerCase() !== FROM_ADDRESS
+          ? rawAddress
+          : null,
+      name: cacheRow.contact_name,
+      platform: cacheRow.platform,
+    };
+    const summary = await generateSummary(rows, contact);
 
     // Persist so the next request hits cache. If the latest message
     // id changed BETWEEN the SELECT above and this UPDATE (very
@@ -328,11 +391,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-async function generateSummary(messages: MessageRow[]): Promise<Summary> {
+async function generateSummary(
+  messages: MessageRow[],
+  contact: ThreadContact,
+): Promise<Summary> {
   const client = getOpenAI();
 
+  // Business timezone, not UTC. Vercel runs UTC, so on a weekday evening in ET
+  // `toISOString()` is already tomorrow — enough to push a bare "the 12th" into
+  // the wrong month at a boundary.
+  const dayOf = (d: Date | string) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(d));
+
   // Format the transcript for the model. Label sides clearly so the
-  // model doesn't get confused about which side is the customer.
+  // model doesn't get confused about which side is the customer. Each line
+  // carries its send date so a bare "October 7" can be resolved to a year
+  // instead of coming back null.
   const transcript = messages
     .map((m) => {
       const role =
@@ -341,13 +415,26 @@ async function generateSummary(messages: MessageRow[]): Promise<Summary> {
           : m.sender === 'ai'
             ? 'AI Assistant'
             : 'Vero';
-      return `${role}: ${m.body}`;
+      return `[${dayOf(m.sent_at)}] ${role}: ${m.body}`;
     })
     .join('\n\n');
+
+  // Fenced off as metadata so the model cannot mistake it for something a
+  // person typed, while still being usable as a source of facts.
+  const metaLines = [
+    contact.platform ? `Channel: ${contact.platform}` : null,
+    contact.address ? `Customer writes from: ${contact.address}` : null,
+    contact.name ? `Customer display name: ${contact.name}` : null,
+  ].filter(Boolean);
+  const userContent = metaLines.length
+    ? `--- THREAD METADATA (from the platform, not typed by anyone) ---\n${metaLines.join('\n')}\n--- CONVERSATION ---\n${transcript}`
+    : transcript;
 
   const systemPrompt = `You are analyzing a conversation between a photography customer and a photographer's inbox (some replies come from the photographer's AI assistant, some from the photographer Vero personally). Produce a compact summary Vero can use to catch up on the thread at a glance AND immediately decide whether it's worth her time.
 
 Vero speaks Russian natively but the admin panel is bilingual, so return the summary in BOTH English AND Russian. Classification and tone stay as machine-readable keys.
+
+Today is ${dayOf(new Date())}. Every transcript line is prefixed with the date that message was sent. Use those dates ONLY to pin down the year or month of a day the thread already names. Never convert a vague reference such as "next summer" or "sometime in October" into a real date.
 
 Return a JSON object with EXACTLY these keys:
 - "classification": one string, EXACTLY one of:
@@ -358,22 +445,27 @@ Return a JSON object with EXACTLY these keys:
     * "personal" — a friend or acquaintance writing to Vero as a person: a social invitation, plans, catching up, personal chat. Warm and specific to her as a human rather than as a business. This is NOT spam — do not label a friend spam.
     * "spam-or-unrelated" — solicitation, sales pitch, agency outreach (web design, SEO, marketing services, "your website is outdated", "we can help you"), crypto/investment, unrelated to photography, or template mass-DM. When in doubt between this and collaboration-offer, prefer this — real collabs are extremely rare.
     * "unclear" — you genuinely cannot tell (e.g. just "hey" with no prior context)
-Fill "booking" BEFORE writing "gathered" — decide the facts first, then describe them. "gathered" must not mention a detail that "booking" leaves null.
+Fill "booking" BEFORE writing "gathered" — decide the facts first, then describe them. If a detail belongs in "gathered" while its key is still null, the NULL is the mistake: go back and fill the key. Never resolve the disagreement by dropping the fact from "gathered", which would hide the error rather than fix it.
 
 - "tone": ONE WORD (English) describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.
-- "booking": an object holding the details needed to write a contract and open a client portal. This is DATA, not prose: do not translate it, do not add commentary, do not write "unknown" or "TBD". Every key below MUST be present. Use null for anything the thread does not actually establish, and NEVER guess, infer or invent a value — a null is correct and useful, a made-up value is not. Read the whole thread: a value counts whether the customer gave it or Vero did.
-    - "session_type": one of "wedding", "engagement", "elopement", "anniversary", "portrait", "family", "maternity", "newborn", "event", "other". null if not yet clear.
-    - "event_date": the date as YYYY-MM-DD. Only when an actual calendar date is settled — "sometime in October" or "next summer" is null.
-    - "event_time": coverage hours or start time, worded as in the thread, e.g. "3:00 PM to 6:00 PM".
-    - "event_location": the venue and/or address as given.
-    - "client_full_name": the customer's name, first AND last. If only a first name is known, null.
-    - "partner_full_name": for a wedding, engagement, elopement or anniversary, the OTHER partner's name, first AND last. null for any other session type, or if not known.
-    - "client_email": the customer's own email address.
-    - "total_amount": the agreed total, digits only, no currency symbol or words — "500", not "$500 for 3 hours". If it changed over the thread, the MOST RECENT figure. null if no price was ever quoted.
-    - "retainer_amount": the retainer or deposit, digits only. null if never discussed. A retainer is NOT the same as the total — do not copy one into the other.
-    - "total_amount_quote": the sentence from the thread that establishes the total, copied word for word. null if "total_amount" is null.
-    - "event_date_quote": the sentence that establishes the date, copied word for word. null if "event_date" is null.
-  Be consistent with "gathered": if a fact appears there, the matching "booking" key must hold it too.
+- "booking": an object holding the details needed to write a contract and open a client portal. This is DATA, not prose: do not translate it, do not add commentary, do not write "unknown" or "TBD". Every key below MUST be present.
+  TWO RULES GOVERN EVERY KEY. They are not in tension with each other.
+  1. FILL IT IF IT WAS SAID. A value is established the moment anyone states it anywhere in the thread. It does not matter which side said it: a date the customer named, a price Vero quoted, a location either of them mentioned all count equally. It does not matter whether the other side replied, agreed, accepted, confirmed, booked, paid or signed anything, and it does not matter that the plan could still change. A price Vero quoted IS the price even if the customer never accepted it, never answered, or answered only "ok". Never hold a value back on the grounds that it is not yet agreed, not settled, not final, not confirmed, not official, not legal, not verified, or not the person's own. None of those tests apply to any key here. If the fact is in the thread, it goes in the key.
+  2. NEVER INVENT ONE. If nobody stated it, the key is null. Do not guess it, do not infer it from what is typical for this kind of shoot, do not carry it in from your own knowledge. A null is correct and useful; a made-up value ends up on a contract.
+  Thread metadata at the top of the conversation (the channel, the address the customer writes from, their display name) is supplied by the platform rather than typed by anyone. It is a valid source of facts under rule 1, and nothing it contains may ever be reported as something still to ask the customer for.
+  If the same key is given more than one value over the thread, use the MOST RECENT.
+    - "session_type": one of "wedding", "engagement", "elopement", "anniversary", "portrait", "family", "maternity", "newborn", "event", "other". null only if the thread never says what kind of shoot this is.
+    - "event_date": the day of the shoot as YYYY-MM-DD, four-digit year, two-digit month, two-digit day. A day counts as soon as either side names it, including a day the customer proposed while asking whether Vero is free when Vero has not answered yet. Every transcript line is prefixed with the date that message was sent; when a day is named without a year ("October 7", "Nov 8", "7 октября"), take the year from that prefix, choosing the first such day falling on or after the date of the message that names it. The month and the day themselves must come from the thread's own words: never supply those yourself. null only when no single day is named at all: "sometime in October", "next summer", "a weekend in the spring", or two or more candidate days with no choice made between them.
+    - "event_time": coverage hours or start time, worded as in the thread, e.g. "3:00 PM to 6:00 PM". null only if no time or duration is named.
+    - "event_location": the venue, address or place as either side named it. null only if no place is named.
+    - "client_full_name": the customer's first and last name, taken from a message or from the sender display name in the thread metadata. Take a name at face value: a name typed in a chat IS that person's name, and it does not have to be legal, formal or verified. null only when no first-and-last name is available at all, meaning a first name on its own, a handle, a single word, an emoji nickname or a business name.
+    - "partner_full_name": for a wedding, engagement, elopement or anniversary, the OTHER partner's first and last name, on exactly the same terms. null for any other session type, or when no such name appears.
+    - "client_email": an email address that reaches the customer. If the thread metadata gives the address the customer writes from, that IS their email address: use it, and never treat it as missing. Otherwise use an address typed in a message. A shared, work or partner's address counts. The only address to exclude is Vero's own (vero@vero.photography) and anything from her signature. null only when neither the metadata nor the thread contains a customer address.
+    - "total_amount": the full price named for THIS shoot, digits only, no currency symbol and no words: "500", not "$500 for 3 hours". A figure Vero quoted counts, full stop: acceptance, confirmation, a deposit and a signature are all irrelevant to this key. If several totals for this shoot appear, use the MOST RECENT. Do NOT use: an hourly or per-item rate that was never multiplied out into a total, one option from a list of packages the customer has not chosen between, a retainer or deposit, a travel or add-on fee on its own, or a number the customer floated as a budget that Vero never quoted. null only when no total for this shoot appears anywhere in the thread.
+    - "retainer_amount": the retainer or deposit for this shoot, digits only, on the same terms: a figure Vero named counts even if it is unpaid and the customer never answered. A retainer is NOT the same as the total: do not copy one into the other. null only when no retainer or deposit figure appears.
+    - "total_amount_quote": the sentence from the thread that names the total, copied word for word. Whenever "total_amount" is non-null this is the sentence it came from, so you must be able to produce it. null if "total_amount" is null.
+    - "event_date_quote": the sentence that names the date, copied word for word, on the same terms. null if "event_date" is null.
+  "gathered" and this object are the same facts read two ways, so they can never disagree. Every fact you put in "gathered" must appear in its matching key here, and every non-null key here must show up in "gathered". If you are about to write a detail into "gathered" while its key is still null, the key is what is wrong: go back and fill it.
 
 - "en": an object with:
     - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
@@ -389,12 +481,12 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
     model: MODEL,
     messages: [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: transcript },
+      { role: 'user', content: userContent },
     ],
     // 400 → 700 for the Russian copy when summaries went bilingual, then
     // → 1000 for the `booking` object and its verbatim source quotes. A
     // truncated response is unparseable JSON, so this has headroom.
-    max_tokens: 1000,
+    max_tokens: 1200,
     temperature: 0.2,
     response_format: { type: 'json_object' },
   });
@@ -448,7 +540,19 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
       const digits = out[key]!.replace(/[^0-9.]/g, '');
       out[key] = digits && Number.isFinite(Number(digits)) ? digits : null;
     }
-    if (out.event_date && !/^\d{4}-\d{2}-\d{2}$/.test(out.event_date)) out.event_date = null;
+    // Shape, then reality: the regex alone accepts "2026-13-45".
+    if (out.event_date) {
+      const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(out.event_date);
+      const d = parts ? new Date(`${out.event_date}T00:00:00Z`) : null;
+      const real =
+        parts &&
+        d &&
+        Number.isFinite(d.getTime()) &&
+        d.getUTCFullYear() === Number(parts[1]) &&
+        d.getUTCMonth() + 1 === Number(parts[2]) &&
+        d.getUTCDate() === Number(parts[3]);
+      if (!real) out.event_date = null;
+    }
     // A quote with nothing to back up is noise.
     if (!out.total_amount) out.total_amount_quote = null;
     if (!out.event_date) out.event_date_quote = null;
@@ -469,6 +573,13 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
   );
 
   const booking = readBooking(parsed.booking);
+
+  // Not a guess and not a promise the prompt might forget to keep: this is the
+  // address the conversation row is keyed on and the address every reply Vero
+  // sends already goes to. Leaving it to prompt wording alone keeps the most
+  // frequently wrong field depending on the model noticing a metadata block.
+  if (!booking.client_email && contact.address) booking.client_email = contact.address;
+
   en.missing = computeMissing(booking, classification, 'en');
   ru.missing = computeMissing(booking, classification, 'ru');
 
@@ -478,5 +589,6 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
     en,
     ru,
     booking,
+    summaryVersion: SUMMARY_VERSION,
   };
 }
