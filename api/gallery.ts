@@ -20,6 +20,7 @@
  * change to how images actually load.
  */
 
+import galleryStatics from './_gallery-statics.json' with { type: 'json' };
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
 
@@ -92,7 +93,7 @@ async function handleList(req: VercelRequest, res: VercelResponse) {
           ORDER BY sort_order DESC, published_at DESC NULLS LAST
         `) as Row[]);
 
-    const photos = rows.map(rowToPublic);
+    const photos = rows.filter(hasStatic).map(rowToPublic);
 
     // 5-minute edge cache with generous SWR. Gallery pages get lots
     // of traffic; hitting the DB per view is unnecessary. Vero's
@@ -155,6 +156,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       'Cache-Control',
       'public, s-maxage=120, stale-while-revalidate=600',
     );
+    // Not exported yet, so there is no file to point at. 404 rather than
+    // hand back a URL that would 404 as an image.
+    if (!hasStatic(row)) {
+      return res.status(404).json({ success: false, error: 'Not found' });
+    }
     return res.status(200).json({ success: true, photo: rowToPublic(row) });
   } catch (err) {
     console.error('[gallery/post] failed:', err);
@@ -210,7 +216,10 @@ async function handleRelated(req: VercelRequest, res: VercelResponse) {
         return Math.random() - 0.5;
       });
 
-    const photos = scored.slice(0, limit).map((s) => rowToPublic(s.row));
+    const photos = scored
+      .filter((s) => hasStatic(s.row))
+      .slice(0, limit)
+      .map((s) => rowToPublic(s.row));
 
     res.setHeader(
       'Cache-Control',
@@ -223,16 +232,34 @@ async function handleRelated(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+/**
+ * Slug key -> static path, written by scripts/build-gallery-statics.mjs during
+ * the build. A photo absent from here has no file in this deployment, so it is
+ * hidden rather than served as a broken link; the nightly sync triggers a
+ * rebuild that bakes it in.
+ */
+function hasStatic(row: Row): boolean {
+  return Boolean((galleryStatics as Record<string, string>)[`${row.category}/${row.slug}`]);
+}
+
 function rowToPublic(row: Row): PublicPhoto {
   return {
     id: row.slug,
     slug: row.slug,
     category: row.category,
-    // /api/photo is our resizing WebP proxy — same URL scheme
-    // client galleries already use. 30-day edge cache set inside
-    // the proxy itself.
-    url: `/api/photo?id=${row.drive_file_id}`,
-    originalUrl: `/api/photo?id=${row.drive_file_id}`,
+    // Static file, not the /api/photo proxy.
+    //
+    // The proxy meant every photo crossed Compute -> CDN, which Vercel bills as
+    // Fast Origin Transfer, and the CDN cache resets on every deploy so the
+    // whole set was re-fetched each time: ~532 KB per photo, ~121 MB per
+    // deploy, for a gallery almost nobody browses. It also made the endpoint a
+    // free quota drain, since any junk query param was a cache miss.
+    //
+    // Byte-for-byte this is a wash — measured across 8 photos, static is 2%
+    // heavier in aggregate, some larger and some smaller — because the exporter
+    // uses the same 2400px/q82 settings the proxy did.
+    url: `/assets/photos/${row.category}/${row.slug}.webp`,
+    originalUrl: `/assets/photos/${row.category}/${row.slug}.webp`,
     driveViewUrl: `https://drive.google.com/file/d/${row.drive_file_id}/view`,
     alt: row.alt,
     // Suffix matches how photos.ts built titles historically, so

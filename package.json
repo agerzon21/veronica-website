@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs",
+    "build": "rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs && node scripts/build-gallery-statics.mjs --check",
     "lint": "eslint . --report-unused-disable-directives",
     "preview": "vite preview",
     "hero-variants": "node scripts/build-hero-variants.mjs",

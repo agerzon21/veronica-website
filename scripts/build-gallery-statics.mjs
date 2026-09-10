@@ -48,6 +48,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PHOTOS_DIR = join(root, 'public/assets/photos');
 const MANIFEST = join(root, 'api/_gallery-statics.json');
 const CHECK = process.argv.includes('--check');
+/**
+ * Strict on Vercel, tolerant on a laptop. GOOGLE_SERVICE_ACCOUNT_JSON is a
+ * sensitive var that does not pull locally, so a hard failure would make the
+ * project unbuildable off CI. In CI a missing export is a real problem and must
+ * stop the deploy; locally it just means those photos are absent from your dev
+ * build, which is harmless.
+ */
+const STRICT = process.env.VERCEL === '1' || process.env.CI === 'true';
 
 /**
  * 2400px matches what the proxy already produces, so nothing about how a photo
@@ -110,13 +118,18 @@ async function main() {
 
   if (CHECK) {
     if (missing.length) {
-      console.error('\ngallery-statics --check: these published photos have no static file:');
-      for (const p of missing.slice(0, 20)) console.error(`  ${p.category}/${p.slug}`);
-      if (missing.length > 20) console.error(`  … and ${missing.length - 20} more`);
-      console.error('\nRun: node scripts/build-gallery-statics.mjs');
-      process.exit(1);
+      const log = STRICT ? console.error : console.warn;
+      log(`\ngallery-statics --check: ${missing.length} published photo(s) have no static file:`);
+      for (const p of missing.slice(0, 20)) log(`  ${p.category}/${p.slug}`);
+      if (missing.length > 20) log(`  … and ${missing.length - 20} more`);
+      if (STRICT) {
+        console.error('\nRun: node scripts/build-gallery-statics.mjs');
+        process.exit(1);
+      }
+      console.warn('  (local build — these will simply be absent from the gallery here)');
+    } else {
+      console.log('gallery-statics --check: every published photo has a static file.');
     }
-    console.log('gallery-statics --check: every published photo has a static file.');
     writeManifest(photos.filter((p) => existsSync(absPath(p))));
     process.exit(0);
   }
@@ -124,12 +137,16 @@ async function main() {
   if (missing.length) {
     const drive = driveClient();
     if (!drive) {
-      console.error(
-        'gallery-statics: GOOGLE_SERVICE_ACCOUNT_JSON is missing or unparseable, so the ' +
-          `${missing.length} photo(s) above cannot be exported. Refusing to continue: ` +
-          'shipping now would hide them from the gallery.',
-      );
-      process.exit(1);
+      const msg =
+        'gallery-statics: GOOGLE_SERVICE_ACCOUNT_JSON is missing or unparseable, so ' +
+        `${missing.length} photo(s) cannot be exported.`;
+      if (STRICT) {
+        console.error(`${msg} Refusing to continue: shipping now would hide them from the gallery.`);
+        process.exit(1);
+      }
+      console.warn(`${msg} Local build — continuing without them.`);
+      writeManifest(photos.filter((p) => existsSync(absPath(p))));
+      return;
     }
     let done = 0;
     for (const p of missing) {
@@ -151,7 +168,7 @@ async function main() {
   }
 
   const present = photos.filter((p) => existsSync(absPath(p)));
-  if (present.length !== photos.length) {
+  if (present.length !== photos.length && STRICT) {
     console.error(`gallery-statics: ${photos.length - present.length} photo(s) still missing after export — failing`);
     process.exit(1);
   }
