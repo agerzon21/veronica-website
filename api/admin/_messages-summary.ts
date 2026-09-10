@@ -91,6 +91,106 @@ interface LocalizedSummary {
   nextStep: string;
 }
 
+/**
+ * The details a contract and a client portal actually need, as data rather
+ * than prose. The model fills each one or leaves it null; it never writes the
+ * "Still needed" list itself.
+ *
+ * WHY THIS IS STRUCTURED
+ *
+ * `gathered` and `missing` used to be two independent free-text lists from one
+ * pass, with nothing tying them together, so the model could contradict
+ * itself — and did: one summary listed "Client name: Daria Klabun" and
+ * "Groom's name: Tufan Akshahin" under gathered while simultaneously asking
+ * for both under missing, having decided a name in a chat was not a "full
+ * legal name". No prompt wording makes that reliably impossible.
+ *
+ * With one set of keys, "present" and "missing" are the same fact read two
+ * ways: the list below is computed from whichever values came back null. A
+ * field cannot appear in both, because there is only one of it.
+ *
+ * These values are also what prefills the new-client form, which is the other
+ * reason they are typed data and not sentences.
+ */
+export interface BookingFields {
+  session_type: string | null;
+  event_date: string | null;
+  event_time: string | null;
+  event_location: string | null;
+  client_full_name: string | null;
+  partner_full_name: string | null;
+  client_email: string | null;
+  total_amount: string | null;
+  retainer_amount: string | null;
+  /**
+   * Verbatim source sentences for the two values that cost money to get
+   * wrong. Real threads renegotiate — one in this inbox contains $1,000,
+   * $1,400 and $2,000 — so the form shows Vero what a figure came from
+   * instead of silently filling in a number.
+   */
+  total_amount_quote: string | null;
+  event_date_quote: string | null;
+}
+
+export const EMPTY_BOOKING: BookingFields = {
+  session_type: null,
+  event_date: null,
+  event_time: null,
+  event_location: null,
+  client_full_name: null,
+  partner_full_name: null,
+  client_email: null,
+  total_amount: null,
+  retainer_amount: null,
+  total_amount_quote: null,
+  event_date_quote: null,
+};
+
+/** Session types where the contract names two people rather than one. */
+const COUPLE_SESSION_TYPES = new Set(['wedding', 'engagement', 'elopement', 'anniversary']);
+
+/**
+ * What "Still needed" can list, in the order it renders. Labels live here in
+ * both languages rather than coming back from the model, so the wording stays
+ * identical between threads and between regenerations.
+ */
+const BOOKING_REQUIREMENTS: Array<{
+  key: keyof BookingFields;
+  en: string;
+  ru: string;
+  coupleOnly?: boolean;
+}> = [
+  { key: 'session_type', en: 'Type of session', ru: 'Тип съёмки' },
+  { key: 'event_date', en: 'Event date', ru: 'Дата съёмки' },
+  { key: 'event_time', en: 'Coverage hours', ru: 'Часы съёмки' },
+  { key: 'event_location', en: 'Location', ru: 'Место съёмки' },
+  { key: 'client_full_name', en: "Client's full name", ru: 'Полное имя клиента' },
+  {
+    key: 'partner_full_name',
+    en: "Partner's full name",
+    ru: 'Полное имя партнёра',
+    coupleOnly: true,
+  },
+  { key: 'client_email', en: 'Client email address', ru: 'Электронная почта клиента' },
+  { key: 'total_amount', en: 'Total price', ru: 'Итоговая стоимость' },
+  { key: 'retainer_amount', en: 'Retainer amount', ru: 'Размер предоплаты' },
+];
+
+/** Only these threads are heading toward a contract; the rest need nothing. */
+const BOOKING_CLASSIFICATIONS = new Set(['booking-inquiry', 'existing-client']);
+
+export function computeMissing(
+  booking: BookingFields,
+  classification: Classification,
+  locale: 'en' | 'ru',
+): string[] {
+  if (!BOOKING_CLASSIFICATIONS.has(classification)) return [];
+  const couple = COUPLE_SESSION_TYPES.has(booking.session_type ?? '');
+  return BOOKING_REQUIREMENTS.filter((f) => !f.coupleOnly || couple)
+    .filter((f) => !booking[f.key])
+    .map((f) => f[locale]);
+}
+
 interface Summary {
   classification: Classification;
   tone: string;
@@ -100,6 +200,9 @@ interface Summary {
   // missing on an old row.
   en: LocalizedSummary;
   ru: LocalizedSummary;
+  // Language-neutral contract details. Optional because summaries cached
+  // before this existed do not have it.
+  booking?: BookingFields;
   // Legacy fields — populated on old cache rows, unused on new ones.
   // Kept in the type so the JSON round-trip stays lossless.
   asking?: string;
@@ -255,13 +358,28 @@ Return a JSON object with EXACTLY these keys:
     * "personal" — a friend or acquaintance writing to Vero as a person: a social invitation, plans, catching up, personal chat. Warm and specific to her as a human rather than as a business. This is NOT spam — do not label a friend spam.
     * "spam-or-unrelated" — solicitation, sales pitch, agency outreach (web design, SEO, marketing services, "your website is outdated", "we can help you"), crypto/investment, unrelated to photography, or template mass-DM. When in doubt between this and collaboration-offer, prefer this — real collabs are extremely rare.
     * "unclear" — you genuinely cannot tell (e.g. just "hey" with no prior context)
+Fill "booking" BEFORE writing "gathered" — decide the facts first, then describe them. "gathered" must not mention a detail that "booking" leaves null.
+
 - "tone": ONE WORD (English) describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.
+- "booking": an object holding the details needed to write a contract and open a client portal. This is DATA, not prose: do not translate it, do not add commentary, do not write "unknown" or "TBD". Every key below MUST be present. Use null for anything the thread does not actually establish, and NEVER guess, infer or invent a value — a null is correct and useful, a made-up value is not. Read the whole thread: a value counts whether the customer gave it or Vero did.
+    - "session_type": one of "wedding", "engagement", "elopement", "anniversary", "portrait", "family", "maternity", "newborn", "event", "other". null if not yet clear.
+    - "event_date": the date as YYYY-MM-DD. Only when an actual calendar date is settled — "sometime in October" or "next summer" is null.
+    - "event_time": coverage hours or start time, worded as in the thread, e.g. "3:00 PM to 6:00 PM".
+    - "event_location": the venue and/or address as given.
+    - "client_full_name": the customer's name, first AND last. If only a first name is known, null.
+    - "partner_full_name": for a wedding, engagement, elopement or anniversary, the OTHER partner's name, first AND last. null for any other session type, or if not known.
+    - "client_email": the customer's own email address.
+    - "total_amount": the agreed total, digits only, no currency symbol or words — "500", not "$500 for 3 hours". If it changed over the thread, the MOST RECENT figure. null if no price was ever quoted.
+    - "retainer_amount": the retainer or deposit, digits only. null if never discussed. A retainer is NOT the same as the total — do not copy one into the other.
+    - "total_amount_quote": the sentence from the thread that establishes the total, copied word for word. null if "total_amount" is null.
+    - "event_date_quote": the sentence that establishes the date, copied word for word. null if "event_date" is null.
+  Be consistent with "gathered": if a fact appears there, the matching "booking" key must hold it too.
+
 - "en": an object with:
     - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
     - "gathered": array of concrete facts ESTABLISHED ANYWHERE IN THIS THREAD, in English, no matter who said them. Include what the customer shared AND what Vero quoted or committed to — a price Vero gave IS a gathered fact and is one of the most important ones. Cover: session type, event date, event time or coverage hours, location, headcount, the price/total quoted, any retainer or deposit, what's included, full names, email addresses, phone numbers, deadlines, styles and constraints. Where a number came from Vero rather than the customer, say so plainly, e.g. "Price quoted: $500 for 3 hours (quoted by Vero)". If the same thing was said more than once with different values, give the MOST RECENT and note it changed, e.g. "Price quoted: $1,400 (revised from $1,000)". Empty array if nothing concrete or if it's spam. Format phone numbers with proper grouping like "(555) 123-4567" — never as one long digit string.
-    - "missing": array of short English phrases naming what is STILL NEEDED before Vero could write a contract and open a client portal for this booking. Consider: session type, event date, event time or coverage hours, event location, both partners' full names (for a wedding, engagement, elopement or anniversary — otherwise just the client's full name), client email address, total price, retainer or deposit amount. List ONLY the ones genuinely not established anywhere in the thread, phrased as the thing to ask for, e.g. "Client's email address", "Retainer amount". If everything needed is present, return an empty array. Return an empty array for spam, personal chat, or anything that is not a booking.
-    - "nextStep": one English sentence — what should Vero do next. If "missing" is non-empty and this is a real booking, say which details to ask for.
-- "ru": an object with the SAME keys ("asking", "gathered", "missing", "nextStep") but in RUSSIAN. Preserve phone-number formatting, proper names, and specific dates/times unchanged (e.g. "9:30am" stays "9:30am", "Bushkill Falls" stays "Bushkill Falls").
+    - "nextStep": one English sentence — what should Vero do next. If details are still needed before a contract could be written, say which ones to ask for.
+- "ru": an object with the SAME keys ("asking", "gathered", "nextStep") but in RUSSIAN. Preserve phone-number formatting, proper names, and specific dates/times unchanged (e.g. "9:30am" stays "9:30am", "Bushkill Falls" stays "Bushkill Falls").
 
 Reply with ONLY the JSON object — no preamble, no markdown code fences, no explanation.
 
@@ -273,10 +391,10 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
       { role: 'system', content: systemPrompt },
       { role: 'user', content: transcript },
     ],
-    // Bumped from 400 → 700 to accommodate the extra Russian copy
-    // now that we render bilingual summaries. Empirically the model
-    // still keeps under this even for long threads.
-    max_tokens: 700,
+    // 400 → 700 for the Russian copy when summaries went bilingual, then
+    // → 1000 for the `booking` object and its verbatim source quotes. A
+    // truncated response is unparseable JSON, so this has headroom.
+    max_tokens: 1000,
     temperature: 0.2,
     response_format: { type: 'json_object' },
   });
@@ -302,13 +420,40 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
     gathered: Array.isArray(src?.gathered)
       ? src.gathered.filter((g: unknown): g is string => typeof g === 'string')
       : [],
-    // Older cached rows predate this field, so it is optional everywhere and
-    // simply renders as nothing rather than breaking the card.
-    missing: Array.isArray(src?.missing)
-      ? src.missing.filter((g: unknown): g is string => typeof g === 'string')
-      : [],
+    // Filled in below from `booking`, not read from the model. See
+    // BookingFields for why the model is not trusted to write this list.
+    missing: [],
     nextStep: typeof src?.nextStep === 'string' ? src.nextStep : fallbackNext,
   });
+
+  /**
+   * Take only keys we asked for, only as non-empty strings. A model that
+   * writes "unknown", "TBD" or "n/a" instead of null would otherwise read as
+   * a real value and quietly drop the field off the "Still needed" list.
+   */
+  const readBooking = (src: any): BookingFields => {
+    const out = { ...EMPTY_BOOKING };
+    if (!src || typeof src !== 'object') return out;
+    for (const key of Object.keys(EMPTY_BOOKING) as Array<keyof BookingFields>) {
+      const v = src[key];
+      if (typeof v !== 'string') continue;
+      const trimmed = v.trim();
+      if (!trimmed) continue;
+      if (['unknown', 'tbd', 'n/a', 'na', 'none', 'null'].includes(trimmed.toLowerCase())) continue;
+      out[key] = trimmed;
+    }
+    // Digits only, so the form can put these straight into number inputs.
+    for (const key of ['total_amount', 'retainer_amount'] as const) {
+      if (!out[key]) continue;
+      const digits = out[key]!.replace(/[^0-9.]/g, '');
+      out[key] = digits && Number.isFinite(Number(digits)) ? digits : null;
+    }
+    if (out.event_date && !/^\d{4}-\d{2}-\d{2}$/.test(out.event_date)) out.event_date = null;
+    // A quote with nothing to back up is noise.
+    if (!out.total_amount) out.total_amount_quote = null;
+    if (!out.event_date) out.event_date_quote = null;
+    return out;
+  };
 
   const en = readLocale(
     parsed.en ?? parsed,
@@ -323,10 +468,15 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
     en.nextStep,
   );
 
+  const booking = readBooking(parsed.booking);
+  en.missing = computeMissing(booking, classification, 'en');
+  ru.missing = computeMissing(booking, classification, 'ru');
+
   return {
     classification,
     tone: typeof parsed.tone === 'string' ? parsed.tone : 'unclear',
     en,
     ru,
+    booking,
   };
 }
