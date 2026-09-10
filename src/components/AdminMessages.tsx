@@ -67,6 +67,7 @@ import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
+import { type ClientPrefill, isCoupleSession } from './clientPrefill';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
 import { translationTargetFor } from './translationDirection';
 
@@ -204,6 +205,8 @@ interface Props {
   adminLevel: 'admin' | 'super';
   /** Switch to the Assistant tab (see ASSISTANT_HANDOFF_KEY). */
   onOpenAssistant?: () => void;
+  /** Open the full new-client form seeded from this conversation. */
+  onCreateFullClient?: (prefill: ClientPrefill) => void;
 }
 
 export interface ConversationSummary {
@@ -294,6 +297,20 @@ export interface AiSummary {
   missing?: string[];
   decide?: string[];
   nextStep?: string;
+  /** Language-neutral contract details. Absent on pre-v2 cached summaries. */
+  booking?: {
+    session_type: string | null;
+    event_date: string | null;
+    event_time: string | null;
+    event_location: string | null;
+    client_full_name: string | null;
+    partner_full_name: string | null;
+    client_email: string | null;
+    total_amount: string | null;
+    retainer_amount: string | null;
+    total_amount_quote: string | null;
+    event_date_quote: string | null;
+  };
 }
 
 type SummaryLang = 'ru' | 'en';
@@ -354,7 +371,7 @@ export const ASSISTANT_HANDOFF_KEY = 'assistant-handoff-prompt';
  */
 export const REFINE_SESSION_KEY = 'vero_refine_session';
 
-const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) => {
+const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient }: Props) => {
   const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
@@ -764,6 +781,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant }: Props) =>
                 onBack={() => setSelectedId(null)}
                 onRefreshList={loadList}
                 onOpenAssistant={onOpenAssistant}
+                onCreateFullClient={onCreateFullClient}
                 onRefine={openRefinePanel}
                 onReplySent={closeRefinePanel}
                 refineDocked={refineOpen && refineCollapsed}
@@ -1470,6 +1488,7 @@ function ConversationView({
   onRefreshList,
   onBack,
   onOpenAssistant,
+  onCreateFullClient,
   onRefine,
   onReplySent,
   refineDocked = false,
@@ -1480,6 +1499,7 @@ function ConversationView({
   onSeedAssistant,
   refreshToken = 0,
 }: {
+  onCreateFullClient?: (prefill: ClientPrefill) => void;
   summary: ConversationSummary;
   adminPassword: string;
   onRefreshList: () => void;
@@ -2639,6 +2659,7 @@ function ConversationView({
         conversationId={summary.id}
         defaultDisplayName={displayName}
         aiSummary={aiSummary}
+        onCreateFullClient={onCreateFullClient}
         onCreated={async () => {
           setCreateClientOpen(false);
           await loadDetail();
@@ -3854,6 +3875,7 @@ function CreateClientModal({
   conversationId,
   defaultDisplayName,
   aiSummary,
+  onCreateFullClient,
   onCreated,
 }: {
   isOpen: boolean;
@@ -3862,6 +3884,7 @@ function CreateClientModal({
   conversationId: string;
   defaultDisplayName: string;
   aiSummary: AiSummary | null;
+  onCreateFullClient?: (prefill: ClientPrefill) => void;
   onCreated: () => void | Promise<void>;
 }) {
   const { t, lang } = useAdminLang();
@@ -3891,6 +3914,46 @@ function CreateClientModal({
     sessionType.trim().length > 0 &&
     displayName.trim().length > 0 &&
     galleryPassword.trim().length >= 4;
+
+  // What the thread already established, in the shape the full form wants.
+  // Null when the summary predates the structured fields, in which case the
+  // full-form route is still offered — it just starts empty rather than seeded.
+  const booking = aiSummary?.booking ?? null;
+  const prefill: ClientPrefill = {
+    conversationId,
+    displayName: defaultDisplayName,
+    session_type: booking?.session_type ?? null,
+    event_date: booking?.event_date ?? null,
+    event_time: booking?.event_time ?? null,
+    event_location: booking?.event_location ?? null,
+    client_full_name: booking?.client_full_name ?? null,
+    partner_full_name: booking?.partner_full_name ?? null,
+    client_email: booking?.client_email ?? null,
+    total_amount: booking?.total_amount ?? null,
+    retainer_amount: booking?.retainer_amount ?? null,
+    total_amount_quote: booking?.total_amount_quote ?? null,
+    event_date_quote: booking?.event_date_quote ?? null,
+  };
+
+  // Named so Vero can see at a glance what is coming across and what she will
+  // still have to supply, before she commits to the longer form.
+  const readyLabels = ([
+    ['session_type', t.messages.pfSessionType],
+    ['event_date', t.messages.pfEventDate],
+    ['event_time', t.messages.pfEventTime],
+    ['event_location', t.messages.pfEventLocation],
+    ['client_full_name', t.messages.pfClientName],
+    ['partner_full_name', t.messages.pfPartnerName],
+    ['client_email', t.messages.pfClientEmail],
+    ['total_amount', t.messages.pfTotal],
+    ['retainer_amount', t.messages.pfRetainer],
+  ] as const)
+    .filter(([k]) => {
+      if (k === 'partner_full_name' && !isCoupleSession(prefill.session_type)) return false;
+      return true;
+    })
+    .map(([k, label]) => ({ label, have: Boolean(prefill[k]) }));
+  const youAdd = readyLabels.filter((r) => !r.have).map((r) => r.label);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -3946,6 +4009,57 @@ function CreateClientModal({
         />
         <ModalBody>
           <VStack spacing={4} align="stretch">
+
+            {/* Two genuinely different outcomes, so they are two choices
+                rather than one button with a mode. The full portal is the
+                one that produces a contract, so it leads; gallery-only stays
+                for the "claim them now, paperwork later" case it was built
+                for. Creating a full portal emails the client immediately,
+                which is why this route opens a form to check rather than
+                creating anything from here. */}
+            {onCreateFullClient && (
+              <Box
+                bg="brand.accentSoft"
+                border="1px solid"
+                borderColor="brand.accentBorder"
+                borderRadius="sm"
+                p={3}
+              >
+                <Text fontSize="xs" fontWeight="600" color="gray.800" mb={0.5}>
+                  {t.messages.fullClientHeading}
+                </Text>
+                <Text fontSize="2xs" color="gray.600" lineHeight="1.5" mb={2}>
+                  {t.messages.fullClientBlurb}
+                </Text>
+                {youAdd.length > 0 && (
+                  <Text fontSize="2xs" color="gray.500" lineHeight="1.5" mb={2}>
+                    {t.messages.fullClientYouAdd(youAdd.join(', '))}
+                  </Text>
+                )}
+                <CTAButton
+                  onClick={() => {
+                    onClose();
+                    onCreateFullClient(prefill);
+                  }}
+                  icon={FaUserPlus}
+                  variant="solid"
+                  size="sm"
+                  isDisabled={submitting}
+                >
+                  {t.messages.fullClientCta}
+                </CTAButton>
+              </Box>
+            )}
+
+            <Box>
+              <Text fontSize="xs" fontWeight="600" color="gray.800" mb={0.5}>
+                {t.messages.galleryOnlyHeading}
+              </Text>
+              <Text fontSize="2xs" color="gray.600" lineHeight="1.5">
+                {t.messages.galleryOnlyBlurb}
+              </Text>
+            </Box>
+
             <Text fontSize="xs" color="gray.500" lineHeight="1.6">
               {t.messages.convertDisclaimer}
             </Text>

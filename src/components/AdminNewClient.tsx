@@ -9,11 +9,18 @@ import {
   type ContractTemplateField,
 } from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
+import { type ClientPrefill, parseCoverageWindow } from './clientPrefill';
 
 interface Props {
   adminPassword: string;
   onCancel: () => void;
   onCreated: () => void;
+  /**
+   * Details lifted from a DM/email thread, when Vero got here from the inbox
+   * rather than from the Clients tab. Everything is optional and everything
+   * stays editable — this seeds the form, it does not lock it.
+   */
+  prefill?: ClientPrefill | null;
 }
 
 // ─── Small formatting helpers ──────────────────────────────────────────
@@ -114,15 +121,22 @@ const todayYmd = (): string => {
 
 // ─── Component ─────────────────────────────────────────────────────────
 
-const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
+const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill }: Props) => {
   const { t } = useAdminLang();
   const templateKeys = Object.keys(CONTRACT_TEMPLATES);
-  const [templateKey, setTemplateKey] = useState<string>(templateKeys[0]);
+  // Seeded once, at mount. Every field below stays fully editable; the point
+  // is to save retyping what the customer already said, not to decide anything.
+  const seededTemplate =
+    prefill?.session_type && templateKeys.includes(prefill.session_type)
+      ? prefill.session_type
+      : templateKeys[0];
+  const seededTimes = parseCoverageWindow(prefill?.event_time ?? null);
+  const [templateKey, setTemplateKey] = useState<string>(seededTemplate);
 
   // Partner full names — first names are extracted automatically for
   // derived fields (display name, gallery password, event title).
-  const [partner1FullName, setPartner1FullName] = useState('');
-  const [partner2FullName, setPartner2FullName] = useState('');
+  const [partner1FullName, setPartner1FullName] = useState(prefill?.client_full_name ?? '');
+  const [partner2FullName, setPartner2FullName] = useState(prefill?.partner_full_name ?? '');
   const p1First = firstWord(partner1FullName);
   const p2First = firstWord(partner2FullName);
 
@@ -134,14 +148,14 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   const [eventTitleOverride, setEventTitleOverride] = useState<string | null>(null);
   const [galleryPasswordOverride, setGalleryPasswordOverride] = useState<string | null>(null);
 
-  const [clientEmail, setClientEmail] = useState('');
-  const [eventDateIso, setEventDateIso] = useState('');
+  const [clientEmail, setClientEmail] = useState(prefill?.client_email ?? '');
+  const [eventDateIso, setEventDateIso] = useState(prefill?.event_date ?? '');
   // Defaults: 5:00 PM – 6:00 PM. Most shoots/weddings start in the late
   // afternoon, and seeding zero-minute values means Vero just adjusts
   // the hour instead of zeroing out :37 every time she opens the
   // picker.
-  const [eventStartTime, setEventStartTime] = useState('17:00');
-  const [eventEndTime, setEventEndTime] = useState('18:00');
+  const [eventStartTime, setEventStartTime] = useState(seededTimes.start ?? '17:00');
+  const [eventEndTime, setEventEndTime] = useState(seededTimes.end ?? '18:00');
 
   // Coverage type covers the case where the booking is sold as a
   // package (half-day, full-day) and exact times aren't known yet —
@@ -153,10 +167,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
 
   // Session type defaults to the chosen template key. Override if needed
   // (mostly relevant when we add additional templates).
-  const [sessionType, setSessionType] = useState<string>(templateKeys[0]);
+  const [sessionType, setSessionType] = useState<string>(prefill?.session_type ?? templateKeys[0]);
 
-  const [totalAmount, setTotalAmount] = useState('');
-  const [retainerAmount, setRetainerAmount] = useState('');
+  const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
+  const [retainerAmount, setRetainerAmount] = useState(prefill?.retainer_amount ?? '');
 
   const [additionalNotes, setAdditionalNotes] = useState('');
 
@@ -181,12 +195,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
     Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ''])),
   );
 
-  // Default the effective_date to today on first render.
+  // Default the effective_date to today, and fold in anything the thread told
+  // us. This has to be an effect rather than part of the useState initializer:
+  // the templateKey useMemo below calls setVariables during the first render,
+  // which would wipe a seeded value. Effects run after that.
   useEffect(() => {
     setVariables((prev) => ({
       ...prev,
       effective_date: prev.effective_date || todayYmd(),
+      ...(prefill?.event_location ? { event_location: prefill.event_location } : {}),
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // When the template changes, reset variables to that template's defaults.
@@ -207,6 +226,23 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
   const clientDisplayName = displayNameOverride ?? derivedDisplayName;
   const galleryPassword = galleryPasswordOverride ?? derivedGalleryPassword;
   const eventTitle = eventTitleOverride ?? derivedEventTitle;
+
+  // Only show a source sentence when there is a value to justify.
+  const prefillQuotes: Array<{ label: string; value: string; quote: string }> = [];
+  if (prefill?.total_amount && prefill.total_amount_quote) {
+    prefillQuotes.push({
+      label: t.newClient.totalLabel,
+      value: `$${prefill.total_amount}`,
+      quote: prefill.total_amount_quote,
+    });
+  }
+  if (prefill?.event_date && prefill.event_date_quote) {
+    prefillQuotes.push({
+      label: t.newClient.eventDateLabel,
+      value: fmtDate(prefill.event_date),
+      quote: prefill.event_date_quote,
+    });
+  }
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -430,6 +466,9 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           contract_total_amount: total,
           contract_retainer_amount: retainer,
           gallery_password: galleryPassword.trim(),
+          // Links portal ↔ conversation so the inbox shows the CLIENT badge
+          // and Vero can jump between the two.
+          link_to_conversation_id: prefill?.conversationId ?? null,
         }),
       });
       const data = await res.json();
@@ -474,6 +513,40 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated }: Props) => {
           {t.newClient.headline}
         </Text>
       </VStack>
+
+      {prefill && (
+        <Box
+          bg="brand.accentSoft"
+          border="1px solid"
+          borderColor="brand.accentBorder"
+          borderRadius="md"
+          px={{ base: 4, md: 5 }}
+          py={4}
+          mb={6}
+        >
+          <Text fontSize="sm" color="gray.700" lineHeight="1.6" mb={prefillQuotes.length ? 3 : 0}>
+            {t.newClient.prefilledFromThread(prefill.displayName)}
+          </Text>
+          {/* The two values that cost money to get wrong get shown with the
+              sentence they came from. Threads renegotiate — one in this inbox
+              carries three different totals — so a figure that appears in a
+              box by itself is not enough to trust without re-reading it. */}
+          {prefillQuotes.length > 0 && (
+            <VStack align="stretch" spacing={2}>
+              {prefillQuotes.map((q) => (
+                <Box key={q.label}>
+                  <Text fontSize="xs" color="gray.600" fontWeight="500">
+                    {q.label}: {q.value}
+                  </Text>
+                  <Text fontSize="xs" color="gray.500" fontStyle="italic" lineHeight="1.5">
+                    &ldquo;{q.quote}&rdquo;
+                  </Text>
+                </Box>
+              ))}
+            </VStack>
+          )}
+        </Box>
+      )}
 
       <Box
         as="form"

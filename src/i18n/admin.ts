@@ -470,6 +470,34 @@ const dict = {
     summaryAsking: { en: 'Asking', ru: 'Спрашивает' },
     summaryGathered: { en: 'Gathered', ru: 'Собрали' },
     summaryMissing: { en: 'Ask the client', ru: 'Спросить у клиента' },
+    fullClientHeading: { en: 'Full client portal', ru: 'Полный клиентский портал' },
+    fullClientBlurb: {
+      en: 'Contract, signing and gallery. Opens the full form with everything this thread already told us filled in.',
+      ru: 'Контракт, подпись и галерея. Откроется полная форма с уже заполненными данными из переписки.',
+    },
+    fullClientCta: { en: 'Open full form', ru: 'Открыть полную форму' },
+    fullClientReady: { en: 'Ready to fill in', ru: 'Готово к заполнению' },
+    fullClientYouAdd: {
+      en: (items: string) => `You add: ${items}`,
+      ru: (items: string) => `Добавишь сам(а): ${items}`,
+    },
+    // Short field names for the create-client card. Deliberately separate
+    // from the form's own labels, which carry "(optional)" and "(USD)"
+    // qualifiers that read as noise in a comma-joined list.
+    pfSessionType: { en: 'session type', ru: 'тип съёмки' },
+    pfEventDate: { en: 'date', ru: 'дата' },
+    pfEventTime: { en: 'time', ru: 'время' },
+    pfEventLocation: { en: 'location', ru: 'место' },
+    pfClientName: { en: "client's name", ru: 'имя клиента' },
+    pfPartnerName: { en: "partner's name", ru: 'имя партнёра' },
+    pfClientEmail: { en: 'email', ru: 'email' },
+    pfTotal: { en: 'total', ru: 'сумма' },
+    pfRetainer: { en: 'retainer', ru: 'предоплата' },
+    galleryOnlyHeading: { en: 'Gallery only', ru: 'Только галерея' },
+    galleryOnlyBlurb: {
+      en: 'No contract. Just a password-protected gallery you can upgrade later.',
+      ru: 'Без контракта. Только галерея с паролем, её можно расширить позже.',
+    },
     summaryDecide: { en: 'For you to set', ru: 'Назначить самой' },
     summaryNextStep: { en: 'Next step', ru: 'Далее' },
     summaryTone: { en: 'Tone', ru: 'Тон' },
@@ -1119,6 +1147,15 @@ const dict = {
     // Header
     kicker: { en: 'New Client', ru: 'Новый клиент' },
     headline: { en: 'Set up a portal', ru: 'Создать портал' },
+
+    // Shown when the form was opened from a conversation rather than the
+    // Clients tab, so it is obvious where the values came from.
+    prefilledFromThread: {
+      en: (name: string) =>
+        `Filled in from your conversation with ${name}. Check everything before you create the portal — creating it emails the client straight away.`,
+      ru: (name: string) =>
+        `Заполнено из переписки с ${name}. Проверь всё перед созданием портала: клиенту сразу уйдёт письмо.`,
+    },
 
     // Section headings
     sectionContract: { en: 'Contract', ru: 'Контракт' },

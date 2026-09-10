@@ -31,6 +31,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import AdminNewClient from '../components/AdminNewClient';
+import type { ClientPrefill } from '../components/clientPrefill';
 import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
 import AdminModeChooser from '../components/AdminModeChooser';
 import AdminClientDetail from '../components/AdminClientDetail';
@@ -106,7 +107,9 @@ const readSavedEmail = (): string => {
 type View =
   | { kind: 'dashboard' }
   | { kind: 'mode-chooser' }
-  | { kind: 'new-full' }
+  // `prefill` is set when Vero came here from a conversation rather than from
+  // the Clients tab, carrying what the thread already established.
+  | { kind: 'new-full'; prefill?: ClientPrefill }
   | { kind: 'new-gallery' }
   | { kind: 'detail'; id: string };
 
@@ -433,6 +436,9 @@ const Admin = () => {
                   // Vero having to navigate and re-explain which thread
                   // she means.
                   onOpenAssistant={() => setDashTab('assistant')}
+                  // Hand a thread off to the full new-client form with
+                  // everything the conversation already established.
+                  onCreateFullClient={(prefill) => setView({ kind: 'new-full', prefill })}
                 />
               )}
               {dashTab === 'leads' && (
@@ -472,7 +478,12 @@ const Admin = () => {
           {view.kind === 'new-full' && (
             <AdminNewClient
               adminPassword={password}
-              onCancel={() => setView({ kind: 'mode-chooser' })}
+              prefill={view.prefill ?? null}
+              // Back goes where she came from: the inbox if this started in a
+              // conversation, the mode chooser otherwise.
+              onCancel={() =>
+                setView(view.prefill ? { kind: 'dashboard' } : { kind: 'mode-chooser' })
+              }
               onCreated={handleCreated}
             />
           )}
