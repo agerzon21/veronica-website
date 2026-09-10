@@ -4,7 +4,8 @@
 // without executing JavaScript.
 //
 // Data source is now the gallery_photos DB table (via Neon HTTP).
-// Images URLs point at the /api/photo proxy (WebP-resized-and-cached
+// Image URLs point at static files under /assets/photos (previously the
+// /api/photo proxy, WebP-resized-and-cached
 // on demand from Drive) rather than /assets/photos/.../filename.webp
 // as they used to.
 //
@@ -106,7 +107,7 @@ if (lastErr) {
 
 // Shape each row to match what the rest of the script expected
 // from the old CSV path (id, url, title-with-suffix, etc.). The
-// url now points at the /api/photo proxy since photos live in
+// url now points at a static file under /assets/photos (photos live in
 // Drive, not the repo.
 /**
  * Same scoring as findRelatedPhotos in src/data/photos.ts: keyword overlap
@@ -172,7 +173,10 @@ const photos = rows
   .map((r) => ({
     id: r.slug,
     category: r.category,
-    url: `/api/photo?id=${r.drive_file_id}`,
+    // Static file, matching what api/gallery.ts now serves. Left as the proxy
+    // these pages' og:image sent every social crawler through a function, which
+    // is the cost the static switch exists to remove.
+    url: `/assets/photos/${r.category}/${r.slug}.webp`,
     alt: r.alt || '',
     title: `${r.title}${TITLE_SUFFIX}`,
     description: r.description || '',
@@ -387,11 +391,11 @@ for (const [category, meta] of Object.entries(CATEGORY_META)) {
 
   const canonical = `${SITE}/gallery/${category}`;
   const pageTitle = `${meta.heading}${TITLE_SUFFIX}`;
-  // Real image, resolved from the DB through the same /api/photo proxy the
+  // Real image, resolved from the DB to the same static path the
   // photo pages use. The old categoryDetails image paths in Gallery.tsx still
   // point at /assets/photos/..., which is where photos lived BEFORE they moved
   // to Drive — pointing an og:image there would share a broken preview.
-  const ogImage = `${SITE}/api/photo?id=${inCategory[0].url.split('id=')[1]}`;
+  const ogImage = `${SITE}${inCategory[0].url}`;
   let html = photoTemplate;
 
   // The SPA sets these client-side; a non-rendering crawler never sees that,

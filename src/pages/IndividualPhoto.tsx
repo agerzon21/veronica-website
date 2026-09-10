@@ -211,9 +211,16 @@ const IndividualPhoto: React.FC = () => {
   const handleShare = async () => {
     if (navigator.share && photo) {
       try {
+        // `text` is deliberately omitted. WhatsApp (and most chat apps) only
+        // render a link preview when the URL is the prominent part of the
+        // message; with a description in front of it the link is treated as
+        // plain text and the og:image never appears. Pasting the same URL by
+        // hand previewed correctly, which is what gave this away. The photo IS
+        // the point of sharing here, so the preview matters more than the
+        // caption. `title` stays: apps use it to label the share, not to pad
+        // the message body.
         await navigator.share({
           title: photo.title,
-          text: photo.description,
           url: window.location.href,
         });
       } catch (error) {
