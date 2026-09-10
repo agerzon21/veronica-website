@@ -47,6 +47,14 @@ import sharp from 'sharp';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PHOTOS_DIR = join(root, 'public/assets/photos');
 const MANIFEST = join(root, 'api/_gallery-statics.json');
+/**
+ * The published set the EXPORT step saw, written for --check to validate
+ * against. --check must not re-query the database: the two steps run minutes
+ * apart in one build, and a photo published in between made the export skip it
+ * (still a draft) and then the check fail on it (now published). That raced a
+ * real click during testing and failed a real deploy.
+ */
+const SNAPSHOT = join(root, 'node_modules/.cache/gallery-statics-snapshot.json');
 const CHECK = process.argv.includes('--check');
 /**
  * Strict on Vercel, tolerant on a laptop. GOOGLE_SERVICE_ACCOUNT_JSON is a
@@ -117,6 +125,24 @@ async function main() {
   console.log(`gallery-statics: ${photos.length} published photos, ${missing.length} without a static file`);
 
   if (CHECK) {
+    // Validate against what the export step actually saw, so the build is
+    // internally consistent rather than racing whatever the DB says now. A
+    // photo published mid-build simply is not in THIS deployment; publishing
+    // triggers its own rebuild, which will include it.
+    let snapshot = null;
+    try {
+      snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8'));
+    } catch {
+      /* no snapshot (check run standalone) — fall back to the live query */
+    }
+    const expected = snapshot
+      ? photos.filter((p) => snapshot.includes(`${p.category}/${p.slug}`))
+      : photos;
+    const skipped = snapshot ? photos.length - expected.length : 0;
+    if (skipped > 0) {
+      console.log(`gallery-statics --check: ${skipped} photo(s) published after the export step — they land in the next build, not this one`);
+    }
+    const missing = expected.filter((p) => !existsSync(absPath(p)));
     if (missing.length) {
       const log = STRICT ? console.error : console.warn;
       log(`\ngallery-statics --check: ${missing.length} published photo(s) have no static file:`);
@@ -133,6 +159,8 @@ async function main() {
     writeManifest(photos.filter((p) => existsSync(absPath(p))));
     process.exit(0);
   }
+
+  writeSnapshot(photos);
 
   if (missing.length) {
     const drive = driveClient();
@@ -174,6 +202,15 @@ async function main() {
   }
   writeManifest(present);
   console.log(`gallery-statics: ${present.length} photos available as static files.`);
+}
+
+function writeSnapshot(photos) {
+  try {
+    mkdirSync(dirname(SNAPSHOT), { recursive: true });
+    writeFileSync(SNAPSHOT, JSON.stringify(photos.map((p) => `${p.category}/${p.slug}`)));
+  } catch {
+    /* best effort — --check falls back to the live query without it */
+  }
 }
 
 function writeManifest(present) {

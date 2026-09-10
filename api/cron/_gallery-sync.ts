@@ -305,8 +305,17 @@ async function doGallerySync() {
   //     refresh with the new set. Only fire if the set of live
   //     photos actually changed — a pure "refresh timestamps"
   //     run doesn't need to redeploy.
-  const changed =
-    inserted.length > 0 || toRestore.length > 0 || toSoftDelete.length > 0;
+  //
+  //     Inserts are deliberately NOT a reason. The sync adds new photos as
+  //     status='draft', so a rebuild triggered by one publishes nothing: it
+  //     spends five minutes and 131 MB of deployment storage to ship an
+  //     identical site. It could also fail, because the export step and the
+  //     final check query the database minutes apart, so a photo published in
+  //     between was skipped by one and failed the other.
+  //
+  //     Publishing is what makes a photo live, and that already has its own
+  //     "Rebuild site" control in the admin Gallery tab.
+  const changed = toRestore.length > 0 || toSoftDelete.length > 0;
   let deployTriggered = false;
   if (changed) {
     deployTriggered = await triggerDeployHook();
