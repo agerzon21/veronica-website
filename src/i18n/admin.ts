@@ -1150,6 +1150,37 @@ const dict = {
 
     // Shown when the form was opened from a conversation rather than the
     // Clients tab, so it is obvious where the values came from.
+    // Short field names for the "from the conversation" panel. Separate from
+    // the form's own labels, which carry "(optional)" and "(USD)" qualifiers
+    // that read as noise in a dense two-column list.
+    pfSessionType: { en: 'Session type', ru: 'Тип съёмки' },
+    pfEventDate: { en: 'Date', ru: 'Дата' },
+    pfEventTime: { en: 'Time', ru: 'Время' },
+    pfEventLocation: { en: 'Location', ru: 'Место' },
+    pfClientName: { en: 'Client', ru: 'Клиент' },
+    pfPartnerName: { en: 'Partner', ru: 'Партнёр' },
+    pfClientEmail: { en: 'Email', ru: 'Email' },
+    pfTotal: { en: 'Total', ru: 'Сумма' },
+    pfRetainer: { en: 'Retainer', ru: 'Предоплата' },
+    peekSubtitle: { en: 'The conversation, read-only', ru: 'Переписка, только чтение' },
+    peekEmpty: { en: 'No messages in this thread.', ru: 'В переписке нет сообщений.' },
+    viewConversation: { en: 'View conversation', ru: 'Открыть переписку' },
+    fromConversation: {
+      en: (name: string) => `From your conversation with ${name}`,
+      ru: (name: string) => `Из переписки с ${name}`,
+    },
+    stillToFill: { en: 'You still need to fill in', ru: 'Осталось заполнить' },
+    createEmailsClient: {
+      en: 'Creating the portal emails the client straight away.',
+      ru: 'После создания портала клиенту сразу уйдёт письмо.',
+    },
+    galleryOnlyInstead: { en: 'Gallery only instead', ru: 'Только галерея' },
+    discardTitle: { en: 'Leave without creating?', ru: 'Выйти без создания?' },
+    discardBody: {
+      en: 'This form will be cleared. Nothing has been created and no email has been sent.',
+      ru: 'Форма будет очищена. Ничего не создано, письмо не отправлено.',
+    },
+    discardConfirm: { en: 'Leave', ru: 'Выйти' },
     prefilledFromThread: {
       en: (name: string) =>
         `Filled in from your conversation with ${name}. Check everything before you create the portal — creating it emails the client straight away.`,

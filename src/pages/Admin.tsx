@@ -110,7 +110,7 @@ type View =
   // `prefill` is set when Vero came here from a conversation rather than from
   // the Clients tab, carrying what the thread already established.
   | { kind: 'new-full'; prefill?: ClientPrefill }
-  | { kind: 'new-gallery' }
+  | { kind: 'new-gallery'; prefill?: ClientPrefill }
   | { kind: 'detail'; id: string };
 
 // sessionStorage, not localStorage: the token should die with the tab. Vero
@@ -479,6 +479,11 @@ const Admin = () => {
             <AdminNewClient
               adminPassword={password}
               prefill={view.prefill ?? null}
+              onSwitchToGalleryOnly={
+                view.prefill
+                  ? () => setView({ kind: 'new-gallery', prefill: view.prefill })
+                  : undefined
+              }
               // Back goes where she came from: the inbox if this started in a
               // conversation, the mode chooser otherwise.
               onCancel={() =>
@@ -490,7 +495,10 @@ const Admin = () => {
           {view.kind === 'new-gallery' && (
             <AdminNewGalleryOnly
               adminPassword={password}
-              onCancel={() => setView({ kind: 'mode-chooser' })}
+              prefill={view.prefill ?? null}
+              onCancel={() =>
+                setView(view.prefill ? { kind: 'dashboard' } : { kind: 'mode-chooser' })
+              }
               onCreated={handleCreated}
             />
           )}

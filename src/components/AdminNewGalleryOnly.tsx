@@ -1,4 +1,5 @@
 import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea } from '@chakra-ui/react';
+import type { ClientPrefill } from './clientPrefill';
 import { useMemo, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaCopy from '../icons/fa/FaCopy';
@@ -11,6 +12,8 @@ interface Props {
   adminPassword: string;
   onCancel: () => void;
   onCreated: () => void;
+  /** Set when Vero came here from a conversation rather than the Clients tab. */
+  prefill?: ClientPrefill | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -96,21 +99,21 @@ interface SuccessState {
   emailWasSent: boolean;
 }
 
-const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
+const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Props) => {
   const { t } = useAdminLang();
-  const [sessionType, setSessionType] = useState('portrait');
-  const [clientName, setClientName] = useState('');
-  const [eventDateIso, setEventDateIso] = useState('');
+  const [sessionType, setSessionType] = useState(prefill?.session_type ?? 'portrait');
+  const [clientName, setClientName] = useState(prefill?.client_full_name ?? '');
+  const [eventDateIso, setEventDateIso] = useState(prefill?.event_date ?? '');
 
   // Auto-derived display name (overridable)
   const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null);
   const [galleryPasswordOverride, setGalleryPasswordOverride] = useState<string | null>(null);
 
   const [driveUrl, setDriveUrl] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
+  const [clientEmail, setClientEmail] = useState(prefill?.client_email ?? '');
   const [retentionMonths, setRetentionMonths] = useState('3');
-  const [totalAmount, setTotalAmount] = useState('');
-  const [retainerAmount, setRetainerAmount] = useState('');
+  const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
+  const [retainerAmount, setRetainerAmount] = useState(prefill?.retainer_amount ?? '');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -188,6 +191,9 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated }: Props) => {
           gallery_password: galleryPassword.trim(),
           contract_total_amount: totalNum,
           contract_retainer_amount: retainerNum,
+          // Keeps the portal ↔ conversation link when Vero got here from a
+          // thread, so the inbox still shows the CLIENT badge.
+          link_to_conversation_id: prefill?.conversationId ?? null,
         }),
       });
       const data = await res.json();

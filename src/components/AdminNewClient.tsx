@@ -1,5 +1,6 @@
-import { Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox } from '@chakra-ui/react';
+import { Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox, Button, Icon } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
+import FaComments from '../icons/fa/FaComments';
 import { useEmailDelivery } from '../hooks/useEmailDelivery';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
@@ -9,7 +10,9 @@ import {
   type ContractTemplateField,
 } from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
-import { type ClientPrefill, parseCoverageWindow } from './clientPrefill';
+import { type ClientPrefill, parseCoverageWindow, isCoupleSession } from './clientPrefill';
+import ConversationPeek from './ConversationPeek';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 interface Props {
   adminPassword: string;
@@ -21,6 +24,8 @@ interface Props {
    * stays editable — this seeds the form, it does not lock it.
    */
   prefill?: ClientPrefill | null;
+  /** Swap to the gallery-only form, carrying the same prefill. */
+  onSwitchToGalleryOnly?: () => void;
 }
 
 // ─── Small formatting helpers ──────────────────────────────────────────
@@ -121,7 +126,7 @@ const todayYmd = (): string => {
 
 // ─── Component ─────────────────────────────────────────────────────────
 
-const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill }: Props) => {
+const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly }: Props) => {
   const { t } = useAdminLang();
   const templateKeys = Object.keys(CONTRACT_TEMPLATES);
   // Seeded once, at mount. Every field below stays fully editable; the point
@@ -227,22 +232,35 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill }: Props) 
   const galleryPassword = galleryPasswordOverride ?? derivedGalleryPassword;
   const eventTitle = eventTitleOverride ?? derivedEventTitle;
 
-  // Only show a source sentence when there is a value to justify.
-  const prefillQuotes: Array<{ label: string; value: string; quote: string }> = [];
-  if (prefill?.total_amount && prefill.total_amount_quote) {
-    prefillQuotes.push({
-      label: t.newClient.totalLabel,
-      value: `$${prefill.total_amount}`,
-      quote: prefill.total_amount_quote,
-    });
-  }
-  if (prefill?.event_date && prefill.event_date_quote) {
-    prefillQuotes.push({
-      label: t.newClient.eventDateLabel,
-      value: fmtDate(prefill.event_date),
-      quote: prefill.event_date_quote,
-    });
-  }
+  const [peekOpen, setPeekOpen] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+
+  /**
+   * Every contract detail, whether the thread had it or not.
+   *
+   * The panel used to show only the two fields that happened to carry a source
+   * quote, which read as an arbitrary two-item list next to a form holding
+   * eight prefilled values. What is actually useful is the whole set at a
+   * glance, and — more so — which required ones are still blank, since those
+   * are the reason she cannot submit yet.
+   */
+  const prefillRows = prefill
+    ? ([
+        { label: t.newClient.pfSessionType, value: prefill.session_type, required: true },
+        { label: t.newClient.pfEventDate, value: prefill.event_date ? fmtDate(prefill.event_date) : null, required: true, quote: prefill.event_date_quote },
+        { label: t.newClient.pfEventTime, value: prefill.event_time, required: false },
+        { label: t.newClient.pfEventLocation, value: prefill.event_location, required: false },
+        { label: t.newClient.pfClientName, value: prefill.client_full_name, required: true },
+        ...(isCoupleSession(prefill.session_type)
+          ? [{ label: t.newClient.pfPartnerName, value: prefill.partner_full_name, required: false }]
+          : []),
+        { label: t.newClient.pfClientEmail, value: prefill.client_email, required: true },
+        { label: t.newClient.pfTotal, value: prefill.total_amount ? `$${prefill.total_amount}` : null, required: true, quote: prefill.total_amount_quote },
+        { label: t.newClient.pfRetainer, value: prefill.retainer_amount ? `$${prefill.retainer_amount}` : null, required: true },
+      ] as Array<{ label: string; value: string | null; required: boolean; quote?: string | null }>)
+    : [];
+  const foundRows = prefillRows.filter((r) => r.value);
+  const stillToFill = prefillRows.filter((r) => !r.value && r.required).map((r) => r.label);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -502,7 +520,14 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill }: Props) 
     <Box maxW="760px" mx="auto" px={{ base: 0, md: 0 }}>
       {/* Header */}
       <Flex align="center" mb={8} gap={3}>
-        <AdminBackButton onClick={onCancel} label={t.common.back} />
+        <AdminBackButton
+          // Leaving unmounts the form and loses everything typed. Harmless
+          // when she walked in from the Clients tab and has entered nothing;
+          // costly when she got here from a thread and has been filling in a
+          // contract, so only that case asks.
+          onClick={() => (prefill && !createdPortalId ? setConfirmLeaveOpen(true) : onCancel())}
+          label={t.common.back}
+        />
       </Flex>
 
       <VStack align="flex-start" spacing={1} mb={6}>
@@ -524,27 +549,88 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill }: Props) 
           py={4}
           mb={6}
         >
-          <Text fontSize="sm" color="gray.700" lineHeight="1.6" mb={prefillQuotes.length ? 3 : 0}>
-            {t.newClient.prefilledFromThread(prefill.displayName)}
-          </Text>
-          {/* The two values that cost money to get wrong get shown with the
-              sentence they came from. Threads renegotiate — one in this inbox
-              carries three different totals — so a figure that appears in a
-              box by itself is not enough to trust without re-reading it. */}
-          {prefillQuotes.length > 0 && (
-            <VStack align="stretch" spacing={2}>
-              {prefillQuotes.map((q) => (
-                <Box key={q.label}>
-                  <Text fontSize="xs" color="gray.600" fontWeight="500">
-                    {q.label}: {q.value}
-                  </Text>
-                  <Text fontSize="xs" color="gray.500" fontStyle="italic" lineHeight="1.5">
-                    &ldquo;{q.quote}&rdquo;
-                  </Text>
+          <Flex align="baseline" justify="space-between" gap={3} wrap="wrap" mb={3}>
+            <Text fontSize="sm" fontWeight="600" color="gray.800">
+              {t.newClient.fromConversation(prefill.displayName)}
+            </Text>
+            {/* Opens the thread over the form instead of navigating to it.
+                Leaving to re-read a detail used to unmount this form and lose
+                every keystroke, so the safe move was to not check. */}
+            <Button
+              size="sm"
+              variant="link"
+              color="brand.accentText"
+              fontWeight="500"
+              minH="44px"
+              leftIcon={<Icon as={FaComments} boxSize={3} />}
+              onClick={() => setPeekOpen(true)}
+            >
+              {t.newClient.viewConversation}
+            </Button>
+          </Flex>
+
+          {/* Everything the thread established. Two columns on a desktop,
+              one on a phone, because these are label/value pairs and a phone
+              cannot show two of them side by side without wrapping badly. */}
+          {foundRows.length > 0 && (
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacingX={6} spacingY={1.5} mb={stillToFill.length ? 4 : 3}>
+              {foundRows.map((r) => (
+                <Box key={r.label}>
+                  <Flex gap={2} align="baseline">
+                    <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.06em" flexShrink={0}>
+                      {r.label}
+                    </Text>
+                    <Text fontSize="sm" color="gray.800" lineHeight="1.4">
+                      {r.value}
+                    </Text>
+                  </Flex>
+                  {/* The two values that cost money to get wrong carry the
+                      sentence they came from. Threads renegotiate — one in
+                      this inbox holds three different totals — so a figure
+                      sitting in a box on its own is not enough to trust. */}
+                  {r.quote && (
+                    <Text fontSize="2xs" color="gray.500" fontStyle="italic" lineHeight="1.45" mt={0.5}>
+                      &ldquo;{r.quote}&rdquo;
+                    </Text>
+                  )}
                 </Box>
               ))}
-            </VStack>
+            </SimpleGrid>
           )}
+
+          {stillToFill.length > 0 && (
+            <Box borderTop="1px solid" borderColor="brand.accentBorder" pt={3} mb={3}>
+              <Text fontSize="2xs" color="gray.600" textTransform="uppercase" letterSpacing="0.06em" fontWeight="600" mb={1}>
+                {t.newClient.stillToFill}
+              </Text>
+              <Text fontSize="sm" color="gray.800" lineHeight="1.5">
+                {stillToFill.join(', ')}
+              </Text>
+            </Box>
+          )}
+
+          <Flex align="center" justify="space-between" gap={3} wrap="wrap">
+            <Text fontSize="2xs" color="gray.600" lineHeight="1.5">
+              {t.newClient.createEmailsClient}
+            </Text>
+            {/* Kept small and out of the way. Turning a booking thread into a
+                gallery-only portal is rarely what she wants — it is what
+                produced a CLIENT badge with no contract behind it — but the
+                option still belongs somewhere, and here it keeps the
+                conversation link that the Clients tab route cannot. */}
+            {onSwitchToGalleryOnly && (
+              <Button
+                size="xs"
+                variant="link"
+                color="gray.500"
+                fontWeight="400"
+                minH="44px"
+                onClick={onSwitchToGalleryOnly}
+              >
+                {t.newClient.galleryOnlyInstead}
+              </Button>
+            )}
+          </Flex>
         </Box>
       )}
 
@@ -1019,6 +1105,29 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill }: Props) 
           )}
         </VStack>
       </Box>
+
+      {prefill && (
+        <ConversationPeek
+          isOpen={peekOpen}
+          onClose={() => setPeekOpen(false)}
+          adminPassword={adminPassword}
+          conversationId={prefill.conversationId}
+          contactName={prefill.displayName}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmLeaveOpen}
+        title={t.newClient.discardTitle}
+        body={t.newClient.discardBody}
+        confirmLabel={t.newClient.discardConfirm}
+        cancelLabel={t.common.cancel}
+        onConfirm={() => {
+          setConfirmLeaveOpen(false);
+          onCancel();
+        }}
+        onCancel={() => setConfirmLeaveOpen(false)}
+      />
     </Box>
   );
 };

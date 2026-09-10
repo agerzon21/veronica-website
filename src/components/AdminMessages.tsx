@@ -19,12 +19,6 @@ import {
   ModalBody,
   ModalFooter,
   ModalCloseButton,
-  FormControl,
-  FormLabel,
-  Input,
-  Select,
-  InputGroup,
-  InputRightElement,
   Button,
   IconButton,
   Stack,
@@ -67,7 +61,7 @@ import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
-import { type ClientPrefill, isCoupleSession } from './clientPrefill';
+import { type ClientPrefill } from './clientPrefill';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
 import { translationTargetFor } from './translationDirection';
 
@@ -1704,7 +1698,6 @@ function ConversationView({
   // is a no-op (English → English, ignored server-side). Alex's
   // ask, explicitly.
   const [translateOnSend, setTranslateOnSend] = useState(true);
-  const [createClientOpen, setCreateClientOpen] = useState(false);
   // Summary is EXPANDED by default when a conversation opens (per
   // Alex's ask — the summary is the first thing you want to see, not
   // the chat scroll). Vero taps the collapse chevron to reveal the
@@ -2264,6 +2257,34 @@ function ConversationView({
       ? t.messages.emailSenderFallback(detail.external_user_id)
       : t.messages.instagramUserFallback(detail.external_user_id.slice(-6)));
 
+  /**
+   * What this thread established, in the shape the full new-client form wants.
+   *
+   * Built here rather than in a chooser modal: converting a booking thread
+   * into a gallery-only portal was never the useful outcome — it is what
+   * produced a client with a CLIENT badge and no contract — so the button
+   * goes straight to the full form and gallery-only stays available from the
+   * Clients tab for the cases it was actually built for.
+   */
+  const buildPrefill = (): ClientPrefill => {
+    const b = aiSummary?.booking ?? null;
+    return {
+      conversationId: summary.id,
+      displayName,
+      session_type: b?.session_type ?? null,
+      event_date: b?.event_date ?? null,
+      event_time: b?.event_time ?? null,
+      event_location: b?.event_location ?? null,
+      client_full_name: b?.client_full_name ?? null,
+      partner_full_name: b?.partner_full_name ?? null,
+      client_email: b?.client_email ?? null,
+      total_amount: b?.total_amount ?? null,
+      retainer_amount: b?.retainer_amount ?? null,
+      total_amount_quote: b?.total_amount_quote ?? null,
+      event_date_quote: b?.event_date_quote ?? null,
+    };
+  };
+
   // The address / handle to show under the name.
   //
   // For email, external_user_id IS the address — that's how the thread is
@@ -2413,7 +2434,7 @@ function ConversationView({
               <IconButton
                 aria-label={t.messages.createClientFromThread}
                 icon={<Icon as={FaUserPlus} boxSize={4} />}
-                onClick={() => setCreateClientOpen(true)}
+                onClick={() => onCreateFullClient?.(buildPrefill())}
                 variant="ghost"
                 size="md"
                 minW="44px"
@@ -2649,28 +2670,6 @@ function ConversationView({
         isLoading={deleteLoading}
         onConfirm={doDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
-      />
-
-      {/* Create-client modal — prefills from IG contact + AI summary */}
-      <CreateClientModal
-        isOpen={createClientOpen}
-        onClose={() => setCreateClientOpen(false)}
-        adminPassword={adminPassword}
-        conversationId={summary.id}
-        defaultDisplayName={displayName}
-        aiSummary={aiSummary}
-        onCreateFullClient={onCreateFullClient}
-        onCreated={async () => {
-          setCreateClientOpen(false);
-          await loadDetail();
-          onRefreshList();
-          toast({
-            title: t.messages.clientPortalCreated,
-            status: 'success',
-            duration: 4000,
-            isClosable: true,
-          });
-        }}
       />
 
       {/* Not-in-AI notice — one-line dismissible banner. Auto-opens
@@ -3855,353 +3854,6 @@ const CLASSIFICATION_STYLE: Record<
 };
 
 /**
- * Modal for converting an IG DM conversation into a client portal.
- * Deliberately minimal: just the fields needed to create a simple-mode
- * portal (session type, display name, gallery password). Vero fills in
- * the rest — email, event date, contract, drive URL — later from the
- * Portals tab. This form is optimized for the first-touch moment where
- * she says "OK this is a real client, let me claim them" without
- * making her fill out a wall of fields she doesn't have answers to
- * yet.
- *
- * On create, the backend also flips conversations.linked_client_portal_id
- * so the inbox shows "Linked client" and the "Client" badge in the
- * sidebar row.
- */
-function CreateClientModal({
-  isOpen,
-  onClose,
-  adminPassword,
-  conversationId,
-  defaultDisplayName,
-  aiSummary,
-  onCreateFullClient,
-  onCreated,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  adminPassword: string;
-  conversationId: string;
-  defaultDisplayName: string;
-  aiSummary: AiSummary | null;
-  onCreateFullClient?: (prefill: ClientPrefill) => void;
-  onCreated: () => void | Promise<void>;
-}) {
-  const { t, lang } = useAdminLang();
-  const [sessionType, setSessionType] = useState<string>(
-    () => inferSessionType(aiSummary) ?? 'portrait',
-  );
-  const [displayName, setDisplayName] = useState<string>(defaultDisplayName);
-  const [galleryPassword, setGalleryPassword] = useState<string>(() => generateGalleryPassword());
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Reset the form each time the modal opens — a stale previous entry
-  // (from a different conversation Vero cancelled out of) would be
-  // confusing here.
-  useEffect(() => {
-    if (isOpen) {
-      setSessionType(inferSessionType(aiSummary) ?? 'portrait');
-      setDisplayName(defaultDisplayName);
-      setGalleryPassword(generateGalleryPassword());
-      setError(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  const canSubmit =
-    !submitting &&
-    sessionType.trim().length > 0 &&
-    displayName.trim().length > 0 &&
-    galleryPassword.trim().length >= 4;
-
-  // What the thread already established, in the shape the full form wants.
-  // Null when the summary predates the structured fields, in which case the
-  // full-form route is still offered — it just starts empty rather than seeded.
-  const booking = aiSummary?.booking ?? null;
-  const prefill: ClientPrefill = {
-    conversationId,
-    displayName: defaultDisplayName,
-    session_type: booking?.session_type ?? null,
-    event_date: booking?.event_date ?? null,
-    event_time: booking?.event_time ?? null,
-    event_location: booking?.event_location ?? null,
-    client_full_name: booking?.client_full_name ?? null,
-    partner_full_name: booking?.partner_full_name ?? null,
-    client_email: booking?.client_email ?? null,
-    total_amount: booking?.total_amount ?? null,
-    retainer_amount: booking?.retainer_amount ?? null,
-    total_amount_quote: booking?.total_amount_quote ?? null,
-    event_date_quote: booking?.event_date_quote ?? null,
-  };
-
-  // Named so Vero can see at a glance what is coming across and what she will
-  // still have to supply, before she commits to the longer form.
-  const readyLabels = ([
-    ['session_type', t.messages.pfSessionType],
-    ['event_date', t.messages.pfEventDate],
-    ['event_time', t.messages.pfEventTime],
-    ['event_location', t.messages.pfEventLocation],
-    ['client_full_name', t.messages.pfClientName],
-    ['partner_full_name', t.messages.pfPartnerName],
-    ['client_email', t.messages.pfClientEmail],
-    ['total_amount', t.messages.pfTotal],
-    ['retainer_amount', t.messages.pfRetainer],
-  ] as const)
-    .filter(([k]) => {
-      if (k === 'partner_full_name' && !isCoupleSession(prefill.session_type)) return false;
-      return true;
-    })
-    .map(([k, label]) => ({ label, have: Boolean(prefill[k]) }));
-  const youAdd = readyLabels.filter((r) => !r.have).map((r) => r.label);
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/portals-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: adminPassword,
-          mode: 'simple',
-          session_type: sessionType.trim(),
-          client_display_name: displayName.trim(),
-          gallery_password: galleryPassword.trim(),
-          link_to_conversation_id: conversationId,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        await onCreated();
-      } else {
-        setError(data.error || t.messages.createFailed(res.status));
-      }
-    } catch {
-      setError(t.common.couldNotReach);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      size={{ base: 'full', md: 'md' } as any}
-      isCentered={{ base: false, md: true } as any}
-      motionPreset="slideInBottom"
-    >
-      <ModalOverlay />
-      <ModalContent
-        borderRadius={{ base: 0, md: 'md' }}
-        maxH={{ base: '100dvh', md: 'auto' }}
-        mx={{ base: 0, md: 4 }}
-      >
-        <ModalHeader fontSize="md" fontWeight="500" color="gray.800">
-          {t.messages.convertToClient}
-        </ModalHeader>
-        <ModalCloseButton
-          size={{ base: 'lg', md: 'md' } as any}
-          top={{ base: 3, md: 2 }}
-          right={{ base: 3, md: 2 }}
-        />
-        <ModalBody>
-          <VStack spacing={4} align="stretch">
-
-            {/* Two genuinely different outcomes, so they are two choices
-                rather than one button with a mode. The full portal is the
-                one that produces a contract, so it leads; gallery-only stays
-                for the "claim them now, paperwork later" case it was built
-                for. Creating a full portal emails the client immediately,
-                which is why this route opens a form to check rather than
-                creating anything from here. */}
-            {onCreateFullClient && (
-              <Box
-                bg="brand.accentSoft"
-                border="1px solid"
-                borderColor="brand.accentBorder"
-                borderRadius="sm"
-                p={3}
-              >
-                <Text fontSize="xs" fontWeight="600" color="gray.800" mb={0.5}>
-                  {t.messages.fullClientHeading}
-                </Text>
-                <Text fontSize="2xs" color="gray.600" lineHeight="1.5" mb={2}>
-                  {t.messages.fullClientBlurb}
-                </Text>
-                {youAdd.length > 0 && (
-                  <Text fontSize="2xs" color="gray.500" lineHeight="1.5" mb={2}>
-                    {t.messages.fullClientYouAdd(youAdd.join(', '))}
-                  </Text>
-                )}
-                <CTAButton
-                  onClick={() => {
-                    onClose();
-                    onCreateFullClient(prefill);
-                  }}
-                  icon={FaUserPlus}
-                  variant="solid"
-                  size="sm"
-                  isDisabled={submitting}
-                >
-                  {t.messages.fullClientCta}
-                </CTAButton>
-              </Box>
-            )}
-
-            <Box>
-              <Text fontSize="xs" fontWeight="600" color="gray.800" mb={0.5}>
-                {t.messages.galleryOnlyHeading}
-              </Text>
-              <Text fontSize="2xs" color="gray.600" lineHeight="1.5">
-                {t.messages.galleryOnlyBlurb}
-              </Text>
-            </Box>
-
-            <Text fontSize="xs" color="gray.500" lineHeight="1.6">
-              {t.messages.convertDisclaimer}
-            </Text>
-
-            <FormControl>
-              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                {t.messages.sessionTypeLabel}
-              </FormLabel>
-              <Select
-                value={sessionType}
-                onChange={(e) => setSessionType(e.target.value)}
-                size={{ base: 'md', md: 'sm' }}
-                fontSize={{ base: 'md', md: 'sm' }}
-                bg="white"
-              >
-                {/* Option values stay English — session_type is a wire
-                    value the API stores in the DB. Labels come from
-                    the dict. */}
-                <option value="portrait">{t.messages.sessionOptions.portrait}</option>
-                <option value="wedding">{t.messages.sessionOptions.wedding}</option>
-                <option value="family">{t.messages.sessionOptions.family}</option>
-                <option value="maternity">{t.messages.sessionOptions.maternity}</option>
-                <option value="engagement">{t.messages.sessionOptions.engagement}</option>
-                <option value="newborn">{t.messages.sessionOptions.newborn}</option>
-                <option value="other">{t.messages.sessionOptions.other}</option>
-              </Select>
-            </FormControl>
-
-            <FormControl>
-              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                {t.messages.clientDisplayName}
-              </FormLabel>
-              <Input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder={t.messages.clientNamePlaceholder}
-                size={{ base: 'md', md: 'sm' }}
-                fontSize={{ base: 'md', md: 'sm' }}
-                bg="white"
-              />
-            </FormControl>
-
-            <FormControl>
-              <FormLabel fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
-                {t.messages.galleryPasswordLabel}
-              </FormLabel>
-              <InputGroup size={{ base: 'md', md: 'sm' }}>
-                <Input
-                  value={galleryPassword}
-                  onChange={(e) => setGalleryPassword(e.target.value)}
-                  placeholder={t.messages.autogenerated}
-                  fontSize={{ base: 'md', md: 'sm' }}
-                  bg="white"
-                  pr="4.5rem"
-                />
-                <InputRightElement width="4.5rem">
-                  <Button
-                    h="1.5rem"
-                    size="xs"
-                    variant="ghost"
-                    color="brand.accentText"
-                    onClick={() => setGalleryPassword(generateGalleryPassword())}
-                  >
-                    {t.messages.generateNewPassword}
-                  </Button>
-                </InputRightElement>
-              </InputGroup>
-              <Text fontSize="2xs" color="gray.400" mt={1}>
-                {t.messages.galleryPasswordHint}
-              </Text>
-            </FormControl>
-
-            {(() => {
-              // Show the gathered facts in whichever language the admin
-              // panel is currently in — matches the surrounding modal
-              // copy so both read as one language.
-              const gathered = aiSummary ? readSummaryLocale(aiSummary, lang).gathered : [];
-              return gathered.length > 0 ? (
-                <Box
-                  bg="rgba(201, 169, 110, 0.06)"
-                  border="1px solid"
-                  borderColor="rgba(201, 169, 110, 0.3)"
-                  borderRadius="sm"
-                  p={3}
-                >
-                  <Text fontSize="2xs" color="brand.accentText" fontWeight="600" letterSpacing="0.08em" textTransform="uppercase" mb={1.5}>
-                    {t.messages.fromThisConversation}
-                  </Text>
-                  <VStack align="stretch" spacing={0.5}>
-                    {gathered.map((fact, i) => (
-                      <Flex key={i} gap={2} align="flex-start">
-                        <Text fontSize="xs" color="brand.accent">•</Text>
-                        <Text fontSize="xs" color="gray.700" lineHeight="1.5">
-                          {formatPhoneNumbersInText(fact)}
-                        </Text>
-                      </Flex>
-                    ))}
-                  </VStack>
-                  <Text fontSize="2xs" color="gray.500" mt={2} lineHeight="1.5">
-                    {t.messages.addTheseToPortal}
-                  </Text>
-                </Box>
-              ) : null;
-            })()}
-
-            {error && (
-              <Text fontSize="xs" color="red.600">{error}</Text>
-            )}
-          </VStack>
-        </ModalBody>
-        <ModalFooter
-          gap={2}
-          pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}
-        >
-          <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} w="100%">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              isDisabled={submitting}
-            >
-              {t.common.cancel}
-            </Button>
-            <CTAButton
-              onClick={handleSubmit}
-              icon={FaUserPlus}
-              variant="solid"
-              size="sm"
-              isLoading={submitting}
-              loadingText={t.messages.creating}
-              isDisabled={!canSubmit}
-            >
-              {t.messages.createClientCta}
-            </CTAButton>
-          </Stack>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
-  );
-}
-
-/**
  * Editor for the signature appended to every email sent from this panel.
  *
  * Two fields because email is two formats: nearly every client renders
@@ -4428,46 +4080,6 @@ function sanitizeSignaturePreview(html: string): string {
     // glue two attributes together.
     .replace(/[\s/]on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, ' ')
     .replace(/javascript\s*:/gi, '');
-}
-
-/**
- * Best-effort session-type inference from the AI summary's `gathered`
- * facts. If the customer mentioned "wedding", "maternity", etc., we
- * preselect that value in the dropdown so Vero doesn't have to
- * re-read the thread to pick. Falls back to null → caller defaults
- * to portrait.
- */
-function inferSessionType(summary: AiSummary | null): string | null {
-  if (!summary) return null;
-  // Use whichever locale has content — the inference regexes below
-  // cover both English and Russian keywords so either language works.
-  const en = readSummaryLocale(summary, 'en');
-  const ru = readSummaryLocale(summary, 'ru');
-  const blob = [en.asking, ...en.gathered, ru.asking, ...ru.gathered]
-    .join(' ')
-    .toLowerCase();
-  if (/\bwedding|bride|groom|ceremony|reception|свадьб/.test(blob)) return 'wedding';
-  if (/\bmatern|pregnan|belly|беремен/.test(blob)) return 'maternity';
-  if (/\bnewborn|infant|baby (photo|shoot|session)|новорожд/.test(blob)) return 'newborn';
-  if (/\bengagement|proposal|помолвк/.test(blob)) return 'engagement';
-  if (/\bfamily|kids|children|дет|семейн/.test(blob)) return 'family';
-  if (/\bportrait|headshot|individual|портрет/.test(blob)) return 'portrait';
-  return null;
-}
-
-/**
- * Generate a short, memorable-ish gallery password. Format:
- *   <adjective><Noun><2 digits>
- * e.g. "goldenLight42", "warmForest17". Client will get this in the
- * gallery-ready email later; short enough to type on a phone.
- */
-function generateGalleryPassword(): string {
-  const adjs = ['golden', 'warm', 'soft', 'quiet', 'gentle', 'bright', 'wild', 'still', 'calm', 'amber'];
-  const nouns = ['Light', 'Forest', 'Ocean', 'Meadow', 'Bloom', 'Dawn', 'Shore', 'Sky', 'Fern', 'Stone'];
-  const adj = adjs[Math.floor(Math.random() * adjs.length)];
-  const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  const num = Math.floor(Math.random() * 90 + 10);
-  return `${adj}${noun}${num}`;
 }
 
 /**
