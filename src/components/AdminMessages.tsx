@@ -451,13 +451,23 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
     }
   };
   /**
-   * A sent reply ends the drafting, not the session. Closing the panel here
-   * would throw away the very thing that was asked for: a panel that stays put
-   * until it is closed by hand. Fall back to the summary, which is now
-   * regenerating against the message that just went out.
+   * A send from the assistant happened entirely server-side, so no client
+   * state knows the message exists. This used to only flip the tab back to
+   * Summary — the thread kept rendering its stale message list, the reply
+   * Vero had JUST sent was nowhere in it, and it stayed missing until a
+   * manual refresh. Sending felt like it had not worked.
+   *
+   * So: reload the thread, then close the panel and land on the
+   * conversation, where the sent message and its delivery state now are.
+   * (An earlier version deliberately kept the panel open after a send — that
+   * ask predated the send flows ending back on the thread, and keeping it
+   * open now means covering up the very message you want to see go out.
+   * Vero's explicit current ask is: send, then show me the conversation.)
    */
   const handleReplySentFromPanel = () => {
+    setThreadRefresh((n) => n + 1);
     setPanelTab('summary');
+    closeRefinePanel();
   };
 
   const closeRefinePanel = () => {
