@@ -1,14 +1,25 @@
 User-agent: *
 Allow: /
 
-# Gallery photos are served through the /api/photo proxy (they live in Google
-# Drive, not the repo). Every one of the 227 prerendered /photo/* pages points
-# its og:image and schema.org contentUrl at /api/photo?id=... — so a blanket
-# "Disallow: /api/" told Google it may read those pages but must not fetch the
-# photograph they exist to show. On a photography site that is the whole point
-# of the page. This Allow must stay ABOVE the /api/ Disallow and be more
-# specific than it; both Google and Bing resolve conflicts by longest match.
+# Googlebot RENDERS pages, and it obeys robots.txt for every fetch the page's
+# JavaScript makes. The public pages hydrate from read-only APIs — a photo
+# page calls /api/gallery/post, a category grid /api/gallery/list, journal
+# pages /api/journal/* — so a blanket "Disallow: /api/" makes those calls fail
+# inside Google's renderer, the page renders its "Photo not found" / error
+# state, and Google classifies a perfectly good URL as a Soft 404. That is not
+# hypothetical: a live URL-inspection test of /photo/family/... came back
+# "Page cannot be indexed: Soft 404" for exactly this reason (2026-09-11).
+#
+# So every public, read-only API the pages render from must be carved out.
+# These Allows are more specific than the /api/ Disallow below; both Google
+# and Bing resolve conflicts by longest match. /api/photo is the legacy Drive
+# proxy some older references still point at. Everything else under /api/
+# (admin, portal, inbox, contact, subscribe, cron) stays blocked.
 Allow: /api/photo
+Allow: /api/gallery/
+Allow: /api/journal/
+Allow: /api/reviews
+Allow: /api/instagram-feed
 
 Disallow: /private/
 Disallow: /admin
