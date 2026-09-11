@@ -698,6 +698,94 @@ export async function processInboundMessage(args: {
 }
 
 /**
+ * Generate a draft because Vero asked for one, skipping the guardrails.
+ *
+ * The pipeline above deliberately goes quiet in several situations: the
+ * booking bridge disables the AI the moment real money or contract talk
+ * starts, personal threads are skipped, and a thread that hit its reply cap
+ * stays silent. Those are the right defaults for UNPROMPTED drafting — and
+ * they are also exactly the moments Vero most wants help writing a reply,
+ * because what remains is the high-stakes part of the conversation.
+ *
+ * An explicit request changes the calculus completely. Every guardrail
+ * exists to stop the AI acting on its own; none of them exists to stop Vero.
+ * So this checks only two things: the conversation exists, and no draft is
+ * already pending (same anti-stack rule as the pipeline, same reason).
+ *
+ * The result is ALWAYS a draft, Instagram included. The pipeline auto-sends
+ * on IG because nobody is at the keyboard when a webhook fires; here somebody
+ * demonstrably is, and she reviews it in the composer like any other draft.
+ */
+export async function draftOnDemand(
+  conversationId: string,
+): Promise<{ ok: true; body: string } | { ok: false; error: string }> {
+  const sql = getDb();
+
+  const convoRows = (await sql`
+    SELECT id, platform FROM conversations WHERE id = ${conversationId} LIMIT 1
+  `) as Array<{ id: string; platform: string }>;
+  if (convoRows.length === 0) return { ok: false, error: 'Conversation not found' };
+  const convo = convoRows[0];
+
+  const pending = (await sql`
+    SELECT id FROM messages
+    WHERE conversation_id = ${conversationId} AND status = 'draft'
+    LIMIT 1
+  `) as Array<{ id: string }>;
+  if (pending.length > 0) {
+    return { ok: false, error: 'A draft is already waiting on this conversation' };
+  }
+
+  const historyRows = (await sql`
+    SELECT id, direction, sender, body, sent_at
+    FROM messages
+    WHERE conversation_id = ${conversationId} AND status <> 'draft'
+    ORDER BY sent_at DESC
+    LIMIT ${HISTORY_CONTEXT_MESSAGES}
+  `) as Array<Message>;
+  if (historyRows.length === 0) return { ok: false, error: 'Conversation has no messages' };
+  const history = [...historyRows].reverse();
+  const aiCount = history.filter((m) => m.direction === 'outbound' && m.sender === 'ai').length;
+  const latestInbound = [...history].reverse().find((m) => m.direction === 'inbound');
+
+  const contextRows = (await sql`
+    SELECT category, label, content
+    FROM ai_context
+    WHERE active = TRUE AND source <> 'system'
+    ORDER BY category, sort_order
+  `) as Array<ContextRow>;
+
+  let replyText: string;
+  try {
+    replyText = await generateReply({
+      contextRows,
+      history,
+      aiMessageCount: aiCount,
+      mentionsDate: latestInbound ? matchesDateIntent(latestInbound.body) : false,
+      // A draft is read before it leaves, whatever the channel.
+      reviewedBeforeSending: true,
+    });
+  } catch (err) {
+    console.error('[ai-reply] on-demand generation failed:', err);
+    return { ok: false, error: 'Generation failed' };
+  }
+  if (!replyText.trim()) return { ok: false, error: 'Generation returned nothing' };
+
+  await sql`
+    INSERT INTO messages (
+      conversation_id, direction, sender, channel, body,
+      sent_at, ai_model, status
+    )
+    VALUES (
+      ${conversationId}, 'outbound', 'ai', ${convo.platform}, ${replyText},
+      NOW(), ${OPENAI_MODEL}, 'draft'
+    )
+  `;
+  console.log(`[ai-reply] on-demand draft for conversation ${conversationId}`);
+  return { ok: true, body: replyText };
+}
+
+/**
  * Send a pre-written bridge / handoff message from the ai_context
  * table and flip the conversation's ai_enabled to false so Vero
  * takes over from here. Used for booking intent, spam, and wrap-up.

@@ -1690,6 +1690,31 @@ function ConversationView({
       setDiscardingDraft(false);
     }
   };
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const handleGenerateDraft = async () => {
+    setGeneratingDraft(true);
+    try {
+      const res = await fetch('/api/admin/messages-draft-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, conversationId: summary.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await loadDetail();
+      } else {
+        toast({
+          title: data.error || t.messages.draftGenerateFailed,
+          status: 'error',
+          duration: 4000,
+        });
+      }
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+    } finally {
+      setGeneratingDraft(false);
+    }
+  };
   const [sending, setSending] = useState(false);
   const [aiToggleLoading, setAiToggleLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
@@ -2773,6 +2798,8 @@ function ConversationView({
               onRefine={handleRefineWithAssistant}
               onDiscard={handleDiscardDraft}
               discarding={discardingDraft}
+              onGenerate={handleGenerateDraft}
+              generating={generatingDraft}
             />
           ),
           panelBodyEl,
@@ -3353,6 +3380,8 @@ function DraftPanel({
   onRefine,
   onDiscard,
   discarding,
+  onGenerate,
+  generating,
 }: {
   draft: Message | null;
   t: AdminT;
@@ -3364,14 +3393,29 @@ function DraftPanel({
   onRefine: () => void;
   onDiscard: () => void;
   discarding: boolean;
+  onGenerate: () => void;
+  generating: boolean;
 }) {
   if (!draft) {
     return (
       <Flex direction="column" align="center" justify="center" h="100%" px={6} py={10}>
         <Icon as={FaRobot} boxSize={5} color="gray.300" mb={3} />
-        <Text fontSize="sm" color="gray.500" textAlign="center" lineHeight="1.6">
+        <Text fontSize="sm" color="gray.500" textAlign="center" lineHeight="1.6" mb={4}>
           {t.messages.aiNoDraft}
         </Text>
+        {/* The automatic pipeline goes quiet on purpose once payment or
+            contract talk starts — which is exactly when Vero most wants a
+            starting point. Asking is different from the AI acting alone, so
+            an explicit request works even where auto-drafting stops. */}
+        <CTAButton
+          onClick={onGenerate}
+          variant="outline"
+          size="sm"
+          isLoading={generating}
+          loadingText={t.messages.draftGenerating}
+        >
+          {t.messages.draftGenerateCta}
+        </CTAButton>
       </Flex>
     );
   }

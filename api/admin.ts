@@ -50,6 +50,7 @@ import usersHandler from './admin/_users.js';
 import messagesDeleteHandler from './admin/_messages-delete.js';
 import messagesDeliveryHandler from './admin/_messages-delivery.js';
 import messagesDraftDiscardHandler from './admin/_messages-draft-discard.js';
+import messagesDraftGenerateHandler from './admin/_messages-draft-generate.js';
 import messagesSettingsHandler from './admin/_messages-settings.js';
 import messagesResetHandler from './admin/_messages-reset.js';
 import contextListHandler from './admin/_context-list.js';
@@ -110,6 +111,7 @@ const HANDLERS: Record<
   'messages-reset': messagesResetHandler,
   'messages-settings': messagesSettingsHandler,
   'messages-draft-discard': messagesDraftDiscardHandler,
+  'messages-draft-generate': messagesDraftGenerateHandler,
   'messages-delivery': messagesDeliveryHandler,
   'messages-delete': messagesDeleteHandler,
   'messages-mark-promotional': messagesMarkPromotionalHandler,
