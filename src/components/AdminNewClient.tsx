@@ -175,7 +175,27 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [sessionType, setSessionType] = useState<string>(prefill?.session_type ?? templateKeys[0]);
 
   const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
-  const [retainerAmount, setRetainerAmount] = useState(prefill?.retainer_amount ?? '');
+  const [retainerAmount, setRetainerAmount] = useState(() => {
+    if (prefill?.retainer_amount) return prefill.retainer_amount;
+    const n = parseFloat(prefill?.total_amount ?? '');
+    return Number.isFinite(n) && n > 0 ? String(Math.round(n * 0.15)) : '';
+  });
+  /**
+   * The retainer follows the total at 15% until it is typed in by hand, after
+   * which it stops moving. Same override pattern as the display name and the
+   * gallery password: derive a sensible default, never fight the operator.
+   *
+   * A retainer the thread already established counts as deliberate, so a
+   * prefilled one starts out overridden rather than being recalculated.
+   */
+  const RETAINER_RATE = 0.15;
+  const [retainerTouched, setRetainerTouched] = useState(Boolean(prefill?.retainer_amount));
+  const applyTotal = (next: string) => {
+    setTotalAmount(next);
+    if (retainerTouched) return;
+    const n = parseFloat(next);
+    setRetainerAmount(Number.isFinite(n) && n > 0 ? String(Math.round(n * RETAINER_RATE)) : '');
+  };
 
   const [additionalNotes, setAdditionalNotes] = useState('');
 
@@ -938,7 +958,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                 type="number"
                 inputMode="decimal"
                 value={totalAmount}
-                onChange={(e) => { setTotalAmount(e.target.value); clearFieldError('total'); }}
+                onChange={(e) => { applyTotal(e.target.value); clearFieldError('total'); clearFieldError('retainer'); }}
                 placeholder="0"
                 step="1"
                 min="0"
@@ -949,7 +969,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                 type="number"
                 inputMode="decimal"
                 value={retainerAmount}
-                onChange={(e) => { setRetainerAmount(e.target.value); clearFieldError('retainer'); }}
+                onChange={(e) => { setRetainerTouched(true); setRetainerAmount(e.target.value); clearFieldError('retainer'); }}
                 placeholder="0"
                 step="1"
                 min="0"

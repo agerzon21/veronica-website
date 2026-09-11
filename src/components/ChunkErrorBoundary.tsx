@@ -90,7 +90,11 @@ class ChunkErrorBoundary extends React.Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Always put the real thing in the console. The UI below deliberately
+    // stays calm for a client mid-contract, but a swallowed stack means the
+    // only evidence of a genuine bug is a screenshot of reassuring copy.
+    console.error('[ChunkErrorBoundary]', error, info?.componentStack);
     // Surface it in analytics so this shows up in a report instead of only in
     // a frustrated text message. gtag is deferred site-wide, so it usually
     // does NOT exist yet at the moment a chunk fails — boot it first or this
@@ -114,10 +118,30 @@ class ChunkErrorBoundary extends React.Component<Props, State> {
           <Heading as="h1" size="lg" fontWeight="light">
             Something went wrong
           </Heading>
+          {/* Two different failures wearing one message is how a real bug
+              spent an evening being mistaken for a stale tab. A missing chunk
+              genuinely is fixed by reloading; a code bug is not, and saying
+              so sends the operator round in circles. */}
           <Text color="gray.600">
-            This page didn&apos;t finish loading. Reloading usually fixes it — the site
-            may have been updated while you had this open.
+            {isChunkLoadError(this.state.error)
+              ? "This page didn't finish loading. Reloading usually fixes it: the site may have been updated while you had this open."
+              : 'Something in the page failed to run. Reloading may get you moving again, but this one is a bug and worth reporting.'}
           </Text>
+          {!isChunkLoadError(this.state.error) && (
+            <Text
+              fontFamily="mono"
+              fontSize="xs"
+              color="gray.500"
+              bg="gray.50"
+              borderRadius="sm"
+              px={3}
+              py={2}
+              maxW="100%"
+              overflowX="auto"
+            >
+              {this.state.error.message || String(this.state.error)}
+            </Text>
+          )}
           <Button onClick={() => window.location.reload()} colorScheme="blackAlpha" bg="black">
             Reload the page
           </Button>
