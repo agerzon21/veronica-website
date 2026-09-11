@@ -217,7 +217,14 @@ const JournalPost = ({ slug }: { slug: string }) => {
   const dateLabel = formatDate(post.published_at);
   const canonicalUrl = `https://vero.photography/journal/${post.slug}`;
   const coverPhoto = post.cover_photo ?? (post.cover_image_url
-    ? { url: post.cover_image_url, fullUrl: post.cover_image_url, alt: post.cover_image_alt ?? post.title }
+    ? {
+        url: post.cover_image_url,
+        // Stored cover URLs are the w800 thumb. The cover renders at full
+        // column width, so derive the w2000 variant the same way the API
+        // builds fullUrl for gallery photos.
+        fullUrl: post.cover_image_url.replace(/([?&]sz=)w\d+/, '$1w2000'),
+        alt: post.cover_image_alt ?? post.title,
+      }
     : null);
   const ogImage = coverPhoto?.url ?? '';
 
@@ -269,15 +276,19 @@ const JournalPost = ({ slug }: { slug: string }) => {
             </Box>
           </Box>
 
-          {/* Cover image — runs the full page column */}
+          {/* Cover image — runs the full page column. fullUrl (w2000), not
+              the w800 thumb: this is the largest image on the page, and the
+              thumb rendered blurry at column width on retina. Natural aspect
+              ratio, no fixed-height crop — a 580px objectFit=cover window
+              was decapitating every landscape cover. The grid tiles keep
+              their thumbs and crops; they display small. */}
           {coverPhoto && (
             <Box mb={{ base: 8, md: 12 }}>
               <Image
-                src={coverPhoto.url}
+                src={coverPhoto.fullUrl}
                 alt={coverPhoto.alt}
                 w="100%"
-                h={{ base: '280px', md: '580px' }}
-                objectFit="cover"
+                h="auto"
                 borderRadius="sm"
               />
             </Box>
