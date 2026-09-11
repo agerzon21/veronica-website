@@ -300,6 +300,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       name: string;
       customerLang: 'ru' | 'en' | null;
       portalBlock: string | null;
+      digest: string;
     } | null =
       null;
     if (slot !== GENERAL_SLOT) {
@@ -319,6 +320,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // assistant can help write "your portal invite is in your inbox"
           // right after Vero creates the portal. See portalContextBlock.
           portalBlock: await portalContextBlock(sql, row.id),
+          digest: await threadDigest(sql, row.id),
         };
       }
     }
@@ -709,6 +711,49 @@ async function customerLanguage(
     )
     .join('\n');
   return detectLang(own);
+}
+
+/**
+ * A compact transcript of the open conversation, injected into the system
+ * prompt rather than left behind the read_thread tool.
+ *
+ * With only the tool, answering "did we ever talk to this person?" required
+ * the model to DECIDE to read the thread it was standing in — and instead it
+ * pattern-matched "this person" to a name lookup and asked Vero who she
+ * meant, in the middle of the conversation in question. Facts beat
+ * instructions: with the transcript already in context, there is nothing to
+ * ask.
+ *
+ * Bodies are truncated and the middle of long threads elided to keep the
+ * token cost sane; read_thread still exists for full bodies. Drafts are
+ * excluded — they were never said.
+ */
+async function threadDigest(
+  sql: ReturnType<typeof getDb>,
+  conversationId: string,
+): Promise<string> {
+  const rows = (await sql`
+    SELECT direction, sender, body, sent_at
+    FROM messages
+    WHERE conversation_id = ${conversationId} AND status <> 'draft'
+    ORDER BY sent_at ASC
+  `) as Array<{
+    direction: 'inbound' | 'outbound';
+    sender: 'contact' | 'ai' | 'human';
+    body: string;
+    sent_at: string;
+  }>;
+  if (rows.length === 0) return '(no messages on record)';
+  const fmt = (m: (typeof rows)[number]) => {
+    const who = m.direction === 'inbound' ? 'Customer' : m.sender === 'ai' ? 'AI' : 'Vero';
+    const body = m.body.length > 220 ? `${m.body.slice(0, 220)}…` : m.body;
+    return `[${m.sent_at.slice(0, 10)}] ${who}: ${body.replace(/\s+/g, ' ')}`;
+  };
+  const MAX = 12;
+  if (rows.length <= MAX) return rows.map(fmt).join('\n');
+  const head = rows.slice(0, 2).map(fmt);
+  const tail = rows.slice(-10).map(fmt);
+  return [...head, `… (${rows.length - 12} earlier messages elided — read_thread has them all)`, ...tail].join('\n');
 }
 
 /**
@@ -1157,6 +1202,7 @@ function buildSystemPrompt(
     name: string;
     customerLang: 'ru' | 'en' | null;
     portalBlock: string | null;
+    digest: string;
   } | null,
 ): string {
   // Group by category for readable rendering. Include ID so the
@@ -1225,10 +1271,19 @@ ${
 }
 
 ${openConversation.portalBlock ? `\n${openConversation.portalBlock}\n` : ''}
+THE THREAD SO FAR (from our records — replies Vero sent OUTSIDE this system,
+e.g. directly from Gmail, are not recorded and will not appear here; say so
+rather than concluding nothing was sent):
+${openConversation.digest}
+
 Use that id directly for read_thread, update_draft and send_reply. Do NOT call
 list_conversations to find it and do NOT ask her which conversation she means:
 you already know. When she says "the draft", "this reply" or "the message", she
-means this conversation.
+means this conversation — and when she says "this person", "they", "he", "she",
+"this customer", or asks whether "we ever talked to them", she means THE
+CUSTOMER ABOVE. Never ask who she is referring to; the thread is right there.
+Answer history questions from it directly (read_thread has full bodies if you
+need more than the digest shows).
 
 When you rewrite the draft for her, call update_draft with this id in the SAME
 turn you show her the new version. Do not ask first.
