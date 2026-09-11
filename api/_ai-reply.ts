@@ -39,6 +39,7 @@
  */
 
 import OpenAI from 'openai';
+import { stripSubjectHeader } from './_subject-strip.js';
 import { getDb } from './_db.js';
 import { sendIgTextMessage } from './_ig-send.js';
 
@@ -610,6 +611,7 @@ export async function processInboundMessage(args: {
       if (!replyText.trim()) {
         return { action: 'error-generation-failed', reason: 'empty reply' };
       }
+      replyText = stripSubjectHeader(replyText);
 
       // ── 13. Deliver, or draft ────────────────────────────────
       //
@@ -762,7 +764,7 @@ export async function portalContextBlock(
       lines.push(
         p.client_email
           ? `- The portal invite email went to ${p.client_email}${
-              p.invite_sent_at ? ` on ${p.invite_sent_at.slice(0, 10)}` : ''
+              p.invite_sent_at ? ` on ${new Date(p.invite_sent_at).toISOString().slice(0, 10)}` : ''
             }.`
           : '- A portal invite email was sent.',
       );
@@ -869,6 +871,7 @@ export async function draftOnDemand(
     return { ok: false, error: 'Generation failed' };
   }
   if (!replyText.trim()) return { ok: false, error: 'Generation returned nothing' };
+  replyText = stripSubjectHeader(replyText);
 
   await sql`
     INSERT INTO messages (

@@ -56,6 +56,7 @@ import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { deliverReply } from '../_reply-delivery.js';
 import { portalContextBlock } from '../_ai-reply.js';
+import { stripSubjectHeader } from '../_subject-strip.js';
 
 const MODEL = 'gpt-4o-mini';
 const MAX_TOOL_ROUNDS = 8;
@@ -344,6 +345,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const newlyPersistedMessages: StoredMessage[] = [
       { role: 'user', content: userMessage },
     ];
+    const knowledgeWriteFailures: string[] = [];
     const dbWrites: DbWrite[] = [];
 
     const client = getOpenAI();
@@ -378,6 +380,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Execute each tool call and record the response.
       for (const toolCall of msg.tool_calls) {
         const toolResult = await executeToolCall(sql, toolCall, dbWrites, contactNames);
+        // A knowledge write that failed must be VISIBLE. The model gets the
+        // error back and is told to relay it, but a model that just claimed
+        // "saved!" is also capable of glossing over the failure — and did:
+        // Vero was told a note was saved when nothing was written. This
+        // surfaces the failure as its own chat line no matter what the model
+        // says about it.
+        if (
+          toolCall.type === 'function' &&
+          (toolCall.function.name === 'upsert_knowledge' ||
+            toolCall.function.name === 'delete_knowledge') &&
+          toolResult &&
+          typeof toolResult === 'object' &&
+          'error' in toolResult
+        ) {
+          knowledgeWriteFailures.push(String((toolResult as { error: unknown }).error));
+        }
         const toolResponseText = JSON.stringify(toolResult);
         newlyPersistedMessages.push({
           role: 'tool',
@@ -399,6 +417,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // successful tool call is now the REQUESTED behaviour — the panel shows the
     // result and a toast announces it — so treating that as a failure would put
     // a spurious error in the chat.
+    if (knowledgeWriteFailures.length > 0) {
+      const warn =
+        (language === 'ru' ? '⚠️ Заметка НЕ сохранена: ' : '⚠️ Note NOT saved: ') +
+        knowledgeWriteFailures[0];
+      newlyPersistedMessages.push({ role: 'assistant', content: warn });
+    }
+
     if (!finalReply && dbWrites.length === 0) {
       finalReply =
         '(The assistant kept calling tools without giving a final answer. Try rephrasing.)';
@@ -747,7 +772,9 @@ async function threadDigest(
   const fmt = (m: (typeof rows)[number]) => {
     const who = m.direction === 'inbound' ? 'Customer' : m.sender === 'ai' ? 'AI' : 'Vero';
     const body = m.body.length > 220 ? `${m.body.slice(0, 220)}…` : m.body;
-    return `[${m.sent_at.slice(0, 10)}] ${who}: ${body.replace(/\s+/g, ' ')}`;
+    // Neon returns timestamptz as a Date, not a string — .slice on it took
+    // down every conversation-scoped assistant turn. Normalize first.
+    return `[${new Date(m.sent_at).toISOString().slice(0, 10)}] ${who}: ${body.replace(/\s+/g, ' ')}`;
   };
   const MAX = 12;
   if (rows.length <= MAX) return rows.map(fmt).join('\n');
@@ -1052,7 +1079,8 @@ async function executeToolCall(
 
   if (name === 'update_draft') {
     const conversationId = String(args.conversation_id ?? '').trim();
-    const text = String(args.text ?? '').trim();
+    // Subject lines are stripped, not argued with. See _subject-strip.ts.
+    const text = stripSubjectHeader(String(args.text ?? '').trim());
     const contentSummary = String(args.content_summary ?? '').trim() || 'Draft updated';
     if (!conversationId || !text) {
       return { error: 'conversation_id and text are required' };
@@ -1323,6 +1351,27 @@ Help Vero read, review, and shape the customer-reply knowledge base (the ai_cont
 - The knowledge base itself is stored in ENGLISH (because the customer-facing AI needs English text to reply to customers correctly). When you call upsert_knowledge, the "content" argument MUST be in English — translate whatever the user says into clean, concise English before storing.
 - Everything in the knowledge base is loaded WHOLE into the prompt that replies to every customer. So store GENERAL RULES, never per-customer material. Never write a label containing a person's name. Never store a verbatim reply as an "example". Never store one-off details about a specific booking. Ask yourself: would this still be correct for a customer who has not written yet? If not, do not store it. If Vero's feedback is about one particular reply, extract the general principle behind it and store that, or store nothing.
 - Every upsert/delete call includes a "content_summary" argument — a very short paraphrase (5-12 words) of what changed, in ${langName} (matching the current UI language). This is what shows up in the achievement toast, so it needs to read naturally in ${langName}.
+
+## TEACHING MOMENTS MUST BE SAVED (critical)
+When Vero gives ANY instruction about how future replies or drafts should be
+written — format, tone, structure, length, language, what to include or leave
+out — you MUST persist the general rule with upsert_knowledge in the SAME
+turn you comply. An in-chat "got it" is forgotten the moment this chat ends:
+these chats are per-conversation, so a lesson that is not written to the
+knowledge base does not exist tomorrow. This has already burned Vero — she
+gave the same formatting instruction four times across different threads and
+nothing persisted until the fourth.
+
+NEVER tell Vero you saved, noted, or wrote something down unless you called
+upsert_knowledge in THIS turn and its result said success. If the tool
+returned an error, say plainly that the note was NOT saved and quote the
+reason. A false "saved!" costs her trust in everything else you do.
+
+## FORMATTING FACTS (not preferences)
+Replies and drafts always continue an existing thread. NEVER include a
+subject line ("Subject:", "Тема:") in any draft or reply text — email
+delivery adds "Re:" to the thread automatically, and Instagram has no
+subjects. The tools strip subject lines if you forget, but do not rely on it.
 
 ## SAFETY RULES for knowledge base writes
 - Before creating a new entry, ALWAYS call search_knowledge_base first to check if one already exists for the same concept — update it instead of duplicating.

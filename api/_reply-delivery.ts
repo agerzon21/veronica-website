@@ -16,6 +16,7 @@
  */
 
 import { getDb } from './_db.js';
+import { stripSubjectHeader } from './_subject-strip.js';
 import { sendIgTextMessage } from './_ig-send.js';
 import { sendEmailReply, deriveReplySubject } from './_email-send.js';
 import { getResendMessageId } from './_auto-reply.js';
@@ -69,6 +70,10 @@ export async function deliverReply(
   text: string,
   options: { allowDuplicate?: boolean } = {},
 ): Promise<DeliveryResult> {
+  // A subject line in a reply body is never correct — email threading sets
+  // "Re:" itself and Instagram has no subjects. See _subject-strip.ts.
+  text = stripSubjectHeader(text);
+
   const convoRows = (await sql`
     SELECT external_user_id, platform
     FROM conversations
