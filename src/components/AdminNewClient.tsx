@@ -11,6 +11,7 @@ import {
 } from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
 import { type ClientPrefill, parseCoverageWindow, isCoupleSession } from './clientPrefill';
+import { fmtAdminDate } from '../utils/adminDate';
 import ConversationPeek from './ConversationPeek';
 import ConfirmDialog from './ui/ConfirmDialog';
 
@@ -127,7 +128,7 @@ const todayYmd = (): string => {
 // ─── Component ─────────────────────────────────────────────────────────
 
 const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly }: Props) => {
-  const { t } = useAdminLang();
+  const { t, lang } = useAdminLang();
   const templateKeys = Object.keys(CONTRACT_TEMPLATES);
   // Seeded once, at mount. Every field below stays fully editable; the point
   // is to save retyping what the customer already said, not to decide anything.
@@ -830,6 +831,16 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
           <Field label={t.newClient.eventDateLabel} required helpText={t.newClient.eventDateHelp} hasError={fieldErrors.has('eventDate')}>
             <FormInput type="date" value={eventDateIso} onChange={(e) => { setEventDateIso(e.target.value); clearFieldError('eventDate'); }} />
+            {/* Native date inputs render in the DEVICE language and cannot be
+                told otherwise, so on a Russian-system phone this widget shows
+                Russian inside an English panel. The echo is the panel's own
+                rendering of the same date, so the authoritative format is
+                always on screen. */}
+            {eventDateIso && (
+              <Text fontSize="2xs" color="gray.500" mt={1}>
+                {fmtAdminDate(eventDateIso, lang)}
+              </Text>
+            )}
           </Field>
 
           <Field
@@ -1234,6 +1245,7 @@ function FieldRow({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { lang } = useAdminLang();
   return (
     <Field label={field.label} helpText={field.helpText} required={field.required}>
       {field.type === 'textarea' ? (
@@ -1258,6 +1270,12 @@ function FieldRow({
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
         />
+      )}
+      {/* Same device-language problem as the event date input above. */}
+      {field.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(value) && (
+        <Text fontSize="2xs" color="gray.500" mt={1}>
+          {fmtAdminDate(value, lang)}
+        </Text>
       )}
     </Field>
   );

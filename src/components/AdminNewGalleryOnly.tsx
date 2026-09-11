@@ -1,4 +1,5 @@
 import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea } from '@chakra-ui/react';
+import { fmtAdminDate } from '../utils/adminDate';
 import type { ClientPrefill } from './clientPrefill';
 import { useMemo, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
@@ -100,7 +101,7 @@ interface SuccessState {
 }
 
 const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Props) => {
-  const { t } = useAdminLang();
+  const { t, lang } = useAdminLang();
   const [sessionType, setSessionType] = useState(prefill?.session_type ?? 'portrait');
   const [clientName, setClientName] = useState(prefill?.client_full_name ?? '');
   const [eventDateIso, setEventDateIso] = useState(prefill?.event_date ?? '');
@@ -285,6 +286,13 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
             helpText={t.newGallery.eventDateHelp}
           >
             <FormInput type="date" value={eventDateIso} onChange={(e) => setEventDateIso(e.target.value)} />
+            {/* Native date inputs follow the device language; the echo is the
+                panel's own rendering. See AdminNewClient. */}
+            {eventDateIso && (
+              <Text fontSize="2xs" color="gray.500" mt={1}>
+                {fmtAdminDate(eventDateIso, lang)}
+              </Text>
+            )}
           </Field>
 
           <Field

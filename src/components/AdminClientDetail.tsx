@@ -1,4 +1,5 @@
 import { Box, VStack, HStack, Text, Input, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
+import { fmtAdminDateTime } from '../utils/adminDate';
 import { useEffect, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
@@ -560,7 +561,7 @@ function Stat({ label, value, emphasize }: { label: string; value: string; empha
  * unguessable, which is why this can be a plain fetch.
  */
 function InviteDelivery({ emailId, sentAt }: { emailId: string; sentAt: string | null }) {
-  const { t } = useAdminLang();
+  const { t, lang } = useAdminLang();
   const [state, setState] = useState<string | null>(null);
 
   useEffect(() => {
@@ -585,7 +586,7 @@ function InviteDelivery({ emailId, sentAt }: { emailId: string; sentAt: string |
   return (
     <Text fontSize="2xs" color={bad ? 'red.600' : good ? 'green.600' : 'gray.500'} mt={1}>
       {t.clientDetail.inviteEmailState(state)}
-      {sentAt ? ` · ${new Date(sentAt).toLocaleString()}` : ''}
+      {sentAt ? ` · ${fmtAdminDateTime(sentAt, lang)}` : ''}
     </Text>
   );
 }

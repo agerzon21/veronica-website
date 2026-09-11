@@ -14,6 +14,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useAdminLang } from '../i18n/admin';
 import type { Message } from './AdminMessages';
+import { fmtAdminDateTime } from '../utils/adminDate';
 
 /**
  * Read-only peek at the conversation a portal is being created from.
@@ -47,7 +48,7 @@ export default function ConversationPeek({
   conversationId: string;
   contactName: string;
 }) {
-  const { t } = useAdminLang();
+  const { t, lang } = useAdminLang();
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,12 +135,7 @@ export default function ConversationPeek({
                       {m.body}
                     </Text>
                     <Text fontSize="2xs" color="gray.400" mt={1}>
-                      {new Date(m.sent_at).toLocaleString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
+                      {fmtAdminDateTime(m.sent_at, lang)}
                     </Text>
                   </Box>
                 </Flex>
