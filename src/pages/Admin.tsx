@@ -439,6 +439,7 @@ const Admin = () => {
                   // Hand a thread off to the full new-client form with
                   // everything the conversation already established.
                   onCreateFullClient={(prefill) => setView({ kind: 'new-full', prefill })}
+                  onOpenClient={(id) => setView({ kind: 'detail', id })}
                 />
               )}
               {dashTab === 'leads' && (

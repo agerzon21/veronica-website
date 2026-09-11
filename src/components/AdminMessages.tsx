@@ -201,6 +201,8 @@ interface Props {
   onOpenAssistant?: () => void;
   /** Open the full new-client form seeded from this conversation. */
   onCreateFullClient?: (prefill: ClientPrefill) => void;
+  /** Jump to the client portal this conversation is linked to. */
+  onOpenClient?: (portalId: string) => void;
 }
 
 export interface ConversationSummary {
@@ -365,7 +367,7 @@ export const ASSISTANT_HANDOFF_KEY = 'assistant-handoff-prompt';
  */
 export const REFINE_SESSION_KEY = 'vero_refine_session';
 
-const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient }: Props) => {
+const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient, onOpenClient }: Props) => {
   const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
@@ -776,6 +778,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                 onRefreshList={loadList}
                 onOpenAssistant={onOpenAssistant}
                 onCreateFullClient={onCreateFullClient}
+                onOpenClient={onOpenClient}
                 onRefine={openRefinePanel}
                 onReplySent={closeRefinePanel}
                 refineDocked={refineOpen && refineCollapsed}
@@ -1483,6 +1486,7 @@ function ConversationView({
   onBack,
   onOpenAssistant,
   onCreateFullClient,
+  onOpenClient,
   onRefine,
   onReplySent,
   refineDocked = false,
@@ -1494,6 +1498,7 @@ function ConversationView({
   refreshToken = 0,
 }: {
   onCreateFullClient?: (prefill: ClientPrefill) => void;
+  onOpenClient?: (portalId: string) => void;
   summary: ConversationSummary;
   adminPassword: string;
   onRefreshList: () => void;
@@ -2411,21 +2416,28 @@ function ConversationView({
               vertical space in the drill-down for a single button. */}
           <HStack spacing={2} flexShrink={0}>
             {detail.linked_client_portal_id ? (
-              <Box
-                title={t.messages.linkedToPortal}
+              <IconButton
+                // Was a plain Box: it looked like the action it implies and
+                // did nothing when tapped. The whole point of knowing a
+                // thread has a client behind it is being able to get there.
                 aria-label={t.messages.linkedToPortal}
-                w="32px"
-                h="32px"
+                title={t.messages.linkedToPortal}
+                icon={<Icon as={FaExternalLinkAlt} boxSize={3} />}
+                onClick={() =>
+                  detail.linked_client_portal_id &&
+                  onOpenClient?.(detail.linked_client_portal_id)
+                }
+                isDisabled={!onOpenClient}
+                variant="ghost"
+                size="md"
+                minW="44px"
+                minH="44px"
                 borderRadius="full"
-                bg="green.100"
+                bg="green.50"
                 color="green.700"
-                display="inline-flex"
-                alignItems="center"
-                justifyContent="center"
-                flexShrink={0}
-              >
-                <Icon as={FaExternalLinkAlt} boxSize={3} />
-              </Box>
+                _hover={{ bg: 'green.100' }}
+                _active={{ bg: 'green.100' }}
+              />
             ) : (
               // Small circular + user icon — replaces the old chunky
               // "Create Client" pill that took up its own line in the

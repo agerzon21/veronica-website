@@ -90,6 +90,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         html: buildInviteHtml(portal.client_display_name, inviteUrl),
       });
       sentId = sent?.id ?? null;
+      if (sentId) {
+        try {
+          await sql`
+            UPDATE client_portals
+            SET invite_email_id = ${sentId}, invite_sent_at = NOW()
+            WHERE id = ${id}
+          `;
+        } catch (e) {
+          console.error('[resend-invite] could not record invite email id', e);
+        }
+      }
     } catch (err) {
       console.error('[admin/resend-invite] email send failed:', err);
       return res.status(500).json({ success: false, error: 'Token was regenerated, but the email failed to send. Try again.' });

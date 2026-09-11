@@ -38,6 +38,8 @@ interface PortalDetail {
   contract_retainer_amount: number | null;
   paid_to_date: number;
   setup_token: string | null;
+  invite_email_id: string | null;
+  invite_sent_at: string | null;
   client_has_password: boolean;
 }
 
@@ -549,6 +551,45 @@ function Stat({ label, value, emphasize }: { label: string; value: string; empha
   );
 }
 
+/**
+ * Live delivery state of the invite email, looked up on demand.
+ *
+ * Not polled: by the time anyone is on this screen the send is minutes or
+ * days old and the answer is settled, so one lookup when the section renders
+ * is enough. `/api/email-status` needs no auth because a Resend id is already
+ * unguessable, which is why this can be a plain fetch.
+ */
+function InviteDelivery({ emailId, sentAt }: { emailId: string; sentAt: string | null }) {
+  const { t } = useAdminLang();
+  const [state, setState] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/email-status?id=${encodeURIComponent(emailId)}`);
+        const data = await res.json();
+        if (!cancelled) setState(data?.status ?? 'unknown');
+      } catch {
+        if (!cancelled) setState('unknown');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [emailId]);
+
+  if (!state) return null;
+  const bad = ['bounced', 'complained', 'failed', 'canceled', 'suppressed'].includes(state);
+  const good = ['delivered', 'delivery_delayed', 'opened', 'clicked'].includes(state);
+  return (
+    <Text fontSize="2xs" color={bad ? 'red.600' : good ? 'green.600' : 'gray.500'} mt={1}>
+      {t.clientDetail.inviteEmailState(state)}
+      {sentAt ? ` · ${new Date(sentAt).toLocaleString()}` : ''}
+    </Text>
+  );
+}
+
 function ContractBadge({ status, signedAt }: { status: string; signedAt: string | null }) {
   const { t } = useAdminLang();
   if (status === 'signed' && signedAt) {
@@ -985,6 +1026,13 @@ function AccountSection({
               <Badge colorScheme="orange" variant="subtle" fontSize="xs">{t.clientDetail.accountInvitePending}</Badge>
             ) : (
               <Badge colorScheme="gray" variant="subtle" fontSize="xs">{t.clientDetail.noAccount}</Badge>
+            )}
+            {/* "Invite pending" alone cannot tell a client who is slow from a
+                client who never got the email. This asks Resend what actually
+                happened to it, which is only possible now that the id is
+                stored rather than living for a few seconds in a browser tab. */}
+            {!portal.client_has_password && portal.invite_email_id && (
+              <InviteDelivery emailId={portal.invite_email_id} sentAt={portal.invite_sent_at} />
             )}
           </Box>
           {!portal.client_has_password && (

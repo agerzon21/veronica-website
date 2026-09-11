@@ -302,6 +302,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           html: buildInviteHtml(clientDisplayName, inviteUrl),
         });
         inviteEmailId = sent?.id ?? null;
+        // Persist it so the delivery state stays answerable after this
+        // request. Best-effort: a portal that exists with an unrecorded
+        // invite id is far better than one that does not exist because
+        // bookkeeping failed.
+        if (inviteEmailId) {
+          try {
+            await sql`
+              UPDATE client_portals
+              SET invite_email_id = ${inviteEmailId}, invite_sent_at = NOW()
+              WHERE id = ${portalId}
+            `;
+          } catch (e) {
+            console.error('[portals-create] could not record invite email id', e);
+          }
+        }
       } catch (err) {
         inviteEmailError = err instanceof Error ? err.message : String(err);
         console.error('[admin/portals-create] invite email failed (portal was still created):', err);

@@ -1669,6 +1669,10 @@ const dict = {
     accountInvitePending: { en: 'Invite pending', ru: 'Приглашение отправлено' },
     noAccount: { en: 'No account', ru: 'Нет аккаунта' },
     resendInvite: { en: 'Resend Invite', ru: 'Отправить приглашение снова' },
+    inviteEmailState: {
+      en: (state: string) => `Invite email: ${state}`,
+      ru: (state: string) => `Письмо-приглашение: ${state}`,
+    },
     inviteResent: {
       en: (email: string) => `Invite re-sent to ${email}.`,
       ru: (email: string) => `Приглашение отправлено повторно на ${email}.`,

@@ -39,6 +39,8 @@ type PortalRow = {
   paid_to_date: string;
   payment_plan_enabled: boolean;
   setup_token: string | null;
+  invite_email_id: string | null;
+  invite_sent_at: string | null;
   setup_token_expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -79,6 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              contract_total_amount, contract_retainer_amount, paid_to_date,
              payment_plan_enabled,
              setup_token, setup_token_expires_at,
+             invite_email_id, invite_sent_at,
              created_at, updated_at
       from client_portals
       where id = ${id}
