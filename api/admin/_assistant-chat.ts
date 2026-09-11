@@ -55,6 +55,7 @@ import OpenAI from 'openai';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { deliverReply } from '../_reply-delivery.js';
+import { portalContextBlock } from '../_ai-reply.js';
 
 const MODEL = 'gpt-4o-mini';
 const MAX_TOOL_ROUNDS = 8;
@@ -294,7 +295,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Resolve the open conversation so the prompt can name it. Only when the
     // request is scoped to one; the general thread has no open conversation.
-    let openConversation: { id: string; name: string; customerLang: 'ru' | 'en' | null } | null =
+    let openConversation: {
+      id: string;
+      name: string;
+      customerLang: 'ru' | 'en' | null;
+      portalBlock: string | null;
+    } | null =
       null;
     if (slot !== GENERAL_SLOT) {
       const convId = slot.slice('conv:'.length);
@@ -309,6 +315,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // language BEFORE writing rather than by being bounced by the
           // tool guard after.
           customerLang: await customerLanguage(sql, row.id),
+          // Portal state the thread does not contain — this is how the
+          // assistant can help write "your portal invite is in your inbox"
+          // right after Vero creates the portal. See portalContextBlock.
+          portalBlock: await portalContextBlock(sql, row.id),
         };
       }
     }
@@ -1142,7 +1152,12 @@ function buildSystemPrompt(
    * have to go looking, and in practice it just did not bother, so the draft it
    * had rewritten never got written back.
    */
-  openConversation?: { id: string; name: string; customerLang: 'ru' | 'en' | null } | null,
+  openConversation?: {
+    id: string;
+    name: string;
+    customerLang: 'ru' | 'en' | null;
+    portalBlock: string | null;
+  } | null,
 ): string {
   // Group by category for readable rendering. Include ID so the
   // model can pass it to upsert_knowledge for updates without
@@ -1209,6 +1224,7 @@ ${
     : ''
 }
 
+${openConversation.portalBlock ? `\n${openConversation.portalBlock}\n` : ''}
 Use that id directly for read_thread, update_draft and send_reply. Do NOT call
 list_conversations to find it and do NOT ask her which conversation she means:
 you already know. When she says "the draft", "this reply" or "the message", she

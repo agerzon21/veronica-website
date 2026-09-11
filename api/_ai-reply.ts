@@ -716,6 +716,75 @@ export async function processInboundMessage(args: {
  * on IG because nobody is at the keyboard when a webhook fires; here somebody
  * demonstrably is, and she reviews it in the composer like any other draft.
  */
+/**
+ * What the system knows about this customer's portal that the thread does
+ * not say.
+ *
+ * The draft generator reads messages, and "a portal was just created and the
+ * invite email went out" is not a message — it lives in client_portals. So a
+ * post-creation follow-up ("just sent your portal link, check your inbox")
+ * was impossible to draft: the model literally could not know it happened.
+ * This block injects that state, and spells out the one detail everyone gets
+ * wrong: the contract is signed INSIDE the portal after account setup, so a
+ * draft must never call it an attachment.
+ *
+ * Best-effort by design: returns null on any failure (including a database
+ * that predates migration 030), because a draft without portal context is
+ * useful and a draft that failed to generate is not.
+ */
+export async function portalContextBlock(
+  sql: ReturnType<typeof getDb>,
+  conversationId: string,
+): Promise<string | null> {
+  try {
+    const rows = (await sql`
+      SELECT p.mode, p.client_email, p.contract_status,
+             (p.client_password_hash IS NOT NULL) AS account_active,
+             p.invite_sent_at
+      FROM conversations c
+      JOIN client_portals p ON p.id = c.linked_client_portal_id
+      WHERE c.id = ${conversationId}
+      LIMIT 1
+    `) as Array<{
+      mode: string;
+      client_email: string | null;
+      contract_status: string;
+      account_active: boolean;
+      invite_sent_at: string | null;
+    }>;
+    if (rows.length === 0) return null;
+    const p = rows[0];
+    const lines = [
+      'PORTAL STATUS (from the system, not the thread — the customer may not have mentioned any of this):',
+      `- This customer has a client portal (${p.mode} mode).`,
+    ];
+    if (p.mode === 'full') {
+      lines.push(
+        p.client_email
+          ? `- The portal invite email went to ${p.client_email}${
+              p.invite_sent_at ? ` on ${p.invite_sent_at.slice(0, 10)}` : ''
+            }.`
+          : '- A portal invite email was sent.',
+      );
+      lines.push(
+        p.account_active
+          ? '- They have finished setting up their portal account.'
+          : '- They have NOT yet finished setting up their account — the invite link is sitting in their email, and spam folders eat these.',
+      );
+      lines.push(
+        `- Contract status: ${p.contract_status}. The contract is reviewed and signed INSIDE the portal, after account setup. It is never an email attachment — do not imply one.`,
+      );
+    }
+    lines.push(
+      'If a follow-up about the portal fits the conversation, the useful message tells them the invite is in their inbox, what it unlocks, and to check spam if it is missing.',
+    );
+    return lines.join('\n');
+  } catch (err) {
+    console.error('[ai-reply] portal context lookup failed (non-fatal):', err);
+    return null;
+  }
+}
+
 export async function draftOnDemand(
   conversationId: string,
 ): Promise<{ ok: true; body: string } | { ok: false; error: string }> {
@@ -755,6 +824,8 @@ export async function draftOnDemand(
     ORDER BY category, sort_order
   `) as Array<ContextRow>;
 
+  const portalContext = await portalContextBlock(sql, conversationId);
+
   let replyText: string;
   try {
     replyText = await generateReply({
@@ -764,6 +835,7 @@ export async function draftOnDemand(
       mentionsDate: latestInbound ? matchesDateIntent(latestInbound.body) : false,
       // A draft is read before it leaves, whatever the channel.
       reviewedBeforeSending: true,
+      extraSystemContext: portalContext,
     });
   } catch (err) {
     console.error('[ai-reply] on-demand generation failed:', err);
@@ -1022,6 +1094,8 @@ Answer with ONE word and nothing else. When torn between business and unclear, a
 interface GenerateArgs {
   contextRows: ContextRow[];
   history: Message[];
+  /** Facts from the SYSTEM (portal state) the thread does not contain. */
+  extraSystemContext?: string | null;
   aiMessageCount: number;
   /**
    * Whether the message being replied to names a date. Dates used to be
@@ -1045,12 +1119,13 @@ interface GenerateArgs {
 async function generateReply(args: GenerateArgs): Promise<string> {
   const client = getOpenAI();
 
-  const systemPrompt = buildSystemPrompt(
-    args.contextRows,
-    args.aiMessageCount,
-    args.mentionsDate,
-    args.reviewedBeforeSending,
-  );
+  const systemPrompt =
+    buildSystemPrompt(
+      args.contextRows,
+      args.aiMessageCount,
+      args.mentionsDate,
+      args.reviewedBeforeSending,
+    ) + (args.extraSystemContext ? `\n\n${args.extraSystemContext}` : '');
 
   // Feed conversation history as alternating user/assistant messages.
   // 'contact' = user, 'ai' = assistant, 'human' = assistant too
