@@ -69,6 +69,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    /**
+     * The invite columns arrive with migration 030, which is applied by hand.
+     * Between this code deploying and that migration running, they do not
+     * exist — and the first version of this change put them straight into the
+     * SELECT, which made every portal detail request 500 and took down the
+     * whole client screen. A missing nicety must degrade to null, never take
+     * the page with it, so they are fetched separately and allowed to fail.
+     */
     const rows = (await sql`
       select id, mode, session_type,
              partner_1_first_name, partner_2_first_name,
@@ -81,16 +89,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              contract_total_amount, contract_retainer_amount, paid_to_date,
              payment_plan_enabled,
              setup_token, setup_token_expires_at,
-             invite_email_id, invite_sent_at,
              created_at, updated_at
       from client_portals
       where id = ${id}
       limit 1
     `) as PortalRow[];
+    let invite: { invite_email_id: string | null; invite_sent_at: string | null } = {
+      invite_email_id: null,
+      invite_sent_at: null,
+    };
+    try {
+      const inviteRows = (await sql`
+        select invite_email_id, invite_sent_at from client_portals where id = ${id} limit 1
+      `) as Array<typeof invite>;
+      if (inviteRows.length > 0) invite = inviteRows[0];
+    } catch {
+      /* pre-migration-030 database — the Account section simply shows no
+         delivery line, which is exactly what it showed before this existed */
+    }
     if (rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Portal not found' });
     }
-    const r = rows[0];
+    const r = { ...rows[0], ...invite };
 
     const payments = (await sql`
       select id, amount, method, note, paid_at, created_at
