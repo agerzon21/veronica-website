@@ -46,6 +46,11 @@ const IndividualPhoto: React.FC = () => {
   const { category, photoId } = useParams<{ category: string; photoId: string }>();
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [loading, setLoading] = useState(true);
+  // True only when the API said 404 — the slug genuinely doesn't exist.
+  // A transient failure (5xx, network) also leaves photo null, but must NOT
+  // send noindex: Googlebot rendering a live page during an API hiccup would
+  // otherwise see a noindex on a perfectly good URL.
+  const [gone, setGone] = useState(false);
   const [relatedPhotos, setRelatedPhotos] = useState<Photo[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [scale, setScale] = useState(1);
@@ -169,6 +174,7 @@ const IndividualPhoto: React.FC = () => {
     let cancelled = false;
     setLoading(true);
     setPhoto(null);
+    setGone(false);
     setRelatedPhotos([]);
     (async () => {
       try {
@@ -184,6 +190,7 @@ const IndividualPhoto: React.FC = () => {
           setPhoto(postData.photo);
         } else {
           setPhoto(null);
+          if (postRes.status === 404) setGone(true);
         }
         if (relatedRes.ok) {
           const relatedData = await relatedRes.json();
@@ -245,6 +252,17 @@ const IndividualPhoto: React.FC = () => {
   if (!photo) {
     return (
       <Box minH="100vh" bg="white">
+        {/* A dead slug is served the SPA shell with a 200 (the static 404 can't
+            exist behind the catch-all rewrite), so noindex here is the only
+            signal telling Google this URL is gone — NotFound and JournalPost
+            already send it; this branch was the one hole. Gated on the API's
+            404 so a transient 5xx/network failure never noindexes a live page. */}
+        {gone && (
+          <Helmet>
+            <title>Photo Not Found | Vero Photography</title>
+            <meta name="robots" content="noindex, nofollow" />
+          </Helmet>
+        )}
         <Flex minH="100vh" align="center" justify="center" direction="column" gap={6}>
           <Text as="h1" textStyle="sectionTitle" m={0}>Photo not found</Text>
           <CTAButton to={`/gallery/${category}`} size="sm">

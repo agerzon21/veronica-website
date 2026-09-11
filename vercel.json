@@ -158,6 +158,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "trailingSlash": false,
   "functions": {
     "api/admin.ts": {
       "maxDuration": 60
