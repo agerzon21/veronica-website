@@ -41,6 +41,7 @@ interface ConversationRow {
   is_promotional: boolean;
   is_personal: boolean;
   has_draft: boolean;
+  needs_follow_up: boolean | null;
 }
 
 const PREVIEW_MAX_CHARS = 120;
@@ -89,11 +90,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         EXISTS (
           SELECT 1 FROM messages d
           WHERE d.conversation_id = c.id AND d.status = 'draft'
-        ) AS has_draft
+        ) AS has_draft,
+        -- A real inquiry that went quiet on OUR message: the customer spoke
+        -- at some point, we replied, and nothing has come back for a week.
+        -- These are the "I'll talk to my fiance" threads that quietly die
+        -- unless someone follows up, so the inbox marks them. Clients,
+        -- promotional mail, personal threads and spam are all excluded —
+        -- there is nobody to win back in any of those.
+        (
+          last_msg.direction = 'outbound'
+          AND last_msg.sent_at < NOW() - INTERVAL '7 days'
+          AND c.linked_client_portal_id IS NULL
+          AND NOT c.is_promotional
+          AND NOT c.is_personal
+          AND COALESCE(c.summary_json->>'classification', '') NOT IN ('spam-or-unrelated', 'personal')
+          AND EXISTS (
+            SELECT 1 FROM messages i
+            WHERE i.conversation_id = c.id AND i.direction = 'inbound'
+          )
+        ) AS needs_follow_up
       FROM conversations c
       LEFT JOIN client_portals cp ON cp.id = c.linked_client_portal_id
       LEFT JOIN LATERAL (
-        SELECT body, direction, sender
+        SELECT body, direction, sender, sent_at
         FROM messages m
         WHERE m.conversation_id = c.id
           -- Drafts are proposed replies nobody has sent. Including them made
@@ -130,6 +149,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         is_promotional: r.is_promotional,
       is_personal: r.is_personal,
         has_draft: r.has_draft,
+        // NULL when the thread has no messages at all — normalize to false.
+        needs_follow_up: Boolean(r.needs_follow_up),
         // Truncate the preview so the inbox rail stays tidy. Full
         // body is fetched via messages-detail when Vero opens the
         // conversation.

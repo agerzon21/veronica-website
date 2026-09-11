@@ -225,6 +225,8 @@ export interface ConversationSummary {
   is_promotional?: boolean | null;
   is_personal?: boolean;
   has_draft?: boolean;
+  /** Real inquiry, our message last, quiet for 7+ days. See _messages-list. */
+  needs_follow_up?: boolean;
   last_message_preview: string | null;
 }
 
@@ -1357,6 +1359,24 @@ function ConversationListRow({
                 borderRadius="sm"
               >
                 {t.messages.aiDraftWaiting}
+              </Badge>
+            )}
+            {/* Quiet-thread marker. Hidden while a draft is waiting — the
+                draft IS the next action then, and two badges shouting about
+                the same thread is noise. */}
+            {conv.needs_follow_up && !conv.has_draft && (
+              <Badge
+                bg="blue.50"
+                color="blue.700"
+                fontSize={{ base: 'xs', md: '2xs' }}
+                fontWeight="500"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+                px={1.5}
+                py={0}
+                borderRadius="sm"
+              >
+                {t.messages.followUpBadge}
               </Badge>
             )}
             {!conv.ai_enabled && (

@@ -826,6 +826,33 @@ export async function draftOnDemand(
 
   const portalContext = await portalContextBlock(sql, conversationId);
 
+  /**
+   * A quiet thread asks for a different kind of message. When the last word
+   * was OURS and a week has passed, the draft should not answer a question
+   * nobody asked — it should be the short, warm nudge that revives an
+   * inquiry that stalled at "I'll talk to my fiance". The rules mirror what
+   * makes these work from a human: brief, specific enough to prove Vero
+   * remembers THEM, and completely free of pressure.
+   */
+  const last = history[history.length - 1];
+  const quietDays = Math.floor(
+    (Date.now() - new Date(last.sent_at).getTime()) / 86_400_000,
+  );
+  const followUpContext =
+    last.direction === 'outbound' && quietDays >= 7
+      ? [
+          `FOLLOW-UP SITUATION: the last message in this thread is ours, sent ${quietDays} days ago, and the customer has not replied since.`,
+          'Write a short follow-up (2-4 sentences), not an answer to a question — nobody asked one.',
+          'Reference one or two concrete specifics from the thread (their date, venue, the thing they were deciding on) so they can tell Vero remembers them personally.',
+          'Zero pressure: no deadlines, no discounts invented for urgency, no guilt. One warm open door — happy to answer anything, or the date is still open ONLY if the thread supports that.',
+          'Do not repeat the full pitch or the full pricing. Do not apologize for following up.',
+        ].join('\n')
+      : null;
+
+  const extraSystemContext = [portalContext, followUpContext]
+    .filter(Boolean)
+    .join('\n\n') || null;
+
   let replyText: string;
   try {
     replyText = await generateReply({
@@ -835,7 +862,7 @@ export async function draftOnDemand(
       mentionsDate: latestInbound ? matchesDateIntent(latestInbound.body) : false,
       // A draft is read before it leaves, whatever the channel.
       reviewedBeforeSending: true,
-      extraSystemContext: portalContext,
+      extraSystemContext,
     });
   } catch (err) {
     console.error('[ai-reply] on-demand generation failed:', err);

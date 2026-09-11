@@ -400,6 +400,7 @@ const dict = {
     draftGenerating: { en: 'Writing…', ru: 'Пишу…' },
     draftGenerateFailed: { en: 'Could not write a draft', ru: 'Не удалось написать черновик' },
     aiDraftWaiting: { en: 'Draft ready', ru: 'Есть черновик' },
+    followUpBadge: { en: 'Follow up', ru: 'Напомнить' },
     railCollapse: { en: 'Collapse list', ru: 'Свернуть список' },
     railExpand: { en: 'Expand list', ru: 'Развернуть список' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },
