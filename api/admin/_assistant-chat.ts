@@ -294,13 +294,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Resolve the open conversation so the prompt can name it. Only when the
     // request is scoped to one; the general thread has no open conversation.
-    let openConversation: { id: string; name: string } | null = null;
+    let openConversation: { id: string; name: string; customerLang: 'ru' | 'en' | null } | null =
+      null;
     if (slot !== GENERAL_SLOT) {
       const convId = slot.slice('conv:'.length);
       const [row] = (await sql`
         SELECT id, contact_name FROM conversations WHERE id = ${convId} LIMIT 1
       `) as Array<{ id: string; contact_name: string | null }>;
-      if (row) openConversation = { id: row.id, name: row.contact_name || 'this customer' };
+      if (row) {
+        openConversation = {
+          id: row.id,
+          name: row.contact_name || 'this customer',
+          // Stated in the prompt as a fact, so the model knows the target
+          // language BEFORE writing rather than by being bounced by the
+          // tool guard after.
+          customerLang: await customerLanguage(sql, row.id),
+        };
+      }
     }
     const systemPrompt = buildSystemPrompt(contextRows, language, openConversation);
 
@@ -592,6 +602,11 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             type: 'string',
             description: "Short summary of what changed, in the admin chat's language.",
           },
+          language_mismatch_confirmed: {
+            type: 'boolean',
+            description:
+              'ONLY set true when the text is deliberately not in the customer\'s language AND Vero explicitly approved that. Never set it to get past the language check.',
+          },
         },
         required: ['conversation_id', 'text', 'content_summary'],
       },
@@ -621,12 +636,93 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             type: 'string',
             description: "Short summary for the toast, in the admin chat's language.",
           },
+          language_mismatch_confirmed: {
+            type: 'boolean',
+            description:
+              'ONLY set true when the text is deliberately not in the customer\'s language AND Vero explicitly approved that. Never set it to get past the language check.',
+          },
         },
         required: ['conversation_id', 'text', 'confirmed', 'content_summary'],
       },
     },
   },
 ];
+
+/**
+ * Which language a piece of text is written in, by script. Mirrors
+ * src/components/translationDirection.ts, which the Translate button already
+ * trusts for the same job. Null when there are too few letters to say.
+ */
+function detectLang(text: string): 'ru' | 'en' | null {
+  const cyr = (text.match(/[\u0400-\u04FF]/g) || []).length;
+  const lat = (text.match(/[A-Za-z]/g) || []).length;
+  if (cyr + lat < 20) return null;
+  return cyr > lat ? 'ru' : 'en';
+}
+
+/**
+ * The language the CUSTOMER writes in, read from their own inbound messages.
+ *
+ * Exists because prompt instructions were not enough. Both reply tools said
+ * "in the language the CUSTOMER writes in" in their descriptions, and the
+ * model still rewrote an English draft into Russian — Vero gave her change
+ * list in Russian, the chat was running in Russian, and the session's
+ * gravity beat one line of tool description. An English-speaking test client
+ * then received a reply in Russian. Language is now a fact computed here and
+ * ENFORCED at the tool layer, not a request made of the model.
+ *
+ * Quoted reply chains are stripped ("> ..." lines and everything after the
+ * "On ... wrote:" marker), because an email from a Russian speaker usually
+ * carries Vero's English underneath it, and counting the quote would call
+ * the customer bilingual in exactly the wrong direction.
+ */
+async function customerLanguage(
+  sql: ReturnType<typeof getDb>,
+  conversationId: string,
+): Promise<'ru' | 'en' | null> {
+  const rows = (await sql`
+    SELECT body FROM messages
+    WHERE conversation_id = ${conversationId}
+      AND direction = 'inbound'
+    ORDER BY sent_at DESC
+    LIMIT 5
+  `) as Array<{ body: string }>;
+  const own = rows
+    .map((r) =>
+      r.body
+        .split(/\r?\n/)
+        .filter((line) => !line.trim().startsWith('>'))
+        .join('\n')
+        // Everything after a quote marker is the older message, not them.
+        .split(/\bOn .{4,80} wrote:|W dniu .{4,80} napisa|\u0431\u0440.? \u043F\u043E\u0434\u043F\u0438\u0441/)[0]
+        .slice(0, 800),
+    )
+    .join('\n');
+  return detectLang(own);
+}
+
+/**
+ * Shared guard for update_draft and send_reply: text that is not in the
+ * customer's language does not pass without Vero explicitly saying so.
+ */
+async function languageMismatch(
+  sql: ReturnType<typeof getDb>,
+  conversationId: string,
+  text: string,
+  confirmed: boolean,
+): Promise<string | null> {
+  if (confirmed) return null;
+  const customer = await customerLanguage(sql, conversationId);
+  const draft = detectLang(text);
+  if (!customer || !draft || customer === draft) return null;
+  const names = { ru: 'Russian', en: 'English' } as const;
+  return (
+    `BLOCKED: this text is in ${names[draft]}, but this customer writes in ${names[customer]}. ` +
+    `Rewrite the text in ${names[customer]} and call again. Only if Vero EXPLICITLY says she wants ` +
+    `it sent in ${names[draft]} anyway, call again with language_mismatch_confirmed=true. ` +
+    `Tell Vero about this in her chat language either way.`
+  );
+}
 
 async function executeToolCall(
   sql: ReturnType<typeof getDb>,
@@ -907,6 +1003,14 @@ async function executeToolCall(
       return { error: 'conversation_id and text are required' };
     }
 
+    const mismatch = await languageMismatch(
+      sql,
+      conversationId,
+      text,
+      args.language_mismatch_confirmed === true,
+    );
+    if (mismatch) return { error: mismatch };
+
     // Only the pending draft is replaceable. A sent message is a record of what
     // the customer actually received and must never be rewritten under it.
     const updated = (await sql`
@@ -948,6 +1052,14 @@ async function executeToolCall(
     if (!conversationId || !text) {
       return { error: 'conversation_id and text are required' };
     }
+    const sendMismatch = await languageMismatch(
+      sql,
+      conversationId,
+      text,
+      args.language_mismatch_confirmed === true,
+    );
+    if (sendMismatch) return { error: sendMismatch };
+
     // Structural speed bump on top of the prompt instruction. The model
     // has to affirmatively assert approval, which makes an accidental
     // send take a deliberate step rather than a plausible next token.
@@ -1030,7 +1142,7 @@ function buildSystemPrompt(
    * have to go looking, and in practice it just did not bother, so the draft it
    * had rewritten never got written back.
    */
-  openConversation?: { id: string; name: string } | null,
+  openConversation?: { id: string; name: string; customerLang: 'ru' | 'en' | null } | null,
 ): string {
   // Group by category for readable rendering. Include ID so the
   // model can pass it to upsert_knowledge for updates without
@@ -1091,6 +1203,11 @@ function buildSystemPrompt(
 Vero has this thread open and is working on it right now:
 - Customer: ${openConversation.name}
 - conversation_id: ${openConversation.id}
+${
+  openConversation.customerLang
+    ? `- THIS CUSTOMER WRITES IN ${openConversation.customerLang === 'ru' ? 'RUSSIAN' : 'ENGLISH'}. Every text you pass to update_draft or send_reply MUST be in that language, no matter what language Vero uses with you — she gives instructions in her language, the customer receives replies in theirs. The tools will reject text in the wrong language. If Vero explicitly asks for another language, say you noticed the mismatch and confirm before proceeding.`
+    : ''
+}
 
 Use that id directly for read_thread, update_draft and send_reply. Do NOT call
 list_conversations to find it and do NOT ask her which conversation she means:
