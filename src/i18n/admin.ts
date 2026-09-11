@@ -2350,6 +2350,7 @@ const dict = {
     },
 
     refreshAria: { en: 'Refresh leads', ru: 'Обновить лидов' },
+    exportAria: { en: 'Export leads as CSV', ru: 'Экспорт лидов в CSV' },
 
     // Fallback if a submission somehow has an empty name field
     // (validation should prevent this, but be defensive on display).

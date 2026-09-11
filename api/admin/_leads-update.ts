@@ -23,7 +23,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
-import { requireAdmin } from '../_admin-auth.js';
+import { requireAdmin, requireSuper } from '../_admin-auth.js';
 
 // App-level enum for the status field. Kept out of the DB CHECK constraint
 // (see 014-contact-submissions.sql header) so we can add new statuses
@@ -62,6 +62,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const auth = await requireAdmin(req.body?.password);
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
+  // Leads is a super-only surface now — the page duplicates Vero's
+  // inbox and was removed from her navigation, so the API matches.
+  const superCheck = requireSuper(auth.level);
+  if (!superCheck.ok) return res.status(superCheck.status).json({ success: false, error: superCheck.error });
 
   const id = typeof req.body?.id === 'string' ? req.body.id.trim() : '';
   if (!id) return res.status(400).json({ success: false, error: 'id is required' });

@@ -3,6 +3,7 @@ import {
   Textarea, Select, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useState, type ReactNode } from 'react';
+import FaDownload from '../icons/fa/FaDownload';
 import FaCalendarAlt from '../icons/fa/FaCalendarAlt';
 import FaCamera from '../icons/fa/FaCamera';
 import FaChevronRight from '../icons/fa/FaChevronRight';
@@ -56,6 +57,36 @@ const STATUS_VALUES = [
   'spam',
 ] as const;
 type LeadStatus = (typeof STATUS_VALUES)[number];
+
+/**
+ * Download the loaded leads as CSV. Excel needs the BOM to read UTF-8
+ * (Russian text in messages otherwise renders as mojibake), and every field
+ * is quoted because messages contain commas and newlines as a matter of
+ * course.
+ */
+function exportCsv(rows: LeadRow[]): void {
+  const esc = (v: string | null): string => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = [
+    'created_at', 'name', 'email', 'shoot_type', 'preferred_date',
+    'location', 'status', 'contacted_at', 'notes', 'message',
+  ];
+  const lines = [
+    header.join(','),
+    ...rows.map((r) =>
+      [
+        r.created_at, r.name, r.email, r.shoot_type, r.preferred_date,
+        r.location, r.status, r.contacted_at, r.notes, r.message,
+      ].map(esc).join(','),
+    ),
+  ];
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export interface LeadRow {
   id: string;
@@ -213,6 +244,23 @@ const AdminLeads = ({ adminPassword, adminLevel }: Props) => {
         </VStack>
 
         <HStack spacing={2} flexShrink={0}>
+          {/* The page is super-only now; export is the reason the data is
+              kept at all. Client-side on purpose — the rows are already
+              loaded, and a CSV needs no thirteenth serverless function. */}
+          <IconButton
+            aria-label={t.leads.exportAria}
+            title={t.leads.exportAria}
+            icon={<Icon as={FaDownload} boxSize={4} />}
+            onClick={() => exportCsv(items ?? [])}
+            isDisabled={!items || items.length === 0}
+            variant="ghost"
+            size="md"
+            minW="44px"
+            minH="44px"
+            color="gray.500"
+            _hover={{ color: 'brand.accent' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
           <IconButton
             aria-label={t.leads.refreshAria}
             icon={<Icon as={FaSyncAlt} boxSize={4} />}

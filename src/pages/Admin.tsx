@@ -414,7 +414,7 @@ const Admin = () => {
               <AdminTabStrip
                 active={dashTab}
                 onChange={setDashTab}
-                showIntegrations={adminLevel === 'super'}
+                isSuper={adminLevel === 'super'}
                 onOpenMenu={menuDisclosure.onOpen}
               />
               {dashTab === 'clients' && (
@@ -442,7 +442,7 @@ const Admin = () => {
                   onOpenClient={(id) => setView({ kind: 'detail', id })}
                 />
               )}
-              {dashTab === 'leads' && (
+              {dashTab === 'leads' && adminLevel === 'super' && (
                 <AdminLeads adminPassword={password} adminLevel={adminLevel} />
               )}
               {dashTab === 'assistant' && (
@@ -528,6 +528,7 @@ const Admin = () => {
             onChangeTab={setDashTab}
             onChangeClientsView={setClientsView}
             onOpenMenu={menuDisclosure.onOpen}
+            isSuper={adminLevel === 'super'}
           />
         )}
 
@@ -851,10 +852,14 @@ const TABS: TabDef[] = [
   { id: 'reviews', labelKey: 'reviews', icon: FaStar },
 ];
 
-function tabsFor(showIntegrations: boolean): TabDef[] {
-  return showIntegrations
-    ? [...TABS, { id: 'integrations', labelKey: 'integrations', icon: FaPlug }]
-    : TABS;
+function tabsFor(isSuper: boolean): TabDef[] {
+  // Leads is super-only: it duplicates what Vero already does in Messages
+  // (every submission lands there as a conversation), so for her it was a
+  // second, worse copy of the inbox. The contact_submissions data stays —
+  // it is the structured record that survives thread deletion and the
+  // export source — it just is not her daily surface.
+  const base = isSuper ? TABS : TABS.filter((t) => t.id !== 'leads');
+  return isSuper ? [...base, { id: 'integrations', labelKey: 'integrations', icon: FaPlug }] : base;
 }
 
 /**
@@ -865,16 +870,16 @@ function tabsFor(showIntegrations: boolean): TabDef[] {
 function AdminTabStrip({
   active,
   onChange,
-  showIntegrations,
+  isSuper,
   onOpenMenu,
 }: {
   active: DashTab;
   onChange: (t: DashTab) => void;
-  showIntegrations: boolean;
+  isSuper: boolean;
   onOpenMenu: () => void;
 }) {
   const { t } = useAdminLang();
-  const tabs = tabsFor(showIntegrations);
+  const tabs = tabsFor(isSuper);
   if (tabs.length < 2) return null;
 
   return (
@@ -974,12 +979,14 @@ function AdminMobileNav({
   onChangeTab,
   onChangeClientsView,
   onOpenMenu,
+  isSuper,
 }: {
   activeTab: DashTab;
   clientsView: ClientsView;
   onChangeTab: (t: DashTab) => void;
   onChangeClientsView: (v: ClientsView) => void;
   onOpenMenu: () => void;
+  isSuper: boolean;
 }) {
   const { t } = useAdminLang();
   // Which group's sub-menu is currently open. Null = collapsed.
@@ -1059,7 +1066,10 @@ function AdminMobileNav({
       : openGroup === 'inbox'
       ? [
           { id: 'messages', label: t.nav.messages, isActive: activeTab === 'messages', onClick: () => { onChangeTab('messages'); setOpenGroup(null); } },
-          { id: 'leads', label: t.nav.leads, isActive: activeTab === 'leads', onClick: () => { onChangeTab('leads'); setOpenGroup(null); } },
+          // Leads is super-only — see tabsFor.
+          ...(isSuper
+            ? [{ id: 'leads', label: t.nav.leads, isActive: activeTab === 'leads', onClick: () => { onChangeTab('leads'); setOpenGroup(null); } }]
+            : []),
           { id: 'assistant', label: t.nav.assistant, isActive: activeTab === 'assistant', onClick: () => { onChangeTab('assistant'); setOpenGroup(null); } },
         ]
       : openGroup === 'studio'
