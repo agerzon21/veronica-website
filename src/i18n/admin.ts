@@ -390,6 +390,13 @@ const dict = {
       ru: 'Черновика пока нет. AI отходит в сторону, когда речь заходит об оплате или договоре: серьёзные ответы за тобой.',
     },
     draftGenerateCta: { en: 'Write a draft anyway', ru: 'Всё равно написать черновик' },
+    useDraftTitle: { en: 'Send this reply?', ru: 'Отправить этот ответ?' },
+    useDraftBody: {
+      en: (name: string) => `It goes to ${name} right away, as Vero.`,
+      ru: (name: string) => `Он сразу уйдёт ${name} от имени Веро.`,
+    },
+    useDraftSendNow: { en: 'Send now', ru: 'Отправить сейчас' },
+    useDraftEditInstead: { en: 'Edit with assistant', ru: 'Доработать с ассистентом' },
     draftGenerating: { en: 'Writing…', ru: 'Пишу…' },
     draftGenerateFailed: { en: 'Could not write a draft', ru: 'Не удалось написать черновик' },
     aiDraftWaiting: { en: 'Draft ready', ru: 'Есть черновик' },

@@ -1493,7 +1493,6 @@ function ConversationView({
   panelTab = 'summary',
   panelBodyEl = null,
   onPanelDraftChange,
-  onPanelTabChange,
   onSeedAssistant,
   refreshToken = 0,
 }: {
@@ -1588,6 +1587,68 @@ function ConversationView({
   // already has list_conversations / read_thread / send_reply, so it can
   // pull the real history, revise with her, and send when she approves —
   // the loop she currently does by pasting into ChatGPT.
+  /**
+   * "Use this draft" flow. It used to copy the draft into the composer and
+   * flip the panel back to Summary — which on a desktop reads as "it's in
+   * the box below", and on a phone, where the panel covers the thread, reads
+   * as nothing happening at all: the composer it copied into is off-screen.
+   * Vero pressed it, landed on the summary, and reasonably concluded the
+   * button was broken.
+   *
+   * Now it asks, then acts: send it right away, or hand it to the assistant
+   * to rework. Sending goes through the same endpoint as the composer's Send
+   * (threading, signature, draft cleanup included) but skips translate-on-
+   * send, because the draft is already in the customer's language and
+   * translating a translation is how a Russian reply nearly reached an
+   * English-speaking client.
+   */
+  const [useDraftOpen, setUseDraftOpen] = useState(false);
+  const handleSendDraftNow = async () => {
+    const text = pendingDraft?.body?.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch('/api/admin/messages-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          conversationId: summary.id,
+          text,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUseDraftOpen(false);
+        await loadDetail();
+        onRefreshList();
+        // Close the AI panel and land back on the thread, where the sent
+        // message and its delivery state are — the whole point of sending.
+        onReplySent?.();
+      } else if (res.status === 409) {
+        setUseDraftOpen(false);
+        setDuplicateText(text);
+      } else {
+        toast({
+          title: data.error || t.messages.sendFailed,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    } catch {
+      await loadDetail();
+      toast({
+        title: t.common.couldNotReach,
+        description: t.messages.sendFailedCheckThread,
+        status: 'warning',
+        duration: 8000,
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleRefineWithAssistant = () => {
     const who = displayName;
     const draft = pendingDraft?.body ?? '';
@@ -2709,6 +2770,63 @@ function ConversationView({
         onCancel={() => setDeleteConfirmOpen(false)}
       />
 
+      {/* "Use this draft" — ask, then act. Stacked full-width buttons on a
+          phone; the draft itself is visible right behind the dialog, so the
+          body stays one line instead of repeating the text. */}
+      <Modal
+        isOpen={useDraftOpen}
+        onClose={() => setUseDraftOpen(false)}
+        isCentered
+        size={{ base: 'xs', md: 'sm' } as never}
+      >
+        <ModalOverlay />
+        <ModalContent mx={4}>
+          <ModalHeader fontSize="md" fontWeight="500" color="gray.800" pb={1}>
+            {t.messages.useDraftTitle}
+          </ModalHeader>
+          <ModalBody pt={0} pb={2}>
+            <Text fontSize="sm" color="gray.600" lineHeight="1.6">
+              {t.messages.useDraftBody(displayName)}
+            </Text>
+          </ModalBody>
+          <ModalFooter pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}>
+            <VStack spacing={2} w="100%" align="stretch">
+              <CTAButton
+                onClick={handleSendDraftNow}
+                icon={FaPaperPlane}
+                variant="solid"
+                size="sm"
+                isLoading={sending}
+                loadingText={t.common.sending}
+              >
+                {t.messages.useDraftSendNow}
+              </CTAButton>
+              <Button
+                variant="outline"
+                size="sm"
+                minH="44px"
+                onClick={() => {
+                  setUseDraftOpen(false);
+                  handleRefineWithAssistant();
+                }}
+                isDisabled={sending}
+              >
+                {t.messages.useDraftEditInstead}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                minH="44px"
+                onClick={() => setUseDraftOpen(false)}
+                isDisabled={sending}
+              >
+                {t.common.cancel}
+              </Button>
+            </VStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {/* Not-in-AI notice — one-line dismissible banner. Auto-opens
           for any conversation with AI disabled; Vero can close it
           for the current session (state resets on remount when she
@@ -2791,10 +2909,7 @@ function ConversationView({
               translating={draftTranslating}
               translateError={draftTranslateError}
               onTranslate={translateDraft}
-              onUse={() => {
-                setReplyText(pendingDraft?.body ?? '');
-                onPanelTabChange?.('summary');
-              }}
+              onUse={() => setUseDraftOpen(true)}
               onRefine={handleRefineWithAssistant}
               onDiscard={handleDiscardDraft}
               discarding={discardingDraft}
