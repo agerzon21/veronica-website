@@ -415,7 +415,14 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
    * what makes a second press re-seed: the text is often identical, so the
    * value alone would not change.
    */
-  const [assistantSeed, setAssistantSeed] = useState<{ text: string; token: number } | null>(null);
+  // Carries the conversation it was created FOR: a seed made while refining
+  // Daria's draft must never surface in Lorraine's assistant. The chat only
+  // receives it when the open conversation matches.
+  const [assistantSeed, setAssistantSeed] = useState<{
+    text: string;
+    token: number;
+    convId: string | null;
+  } | null>(null);
   /**
    * Bumped to ask the open thread to reload. The thread owns its own detail
    * fetch, so this is a signal rather than the data itself.
@@ -424,7 +431,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
   const seedCounter = useRef(0);
   const seedAssistant = (text: string) => {
     seedCounter.current += 1;
-    setAssistantSeed({ text, token: seedCounter.current });
+    setAssistantSeed({ text, token: seedCounter.current, convId: selectedId });
   };
   // Mobile only: roll the panel down to its header so the conversation behind
   // it is readable, then roll back up and keep typing. Distinct from closing,
@@ -972,7 +979,11 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                     adminPassword={adminPassword}
                     embedded
                     conversationId={selectedId}
-                    seed={assistantSeed}
+                    seed={
+                      assistantSeed && assistantSeed.convId === selectedId
+                        ? assistantSeed
+                        : null
+                    }
                     onDraftUpdated={() => setThreadRefresh((n) => n + 1)}
                     onReplySent={handleReplySentFromPanel}
                   />

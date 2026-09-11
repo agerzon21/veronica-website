@@ -290,16 +290,42 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Debounced so typing does not hit localStorage on every keystroke.
+  /**
+   * The chat stays mounted across conversation switches, and the composer
+   * used to load its text once, at mount. Switching Daria → Lorraine kept
+   * Daria's half-typed prompt on screen — and the save effect below, which
+   * was keyed on the scope too, then wrote Daria's text into LORRAINE's
+   * saved slot, making the leak permanent. Each conversation's composer is
+   * its own pocket: on a switch, what was typed is parked under the scope
+   * it was typed in, and the new scope's own parked text (or nothing)
+   * replaces it.
+   */
+  const inputRef = useRef(input);
+  inputRef.current = input;
+  const prevScopeRef = useRef(draftScope);
   useEffect(() => {
-    const id = window.setTimeout(() => saveDraft('assistant', draftScope, input), 400);
+    if (prevScopeRef.current === draftScope) return;
+    saveDraft('assistant', prevScopeRef.current, inputRef.current);
+    prevScopeRef.current = draftScope;
+    setInput(loadDraft('assistant', draftScope));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftScope]);
+
+  // Debounced so typing does not hit localStorage on every keystroke. Keyed
+  // on the text alone and reading the scope from the ref above, so a scope
+  // switch can never pair old text with the new conversation's slot.
+  useEffect(() => {
+    const id = window.setTimeout(
+      () => saveDraft('assistant', prevScopeRef.current, input),
+      400,
+    );
     return () => window.clearTimeout(id);
-  }, [input, draftScope]);
+  }, [input]);
 
   // A pull-to-refresh does not reliably fire `beforeunload` on iOS Safari,
   // which is exactly how this was lost. `pagehide` and `visibilitychange` do.
   useEffect(() => {
-    const flush = () => saveDraft('assistant', draftScope, inputRef.current);
+    const flush = () => saveDraft('assistant', prevScopeRef.current, inputRef.current);
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', flush);
     return () => {
@@ -314,8 +340,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // The pagehide listener is registered once; without this it would flush
   // whatever `input` was when it was registered.
-  const inputRef = useRef(input);
-  inputRef.current = input;
+
   const toast = useToast();
 
   // Indexed by the GLOBAL admin language. It used to be indexed by a separate
