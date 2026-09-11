@@ -1,5 +1,5 @@
 import { Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox, Button, Icon } from '@chakra-ui/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import FaComments from '../icons/fa/FaComments';
 import { useEmailDelivery } from '../hooks/useEmailDelivery';
 import CTAButton from './ui/CTAButton';
@@ -236,6 +236,25 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   /**
+   * Floating "View conversation" button.
+   *
+   * The form is long and the button that opens the thread lived only in the
+   * panel at the very top, so checking a detail from halfway down meant
+   * scrolling all the way up and all the way back. It now follows.
+   *
+   * It hides in the two places it would be noise or harm: while the panel is
+   * on screen (its own button is right there) and while the submit button is
+   * on screen, because a floating control must never sit on top of the
+   * primary action — especially on a phone, where it would land exactly under
+   * the thumb aiming for "Create".
+   */
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const submitRef = useRef<HTMLDivElement | null>(null);
+  const [panelVisible, setPanelVisible] = useState(true);
+  const [submitVisible, setSubmitVisible] = useState(false);
+
+
+  /**
    * Every contract detail, whether the thread had it or not.
    *
    * The panel used to show only the two fields that happened to carry a source
@@ -271,6 +290,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   // never got their link. Now we hold her here until Resend confirms delivery.
   const [inviteEmailId, setInviteEmailId] = useState<string | null>(null);
   const [createdPortalId, setCreatedPortalId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!prefill) return;
+    const watch = (el: Element | null, set: (v: boolean) => void) => {
+      if (!el) return () => {};
+      const io = new IntersectionObserver(([e]) => set(e.isIntersecting), { threshold: 0 });
+      io.observe(el);
+      return () => io.disconnect();
+    };
+    const a = watch(panelRef.current, setPanelVisible);
+    const b = watch(submitRef.current, setSubmitVisible);
+    return () => {
+      a();
+      b();
+    };
+  }, [prefill, submitting]);
+
+  const showFloatingPeek = Boolean(prefill) && !panelVisible && !submitVisible;
   const [sendAttempts, setSendAttempts] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const deliveryStatus = useEmailDelivery(inviteEmailId);
@@ -541,6 +578,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
       {prefill && (
         <Box
+          ref={panelRef}
           bg="brand.accentSoft"
           border="1px solid"
           borderColor="brand.accentBorder"
@@ -1091,20 +1129,55 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               )}
             </VStack>
           ) : (
-            <CTAButton
-              type="submit"
-              variant="solid"
-              size="lg"
-              fullWidth
-              wrapText
-              isLoading={submitting}
-              loadingText={t.newClient.submitting}
-            >
-              {t.newClient.submit}
-            </CTAButton>
+            <Box ref={submitRef}>
+              <CTAButton
+                type="submit"
+                variant="solid"
+                size="lg"
+                fullWidth
+                wrapText
+                isLoading={submitting}
+                loadingText={t.newClient.submitting}
+              >
+                {t.newClient.submit}
+              </CTAButton>
+            </Box>
           )}
         </VStack>
       </Box>
+
+      {/* Follows her down the form. Bottom-right because that is where a
+          thumb rests on a phone and where a floating action is expected on a
+          desktop; the label collapses to the icon alone on narrow screens so
+          it never crowds the field it is sitting over. Safe-area inset keeps
+          it clear of the iOS home indicator. */}
+      {showFloatingPeek && (
+        <Button
+          onClick={() => setPeekOpen(true)}
+          position="fixed"
+          zIndex="docked"
+          right={{ base: 4, md: 6 }}
+          bottom={{
+            base: 'max(env(safe-area-inset-bottom), 16px)',
+            md: '24px',
+          }}
+          minH="48px"
+          minW="48px"
+          px={{ base: 0, md: 4 }}
+          borderRadius="full"
+          bg="brand.accent"
+          color="white"
+          boxShadow="0 4px 16px rgba(0,0,0,0.22)"
+          _hover={{ bg: 'brand.accentText' }}
+          _active={{ bg: 'brand.accentText' }}
+          aria-label={t.newClient.viewConversation}
+        >
+          <Icon as={FaComments} boxSize={4} />
+          <Text as="span" ml={2} fontSize="sm" fontWeight="500" display={{ base: 'none', md: 'inline' }}>
+            {t.newClient.viewConversation}
+          </Text>
+        </Button>
+      )}
 
       {prefill && (
         <ConversationPeek
