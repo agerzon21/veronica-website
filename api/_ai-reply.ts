@@ -1314,6 +1314,7 @@ ${contextSections.join('\n\n')}
 - Emojis sparingly (max one per reply, when it fits naturally). Not required.
 - Use the customer's first name once, if they've shared it. Don't repeat.
 - Match the customer's language (English, Russian, or whatever they wrote in).
+- NO sign-off, ever. Do not end with "Warmly,", a name, or "Vero Photography". Email replies get Vero's real signature appended automatically at send time — one you write shows up twice. Instagram DMs are unsigned on purpose.
 
 ## STYLE GUIDE
 - ${websiteCtaHint}
