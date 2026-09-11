@@ -25,8 +25,8 @@ import {
   Menu,
   MenuButton,
   MenuList,
-  MenuItem,
-  } from '@chakra-ui/react'; import { useEffect,
+  MenuItem,,
+  useBreakpointValue,} from '@chakra-ui/react'; import { useEffect,
   useState,
   useCallback,
   useRef } from 'react'; import FaCheckCircle from '../icons/fa/FaCheckCircle';
@@ -375,6 +375,8 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
   // Left rail fold. Default open; folds to avatars so the thread and the
   // refine panel have room.
   const [listCollapsed, setListCollapsed] = useState(false);
+  // lg matches the breakpoint where the rail and thread share one screen.
+  const isDesktopRail = useBreakpointValue({ base: false, lg: true }) ?? false;
   // Refine panel. Opens as a THIRD column beside the thread rather than
   // navigating to the Assistant tab, which lost the conversation you were
   // reading and wiped anything already typed on the way back.
@@ -440,7 +442,12 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
   const openRefinePanel = (tab?: AiPanelTab) => {
     if (!selectedId) return;
     setPanelTab(tab ?? (panelHasDraft ? 'reply' : 'summary'));
-    railBeforeRefine.current = listCollapsed;
+    // Capture the rail state only when the panel is actually opening.
+    // "Edit with assistant" calls this again on an ALREADY-open panel to
+    // switch tabs, and capturing then records the collapsed-for-the-panel
+    // state as the thing to restore — so closing the panel "restored" a
+    // collapsed rail, which on a phone rendered the desktop avatar strip.
+    if (refineFor !== selectedId) railBeforeRefine.current = listCollapsed;
     setListCollapsed(true);
     setRefineCollapsed(false);
     setRefineFor(selectedId);
@@ -736,7 +743,10 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
               conversations={conversations}
               selectedId={selectedId}
               onSelect={setSelectedId}
-              collapsed={listCollapsed}
+              // Belt to the capture-fix's suspenders: whatever state the fold
+              // is in, a phone never renders the avatar strip. The fold's own
+              // control is already desktop-only; the rendering now is too.
+              collapsed={listCollapsed && isDesktopRail}
             />
           </Box>
 
