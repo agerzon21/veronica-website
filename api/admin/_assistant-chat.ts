@@ -56,7 +56,7 @@ import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { deliverReply } from '../_reply-delivery.js';
 import { portalContextBlock } from '../_ai-reply.js';
-import { stripSubjectHeader } from '../_subject-strip.js';
+import { stripSubjectHeader, scrubSubjectLines } from '../_subject-strip.js';
 
 const MODEL = 'gpt-4o-mini';
 const MAX_TOOL_ROUNDS = 8;
@@ -362,18 +362,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const msg = choice?.message;
       if (!msg) throw new Error('OpenAI returned no message');
 
+      // Chat prose passes no tool, so the subject guard has to run on the
+      // DISPLAYED text too — the model presents drafts inside its bubbles,
+      // and a "Subject:" there reads exactly like the rule not working,
+      // whatever the actual draft row says.
+      const shownContent = msg.content ? scrubSubjectLines(msg.content) : msg.content;
+
       // Record the assistant's turn (whether it's a tool-call turn
       // or a final text turn) so the persisted history includes it.
       newlyPersistedMessages.push({
         role: 'assistant',
-        content: msg.content ?? null,
+        content: shownContent ?? null,
         tool_calls: msg.tool_calls,
       });
       openaiMessages.push(msg);
 
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
         // No tool call → this is the final answer, exit the loop.
-        finalReply = msg.content ?? '';
+        finalReply = shownContent ?? '';
         break;
       }
 

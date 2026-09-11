@@ -33,3 +33,25 @@ export function stripSubjectHeader(text: string): string {
   while (j < lines.length && (lines[j].trim() === '' || DIVIDER.test(lines[j].trim()))) j++;
   return lines.slice(j).join('\n').trimStart();
 }
+
+/**
+ * Remove header-formatted subject lines from ASSISTANT CHAT PROSE.
+ *
+ * stripSubjectHeader above guards what reaches the customer (drafts, sends).
+ * This one guards what Vero SEES: the assistant presents drafts inside its
+ * chat bubbles as plain prose — "Here's a follow-up for Nicole: Subject: …" —
+ * which goes through no tool and so passed no guard. Vero was then staring
+ * at a subject line in the chat while the actual draft underneath was clean,
+ * which is indistinguishable from the rule not working at all.
+ *
+ * Line-level and format-anchored on purpose: only lines SHAPED like an email
+ * header die ("Subject: X" / "**Тема: X**" alone on a line). Prose that
+ * mentions the word — "the subject of her email was…" — is untouched.
+ */
+export function scrubSubjectLines(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .filter((l) => !/^(\*{0,2}|_{0,2})\s*(subject|тема)\s*:/i.test(l.trim()))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
+}
