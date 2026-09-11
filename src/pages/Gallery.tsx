@@ -7,6 +7,7 @@ import PageHeader from '../components/ui/PageHeader';
 import { m } from 'framer-motion';
 import GalleryCategories from '../components/GalleryCategories';
 import GalleryGrid from '../components/GalleryGrid';
+import NotFound from './NotFound';
 
 // Match the shape /api/gallery returns — kept local here (rather
 // than a shared type file) since the API is the source of truth and
@@ -153,7 +154,10 @@ const Gallery = () => {
   const categoryInfo = categoryDetails[category as Category];
 
   if (!categoryInfo) {
-    return null;
+    // An unknown category used to render a blank 200 page with no meta at
+    // all — indexable nothing. NotFound brings the standard 404 UI and its
+    // noindex with it.
+    return <NotFound />;
   }
 
   return (

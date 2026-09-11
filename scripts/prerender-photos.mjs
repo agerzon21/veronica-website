@@ -85,7 +85,8 @@ let lastErr;
 for (let attempt = 0; attempt < 3; attempt++) {
   try {
     rows = await sql`
-      SELECT slug, category, drive_file_id, title, alt, description, keywords
+      SELECT slug, category, drive_file_id, title, alt, description, keywords,
+             published_at, created_at
       FROM gallery_photos
       WHERE status = 'published' AND deleted_at IS NULL
     `;
@@ -181,6 +182,13 @@ const photos = rows
     title: `${r.title}${TITLE_SUFFIX}`,
     description: r.description || '',
     keywords: Array.isArray(r.keywords) ? r.keywords : [],
+    // For sitemap <lastmod>. NOT updated_at: the nightly gallery-sync cron
+    // touches drive_seen_at on every row it sees in Drive, and the
+    // touch-updated_at trigger fires on any UPDATE — so updated_at is "when
+    // the cron last ran" (all 229 photos said "today"), which is the exact
+    // all-identical-lastmod pattern that teaches Google to ignore the field.
+    // published_at is set once and left alone.
+    publishedAt: r.published_at || r.created_at,
   }));
 
 // index.html carries a homepage <noscript> (site blurb + nav) so non-JS
@@ -501,7 +509,7 @@ let journalRows = [];
 try {
   journalRows = await sql`
     SELECT slug, title, excerpt, body_markdown, cover_image_url, cover_image_alt,
-           session_type, tags, published_at
+           session_type, tags, published_at, updated_at
     FROM journal_posts
     WHERE status = 'published' AND published_at IS NOT NULL
     ORDER BY published_at DESC
@@ -902,16 +910,30 @@ const staticUrls = [
   { loc: '/gallery/maternity', changefreq: 'weekly', priority: '0.85' },
 ];
 
+// Real per-URL <lastmod> from the DB, date-only. Google ignores changefreq and
+// priority but does read lastmod when the values are credible — and with 229
+// photo pages sitting in "Discovered - currently not indexed", it is one of
+// the few recrawl signals we can legitimately send. Static pages carry none:
+// we have no honest timestamp for them, and a fabricated one (e.g. build date
+// on every deploy) is exactly what makes Google distrust the whole field.
+const toLastmod = (d) => {
+  if (!d) return null;
+  const t = new Date(d);
+  return Number.isNaN(t.getTime()) ? null : t.toISOString().slice(0, 10);
+};
+
 const photoUrls = photos.map((p) => ({
   loc: `/photo/${p.category}/${p.id}`,
   changefreq: 'monthly',
   priority: '0.7',
+  lastmod: toLastmod(p.publishedAt),
 }));
 
 const journalUrls = posts.map((p) => ({
   loc: `/journal/${p.slug}`,
   changefreq: 'monthly',
   priority: '0.75',
+  lastmod: toLastmod(p.updated_at || p.published_at),
 }));
 
 const allUrls = [...staticUrls, ...journalUrls, ...photoUrls];
@@ -921,7 +943,9 @@ const sitemapXml =
   allUrls
     .map(
       (u) =>
-        `  <url>\n    <loc>${SITE}${u.loc}</loc>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`,
+        `  <url>\n    <loc>${SITE}${u.loc}</loc>\n` +
+        (u.lastmod ? `    <lastmod>${u.lastmod}</lastmod>\n` : '') +
+        `    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`,
     )
     .join('\n') +
   `\n</urlset>\n`;
