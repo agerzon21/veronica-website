@@ -25,11 +25,11 @@ import {
   Menu,
   MenuButton,
   MenuList,
-  MenuItem,,
-  useBreakpointValue,} from '@chakra-ui/react'; import { useEffect,
-  useState,
-  useCallback,
-  useRef } from 'react'; import FaCheckCircle from '../icons/fa/FaCheckCircle';
+  MenuItem,
+  useBreakpointValue,
+} from '@chakra-ui/react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import FaCheckCircle from '../icons/fa/FaCheckCircle';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
