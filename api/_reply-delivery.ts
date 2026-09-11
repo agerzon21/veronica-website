@@ -20,7 +20,12 @@ import { stripSubjectHeader } from './_subject-strip.js';
 import { sendIgTextMessage } from './_ig-send.js';
 import { sendEmailReply, deriveReplySubject } from './_email-send.js';
 import { getResendMessageId } from './_auto-reply.js';
-import { loadSignature, appendSignatureText, buildReplyHtml } from './_email-signature.js';
+import {
+  loadSignature,
+  appendSignatureText,
+  buildReplyHtml,
+  stripTrailingSignature,
+} from './_email-signature.js';
 
 const MAX_IG_MESSAGE_LEN = 1000; // sensible for IG DMs; Meta rejects >1000 anyway
 const MAX_EMAIL_MESSAGE_LEN = 100_000; // 100KB body cap — huge but sane bound
@@ -320,9 +325,17 @@ async function sendEmail(
   // system_state). We persist the SIGNED text, not the raw composer
   // input, so the thread is a faithful record of what the client
   // actually received.
+  //
+  // Strip any signature the body already carries FIRST — the AI writes
+  // its own sign-off (with Markdown two-space line breaks that defeated
+  // the old exact-match guard), and a saved draft can round-trip already
+  // signed. Both text and HTML are then built from the same stripped
+  // body, so exactly one signature ships on each. The HTML path
+  // previously had no guard at all.
   const signature = await loadSignature();
-  const signedText = appendSignatureText(text, signature.text);
-  const html = buildReplyHtml(text, signature.html);
+  const bodyText = stripTrailingSignature(text, signature.text);
+  const signedText = appendSignatureText(bodyText, signature.text);
+  const html = buildReplyHtml(bodyText, signature.html);
 
   // Insert the outbound row FIRST. On UNIQUE conflict (near-impossible
   // with a fresh UUID but defensive) we know something's already

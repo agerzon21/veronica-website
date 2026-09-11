@@ -64,6 +64,43 @@ export async function loadSignature(): Promise<EmailSignature> {
 }
 
 /**
+ * Normalize text for signature comparison and outbound plaintext: CRLF to
+ * LF, and strip trailing whitespace from every line. The AI writes its
+ * sign-offs with Markdown's two-trailing-space line breaks ("Warmly,  \n"),
+ * which is invisible in any mail client but defeated the old exact
+ * endsWith check — that mismatch is how a client received the signature
+ * twice. Per-line trailing whitespace carries no meaning in email text,
+ * so normalizing the whole outbound body is safe.
+ */
+const normalizeText = (s: string): string =>
+  s
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t\u00a0]+$/, ''))
+    .join('\n')
+    .replace(/\s+$/, '');
+
+/**
+ * Remove any trailing copy of the signature from a body — the AI writing
+ * its own sign-off, or a draft that round-tripped through the composer
+ * already signed. Loops because both can stack ("body -- sig" drafted,
+ * then signed again). Mid-text occurrences (quoted earlier mail) are
+ * deliberately left alone; only the tail is touched.
+ */
+export function stripTrailingSignature(body: string, signature: string): string {
+  let out = normalizeText(body);
+  const sig = normalizeText(signature);
+  if (!sig) return out;
+  for (let guard = 0; guard < 4 && out.endsWith(sig); guard++) {
+    out = out.slice(0, out.length - sig.length).replace(/\s+$/, '');
+    // Swallow the sig delimiter a previous append (or the model) left
+    // behind: "--", "-", or a lone em/en dash on its own line.
+    out = out.replace(/(?:^|\n)[-–—]{1,2}$/, '').replace(/\s+$/, '');
+  }
+  return out;
+}
+
+/**
  * Append the signature to a plaintext body.
  *
  * Uses the RFC 3676 `-- ` sig delimiter (dash-dash-space-newline), which
@@ -71,15 +108,16 @@ export async function loadSignature(): Promise<EmailSignature> {
  * toggle. That keeps quoted reply chains readable instead of
  * accumulating a wall of repeated sign-offs.
  *
- * Idempotent: if the body already ends with the signature (Vero pasted
- * it, or a draft round-tripped), it isn't added twice.
+ * Idempotent the robust way: any trailing copy of the signature is
+ * stripped first (see stripTrailingSignature), then the canonical block
+ * is appended exactly once.
  */
 export function appendSignatureText(body: string, signature: string): string {
-  const trimmedBody = body.replace(/\s+$/, '');
-  const trimmedSig = signature.trim();
-  if (!trimmedSig) return trimmedBody;
-  if (trimmedBody.endsWith(trimmedSig)) return trimmedBody;
-  return `${trimmedBody}\n\n-- \n${trimmedSig}`;
+  const sig = normalizeText(signature);
+  const base = stripTrailingSignature(body, sig);
+  if (!sig) return base;
+  if (!base) return sig;
+  return `${base}\n\n-- \n${sig}`;
 }
 
 /**
