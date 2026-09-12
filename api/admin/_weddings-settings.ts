@@ -28,8 +28,10 @@ import {
   KEY_FEATURED,
   KEY_SELECTED,
   isValidFocus,
+  asZoom,
   parseFeatured,
   parsePinned,
+  parseSelected,
 } from '../_weddings-page.js';
 
 const MAX_PINNED = 5;
@@ -84,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Objects with per-entry focus points; legacy slug arrays are
         // normalized by parseFeatured with centered defaults.
         featured: parseFeatured(state.get(KEY_FEATURED), 6),
-        selectedWork: parse(state.get(KEY_SELECTED)),
+        selectedWork: parseSelected(state.get(KEY_SELECTED), MAX_SELECTED),
       });
     }
 
@@ -96,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!Array.isArray(input)) {
           return res.status(400).json({ success: false, error: 'pinned must be an array' });
         }
-        const entries: Array<{ url: string; focus: string }> = [];
+        const entries: Array<{ url: string; focus: string; zoom: number }> = [];
         for (const item of input) {
           const url = typeof item?.url === 'string' ? item.url.trim() : '';
           if (url.length > 600) {
@@ -107,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           // Empty url keeps the SLOT (slots have fixed jobs: packages 1-3,
           // FAQ, quote background) — an empty slot just renders nothing.
-          entries.push({ url, focus: item?.focus ?? '50% 50%' });
+          entries.push({ url, focus: item?.focus ?? '50% 50%', zoom: asZoom(item?.zoom) });
         }
         writes.push([KEY_HEROES, JSON.stringify(entries.slice(0, MAX_PINNED))]);
       }
@@ -133,7 +135,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!Array.isArray(input)) {
           return res.status(400).json({ success: false, error: 'featured must be an array' });
         }
-        const entries: Array<{ slug: string; focusStage: string; focusThumb: string }> = [];
+        const entries: Array<{
+          slug: string;
+          focusStage: string;
+          focusThumb: string;
+          zoomStage: number;
+          zoomThumb: number;
+        }> = [];
         for (const item of input) {
           const slug = typeof item?.slug === 'string' ? item.slug.trim() : '';
           if (!slug || slug.length > 200) {
@@ -147,17 +155,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             slug,
             focusStage: item.focusStage ?? '50% 50%',
             focusThumb: item.focusThumb ?? '50% 50%',
+            zoomStage: asZoom(item.zoomStage),
+            zoomThumb: asZoom(item.zoomThumb),
           });
         }
         writes.push([KEY_FEATURED, JSON.stringify(entries.slice(0, MAX_FEATURED))]);
       }
 
       if (req.body?.selectedWork !== undefined) {
-        const slugs = cleanStringArray(req.body.selectedWork, MAX_SELECTED, 200);
-        if (slugs === null) {
-          return res.status(400).json({ success: false, error: 'selectedWork must be an array of slugs' });
+        const input = req.body.selectedWork;
+        if (!Array.isArray(input)) {
+          return res.status(400).json({ success: false, error: 'selectedWork must be an array' });
         }
-        writes.push([KEY_SELECTED, JSON.stringify(slugs)]);
+        // Objects now ({slug, focus, zoom}); plain slugs still accepted so a
+        // stale admin bundle cannot wipe the list.
+        const entries: Array<{ slug: string; focus: string; zoom: number }> = [];
+        for (const item of input) {
+          if (typeof item === 'string') {
+            const slug = item.trim();
+            if (!slug || slug.length > 200) {
+              return res.status(400).json({ success: false, error: 'invalid selectedWork slug' });
+            }
+            entries.push({ slug, focus: '50% 50%', zoom: 1 });
+            continue;
+          }
+          const slug = typeof item?.slug === 'string' ? item.slug.trim() : '';
+          if (!slug || slug.length > 200) {
+            return res.status(400).json({ success: false, error: 'each selectedWork entry needs a slug' });
+          }
+          if (item?.focus !== undefined && !isValidFocus(item.focus)) {
+            return res.status(400).json({ success: false, error: 'invalid focus value' });
+          }
+          entries.push({ slug, focus: item?.focus ?? '50% 50%', zoom: asZoom(item?.zoom) });
+        }
+        writes.push([KEY_SELECTED, JSON.stringify(entries.slice(0, MAX_SELECTED))]);
       }
 
       if (writes.length === 0) {

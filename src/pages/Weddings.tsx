@@ -5,7 +5,7 @@ import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaArrowRight from '../icons/fa/FaArrowRight';
 import { Helmet } from 'react-helmet-async';
 import { m, useInView } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
@@ -65,7 +65,47 @@ interface PinnedPhoto {
   url: string;
   fullUrl: string;
   focus: string;
+  zoom: number;
 }
+
+interface SelectedPhoto {
+  slug: string;
+  url: string;
+  alt: string;
+  focus: string;
+  zoom: number;
+}
+
+/** A print placed in the tapestry: the photo plus its jittered geometry. */
+interface PlacedPrint {
+  photo: WPhoto;
+  top?: string;
+  bottom?: string;
+  left?: string;
+  right?: string;
+  w: number;
+  rot: number;
+}
+
+interface Tapestry {
+  approach: PlacedPrint[];
+  packages: PlacedPrint[];
+  journal: PlacedPrint[];
+  faq: PlacedPrint[];
+  vendors: PlacedPrint[];
+  selected: PlacedPrint[];
+  seams: WPhoto[][];
+}
+
+const EMPTY_TAPESTRY: Tapestry = {
+  approach: [],
+  packages: [],
+  journal: [],
+  faq: [],
+  vendors: [],
+  selected: [],
+  seams: [[], [], [], [], [], [], []],
+};
 
 interface Vendor {
   name: string;
@@ -147,10 +187,13 @@ const Weddings = () => {
 
   // POSITIONAL pinned slots: 0-2 package cards, 3 FAQ, 4 quote background.
   const [pinned, setPinned] = useState<Array<PinnedPhoto | null>>([]);
-  const [pool, setPool] = useState<WPhoto[]>([]);
+  // The whole tapestry is planned once per visit (photos AND geometry) in
+  // the fetch effect — never at module scope, where a random call would
+  // run during prerender.
+  const [tapestry, setTapestry] = useState<Tapestry>(EMPTY_TAPESTRY);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [featured, setFeatured] = useState<FeaturedItem[]>([]);
-  const [selectedWork, setSelectedWork] = useState<Array<{ slug: string; url: string; alt: string }>>([]);
+  const [selectedWork, setSelectedWork] = useState<SelectedPhoto[]>([]);
   // Journal slideshow: active slide + hover-pause for the autoplay.
   const [slideIdx, setSlideIdx] = useState(0);
   const [slidePaused, setSlidePaused] = useState(false);
@@ -173,11 +216,10 @@ const Weddings = () => {
         const data = await res.json();
         if (cancelled || !res.ok || !data.success) return;
         setPinned(Array.isArray(data.pinned) ? data.pinned : []);
-        // The once-per-visit shuffle: the folder's photos become the
-        // background tapestry, dealt into fixed decorative slots in a
-        // new order on every visit.
+        // Once per visit: shuffle the folder's photos AND re-roll every
+        // print's position, size and angle, so no two loads look alike.
         const photos: WPhoto[] = Array.isArray(data.photos) ? data.photos : [];
-        setPool(shuffled(photos));
+        setTapestry(planTapestry(shuffled(photos)));
         setVendors(Array.isArray(data.vendors) ? data.vendors : []);
         setSelectedWork(Array.isArray(data.selectedWork) ? data.selectedWork : []);
 
@@ -225,29 +267,6 @@ const Weddings = () => {
     };
   }, []);
 
-  // Deal the shuffled pool into the tapestry: fixed decorative slots
-  // per section, filled in whatever order this visit's shuffle dealt.
-  const decor = useMemo(() => {
-    let cursor = 0;
-    const take = (n: number) => {
-      const s = pool.slice(cursor, cursor + n);
-      cursor += n;
-      return s;
-    };
-    return {
-      approach: take(5),
-      packages: take(7),
-      journal: take(4),
-      faq: take(4),
-      vendors: take(4),
-      selected: take(3),
-      // Mobile print seams: rows of three between sections, drawn from
-      // the remaining pool so phones see different photos than desktop
-      // gutters would at the same scroll depth.
-      seams: [take(3), take(3), take(3), take(3), take(3), take(3)],
-    };
-  }, [pool]);
-
   // The big top hero stays FIXED: the curated local photo, served from
   // /assets. The five admin pinned slots are positional:
   const pkgPin = (i: number): PinnedPhoto | null => pinned[i] ?? null;
@@ -287,7 +306,7 @@ const Weddings = () => {
       </Helmet>
 
       {/* ─── Hero ─── */}
-      <Box position="relative" h={{ base: '68vh', md: '80vh' }} overflow="hidden">
+      <Box position="relative" h={{ base: '48vh', md: '56vh' }} overflow="hidden">
         <Image
           src={photoUrl(FEATURED[0].id)}
           alt={FEATURED[0].alt}
@@ -322,7 +341,7 @@ const Weddings = () => {
 
       {/* ─── Approach — tapestry prints live behind the words ─── */}
       <Box bg="white" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
-        <DecorPrints photos={decor.approach} slots={DECOR_APPROACH} />
+        <DecorPrints items={tapestry.approach} />
         <Flex justify="center" ref={introRef}>
           <MotionDiv
             initial={{ opacity: 0, y: 24 }}
@@ -365,12 +384,12 @@ const Weddings = () => {
 
       </Box>
 
-      <MobilePrintSeam photos={decor.seams[0]} />
+      <MobilePrintSeam photos={tapestry.seams[0]} />
 
       {/* ─── Packages — cream section keeps its rhythm; prints peek from
           the gutters behind the cards ─── */}
       <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
-        <DecorPrints photos={decor.packages} slots={DECOR_PACKAGES} />
+        <DecorPrints items={tapestry.packages} />
         <Box maxW="1200px" mx="auto">
           <VStack spacing={3} mb={{ base: 4, md: 6 }} textAlign="center">
             <Text textStyle="eyebrow">Wedding Photography</Text>
@@ -416,23 +435,68 @@ const Weddings = () => {
                   }}
                 >
                   {pin ? (
-                    /* The WHOLE photo, unfaded (finding a photo whose top
-                       third works alone is hard — Alex). The text lives on
-                       a floating white panel; the photograph stays visible
-                       above it and peeks around its edges. */
-                    <Image
-                      src={pin.fullUrl}
-                      alt=""
-                      position="absolute"
-                      inset={0}
-                      w="100%"
-                      h="100%"
-                      objectFit="cover"
-                      objectPosition={pin.focus}
-                      loading="lazy"
-                      transition="transform 0.7s ease"
-                      _groupHover={{ transform: 'scale(1.04)' }}
-                    />
+                    /* Photo across the top, the package NAME over it (no
+                       box — a scrim and a shadow carry legibility), then
+                       the image dissolves into the card body. Zoom and
+                       focal point both come from the admin drag editor. */
+                    <Box position="relative" h={{ base: '250px', md: '285px' }} overflow="hidden" flexShrink={0}>
+                      <Image
+                        src={pin.fullUrl}
+                        alt=""
+                        position="absolute"
+                        inset={0}
+                        w="100%"
+                        h="100%"
+                        objectFit="cover"
+                        objectPosition={pin.focus}
+                        transform={`scale(${pin.zoom ?? 1})`}
+                        transformOrigin={pin.focus}
+                        loading="lazy"
+                        transition="transform 0.7s ease"
+                        _groupHover={{ transform: `scale(${(pin.zoom ?? 1) * 1.04})` }}
+                      />
+                      {/* Two overlays, not one: a dark scrim that carries the
+                          title, and a separate white fade pinned to the bottom.
+                          A single gradient mixing dark and white stops leaves a
+                          transparent band where light photos punch through. */}
+                      <Box
+                        position="absolute"
+                        inset={0}
+                        bg="linear-gradient(180deg, rgba(12,10,6,0.06) 0%, rgba(12,10,6,0.32) 42%, rgba(12,10,6,0.62) 70%, rgba(12,10,6,0.22) 100%)"
+                      />
+                      <Box
+                        position="absolute"
+                        left={0}
+                        right={0}
+                        bottom={0}
+                        h="38%"
+                        bg="linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 40%, #ffffff 62%)"
+                      />
+                      <VStack
+                        position="absolute"
+                        left={0}
+                        right={0}
+                        bottom={{ base: '104px', md: '116px' }}
+                        spacing={1}
+                        px={5}
+                        align="flex-start"
+                      >
+                        <Text textStyle="eyebrow" color="whiteAlpha.900" textShadow="0 1px 8px rgba(0,0,0,0.5)">
+                          {pkg.coverage}
+                        </Text>
+                        <Text
+                          as="h3"
+                          fontFamily="heading"
+                          fontWeight="400"
+                          fontSize={{ base: '1.7rem', md: '1.9rem' }}
+                          lineHeight="1.15"
+                          color="white"
+                          textShadow="0 2px 14px rgba(0,0,0,0.55)"
+                        >
+                          {pkg.name}
+                        </Text>
+                      </VStack>
+                    </Box>
                   ) : (
                     <Box h={{ base: '170px', md: '190px' }} overflow="hidden" flexShrink={0}>
                       <Image
@@ -447,21 +511,15 @@ const Weddings = () => {
                       />
                     </Box>
                   )}
-                  <Flex
-                    direction="column"
-                    m={pin ? { base: 3, md: 3.5 } : 0}
-                    mt={pin ? { base: '180px', md: '200px' } : 0}
-                    p={{ base: 5, md: 6 }}
-                    bg={pin ? 'rgba(255, 255, 255, 0.95)' : undefined}
-                    borderRadius={pin ? '2px' : undefined}
-                    flex="1"
-                    position="relative"
-                    zIndex={1}
-                  >
-                    <Text textStyle="eyebrow">{pkg.coverage}</Text>
-                    <Text as="h3" textStyle="cardTitle" mt={2}>
-                      {pkg.name}
-                    </Text>
+                  <Flex direction="column" p={{ base: 6, md: 7 }} pt={pin ? { base: 2, md: 3 } : { base: 6, md: 7 }} flex="1" position="relative" zIndex={1}>
+                    {!pin && (
+                      <>
+                        <Text textStyle="eyebrow">{pkg.coverage}</Text>
+                        <Text as="h3" textStyle="cardTitle" mt={2}>
+                          {pkg.name}
+                        </Text>
+                      </>
+                    )}
                     <Text
                       fontFamily="heading"
                       fontSize={{ base: '2xl', md: '3xl' }}
@@ -541,14 +599,14 @@ const Weddings = () => {
 
 
 
-      <MobilePrintSeam photos={decor.seams[1]} />
+      <MobilePrintSeam photos={tapestry.seams[1]} />
 
       {/* ─── From the Journal — the slow slideshow (Alex's pick), with
           tapestry prints behind it. Per-entry focal points from the
           admin keep faces in frame on stage and thumbs alike. ─── */}
       {featured.length > 0 && (
         <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 4, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
-          <DecorPrints photos={decor.journal} slots={DECOR_JOURNAL} />
+          <DecorPrints items={tapestry.journal} />
           <VStack spacing={3} mb={{ base: 8, md: 10 }} textAlign="center">
             <Text textStyle="eyebrow">From the Journal</Text>
             <Box w="35px" h="1px" bg="brand.accent" />
@@ -706,13 +764,13 @@ const Weddings = () => {
         </Box>
       )}
 
-      <MobilePrintSeam photos={decor.seams[2]} />
+      <MobilePrintSeam photos={tapestry.seams[2]} />
 
       {/* ─── FAQ — editorial split: a sticky intro column (with one ambient
           photograph and the ask-me-directly path) beside the numbered
           questions. On mobile the intro stacks above the list. ─── */}
       <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" sx={{ isolation: 'isolate' }}>
-        <DecorPrints photos={decor.faq} slots={DECOR_FAQ} />
+        <DecorPrints items={tapestry.faq} />
         <Grid
           templateColumns={{ base: '1fr', lg: '5fr 7fr' }}
           gap={{ base: 10, lg: 16 }}
@@ -720,8 +778,26 @@ const Weddings = () => {
           mx="auto"
           alignItems="start"
         >
-          <Box position={{ lg: 'sticky' }} top={{ lg: '110px' }}>
-            <VStack spacing={5} align={{ base: 'center', lg: 'flex-start' }} textAlign={{ base: 'center', lg: 'left' }}>
+          <Box position={{ base: 'relative', lg: 'sticky' }} top={{ lg: '110px' }} overflow={{ base: 'hidden', lg: 'visible' }} borderRadius={{ base: 'sm', lg: 0 }}>
+            {/* On phones the FAQ photo sits BEHIND this column (there is no
+                room beside it), with a cream veil keeping the type legible. */}
+            {faqPin && (
+              <Box display={{ base: 'block', lg: 'none' }} position="absolute" inset={0} zIndex={0}>
+                <Image
+                  src={faqPin.fullUrl}
+                  alt=""
+                  w="100%"
+                  h="100%"
+                  objectFit="cover"
+                  objectPosition={faqPin.focus}
+                  transform={`scale(${faqPin.zoom ?? 1})`}
+                  transformOrigin={faqPin.focus}
+                  loading="lazy"
+                />
+                <Box position="absolute" inset={0} bg="rgba(253, 249, 240, 0.86)" />
+              </Box>
+            )}
+            <VStack position="relative" zIndex={1} py={{ base: 6, lg: 0 }} px={{ base: 4, lg: 0 }} spacing={5} align={{ base: 'center', lg: 'flex-start' }} textAlign={{ base: 'center', lg: 'left' }}>
               <Text textStyle="eyebrow">Wedding Photography FAQ</Text>
               <Box w="35px" h="1px" bg="brand.accent" />
               <Text
@@ -750,6 +826,8 @@ const Weddings = () => {
                     h="100%"
                     objectFit="cover"
                     objectPosition={faqPin.focus}
+                    transform={`scale(${faqPin.zoom ?? 1})`}
+                    transformOrigin={faqPin.focus}
                     loading="lazy"
                   />
                 </Box>
@@ -771,12 +849,12 @@ const Weddings = () => {
         </Grid>
       </Box>
 
-      <MobilePrintSeam photos={decor.seams[3]} />
+      <MobilePrintSeam photos={tapestry.seams[3]} />
 
       {/* ─── Recommended vendors ─── */}
       {vendors.length > 0 && (
         <Box bg="white" pb={{ base: 16, md: 24 }} pt={{ base: 4, md: 8 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
-          <DecorPrints photos={decor.vendors} slots={DECOR_VENDORS} />
+          <DecorPrints items={tapestry.vendors} />
           <Box maxW="1000px" mx="auto">
             <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
               <Text textStyle="eyebrow">Recommended Vendors</Text>
@@ -867,14 +945,14 @@ const Weddings = () => {
         </Box>
       )}
 
-      <MobilePrintSeam photos={decor.seams[4]} />
+      {vendors.length > 0 && <MobilePrintSeam photos={tapestry.seams[4]} />}
 
       {/* ─── Selected work: admin-curated GALLERY photos, every tile a real
           link to its photo page. Deliberately separate from the ambient
           hero/folder pools, which are background and never clickable. Falls
           back to the built-in curated six until Vero picks her own. ─── */}
       <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
-        <DecorPrints photos={decor.selected} slots={DECOR_SELECTED} />
+        <DecorPrints items={tapestry.selected} />
         <VStack spacing={3} mb={{ base: 10, md: 14 }} textAlign="center">
           <Text textStyle="eyebrow">Selected Work</Text>
           <Box w="35px" h="1px" bg="brand.accent" />
@@ -889,7 +967,13 @@ const Weddings = () => {
         >
           {(selectedWork.length > 0
             ? selectedWork
-            : FEATURED.map((p) => ({ slug: p.id, url: photoUrl(p.id), alt: p.alt }))
+            : FEATURED.map((p) => ({
+                slug: p.id,
+                url: photoUrl(p.id),
+                alt: p.alt,
+                focus: '50% 50%',
+                zoom: 1,
+              }))
           ).map((p, i) => {
             const feature = i % 5 === 0;
             return (
@@ -908,7 +992,7 @@ const Weddings = () => {
                   borderRadius="sm"
                   bg="gray.100"
                   sx={{ '& > img': { transition: 'transform 0.5s ease' } }}
-                  _hover={{ '& > img': { transform: 'scale(1.03)' } }}
+                  _hover={{ '& > img': { transform: `scale(${(p.zoom ?? 1) * 1.03})` } }}
                 >
                   <Image
                     src={p.url}
@@ -916,6 +1000,9 @@ const Weddings = () => {
                     w="100%"
                     h="100%"
                     objectFit="cover"
+                    objectPosition={p.focus ?? '50% 50%'}
+                    transform={`scale(${p.zoom ?? 1})`}
+                    transformOrigin={p.focus ?? '50% 50%'}
                     loading="lazy"
                     decoding="async"
                   />
@@ -923,15 +1010,55 @@ const Weddings = () => {
               </GridItem>
             );
           })}
+
+          {/* The mosaic's dense packing always leaves the last cell open at
+              eight photos — so the gallery invitation lives there instead
+              of floating under the grid. */}
+          <GridItem colSpan={{ base: 2, md: 2 }} rowSpan={1}>
+            <Flex
+              as={RouterLink}
+              to="/gallery/weddings"
+              role="group"
+              direction="column"
+              align="center"
+              justify="center"
+              textAlign="center"
+              h="100%"
+              px={4}
+              gap={2}
+              bg="brand.surface"
+              border="1px solid"
+              borderColor="brand.accentBorder"
+              borderRadius="sm"
+              transition="background 0.25s ease, border-color 0.25s ease"
+              _hover={{ bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }}
+            >
+              <Text
+                fontFamily="heading"
+                fontWeight="300"
+                fontSize={{ base: '1.05rem', md: '1.3rem' }}
+                lineHeight="1.25"
+                color="gray.800"
+              >
+                See the full
+                <br />
+                wedding gallery
+              </Text>
+              <HStack
+                spacing={2}
+                color="brand.accentText"
+                transition="transform 0.25s ease"
+                _groupHover={{ transform: 'translateX(3px)' }}
+              >
+                <Text textStyle="ctaLabel">Browse</Text>
+                <Icon as={FaArrowRight} boxSize={3} />
+              </HStack>
+            </Flex>
+          </GridItem>
         </Grid>
-        <Flex justify="center" mt={{ base: 10, md: 14 }}>
-          <CTAButton to="/gallery/weddings" variant="outline" size="md">
-            See the full wedding gallery
-          </CTAButton>
-        </Flex>
       </Box>
 
-      <MobilePrintSeam photos={decor.seams[5]} />
+      <MobilePrintSeam photos={tapestry.seams[5]} />
 
       {/* ─── CTA ─── */}
       <Box position="relative" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }} overflow="hidden">
@@ -946,6 +1073,8 @@ const Weddings = () => {
               h="100%"
               objectFit="cover"
               objectPosition={ctaPin.focus}
+              transform={`scale(${ctaPin.zoom ?? 1})`}
+              transformOrigin={ctaPin.focus}
               loading="lazy"
             />
             <Box position="absolute" inset={0} bg="rgba(15,15,15,0.55)" />
@@ -979,58 +1108,6 @@ const Weddings = () => {
     </Box>
   );
 };
-
-/**
- * The mobile tapestry: a row of three small slanted prints woven BETWEEN
- * sections in normal flow. Absolute prints can never be collision-proof
- * on a narrow column (they ended up under FAQ text), so phones get the
- * collage as seams instead — guaranteed clear of content, still
- * reshuffled every visit. Hidden from md up, where the gutters take over.
- */
-function MobilePrintSeam({ photos }: { photos: WPhoto[] }) {
-  if (photos.length === 0) return null;
-  return (
-    <Flex
-      display={{ base: 'flex', md: 'none' }}
-      justify="center"
-      align="center"
-      gap={3}
-      py={5}
-      px={4}
-      pointerEvents="none"
-      aria-hidden="true"
-    >
-      {photos.slice(0, 3).map((photo, i) => (
-        <Box
-          key={i}
-          data-print=""
-          bg="white"
-          p={1}
-          borderRadius="2px"
-          boxShadow="0 10px 22px -14px rgba(20, 15, 5, 0.45)"
-          transform={`rotate(${i === 1 ? 2.5 : i === 0 ? -4 : 3.5}deg) translateY(${i === 1 ? -6 : 4}px)`}
-          w="30%"
-          maxW="130px"
-        >
-          <Box aspectRatio={4 / 3} overflow="hidden">
-            <Image
-              src={photo.url}
-              alt=""
-              w="100%"
-              h="100%"
-              objectFit="cover"
-              loading="lazy"
-              onError={(e) => {
-                const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
-                if (print) print.style.display = 'none';
-              }}
-            />
-          </Box>
-        </Box>
-      ))}
-    </Flex>
-  );
-}
 
 /**
  * One FAQ disclosure. NOT Chakra's Accordion: that renders framer's full
@@ -1101,115 +1178,222 @@ function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
 
 
 /**
- * One tapestry slot: where a background print sits inside its section.
- * Percent offsets so wide screens breathe. Rotations alternate so the
- * collage reads as scattered prints, not a grid. Desktop only — phones
- * get MobilePrintSeam rows between sections instead, which cannot
- * collide with text no matter how long content grows.
+ * A tapestry slot: the base geometry of one background print inside a
+ * section. Every value is a STARTING POINT — planTapestry jitters all of
+ * them per visit, so reloading redeals both which photo appears and
+ * exactly where, how big, and at what angle it sits.
  */
 interface DecorSlot {
-  top?: string;
-  bottom?: string;
-  left?: string;
-  right?: string;
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
   w: number;
   rot: number;
 }
 
-const DECOR_APPROACH: DecorSlot[] = [
-  { left: '1%', top: '8%', w: 190, rot: -6 },
-  { right: '2%', top: '26%', w: 230, rot: 4 },
-  { left: '10%', top: '46%', w: 140, rot: 3 },
-  { right: '13%', bottom: '6%', w: 160, rot: -3 },
-  { left: '3%', bottom: '4%', w: 150, rot: 2 },
-];
-const DECOR_PACKAGES: DecorSlot[] = [
-  { left: '-1%', top: '1.5%', w: 200, rot: -5 },
-  { right: '-1%', top: '9%', w: 170, rot: 6 },
-  { left: '4%', top: '38%', w: 150, rot: 4 },
-  { right: '3%', top: '44%', w: 185, rot: -4 },
-  { left: '30%', bottom: '24%', w: 135, rot: -3 },
-  { right: '28%', bottom: '22%', w: 150, rot: 5 },
-  { left: '1%', bottom: '4%', w: 165, rot: 2 },
-];
-const DECOR_JOURNAL: DecorSlot[] = [
-  { left: '0.5%', top: '10%', w: 160, rot: -4 },
-  { right: '1%', top: '30%', w: 190, rot: 5 },
-  { left: '2%', bottom: '8%', w: 145, rot: 3 },
-  { right: '2.5%', bottom: '5%', w: 165, rot: -5 },
-];
-const DECOR_FAQ: DecorSlot[] = [
-  { right: '2%', top: '4%', w: 170, rot: 4 },
-  { left: '2%', top: '40%', w: 145, rot: -4 },
-  { right: '1%', bottom: '18%', w: 155, rot: 6 },
-  { left: '4%', bottom: '3%', w: 150, rot: -5 },
-];
-const DECOR_VENDORS: DecorSlot[] = [
-  { left: '1%', top: '9%', w: 150, rot: -4 },
-  { right: '2%', top: '12%', w: 165, rot: 3 },
-  { left: '2.5%', bottom: '7%', w: 140, rot: 5 },
-  { right: '1%', bottom: '9%', w: 175, rot: -3 },
-];
-const DECOR_SELECTED: DecorSlot[] = [
-  { left: '0.5%', top: '6%', w: 165, rot: 5 },
-  { right: '1%', top: '8%', w: 150, rot: -4 },
-  { left: '1.5%', bottom: '5%', w: 155, rot: -6 },
-];
+// Desktop gutters and the genuinely empty vertical gaps. Never behind a
+// paragraph: prints under text is what made the first mobile attempt ugly.
+const DECOR_SLOTS: Record<string, DecorSlot[]> = {
+  approach: [
+    { left: 1, top: 7, w: 190, rot: -6 },
+    { right: 2, top: 22, w: 225, rot: 4 },
+    { left: 8, top: 44, w: 140, rot: 3 },
+    { right: 11, bottom: 10, w: 165, rot: -3 },
+    { left: 3, bottom: 5, w: 150, rot: 2 },
+    { right: 4, top: 62, w: 130, rot: 6 },
+  ],
+  packages: [
+    { left: -1, top: 2, w: 200, rot: -5 },
+    { right: -1, top: 8, w: 170, rot: 6 },
+    { left: 3, top: 33, w: 150, rot: 4 },
+    { right: 2, top: 41, w: 185, rot: -4 },
+    { left: 22, bottom: 27, w: 130, rot: -3 },
+    { right: 34, bottom: 20, w: 145, rot: 5 },
+    { left: 1, bottom: 6, w: 165, rot: 2 },
+    { right: 3, bottom: 4, w: 155, rot: -6 },
+    { left: 9, top: 17, w: 120, rot: 7 },
+  ],
+  journal: [
+    { left: 0.5, top: 9, w: 160, rot: -4 },
+    { right: 1, top: 26, w: 190, rot: 5 },
+    { left: 2, bottom: 10, w: 145, rot: 3 },
+    { right: 2.5, bottom: 6, w: 165, rot: -5 },
+    { left: 4, top: 48, w: 125, rot: 6 },
+    { right: 6, top: 62, w: 135, rot: -2 },
+  ],
+  faq: [
+    { right: 2, top: 4, w: 170, rot: 4 },
+    { left: 1.5, top: 36, w: 145, rot: -4 },
+    { right: 1, bottom: 22, w: 155, rot: 6 },
+    { left: 3.5, bottom: 4, w: 150, rot: -5 },
+    { right: 5, top: 52, w: 125, rot: 2 },
+    { left: 6, top: 16, w: 120, rot: 5 },
+  ],
+  vendors: [
+    { left: 1, top: 8, w: 150, rot: -4 },
+    { right: 2, top: 14, w: 165, rot: 3 },
+    { left: 2.5, bottom: 8, w: 140, rot: 5 },
+    { right: 1, bottom: 10, w: 175, rot: -3 },
+    { left: 7, top: 44, w: 120, rot: 6 },
+  ],
+  selected: [
+    { left: 0.5, top: 5, w: 165, rot: 5 },
+    { right: 1, top: 7, w: 150, rot: -4 },
+    { left: 1.5, bottom: 6, w: 155, rot: -6 },
+    { right: 2, bottom: 4, w: 140, rot: 4 },
+    { left: 5, top: 40, w: 120, rot: 3 },
+    { right: 4, top: 52, w: 130, rot: -5 },
+  ],
+};
+
+const SEAM_COUNT = 7;
+const SEAM_SIZE = 4;
+
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 /**
- * The background tapestry. Absolutely positioned white-bordered prints
- * at fixed slots, zIndex -1 inside an isolated section: they paint ABOVE
- * the section's background but BELOW every piece of content, so the
- * layout, spacing, and the page's white/cream rhythm never move — the
- * photographs are fabric, not blocks. pointer-events none throughout;
- * a print that fails to load removes itself.
+ * Plan one visit's tapestry: deal photos into every slot and jitter the
+ * geometry so placement itself is random, not just which photo lands
+ * where. Runs inside the fetch effect (never at import time). The pool
+ * cycles, so a folder smaller than the slot count still fills the page
+ * and a big folder shows a different subset each time.
  */
-function DecorPrints({ photos, slots }: { photos: WPhoto[]; slots: DecorSlot[] }) {
+function planTapestry(pool: WPhoto[]): Tapestry {
+  if (pool.length === 0) return EMPTY_TAPESTRY;
+  let cursor = 0;
+  const take = (n: number): WPhoto[] =>
+    Array.from({ length: n }, () => pool[cursor++ % pool.length]);
+
+  const place = (slots: DecorSlot[]): PlacedPrint[] =>
+    take(slots.length).map((photo, i) => {
+      const slot = slots[i];
+      const off = (v: number | undefined) =>
+        v === undefined ? undefined : `${Math.max(-2, v + rand(-3, 3)).toFixed(1)}%`;
+      return {
+        photo,
+        top: off(slot.top),
+        bottom: off(slot.bottom),
+        left: off(slot.left),
+        right: off(slot.right),
+        w: Math.round(slot.w * rand(0.82, 1.18)),
+        rot: Number((slot.rot + rand(-2.5, 2.5)).toFixed(1)),
+      };
+    });
+
+  return {
+    approach: place(DECOR_SLOTS.approach),
+    packages: place(DECOR_SLOTS.packages),
+    journal: place(DECOR_SLOTS.journal),
+    faq: place(DECOR_SLOTS.faq),
+    vendors: place(DECOR_SLOTS.vendors),
+    selected: place(DECOR_SLOTS.selected),
+    seams: Array.from({ length: SEAM_COUNT }, () => take(SEAM_SIZE)),
+  };
+}
+
+/**
+ * The desktop tapestry. Absolutely positioned white-bordered prints at
+ * zIndex -1 inside an isolated section: they paint ABOVE the section's
+ * background but BELOW every piece of content, so the layout, spacing
+ * and the page's white/cream rhythm never move. pointer-events none
+ * throughout; a print that fails to load removes itself.
+ */
+function DecorPrints({ items }: { items: PlacedPrint[] }) {
   return (
     <>
-      {slots.map((slot, i) => {
-        const photo = photos[i];
-        if (!photo) return null;
-        return (
-          <Box
-            key={i}
-            data-print=""
-            position="absolute"
-            top={slot.top}
-            bottom={slot.bottom}
-            left={slot.left}
-            right={slot.right}
-            w={`${slot.w}px`}
-            display={{ base: 'none', md: 'block' }}
-            transform={`rotate(${slot.rot}deg)`}
-            zIndex={-1}
-            pointerEvents="none"
-            bg="white"
-            p={{ base: 1, md: 2 }}
-            borderRadius="2px"
-            boxShadow="0 14px 30px -18px rgba(20, 15, 5, 0.4)"
-            aria-hidden="true"
-          >
-            <Box aspectRatio={4 / 3} overflow="hidden">
-              <Image
-                src={photo.url}
-                alt=""
-                w="100%"
-                h="100%"
-                objectFit="cover"
-                loading="lazy"
-                onError={(e) => {
-                  const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
-                  if (print) print.style.display = 'none';
-                }}
-              />
-            </Box>
+      {items.map((item, i) => (
+        <Box
+          key={i}
+          data-print=""
+          position="absolute"
+          top={item.top}
+          bottom={item.bottom}
+          left={item.left}
+          right={item.right}
+          w={`${item.w}px`}
+          display={{ base: 'none', md: 'block' }}
+          transform={`rotate(${item.rot}deg)`}
+          zIndex={-1}
+          pointerEvents="none"
+          bg="white"
+          p={2}
+          borderRadius="2px"
+          boxShadow="0 14px 30px -18px rgba(20, 15, 5, 0.4)"
+          aria-hidden="true"
+        >
+          <Box aspectRatio={4 / 3} overflow="hidden">
+            <Image
+              src={item.photo.url}
+              alt=""
+              w="100%"
+              h="100%"
+              objectFit="cover"
+              loading="lazy"
+              onError={(e) => {
+                const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
+                if (print) print.style.display = 'none';
+              }}
+            />
           </Box>
-        );
-      })}
+        </Box>
+      ))}
     </>
   );
 }
 
+/**
+ * The mobile tapestry: a row of four small slanted prints woven BETWEEN
+ * sections in normal flow. Absolute prints can never be collision-proof
+ * on a narrow column (one landed on the FAQ), so phones get the collage
+ * as seams instead, where overlap is structurally impossible. Hidden
+ * from md up, where the gutters take over.
+ */
+function MobilePrintSeam({ photos }: { photos: WPhoto[] }) {
+  if (photos.length === 0) return null;
+  const tilt = [-5, 2.5, -2, 4];
+  const lift = [5, -7, 6, -4];
+  return (
+    <Flex
+      display={{ base: 'flex', md: 'none' }}
+      justify="center"
+      align="center"
+      gap={2}
+      py={6}
+      px={3}
+      pointerEvents="none"
+      aria-hidden="true"
+    >
+      {photos.slice(0, 4).map((photo, i) => (
+        <Box
+          key={i}
+          data-print=""
+          bg="white"
+          p={1}
+          borderRadius="2px"
+          boxShadow="0 10px 22px -14px rgba(20, 15, 5, 0.45)"
+          transform={`rotate(${tilt[i % 4]}deg) translateY(${lift[i % 4]}px)`}
+          w="24%"
+          maxW="104px"
+        >
+          <Box aspectRatio={4 / 3} overflow="hidden">
+            <Image
+              src={photo.url}
+              alt=""
+              w="100%"
+              h="100%"
+              objectFit="cover"
+              loading="lazy"
+              onError={(e) => {
+                const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
+                if (print) print.style.display = 'none';
+              }}
+            />
+          </Box>
+        </Box>
+      ))}
+    </Flex>
+  );
+}
 
 export default Weddings;

@@ -1,6 +1,7 @@
 import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, IconButton,
   Switch, Input, Textarea, Stack,
+  Slider, SliderTrack, SliderFilledTrack, SliderThumb,
 } from '@chakra-ui/react';
 import {
   useEffect,
@@ -64,6 +65,12 @@ const MAX_SELECTED_WORK = 8;
 const PICKER_PAGE_SIZE = 10;
 
 const DEFAULT_FOCUS = '50% 50%';
+// Zoom is a plain scale factor. 1 = the whole frame (object-fit cover),
+// 3 = tight crop. Server clamps to the same range.
+const DEFAULT_ZOOM = 1;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 0.05;
 
 // Focus values are CSS object-position strings — since the drag
 // editors, percent pairs like "37% 62%"; the dropdown era's keywords
@@ -104,12 +111,21 @@ function parseFocusPercent(focus: string): { x: number; y: number } {
   return { x: Math.min(100, Number(m[1])), y: Math.min(100, Number(m[2])) };
 }
 
-// One featured journal entry: which post, plus where its cover anchors
+/** Coerce an unknown wire value into a usable zoom factor. */
+function normalizeZoom(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return DEFAULT_ZOOM;
+  return clamp(n, MIN_ZOOM, MAX_ZOOM);
+}
+
+// One featured journal entry: which post, plus how its cover is framed
 // in the slideshow's big stage and in the thumbnail strip.
 interface FeaturedEntry {
   slug: string;
   focusStage: string;
   focusThumb: string;
+  zoomStage: number;
+  zoomThumb: number;
 }
 
 /** Defensive parse of the settings `featured` array into typed entries. */
@@ -120,12 +136,17 @@ function parseFeaturedEntries(input: unknown): FeaturedEntry[] {
     const slug =
       item && typeof item === 'object' && typeof (item as { slug?: unknown }).slug === 'string'
         ? ((item as { slug: string }).slug || '').trim()
-        : '';
+        : typeof item === 'string'
+          ? item.trim()
+          : '';
     if (!slug) continue;
+    const obj = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
     out.push({
       slug,
-      focusStage: normalizeFocus((item as { focusStage?: unknown }).focusStage),
-      focusThumb: normalizeFocus((item as { focusThumb?: unknown }).focusThumb),
+      focusStage: normalizeFocus(obj.focusStage),
+      focusThumb: normalizeFocus(obj.focusThumb),
+      zoomStage: normalizeZoom(obj.zoomStage),
+      zoomThumb: normalizeZoom(obj.zoomThumb),
     });
   }
   return out;
@@ -136,6 +157,7 @@ function parseFeaturedEntries(input: unknown): FeaturedEntry[] {
 interface PinnedEntry {
   url: string;
   focus: string;
+  zoom: number;
 }
 
 /** Defensive parse of the settings `pinned` array, padded to 5 slots. */
@@ -143,18 +165,58 @@ function parsePinnedEntries(input: unknown): PinnedEntry[] {
   const out: PinnedEntry[] = [];
   if (Array.isArray(input)) {
     for (const item of input.slice(0, MAX_PINNED)) {
+      const obj = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
       out.push({
-        url:
-          item && typeof item === 'object' && typeof (item as { url?: unknown }).url === 'string'
-            ? ((item as { url: string }).url || '').trim()
-            : '',
-        focus: normalizeFocus((item as { focus?: unknown } | null)?.focus),
+        url: typeof obj.url === 'string' ? obj.url.trim() : typeof item === 'string' ? item.trim() : '',
+        focus: normalizeFocus(obj.focus),
+        zoom: normalizeZoom(obj.zoom),
       });
     }
   }
-  while (out.length < MAX_PINNED) out.push({ url: '', focus: DEFAULT_FOCUS });
+  while (out.length < MAX_PINNED) {
+    out.push({ url: '', focus: DEFAULT_FOCUS, zoom: DEFAULT_ZOOM });
+  }
   return out;
 }
+
+// One curated mosaic tile: which gallery photo, plus how it is framed
+// in whichever mosaic position it currently occupies.
+interface SelectedEntry {
+  slug: string;
+  focus: string;
+  zoom: number;
+}
+
+/**
+ * Defensive parse of the settings `selectedWork` array. Tolerates the
+ * legacy plain-slug array (normalized server-side too) so a stale
+ * cached payload can't blank the card.
+ */
+function parseSelectedEntries(input: unknown): SelectedEntry[] {
+  if (!Array.isArray(input)) return [];
+  const out: SelectedEntry[] = [];
+  for (const item of input) {
+    if (typeof item === 'string') {
+      const slug = item.trim();
+      if (slug) out.push({ slug, focus: DEFAULT_FOCUS, zoom: DEFAULT_ZOOM });
+      continue;
+    }
+    const obj = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
+    const slug = typeof obj.slug === 'string' ? obj.slug.trim() : '';
+    if (!slug) continue;
+    out.push({ slug, focus: normalizeFocus(obj.focus), zoom: normalizeZoom(obj.zoom) });
+  }
+  return out;
+}
+
+/**
+ * The mosaic makes every 5th tile (positions 0 and 5) a large 2-row
+ * feature and leaves the rest as small 1-row tiles, so the crop a
+ * photo gets depends on where it sits in the order. Reordering
+ * re-derives this, which is exactly what the page does.
+ */
+const isLargeMosaicTile = (index: number) => index % 5 === 0;
+const mosaicAspect = (index: number) => (isLargeMosaicTile(index) ? 2 : 1.52);
 
 // Editor aspect ratios per pinned slot: three portrait package cards,
 // the FAQ portrait, and the wide quote-section band. Must track how
@@ -165,7 +227,7 @@ interface WeddingsSettings {
   pinned: PinnedEntry[];
   folderId: string;
   featured: FeaturedEntry[];
-  selectedWork: string[];
+  selectedWork: SelectedEntry[];
 }
 
 // Public gallery/list shape (the fields this card uses; the endpoint
@@ -271,7 +333,7 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
           pinned: parsePinnedEntries(data.pinned),
           folderId: typeof data.folderId === 'string' ? data.folderId : '',
           featured: parseFeaturedEntries(data.featured),
-          selectedWork: Array.isArray(data.selectedWork) ? data.selectedWork : [],
+          selectedWork: parseSelectedEntries(data.selectedWork),
         });
       } else {
         setError(data.error || t.weddings.loadFailed(res.status));
@@ -387,6 +449,9 @@ function PinnedCard({
   const setFocus = (index: number, focus: string) =>
     setEntries((cur) => cur.map((e, i) => (i === index ? { ...e, focus } : e)));
 
+  const setZoom = (index: number, zoom: number) =>
+    setEntries((cur) => cur.map((e, i) => (i === index ? { ...e, zoom } : e)));
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -399,7 +464,7 @@ function PinnedCard({
           action: 'set',
           // All five slots in order — empty urls hold their POSITION
           // (slot index is the slot's job on the page).
-          pinned: entries.map((e) => ({ url: e.url.trim(), focus: e.focus })),
+          pinned: entries.map((e) => ({ url: e.url.trim(), focus: e.focus, zoom: e.zoom })),
           folderId: folderInput.trim(),
         }),
       });
@@ -454,6 +519,8 @@ function PinnedCard({
                   aspect={PINNED_SLOT_ASPECTS[i]}
                   focus={entry.focus}
                   onChange={(focus) => setFocus(i, focus)}
+                  zoom={entry.zoom}
+                  onZoomChange={(zoom) => setZoom(i, zoom)}
                   editorLabel={t.weddings.positionLabel}
                 />
               </Box>
@@ -493,22 +560,26 @@ function PinnedCard({
 
 /**
  * The preview IS the viewport: a box with the real slot's aspect ratio
- * showing the photo object-fit cover at the current focus. Dragging
- * pans the photo live — what you see in the box is exactly the crop
- * the public page renders. Replaces the dropdowns Alex couldn't see
- * the effect of.
+ * showing the photo object-fit cover at the current focus, scaled by
+ * the current zoom around that same focal point (exactly what the
+ * public page does). Dragging pans, the slider zooms — what you see in
+ * the box is the crop the page renders.
  */
 function DragFocusEditor({
   src,
   aspect,
   focus,
   onChange,
+  zoom,
+  onZoomChange,
   editorLabel,
 }: {
   src: string;
   aspect: number;
   focus: string;
   onChange: (focus: string) => void;
+  zoom: number;
+  onZoomChange: (z: number) => void;
   editorLabel: string;
 }) {
   const { t } = useAdminLang();
@@ -581,6 +652,10 @@ function DragFocusEditor({
           objectFit="cover"
           objectPosition={focus}
           pointerEvents="none"
+          // Zoom scales around the focal point, so zooming in keeps
+          // whatever was chosen by dragging centred in the frame.
+          transform={`scale(${zoom})`}
+          transformOrigin={focus}
           sx={{ userSelect: 'none' }}
         />
       </Box>
@@ -596,10 +671,51 @@ function DragFocusEditor({
           {editorLabel}
         </Text>
         <Box flex={1} />
-        <CTAButton onClick={() => onChange(DEFAULT_FOCUS)} variant="ghost" size="sm">
+        <CTAButton
+          onClick={() => {
+            onChange(DEFAULT_FOCUS);
+            onZoomChange(DEFAULT_ZOOM);
+          }}
+          variant="ghost"
+          size="sm"
+        >
           {t.weddings.focusReset}
         </CTAButton>
       </Flex>
+
+      {/* Zoom. Independent of the drag: the slider changes scale only,
+          dragging changes the focal point only. */}
+      <HStack spacing={3} mt={1}>
+        <Text
+          fontSize="2xs"
+          fontWeight="500"
+          textTransform="uppercase"
+          letterSpacing="0.1em"
+          color="gray.500"
+          whiteSpace="nowrap"
+        >
+          {t.weddings.zoomLabel}
+        </Text>
+        <Slider
+          value={zoom}
+          onChange={(v) => onZoomChange(clamp(v, MIN_ZOOM, MAX_ZOOM))}
+          min={MIN_ZOOM}
+          max={MAX_ZOOM}
+          step={ZOOM_STEP}
+          aria-label={t.weddings.zoomLabel}
+          flex={1}
+          focusThumbOnChange={false}
+        >
+          <SliderTrack bg="gray.200">
+            <SliderFilledTrack bg="brand.accent" />
+          </SliderTrack>
+          <SliderThumb boxSize={4} borderWidth="1px" borderColor="brand.accentBorder" />
+        </Slider>
+        <Text fontSize="2xs" color="gray.500" fontWeight="400" minW="34px" textAlign="right">
+          {`${zoom.toFixed(1)}x`}
+        </Text>
+      </HStack>
+
       <Text fontSize="2xs" color="gray.400" fontWeight="300" lineHeight="1.5">
         {t.weddings.dragHint}
       </Text>
@@ -701,10 +817,22 @@ function JournalCard({
     setEntries((cur) =>
       cur.length >= MAX_FEATURED || cur.some((e) => e.slug === slug)
         ? cur
-        : [...cur, { slug, focusStage: DEFAULT_FOCUS, focusThumb: DEFAULT_FOCUS }],
+        : [
+            ...cur,
+            {
+              slug,
+              focusStage: DEFAULT_FOCUS,
+              focusThumb: DEFAULT_FOCUS,
+              zoomStage: DEFAULT_ZOOM,
+              zoomThumb: DEFAULT_ZOOM,
+            },
+          ],
     );
 
   const setFocus = (slug: string, field: 'focusStage' | 'focusThumb', value: string) =>
+    setEntries((cur) => cur.map((e) => (e.slug === slug ? { ...e, [field]: value } : e)));
+
+  const setZoom = (slug: string, field: 'zoomStage' | 'zoomThumb', value: number) =>
     setEntries((cur) => cur.map((e) => (e.slug === slug ? { ...e, [field]: value } : e)));
 
   const handleSave = async () => {
@@ -793,6 +921,7 @@ function JournalCard({
                   onMove={(delta) => move(i, delta)}
                   onRemove={() => remove(entry.slug)}
                   onFocusChange={(field, value) => setFocus(entry.slug, field, value)}
+                  onZoomChange={(field, value) => setZoom(entry.slug, field, value)}
                 />
               ))}
             </VStack>
@@ -846,6 +975,7 @@ function FeaturedRow({
   onMove,
   onRemove,
   onFocusChange,
+  onZoomChange,
 }: {
   entry: FeaturedEntry;
   post: JournalPostRow | undefined;
@@ -854,6 +984,7 @@ function FeaturedRow({
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
   onFocusChange: (field: 'focusStage' | 'focusThumb', value: string) => void;
+  onZoomChange: (field: 'zoomStage' | 'zoomThumb', value: number) => void;
 }) {
   const { t } = useAdminLang();
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -940,6 +1071,8 @@ function FeaturedRow({
                 aspect={1150 / 470}
                 focus={entry.focusStage}
                 onChange={(v) => onFocusChange('focusStage', v)}
+                zoom={entry.zoomStage}
+                onZoomChange={(z) => onZoomChange('zoomStage', z)}
                 editorLabel={t.weddings.focusStageLabel}
               />
               <DragFocusEditor
@@ -947,6 +1080,8 @@ function FeaturedRow({
                 aspect={2.6}
                 focus={entry.focusThumb}
                 onChange={(v) => onFocusChange('focusThumb', v)}
+                zoom={entry.zoomThumb}
+                onZoomChange={(z) => onZoomChange('zoomThumb', z)}
                 editorLabel={t.weddings.focusThumbLabel}
               />
             </Stack>
@@ -998,12 +1133,14 @@ function SelectedWorkCard({
   initialSelected,
 }: {
   adminPassword: string;
-  initialSelected: string[];
+  initialSelected: SelectedEntry[];
 }) {
   const { t } = useAdminLang();
   const toast = useToast();
   const [photos, setPhotos] = useState<GalleryPhotoRow[] | null>(null);
-  const [order, setOrder] = useState<string[]>(initialSelected.slice(0, MAX_SELECTED_WORK));
+  const [entries, setEntries] = useState<SelectedEntry[]>(
+    initialSelected.slice(0, MAX_SELECTED_WORK),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1036,7 +1173,7 @@ function SelectedWorkCard({
   }, []);
 
   const move = (index: number, delta: -1 | 1) =>
-    setOrder((cur) => {
+    setEntries((cur) => {
       const target = index + delta;
       if (target < 0 || target >= cur.length) return cur;
       const next = [...cur];
@@ -1044,12 +1181,20 @@ function SelectedWorkCard({
       return next;
     });
 
-  const remove = (slug: string) => setOrder((cur) => cur.filter((s) => s !== slug));
+  const remove = (slug: string) => setEntries((cur) => cur.filter((e) => e.slug !== slug));
 
   const add = (slug: string) =>
-    setOrder((cur) =>
-      cur.length >= MAX_SELECTED_WORK || cur.includes(slug) ? cur : [...cur, slug],
+    setEntries((cur) =>
+      cur.length >= MAX_SELECTED_WORK || cur.some((e) => e.slug === slug)
+        ? cur
+        : [...cur, { slug, focus: DEFAULT_FOCUS, zoom: DEFAULT_ZOOM }],
     );
+
+  const setFocus = (slug: string, focus: string) =>
+    setEntries((cur) => cur.map((e) => (e.slug === slug ? { ...e, focus } : e)));
+
+  const setZoom = (slug: string, zoom: number) =>
+    setEntries((cur) => cur.map((e) => (e.slug === slug ? { ...e, zoom } : e)));
 
   const handleSave = async () => {
     setSaving(true);
@@ -1061,7 +1206,9 @@ function SelectedWorkCard({
         body: JSON.stringify({
           password: adminPassword,
           action: 'set',
-          selectedWork: order,
+          // Objects now, in display order — position decides the crop,
+          // so order and framing travel together.
+          selectedWork: entries,
         }),
       });
       const data = await res.json();
@@ -1078,8 +1225,8 @@ function SelectedWorkCard({
   };
 
   const bySlug = new Map((photos ?? []).map((p) => [p.slug, p]));
-  const available = (photos ?? []).filter((p) => !order.includes(p.slug));
-  const atCap = order.length >= MAX_SELECTED_WORK;
+  const available = (photos ?? []).filter((p) => !entries.some((e) => e.slug === p.slug));
+  const atCap = entries.length >= MAX_SELECTED_WORK;
 
   return (
     <SectionCard
@@ -1098,10 +1245,15 @@ function SelectedWorkCard({
           py={0.5}
           borderRadius="sm"
         >
-          {t.weddings.selectedCount(order.length, MAX_SELECTED_WORK)}
+          {t.weddings.selectedCount(entries.length, MAX_SELECTED_WORK)}
         </Badge>
       }
     >
+      {/* Why the crop shape changes as photos move around. */}
+      <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" mb={4}>
+        {t.weddings.mosaicHelp}
+      </Text>
+
       {error && <ErrorBox message={error} />}
 
       {loading ? (
@@ -1113,79 +1265,26 @@ function SelectedWorkCard({
           {/* Selection — ordered; a slug whose photo got unpublished or
               recategorized still renders (as "unavailable") so it can be
               removed rather than silently lingering in settings. */}
-          {order.length === 0 ? (
+          {entries.length === 0 ? (
             <Text fontSize="sm" color="gray.500" fontWeight="300" py={2}>
               {t.weddings.selectedEmpty}
             </Text>
           ) : (
             <VStack spacing={2} align="stretch">
-              {order.map((slug, i) => {
-                const photo = bySlug.get(slug);
-                return (
-                  <Flex
-                    key={slug}
-                    align="center"
-                    gap={3}
-                    bg="gray.50"
-                    border="1px solid"
-                    borderColor="gray.200"
-                    borderRadius="sm"
-                    p={2}
-                  >
-                    <PhotoThumb url={photo?.url ?? null} />
-                    <Text
-                      flex={1}
-                      minW={0}
-                      fontSize="sm"
-                      fontWeight="500"
-                      color={photo ? 'gray.800' : 'orange.600'}
-                      noOfLines={1}
-                    >
-                      {photo ? displayPhotoTitle(photo) : t.weddings.unavailablePhoto(slug)}
-                    </Text>
-                    <HStack spacing={0} flexShrink={0}>
-                      <IconButton
-                        aria-label={t.weddings.moveUpAria}
-                        icon={<Icon as={FaChevronUp} boxSize={3} />}
-                        onClick={() => move(i, -1)}
-                        isDisabled={i === 0}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="gray.500"
-                        _hover={{ color: 'brand.accent' }}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                      <IconButton
-                        aria-label={t.weddings.moveDownAria}
-                        icon={<Icon as={FaChevronDown} boxSize={3} />}
-                        onClick={() => move(i, 1)}
-                        isDisabled={i === order.length - 1}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="gray.500"
-                        _hover={{ color: 'brand.accent' }}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                      <IconButton
-                        aria-label={t.weddings.removeFromSelectionAria}
-                        icon={<Icon as={FaTimes} boxSize={3.5} />}
-                        onClick={() => remove(slug)}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="red.500"
-                        _hover={{ bg: 'red.50', color: 'red.600' }}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                    </HStack>
-                  </Flex>
-                );
-              })}
+              {entries.map((entry, i) => (
+                <SelectedRow
+                  key={entry.slug}
+                  entry={entry}
+                  photo={bySlug.get(entry.slug)}
+                  index={i}
+                  isFirst={i === 0}
+                  isLast={i === entries.length - 1}
+                  onMove={(delta) => move(i, delta)}
+                  onRemove={() => remove(entry.slug)}
+                  onFocusChange={(v) => setFocus(entry.slug, v)}
+                  onZoomChange={(z) => setZoom(entry.slug, z)}
+                />
+              ))}
             </VStack>
           )}
 
@@ -1220,6 +1319,125 @@ function SelectedWorkCard({
         </>
       )}
     </SectionCard>
+  );
+}
+
+/**
+ * One mosaic tile: title row with reorder/remove, plus an "Adjust photo
+ * position" disclosure holding a single drag editor (same pattern as
+ * the journal rows). The editor's aspect follows the tile's CURRENT
+ * position, so reordering re-frames the preview the way the live
+ * mosaic re-frames the tile.
+ */
+function SelectedRow({
+  entry,
+  photo,
+  index,
+  isFirst,
+  isLast,
+  onMove,
+  onRemove,
+  onFocusChange,
+  onZoomChange,
+}: {
+  entry: SelectedEntry;
+  photo: GalleryPhotoRow | undefined;
+  index: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onMove: (delta: -1 | 1) => void;
+  onRemove: () => void;
+  onFocusChange: (value: string) => void;
+  onZoomChange: (value: number) => void;
+}) {
+  const { t } = useAdminLang();
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const large = isLargeMosaicTile(index);
+
+  return (
+    <Box bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="sm" p={2}>
+      <Flex align="center" gap={3}>
+        <PhotoThumb url={photo?.url ?? null} />
+        <Text
+          flex={1}
+          minW={0}
+          fontSize="sm"
+          fontWeight="500"
+          color={photo ? 'gray.800' : 'orange.600'}
+          noOfLines={1}
+        >
+          {photo ? displayPhotoTitle(photo) : t.weddings.unavailablePhoto(entry.slug)}
+        </Text>
+        <HStack spacing={0} flexShrink={0}>
+          <IconButton
+            aria-label={t.weddings.moveUpAria}
+            icon={<Icon as={FaChevronUp} boxSize={3} />}
+            onClick={() => onMove(-1)}
+            isDisabled={isFirst}
+            variant="ghost"
+            size="sm"
+            minW="40px"
+            minH="40px"
+            color="gray.500"
+            _hover={{ color: 'brand.accent' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
+          <IconButton
+            aria-label={t.weddings.moveDownAria}
+            icon={<Icon as={FaChevronDown} boxSize={3} />}
+            onClick={() => onMove(1)}
+            isDisabled={isLast}
+            variant="ghost"
+            size="sm"
+            minW="40px"
+            minH="40px"
+            color="gray.500"
+            _hover={{ color: 'brand.accent' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
+          <IconButton
+            aria-label={t.weddings.removeFromSelectionAria}
+            icon={<Icon as={FaTimes} boxSize={3.5} />}
+            onClick={onRemove}
+            variant="ghost"
+            size="sm"
+            minW="40px"
+            minH="40px"
+            color="red.500"
+            _hover={{ bg: 'red.50', color: 'red.600' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
+        </HStack>
+      </Flex>
+
+      {/* An unavailable slug has no photo to frame — only the row's
+          remove button is useful there. */}
+      {photo && (
+        <Box mt={1}>
+          <CTAButton
+            onClick={() => setAdjustOpen((o) => !o)}
+            icon={adjustOpen ? FaChevronUp : FaChevronDown}
+            variant="ghost"
+            size="sm"
+          >
+            {t.weddings.adjustPosition}
+          </CTAButton>
+          {adjustOpen && (
+            <Box mt={2} pb={1} px={1}>
+              <DragFocusEditor
+                src={photo.url}
+                aspect={mosaicAspect(index)}
+                focus={entry.focus}
+                onChange={onFocusChange}
+                zoom={entry.zoom}
+                onZoomChange={onZoomChange}
+                editorLabel={large ? t.weddings.mosaicLargeLabel : t.weddings.mosaicSmallLabel}
+              />
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
   );
 }
 

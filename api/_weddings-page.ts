@@ -81,12 +81,47 @@ export function isValidFocus(v: unknown): boolean {
   );
 }
 
+/** Zoom multiplier for the drag editors: 1x to 3x, clamped. */
+export function asZoom(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(3, Math.max(1, Math.round(n * 100) / 100));
+}
+
 export interface FeaturedEntry {
   slug: string;
   /** Focal point of the cover in the big slideshow stage. */
   focusStage: string;
   /** Focal point in the small thumbnail strip. */
   focusThumb: string;
+  zoomStage: number;
+  zoomThumb: number;
+}
+
+/** One curated gallery photo in the clickable Selected Work mosaic. */
+export interface SelectedEntry {
+  slug: string;
+  focus: string;
+  zoom: number;
+}
+
+export function parseSelected(raw: string | null | undefined, cap: number): SelectedEntry[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const out: SelectedEntry[] = [];
+    for (const item of arr) {
+      if (typeof item === 'string' && item.trim()) {
+        out.push({ slug: item.trim(), focus: '50% 50%', zoom: 1 });
+      } else if (item && typeof item === 'object' && typeof item.slug === 'string' && item.slug.trim()) {
+        out.push({ slug: item.slug.trim(), focus: asFocus(item.focus), zoom: asZoom(item.zoom) });
+      }
+    }
+    return out.slice(0, cap);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -98,6 +133,7 @@ export interface FeaturedEntry {
 export interface PinnedEntry {
   url: string;
   focus: string;
+  zoom: number;
 }
 
 export function parsePinned(raw: string | null | undefined, cap: number): PinnedEntry[] {
@@ -108,13 +144,13 @@ export function parsePinned(raw: string | null | undefined, cap: number): Pinned
     const out: PinnedEntry[] = [];
     for (const item of arr) {
       if (typeof item === 'string') {
-        out.push({ url: item.trim(), focus: '50% 50%' });
+        out.push({ url: item.trim(), focus: '50% 50%', zoom: 1 });
       } else if (item && typeof item === 'object' && typeof item.url === 'string') {
         // Empty urls are kept: slots are POSITIONAL (0-2 packages, 3 FAQ,
         // 4 quote background), so an unfilled slot must hold its place.
-        out.push({ url: item.url.trim(), focus: asFocus(item.focus) });
+        out.push({ url: item.url.trim(), focus: asFocus(item.focus), zoom: asZoom(item.zoom) });
       } else {
-        out.push({ url: '', focus: '50% 50%' });
+        out.push({ url: '', focus: '50% 50%', zoom: 1 });
       }
     }
     return out.slice(0, cap);
@@ -137,12 +173,20 @@ export function parseFeatured(raw: string | null | undefined, cap: number): Feat
     const out: FeaturedEntry[] = [];
     for (const item of arr) {
       if (typeof item === 'string' && item.trim()) {
-        out.push({ slug: item.trim(), focusStage: 'center', focusThumb: 'center' });
+        out.push({
+          slug: item.trim(),
+          focusStage: '50% 50%',
+          focusThumb: '50% 50%',
+          zoomStage: 1,
+          zoomThumb: 1,
+        });
       } else if (item && typeof item === 'object' && typeof item.slug === 'string' && item.slug.trim()) {
         out.push({
           slug: item.slug.trim(),
           focusStage: asFocus(item.focusStage),
           focusThumb: asFocus(item.focusThumb),
+          zoomStage: asZoom(item.zoomStage),
+          zoomThumb: asZoom(item.zoomThumb),
         });
       }
     }
@@ -177,7 +221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Unfilled slots stay as null so nothing shifts.
     const pinned = parsePinned(state.get(KEY_HEROES), 5).map((p) => {
       const photo = p.url ? heroToPhoto(p.url) : null;
-      return photo ? { ...photo, focus: p.focus } : null;
+      return photo ? { ...photo, focus: p.focus, zoom: p.zoom } : null;
     });
 
     const featured = parseFeatured(state.get(KEY_FEATURED), 10);
@@ -208,8 +252,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // photos (distinct from the ambient hero/folder pools). Resolved
     // against gallery_photos + the static-file manifest so a renamed or
     // unpublished slug silently drops out instead of 404ing a tile.
-    const selectedSlugs = parseStringArray(state.get(KEY_SELECTED), 8);
-    let selectedWork: Array<{ slug: string; url: string; alt: string }> = [];
+    const selectedEntries = parseSelected(state.get(KEY_SELECTED), 8);
+    const selectedSlugs = selectedEntries.map((e) => e.slug);
+    let selectedWork: Array<{ slug: string; url: string; alt: string; focus: string; zoom: number }> = [];
     if (selectedSlugs.length > 0) {
       const rows = (await sql`
         SELECT slug, alt FROM gallery_photos
@@ -217,15 +262,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           AND category = 'weddings' AND slug = ANY(${selectedSlugs})
       `) as Array<{ slug: string; alt: string }>;
       const bySlug = new Map(rows.map((r) => [r.slug, r]));
-      selectedWork = selectedSlugs
-        .map((slug) => bySlug.get(slug))
-        .filter((r): r is { slug: string; alt: string } => Boolean(r))
-        .filter((r) => Boolean((galleryStatics as Record<string, string>)[`weddings/${r.slug}`]))
-        .map((r) => ({
-          slug: r.slug,
-          url: `/assets/photos/weddings/${r.slug}.webp`,
-          alt: r.alt,
-        }));
+      selectedWork = selectedEntries
+        .map((e) => {
+          const row = bySlug.get(e.slug);
+          if (!row) return null;
+          if (!(galleryStatics as Record<string, string>)[`weddings/${e.slug}`]) return null;
+          return {
+            slug: e.slug,
+            url: `/assets/photos/weddings/${e.slug}.webp`,
+            alt: row.alt,
+            focus: e.focus,
+            zoom: e.zoom,
+          };
+        })
+        .filter((r): r is { slug: string; url: string; alt: string; focus: string; zoom: number } =>
+          r !== null,
+        );
     }
 
     const vendorRows = (await sql`

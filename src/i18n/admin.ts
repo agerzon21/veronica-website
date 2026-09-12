@@ -2439,11 +2439,13 @@ const dict = {
     focusStageLabel: { en: 'Large photo', ru: 'Большое фото' },
     focusThumbLabel: { en: 'Small photo', ru: 'Маленькое фото' },
     adjustPosition: { en: 'Adjust photo position', ru: 'Настроить положение фото' },
-    // Shared strings for the drag-to-focus editor (pinned + journal).
+    // Shared strings for the drag-to-focus editor (pinned, journal,
+    // selected work). Reset clears both the position and the zoom.
     dragHint: {
-      en: 'Drag the photo to choose what stays in view.',
-      ru: 'Перетащи фото, чтобы выбрать, что останется в кадре.',
+      en: 'Drag the photo to choose what stays in view, and use the zoom slider to crop closer.',
+      ru: 'Перетащи фото, чтобы выбрать, что останется в кадре, а ползунком приближения подрежь ближе.',
     },
+    zoomLabel: { en: 'Zoom', ru: 'Приближение' },
     focusReset: { en: 'Reset', ru: 'Сбросить' },
 
     // ── Card 3: Selected work ───────────────────────────────────
@@ -2459,6 +2461,14 @@ const dict = {
       en: (n: number, max: number) => `${n} / ${max}`,
       ru: (n: number, max: number) => `${n} / ${max}`,
     },
+    // The mosaic gives every fifth tile a tall feature slot, so a
+    // photo's crop depends on where it sits in this order.
+    mosaicHelp: {
+      en: 'The first photo and the sixth photo get the large tiles, the rest get small ones. Open Adjust photo position on any row to set what stays in view for its current place.',
+      ru: 'Первое и шестое фото занимают большие плитки, остальные маленькие. Открой «Настроить положение фото» в любой строке, чтобы выбрать, что остаётся в кадре на текущем месте.',
+    },
+    mosaicLargeLabel: { en: 'Large tile', ru: 'Большая плитка' },
+    mosaicSmallLabel: { en: 'Small tile', ru: 'Маленькая плитка' },
     selectedEmpty: {
       en: 'No photos selected yet. Add one from the list below.',
       ru: 'Пока ничего не выбрано. Добавь фото из списка ниже.',
