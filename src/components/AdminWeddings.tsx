@@ -7,6 +7,7 @@ import FaBookOpen from '../icons/fa/FaBookOpen';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaEdit from '../icons/fa/FaEdit';
+import FaImage from '../icons/fa/FaImage';
 import FaPlus from '../icons/fa/FaPlus';
 import FaSyncAlt from '../icons/fa/FaSyncAlt';
 import FaTimes from '../icons/fa/FaTimes';
@@ -19,13 +20,16 @@ import { useAdminLang } from '../i18n/admin';
 
 /**
  * "Weddings" tab in /admin — everything the weddings page needs, in
- * three stacked cards (the Studio-group layout language):
+ * four stacked cards (the Studio-group layout language):
  *
  *   1. Page photos — six pinned hero links + the Drive sprinkle-pool
  *      folder. Saved together via weddings-settings.
- *   2. From the Journal — the ordered featured-post list (max 10),
+ *   2. From the Journal — the ordered featured-post list (max 6),
  *      picked from published journal posts. Saved via weddings-settings.
- *   3. Recommended vendors — full CRUD following AdminReviews: list +
+ *   3. Selected work — the ordered clickable mosaic (max 8), picked
+ *      from published wedding gallery photos; each links to its
+ *      /photo/weddings/<slug> page. Saved via weddings-settings.
+ *   4. Recommended vendors — full CRUD following AdminReviews: list +
  *      inline Active toggle + MobileSheetModal editor + super-only
  *      delete behind ConfirmDialog.
  *
@@ -40,12 +44,23 @@ interface Props {
 }
 
 const MAX_HEROES = 6;
-const MAX_FEATURED = 10;
+const MAX_FEATURED = 6;
+const MAX_SELECTED_WORK = 8;
 
 interface WeddingsSettings {
   heroes: string[];
   folderId: string;
   featuredSlugs: string[];
+  selectedWork: string[];
+}
+
+// Public gallery/list shape (the fields this card uses; the endpoint
+// returns more). `url` is served locally — usable as a thumb directly.
+interface GalleryPhotoRow {
+  slug: string;
+  url: string;
+  alt: string;
+  title: string;
 }
 
 interface JournalPostRow {
@@ -142,6 +157,7 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
           heroes: Array.isArray(data.heroes) ? data.heroes : [],
           folderId: typeof data.folderId === 'string' ? data.folderId : '',
           featuredSlugs: Array.isArray(data.featuredSlugs) ? data.featuredSlugs : [],
+          selectedWork: Array.isArray(data.selectedWork) ? data.selectedWork : [],
         });
       } else {
         setError(data.error || t.weddings.loadFailed(res.status));
@@ -219,6 +235,10 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
           <JournalCard
             adminPassword={adminPassword}
             initialFeatured={settings.featuredSlugs}
+          />
+          <SelectedWorkCard
+            adminPassword={adminPassword}
+            initialSelected={settings.selectedWork}
           />
           <VendorsCard adminPassword={adminPassword} adminLevel={adminLevel} />
         </VStack>
@@ -669,7 +689,321 @@ function PostThumb({ coverUrl }: { coverUrl: string | null }) {
   );
 }
 
-// ── Card 3: Recommended vendors ────────────────────────────────────
+// ── Card 3: Selected work ──────────────────────────────────────────
+
+/**
+ * The public gallery suffixes titles with " | Vero Photography" for
+ * legacy consumers — strip it for the picker rows; fall back to the
+ * slug when a photo has no title at all.
+ */
+function displayPhotoTitle(photo: GalleryPhotoRow): string {
+  const cleaned = (photo.title || '').replace(/\s*\|\s*Vero Photography\s*$/, '').trim();
+  return cleaned || photo.slug;
+}
+
+function SelectedWorkCard({
+  adminPassword,
+  initialSelected,
+}: {
+  adminPassword: string;
+  initialSelected: string[];
+}) {
+  const { t } = useAdminLang();
+  const toast = useToast();
+  const [photos, setPhotos] = useState<GalleryPhotoRow[] | null>(null);
+  const [order, setOrder] = useState<string[]>(initialSelected.slice(0, MAX_SELECTED_WORK));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Public endpoint — no password. Same data the live mosaic reads.
+        const res = await fetch('/api/gallery/list?category=weddings');
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.success) {
+          setPhotos(data.photos as GalleryPhotoRow[]);
+        } else {
+          setError(data.error || t.weddings.loadFailed(res.status));
+        }
+      } catch {
+        if (!cancelled) setError(t.common.couldNotReach);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const move = (index: number, delta: -1 | 1) =>
+    setOrder((cur) => {
+      const target = index + delta;
+      if (target < 0 || target >= cur.length) return cur;
+      const next = [...cur];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+
+  const remove = (slug: string) => setOrder((cur) => cur.filter((s) => s !== slug));
+
+  const add = (slug: string) =>
+    setOrder((cur) =>
+      cur.length >= MAX_SELECTED_WORK || cur.includes(slug) ? cur : [...cur, slug],
+    );
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/weddings-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          action: 'set',
+          selectedWork: order,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({ title: t.weddings.selectedSaved, status: 'success', duration: 3000, isClosable: true });
+      } else {
+        setError(data.error || t.weddings.saveFailed(res.status));
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const bySlug = new Map((photos ?? []).map((p) => [p.slug, p]));
+  const available = (photos ?? []).filter((p) => !order.includes(p.slug));
+  const atCap = order.length >= MAX_SELECTED_WORK;
+
+  return (
+    <SectionCard
+      title={t.weddings.selectedWorkTitle}
+      subtitle={t.weddings.selectedWorkSubtitle}
+      headerRight={
+        <Badge
+          bg="brand.surface"
+          color="brand.accentText"
+          border="1px solid"
+          borderColor="brand.accentBorder"
+          fontSize={{ base: 'xs', md: '2xs' }}
+          fontWeight="500"
+          letterSpacing="0.1em"
+          px={2}
+          py={0.5}
+          borderRadius="sm"
+        >
+          {t.weddings.selectedCount(order.length, MAX_SELECTED_WORK)}
+        </Badge>
+      }
+    >
+      {error && <ErrorBox message={error} />}
+
+      {loading ? (
+        <Flex justify="center" py={6}>
+          <Spinner size="sm" color="brand.accent" />
+        </Flex>
+      ) : (
+        <>
+          {/* Selection — ordered; a slug whose photo got unpublished or
+              recategorized still renders (as "unavailable") so it can be
+              removed rather than silently lingering in settings. */}
+          {order.length === 0 ? (
+            <Text fontSize="sm" color="gray.500" fontWeight="300" py={2}>
+              {t.weddings.selectedEmpty}
+            </Text>
+          ) : (
+            <VStack spacing={2} align="stretch">
+              {order.map((slug, i) => {
+                const photo = bySlug.get(slug);
+                return (
+                  <Flex
+                    key={slug}
+                    align="center"
+                    gap={3}
+                    bg="gray.50"
+                    border="1px solid"
+                    borderColor="gray.200"
+                    borderRadius="sm"
+                    p={2}
+                  >
+                    <PhotoThumb url={photo?.url ?? null} />
+                    <Text
+                      flex={1}
+                      minW={0}
+                      fontSize="sm"
+                      fontWeight="500"
+                      color={photo ? 'gray.800' : 'orange.600'}
+                      noOfLines={1}
+                    >
+                      {photo ? displayPhotoTitle(photo) : t.weddings.unavailablePhoto(slug)}
+                    </Text>
+                    <HStack spacing={0} flexShrink={0}>
+                      <IconButton
+                        aria-label={t.weddings.moveUpAria}
+                        icon={<Icon as={FaChevronUp} boxSize={3} />}
+                        onClick={() => move(i, -1)}
+                        isDisabled={i === 0}
+                        variant="ghost"
+                        size="sm"
+                        minW="40px"
+                        minH="40px"
+                        color="gray.500"
+                        _hover={{ color: 'brand.accent' }}
+                        sx={{ WebkitTapHighlightColor: 'transparent' }}
+                      />
+                      <IconButton
+                        aria-label={t.weddings.moveDownAria}
+                        icon={<Icon as={FaChevronDown} boxSize={3} />}
+                        onClick={() => move(i, 1)}
+                        isDisabled={i === order.length - 1}
+                        variant="ghost"
+                        size="sm"
+                        minW="40px"
+                        minH="40px"
+                        color="gray.500"
+                        _hover={{ color: 'brand.accent' }}
+                        sx={{ WebkitTapHighlightColor: 'transparent' }}
+                      />
+                      <IconButton
+                        aria-label={t.weddings.removeFromSelectionAria}
+                        icon={<Icon as={FaTimes} boxSize={3.5} />}
+                        onClick={() => remove(slug)}
+                        variant="ghost"
+                        size="sm"
+                        minW="40px"
+                        minH="40px"
+                        color="red.500"
+                        _hover={{ bg: 'red.50', color: 'red.600' }}
+                        sx={{ WebkitTapHighlightColor: 'transparent' }}
+                      />
+                    </HStack>
+                  </Flex>
+                );
+              })}
+            </VStack>
+          )}
+
+          {/* Add picker — the published wedding photos not yet selected. */}
+          <Box mt={5}>
+            <Text
+              fontSize={{ base: 'xs', md: '2xs' }}
+              fontWeight="500"
+              textTransform="uppercase"
+              letterSpacing={{ base: '0.15em', md: '0.22em' }}
+              color="brand.accent"
+              mb={2}
+            >
+              {t.weddings.addPhotoHeading}
+            </Text>
+            {photos && photos.length === 0 ? (
+              <Text fontSize="sm" color="gray.500" fontWeight="300">
+                {t.weddings.noGalleryPhotos}
+              </Text>
+            ) : available.length === 0 ? (
+              <Text fontSize="sm" color="gray.500" fontWeight="300">
+                {t.weddings.allPhotosAdded}
+              </Text>
+            ) : (
+              <>
+                {atCap && (
+                  <Text fontSize="xs" color="orange.600" fontWeight="300" mb={2}>
+                    {t.weddings.maxReachedPhotos}
+                  </Text>
+                )}
+                <VStack spacing={2} align="stretch">
+                  {available.map((photo) => (
+                    <Flex
+                      key={photo.slug}
+                      align="center"
+                      gap={3}
+                      border="1px solid"
+                      borderColor="gray.200"
+                      borderRadius="sm"
+                      p={2}
+                      opacity={atCap ? 0.5 : 1}
+                    >
+                      <PhotoThumb url={photo.url} />
+                      <Text flex={1} minW={0} fontSize="sm" fontWeight="300" color="gray.700" noOfLines={1}>
+                        {displayPhotoTitle(photo)}
+                      </Text>
+                      <IconButton
+                        aria-label={t.weddings.addPhotoAria}
+                        icon={<Icon as={FaPlus} boxSize={3.5} />}
+                        onClick={() => add(photo.slug)}
+                        isDisabled={atCap}
+                        variant="ghost"
+                        size="sm"
+                        minW="40px"
+                        minH="40px"
+                        color="brand.accentText"
+                        _hover={{ color: 'brand.accent' }}
+                        flexShrink={0}
+                        sx={{ WebkitTapHighlightColor: 'transparent' }}
+                      />
+                    </Flex>
+                  ))}
+                </VStack>
+              </>
+            )}
+          </Box>
+
+          <Flex justify="flex-end" mt={4}>
+            <CTAButton
+              onClick={handleSave}
+              variant="solid"
+              size="sm"
+              isLoading={saving}
+              loadingText={t.common.saving}
+            >
+              {t.common.save}
+            </CTAButton>
+          </Flex>
+        </>
+      )}
+    </SectionCard>
+  );
+}
+
+// Gallery thumb — url is a locally served /assets path; the icon
+// placeholder covers the "unavailable slug" row, which has no photo.
+function PhotoThumb({ url }: { url: string | null }) {
+  return (
+    <Box
+      boxSize={{ base: '40px', md: '44px' }}
+      flexShrink={0}
+      bg={url ? 'transparent' : 'brand.surface'}
+      borderRadius="sm"
+      overflow="hidden"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      border={url ? 'none' : '1px solid'}
+      borderColor="brand.accentBorder"
+    >
+      {url ? (
+        <Box as="img" src={url} alt="" w="100%" h="100%" objectFit="cover" />
+      ) : (
+        <Icon as={FaImage} color="brand.accent" boxSize={4} />
+      )}
+    </Box>
+  );
+}
+
+// ── Card 4: Recommended vendors ────────────────────────────────────
 
 /** Map a wire-shape vendor row to the camelCase upsert payload. */
 function vendorPayload(v: VendorRow): Record<string, unknown> {
