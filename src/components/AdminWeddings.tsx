@@ -71,6 +71,8 @@ const DEFAULT_ZOOM = 1;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.05;
+/** Nudge step, in focus percentage points. */
+const NUDGE = 2;
 
 // Focus values are CSS object-position strings — since the drag
 // editors, percent pairs like "37% 62%"; the dropdown era's keywords
@@ -221,7 +223,11 @@ const mosaicAspect = (index: number) => (isLargeMosaicTile(index) ? 2 : 1.52);
 // Editor aspect ratios per pinned slot: three portrait package cards,
 // the FAQ portrait, and the wide quote-section band. Must track how
 // the public page actually crops each slot.
-const PINNED_SLOT_ASPECTS = [2 / 3, 2 / 3, 2 / 3, 3 / 4, 3 / 1] as const;
+// Each editor frame must be the SHAPE OF THE REAL PLACEMENT, or dragging
+// maps to something the visitor never sees. The package cards show a
+// landscape band (card width ~382 x 265), not a portrait — that mismatch
+// is why the controls felt broken.
+const PINNED_SLOT_ASPECTS = [1.44, 1.44, 1.44, 3 / 4, 3.4] as const;
 
 interface WeddingsSettings {
   pinned: PinnedEntry[];
@@ -659,7 +665,7 @@ function DragFocusEditor({
           sx={{ userSelect: 'none' }}
         />
       </Box>
-      <Flex align="center" gap={2} mt={0.5}>
+      <Flex align="center" gap={2} mt={0.5} flexWrap="wrap">
         <Text
           fontSize="2xs"
           fontWeight="500"
@@ -669,6 +675,9 @@ function DragFocusEditor({
           whiteSpace="nowrap"
         >
           {editorLabel}
+        </Text>
+        <Text fontSize="2xs" color="brand.accentText" fontFamily="mono" whiteSpace="nowrap">
+          {focus} · {zoom.toFixed(2)}x
         </Text>
         <Box flex={1} />
         <CTAButton
@@ -682,6 +691,65 @@ function DragFocusEditor({
           {t.weddings.focusReset}
         </CTAButton>
       </Flex>
+
+      {/* Nudge pad: exact, repeatable steps for anyone who would rather not
+          wrestle a drag (and the only way to hit a round number like 40%). */}
+      <HStack spacing={1} mt={1}>
+        {([
+          ['\u2190', -NUDGE, 0],
+          ['\u2192', NUDGE, 0],
+          ['\u2191', 0, -NUDGE],
+          ['\u2193', 0, NUDGE],
+        ] as const).map(([glyph, dx, dy]) => (
+          <Box
+            key={glyph}
+            as="button"
+            type="button"
+            aria-label={glyph}
+            onClick={() => {
+              const { x, y } = parseFocusPercent(focus);
+              onChange(`${clamp(x + dx, 0, 100)}% ${clamp(y + dy, 0, 100)}%`);
+            }}
+            px={2}
+            py={1}
+            fontSize="xs"
+            lineHeight={1}
+            borderRadius="sm"
+            border="1px solid"
+            borderColor="brand.accentBorder"
+            bg="white"
+            cursor="pointer"
+            _hover={{ bg: 'brand.surface' }}
+          >
+            {glyph}
+          </Box>
+        ))}
+        <Box flex={1} />
+        {([
+          ['\u2212', -0.1],
+          ['+', 0.1],
+        ] as const).map(([glyph, dz]) => (
+          <Box
+            key={glyph}
+            as="button"
+            type="button"
+            aria-label={`${t.weddings.zoomLabel} ${glyph}`}
+            onClick={() => onZoomChange(clamp(Number((zoom + dz).toFixed(2)), MIN_ZOOM, MAX_ZOOM))}
+            px={2}
+            py={1}
+            fontSize="xs"
+            lineHeight={1}
+            borderRadius="sm"
+            border="1px solid"
+            borderColor="brand.accentBorder"
+            bg="white"
+            cursor="pointer"
+            _hover={{ bg: 'brand.surface' }}
+          >
+            {glyph}
+          </Box>
+        ))}
+      </HStack>
 
       {/* Zoom. Independent of the drag: the slider changes scale only,
           dragging changes the focal point only. */}
