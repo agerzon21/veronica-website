@@ -2,6 +2,7 @@ import {
   Box, VStack, HStack, Text, Flex, Image, SimpleGrid, Grid, GridItem, Icon,
 } from '@chakra-ui/react';
 import FaChevronDown from '../icons/fa/FaChevronDown';
+import FaArrowRight from '../icons/fa/FaArrowRight';
 import { Helmet } from 'react-helmet-async';
 import { m, useInView } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -143,6 +144,9 @@ const Weddings = () => {
       return s;
     };
     return {
+      // First claim: one photograph per package card, so the tiers are
+      // never plain white once the folder is configured.
+      packageShots: take(3),
       trio: take(3),
       fullbleed1: take(1),
       stagger: take(2),
@@ -298,63 +302,111 @@ const Weddings = () => {
             {weddingData.broadNote}
           </Text>
 
+          {/* Each card is one link: the whole tier clicks through to the
+              contact form with the package preselected. Cards carry a
+              photograph (pool when the folder is set, curated fallback
+              otherwise) so the tiers are never walls of white. */}
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={{ base: 5, md: 6 }}>
-            {weddingData.packages.map((pkg) => (
-              <Flex
-                key={pkg.name}
-                direction="column"
-                bg="white"
-                borderRadius="sm"
-                border="1px solid"
-                borderColor="brand.accentBorder"
-                p={{ base: 6, md: 8 }}
-              >
-                <Text textStyle="eyebrow">{pkg.coverage}</Text>
-                <Text as="h3" textStyle="cardTitle" mt={2}>
-                  {pkg.name}
-                </Text>
-                <Text
-                  fontFamily="heading"
-                  fontSize={{ base: '2xl', md: '3xl' }}
-                  fontWeight="300"
-                  color="gray.800"
-                  mt={1}
+            {weddingData.packages.map((pkg, i) => {
+              const shot = slots.packageShots[i] ?? null;
+              const fallback = FEATURED[i + 1];
+              return (
+                <Flex
+                  key={pkg.name}
+                  as={RouterLink}
+                  to={`/contact?package=${encodeURIComponent(pkg.name)}`}
+                  role="group"
+                  direction="column"
+                  bg="white"
+                  borderRadius="sm"
+                  border="1px solid"
+                  borderColor="brand.accentBorder"
+                  overflow="hidden"
+                  transition="transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease"
+                  _hover={{
+                    transform: 'translateY(-4px)',
+                    boxShadow: '0 18px 40px -18px rgba(15, 15, 15, 0.35)',
+                    borderColor: 'brand.accent',
+                  }}
                 >
-                  {pkg.price}
-                </Text>
-                <Text textStyle="bodyCopy" color="gray.600" mt={3}>
-                  {pkg.tagline}
-                </Text>
-                <Box w="28px" h="1px" bg="brand.accent" my={4} />
-                <VStack align="flex-start" spacing={1.5} mt="auto">
-                  {pkg.includes.map((line) => (
-                    <HStack key={line} spacing={2} align="flex-start">
-                      <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" mt="9px" flexShrink={0} />
-                      <Text textStyle="bodyCopy">{line}</Text>
+                  <Box h={{ base: '170px', md: '190px' }} overflow="hidden" flexShrink={0}>
+                    <Image
+                      src={shot ? shot.url : photoUrl(fallback.id)}
+                      alt={shot ? SPRINKLE_ALT : fallback.alt}
+                      w="100%"
+                      h="100%"
+                      objectFit="cover"
+                      loading="lazy"
+                      transition="transform 0.6s ease"
+                      _groupHover={{ transform: 'scale(1.05)' }}
+                    />
+                  </Box>
+                  <Flex direction="column" p={{ base: 6, md: 7 }} flex="1">
+                    <Text textStyle="eyebrow">{pkg.coverage}</Text>
+                    <Text as="h3" textStyle="cardTitle" mt={2}>
+                      {pkg.name}
+                    </Text>
+                    <Text
+                      fontFamily="heading"
+                      fontSize={{ base: '2xl', md: '3xl' }}
+                      fontWeight="300"
+                      color="gray.800"
+                      mt={1}
+                    >
+                      {pkg.price}
+                    </Text>
+                    <Text textStyle="bodyCopy" color="gray.600" mt={3}>
+                      {pkg.tagline}
+                    </Text>
+                    <Box w="28px" h="1px" bg="brand.accent" my={4} />
+                    {pkg.buildsOn && (
+                      <Text textStyle="metaCaption" color="brand.accentText" mb={2}>
+                        {pkg.buildsOn}
+                      </Text>
+                    )}
+                    <VStack align="flex-start" spacing={1.5}>
+                      {pkg.includes.map((line) => (
+                        <HStack key={line} spacing={2} align="flex-start">
+                          <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" mt="9px" flexShrink={0} />
+                          <Text textStyle="bodyCopy">{line}</Text>
+                        </HStack>
+                      ))}
+                    </VStack>
+                    {/* The hover reveal on desktop; always visible on touch,
+                        where hover doesn't exist. */}
+                    <HStack
+                      spacing={2}
+                      mt="auto"
+                      pt={5}
+                      color="brand.accentText"
+                      opacity={{ base: 1, md: 0 }}
+                      transform={{ base: 'none', md: 'translateY(4px)' }}
+                      transition="opacity 0.25s ease, transform 0.25s ease"
+                      _groupHover={{ opacity: 1, transform: 'translateY(0)' }}
+                    >
+                      <Text textStyle="ctaLabel">Start with this package</Text>
+                      <Icon as={FaArrowRight} boxSize={3} />
                     </HStack>
-                  ))}
-                </VStack>
-              </Flex>
-            ))}
+                  </Flex>
+                </Flex>
+              );
+            })}
           </SimpleGrid>
 
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={{ base: 5, md: 6 }} mt={{ base: 5, md: 6 }}>
-            {weddingData.addOns.map((a) => (
-              <Box
-                key={a.name}
-                bg="white"
-                borderRadius="sm"
-                border="1px dashed"
-                borderColor="brand.accentBorder"
-                p={{ base: 5, md: 6 }}
-              >
-                <Text textStyle="eyebrow">{a.name}</Text>
-                <Text textStyle="bodyCopy" mt={2}>
+          {/* Footnotes, deliberately not card-shaped: these are asides to
+              the tiers, not options you click. */}
+          <Box maxW="720px" mx="auto" mt={{ base: 10, md: 12 }} pt={{ base: 6, md: 8 }} borderTop="1px solid" borderColor="brand.accentBorder">
+            <VStack spacing={4} align="stretch">
+              {weddingData.addOns.map((a) => (
+                <Text key={a.name} textStyle="bodyCopy" color="gray.600" textAlign="center">
+                  <Box as="span" textStyle="eyebrow" color="gray.700" mr={2}>
+                    {a.name}.
+                  </Box>
                   {a.detail}
                 </Text>
-              </Box>
-            ))}
-          </SimpleGrid>
+              ))}
+            </VStack>
+          </Box>
 
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={{ base: 8, md: 12 }} mt={{ base: 12, md: 16 }}>
             <VStack align="flex-start" spacing={3}>

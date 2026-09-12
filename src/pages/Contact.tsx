@@ -63,6 +63,18 @@ const Contact = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // The weddings page links each package card here as
+  // /contact?package=<name>. Validated against the known package names so
+  // a crafted URL can't inject arbitrary text into the form. The form is
+  // uncontrolled (FormData on submit), so seeding defaultValue at first
+  // render is all a prefill takes — and the visitor can edit freely.
+  const WEDDING_PACKAGES = ['Intimate Wedding', 'Wedding Day', 'Full Wedding Day'];
+  const packageParam = (() => {
+    if (typeof window === 'undefined') return null;
+    const raw = new URLSearchParams(window.location.search).get('package');
+    return raw && WEDDING_PACKAGES.includes(raw) ? raw : null;
+  })();
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -260,7 +272,7 @@ const Contact = () => {
                           id="shoot_type"
                           name="shoot_type"
                           required
-                          defaultValue=""
+                          defaultValue={packageParam ? 'Wedding Photography' : ''}
                           {...inputStyles}
                           h="48px"
                           sx={{
@@ -312,6 +324,11 @@ const Contact = () => {
                         name="message"
                         placeholder="Tell me about your project, your vision, anything else I should know..."
                         required
+                        defaultValue={
+                          packageParam
+                            ? `Hi Veronika! We're interested in the ${packageParam} package. Our date and venue are: `
+                            : undefined
+                        }
                         {...inputStyles}
                         rows={3}
                         resize="none"
