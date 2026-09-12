@@ -78,6 +78,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
     { value: 'portrait',   label: t.journalEditor.sessionOptionPortrait },
     { value: 'family',     label: t.journalEditor.sessionOptionFamily },
     { value: 'maternity',  label: t.journalEditor.sessionOptionMaternity },
+    { value: 'article',    label: t.journalEditor.sessionOptionArticle },
   ];
   const [loading, setLoading] = useState(postId !== null);
   const [saving, setSaving] = useState(false);

@@ -27,11 +27,12 @@ import {
   KEY_FOLDER,
   KEY_FEATURED,
   KEY_SELECTED,
-  FOCUS_VALUES,
+  isValidFocus,
   parseFeatured,
+  parsePinned,
 } from '../_weddings-page.js';
 
-const MAX_HEROES = 6;
+const MAX_PINNED = 5;
 // Alex capped the journal strip at six; the mosaic tops out at eight tiles.
 const MAX_FEATURED = 6;
 const MAX_SELECTED = 8;
@@ -78,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       return res.status(200).json({
         success: true,
-        heroes: parse(state.get(KEY_HEROES)),
+        pinned: parsePinned(state.get(KEY_HEROES), MAX_PINNED),
         folderId: state.get(KEY_FOLDER) ?? '',
         // Objects with per-entry focus points; legacy slug arrays are
         // normalized by parseFeatured with centered defaults.
@@ -90,12 +91,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'set') {
       const writes: Array<[string, string]> = [];
 
-      if (req.body?.heroes !== undefined) {
-        const heroes = cleanStringArray(req.body.heroes, MAX_HEROES, 600);
-        if (heroes === null) {
-          return res.status(400).json({ success: false, error: 'heroes must be an array of URLs' });
+      if (req.body?.pinned !== undefined) {
+        const input = req.body.pinned;
+        if (!Array.isArray(input)) {
+          return res.status(400).json({ success: false, error: 'pinned must be an array' });
         }
-        writes.push([KEY_HEROES, JSON.stringify(heroes)]);
+        const entries: Array<{ url: string; focus: string }> = [];
+        for (const item of input) {
+          const url = typeof item?.url === 'string' ? item.url.trim() : '';
+          if (url.length > 600) {
+            return res.status(400).json({ success: false, error: 'pinned url too long' });
+          }
+          if (item?.focus !== undefined && !isValidFocus(item.focus)) {
+            return res.status(400).json({ success: false, error: 'invalid focus value' });
+          }
+          // Empty url keeps the SLOT (slots have fixed jobs: packages 1-3,
+          // FAQ, quote background) — an empty slot just renders nothing.
+          entries.push({ url, focus: item?.focus ?? '50% 50%' });
+        }
+        writes.push([KEY_HEROES, JSON.stringify(entries.slice(0, MAX_PINNED))]);
       }
 
       if (req.body?.folderId !== undefined) {
@@ -125,15 +139,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (!slug || slug.length > 200) {
             return res.status(400).json({ success: false, error: 'each featured entry needs a slug' });
           }
-          const okFocus = (v: unknown) =>
-            v === undefined || (typeof v === 'string' && (FOCUS_VALUES as readonly string[]).includes(v));
+          const okFocus = (v: unknown) => v === undefined || isValidFocus(v);
           if (!okFocus(item.focusStage) || !okFocus(item.focusThumb)) {
             return res.status(400).json({ success: false, error: 'invalid focus value' });
           }
           entries.push({
             slug,
-            focusStage: item.focusStage ?? 'center',
-            focusThumb: item.focusThumb ?? 'center',
+            focusStage: item.focusStage ?? '50% 50%',
+            focusThumb: item.focusThumb ?? '50% 50%',
           });
         }
         writes.push([KEY_FEATURED, JSON.stringify(entries.slice(0, MAX_FEATURED))]);
