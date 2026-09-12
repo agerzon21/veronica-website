@@ -92,22 +92,24 @@ function JournalIndex() {
         <meta property="og:title" content="Journal | Vero Photography" />
         <meta property="og:description" content="Long-form recaps from behind the lens." />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://vero.photography/assets/photos/site/journal-hero.webp" />
       </Helmet>
 
       {/* Hero — every other section of the site opens on a photograph;
           the journal was the one page that opened on white. Served from
           /assets (no Drive dependency, no layout shift). */}
-      <Box position="relative" h={{ base: '42vh', md: '50vh' }} overflow="hidden">
+      <Box position="relative" h={{ base: '46vh', md: '50vh' }} overflow="hidden">
         <Image
-          src="/assets/photos/site/vero-photographing.webp"
-          alt="Veronika Gerzon photographing a session"
+          src="/assets/photos/site/journal-hero.webp"
+          alt="A couple outside a stone building, the bride leaning back across a bench as the groom watches."
           w="100%"
           h="100%"
           objectFit="cover"
-          objectPosition="center 35%"
+          objectPosition="center"
+          fetchPriority="high"
         />
         <Box position="absolute" inset={0} bg="rgba(0,0,0,0.45)" />
-        <Flex position="absolute" inset={0} align="center" justify="center" px={6}>
+        <Flex position="absolute" inset={0} align="center" justify="center" px={6} pt={{ base: "64px", md: "72px" }}>
           <Box maxW="46ch">
             <PageHeader
               onDark
