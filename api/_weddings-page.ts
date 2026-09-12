@@ -42,6 +42,65 @@ function parseStringArray(raw: string | null | undefined, cap: number): string[]
   }
 }
 
+/**
+ * CSS object-position keywords the focus controls may use. An allowlist
+ * because these values land verbatim in a style attribute.
+ */
+export const FOCUS_VALUES = [
+  'center',
+  'top',
+  'bottom',
+  'left',
+  'right',
+  'left top',
+  'right top',
+  'left bottom',
+  'right bottom',
+] as const;
+export type FocusValue = (typeof FOCUS_VALUES)[number];
+
+export interface FeaturedEntry {
+  slug: string;
+  /** Focal point of the cover in the big slideshow stage. */
+  focusStage: FocusValue;
+  /** Focal point in the small thumbnail strip. */
+  focusThumb: FocusValue;
+}
+
+const asFocus = (v: unknown): FocusValue =>
+  typeof v === 'string' && (FOCUS_VALUES as readonly string[]).includes(v)
+    ? (v as FocusValue)
+    : 'center';
+
+/**
+ * The featured list started life as a plain array of slugs; it is now an
+ * array of { slug, focusStage, focusThumb } so Vero can stop cover crops
+ * from cutting faces. Both shapes parse — old stored values keep working
+ * with centered defaults.
+ */
+export function parseFeatured(raw: string | null | undefined, cap: number): FeaturedEntry[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const out: FeaturedEntry[] = [];
+    for (const item of arr) {
+      if (typeof item === 'string' && item.trim()) {
+        out.push({ slug: item.trim(), focusStage: 'center', focusThumb: 'center' });
+      } else if (item && typeof item === 'object' && typeof item.slug === 'string' && item.slug.trim()) {
+        out.push({
+          slug: item.slug.trim(),
+          focusStage: asFocus(item.focusStage),
+          focusThumb: asFocus(item.focusThumb),
+        });
+      }
+    }
+    return out.slice(0, cap);
+  } catch {
+    return [];
+  }
+}
+
 /** A pinned hero entry: Drive link or direct URL → {url w800, fullUrl w2000}. */
 function heroToPhoto(raw: string): { url: string; fullUrl: string } | null {
   const normalized = normalizeImageUrl(raw);
@@ -67,7 +126,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map(heroToPhoto)
       .filter((h): h is { url: string; fullUrl: string } => h !== null);
 
-    const featuredSlugs = parseStringArray(state.get(KEY_FEATURED), 10);
+    const featured = parseFeatured(state.get(KEY_FEATURED), 10);
+    // Transitional: pages cached before the focus upgrade read this.
+    const featuredSlugs = featured.map((f) => f.slug);
 
     // The sprinkle pool. Same degrade-to-empty posture as journal:
     // Drive being slow or the folder being unset must not 500 the page.
@@ -139,7 +200,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
     return res
       .status(200)
-      .json({ success: true, heroes, photos, vendors, featuredSlugs, selectedWork });
+      .json({ success: true, heroes, photos, vendors, featured, featuredSlugs, selectedWork });
   } catch (err) {
     console.error('[gallery/wedding-page] failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

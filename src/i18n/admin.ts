@@ -2397,6 +2397,29 @@ const dict = {
     },
     featuredSaved: { en: 'Featured posts saved', ru: 'Подборка сохранена' },
 
+    // Focal-point controls for the journal slideshow — each featured
+    // entry anchors its cover separately in the big stage image and
+    // in the thumbnail strip, so crops stop cutting faces.
+    focusHelp: {
+      en: 'If a face gets cropped, choose which part of the photo stays in view. Large photo controls the big slideshow image, small photo controls its thumbnail.',
+      ru: 'Если лицо обрезается, выбери, какая часть фото остаётся в кадре. «Большое фото» отвечает за крупный слайд, «Маленькое фото» отвечает за его миниатюру.',
+    },
+    focusStageLabel: { en: 'Large photo', ru: 'Большое фото' },
+    focusThumbLabel: { en: 'Small photo', ru: 'Маленькое фото' },
+    // Human labels for the nine CSS object-position anchors. Keys are
+    // camelCase versions of the CSS values ('left top' → leftTop).
+    focusOptions: {
+      center: { en: 'Center', ru: 'По центру' },
+      top: { en: 'Top', ru: 'Сверху' },
+      bottom: { en: 'Bottom', ru: 'Снизу' },
+      left: { en: 'Left', ru: 'Слева' },
+      right: { en: 'Right', ru: 'Справа' },
+      leftTop: { en: 'Top left', ru: 'Сверху слева' },
+      rightTop: { en: 'Top right', ru: 'Сверху справа' },
+      leftBottom: { en: 'Bottom left', ru: 'Снизу слева' },
+      rightBottom: { en: 'Bottom right', ru: 'Снизу справа' },
+    },
+
     // ── Card 3: Selected work ───────────────────────────────────
     // Curates the clickable Selected Work mosaic — public wedding
     // gallery photos that link to /photo/weddings/<slug>. Distinct
