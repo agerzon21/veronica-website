@@ -100,6 +100,7 @@ const Weddings = () => {
   const [pool, setPool] = useState<WPhoto[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [featured, setFeatured] = useState<FeaturedPost[]>([]);
+  const [selectedWork, setSelectedWork] = useState<Array<{ slug: string; url: string; alt: string }>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,11 +109,15 @@ const Weddings = () => {
         const res = await fetch('/api/gallery/wedding-page');
         const data = await res.json();
         if (cancelled || !res.ok || !data.success) return;
-        setHeroes(Array.isArray(data.heroes) ? data.heroes : []);
+        const allHeroes: WPhoto[] = Array.isArray(data.heroes) ? data.heroes : [];
+        setHeroes(allHeroes);
         // The once-per-visit shuffle. Every reload deals the folder's
-        // photos into the layout slots in a new order.
-        setPool(shuffled(Array.isArray(data.photos) ? data.photos : []));
+        // photos into the layout slots in a new order. Hero slots 5-6
+        // have no anchored placement, so they join the ambient pool.
+        const photos: WPhoto[] = Array.isArray(data.photos) ? data.photos : [];
+        setPool(shuffled([...allHeroes.slice(4), ...photos]));
         setVendors(Array.isArray(data.vendors) ? data.vendors : []);
+        setSelectedWork(Array.isArray(data.selectedWork) ? data.selectedWork : []);
 
         const slugs: string[] = Array.isArray(data.featuredSlugs) ? data.featuredSlugs : [];
         if (slugs.length > 0) {
@@ -150,16 +155,18 @@ const Weddings = () => {
       trio: take(3),
       fullbleed1: take(1),
       stagger: take(2),
+      faqSide: take(1),
       quartet: take(4),
-      fullbleed2: take(1),
-      mosaic: take(8),
     };
   }, [pool]);
 
-  const heroPhoto = heroes[0] ?? null;
-  const midHero = heroes[3] ?? null;
-  const ctaHero = heroes[4] ?? null;
-  const approachPair = heroes.slice(1, 3);
+  // The big top hero is FIXED: the curated local photo Alex signed off
+  // on, served from /assets (fast, no Drive dependency). Admin hero
+  // slots anchor the rest of the page: 1-2 flank the approach, 3 is the
+  // mid-page full-bleed, 4 backs the closing CTA, 5-6 join the pool.
+  const approachPair = heroes.slice(0, 2);
+  const midHero = heroes[2] ?? null;
+  const ctaHero = heroes[3] ?? null;
 
   const faqSchema = {
     '@context': 'https://schema.org',
@@ -188,9 +195,7 @@ const Weddings = () => {
         <meta property="og:url" content="https://vero.photography/wedding-photography" />
         <meta
           property="og:image"
-          content={
-            heroPhoto?.fullUrl ?? 'https://vero.photography/assets/photos/weddings/newlyweds-running-sea.webp'
-          }
+          content="https://vero.photography/assets/photos/weddings/newlyweds-running-sea.webp"
         />
         <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
       </Helmet>
@@ -198,7 +203,7 @@ const Weddings = () => {
       {/* ─── Hero ─── */}
       <Box position="relative" h={{ base: '68vh', md: '80vh' }} overflow="hidden">
         <Image
-          src={heroPhoto?.fullUrl ?? photoUrl(FEATURED[0].id)}
+          src={photoUrl(FEATURED[0].id)}
           alt={FEATURED[0].alt}
           objectFit="cover"
           objectPosition="center 35%"
@@ -237,13 +242,32 @@ const Weddings = () => {
             animate={isIntroInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.7, ease: 'easeOut' }}
           >
-            <VStack spacing={6} maxW="640px" textAlign="center">
-              <Text fontSize={{ base: 'lg', md: 'xl' }} fontWeight="300" color="gray.700" lineHeight="1.9">
-                Some couples want a few hours — the ceremony, the portraits, a little of
-                the party. Others want the whole day, from the quiet morning through the
-                last song. Some fly me out for a weekend.
+            <VStack spacing={7} maxW="720px" textAlign="center">
+              <Text textStyle="eyebrow">My Approach</Text>
+              <Box w="35px" h="1px" bg="brand.accent" />
+              {/* The pitch as a statement, not a paragraph — set in the
+                  serif display face so it reads as her voice, with the
+                  accent phrase in italic. */}
+              <Text
+                fontFamily="heading"
+                fontWeight="300"
+                fontSize={{ base: '1.55rem', md: '2.15rem' }}
+                lineHeight="1.55"
+                color="gray.800"
+              >
+                Some couples want a few hours. Others want the whole day, from the quiet
+                morning through the last song.{' '}
+                <Box as="em" fontStyle="italic" color="brand.accentText">
+                  Some fly me out for a weekend.
+                </Box>
               </Text>
-              <Text fontSize={{ base: 'md', md: 'lg' }} fontWeight="300" color="gray.600" lineHeight="1.9">
+              <Text
+                fontSize={{ base: 'md', md: 'lg' }}
+                fontWeight="300"
+                color="gray.600"
+                lineHeight="1.9"
+                maxW="560px"
+              >
                 My photographs are warm, natural, and story-driven: real moments in real
                 light. My packages are based on how much coverage you need, and every one
                 of them bends to fit your day.
@@ -533,22 +557,50 @@ const Weddings = () => {
         </Box>
       )}
 
-      {/* ─── FAQ ─── */}
+      {/* ─── FAQ — editorial split: a sticky intro column (with one ambient
+          photograph and the ask-me-directly path) beside the numbered
+          questions. On mobile the intro stacks above the list. ─── */}
       <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }}>
-        <Box maxW="820px" mx="auto">
-          <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
-            <Text textStyle="eyebrow">Wedding Photography FAQ</Text>
-            <Box w="35px" h="1px" bg="brand.accent" />
-            <Text textStyle="bodyCopy" color="gray.600" maxW="560px">
-              The questions every couple asks, answered the way I answer them in my inbox.
-            </Text>
-          </VStack>
+        <Grid
+          templateColumns={{ base: '1fr', lg: '5fr 7fr' }}
+          gap={{ base: 10, lg: 16 }}
+          maxW="1100px"
+          mx="auto"
+          alignItems="start"
+        >
+          <Box position={{ lg: 'sticky' }} top={{ lg: '110px' }}>
+            <VStack spacing={5} align={{ base: 'center', lg: 'flex-start' }} textAlign={{ base: 'center', lg: 'left' }}>
+              <Text textStyle="eyebrow">Wedding Photography FAQ</Text>
+              <Box w="35px" h="1px" bg="brand.accent" />
+              <Text
+                fontFamily="heading"
+                fontWeight="300"
+                fontSize={{ base: '1.4rem', md: '1.7rem' }}
+                lineHeight="1.5"
+                color="gray.800"
+              >
+                Everything couples ask me, answered the way I answer it in my inbox.
+              </Text>
+              {slots.faqSide[0] && (
+                <Box display={{ base: 'none', lg: 'block' }} w="100%" maxW="360px">
+                  <SprinkleTile photo={slots.faqSide[0]} ratio={3 / 4} />
+                </Box>
+              )}
+              <Text textStyle="bodyCopy" color="gray.600">
+                Have a question that isn't here? Ask me directly and you'll hear back
+                within a day or two.
+              </Text>
+              <CTAButton to="/contact" variant="outline" size="sm">
+                Ask me directly
+              </CTAButton>
+            </VStack>
+          </Box>
           <Box borderTop="1px solid" borderColor="brand.accentBorder">
-            {weddingData.faq.map((f) => (
-              <FaqItem key={f.q} q={f.q} a={f.a} />
+            {weddingData.faq.map((f, i) => (
+              <FaqItem key={f.q} q={f.q} a={f.a} index={i} />
             ))}
           </Box>
-        </Box>
+        </Grid>
       </Box>
 
       {/* ─── Sprinkle: quartet filmstrip ─── */}
@@ -655,7 +707,10 @@ const Weddings = () => {
         </Box>
       )}
 
-      {/* ─── Selected work: curated, linked, always present ─── */}
+      {/* ─── Selected work: admin-curated GALLERY photos, every tile a real
+          link to its photo page. Deliberately separate from the ambient
+          hero/folder pools, which are background and never clickable. Falls
+          back to the built-in curated six until Vero picks her own. ─── */}
       <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 6, md: 12 }}>
         <VStack spacing={3} mb={{ base: 10, md: 14 }} textAlign="center">
           <Text textStyle="eyebrow">Selected Work</Text>
@@ -669,56 +724,42 @@ const Weddings = () => {
           maxW="1200px"
           mx="auto"
         >
-          {[...FEATURED.map((p) => ({ kind: 'featured' as const, p })), ...slots.mosaic.map((p) => ({ kind: 'pool' as const, p }))].map(
-            (item, i) => {
-              const feature = i % 5 === 0;
-              const tile =
-                item.kind === 'featured' ? (
-                  <Box
-                    as={RouterLink}
-                    to={`/photo/weddings/${item.p.id}`}
-                    display="block"
+          {(selectedWork.length > 0
+            ? selectedWork
+            : FEATURED.map((p) => ({ slug: p.id, url: photoUrl(p.id), alt: p.alt }))
+          ).map((p, i) => {
+            const feature = i % 5 === 0;
+            return (
+              <GridItem
+                key={p.slug}
+                colSpan={feature ? { base: 2, md: 4 } : { base: 1, md: 2 }}
+                rowSpan={feature ? 2 : 1}
+              >
+                <Box
+                  as={RouterLink}
+                  to={`/photo/weddings/${p.slug}`}
+                  display="block"
+                  w="100%"
+                  h="100%"
+                  overflow="hidden"
+                  borderRadius="sm"
+                  bg="gray.100"
+                  sx={{ '& > img': { transition: 'transform 0.5s ease' } }}
+                  _hover={{ '& > img': { transform: 'scale(1.03)' } }}
+                >
+                  <Image
+                    src={p.url}
+                    alt={p.alt}
                     w="100%"
                     h="100%"
-                    overflow="hidden"
-                    borderRadius="sm"
-                    bg="gray.100"
-                    sx={{ '& > img': { transition: 'transform 0.5s ease' } }}
-                    _hover={{ '& > img': { transform: 'scale(1.03)' } }}
-                  >
-                    <Image
-                      src={photoUrl(item.p.id)}
-                      alt={item.p.alt}
-                      w="100%"
-                      h="100%"
-                      objectFit="cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </Box>
-                ) : (
-                  <Box w="100%" h="100%" overflow="hidden" borderRadius="sm" bg="gray.100">
-                    <Image
-                      src={feature ? item.p.fullUrl : item.p.url}
-                      alt={SPRINKLE_ALT}
-                      w="100%"
-                      h="100%"
-                      objectFit="cover"
-                      loading="lazy"
-                    />
-                  </Box>
-                );
-              return (
-                <GridItem
-                  key={i}
-                  colSpan={feature ? { base: 2, md: 4 } : { base: 1, md: 2 }}
-                  rowSpan={feature ? 2 : 1}
-                >
-                  {tile}
-                </GridItem>
-              );
-            },
-          )}
+                    objectFit="cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </Box>
+              </GridItem>
+            );
+          })}
         </Grid>
         <Flex justify="center" mt={{ base: 10, md: 14 }}>
           <CTAButton to="/gallery/weddings" variant="outline" size="md">
@@ -780,7 +821,7 @@ const Weddings = () => {
  * grid-template-rows transition gives the same open/close animation with
  * zero motion machinery.
  */
-function FaqItem({ q, a }: { q: string; a: string }) {
+function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
   const [open, setOpen] = useState(false);
   return (
     <Box borderBottom="1px solid" borderColor="brand.accentBorder">
@@ -799,9 +840,20 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         _hover={{ bg: 'blackAlpha.50' }}
         sx={{ WebkitTapHighlightColor: 'transparent' }}
       >
-        <Text textStyle="cardTitle" fontSize={{ base: 'sm', md: 'md' }}>
-          {q}
-        </Text>
+        <HStack spacing={4} align="baseline">
+          <Text
+            fontFamily="heading"
+            fontWeight="300"
+            fontSize="sm"
+            color="brand.accent"
+            minW="24px"
+          >
+            {String(index + 1).padStart(2, '0')}
+          </Text>
+          <Text textStyle="cardTitle" fontSize={{ base: 'sm', md: 'md' }}>
+            {q}
+          </Text>
+        </HStack>
         <Icon
           as={FaChevronDown}
           boxSize={3}
@@ -813,7 +865,14 @@ function FaqItem({ q, a }: { q: string; a: string }) {
       </Flex>
       <Box display="grid" gridTemplateRows={open ? '1fr' : '0fr'} transition="grid-template-rows 0.25s ease">
         <Box overflow="hidden">
-          <Text textStyle="bodyCopy" color="gray.600" px={1} pb={open ? 5 : 0} transition="padding 0.25s ease">
+          <Text
+            textStyle="bodyCopy"
+            color="gray.600"
+            pl={{ base: 1, md: '44px' }}
+            pr={1}
+            pb={open ? 5 : 0}
+            transition="padding 0.25s ease"
+          >
             {a}
           </Text>
         </Box>

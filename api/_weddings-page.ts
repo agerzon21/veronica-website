@@ -18,6 +18,7 @@
  * arrays, never a 500 — the page falls back to its built-in photo strip.
  */
 
+import galleryStatics from './_gallery-statics.json' with { type: 'json' };
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
 import { extractFolderId, listFolderMedia, normalizeImageUrl } from './_drive.js';
@@ -25,6 +26,7 @@ import { extractFolderId, listFolderMedia, normalizeImageUrl } from './_drive.js
 export const KEY_HEROES = 'weddings_page_heroes';
 export const KEY_FOLDER = 'weddings_page_drive_folder';
 export const KEY_FEATURED = 'weddings_featured_posts';
+export const KEY_SELECTED = 'weddings_selected_work';
 
 /** Parse a system_state JSON-array value defensively. */
 function parseStringArray(raw: string | null | undefined, cap: number): string[] {
@@ -57,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const stateRows = (await sql`
       SELECT key, value FROM system_state
-      WHERE key IN (${KEY_HEROES}, ${KEY_FOLDER}, ${KEY_FEATURED})
+      WHERE key IN (${KEY_HEROES}, ${KEY_FOLDER}, ${KEY_FEATURED}, ${KEY_SELECTED})
     `) as Array<{ key: string; value: string | null }>;
     const state = new Map(stateRows.map((r) => [r.key, r.value]));
 
@@ -87,6 +89,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // The clickable Selected Work mosaic: admin-curated PUBLIC GALLERY
+    // photos (distinct from the ambient hero/folder pools). Resolved
+    // against gallery_photos + the static-file manifest so a renamed or
+    // unpublished slug silently drops out instead of 404ing a tile.
+    const selectedSlugs = parseStringArray(state.get(KEY_SELECTED), 8);
+    let selectedWork: Array<{ slug: string; url: string; alt: string }> = [];
+    if (selectedSlugs.length > 0) {
+      const rows = (await sql`
+        SELECT slug, alt FROM gallery_photos
+        WHERE status = 'published' AND deleted_at IS NULL
+          AND category = 'weddings' AND slug = ANY(${selectedSlugs})
+      `) as Array<{ slug: string; alt: string }>;
+      const bySlug = new Map(rows.map((r) => [r.slug, r]));
+      selectedWork = selectedSlugs
+        .map((slug) => bySlug.get(slug))
+        .filter((r): r is { slug: string; alt: string } => Boolean(r))
+        .filter((r) => Boolean((galleryStatics as Record<string, string>)[`weddings/${r.slug}`]))
+        .map((r) => ({
+          slug: r.slug,
+          url: `/assets/photos/weddings/${r.slug}.webp`,
+          alt: r.alt,
+        }));
+    }
+
     const vendorRows = (await sql`
       SELECT name, category, blurb, website_url, instagram, photo_url
       FROM wedding_vendors
@@ -111,7 +137,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }));
 
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-    return res.status(200).json({ success: true, heroes, photos, vendors, featuredSlugs });
+    return res
+      .status(200)
+      .json({ success: true, heroes, photos, vendors, featuredSlugs, selectedWork });
   } catch (err) {
     console.error('[gallery/wedding-page] failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

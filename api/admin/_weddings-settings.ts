@@ -22,10 +22,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { extractFolderId } from '../_drive.js';
-import { KEY_HEROES, KEY_FOLDER, KEY_FEATURED } from '../_weddings-page.js';
+import { KEY_HEROES, KEY_FOLDER, KEY_FEATURED, KEY_SELECTED } from '../_weddings-page.js';
 
 const MAX_HEROES = 6;
-const MAX_FEATURED = 10;
+// Alex capped the journal strip at six; the mosaic tops out at eight tiles.
+const MAX_FEATURED = 6;
+const MAX_SELECTED = 8;
 
 function cleanStringArray(input: unknown, cap: number, maxLen: number): string[] | null {
   if (!Array.isArray(input)) return null;
@@ -56,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'get') {
       const rows = (await sql`
         SELECT key, value FROM system_state
-        WHERE key IN (${KEY_HEROES}, ${KEY_FOLDER}, ${KEY_FEATURED})
+        WHERE key IN (${KEY_HEROES}, ${KEY_FOLDER}, ${KEY_FEATURED}, ${KEY_SELECTED})
       `) as Array<{ key: string; value: string | null }>;
       const state = new Map(rows.map((r) => [r.key, r.value]));
       const parse = (raw: string | null | undefined): string[] => {
@@ -72,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         heroes: parse(state.get(KEY_HEROES)),
         folderId: state.get(KEY_FOLDER) ?? '',
         featuredSlugs: parse(state.get(KEY_FEATURED)),
+        selectedWork: parse(state.get(KEY_SELECTED)),
       });
     }
 
@@ -108,6 +111,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(400).json({ success: false, error: 'featuredSlugs must be an array of slugs' });
         }
         writes.push([KEY_FEATURED, JSON.stringify(slugs)]);
+      }
+
+      if (req.body?.selectedWork !== undefined) {
+        const slugs = cleanStringArray(req.body.selectedWork, MAX_SELECTED, 200);
+        if (slugs === null) {
+          return res.status(400).json({ success: false, error: 'selectedWork must be an array of slugs' });
+        }
+        writes.push([KEY_SELECTED, JSON.stringify(slugs)]);
       }
 
       if (writes.length === 0) {

@@ -2348,8 +2348,8 @@ const dict = {
       ru: (n: number) => `Фото ${n}`,
     },
     heroesHelp: {
-      en: 'Paste a Google Drive file link or a direct https image link. Empty slots are simply skipped.',
-      ru: 'Вставь ссылку на файл в Google Drive или прямую https-ссылку на изображение. Пустые поля просто пропускаются.',
+      en: 'Paste a Google Drive file link or a direct https image link. Heroes 1 and 2 flank the approach text, Hero 3 is the full-width photo mid-page, Hero 4 is the closing block background, and Heroes 5 and 6 join the ambient photo pool. The big photo at the very top of the page is fixed and not controlled here. Empty slots are simply skipped.',
+      ru: 'Вставь ссылку на файл в Google Drive или прямую https-ссылку на изображение. Фото 1 и 2 стоят по бокам от текста о подходе, Фото 3 идёт во всю ширину в середине страницы, Фото 4 служит фоном финального блока, а Фото 5 и 6 попадают в общий пул фоновых кадров. Большое фото в самом верху страницы фиксированное и здесь не настраивается. Пустые поля просто пропускаются.',
     },
     folderLabel: { en: 'Drive folder', ru: 'Папка Drive' },
     folderHelp: {
@@ -2397,7 +2397,47 @@ const dict = {
     },
     featuredSaved: { en: 'Featured posts saved', ru: 'Подборка сохранена' },
 
-    // ── Card 3: Recommended vendors ─────────────────────────────
+    // ── Card 3: Selected work ───────────────────────────────────
+    // Curates the clickable Selected Work mosaic — public wedding
+    // gallery photos that link to /photo/weddings/<slug>. Distinct
+    // from the hero/folder photos, which are non-clickable ambiance.
+    selectedWorkTitle: { en: 'Selected work', ru: 'Избранные работы' },
+    selectedWorkSubtitle: {
+      en: 'Gallery photos in the clickable mosaic. Each one links to its photo page.',
+      ru: 'Фото из галереи для кликабельной мозаики. Каждое ведёт на свою страницу.',
+    },
+    selectedCount: {
+      en: (n: number, max: number) => `${n} / ${max}`,
+      ru: (n: number, max: number) => `${n} / ${max}`,
+    },
+    selectedEmpty: {
+      en: 'No photos selected yet. Add one from the list below.',
+      ru: 'Пока ничего не выбрано. Добавь фото из списка ниже.',
+    },
+    // Shown when a selected slug no longer matches a published wedding
+    // gallery photo (unpublished, recategorized, or deleted).
+    unavailablePhoto: {
+      en: (slug: string) => `Unavailable photo (${slug})`,
+      ru: (slug: string) => `Недоступное фото (${slug})`,
+    },
+    removeFromSelectionAria: { en: 'Remove from selection', ru: 'Убрать из подборки' },
+    addPhotoHeading: { en: 'Add a photo', ru: 'Добавить фото' },
+    addPhotoAria: { en: 'Add to selection', ru: 'Добавить в подборку' },
+    maxReachedPhotos: {
+      en: 'Limit reached. Remove a photo to add another.',
+      ru: 'Лимит достигнут. Убери фото, чтобы добавить другое.',
+    },
+    noGalleryPhotos: {
+      en: 'No published wedding photos yet. Publish some in the Gallery tab first.',
+      ru: 'Опубликованных свадебных фото пока нет. Сначала опубликуй их во вкладке «Галерея».',
+    },
+    allPhotosAdded: {
+      en: 'Every wedding gallery photo is already selected.',
+      ru: 'Все свадебные фото из галереи уже в подборке.',
+    },
+    selectedSaved: { en: 'Selected work saved', ru: 'Подборка работ сохранена' },
+
+    // ── Card 4: Recommended vendors ─────────────────────────────
     vendorsTitle: { en: 'Recommended vendors', ru: 'Рекомендуемые подрядчики' },
     vendorsNote: {
       en: 'Vendors are listed for free as mutual promotion. The site shows them with a note that Vero is independent from them.',
