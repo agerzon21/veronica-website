@@ -1,8 +1,8 @@
 import {
-  Box, HStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, useToast,
+  Box, HStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, Grid, useToast,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import FaArrowLeft from '../icons/fa/FaArrowLeft';
 import FaArrowRight from '../icons/fa/FaArrowRight';
@@ -62,6 +62,71 @@ interface SiblingSummary {
   slug: string;
   title: string;
   published_at: string;
+  cover_image_url?: string | null;
+  cover_image_alt?: string | null;
+}
+
+/**
+ * Split the markdown body into chunks of roughly two paragraphs so photo
+ * bands can be woven between them. Headings never end a chunk — they stay
+ * attached to the paragraph that follows, so a band can't separate a
+ * section title from its first sentence.
+ */
+function chunkMarkdown(md: string): string[] {
+  const blocks = md.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current: string[] = [];
+  let paragraphs = 0;
+  for (const block of blocks) {
+    current.push(block);
+    if (!/^#{1,6}\s/.test(block)) paragraphs++;
+    if (paragraphs >= 2) {
+      chunks.push(current.join('\n\n'));
+      current = [];
+      paragraphs = 0;
+    }
+  }
+  if (current.length) chunks.push(current.join('\n\n'));
+  return chunks;
+}
+
+type BandVariant = 'single' | 'duo' | 'stagger';
+interface BandPlan {
+  /** Index into the post's photos array where this band starts. */
+  start: number;
+  count: number;
+  variant: BandVariant;
+}
+
+/**
+ * Decide which photos get woven into the text and which stay in the
+ * closing grid. Deliberately deterministic (no randomness — this runs on
+ * every render and during prerender): bands cycle single → duo → stagger,
+ * and the budget leaves a meaningful closing grid so the end of the post
+ * still lands on a wall of photographs.
+ */
+function planBands(chunkCount: number, photoCount: number): BandPlan[] {
+  const slots = Math.max(0, chunkCount - 1);
+  if (slots === 0 || photoCount === 0) return [];
+  let budget =
+    photoCount > 8 ? 5 : photoCount > 4 ? 3 : photoCount > 2 ? 1 : 0;
+  const cycle: BandVariant[] = ['single', 'duo', 'stagger'];
+  const plans: BandPlan[] = [];
+  let start = 0;
+  for (let slot = 0; slot < slots && budget > 0; slot++) {
+    const variant = cycle[plans.length % cycle.length];
+    const need = variant === 'single' ? 1 : 2;
+    if (budget < need) {
+      plans.push({ start, count: 1, variant: 'single' });
+      start += 1;
+      budget = 0;
+      break;
+    }
+    plans.push({ start, count: need, variant });
+    start += need;
+    budget -= need;
+  }
+  return plans;
 }
 
 const JournalPost = ({ slug }: { slug: string }) => {
@@ -72,7 +137,35 @@ const JournalPost = ({ slug }: { slug: string }) => {
     prev: null,
     next: null,
   });
+  // One lightbox for the whole page — bands and the closing grid both open
+  // it with a global photo index, so arrow keys walk EVERY photo in order
+  // no matter where the visitor clicked in.
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const articleRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
+
+  const chunks = useMemo(
+    () => (post?.body_markdown ? chunkMarkdown(post.body_markdown) : []),
+    [post?.body_markdown],
+  );
+  const bands = useMemo(
+    () => planBands(chunks.length, post?.photos.length ?? 0),
+    [chunks.length, post?.photos.length],
+  );
+
+  const photoCount = post?.photos.length ?? 0;
+  const navLightbox = useCallback(
+    (dir: -1 | 1) => {
+      setLightboxIdx((i) => {
+        if (i === null) return i;
+        const n = i + dir;
+        if (n < 0) return photoCount - 1;
+        if (n >= photoCount) return 0;
+        return n;
+      });
+    },
+    [photoCount],
+  );
 
   // Fetch this post
   useEffect(() => {
@@ -249,7 +342,9 @@ const JournalPost = ({ slug }: { slug: string }) => {
         {ogImage && <meta name="twitter:image" content={ogImage} />}
       </Helmet>
 
-      <Box bg="white" minH="100vh" layerStyle="pageTop" pb={{ base: '3.5rem', md: '6rem' }}>
+      <ReadingProgress articleRef={articleRef} />
+
+      <Box ref={articleRef} bg="white" minH="100vh" layerStyle="pageTop" pb={{ base: '3.5rem', md: '6rem' }}>
         <Box maxW="content" mx="auto" px={{ base: 4, md: 6 }}>
           {/* Back link + header — held to the reading measure */}
           <Box maxW="contentNarrow" mx="auto">
@@ -294,87 +389,39 @@ const JournalPost = ({ slug }: { slug: string }) => {
             </Box>
           )}
 
-          {/* Markdown body */}
-          {post.body_markdown && (
-            <Box className="journal-body" maxW="contentNarrow" mx="auto" mb={{ base: 8, md: 12 }}>
-              <ReactMarkdown
-                components={{
-                  h1: ({ children }) => (
-                    <Text as="h2" textStyle="sectionTitle" mt={10} mb={4}>
-                      {children}
-                    </Text>
-                  ),
-                  h2: ({ children }) => (
-                    <Text as="h3" textStyle="cardTitle" mt={8} mb={3}>
-                      {children}
-                    </Text>
-                  ),
-                  h3: ({ children }) => (
-                    <Text as="h4" textStyle="cardTitle" mt={6} mb={2}>
-                      {children}
-                    </Text>
-                  ),
-                  p: ({ children }) => (
-                    <Text textStyle="bodyCopy" mb={5}>
-                      {children}
-                    </Text>
-                  ),
-                  a: ({ children, href }) => (
-                    <Box
-                      as="a"
-                      href={href}
-                      color="brand.accentText"
-                      textDecoration="underline"
-                      textDecorationColor="brand.accentBorder"
-                      textUnderlineOffset="3px"
-                      _hover={{ textDecorationColor: 'brand.accentText' }}
-                      target={href?.startsWith('http') ? '_blank' : undefined}
-                      rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
-                    >
-                      {children}
-                    </Box>
-                  ),
-                  em: ({ children }) => <Box as="em" fontStyle="italic">{children}</Box>,
-                  strong: ({ children }) => <Box as="strong" fontWeight="600" color="gray.800">{children}</Box>,
-                  ul: ({ children }) => (
-                    <Box as="ul" textStyle="bodyCopy" pl={5} mb={5} sx={{ 'li': { mb: 1.5 } }}>
-                      {children}
-                    </Box>
-                  ),
-                  ol: ({ children }) => (
-                    <Box as="ol" textStyle="bodyCopy" pl={5} mb={5} sx={{ 'li': { mb: 1.5 } }}>
-                      {children}
-                    </Box>
-                  ),
-                  blockquote: ({ children }) => (
-                    <Box
-                      as="blockquote"
-                      borderLeft="3px solid"
-                      borderColor="brand.accent"
-                      pl={5}
-                      py={1}
-                      my={6}
-                      fontStyle="italic"
-                    >
-                      {children}
-                    </Box>
-                  ),
-                  hr: () => <Box as="hr" my={8} borderColor="gray.200" />,
-                }}
+          {/* Body — text woven with photo bands. Chunks keep the reading
+              measure; bands run the full column. Same rule as the cover:
+              the photographs get the width, the words get the measure. */}
+          {chunks.map((chunk, i) => (
+            <Fragment key={i}>
+              <Box
+                className="journal-body"
+                maxW="contentNarrow"
+                mx="auto"
+                mb={{ base: 8, md: 12 }}
+                sx={i === 0 ? DROP_CAP_SX : undefined}
               >
-                {post.body_markdown}
-              </ReactMarkdown>
-            </Box>
-          )}
+                <ReactMarkdown components={mdComponents}>{chunk}</ReactMarkdown>
+              </Box>
+              {bands[i] && (
+                <PhotoBand photos={post.photos} plan={bands[i]} onOpen={setLightboxIdx} />
+              )}
+            </Fragment>
+          ))}
 
-          {/* Photo gallery — full page column, same as the cover */}
-          {post.photos.length > 0 && <PhotoGrid photos={post.photos} />}
+          {/* Closing grid — every photo the bands didn't use */}
+          {post.photos.length > bandPhotoCount(bands) && (
+            <PhotoGrid
+              photos={post.photos.slice(bandPhotoCount(bands))}
+              onOpen={(i) => setLightboxIdx(i + bandPhotoCount(bands))}
+            />
+          )}
 
           {/* Footer block — back to the reading measure */}
           <Box maxW="contentNarrow" mx="auto">
             {/* Tags footer */}
             {post.tags.length > 0 && (
-              <HStack spacing={2} wrap="wrap" mt={{ base: 8, md: 12 }} pt={6} borderTop="1px solid" borderColor="gray.100">
+              <HStack spacing={2} wrap="wrap" justify="center" mt={{ base: 8, md: 12 }} pt={6} borderTop="1px solid" borderColor="gray.100">
                 {post.tags.map((tag) => (
                   <Text
                     key={tag}
@@ -424,9 +471,352 @@ const JournalPost = ({ slug }: { slug: string }) => {
           </Box>
         </Box>
       </Box>
+
+      {lightboxIdx !== null && post.photos.length > 0 && (
+        <Lightbox
+          photos={post.photos}
+          activeIdx={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+          onNav={navLightbox}
+        />
+      )}
     </>
   );
 };
+
+/** Total photos consumed by the woven bands (the closing grid starts after them). */
+function bandPhotoCount(bands: BandPlan[]): number {
+  return bands.reduce((n, b) => n + b.count, 0);
+}
+
+/**
+ * Markdown renderers, hoisted so every text chunk shares one instance.
+ * These are stateless — keeping them inline meant a fresh object per
+ * render for no benefit once the body split into multiple chunks.
+ */
+const mdComponents = {
+  h1: ({ children }: { children?: React.ReactNode }) => (
+    <Text as="h2" textStyle="sectionTitle" mt={10} mb={4}>
+      {children}
+    </Text>
+  ),
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <Text as="h3" textStyle="cardTitle" mt={8} mb={3}>
+      {children}
+    </Text>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <Text as="h4" textStyle="cardTitle" mt={6} mb={2}>
+      {children}
+    </Text>
+  ),
+  p: ({ children }: { children?: React.ReactNode }) => (
+    <Text textStyle="bodyCopy" mb={5}>
+      {children}
+    </Text>
+  ),
+  a: ({ children, href }: { children?: React.ReactNode; href?: string }) => (
+    <Box
+      as="a"
+      href={href}
+      color="brand.accentText"
+      textDecoration="underline"
+      textDecorationColor="brand.accentBorder"
+      textUnderlineOffset="3px"
+      _hover={{ textDecorationColor: 'brand.accentText' }}
+      target={href?.startsWith('http') ? '_blank' : undefined}
+      rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
+    >
+      {children}
+    </Box>
+  ),
+  em: ({ children }: { children?: React.ReactNode }) => (
+    <Box as="em" fontStyle="italic">{children}</Box>
+  ),
+  strong: ({ children }: { children?: React.ReactNode }) => (
+    <Box as="strong" fontWeight="600" color="gray.800">{children}</Box>
+  ),
+  ul: ({ children }: { children?: React.ReactNode }) => (
+    <Box as="ul" textStyle="bodyCopy" pl={5} mb={5} sx={{ 'li': { mb: 1.5 } }}>
+      {children}
+    </Box>
+  ),
+  ol: ({ children }: { children?: React.ReactNode }) => (
+    <Box as="ol" textStyle="bodyCopy" pl={5} mb={5} sx={{ 'li': { mb: 1.5 } }}>
+      {children}
+    </Box>
+  ),
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <Box
+      as="blockquote"
+      borderLeft="3px solid"
+      borderColor="brand.accent"
+      pl={5}
+      py={1}
+      my={6}
+      fontStyle="italic"
+    >
+      {children}
+    </Box>
+  ),
+  hr: () => <Box as="hr" my={8} borderColor="gray.200" />,
+};
+
+/**
+ * Editorial drop cap on the opening paragraph only. The serif initial is
+ * the one flourish the text gets — everything else stays the site's
+ * reading measure.
+ */
+const DROP_CAP_SX = {
+  '& > p:first-of-type::first-letter': {
+    float: 'left',
+    fontFamily: 'heading',
+    fontSize: { base: '3.3em', md: '3.8em' },
+    lineHeight: '0.82',
+    pr: '0.13em',
+    pt: '0.06em',
+    color: 'gray.800',
+  },
+} as const;
+
+/**
+ * The round VP monogram lifted from /assets/images/logo.svg (the circle
+ * group, viewBox re-based onto it). Inlined so the reading-progress coin
+ * needs no extra network fetch and inherits crispness at any size.
+ */
+function VPMedallion({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="107 3 64 64" aria-hidden="true" focusable="false">
+      <circle cx="139" cy="35" r="29.5" fill="white" stroke="#2d2d2d" strokeOpacity="0.4" strokeWidth="1.2" />
+      <path
+        d="M136.865 23.0692C140.881 22.7923 144.412 22.6538 147.458 22.6538C156.042 22.6538 160.335 25.6827 160.335 31.7404C160.335 34.5442 159.608 37.0019 158.154 39.1135C157.392 40.2558 156.215 41.1731 154.623 41.8654C153.031 42.5231 151.11 42.8519 148.86 42.8519H141.175V59H136.865V23.0692ZM147.51 23.1731C145.502 23.1731 143.39 23.2942 141.175 23.5365V42.3327H148.86C153.74 42.125 156.181 38.6288 156.181 31.8442C156.181 29.075 155.454 26.9462 154 25.4577C152.546 23.9346 150.383 23.1731 147.51 23.1731Z"
+        fill="#7C7C7C"
+      />
+      <path
+        d="M143.321 9.73078C143.979 10.3885 144.308 11.2365 144.308 12.275C144.308 13.1404 144.117 14.0231 143.737 14.9231L130.444 46.0769L129.873 46.3366L116.788 9.73078H121.202L132.054 40.4692L143.113 14.9231C143.494 14.0577 143.685 13.1577 143.685 12.2231C143.685 11.2885 143.425 10.5615 142.906 10.0423L143.321 9.73078Z"
+        fill="#0f0f0f"
+      />
+    </svg>
+  );
+}
+
+const COIN = 28;
+const COIN_MOBILE = 22;
+
+/**
+ * Reading progress, in the site's own voice: the VP monogram coin travels
+ * a hairline track as you read. Desktop (xl+, where the 1000px column
+ * leaves a real gutter): a vertical rail on the right edge, coin sliding
+ * downward. Smaller screens: a hairline along the BOTTOM edge with the
+ * coin riding its leading tip — the top edge belongs to the fixed navbar.
+ *
+ * All motion is transform-only, driven by one rAF-throttled passive
+ * scroll listener writing directly to refs — no React re-renders, no
+ * layout thrash. Bounds are re-measured per frame so images finishing
+ * their load (which changes article height) can't leave the coin lying.
+ */
+function ReadingProgress({ articleRef }: { articleRef: { current: HTMLDivElement | null } }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const deskFillRef = useRef<HTMLDivElement>(null);
+  const deskCoinRef = useRef<HTMLDivElement>(null);
+  const mobFillRef = useRef<HTMLDivElement>(null);
+  const mobCoinRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const el = articleRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const total = rect.height - window.innerHeight;
+      const p = total > 80 ? Math.min(1, Math.max(0, -rect.top / total)) : rect.top < 0 ? 1 : 0;
+      if (deskFillRef.current) deskFillRef.current.style.transform = `scaleY(${p})`;
+      if (deskCoinRef.current && trackRef.current) {
+        deskCoinRef.current.style.transform = `translateY(${p * (trackRef.current.clientHeight - COIN)}px)`;
+      }
+      if (mobFillRef.current) mobFillRef.current.style.transform = `scaleX(${p})`;
+      if (mobCoinRef.current) {
+        mobCoinRef.current.style.transform = `translateX(${4 + p * (window.innerWidth - COIN_MOBILE - 8)}px)`;
+      }
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [articleRef]);
+
+  return (
+    <>
+      {/* Desktop rail — lives in the right gutter, below the navbar's z-index */}
+      <Box
+        ref={trackRef}
+        position="fixed"
+        right={{ xl: '28px', '2xl': '44px' }}
+        top="50%"
+        transform="translateY(-50%)"
+        h="min(44vh, 400px)"
+        w={`${COIN}px`}
+        zIndex={900}
+        display={{ base: 'none', xl: 'block' }}
+        pointerEvents="none"
+        aria-hidden="true"
+      >
+        <Box position="absolute" left="50%" top={`${COIN / 2}px`} bottom={`${COIN / 2}px`} w="1px" bg="gray.200" />
+        <Box
+          ref={deskFillRef}
+          position="absolute"
+          left="50%"
+          top={`${COIN / 2}px`}
+          h={`calc(100% - ${COIN}px)`}
+          w="1px"
+          bg="brand.accent"
+          transformOrigin="top"
+          transform="scaleY(0)"
+        />
+        <Box
+          ref={deskCoinRef}
+          position="absolute"
+          top="0"
+          left="0"
+          w={`${COIN}px`}
+          h={`${COIN}px`}
+          willChange="transform"
+          filter="drop-shadow(0 1px 4px rgba(15, 15, 15, 0.18))"
+        >
+          <VPMedallion size={COIN} />
+        </Box>
+      </Box>
+
+      {/* Mobile / tablet — hairline along the bottom edge, coin on its tip */}
+      <Box
+        position="fixed"
+        left="0"
+        right="0"
+        bottom="0"
+        zIndex={1400}
+        display={{ base: 'block', xl: 'none' }}
+        pointerEvents="none"
+        aria-hidden="true"
+      >
+        <Box
+          ref={mobCoinRef}
+          position="absolute"
+          bottom="7px"
+          left="0"
+          w={`${COIN_MOBILE}px`}
+          h={`${COIN_MOBILE}px`}
+          willChange="transform"
+          filter="drop-shadow(0 1px 3px rgba(15, 15, 15, 0.22))"
+        >
+          <VPMedallion size={COIN_MOBILE} />
+        </Box>
+        <Box h="2.5px" bg="blackAlpha.100">
+          <Box
+            ref={mobFillRef}
+            h="100%"
+            w="100%"
+            bg="brand.accent"
+            transformOrigin="left"
+            transform="scaleX(0)"
+          />
+        </Box>
+      </Box>
+    </>
+  );
+}
+
+/**
+ * One woven photo band. Three shapes cycle through the article:
+ *   single  — one photograph at full column width, natural aspect ratio
+ *   duo     — two portrait-cropped tiles side by side
+ *   stagger — asymmetric pair, the narrower one dropped a beat lower
+ * Every tile opens the shared lightbox at its global index. Crops only
+ * happen at tile sizes (the same treatment the closing grid uses) —
+ * full-width photographs always keep their own shape.
+ */
+function PhotoBand({
+  photos,
+  plan,
+  onOpen,
+}: {
+  photos: Photo[];
+  plan: BandPlan;
+  onOpen: (globalIdx: number) => void;
+}) {
+  const tileSx = {
+    WebkitTapHighlightColor: 'transparent',
+    '& > img': { transition: 'transform 0.5s ease' },
+  } as const;
+
+  const tile = (offset: number, ratio?: number, extraProps?: Record<string, unknown>) => {
+    const photo = photos[plan.start + offset];
+    if (!photo) return null;
+    return (
+      <Box
+        as="button"
+        type="button"
+        onClick={() => onOpen(plan.start + offset)}
+        display="block"
+        w="100%"
+        p={0}
+        border="none"
+        bg="gray.100"
+        borderRadius="sm"
+        overflow="hidden"
+        cursor="zoom-in"
+        aspectRatio={ratio}
+        sx={tileSx}
+        _hover={{ '& > img': { transform: 'scale(1.03)' } }}
+        {...extraProps}
+      >
+        <Image
+          src={ratio ? photo.url : photo.fullUrl}
+          alt={photo.alt}
+          w="100%"
+          h={ratio ? '100%' : 'auto'}
+          objectFit={ratio ? 'cover' : undefined}
+          display="block"
+          loading="lazy"
+        />
+      </Box>
+    );
+  };
+
+  if (plan.variant === 'single') {
+    return <Box mb={{ base: 8, md: 12 }}>{tile(0)}</Box>;
+  }
+
+  if (plan.variant === 'duo') {
+    return (
+      <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: 3, md: 4 }} mb={{ base: 8, md: 12 }}>
+        {tile(0, 4 / 5)}
+        {tile(1, 4 / 5)}
+      </SimpleGrid>
+    );
+  }
+
+  return (
+    <Grid
+      templateColumns={{ base: '1fr', sm: '3fr 2fr' }}
+      gap={{ base: 3, md: 4 }}
+      mb={{ base: 8, md: 12 }}
+      alignItems="start"
+    >
+      {tile(0, 3 / 4)}
+      {tile(1, 4 / 5, { mt: { base: 0, sm: 12 } })}
+    </Grid>
+  );
+}
 
 /**
  * The one "back to the journal" link. It used to exist twice in this
@@ -491,36 +881,71 @@ function SiblingNavCard({
   return (
     <RouterLink to={`/journal/${sibling.slug}`}>
       <Box
-        p={{ base: 4, md: 5 }}
-        border="1px solid"
-        borderColor="gray.200"
+        role="group"
+        position="relative"
+        h={{ base: '110px', md: '150px' }}
         borderRadius="sm"
-        bg="white"
-        transition="all 0.2s"
-        _hover={{
-          borderColor: 'brand.accent',
-          bg: 'brand.surface',
-          transform: 'translateY(-1px)',
-          boxShadow: '0 4px 12px -6px rgba(201, 169, 110, 0.35)',
-        }}
+        overflow="hidden"
+        bg="brand.surface"
+        transition="box-shadow 0.25s"
+        _hover={{ boxShadow: '0 10px 28px -12px rgba(15, 15, 15, 0.45)' }}
         cursor="pointer"
-        textAlign={isNext ? 'right' : 'left'}
       >
-        <HStack
-          spacing={2}
-          justify={isNext ? 'flex-end' : 'flex-start'}
-          color="brand.accent"
-          mb={2}
+        {/* That post's own cover, quietly zooming on hover. The gradient
+            keeps white text readable over any photograph. Drive thumbnails
+            occasionally rate-limit under a burst (this page loads a lot of
+            them) — on error the img hides itself so the card degrades to
+            gradient-on-surface instead of a broken-image glyph. */}
+        {sibling.cover_image_url && (
+          <Image
+            src={sibling.cover_image_url}
+            alt=""
+            position="absolute"
+            inset={0}
+            w="100%"
+            h="100%"
+            objectFit="cover"
+            transition="transform 0.6s ease"
+            _groupHover={{ transform: 'scale(1.05)' }}
+            loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        )}
+        <Box
+          position="absolute"
+          inset={0}
+          bg="linear-gradient(180deg, rgba(15,15,15,0.16) 0%, rgba(15,15,15,0.35) 45%, rgba(15,15,15,0.66) 100%)"
+        />
+        <Flex
+          position="relative"
+          direction="column"
+          justify="space-between"
+          h="100%"
+          p={{ base: 3.5, md: 4 }}
+          textAlign={isNext ? 'right' : 'left'}
         >
-          {!isNext && <Icon as={FaArrowLeft} boxSize={2.5} />}
-          <Text textStyle="metaCaption">
-            {label}
+          <HStack
+            spacing={2}
+            justify={isNext ? 'flex-end' : 'flex-start'}
+            color="whiteAlpha.900"
+          >
+            {!isNext && <Icon as={FaArrowLeft} boxSize={2.5} />}
+            <Text textStyle="metaCaption" color="whiteAlpha.900">
+              {label}
+            </Text>
+            {isNext && <Icon as={FaArrowRight} boxSize={2.5} />}
+          </HStack>
+          <Text
+            textStyle="cardTitle"
+            color="white"
+            noOfLines={2}
+            textShadow="0 1px 10px rgba(0, 0, 0, 0.45)"
+          >
+            {sibling.title}
           </Text>
-          {isNext && <Icon as={FaArrowRight} boxSize={2.5} />}
-        </HStack>
-        <Text textStyle="cardTitle" noOfLines={2}>
-          {sibling.title}
-        </Text>
+        </Flex>
       </Box>
     </RouterLink>
   );
@@ -538,64 +963,40 @@ function SiblingNavCard({
  * intentionally left out — this is a public showcase, not a gallery
  * where visitors need to take files with them.
  */
-function PhotoGrid({ photos }: { photos: Photo[] }) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const openAt = (i: number) => setActiveIdx(i);
-  const close = () => setActiveIdx(null);
-  const nav = (dir: -1 | 1) => {
-    setActiveIdx((i) => {
-      if (i === null) return i;
-      const next = i + dir;
-      if (next < 0) return photos.length - 1;
-      if (next >= photos.length) return 0;
-      return next;
-    });
-  };
-
+function PhotoGrid({ photos, onOpen }: { photos: Photo[]; onOpen: (i: number) => void }) {
   return (
-    <>
-      <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: 3, md: 4 }}>
-        {photos.map((photo, i) => (
-          <Box
-            key={i}
-            as="button"
-            type="button"
-            onClick={() => openAt(i)}
-            bg="gray.100"
-            overflow="hidden"
-            borderRadius="sm"
-            aspectRatio={4 / 3}
-            position="relative"
-            border="none"
-            p={0}
-            cursor="pointer"
-            sx={{
-              WebkitTapHighlightColor: 'transparent',
-              '& > img': { transition: 'transform 0.5s ease' },
-            }}
-            _hover={{ '& > img': { transform: 'scale(1.03)' } }}
-          >
-            <Image
-              src={photo.url}
-              alt={photo.alt}
-              w="100%"
-              h="100%"
-              objectFit="cover"
-              loading="lazy"
-            />
-          </Box>
-        ))}
-      </SimpleGrid>
-
-      {activeIdx !== null && (
-        <Lightbox
-          photos={photos}
-          activeIdx={activeIdx}
-          onClose={close}
-          onNav={nav}
-        />
-      )}
-    </>
+    <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: 3, md: 4 }}>
+      {photos.map((photo, i) => (
+        <Box
+          key={i}
+          as="button"
+          type="button"
+          onClick={() => onOpen(i)}
+          bg="gray.100"
+          overflow="hidden"
+          borderRadius="sm"
+          aspectRatio={4 / 3}
+          position="relative"
+          border="none"
+          p={0}
+          cursor="pointer"
+          sx={{
+            WebkitTapHighlightColor: 'transparent',
+            '& > img': { transition: 'transform 0.5s ease' },
+          }}
+          _hover={{ '& > img': { transform: 'scale(1.03)' } }}
+        >
+          <Image
+            src={photo.url}
+            alt={photo.alt}
+            w="100%"
+            h="100%"
+            objectFit="cover"
+            loading="lazy"
+          />
+        </Box>
+      ))}
+    </SimpleGrid>
   );
 }
 
