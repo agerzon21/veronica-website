@@ -1,5 +1,5 @@
 import {
-  Box, HStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, Grid, useToast,
+  Box, HStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, Grid, GridItem, useToast,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -67,30 +67,41 @@ interface SiblingSummary {
 }
 
 /**
- * Split the markdown body into chunks of roughly two paragraphs so photo
- * bands can be woven between them. Headings never end a chunk — they stay
- * attached to the paragraph that follows, so a band can't separate a
- * section title from its first sentence.
+ * Split the markdown body into short chunks so photo bands can be woven
+ * between them. Chunk sizes cycle one paragraph, then two — the first
+ * photograph arrives after a single paragraph and the page keeps
+ * alternating instead of front-loading the words. Headings never end a
+ * chunk; they stay attached to the paragraph that follows, so a band
+ * can't separate a section title from its first sentence.
  */
 function chunkMarkdown(md: string): string[] {
   const blocks = md.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
   const chunks: string[] = [];
   let current: string[] = [];
   let paragraphs = 0;
+  let target = 1;
   for (const block of blocks) {
     current.push(block);
     if (!/^#{1,6}\s/.test(block)) paragraphs++;
-    if (paragraphs >= 2) {
+    if (paragraphs >= target) {
       chunks.push(current.join('\n\n'));
       current = [];
       paragraphs = 0;
+      target = target === 1 ? 2 : 1;
     }
   }
   if (current.length) chunks.push(current.join('\n\n'));
   return chunks;
 }
 
-type BandVariant = 'single' | 'duo' | 'stagger';
+type BandVariant = 'fullbleed' | 'trio' | 'duo' | 'stagger';
+const BAND_NEED: Record<BandVariant, number> = {
+  fullbleed: 1,
+  trio: 3,
+  duo: 2,
+  stagger: 2,
+};
+
 interface BandPlan {
   /** Index into the post's photos array where this band starts. */
   start: number;
@@ -99,32 +110,31 @@ interface BandPlan {
 }
 
 /**
- * Decide which photos get woven into the text and which stay in the
- * closing grid. Deliberately deterministic (no randomness — this runs on
- * every render and during prerender): bands cycle single → duo → stagger,
- * and the budget leaves a meaningful closing grid so the end of the post
- * still lands on a wall of photographs.
+ * Decide which photos get woven into the text and which stay for the
+ * closing mosaic. Deliberately deterministic (no randomness — this runs
+ * on every render): bands cycle fullbleed → trio → stagger → duo, most
+ * of the photo set gets woven, and a fixed reserve keeps the ending a
+ * proper wall of photographs. When the remaining budget can't afford the
+ * cycle's next shape it downgrades (trio → stagger → fullbleed) rather
+ * than stopping early.
  */
 function planBands(chunkCount: number, photoCount: number): BandPlan[] {
   const slots = Math.max(0, chunkCount - 1);
   if (slots === 0 || photoCount === 0) return [];
-  let budget =
-    photoCount > 8 ? 5 : photoCount > 4 ? 3 : photoCount > 2 ? 1 : 0;
-  const cycle: BandVariant[] = ['single', 'duo', 'stagger'];
+  const reserve =
+    photoCount >= 12 ? 6 : photoCount >= 8 ? 4 : photoCount >= 5 ? 3 : photoCount;
+  let budget = photoCount - reserve;
+  const cycle: BandVariant[] = ['fullbleed', 'trio', 'stagger', 'duo'];
   const plans: BandPlan[] = [];
   let start = 0;
   for (let slot = 0; slot < slots && budget > 0; slot++) {
-    const variant = cycle[plans.length % cycle.length];
-    const need = variant === 'single' ? 1 : 2;
-    if (budget < need) {
-      plans.push({ start, count: 1, variant: 'single' });
-      start += 1;
-      budget = 0;
-      break;
+    let variant = cycle[plans.length % cycle.length];
+    if (budget < BAND_NEED[variant]) {
+      variant = budget >= 2 ? 'stagger' : 'fullbleed';
     }
-    plans.push({ start, count: need, variant });
-    start += need;
-    budget -= need;
+    plans.push({ start, count: BAND_NEED[variant], variant });
+    start += BAND_NEED[variant];
+    budget -= BAND_NEED[variant];
   }
   return plans;
 }
@@ -344,7 +354,10 @@ const JournalPost = ({ slug }: { slug: string }) => {
 
       <ReadingProgress articleRef={articleRef} />
 
-      <Box ref={articleRef} bg="white" minH="100vh" layerStyle="pageTop" pb={{ base: '3.5rem', md: '6rem' }}>
+      {/* overflowX clip: the fullbleed bands run w=100vw out of the centered
+          column, and 100vw includes the scrollbar — without the clip that's
+          a few px of horizontal scroll on every post. */}
+      <Box ref={articleRef} bg="white" minH="100vh" layerStyle="pageTop" pb={{ base: '3.5rem', md: '6rem' }} overflowX="clip">
         <Box maxW="content" mx="auto" px={{ base: 4, md: 6 }}>
           {/* Back link + header — held to the reading measure */}
           <Box maxW="contentNarrow" mx="auto">
@@ -735,14 +748,123 @@ function ReadingProgress({ articleRef }: { articleRef: { current: HTMLDivElement
   );
 }
 
+const BAND_TILE_SX = {
+  WebkitTapHighlightColor: 'transparent',
+  '& > img': { transition: 'transform 0.5s ease' },
+} as const;
+
 /**
- * One woven photo band. Three shapes cycle through the article:
- *   single  — one photograph at full column width, natural aspect ratio
- *   duo     — two portrait-cropped tiles side by side
- *   stagger — asymmetric pair, the narrower one dropped a beat lower
+ * One clickable photograph. `ratio` crops it to a fixed-shape tile;
+ * `cover` fills whatever box the parent grid gives it (trio cells, where
+ * the row heights come from the container). Neither → natural shape.
+ * `full` requests the w2000 asset — for anything displayed wider than
+ * about half the column.
+ */
+function BandTile({
+  photo,
+  onClick,
+  ratio,
+  cover,
+  full,
+  ...boxProps
+}: {
+  photo: Photo;
+  onClick: () => void;
+  ratio?: number;
+  cover?: boolean;
+  full?: boolean;
+} & Record<string, unknown>) {
+  const cropped = cover || ratio !== undefined;
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      display="block"
+      w="100%"
+      h={cover ? '100%' : 'auto'}
+      p={0}
+      border="none"
+      bg="gray.100"
+      borderRadius="sm"
+      overflow="hidden"
+      cursor="zoom-in"
+      aspectRatio={ratio}
+      sx={BAND_TILE_SX}
+      _hover={{ '& > img': { transform: 'scale(1.03)' } }}
+      {...boxProps}
+    >
+      <Image
+        src={full || !cropped ? photo.fullUrl : photo.url}
+        alt={photo.alt}
+        w="100%"
+        h={cropped ? '100%' : 'auto'}
+        objectFit={cropped ? 'cover' : undefined}
+        display="block"
+        loading="lazy"
+      />
+    </Box>
+  );
+}
+
+/**
+ * The edge-to-edge moment: one photograph breaking out of the column to
+ * the full viewport width, uncropped. Orientation is only knowable once
+ * the image loads — a portrait at 100vw would be one-and-a-half screens
+ * tall, so portraits fall back to a centered column presentation
+ * instead. Landscapes get the full bleed at their natural shape.
+ */
+function FullBleedTile({ photo, onClick }: { photo: Photo; onClick: () => void }) {
+  const [isPortrait, setIsPortrait] = useState(false);
+  if (isPortrait) {
+    return (
+      <Box maxW="640px" mx="auto">
+        <BandTile photo={photo} onClick={onClick} full />
+      </Box>
+    );
+  }
+  return (
+    <Box w="100vw" ml="calc(50% - 50vw)">
+      <Box
+        as="button"
+        type="button"
+        onClick={onClick}
+        display="block"
+        w="100%"
+        p={0}
+        border="none"
+        bg="gray.100"
+        overflow="hidden"
+        cursor="zoom-in"
+        sx={BAND_TILE_SX}
+      >
+        <Image
+          src={photo.fullUrl}
+          alt={photo.alt}
+          w="100%"
+          h="auto"
+          display="block"
+          loading="lazy"
+          onLoad={(e) => {
+            const img = e.target as HTMLImageElement;
+            if (img.naturalWidth > 0 && img.naturalWidth / img.naturalHeight < 1.15) {
+              setIsPortrait(true);
+            }
+          }}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * One woven photo band. Four shapes cycle through the article:
+ *   fullbleed — one landscape running edge-to-edge across the viewport
+ *   trio      — a collage: one tall feature with two squares beside it
+ *   stagger   — asymmetric pair, the narrower one dropped a beat lower
+ *   duo       — two portrait-cropped tiles side by side
  * Every tile opens the shared lightbox at its global index. Crops only
- * happen at tile sizes (the same treatment the closing grid uses) —
- * full-width photographs always keep their own shape.
+ * happen at tile sizes — photographs shown big keep their own shape.
  */
 function PhotoBand({
   photos,
@@ -753,58 +875,52 @@ function PhotoBand({
   plan: BandPlan;
   onOpen: (globalIdx: number) => void;
 }) {
-  const tileSx = {
-    WebkitTapHighlightColor: 'transparent',
-    '& > img': { transition: 'transform 0.5s ease' },
-  } as const;
+  const photo = (offset: number) => photos[plan.start + offset];
+  const open = (offset: number) => () => onOpen(plan.start + offset);
 
-  const tile = (offset: number, ratio?: number, extraProps?: Record<string, unknown>) => {
-    const photo = photos[plan.start + offset];
-    if (!photo) return null;
+  if (plan.variant === 'fullbleed') {
+    if (!photo(0)) return null;
     return (
-      <Box
-        as="button"
-        type="button"
-        onClick={() => onOpen(plan.start + offset)}
-        display="block"
-        w="100%"
-        p={0}
-        border="none"
-        bg="gray.100"
-        borderRadius="sm"
-        overflow="hidden"
-        cursor="zoom-in"
-        aspectRatio={ratio}
-        sx={tileSx}
-        _hover={{ '& > img': { transform: 'scale(1.03)' } }}
-        {...extraProps}
-      >
-        <Image
-          src={ratio ? photo.url : photo.fullUrl}
-          alt={photo.alt}
-          w="100%"
-          h={ratio ? '100%' : 'auto'}
-          objectFit={ratio ? 'cover' : undefined}
-          display="block"
-          loading="lazy"
-        />
+      <Box mb={{ base: 8, md: 12 }}>
+        <FullBleedTile photo={photo(0)} onClick={open(0)} />
       </Box>
     );
-  };
+  }
 
-  if (plan.variant === 'single') {
-    return <Box mb={{ base: 8, md: 12 }}>{tile(0)}</Box>;
+  if (plan.variant === 'trio') {
+    if (!photo(0) || !photo(1) || !photo(2)) return null;
+    return (
+      <Grid
+        templateColumns={{ base: '1fr 1fr', md: '2fr 1fr' }}
+        templateRows={{ md: '1fr 1fr' }}
+        gap={{ base: 3, md: 4 }}
+        mb={{ base: 8, md: 12 }}
+        aspectRatio={{ md: 3 / 2 }}
+      >
+        <GridItem colSpan={{ base: 2, md: 1 }} rowSpan={{ base: 1, md: 2 }}>
+          <BandTile photo={photo(0)} onClick={open(0)} cover full aspectRatio={{ base: 3 / 2, md: 'auto' }} />
+        </GridItem>
+        <GridItem>
+          <BandTile photo={photo(1)} onClick={open(1)} cover aspectRatio={{ base: 1, md: 'auto' }} />
+        </GridItem>
+        <GridItem>
+          <BandTile photo={photo(2)} onClick={open(2)} cover aspectRatio={{ base: 1, md: 'auto' }} />
+        </GridItem>
+      </Grid>
+    );
   }
 
   if (plan.variant === 'duo') {
+    if (!photo(0) || !photo(1)) return null;
     return (
       <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: 3, md: 4 }} mb={{ base: 8, md: 12 }}>
-        {tile(0, 4 / 5)}
-        {tile(1, 4 / 5)}
+        <BandTile photo={photo(0)} onClick={open(0)} ratio={4 / 5} />
+        <BandTile photo={photo(1)} onClick={open(1)} ratio={4 / 5} />
       </SimpleGrid>
     );
   }
 
+  if (!photo(0) || !photo(1)) return null;
   return (
     <Grid
       templateColumns={{ base: '1fr', sm: '3fr 2fr' }}
@@ -812,8 +928,8 @@ function PhotoBand({
       mb={{ base: 8, md: 12 }}
       alignItems="start"
     >
-      {tile(0, 3 / 4)}
-      {tile(1, 4 / 5, { mt: { base: 0, sm: 12 } })}
+      <BandTile photo={photo(0)} onClick={open(0)} ratio={3 / 4} />
+      <BandTile photo={photo(1)} onClick={open(1)} ratio={4 / 5} mt={{ base: 0, sm: 12 }} />
     </Grid>
   );
 }
@@ -964,39 +1080,30 @@ function SiblingNavCard({
  * where visitors need to take files with them.
  */
 function PhotoGrid({ photos, onOpen }: { photos: Photo[]; onOpen: (i: number) => void }) {
+  // Mosaic, not a uniform grid: every fifth photograph becomes a
+  // double-height feature spanning four of the six columns; the rest
+  // flow dense around it. Deterministic pattern, no measuring needed —
+  // crops happen at tile size where they're invisible.
   return (
-    <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: 3, md: 4 }}>
-      {photos.map((photo, i) => (
-        <Box
-          key={i}
-          as="button"
-          type="button"
-          onClick={() => onOpen(i)}
-          bg="gray.100"
-          overflow="hidden"
-          borderRadius="sm"
-          aspectRatio={4 / 3}
-          position="relative"
-          border="none"
-          p={0}
-          cursor="pointer"
-          sx={{
-            WebkitTapHighlightColor: 'transparent',
-            '& > img': { transition: 'transform 0.5s ease' },
-          }}
-          _hover={{ '& > img': { transform: 'scale(1.03)' } }}
-        >
-          <Image
-            src={photo.url}
-            alt={photo.alt}
-            w="100%"
-            h="100%"
-            objectFit="cover"
-            loading="lazy"
-          />
-        </Box>
-      ))}
-    </SimpleGrid>
+    <Grid
+      templateColumns={{ base: 'repeat(2, 1fr)', md: 'repeat(6, 1fr)' }}
+      autoRows={{ base: '34vw', md: '220px' }}
+      autoFlow="dense"
+      gap={{ base: 3, md: 4 }}
+    >
+      {photos.map((photo, i) => {
+        const feature = i % 5 === 0;
+        return (
+          <GridItem
+            key={i}
+            colSpan={feature ? { base: 2, md: 4 } : { base: 1, md: 2 }}
+            rowSpan={feature ? 2 : 1}
+          >
+            <BandTile photo={photo} onClick={() => onOpen(i)} cover full={feature} />
+          </GridItem>
+        );
+      })}
+    </Grid>
   );
 }
 
