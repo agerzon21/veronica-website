@@ -107,6 +107,7 @@ const dict = {
     journal: { en: 'Journal', ru: 'Дневник' },
     gallery: { en: 'Gallery', ru: 'Галерея' },
     reviews: { en: 'Reviews', ru: 'Отзывы' },
+    weddings: { en: 'Weddings', ru: 'Свадьбы' },
     integrations: { en: 'Integrations', ru: 'Интеграции' },
     crons: { en: 'Crons', ru: 'Задачи' },
     users: { en: 'Admin users', ru: 'Администраторы' },
@@ -2312,6 +2313,160 @@ const dict = {
       en: (name: string) => `The review from ${name} will be permanently removed.`,
       ru: (name: string) => `Отзыв от ${name} будет удалён навсегда.`,
     },
+  },
+
+  weddings: {
+    tabTitle: { en: 'Weddings', ru: 'Свадьбы' },
+    subtitle: {
+      en: 'Photos, journal picks, and vendors for the weddings page.',
+      ru: 'Фото, записи из дневника и подрядчики для страницы свадеб.',
+    },
+    refreshAria: { en: 'Refresh weddings content', ru: 'Обновить данные' },
+
+    // Shared error shapes — same pattern as reviews/journal/gallery.
+    loadFailed: {
+      en: (status: number) => `Load failed (${status})`,
+      ru: (status: number) => `Не удалось загрузить (${status})`,
+    },
+    saveFailed: {
+      en: (status: number) => `Save failed (${status})`,
+      ru: (status: number) => `Не удалось сохранить (${status})`,
+    },
+    deleteFailed: {
+      en: (status: number) => `Delete failed (${status})`,
+      ru: (status: number) => `Не удалось удалить (${status})`,
+    },
+
+    // ── Card 1: Page photos ─────────────────────────────────────
+    photosTitle: { en: 'Page photos', ru: 'Фото страницы' },
+    photosSubtitle: {
+      en: 'Six pinned hero photos plus a Drive folder of extras.',
+      ru: 'Шесть закреплённых фото и папка Drive с дополнительными кадрами.',
+    },
+    heroLabel: {
+      en: (n: number) => `Hero ${n}`,
+      ru: (n: number) => `Фото ${n}`,
+    },
+    heroesHelp: {
+      en: 'Paste a Google Drive file link or a direct https image link. Empty slots are simply skipped.',
+      ru: 'Вставь ссылку на файл в Google Drive или прямую https-ссылку на изображение. Пустые поля просто пропускаются.',
+    },
+    folderLabel: { en: 'Drive folder', ru: 'Папка Drive' },
+    folderHelp: {
+      en: 'Photos from this folder are scattered through the weddings page and reshuffle on every visit.',
+      ru: 'Фото из этой папки разбрасываются по странице свадеб и перемешиваются при каждом заходе.',
+    },
+    photosSaved: { en: 'Page photos saved', ru: 'Фото страницы сохранены' },
+
+    // ── Card 2: From the Journal ────────────────────────────────
+    journalTitle: { en: 'From the Journal', ru: 'Из дневника' },
+    journalSubtitle: {
+      en: 'Published posts featured on the weddings page, in this order.',
+      ru: 'Опубликованные записи для страницы свадеб, в этом порядке.',
+    },
+    featuredCount: {
+      en: (n: number, max: number) => `${n} / ${max}`,
+      ru: (n: number, max: number) => `${n} / ${max}`,
+    },
+    featuredEmpty: {
+      en: 'No posts featured yet. Add one from the list below.',
+      ru: 'Пока ничего не выбрано. Добавь запись из списка ниже.',
+    },
+    // Shown when a featured slug no longer matches a published post
+    // (post deleted or unpublished after being featured).
+    unavailablePost: {
+      en: (slug: string) => `Unavailable post (${slug})`,
+      ru: (slug: string) => `Недоступная запись (${slug})`,
+    },
+    moveUpAria: { en: 'Move up', ru: 'Выше' },
+    moveDownAria: { en: 'Move down', ru: 'Ниже' },
+    removeAria: { en: 'Remove from featured', ru: 'Убрать из подборки' },
+    addHeading: { en: 'Add a post', ru: 'Добавить запись' },
+    addAria: { en: 'Add to featured', ru: 'Добавить в подборку' },
+    maxReached: {
+      en: 'Limit reached. Remove a post to add another.',
+      ru: 'Лимит достигнут. Убери запись, чтобы добавить другую.',
+    },
+    noPublishedPosts: {
+      en: 'No published journal posts yet. Publish one in the Journal tab first.',
+      ru: 'Опубликованных записей пока нет. Сначала опубликуй запись во вкладке «Дневник».',
+    },
+    allPostsAdded: {
+      en: 'Every published post is already featured.',
+      ru: 'Все опубликованные записи уже в подборке.',
+    },
+    featuredSaved: { en: 'Featured posts saved', ru: 'Подборка сохранена' },
+
+    // ── Card 3: Recommended vendors ─────────────────────────────
+    vendorsTitle: { en: 'Recommended vendors', ru: 'Рекомендуемые подрядчики' },
+    vendorsNote: {
+      en: 'Vendors are listed for free as mutual promotion. The site shows them with a note that Vero is independent from them.',
+      ru: 'Подрядчики размещаются бесплатно, в порядке взаимной рекомендации. На сайте рядом с ними стоит пометка, что Веро работает независимо от них.',
+    },
+    // Russian plural: 1 подрядчик, 2/3/4 подрядчика, 5+ подрядчиков
+    // (teens 11-14 take gen.pl) — same shape as reviews.reviewCount.
+    vendorCount: {
+      en: (n: number) => `${n} vendor${n === 1 ? '' : 's'}`,
+      ru: (n: number) => {
+        const mod10 = n % 10;
+        const mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return `${n} подрядчик`;
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} подрядчика`;
+        return `${n} подрядчиков`;
+      },
+    },
+    newVendor: { en: 'New Vendor', ru: 'Новый подрядчик' },
+    newVendorShort: { en: 'New', ru: 'Новый' },
+    hiddenBadge: { en: 'Hidden', ru: 'Скрыт' },
+    activeLabel: { en: 'Active', ru: 'Активен' },
+    deleteVendorAria: { en: 'Delete vendor', ru: 'Удалить подрядчика' },
+    vendorsEmptyTitle: { en: 'No vendors yet', ru: 'Пока нет подрядчиков' },
+    vendorsEmptyBody: {
+      en: 'Add the DJs, florists, and planners you like working with. They appear on the weddings page.',
+      ru: 'Добавь диджеев, флористов и организаторов, с которыми тебе нравится работать. Они появятся на странице свадеб.',
+    },
+
+    // Vendor editor modal
+    editorNewTitle: { en: 'New Vendor', ru: 'Новый подрядчик' },
+    editorEditTitle: { en: 'Edit Vendor', ru: 'Редактировать подрядчика' },
+    nameLabel: { en: 'Name', ru: 'Название' },
+    namePlaceholder: { en: 'e.g. Bloom Florals', ru: 'например, Bloom Florals' },
+    categoryLabel: { en: 'Category', ru: 'Категория' },
+    categoryPlaceholder: { en: 'DJ / Florist / Dresses', ru: 'DJ / Флорист / Платья' },
+    blurbLabel: { en: 'Blurb', ru: 'Описание' },
+    blurbPlaceholder: {
+      en: 'A sentence or two on why you recommend them.',
+      ru: 'Пара предложений о том, почему ты их рекомендуешь.',
+    },
+    websiteLabel: { en: 'Website', ru: 'Сайт' },
+    instagramLabel: { en: 'Instagram', ru: 'Instagram' },
+    photoLabel: { en: 'Photo URL', ru: 'Ссылка на фото' },
+    photoHelp: {
+      en: 'Optional. A logo or portrait shown next to the name.',
+      ru: 'Необязательно. Логотип или портрет рядом с названием.',
+    },
+    sortOrderLabel: { en: 'Sort order', ru: 'Порядок' },
+    sortOrderHelp: {
+      en: 'Lower numbers show first.',
+      ru: 'Чем меньше число, тем выше в списке.',
+    },
+    activeHelp: {
+      en: 'When off, the vendor is hidden from the public site.',
+      ru: 'Если выключено, подрядчик не показывается на сайте.',
+    },
+    requiredFields: {
+      en: 'Name and category are both required.',
+      ru: 'Название и категория обязательны.',
+    },
+    vendorSaved: { en: 'Vendor saved', ru: 'Подрядчик сохранён' },
+    vendorCreated: { en: 'Vendor added', ru: 'Подрядчик добавлен' },
+    vendorDeleted: { en: 'Vendor deleted', ru: 'Подрядчик удалён' },
+    deleteConfirmTitle: { en: 'Delete this vendor?', ru: 'Удалить этого подрядчика?' },
+    deleteConfirmBody: {
+      en: (name: string) => `${name} will be permanently removed from the weddings page.`,
+      ru: (name: string) => `${name} будет навсегда удалён со страницы свадеб.`,
+    },
+    deleteVendor: { en: 'Delete vendor', ru: 'Удалить подрядчика' },
   },
 
   leads: {

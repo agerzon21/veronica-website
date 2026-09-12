@@ -32,6 +32,10 @@ import reviewsListHandler from './admin/_reviews-list.js';
 import reviewsUpsertHandler from './admin/_reviews-upsert.js';
 import reviewsDeleteHandler from './admin/_reviews-delete.js';
 import reviewsAggregateHandler from './admin/_reviews-aggregate.js';
+import weddingsSettingsHandler from './admin/_weddings-settings.js';
+import weddingsVendorsListHandler from './admin/_weddings-vendors-list.js';
+import weddingsVendorsUpsertHandler from './admin/_weddings-vendors-upsert.js';
+import weddingsVendorsDeleteHandler from './admin/_weddings-vendors-delete.js';
 import leadsListHandler from './admin/_leads-list.js';
 import leadsUpdateHandler from './admin/_leads-update.js';
 import leadsDeleteHandler from './admin/_leads-delete.js';
@@ -97,6 +101,10 @@ const HANDLERS: Record<
   'reviews-upsert': reviewsUpsertHandler,
   'reviews-delete': reviewsDeleteHandler,
   'reviews-aggregate': reviewsAggregateHandler,
+  'weddings-settings': weddingsSettingsHandler,
+  'weddings-vendors-list': weddingsVendorsListHandler,
+  'weddings-vendors-upsert': weddingsVendorsUpsertHandler,
+  'weddings-vendors-delete': weddingsVendorsDeleteHandler,
   'leads-list': leadsListHandler,
   'leads-update': leadsUpdateHandler,
   'leads-delete': leadsDeleteHandler,

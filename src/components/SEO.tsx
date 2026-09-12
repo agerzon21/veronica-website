@@ -43,7 +43,7 @@ const ROUTE_META: Record<string, RouteMeta> = {
   '/wedding-photography': {
     title: 'Wedding Photography Services | Vero Photography',
     description:
-      'Wedding photography by Veronika Gerzon — what coverage includes, travel, and how your gallery is delivered. Based in Scranton, Pennsylvania; available worldwide.',
+      'Wedding photography by Veronika Gerzon — coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
     image: `${SITE_URL}/assets/photos/weddings/newlyweds-running-sea.webp`,
   },
   '/gallery': {

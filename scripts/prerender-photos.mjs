@@ -756,7 +756,7 @@ const STATIC_PAGES = [
     heading: 'Wedding Photography Services',
     title: 'Wedding Photography Services | Vero Photography',
     description:
-      'Wedding photography by Veronika Gerzon — what coverage includes, travel, and how your gallery is delivered. Based in Scranton, Pennsylvania; available worldwide.',
+      'Wedding photography by Veronika Gerzon — coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
     image: `${SITE}/assets/photos/weddings/newlyweds-running-sea.webp`,
   },
   {
@@ -783,6 +783,15 @@ const STATIC_PAGES = [
     failProd('static page metadata drifted from SEO.tsx.');
   }
 }
+
+// The weddings page shares its packages/FAQ copy with the SPA through this
+// JSON file — one source, so the page and what crawlers see cannot drift.
+// FAQPage structured data is emitted into the STATIC HTML because Helmet-only
+// JSON-LD needs JS execution, and rich-result eligibility shouldn't depend
+// on Google's render pass.
+const weddingPage = JSON.parse(
+  readFileSync(join(__dirname, '..', 'src/data/wedding-page.json'), 'utf-8'),
+);
 
 let staticPages = 0;
 for (const pg of STATIC_PAGES) {
@@ -827,13 +836,47 @@ for (const pg of STATIC_PAGES) {
       }
     }
     </script>`;
-  html = stripDefaultWebPage(html).replace('</head>', `${meta}\n  </head>`);
+
+  // Wedding-page extras: FAQPage schema in the head, and the packages +
+  // FAQ text in the noscript body so the answers are crawlable verbatim.
+  let extraMeta = '';
+  let extraBody = pg.extra ? `\n        ${pg.extra}` : '';
+  if (pg.path === '/wedding-photography') {
+    const faqSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: weddingPage.faq.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    };
+    extraMeta = `\n    <script type="application/ld+json">${JSON.stringify(faqSchema)}</script>`;
+    extraBody +=
+      `\n        <h2>Wedding Packages</h2>\n        <p>${esc(weddingPage.broadNote)}</p>` +
+      weddingPage.packages
+        .map(
+          (p) =>
+            `\n        <h3>${esc(p.name)} — ${esc(p.coverage)}, ${esc(p.price)}</h3>` +
+            `\n        <p>${esc(p.tagline)} Includes: ${p.includes.map(esc).join('; ')}.</p>`,
+        )
+        .join('') +
+      `\n        <p>${esc(weddingPage.addOns.map((a) => `${a.name}: ${a.detail}`).join(' '))}</p>` +
+      `\n        <h2>Travel</h2>\n        <p>${esc(weddingPage.travel)}</p>` +
+      `\n        <h2>Booking</h2>\n        <p>${esc(weddingPage.booking)}</p>` +
+      `\n        <h2>Wedding Photography FAQ</h2>` +
+      weddingPage.faq
+        .map((f) => `\n        <h3>${esc(f.q)}</h3>\n        <p>${esc(f.a)}</p>`)
+        .join('');
+  }
+
+  html = stripDefaultWebPage(html).replace('</head>', `${meta}${extraMeta}\n  </head>`);
 
   const noscript = `
     <noscript>
       <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:sans-serif;">
         <h1>${esc(pg.heading)}</h1>
-        <p>${esc(pg.description)}</p>${pg.extra ? `\n        ${pg.extra}` : ''}
+        <p>${esc(pg.description)}</p>${extraBody}
         <h2>Browse</h2>
         <ul>
           <li><a href="/">Home</a></li>
