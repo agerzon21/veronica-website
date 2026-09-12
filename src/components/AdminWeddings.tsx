@@ -5,6 +5,8 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import FaBookOpen from '../icons/fa/FaBookOpen';
 import FaChevronDown from '../icons/fa/FaChevronDown';
+import FaChevronLeft from '../icons/fa/FaChevronLeft';
+import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaEdit from '../icons/fa/FaEdit';
 import FaImage from '../icons/fa/FaImage';
@@ -46,6 +48,8 @@ interface Props {
 const MAX_HEROES = 6;
 const MAX_FEATURED = 6;
 const MAX_SELECTED_WORK = 8;
+// Add-picker page size — Alex refuses to scroll a 97-row list.
+const PICKER_PAGE_SIZE = 10;
 
 interface WeddingsSettings {
   heroes: string[];
@@ -585,68 +589,21 @@ function JournalCard({
           )}
 
           {/* Add picker — the published posts not yet featured. */}
-          <Box mt={5}>
-            <Text
-              fontSize={{ base: 'xs', md: '2xs' }}
-              fontWeight="500"
-              textTransform="uppercase"
-              letterSpacing={{ base: '0.15em', md: '0.22em' }}
-              color="brand.accent"
-              mb={2}
-            >
-              {t.weddings.addHeading}
-            </Text>
-            {posts && posts.length === 0 ? (
-              <Text fontSize="sm" color="gray.500" fontWeight="300">
-                {t.weddings.noPublishedPosts}
-              </Text>
-            ) : available.length === 0 ? (
-              <Text fontSize="sm" color="gray.500" fontWeight="300">
-                {t.weddings.allPostsAdded}
-              </Text>
-            ) : (
-              <>
-                {atCap && (
-                  <Text fontSize="xs" color="orange.600" fontWeight="300" mb={2}>
-                    {t.weddings.maxReached}
-                  </Text>
-                )}
-                <VStack spacing={2} align="stretch">
-                  {available.map((post) => (
-                    <Flex
-                      key={post.slug}
-                      align="center"
-                      gap={3}
-                      border="1px solid"
-                      borderColor="gray.200"
-                      borderRadius="sm"
-                      p={2}
-                      opacity={atCap ? 0.5 : 1}
-                    >
-                      <PostThumb coverUrl={post.cover_image_url} />
-                      <Text flex={1} minW={0} fontSize="sm" fontWeight="300" color="gray.700" noOfLines={1}>
-                        {post.title}
-                      </Text>
-                      <IconButton
-                        aria-label={t.weddings.addAria}
-                        icon={<Icon as={FaPlus} boxSize={3.5} />}
-                        onClick={() => add(post.slug)}
-                        isDisabled={atCap}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="brand.accentText"
-                        _hover={{ color: 'brand.accent' }}
-                        flexShrink={0}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                    </Flex>
-                  ))}
-                </VStack>
-              </>
-            )}
-          </Box>
+          <SearchableAddPicker
+            heading={t.weddings.addHeading}
+            sourceIsEmpty={posts !== null && posts.length === 0}
+            sourceEmptyLabel={t.weddings.noPublishedPosts}
+            allAddedLabel={t.weddings.allPostsAdded}
+            atCap={atCap}
+            capLabel={t.weddings.maxReached}
+            addAria={t.weddings.addAria}
+            items={available.map((post) => ({
+              slug: post.slug,
+              title: post.title || post.slug,
+              thumb: <PostThumb coverUrl={post.cover_image_url} />,
+            }))}
+            onAdd={add}
+          />
 
           <Flex justify="flex-end" mt={4}>
             <CTAButton
@@ -898,68 +855,21 @@ function SelectedWorkCard({
           )}
 
           {/* Add picker — the published wedding photos not yet selected. */}
-          <Box mt={5}>
-            <Text
-              fontSize={{ base: 'xs', md: '2xs' }}
-              fontWeight="500"
-              textTransform="uppercase"
-              letterSpacing={{ base: '0.15em', md: '0.22em' }}
-              color="brand.accent"
-              mb={2}
-            >
-              {t.weddings.addPhotoHeading}
-            </Text>
-            {photos && photos.length === 0 ? (
-              <Text fontSize="sm" color="gray.500" fontWeight="300">
-                {t.weddings.noGalleryPhotos}
-              </Text>
-            ) : available.length === 0 ? (
-              <Text fontSize="sm" color="gray.500" fontWeight="300">
-                {t.weddings.allPhotosAdded}
-              </Text>
-            ) : (
-              <>
-                {atCap && (
-                  <Text fontSize="xs" color="orange.600" fontWeight="300" mb={2}>
-                    {t.weddings.maxReachedPhotos}
-                  </Text>
-                )}
-                <VStack spacing={2} align="stretch">
-                  {available.map((photo) => (
-                    <Flex
-                      key={photo.slug}
-                      align="center"
-                      gap={3}
-                      border="1px solid"
-                      borderColor="gray.200"
-                      borderRadius="sm"
-                      p={2}
-                      opacity={atCap ? 0.5 : 1}
-                    >
-                      <PhotoThumb url={photo.url} />
-                      <Text flex={1} minW={0} fontSize="sm" fontWeight="300" color="gray.700" noOfLines={1}>
-                        {displayPhotoTitle(photo)}
-                      </Text>
-                      <IconButton
-                        aria-label={t.weddings.addPhotoAria}
-                        icon={<Icon as={FaPlus} boxSize={3.5} />}
-                        onClick={() => add(photo.slug)}
-                        isDisabled={atCap}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="brand.accentText"
-                        _hover={{ color: 'brand.accent' }}
-                        flexShrink={0}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                    </Flex>
-                  ))}
-                </VStack>
-              </>
-            )}
-          </Box>
+          <SearchableAddPicker
+            heading={t.weddings.addPhotoHeading}
+            sourceIsEmpty={photos !== null && photos.length === 0}
+            sourceEmptyLabel={t.weddings.noGalleryPhotos}
+            allAddedLabel={t.weddings.allPhotosAdded}
+            atCap={atCap}
+            capLabel={t.weddings.maxReachedPhotos}
+            addAria={t.weddings.addPhotoAria}
+            items={available.map((photo) => ({
+              slug: photo.slug,
+              title: displayPhotoTitle(photo),
+              thumb: <PhotoThumb url={photo.url} />,
+            }))}
+            onAdd={add}
+          />
 
           <Flex justify="flex-end" mt={4}>
             <CTAButton
@@ -1001,6 +911,218 @@ function PhotoThumb({ url }: { url: string | null }) {
       )}
     </Box>
   );
+}
+
+// ── Shared searchable add-picker (journal + selected work) ─────────
+
+interface PickerItem {
+  slug: string;
+  // Display title — already resolved by the caller (slug fallback done
+  // upstream) so the search + highlight here match exactly what's shown.
+  title: string;
+  // Pre-rendered thumbnail node (PostThumb / PhotoThumb) — keeps this
+  // component agnostic of where the image comes from.
+  thumb: ReactNode;
+}
+
+/**
+ * The add-list both curation cards share: search box on top,
+ * case-insensitive substring filtering against the display title,
+ * gold highlight on the matched substring, and 10-per-page
+ * pagination so a 97-photo gallery never renders as one wall.
+ * In-memory only — the lists are already fully fetched.
+ */
+function SearchableAddPicker({
+  heading,
+  items,
+  sourceIsEmpty,
+  sourceEmptyLabel,
+  allAddedLabel,
+  atCap,
+  capLabel,
+  addAria,
+  onAdd,
+}: {
+  heading: string;
+  items: PickerItem[];
+  // The SOURCE list (before removing already-added items) is empty —
+  // "publish something first" beats "everything is already added".
+  sourceIsEmpty: boolean;
+  sourceEmptyLabel: string;
+  allAddedLabel: string;
+  atCap: boolean;
+  capLabel: string;
+  addAria: string;
+  onAdd: (slug: string) => void;
+}) {
+  const { t } = useAdminLang();
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? items.filter((it) => it.title.toLowerCase().includes(q)) : items;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PICKER_PAGE_SIZE));
+  // Clamp instead of trusting `page` — adding an item can shrink the
+  // list under the current page without any query change.
+  const safePage = Math.min(page, totalPages - 1);
+  const visible = filtered.slice(
+    safePage * PICKER_PAGE_SIZE,
+    (safePage + 1) * PICKER_PAGE_SIZE,
+  );
+
+  return (
+    <Box mt={5}>
+      <Text
+        fontSize={{ base: 'xs', md: '2xs' }}
+        fontWeight="500"
+        textTransform="uppercase"
+        letterSpacing={{ base: '0.15em', md: '0.22em' }}
+        color="brand.accent"
+        mb={2}
+      >
+        {heading}
+      </Text>
+
+      {sourceIsEmpty ? (
+        <Text fontSize="sm" color="gray.500" fontWeight="300">
+          {sourceEmptyLabel}
+        </Text>
+      ) : items.length === 0 ? (
+        <Text fontSize="sm" color="gray.500" fontWeight="300">
+          {allAddedLabel}
+        </Text>
+      ) : (
+        <>
+          <Input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder={t.weddings.searchPlaceholder}
+            aria-label={t.weddings.searchPlaceholder}
+            mb={2.5}
+            {...inputStyles}
+          />
+
+          {atCap && (
+            <Text fontSize="xs" color="orange.600" fontWeight="300" mb={2}>
+              {capLabel}
+            </Text>
+          )}
+
+          {filtered.length === 0 ? (
+            <Text fontSize="sm" color="gray.500" fontWeight="300">
+              {t.weddings.noMatches(query.trim())}
+            </Text>
+          ) : (
+            <>
+              <VStack spacing={2} align="stretch">
+                {visible.map((item) => (
+                  <Flex
+                    key={item.slug}
+                    align="center"
+                    gap={3}
+                    border="1px solid"
+                    borderColor="gray.200"
+                    borderRadius="sm"
+                    p={2}
+                    opacity={atCap ? 0.5 : 1}
+                  >
+                    {item.thumb}
+                    <Text flex={1} minW={0} fontSize="sm" fontWeight="300" color="gray.700" noOfLines={1}>
+                      {highlightMatches(item.title, query.trim())}
+                    </Text>
+                    <IconButton
+                      aria-label={addAria}
+                      icon={<Icon as={FaPlus} boxSize={3.5} />}
+                      onClick={() => onAdd(item.slug)}
+                      isDisabled={atCap}
+                      variant="ghost"
+                      size="sm"
+                      minW="40px"
+                      minH="40px"
+                      color="brand.accentText"
+                      _hover={{ color: 'brand.accent' }}
+                      flexShrink={0}
+                      sx={{ WebkitTapHighlightColor: 'transparent' }}
+                    />
+                  </Flex>
+                ))}
+              </VStack>
+
+              {totalPages > 1 && (
+                <Flex align="center" justify="center" gap={2} mt={3}>
+                  <IconButton
+                    aria-label={t.weddings.prevPageAria}
+                    icon={<Icon as={FaChevronLeft} boxSize={3} />}
+                    onClick={() => setPage(Math.max(0, safePage - 1))}
+                    isDisabled={safePage === 0}
+                    variant="ghost"
+                    size="sm"
+                    minW="40px"
+                    minH="40px"
+                    color="gray.500"
+                    _hover={{ color: 'brand.accent' }}
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  />
+                  <Text fontSize="xs" color="gray.500" fontWeight="300" minW="90px" textAlign="center">
+                    {t.weddings.pageOf(safePage + 1, totalPages)}
+                  </Text>
+                  <IconButton
+                    aria-label={t.weddings.nextPageAria}
+                    icon={<Icon as={FaChevronRight} boxSize={3} />}
+                    onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+                    isDisabled={safePage >= totalPages - 1}
+                    variant="ghost"
+                    size="sm"
+                    minW="40px"
+                    minH="40px"
+                    color="gray.500"
+                    _hover={{ color: 'brand.accent' }}
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  />
+                </Flex>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Split `text` on case-insensitive occurrences of `query` and wrap the
+ * matches in a gold emphasis. Semantic <mark> with the browser's
+ * default yellow suppressed — the gold weight carries the highlight.
+ */
+function highlightMatches(text: string, query: string): ReactNode {
+  if (!query) return text;
+  const lower = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let matchAt = lower.indexOf(lowerQuery);
+  let key = 0;
+  while (matchAt !== -1) {
+    if (matchAt > cursor) parts.push(text.slice(cursor, matchAt));
+    parts.push(
+      <Box
+        as="mark"
+        key={key++}
+        bg="transparent"
+        color="brand.accentText"
+        fontWeight="600"
+      >
+        {text.slice(matchAt, matchAt + query.length)}
+      </Box>,
+    );
+    cursor = matchAt + query.length;
+    matchAt = lower.indexOf(lowerQuery, cursor);
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return parts;
 }
 
 // ── Card 4: Recommended vendors ────────────────────────────────────
