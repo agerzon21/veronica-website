@@ -2,7 +2,7 @@
 // TESTIMONIAL_POOL — see git history.
 import { useEffect, useRef, useState } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon, Image } from '@chakra-ui/react';
-import { m, useInView } from 'framer-motion';
+import { m, useInView, useScroll, useTransform } from 'framer-motion';
 import FaGoogle from '../icons/fa/FaGoogle';
 import FaStar from '../icons/fa/FaStar';
 import CTAButton from './ui/CTAButton';
@@ -78,6 +78,15 @@ const AuthorBadge = ({ review }: { review: Review }) => {
 };
 
 const GoogleReviewsSection = () => {
+  // Parallax: the backdrop travels a shorter distance than the page, which
+  // is what reads as depth. 'start end' → 'end start' means the range runs
+  // from the section entering the viewport to it leaving.
+  const parallaxRef = useRef<HTMLDivElement | null>(null);
+  const { scrollYProgress: bandProgress } = useScroll({
+    target: parallaxRef,
+    offset: ['start end', 'end start'],
+  });
+  const parallaxY = useTransform(bandProgress, [0, 1], ['-9%', '9%']);
   const [testimonials, setTestimonials] = useState<Review[]>([]);
   const [rating, setRating] = useState<string>(FALLBACK_RATING);
   const [reviewCount, setReviewCount] = useState<number>(FALLBACK_REVIEW_COUNT);
@@ -142,7 +151,10 @@ const GoogleReviewsSection = () => {
     // gap above this section and doubling it is exactly the "spacey" the
     // brief is about. Declared after layerStyle so it wins.
     <Box
-      ref={sectionRef}
+      ref={(node: HTMLDivElement | null) => {
+        sectionRef.current = node;
+        parallaxRef.current = node;
+      }}
       position="relative"
       layerStyle="section"
       pt={{ base: 16, md: 20 }}
@@ -150,20 +162,38 @@ const GoogleReviewsSection = () => {
       overflow="hidden"
       sx={{ isolation: 'isolate' }}
     >
-      {/* Words about photographs deserve a photograph behind them. The
-          scrim is heavy enough for AA on every string in here. */}
-      <Image
-        src="/assets/photos/site/home-cta-bg.webp"
-        alt=""
-        position="absolute"
-        inset={0}
-        w="100%"
-        h="100%"
-        objectFit="cover"
-        objectPosition="center 40%"
-        zIndex={-2}
-        loading="lazy"
-      />
+      {/* Words about photographs deserve a photograph behind them, and it
+          PARALLAXES: the backdrop is taller than the section and drifts
+          against the scroll, so the band has depth instead of sitting
+          flat. Portrait-centred on each breakpoint — the wide frame on
+          desktop, the lighthouse portrait on phones, which is the shape
+          a phone actually has room for. */}
+      <MotionDiv
+        // The extra height is what the drift travels through; without it
+        // the top and bottom edges would slide into view.
+        style={{ y: parallaxY, position: 'absolute', top: '-18%', bottom: '-18%', left: 0, right: 0, zIndex: -2 }}
+      >
+        <Image
+          src="/assets/photos/site/home-cta-bg.webp"
+          alt=""
+          display={{ base: 'none', md: 'block' }}
+          w="100%"
+          h="100%"
+          objectFit="cover"
+          objectPosition="center 38%"
+          loading="lazy"
+        />
+        <Image
+          src="/assets/photos/portraits/white-dress-lighthouse.webp"
+          alt=""
+          display={{ base: 'block', md: 'none' }}
+          w="100%"
+          h="100%"
+          objectFit="cover"
+          objectPosition="center 35%"
+          loading="lazy"
+        />
+      </MotionDiv>
       <Box position="absolute" inset={0} bg="rgba(12, 10, 6, 0.76)" zIndex={-1} />
       <MotionDiv
         initial={{ opacity: 0, y: 20 }}
@@ -274,7 +304,9 @@ const GoogleReviewsSection = () => {
 
         {/* CTA — links to write-review URL */}
         <Flex justify="center" mt={{ base: 10, md: 14 }}>
-          <CTAButton href={GOOGLE_WRITE_REVIEW_URL}>Leave a Review</CTAButton>
+          <CTAButton href={GOOGLE_WRITE_REVIEW_URL} variant="solid">
+            Leave a Review
+          </CTAButton>
         </Flex>
       </MotionDiv>
     </Box>

@@ -8,7 +8,6 @@ import FaPlay from '../icons/fa/FaPlay';
 import FaRegComment from '../icons/fa/FaRegComment';
 import instagramData from '../data/instagram.json';
 import igFallbackVariants from '../data/ig-fallback-variants.json';
-import CTAButton from './ui/CTAButton';
 import IgPostModal, { type IgPostForModal } from './IgPostModal';
 
 // Native grid replacement for the Instagram embed. Cross-origin iframes
@@ -418,6 +417,52 @@ const InstagramFeed = () => {
       >
         {PHOTOS.map((photo, i) => {
           const isHero = i === 0;
+          // Final slot is the Instagram invitation itself: it reads as part
+          // of the feed, and it replaces the button that used to float
+          // under the grid with a gap above it.
+          if (i === PHOTOS.length - 1) {
+            return (
+              <Link
+                key={i}
+                href={INSTAGRAM_URL}
+                isExternal
+                role="group"
+                _hover={{ textDecoration: 'none' }}
+              >
+                <AspectRatio ratio={1}>
+                  <Flex
+                    direction="column"
+                    align="center"
+                    justify="center"
+                    gap={{ base: 1.5, md: 2.5 }}
+                    bg="brand.surface"
+                    border="1px solid"
+                    borderColor="brand.accentBorder"
+                    transition="background 0.25s ease, border-color 0.25s ease"
+                    _groupHover={{ bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }}
+                    px={2}
+                    textAlign="center"
+                  >
+                    <Icon as={FaInstagram} boxSize={{ base: 5, md: 7 }} color="brand.accentText" />
+                    <Text
+                      fontFamily="heading"
+                      fontWeight="300"
+                      fontSize={{ base: '0.95rem', md: '1.2rem' }}
+                      lineHeight="1.2"
+                      color="gray.800"
+                    >
+                      Connect on
+                      <br />
+                      Instagram
+                    </Text>
+                    <Text textStyle="metaCaption" color="brand.accentText" display={{ base: 'none', md: 'block' }}>
+                      @vero.art.photo
+                    </Text>
+                  </Flex>
+                </AspectRatio>
+              </Link>
+            );
+          }
           return (
             <Box
               // Index key ON PURPOSE. This is a fixed 9-slot grid that is never
@@ -559,10 +604,6 @@ const InstagramFeed = () => {
           );
         })}
       </Grid>
-
-      <VStack mt={{ base: 10, md: 12 }}>
-        <CTAButton href={INSTAGRAM_URL} icon={FaInstagram}>Follow on Instagram</CTAButton>
-      </VStack>
 
       {/* Post lightbox — opens on tile click, shows full caption +
           engagement + "View on Instagram" CTA. Keeps users on the

@@ -102,6 +102,11 @@ const MAX_NATURAL_WIDTH = 6000;
 const NAVBAR_HEIGHT = 72;
 const SAFE_BUFFER = 16;
 const CAMERA_GAP = 24;
+// The footer sits FURTHER from the camera than the header does. With the
+// stats row gone the footer is a single button, and 24px under the body
+// made it look welded to the camera. The budget below reserves this
+// instead of a second CAMERA_GAP, so the camera never grows into it.
+const FOOTER_GAP = 88;
 
 // The hero header is now the shared PageHeader (eyebrow → 40px rule →
 // pageTitle h1). pageTitle is 36 / 52 / 68px against the old hand-rolled
@@ -117,9 +122,10 @@ const HEADER_CONTENT_LG = 195;
 const headerContentFor = (vw: number) =>
   vw >= 992 ? HEADER_CONTENT_LG : vw >= 768 ? HEADER_CONTENT_MD : HEADER_CONTENT_BASE;
 
-// Stat labels moved to metaCaption (11px/1.4) and stat values to cardTitle
-// (20/22px Cormorant), which is ~16px taller than the old 10px/14px pair.
-const FOOTER_CONTENT = 150;
+// Just the CTA button now that the stats row lives on the About page:
+// button height plus a little slack, not the 150px the three-column
+// stat block needed.
+const FOOTER_CONTENT = 64;
 const FOOTER_RESERVED = FOOTER_CONTENT + SAFE_BUFFER;
 
 // CameraBody rendered at a configurable CSS-natural width (passed in as px).
@@ -260,7 +266,7 @@ const computeCameraSize = (
   // sits just below the sticky and is revealed by additional scroll.
   const headerReserved = NAVBAR_HEIGHT + SAFE_BUFFER + headerContentFor(vw);
 
-  const fullAvailableH = vh - headerReserved - FOOTER_RESERVED - 2 * CAMERA_GAP;
+  const fullAvailableH = vh - headerReserved - FOOTER_RESERVED - CAMERA_GAP - FOOTER_GAP;
   const extractFooter = fullAvailableH < MIN_FULL_LAYOUT_CAMERA_HEIGHT;
 
   const availableH = extractFooter
@@ -351,7 +357,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // so the two stay visually balanced around the (shifted) camera.
   const anchorOffset = size.finalHeight / 2 + CAMERA_GAP;
   const headerBottomOffset = anchorOffset - size.verticalShiftPx;
-  const footerTopOffset = anchorOffset + size.verticalShiftPx;
+  const footerTopOffset = size.finalHeight / 2 + FOOTER_GAP + size.verticalShiftPx;
 
   // Motion-y at scroll end translates the camera body down by verticalShiftPx
   // so its center matches the header/footer anchor. Expressed as a percentage
