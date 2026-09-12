@@ -556,7 +556,7 @@ if (!existsSync(journalDir)) mkdirSync(journalDir, { recursive: true });
 // cover_image_url is null on every current post, so fall back to the site
 // default rather than emitting an empty og:image (which renders as a broken
 // card on every share).
-const DEFAULT_OG = `${SITE}/assets/photos/site/contact-bg.webp`;
+const DEFAULT_OG = `${SITE}/assets/photos/site/journal-hero.webp`;
 
 let journalPages = 0;
 for (const post of posts) {
@@ -757,7 +757,7 @@ const STATIC_PAGES = [
     title: 'Wedding Photography Services | Vero Photography',
     description:
       'Wedding photography by Veronika Gerzon — coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
-    image: `${SITE}/assets/photos/weddings/newlyweds-running-sea.webp`,
+    image: `${SITE}/assets/photos/site/weddings-hero.webp`,
   },
   {
     path: '/gallery',

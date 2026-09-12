@@ -300,23 +300,26 @@ const Weddings = () => {
         <meta property="og:url" content="https://vero.photography/wedding-photography" />
         <meta
           property="og:image"
-          content="https://vero.photography/assets/photos/weddings/newlyweds-running-sea.webp"
+          content="https://vero.photography/assets/photos/site/weddings-hero.webp"
         />
         <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
       </Helmet>
 
-      {/* ─── Hero ─── */}
-      <Box position="relative" h={{ base: '48vh', md: '56vh' }} overflow="hidden">
+      {/* ─── Hero — the photograph Alex picked from the chooser, hosted
+          locally and pre-cropped to the framing he set (focus 50% 43% at
+          49vh), so the browser has no positioning work to do. ─── */}
+      <Box position="relative" h={{ base: '48vh', md: '49vh' }} overflow="hidden">
         <Image
-          src={photoUrl(FEATURED[0].id)}
-          alt={FEATURED[0].alt}
+          src="/assets/photos/site/weddings-hero.webp"
+          alt="Bride and groom kissing on a pier at sunset, her veil lifting in the wind."
           objectFit="cover"
-          objectPosition="center 35%"
+          objectPosition="center"
           w="100%"
           h="100%"
+          fetchPriority="high"
         />
         <Box position="absolute" inset={0} bg="rgba(0,0,0,0.42)" />
-        <Flex position="absolute" inset={0} align="center" justify="center">
+        <Flex position="absolute" inset={0} align="center" justify="center" pt={{ base: "64px", md: "72px" }}>
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
