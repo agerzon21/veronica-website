@@ -90,6 +90,10 @@ function shuffled<T>(arr: T[]): T[] {
 
 const SPRINKLE_ALT = 'Wedding photography by Veronika Gerzon';
 
+/** Journal covers arrive as w800 thumbs; the index preview renders big. */
+const coverLarge = (url: string | null): string =>
+  url ? url.replace(/([?&]sz=)w\d+/, '$1w2000') : '';
+
 const Weddings = () => {
   const introRef = useRef<HTMLDivElement>(null);
   const isIntroInView = useInView(introRef, { once: true, amount: 0.15 });
@@ -101,6 +105,8 @@ const Weddings = () => {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [featured, setFeatured] = useState<FeaturedPost[]>([]);
   const [selectedWork, setSelectedWork] = useState<Array<{ slug: string; url: string; alt: string }>>([]);
+  // Which journal pick the desktop index is previewing (hover-driven).
+  const [journalIdx, setJournalIdx] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -461,79 +467,134 @@ const Weddings = () => {
         </Box>
       )}
 
-      {/* ─── From the Journal ─── */}
+      {/* ─── From the Journal — an editorial index, not a card strip.
+          Desktop: the six titles as a numbered serif list; hovering a
+          title crossfades its cover into the preview frame beside it
+          (CSS opacity only — no motion machinery, LazyMotion-safe).
+          Mobile: a two-column card grid that scrolls vertically like
+          the rest of the page — no sideways gesture to discover. ─── */}
       {featured.length > 0 && (
-        <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 0, md: 0 }}>
-          <VStack spacing={3} mb={{ base: 3, md: 4 }} textAlign="center" px={6}>
+        <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 6, md: 12 }}>
+          <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
             <Text textStyle="eyebrow">From the Journal</Text>
             <Box w="35px" h="1px" bg="brand.accent" />
             <Text textStyle="bodyCopy" color="gray.600" maxW="560px">
               Real weddings, planning advice, and notes from behind the lens.
             </Text>
           </VStack>
-          <Flex
-            overflowX="auto"
-            gap={{ base: 3, md: 4 }}
-            px={{ base: 4, md: 10 }}
-            py={{ base: 4, md: 6 }}
-            sx={{
-              scrollSnapType: 'x mandatory',
-              scrollbarWidth: 'none',
-              '&::-webkit-scrollbar': { display: 'none' },
-              '& > a': { scrollSnapAlign: 'start' },
-            }}
+
+          {/* Desktop index */}
+          <Grid
+            display={{ base: 'none', lg: 'grid' }}
+            templateColumns="7fr 5fr"
+            gap={{ lg: 14 }}
+            maxW="1100px"
+            mx="auto"
+            alignItems="stretch"
           >
-            {featured.map((post) => (
-              <Box
-                key={post.slug}
-                as={RouterLink}
-                to={`/journal/${post.slug}`}
-                role="group"
-                position="relative"
-                flexShrink={0}
-                w={{ base: '240px', md: '300px' }}
-                h={{ base: '160px', md: '200px' }}
-                borderRadius="sm"
-                overflow="hidden"
-                bg="brand.surface"
-              >
-                {post.cover_image_url && (
-                  <Image
-                    src={post.cover_image_url}
-                    alt=""
-                    position="absolute"
-                    inset={0}
-                    w="100%"
-                    h="100%"
-                    objectFit="cover"
-                    transition="transform 0.6s ease"
-                    _groupHover={{ transform: 'scale(1.05)' }}
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                )}
+            <Flex direction="column" justify="center" borderTop="1px solid" borderColor="brand.accentBorder">
+              {featured.map((post, i) => (
                 <Box
+                  key={post.slug}
+                  as={RouterLink}
+                  to={`/journal/${post.slug}`}
+                  role="group"
+                  onMouseEnter={() => setJournalIdx(i)}
+                  onFocus={() => setJournalIdx(i)}
+                  py={4}
+                  borderBottom="1px solid"
+                  borderColor="brand.accentBorder"
+                >
+                  <HStack spacing={5} align="baseline">
+                    <Text
+                      fontFamily="heading"
+                      fontWeight="300"
+                      fontSize="sm"
+                      color={i === journalIdx ? 'brand.accent' : 'gray.400'}
+                      transition="color 0.25s ease"
+                      minW="26px"
+                    >
+                      {String(i + 1).padStart(2, '0')}
+                    </Text>
+                    <Text
+                      fontFamily="heading"
+                      fontWeight="300"
+                      fontSize="1.3rem"
+                      lineHeight="1.35"
+                      color={i === journalIdx ? 'gray.900' : 'gray.500'}
+                      transition="color 0.25s ease"
+                      noOfLines={2}
+                      flex="1"
+                    >
+                      {post.title}
+                    </Text>
+                    <Icon
+                      as={FaArrowRight}
+                      boxSize={3}
+                      color="brand.accentText"
+                      opacity={i === journalIdx ? 1 : 0}
+                      transform={i === journalIdx ? 'translateX(0)' : 'translateX(-6px)'}
+                      transition="opacity 0.25s ease, transform 0.25s ease"
+                    />
+                  </HStack>
+                </Box>
+              ))}
+              <Box pt={5}>
+                <CTAButton to="/journal" variant="ghost" size="sm">
+                  View the full journal
+                </CTAButton>
+              </Box>
+            </Flex>
+
+            {/* Preview frame — all covers stacked, active one visible */}
+            <Box position="relative" overflow="hidden" borderRadius="sm" bg="brand.surface" minH="460px">
+              {featured.map((post, i) => (
+                <Image
+                  key={post.slug}
+                  src={coverLarge(post.cover_image_url)}
+                  alt=""
                   position="absolute"
                   inset={0}
-                  bg="linear-gradient(180deg, rgba(15,15,15,0.05) 30%, rgba(15,15,15,0.62) 100%)"
+                  w="100%"
+                  h="100%"
+                  objectFit="cover"
+                  opacity={i === journalIdx ? 1 : 0}
+                  transition="opacity 0.45s ease"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
                 />
-                <Flex position="relative" direction="column" justify="flex-end" h="100%" p={4}>
-                  <Text
-                    color="white"
-                    textStyle="cardTitle"
-                    fontSize={{ base: 'sm', md: 'md' }}
-                    noOfLines={2}
-                    textShadow="0 1px 8px rgba(0,0,0,0.4)"
-                  >
-                    {post.title}
-                  </Text>
-                </Flex>
+              ))}
+            </Box>
+          </Grid>
+
+          {/* Mobile / tablet: tidy vertical card grid */}
+          <SimpleGrid display={{ base: 'grid', lg: 'none' }} columns={2} spacing={{ base: 3, md: 4 }} maxW="720px" mx="auto">
+            {featured.map((post) => (
+              <Box key={post.slug} as={RouterLink} to={`/journal/${post.slug}`}>
+                <Box aspectRatio={4 / 3} overflow="hidden" borderRadius="sm" bg="brand.surface">
+                  {post.cover_image_url && (
+                    <Image
+                      src={post.cover_image_url}
+                      alt=""
+                      w="100%"
+                      h="100%"
+                      objectFit="cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  )}
+                </Box>
+                <Text textStyle="cardTitle" fontSize="sm" mt={2} noOfLines={2}>
+                  {post.title}
+                </Text>
               </Box>
             ))}
-          </Flex>
-          <Flex justify="center" mt={{ base: 2, md: 3 }}>
+          </SimpleGrid>
+          <Flex justify="center" mt={{ base: 6, md: 8 }} display={{ base: 'flex', lg: 'none' }}>
             <CTAButton to="/journal" variant="ghost" size="sm">
               View the full journal
             </CTAButton>
