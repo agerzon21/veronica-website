@@ -439,7 +439,7 @@ const Weddings = () => {
                        box — a scrim and a shadow carry legibility), then
                        the image dissolves into the card body. Zoom and
                        focal point both come from the admin drag editor. */
-                    <Box position="relative" h={{ base: '250px', md: '285px' }} overflow="hidden" flexShrink={0}>
+                    <Box position="relative" h={{ base: '230px', md: '265px' }} overflow="hidden" flexShrink={0}>
                       <Image
                         src={pin.fullUrl}
                         alt=""
@@ -455,28 +455,18 @@ const Weddings = () => {
                         transition="transform 0.7s ease"
                         _groupHover={{ transform: `scale(${(pin.zoom ?? 1) * 1.04})` }}
                       />
-                      {/* Two overlays, not one: a dark scrim that carries the
-                          title, and a separate white fade pinned to the bottom.
-                          A single gradient mixing dark and white stops leaves a
-                          transparent band where light photos punch through. */}
+                      {/* One scrim, no fade: Alex wanted the photograph to end
+                          on a clean edge, not dissolve into the card. */}
                       <Box
                         position="absolute"
                         inset={0}
-                        bg="linear-gradient(180deg, rgba(12,10,6,0.06) 0%, rgba(12,10,6,0.32) 42%, rgba(12,10,6,0.62) 70%, rgba(12,10,6,0.22) 100%)"
-                      />
-                      <Box
-                        position="absolute"
-                        left={0}
-                        right={0}
-                        bottom={0}
-                        h="38%"
-                        bg="linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 40%, #ffffff 62%)"
+                        bg="linear-gradient(180deg, rgba(12,10,6,0.04) 0%, rgba(12,10,6,0.16) 40%, rgba(12,10,6,0.55) 78%, rgba(12,10,6,0.68) 100%)"
                       />
                       <VStack
                         position="absolute"
                         left={0}
                         right={0}
-                        bottom={{ base: '104px', md: '116px' }}
+                        bottom={{ base: '16px', md: '20px' }}
                         spacing={1}
                         px={5}
                         align="flex-start"
@@ -511,7 +501,7 @@ const Weddings = () => {
                       />
                     </Box>
                   )}
-                  <Flex direction="column" p={{ base: 6, md: 7 }} pt={pin ? { base: 2, md: 3 } : { base: 6, md: 7 }} flex="1" position="relative" zIndex={1}>
+                  <Flex direction="column" p={{ base: 6, md: 7 }} flex="1" position="relative" zIndex={1}>
                     {!pin && (
                       <>
                         <Text textStyle="eyebrow">{pkg.coverage}</Text>
@@ -698,7 +688,7 @@ const Weddings = () => {
             </Box>
 
             <Grid
-              templateColumns={{ base: 'repeat(3, 1fr)', md: `repeat(${featured.length}, 1fr)` }}
+              templateColumns={{ base: 'repeat(3, 1fr)', md: `repeat(${featured.length + 1}, 1fr)` }}
               gap={{ base: 2, md: 2.5 }}
               mt={{ base: 2.5, md: 3.5 }}
             >
@@ -753,13 +743,49 @@ const Weddings = () => {
                   </Box>
                 </Box>
               ))}
+
+              {/* The journal invitation rides in the strip itself, the way
+                  the gallery link rides in the Selected Work mosaic. */}
+              <Flex
+                as={RouterLink}
+                to="/journal"
+                role="group"
+                direction="column"
+                align="center"
+                justify="center"
+                gap={1}
+                h={{ base: '58px', md: '66px' }}
+                px={2}
+                textAlign="center"
+                borderRadius="sm"
+                bg="brand.surface"
+                border="1px solid"
+                borderColor="brand.accentBorder"
+                transition="background 0.25s ease, border-color 0.25s ease"
+                _hover={{ bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }}
+              >
+                <Text
+                  fontFamily="heading"
+                  fontWeight="300"
+                  fontSize={{ base: '11px', md: '13px' }}
+                  lineHeight="1.15"
+                  color="gray.800"
+                >
+                  View the
+                  <br />
+                  full journal
+                </Text>
+                <Icon
+                  as={FaArrowRight}
+                  boxSize={2.5}
+                  color="brand.accentText"
+                  transition="transform 0.25s ease"
+                  _groupHover={{ transform: 'translateX(3px)' }}
+                />
+              </Flex>
             </Grid>
 
-            <Flex justify="center" mt={{ base: 6, md: 8 }}>
-              <CTAButton to="/journal" variant="ghost" size="sm">
-                View the full journal
-              </CTAButton>
-            </Flex>
+
           </Box>
         </Box>
       )}
@@ -778,26 +804,8 @@ const Weddings = () => {
           mx="auto"
           alignItems="start"
         >
-          <Box position={{ base: 'relative', lg: 'sticky' }} top={{ lg: '110px' }} overflow={{ base: 'hidden', lg: 'visible' }} borderRadius={{ base: 'sm', lg: 0 }}>
-            {/* On phones the FAQ photo sits BEHIND this column (there is no
-                room beside it), with a cream veil keeping the type legible. */}
-            {faqPin && (
-              <Box display={{ base: 'block', lg: 'none' }} position="absolute" inset={0} zIndex={0}>
-                <Image
-                  src={faqPin.fullUrl}
-                  alt=""
-                  w="100%"
-                  h="100%"
-                  objectFit="cover"
-                  objectPosition={faqPin.focus}
-                  transform={`scale(${faqPin.zoom ?? 1})`}
-                  transformOrigin={faqPin.focus}
-                  loading="lazy"
-                />
-                <Box position="absolute" inset={0} bg="rgba(253, 249, 240, 0.86)" />
-              </Box>
-            )}
-            <VStack position="relative" zIndex={1} py={{ base: 6, lg: 0 }} px={{ base: 4, lg: 0 }} spacing={5} align={{ base: 'center', lg: 'flex-start' }} textAlign={{ base: 'center', lg: 'left' }}>
+          <Box position={{ lg: 'sticky' }} top={{ lg: '110px' }}>
+            <VStack spacing={5} align={{ base: 'center', lg: 'flex-start' }} textAlign={{ base: 'center', lg: 'left' }}>
               <Text textStyle="eyebrow">Wedding Photography FAQ</Text>
               <Box w="35px" h="1px" bg="brand.accent" />
               <Text
@@ -809,12 +817,14 @@ const Weddings = () => {
               >
                 Everything couples ask me, answered the way I answer it in my inbox.
               </Text>
+              {/* Full opacity, in normal flow: veiling it behind the words
+                  muddied both (Alex). On phones it is a wide band under the
+                  heading; from lg it is the tall portrait beside the list. */}
               {faqPin && (
                 <Box
-                  display={{ base: 'none', lg: 'block' }}
                   w="100%"
-                  maxW="360px"
-                  aspectRatio={3 / 4}
+                  maxW={{ base: '100%', lg: '360px' }}
+                  aspectRatio={{ base: 3 / 2, lg: 3 / 4 }}
                   overflow="hidden"
                   borderRadius="sm"
                   bg="gray.100"
@@ -836,10 +846,12 @@ const Weddings = () => {
                 Have a question that isn't here? Ask me directly and you'll hear back
                 within a day or two.
               </Text>
-              <CTAButton to="/contact" variant="outline" size="sm">
+            </VStack>
+            <Flex justify="center" w="100%" mt={5}>
+              <CTAButton to="/contact" variant="outline" size="md">
                 Ask me directly
               </CTAButton>
-            </VStack>
+            </Flex>
           </Box>
           <Box borderTop="1px solid" borderColor="brand.accentBorder">
             {weddingData.faq.map((f, i) => (
@@ -1196,54 +1208,62 @@ interface DecorSlot {
 // paragraph: prints under text is what made the first mobile attempt ugly.
 const DECOR_SLOTS: Record<string, DecorSlot[]> = {
   approach: [
-    { left: 1, top: 7, w: 190, rot: -6 },
-    { right: 2, top: 22, w: 225, rot: 4 },
-    { left: 8, top: 44, w: 140, rot: 3 },
-    { right: 11, bottom: 10, w: 165, rot: -3 },
-    { left: 3, bottom: 5, w: 150, rot: 2 },
-    { right: 4, top: 62, w: 130, rot: 6 },
+    { left: 1, top: 6, w: 195, rot: -6 },
+    { right: 2, top: 20, w: 230, rot: 4 },
+    { left: 7, top: 43, w: 145, rot: 3 },
+    { right: 10, bottom: 9, w: 165, rot: -3 },
+    { left: 2.5, bottom: 5, w: 155, rot: 2 },
+    { right: 3.5, top: 60, w: 135, rot: 6 },
+    { left: 12, top: 8, w: 120, rot: -4 },
   ],
+  // Center slots sit ONLY in the band above the cards; the add-on
+  // footnotes below them are 720px of centered text and must stay clear.
   packages: [
-    { left: -1, top: 2, w: 200, rot: -5 },
-    { right: -1, top: 8, w: 170, rot: 6 },
-    { left: 3, top: 33, w: 150, rot: 4 },
-    { right: 2, top: 41, w: 185, rot: -4 },
-    { left: 22, bottom: 27, w: 130, rot: -3 },
-    { right: 34, bottom: 20, w: 145, rot: 5 },
-    { left: 1, bottom: 6, w: 165, rot: 2 },
-    { right: 3, bottom: 4, w: 155, rot: -6 },
-    { left: 9, top: 17, w: 120, rot: 7 },
+    { left: -1, top: 2, w: 205, rot: -5 },
+    { right: -1, top: 7, w: 175, rot: 6 },
+    { left: 3, top: 30, w: 150, rot: 4 },
+    { right: 2, top: 38, w: 190, rot: -4 },
+    { left: 1, bottom: 6, w: 170, rot: 2 },
+    { right: 3, bottom: 4, w: 160, rot: -6 },
+    { left: 8, top: 14, w: 125, rot: 7 },
+    { right: 7, top: 16, w: 130, rot: -3 },
+    { left: 4.5, bottom: 26, w: 140, rot: 5 },
+    { right: 4, bottom: 24, w: 150, rot: -2 },
   ],
   journal: [
-    { left: 0.5, top: 9, w: 160, rot: -4 },
-    { right: 1, top: 26, w: 190, rot: 5 },
-    { left: 2, bottom: 10, w: 145, rot: 3 },
-    { right: 2.5, bottom: 6, w: 165, rot: -5 },
-    { left: 4, top: 48, w: 125, rot: 6 },
-    { right: 6, top: 62, w: 135, rot: -2 },
+    { left: 0.5, top: 8, w: 165, rot: -4 },
+    { right: 1, top: 24, w: 190, rot: 5 },
+    { left: 2, bottom: 9, w: 150, rot: 3 },
+    { right: 2.5, bottom: 5, w: 170, rot: -5 },
+    { left: 4, top: 47, w: 130, rot: 6 },
+    { right: 5.5, top: 60, w: 140, rot: -2 },
+    { left: 7, top: 20, w: 115, rot: 2 },
   ],
   faq: [
-    { right: 2, top: 4, w: 170, rot: 4 },
-    { left: 1.5, top: 36, w: 145, rot: -4 },
-    { right: 1, bottom: 22, w: 155, rot: 6 },
-    { left: 3.5, bottom: 4, w: 150, rot: -5 },
-    { right: 5, top: 52, w: 125, rot: 2 },
-    { left: 6, top: 16, w: 120, rot: 5 },
+    { right: 2, top: 3, w: 175, rot: 4 },
+    { left: 1.5, top: 33, w: 150, rot: -4 },
+    { right: 1, bottom: 20, w: 160, rot: 6 },
+    { left: 3, bottom: 3, w: 155, rot: -5 },
+    { right: 4.5, top: 50, w: 130, rot: 2 },
+    { left: 5.5, top: 14, w: 125, rot: 5 },
+    { right: 6, bottom: 4, w: 120, rot: -3 },
   ],
   vendors: [
-    { left: 1, top: 8, w: 150, rot: -4 },
-    { right: 2, top: 14, w: 165, rot: 3 },
-    { left: 2.5, bottom: 8, w: 140, rot: 5 },
-    { right: 1, bottom: 10, w: 175, rot: -3 },
-    { left: 7, top: 44, w: 120, rot: 6 },
+    { left: 1, top: 7, w: 155, rot: -4 },
+    { right: 2, top: 12, w: 170, rot: 3 },
+    { left: 2.5, bottom: 7, w: 145, rot: 5 },
+    { right: 1, bottom: 9, w: 180, rot: -3 },
+    { left: 6, top: 42, w: 125, rot: 6 },
+    { right: 6.5, top: 46, w: 120, rot: -5 },
   ],
   selected: [
-    { left: 0.5, top: 5, w: 165, rot: 5 },
-    { right: 1, top: 7, w: 150, rot: -4 },
-    { left: 1.5, bottom: 6, w: 155, rot: -6 },
-    { right: 2, bottom: 4, w: 140, rot: 4 },
-    { left: 5, top: 40, w: 120, rot: 3 },
-    { right: 4, top: 52, w: 130, rot: -5 },
+    { left: 0.5, top: 4, w: 170, rot: 5 },
+    { right: 1, top: 6, w: 155, rot: -4 },
+    { left: 1.5, bottom: 5, w: 160, rot: -6 },
+    { right: 2, bottom: 3, w: 145, rot: 4 },
+    { left: 4.5, top: 38, w: 125, rot: 3 },
+    { right: 3.5, top: 50, w: 135, rot: -5 },
+    { left: 6, top: 66, w: 115, rot: 6 },
   ],
 };
 
@@ -1322,13 +1342,15 @@ function DecorPrints({ items }: { items: PlacedPrint[] }) {
           boxShadow="0 14px 30px -18px rgba(20, 15, 5, 0.4)"
           aria-hidden="true"
         >
-          <Box aspectRatio={4 / 3} overflow="hidden">
+          {/* No forced aspect: the print takes the photo's own shape, so a
+              portrait stays a portrait and nothing gets cropped away. */}
+          <Box overflow="hidden" lineHeight={0}>
             <Image
               src={item.photo.url}
               alt=""
               w="100%"
-              h="100%"
-              objectFit="cover"
+              h="auto"
+              display="block"
               loading="lazy"
               onError={(e) => {
                 const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
@@ -1376,13 +1398,13 @@ function MobilePrintSeam({ photos }: { photos: WPhoto[] }) {
           w="24%"
           maxW="104px"
         >
-          <Box aspectRatio={4 / 3} overflow="hidden">
+          <Box overflow="hidden" lineHeight={0}>
             <Image
               src={photo.url}
               alt=""
               w="100%"
-              h="100%"
-              objectFit="cover"
+              h="auto"
+              display="block"
               loading="lazy"
               onError={(e) => {
                 const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
