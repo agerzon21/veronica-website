@@ -23,6 +23,7 @@
 import galleryStatics from './_gallery-statics.json' with { type: 'json' };
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
+import weddingPageHandler from './_weddings-page.js';
 
 type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
 const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'maternity'] as const;
@@ -63,6 +64,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (action === 'list') return handleList(req, res);
   if (action === 'post') return handlePost(req, res);
   if (action === 'related') return handleRelated(req, res);
+  // Everything dynamic on /wedding-photography in one payload. Lives
+  // here because the 12-function budget is spent; see _weddings-page.ts.
+  if (action === 'wedding-page') return weddingPageHandler(req, res);
 
   return res.status(404).json({ success: false, error: 'Not found' });
 }

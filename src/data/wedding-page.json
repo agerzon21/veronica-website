@@ -1,0 +1,106 @@
+{
+  "broadNote": "Every wedding is different. These are starting points, not boxes: each package trims down for a quieter day or builds up with more hours, a second photographer, and add-ons.",
+  "packages": [
+    {
+      "name": "Intimate Wedding",
+      "price": "from $500",
+      "coverage": "Up to 3 hours",
+      "tagline": "Elopements, small ceremonies, and quiet celebrations.",
+      "includes": [
+        "Ceremony",
+        "Couple portraits",
+        "Family and group photos",
+        "Details and candid moments"
+      ]
+    },
+    {
+      "name": "Wedding Day",
+      "price": "from $900",
+      "coverage": "Up to 6 hours",
+      "tagline": "The main chapters of the day, without full-day coverage.",
+      "includes": [
+        "Getting ready",
+        "First look",
+        "Ceremony",
+        "Family and wedding party photos",
+        "Couple portraits",
+        "Beginning of the reception"
+      ]
+    },
+    {
+      "name": "Full Wedding Day",
+      "price": "from $1,200",
+      "coverage": "Up to 8 hours",
+      "tagline": "The whole story, from the quiet morning to the dance floor.",
+      "includes": [
+        "Everything in Wedding Day",
+        "Reception and grand entrance",
+        "First dance, speeches, and toasts",
+        "Cake cutting",
+        "Candid moments throughout the day"
+      ]
+    }
+  ],
+  "addOns": [
+    {
+      "name": "Additional coverage",
+      "detail": "$150 per hour, on any package."
+    },
+    {
+      "name": "Second photographer",
+      "detail": "From $1,300 for 6 hours or $1,700 for 8. Worth it for large guest lists, separate getting-ready locations, busy timelines, and when you simply want more candid coverage of your guests."
+    }
+  ],
+  "travel": "Travel within about two hours of the Scranton and Poconos area is included in every package. Weddings across Pennsylvania, New Jersey, New York, and beyond are welcome. Longer distances are quoted individually up front, and destination weddings get a custom quote.",
+  "booking": "A signed contract and a 15% retainer reserve your date, and your final price is confirmed before booking, so there are no surprise travel or coverage charges later. Not sure how much coverage you need? Send your timeline, locations, and guest count, and I will recommend the option that makes the most sense for your day.",
+  "faq": [
+    {
+      "q": "How do I book you for our wedding?",
+      "a": "Send me your date, locations, and what you have in mind, and I personally reply within a day or two. When you are ready, I prepare your contract in your private client portal, where you review and sign it online. Your date is officially reserved once the contract is signed and the retainer is paid."
+    },
+    {
+      "q": "How much does wedding photography cost?",
+      "a": "Coverage starts at $500 for an intimate wedding and $1,200 for a full day. Every package can be tailored, trimmed down for a small ceremony or extended with more hours and a second photographer. Your final price is confirmed before you book."
+    },
+    {
+      "q": "Do you require a deposit?",
+      "a": "A retainer of 15% of your package reserves your date, together with the signed contract. The remaining balance is due within ten days after the wedding. I accept Zelle, Venmo, CashApp, and cash."
+    },
+    {
+      "q": "What exactly do we receive?",
+      "a": "Every delivered photo is professionally color corrected, and your package includes a set of fully retouched photos that you pick yourself. RAW files are not included, and advanced retouching beyond the included set can always be added."
+    },
+    {
+      "q": "What is the difference between color correction and retouching?",
+      "a": "Color correction is the polish every single photo gets: exposure, color, tone, and light. Retouching is detailed editing of individual photos, things like skin smoothing and removing distractions. You choose which photos get the full retouch."
+    },
+    {
+      "q": "When and how do we get our photos?",
+      "a": "Galleries are typically delivered within five weeks. Your photos arrive in your own private online gallery, where you can view everything, pick favorites, download in high resolution, and share the link with family."
+    },
+    {
+      "q": "Do you travel? What about destination weddings?",
+      "a": "I photograph weddings across Pennsylvania, New Jersey, New York, and beyond. Travel within about two hours of the Scranton and Poconos area is included in every package. Longer distances and destination weddings are welcome and quoted individually, always confirmed before you book."
+    },
+    {
+      "q": "Do you use a drone?",
+      "a": "For full-day weddings I normally bring a drone and include several aerial clips at no extra charge, whenever the venue and conditions allow it. Drone coverage depends on flight rules and weather, so I treat it as a bonus rather than a promise."
+    },
+    {
+      "q": "Do we need a second photographer?",
+      "a": "For most weddings with a simple timeline, one photographer is enough. A second photographer earns their place with large guest counts, multiple locations, or several important moments happening at once. Two-photographer options are listed with the packages."
+    },
+    {
+      "q": "Can you help us plan our timeline?",
+      "a": "Yes, and I genuinely enjoy this part. Send me your draft timeline, locations, and guest count, and I will tell you how much coverage you actually need, where the light will be best, and how to keep family photos quick so you can get back to your party."
+    },
+    {
+      "q": "We feel awkward in front of the camera. Will that be a problem?",
+      "a": "Not at all. Most of my couples have never done a professional shoot. I guide every pose and pick the spots, and the in-between candid moments usually turn out to be everyone's favorites."
+    },
+    {
+      "q": "Can we talk before booking?",
+      "a": "Of course. I answer everything over chat or email, and for bigger questions we can set up a call or video chat."
+    }
+  ]
+}
