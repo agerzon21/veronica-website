@@ -159,6 +159,7 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "trailingSlash": false,
+  "ignoreCommand": "test \"$VERCEL_ENV\" != \"production\"",
   "functions": {
     "api/admin.ts": {
       "maxDuration": 60
