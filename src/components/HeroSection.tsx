@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, VStack, Text, Image } from '@chakra-ui/react';
 import { m, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
+import { Link as RouterLink } from 'react-router-dom';
 import ImageCarousel from './ImageCarousel';
-import CTAButton from './ui/CTAButton';
 import PageHeader from './ui/PageHeader';
 // The scroll-hint dot and its glow are plain framer-motion inline styles, not
 // Chakra props, so they can't resolve a theme token by name. Importing the raw
@@ -436,11 +436,48 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // "Based in / Experience / Available" on the homepage AND there was
   // saying the same thing twice, and the zoom-out deserves to land on
   // one clear invitation rather than a table of facts.
+  // The stats row moved to the About page's closing band. What lands here
+  // instead is deliberately NOT the gold slab CTAButton renders: after a
+  // full-screen cinematic, a filled rectangle reads as a form control.
+  // This is the site's own vocabulary at hero scale — letterspaced label,
+  // gold hairline, the rule drawing itself across on hover.
   const footerContent = (
-    <VStack spacing={4} align="center">
-      <CTAButton to="/contact" variant="solid" size="lg">
-        Book a Session
-      </CTAButton>
+    <VStack spacing={0} align="center">
+      <Box
+        as={RouterLink}
+        to="/contact"
+        role="group"
+        display="inline-flex"
+        flexDirection="column"
+        alignItems="center"
+        gap={{ base: 3, md: 4 }}
+        px={2}
+        py={1}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        <Text
+          fontFamily="heading"
+          fontWeight="300"
+          fontSize={{ base: '1.35rem', md: '1.7rem' }}
+          letterSpacing="0.08em"
+          color="gray.800"
+          transition="color 0.3s ease"
+          _groupHover={{ color: 'brand.accentText' }}
+        >
+          Book a Session
+        </Text>
+        <Box position="relative" w={{ base: '150px', md: '190px' }} h="1px" bg="brand.accentBorder">
+          <Box
+            position="absolute"
+            inset={0}
+            bg="brand.accent"
+            transformOrigin="left"
+            transform="scaleX(0.28)"
+            transition="transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)"
+            _groupHover={{ transform: 'scaleX(1)' }}
+          />
+        </Box>
+      </Box>
     </VStack>
   );
 
