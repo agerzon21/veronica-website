@@ -498,6 +498,7 @@ const Weddings = () => {
                   key={post.slug}
                   as={RouterLink}
                   to={`/journal/${post.slug}`}
+                  state={{ back: { to: '/wedding-photography', label: 'Back to weddings' } }}
                   role="group"
                   onMouseEnter={() => setJournalIdx(i)}
                   onFocus={() => setJournalIdx(i)}
@@ -572,7 +573,12 @@ const Weddings = () => {
           {/* Mobile / tablet: tidy vertical card grid */}
           <SimpleGrid display={{ base: 'grid', lg: 'none' }} columns={2} spacing={{ base: 3, md: 4 }} maxW="720px" mx="auto">
             {featured.map((post) => (
-              <Box key={post.slug} as={RouterLink} to={`/journal/${post.slug}`}>
+              <Box
+                key={post.slug}
+                as={RouterLink}
+                to={`/journal/${post.slug}`}
+                state={{ back: { to: '/wedding-photography', label: 'Back to weddings' } }}
+              >
                 <Box aspectRatio={4 / 3} overflow="hidden" borderRadius="sm" bg="brand.surface">
                   {post.cover_image_url && (
                     <Image

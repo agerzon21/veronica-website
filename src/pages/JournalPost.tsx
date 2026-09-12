@@ -3,7 +3,7 @@ import {
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import FaArrowLeft from '../icons/fa/FaArrowLeft';
 import FaArrowRight from '../icons/fa/FaArrowRight';
 import FaBookOpen from '../icons/fa/FaBookOpen';
@@ -147,6 +147,11 @@ const JournalPost = ({ slug }: { slug: string }) => {
     prev: null,
     next: null,
   });
+  // Contextual back target: the weddings page passes { back } in router
+  // state so the top link returns visitors where they came from.
+  const location = useLocation();
+  const back =
+    (location.state as { back?: { to: string; label: string } } | null)?.back ?? DEFAULT_BACK;
   // One lightbox for the whole page — bands and the closing grid both open
   // it with a global photo index, so arrow keys walk EVERY photo in order
   // no matter where the visitor clicked in.
@@ -298,7 +303,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
           <Text textStyle="bodyLead">
             That post doesn't exist (yet).
           </Text>
-          <BackToJournalLink />
+          <BackToJournalLink back={back} />
         </Flex>
       </>
     );
@@ -362,7 +367,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
           {/* Back link + header — held to the reading measure */}
           <Box maxW="contentNarrow" mx="auto">
             <Box mb={{ base: 6, md: 8 }}>
-              <BackToJournalLink />
+              <BackToJournalLink back={back} />
             </Box>
 
             <Box mb={{ base: 8, md: 12 }}>
@@ -934,15 +939,20 @@ function PhotoBand({
   );
 }
 
+/** Where the top back link leads when nothing sent us here explicitly. */
+const DEFAULT_BACK = { to: '/journal', label: 'Back to the journal' };
+
 /**
- * The one "back to the journal" link. It used to exist twice in this
- * file at two different weights, two sizes and two colours — one of
- * them gold-on-white, which fails contrast. One component, one
- * `ctaLabel`, one hover.
+ * The one top back link. Contextual: pages that link into a post (the
+ * weddings page's From the Journal section) pass router state
+ * `{ back: { to, label } }`, and the link takes you back where you
+ * actually came from. Direct visits and journal-internal navigation
+ * (prev/next cards deliberately do NOT pass state) fall back to the
+ * journal. Used twice — header and the not-found screen.
  */
-function BackToJournalLink() {
+function BackToJournalLink({ back = DEFAULT_BACK }: { back?: { to: string; label: string } }) {
   return (
-    <RouterLink to="/journal">
+    <RouterLink to={back.to}>
       <HStack
         as="span"
         display="inline-flex"
@@ -953,7 +963,7 @@ function BackToJournalLink() {
         transition="color 0.2s"
       >
         <Icon as={FaArrowLeft} boxSize={3} />
-        <Text as="span">Back to the journal</Text>
+        <Text as="span">{back.label}</Text>
       </HStack>
     </RouterLink>
   );
