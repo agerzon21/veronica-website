@@ -2437,6 +2437,19 @@ const dict = {
     },
     selectedSaved: { en: 'Selected work saved', ru: 'Подборка работ сохранена' },
 
+    // ── Shared searchable add-picker (journal + selected work) ──
+    searchPlaceholder: { en: 'Search by title...', ru: 'Поиск по названию...' },
+    noMatches: {
+      en: (query: string) => `Nothing matches "${query}".`,
+      ru: (query: string) => `По запросу «${query}» ничего не найдено.`,
+    },
+    pageOf: {
+      en: (x: number, y: number) => `Page ${x} of ${y}`,
+      ru: (x: number, y: number) => `Страница ${x} из ${y}`,
+    },
+    prevPageAria: { en: 'Previous page', ru: 'Предыдущая страница' },
+    nextPageAria: { en: 'Next page', ru: 'Следующая страница' },
+
     // ── Card 4: Recommended vendors ─────────────────────────────
     vendorsTitle: { en: 'Recommended vendors', ru: 'Рекомендуемые подрядчики' },
     vendorsNote: {
