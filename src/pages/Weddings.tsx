@@ -235,11 +235,16 @@ const Weddings = () => {
       return s;
     };
     return {
-      approach: take(3),
-      packages: take(4),
-      journal: take(2),
-      faq: take(2),
-      vendors: take(2),
+      approach: take(5),
+      packages: take(7),
+      journal: take(4),
+      faq: take(4),
+      vendors: take(4),
+      selected: take(3),
+      // Mobile print seams: rows of three between sections, drawn from
+      // the remaining pool so phones see different photos than desktop
+      // gutters would at the same scroll depth.
+      seams: [take(3), take(3), take(3), take(3), take(3), take(3)],
     };
   }, [pool]);
 
@@ -360,6 +365,8 @@ const Weddings = () => {
 
       </Box>
 
+      <MobilePrintSeam photos={decor.seams[0]} />
+
       {/* ─── Packages — cream section keeps its rhythm; prints peek from
           the gutters behind the cards ─── */}
       <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
@@ -409,26 +416,23 @@ const Weddings = () => {
                   }}
                 >
                   {pin ? (
-                    <>
-                      <Image
-                        src={pin.fullUrl}
-                        alt=""
-                        position="absolute"
-                        inset={0}
-                        w="100%"
-                        h="100%"
-                        objectFit="cover"
-                        objectPosition={pin.focus}
-                        loading="lazy"
-                        transition="transform 0.7s ease"
-                        _groupHover={{ transform: 'scale(1.04)' }}
-                      />
-                      <Box
-                        position="absolute"
-                        inset={0}
-                        bg="linear-gradient(180deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.28) 130px, rgba(255,255,255,0.9) 185px, rgba(255,255,255,0.99) 215px, #ffffff 245px)"
-                      />
-                    </>
+                    /* The WHOLE photo, unfaded (finding a photo whose top
+                       third works alone is hard — Alex). The text lives on
+                       a floating white panel; the photograph stays visible
+                       above it and peeks around its edges. */
+                    <Image
+                      src={pin.fullUrl}
+                      alt=""
+                      position="absolute"
+                      inset={0}
+                      w="100%"
+                      h="100%"
+                      objectFit="cover"
+                      objectPosition={pin.focus}
+                      loading="lazy"
+                      transition="transform 0.7s ease"
+                      _groupHover={{ transform: 'scale(1.04)' }}
+                    />
                   ) : (
                     <Box h={{ base: '170px', md: '190px' }} overflow="hidden" flexShrink={0}>
                       <Image
@@ -445,8 +449,11 @@ const Weddings = () => {
                   )}
                   <Flex
                     direction="column"
-                    p={{ base: 6, md: 7 }}
-                    pt={pin ? { base: '210px', md: '235px' } : { base: 6, md: 7 }}
+                    m={pin ? { base: 3, md: 3.5 } : 0}
+                    mt={pin ? { base: '180px', md: '200px' } : 0}
+                    p={{ base: 5, md: 6 }}
+                    bg={pin ? 'rgba(255, 255, 255, 0.95)' : undefined}
+                    borderRadius={pin ? '2px' : undefined}
                     flex="1"
                     position="relative"
                     zIndex={1}
@@ -533,6 +540,8 @@ const Weddings = () => {
       </Box>
 
 
+
+      <MobilePrintSeam photos={decor.seams[1]} />
 
       {/* ─── From the Journal — the slow slideshow (Alex's pick), with
           tapestry prints behind it. Per-entry focal points from the
@@ -697,6 +706,8 @@ const Weddings = () => {
         </Box>
       )}
 
+      <MobilePrintSeam photos={decor.seams[2]} />
+
       {/* ─── FAQ — editorial split: a sticky intro column (with one ambient
           photograph and the ask-me-directly path) beside the numbered
           questions. On mobile the intro stacks above the list. ─── */}
@@ -759,6 +770,8 @@ const Weddings = () => {
           </Box>
         </Grid>
       </Box>
+
+      <MobilePrintSeam photos={decor.seams[3]} />
 
       {/* ─── Recommended vendors ─── */}
       {vendors.length > 0 && (
@@ -854,11 +867,14 @@ const Weddings = () => {
         </Box>
       )}
 
+      <MobilePrintSeam photos={decor.seams[4]} />
+
       {/* ─── Selected work: admin-curated GALLERY photos, every tile a real
           link to its photo page. Deliberately separate from the ambient
           hero/folder pools, which are background and never clickable. Falls
           back to the built-in curated six until Vero picks her own. ─── */}
-      <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 6, md: 12 }}>
+      <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
+        <DecorPrints photos={decor.selected} slots={DECOR_SELECTED} />
         <VStack spacing={3} mb={{ base: 10, md: 14 }} textAlign="center">
           <Text textStyle="eyebrow">Selected Work</Text>
           <Box w="35px" h="1px" bg="brand.accent" />
@@ -915,6 +931,8 @@ const Weddings = () => {
         </Flex>
       </Box>
 
+      <MobilePrintSeam photos={decor.seams[5]} />
+
       {/* ─── CTA ─── */}
       <Box position="relative" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }} overflow="hidden">
         {ctaPin ? (
@@ -961,6 +979,58 @@ const Weddings = () => {
     </Box>
   );
 };
+
+/**
+ * The mobile tapestry: a row of three small slanted prints woven BETWEEN
+ * sections in normal flow. Absolute prints can never be collision-proof
+ * on a narrow column (they ended up under FAQ text), so phones get the
+ * collage as seams instead — guaranteed clear of content, still
+ * reshuffled every visit. Hidden from md up, where the gutters take over.
+ */
+function MobilePrintSeam({ photos }: { photos: WPhoto[] }) {
+  if (photos.length === 0) return null;
+  return (
+    <Flex
+      display={{ base: 'flex', md: 'none' }}
+      justify="center"
+      align="center"
+      gap={3}
+      py={5}
+      px={4}
+      pointerEvents="none"
+      aria-hidden="true"
+    >
+      {photos.slice(0, 3).map((photo, i) => (
+        <Box
+          key={i}
+          data-print=""
+          bg="white"
+          p={1}
+          borderRadius="2px"
+          boxShadow="0 10px 22px -14px rgba(20, 15, 5, 0.45)"
+          transform={`rotate(${i === 1 ? 2.5 : i === 0 ? -4 : 3.5}deg) translateY(${i === 1 ? -6 : 4}px)`}
+          w="30%"
+          maxW="130px"
+        >
+          <Box aspectRatio={4 / 3} overflow="hidden">
+            <Image
+              src={photo.url}
+              alt=""
+              w="100%"
+              h="100%"
+              objectFit="cover"
+              loading="lazy"
+              onError={(e) => {
+                const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
+                if (print) print.style.display = 'none';
+              }}
+            />
+          </Box>
+        </Box>
+      ))}
+    </Flex>
+  );
+}
 
 /**
  * One FAQ disclosure. NOT Chakra's Accordion: that renders framer's full
@@ -1032,9 +1102,10 @@ function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
 
 /**
  * One tapestry slot: where a background print sits inside its section.
- * Percent offsets so wide screens breathe; `mob` marks the few slots
- * that survive on phones (smaller, via mw). Rotations alternate so the
- * collage reads as scattered prints, not a grid.
+ * Percent offsets so wide screens breathe. Rotations alternate so the
+ * collage reads as scattered prints, not a grid. Desktop only — phones
+ * get MobilePrintSeam rows between sections instead, which cannot
+ * collide with text no matter how long content grows.
  */
 interface DecorSlot {
   top?: string;
@@ -1043,32 +1114,46 @@ interface DecorSlot {
   right?: string;
   w: number;
   rot: number;
-  mob?: boolean;
-  mw?: number;
 }
 
 const DECOR_APPROACH: DecorSlot[] = [
   { left: '1%', top: '8%', w: 190, rot: -6 },
-  { right: '2%', top: '30%', w: 230, rot: 4 },
-  { left: '3%', bottom: '2%', w: 150, rot: 2 },
+  { right: '2%', top: '26%', w: 230, rot: 4 },
+  { left: '10%', top: '46%', w: 140, rot: 3 },
+  { right: '13%', bottom: '6%', w: 160, rot: -3 },
+  { left: '3%', bottom: '4%', w: 150, rot: 2 },
 ];
 const DECOR_PACKAGES: DecorSlot[] = [
   { left: '-1%', top: '1.5%', w: 200, rot: -5 },
-  { right: '-1%', top: '10%', w: 170, rot: 6, mob: true, mw: 88 },
-  { right: '4%', bottom: '2.5%', w: 210, rot: -3 },
-  { left: '2%', bottom: '16%', w: 150, rot: 3 },
+  { right: '-1%', top: '9%', w: 170, rot: 6 },
+  { left: '4%', top: '38%', w: 150, rot: 4 },
+  { right: '3%', top: '44%', w: 185, rot: -4 },
+  { left: '30%', bottom: '24%', w: 135, rot: -3 },
+  { right: '28%', bottom: '22%', w: 150, rot: 5 },
+  { left: '1%', bottom: '4%', w: 165, rot: 2 },
 ];
 const DECOR_JOURNAL: DecorSlot[] = [
-  { left: '0.5%', top: '12%', w: 160, rot: -4 },
-  { right: '1%', bottom: '9%', w: 190, rot: 5 },
+  { left: '0.5%', top: '10%', w: 160, rot: -4 },
+  { right: '1%', top: '30%', w: 190, rot: 5 },
+  { left: '2%', bottom: '8%', w: 145, rot: 3 },
+  { right: '2.5%', bottom: '5%', w: 165, rot: -5 },
 ];
 const DECOR_FAQ: DecorSlot[] = [
-  { right: '2%', top: '5%', w: 170, rot: 4 },
-  { left: '3%', bottom: '5%', w: 150, rot: -5, mob: true, mw: 88 },
+  { right: '2%', top: '4%', w: 170, rot: 4 },
+  { left: '2%', top: '40%', w: 145, rot: -4 },
+  { right: '1%', bottom: '18%', w: 155, rot: 6 },
+  { left: '4%', bottom: '3%', w: 150, rot: -5 },
 ];
 const DECOR_VENDORS: DecorSlot[] = [
   { left: '1%', top: '9%', w: 150, rot: -4 },
-  { right: '2%', bottom: '7%', w: 170, rot: 3 },
+  { right: '2%', top: '12%', w: 165, rot: 3 },
+  { left: '2.5%', bottom: '7%', w: 140, rot: 5 },
+  { right: '1%', bottom: '9%', w: 175, rot: -3 },
+];
+const DECOR_SELECTED: DecorSlot[] = [
+  { left: '0.5%', top: '6%', w: 165, rot: 5 },
+  { right: '1%', top: '8%', w: 150, rot: -4 },
+  { left: '1.5%', bottom: '5%', w: 155, rot: -6 },
 ];
 
 /**
@@ -1094,8 +1179,8 @@ function DecorPrints({ photos, slots }: { photos: WPhoto[]; slots: DecorSlot[] }
             bottom={slot.bottom}
             left={slot.left}
             right={slot.right}
-            w={{ base: slot.mob ? `${slot.mw ?? 90}px` : '0px', md: `${slot.w}px` }}
-            display={{ base: slot.mob ? 'block' : 'none', md: 'block' }}
+            w={`${slot.w}px`}
+            display={{ base: 'none', md: 'block' }}
             transform={`rotate(${slot.rot}deg)`}
             zIndex={-1}
             pointerEvents="none"
