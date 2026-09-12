@@ -284,7 +284,7 @@ const Weddings = () => {
   };
 
   return (
-    <Box minH="100vh">
+    <Box minH="100vh" overflowX="clip">
       <Helmet>
         <title>Wedding Photography Services | Vero Photography</title>
         <meta
@@ -305,15 +305,28 @@ const Weddings = () => {
         <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
       </Helmet>
 
-      {/* ─── Hero — the photograph Alex picked from the chooser, hosted
-          locally and pre-cropped to the framing he set (focus 50% 43% at
-          49vh), so the browser has no positioning work to do. ─── */}
-      <Box position="relative" h={{ base: '48vh', md: '49vh' }} overflow="hidden">
+      {/* ─── Hero. Two photographs, not one: the picked frame is a wide
+          landscape that crops awkwardly into a phone's tall window, so
+          small screens keep the ocean ceremony shot that was made for
+          this slot. Desktop sits a little taller than 49vh and anchors
+          at 45% so the groom's head clears the top edge. ─── */}
+      <Box position="relative" h={{ base: '52vh', md: '58vh' }} overflow="hidden">
+        <Image
+          src="/assets/photos/weddings/ocean-vows-ceremony.webp"
+          alt="Wedding couple exchanging vows by the ocean."
+          display={{ base: 'block', md: 'none' }}
+          objectFit="cover"
+          objectPosition="center 35%"
+          w="100%"
+          h="100%"
+          fetchPriority="high"
+        />
         <Image
           src="/assets/photos/site/weddings-hero.webp"
           alt="Bride and groom kissing on a pier at sunset, her veil lifting in the wind."
+          display={{ base: 'none', md: 'block' }}
           objectFit="cover"
-          objectPosition="center"
+          objectPosition="center 45%"
           w="100%"
           h="100%"
           fetchPriority="high"
@@ -753,11 +766,12 @@ const Weddings = () => {
                 as={RouterLink}
                 to="/journal"
                 role="group"
-                direction="column"
+                direction={{ base: 'row', md: 'column' }}
                 align="center"
                 justify="center"
-                gap={1}
-                h={{ base: '58px', md: '66px' }}
+                gap={{ base: 2, md: 1 }}
+                gridColumn={{ base: '1 / -1', md: 'auto' }}
+                h={{ base: '46px', md: '66px' }}
                 px={2}
                 textAlign="center"
                 borderRadius="sm"
@@ -770,12 +784,12 @@ const Weddings = () => {
                 <Text
                   fontFamily="heading"
                   fontWeight="300"
-                  fontSize={{ base: '11px', md: '13px' }}
+                  fontSize={{ base: '14px', md: '13px' }}
                   lineHeight="1.15"
                   color="gray.800"
                 >
-                  View the
-                  <br />
+                  View the{' '}
+                  <Box as="br" display={{ base: 'none', md: 'inline' }} />
                   full journal
                 </Text>
                 <Icon
@@ -798,7 +812,7 @@ const Weddings = () => {
       {/* ─── FAQ — editorial split: a sticky intro column (with one ambient
           photograph and the ask-me-directly path) beside the numbered
           questions. On mobile the intro stacks above the list. ─── */}
-      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" sx={{ isolation: 'isolate' }}>
+      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" overflowX="clip" sx={{ isolation: 'isolate' }}>
         <DecorPrints items={tapestry.faq} />
         <Grid
           templateColumns={{ base: '1fr', lg: '5fr 7fr' }}
