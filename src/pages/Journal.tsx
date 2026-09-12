@@ -94,15 +94,32 @@ function JournalIndex() {
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <Box bg="white" minH="100vh" pt={{ base: 20, md: 28 }} pb={{ base: 20, md: 24 }} px={4}>
-        {/* Page header */}
-        <Box maxW="46ch" mx="auto" mb={{ base: 10, md: 14 }}>
-          <PageHeader
-            eyebrow="Journal"
-            title="Behind the lens"
-            lead="Stories from recent sessions, and the occasional thought about photographing people."
-          />
-        </Box>
+      {/* Hero — every other section of the site opens on a photograph;
+          the journal was the one page that opened on white. Served from
+          /assets (no Drive dependency, no layout shift). */}
+      <Box position="relative" h={{ base: '42vh', md: '50vh' }} overflow="hidden">
+        <Image
+          src="/assets/photos/site/vero-photographing.webp"
+          alt="Veronika Gerzon photographing a session"
+          w="100%"
+          h="100%"
+          objectFit="cover"
+          objectPosition="center 35%"
+        />
+        <Box position="absolute" inset={0} bg="rgba(0,0,0,0.45)" />
+        <Flex position="absolute" inset={0} align="center" justify="center" px={6}>
+          <Box maxW="46ch">
+            <PageHeader
+              onDark
+              eyebrow="Journal"
+              title="Behind the lens"
+              lead="Stories from recent sessions, and the occasional thought about photographing people."
+            />
+          </Box>
+        </Flex>
+      </Box>
+
+      <Box bg="white" minH="100vh" pt={{ base: 12, md: 16 }} pb={{ base: 20, md: 24 }} px={4}>
 
         {/* Timeline body */}
         <Box maxW="1000px" mx="auto">
