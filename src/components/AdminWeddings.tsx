@@ -1,8 +1,14 @@
 import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, IconButton,
-  Switch, Input, Textarea, Select, Stack,
+  Switch, Input, Textarea, Stack,
 } from '@chakra-ui/react';
-import { useEffect, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import FaBookOpen from '../icons/fa/FaBookOpen';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
@@ -24,11 +30,14 @@ import { useAdminLang } from '../i18n/admin';
  * "Weddings" tab in /admin — everything the weddings page needs, in
  * four stacked cards (the Studio-group layout language):
  *
- *   1. Page photos — six pinned hero links + the Drive sprinkle-pool
- *      folder. Saved together via weddings-settings.
+ *   1. Pinned photos — five POSITIONAL slots (three package cards, the
+ *      FAQ photo, the quote-section background) that must not reshuffle
+ *      per visit, each with a draggable focal point; plus the Drive
+ *      folder that feeds the background tapestry. Saved together via
+ *      weddings-settings.
  *   2. From the Journal — the ordered featured-post list (max 6) for
  *      the page's slideshow, picked from published journal posts; each
- *      entry carries two focal-point anchors (big stage + thumbnail
+ *      entry carries two drag-set focal points (big stage + thumbnail
  *      strip) so cover crops stop cutting faces. Saved via
  *      weddings-settings.
  *   3. Selected work — the ordered clickable mosaic (max 8), picked
@@ -48,16 +57,20 @@ interface Props {
   adminLevel: 'admin' | 'super';
 }
 
-const MAX_HEROES = 6;
+const MAX_PINNED = 5;
 const MAX_FEATURED = 6;
 const MAX_SELECTED_WORK = 8;
 // Add-picker page size — Alex refuses to scroll a 97-row list.
 const PICKER_PAGE_SIZE = 10;
 
-// CSS object-position keywords the focus selects may use. Mirrors the
-// FOCUS_VALUES allowlist in api/_weddings-page.ts — values land in a
-// style attribute on the public page, so only these nine are legal.
-const FOCUS_VALUES = [
+const DEFAULT_FOCUS = '50% 50%';
+
+// Focus values are CSS object-position strings — since the drag
+// editors, percent pairs like "37% 62%"; the dropdown era's keywords
+// ('center', 'left top', ...) still render and still validate
+// server-side, so they pass through untouched.
+const FOCUS_PERCENT_RE = /^(\d{1,3})% (\d{1,3})%$/;
+const LEGACY_FOCUS_KEYWORDS = [
   'center',
   'top',
   'bottom',
@@ -68,34 +81,36 @@ const FOCUS_VALUES = [
   'left bottom',
   'right bottom',
 ] as const;
-type FocusValue = (typeof FOCUS_VALUES)[number];
 
-// CSS value → i18n label key for the two focus selects. Kept as one
-// ordered list so both dropdowns render identically.
-const FOCUS_OPTIONS = [
-  { value: 'center', key: 'center' },
-  { value: 'top', key: 'top' },
-  { value: 'bottom', key: 'bottom' },
-  { value: 'left', key: 'left' },
-  { value: 'right', key: 'right' },
-  { value: 'left top', key: 'leftTop' },
-  { value: 'right top', key: 'rightTop' },
-  { value: 'left bottom', key: 'leftBottom' },
-  { value: 'right bottom', key: 'rightBottom' },
-] as const;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/** Coerce an unknown wire value into a renderable, saveable focus string. */
+function normalizeFocus(v: unknown): string {
+  if (typeof v !== 'string') return DEFAULT_FOCUS;
+  const s = v.trim();
+  const m = s.match(FOCUS_PERCENT_RE);
+  if (m) return `${Math.min(100, Number(m[1]))}% ${Math.min(100, Number(m[2]))}%`;
+  if ((LEGACY_FOCUS_KEYWORDS as readonly string[]).includes(s)) return s;
+  return DEFAULT_FOCUS;
+}
+
+/**
+ * Focus string → numeric pair for the drag math. Legacy keywords start
+ * from center — the first drag replaces them with a percent pair.
+ */
+function parseFocusPercent(focus: string): { x: number; y: number } {
+  const m = focus.trim().match(FOCUS_PERCENT_RE);
+  if (!m) return { x: 50, y: 50 };
+  return { x: Math.min(100, Number(m[1])), y: Math.min(100, Number(m[2])) };
+}
 
 // One featured journal entry: which post, plus where its cover anchors
 // in the slideshow's big stage and in the thumbnail strip.
 interface FeaturedEntry {
   slug: string;
-  focusStage: FocusValue;
-  focusThumb: FocusValue;
+  focusStage: string;
+  focusThumb: string;
 }
-
-const asFocus = (v: unknown): FocusValue =>
-  typeof v === 'string' && (FOCUS_VALUES as readonly string[]).includes(v)
-    ? (v as FocusValue)
-    : 'center';
 
 /** Defensive parse of the settings `featured` array into typed entries. */
 function parseFeaturedEntries(input: unknown): FeaturedEntry[] {
@@ -109,15 +124,45 @@ function parseFeaturedEntries(input: unknown): FeaturedEntry[] {
     if (!slug) continue;
     out.push({
       slug,
-      focusStage: asFocus((item as { focusStage?: unknown }).focusStage),
-      focusThumb: asFocus((item as { focusThumb?: unknown }).focusThumb),
+      focusStage: normalizeFocus((item as { focusStage?: unknown }).focusStage),
+      focusThumb: normalizeFocus((item as { focusThumb?: unknown }).focusThumb),
     });
   }
   return out;
 }
 
+// One of the five POSITIONAL pinned slots. Empty url = unfilled slot
+// that still holds its place (slot index IS the slot's job).
+interface PinnedEntry {
+  url: string;
+  focus: string;
+}
+
+/** Defensive parse of the settings `pinned` array, padded to 5 slots. */
+function parsePinnedEntries(input: unknown): PinnedEntry[] {
+  const out: PinnedEntry[] = [];
+  if (Array.isArray(input)) {
+    for (const item of input.slice(0, MAX_PINNED)) {
+      out.push({
+        url:
+          item && typeof item === 'object' && typeof (item as { url?: unknown }).url === 'string'
+            ? ((item as { url: string }).url || '').trim()
+            : '',
+        focus: normalizeFocus((item as { focus?: unknown } | null)?.focus),
+      });
+    }
+  }
+  while (out.length < MAX_PINNED) out.push({ url: '', focus: DEFAULT_FOCUS });
+  return out;
+}
+
+// Editor aspect ratios per pinned slot: three portrait package cards,
+// the FAQ portrait, and the wide quote-section band. Must track how
+// the public page actually crops each slot.
+const PINNED_SLOT_ASPECTS = [2 / 3, 2 / 3, 2 / 3, 3 / 4, 3 / 1] as const;
+
 interface WeddingsSettings {
-  heroes: string[];
+  pinned: PinnedEntry[];
   folderId: string;
   featured: FeaturedEntry[];
   selectedWork: string[];
@@ -223,7 +268,7 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
       const data = await res.json();
       if (res.ok && data.success) {
         setSettings({
-          heroes: Array.isArray(data.heroes) ? data.heroes : [],
+          pinned: parsePinnedEntries(data.pinned),
           folderId: typeof data.folderId === 'string' ? data.folderId : '',
           featured: parseFeaturedEntries(data.featured),
           selectedWork: Array.isArray(data.selectedWork) ? data.selectedWork : [],
@@ -296,9 +341,9 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
         // Cards mount fresh each time settings finish loading, so Refresh
         // re-seeds every card's local state from the server truth.
         <VStack spacing={{ base: 5, md: 6 }} align="stretch">
-          <PhotosCard
+          <PinnedCard
             adminPassword={adminPassword}
-            initialHeroes={settings.heroes}
+            initialPinned={settings.pinned}
             initialFolderId={settings.folderId}
           />
           <JournalCard
@@ -316,29 +361,31 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
   );
 };
 
-// ── Card 1: Page photos ────────────────────────────────────────────
-function PhotosCard({
+// ── Card 1: Pinned photos ──────────────────────────────────────────
+function PinnedCard({
   adminPassword,
-  initialHeroes,
+  initialPinned,
   initialFolderId,
 }: {
   adminPassword: string;
-  initialHeroes: string[];
+  initialPinned: PinnedEntry[];
   initialFolderId: string;
 }) {
   const { t } = useAdminLang();
   const toast = useToast();
-  const [heroes, setHeroes] = useState<string[]>(() => {
-    const arr = initialHeroes.slice(0, MAX_HEROES);
-    while (arr.length < MAX_HEROES) arr.push('');
-    return arr;
-  });
+  // Already padded to 5 by parsePinnedEntries; copy defensively anyway.
+  const [entries, setEntries] = useState<PinnedEntry[]>(() =>
+    parsePinnedEntries(initialPinned),
+  );
   const [folderInput, setFolderInput] = useState(initialFolderId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const setHero = (index: number, value: string) =>
-    setHeroes((cur) => cur.map((h, i) => (i === index ? value : h)));
+  const setUrl = (index: number, url: string) =>
+    setEntries((cur) => cur.map((e, i) => (i === index ? { ...e, url } : e)));
+
+  const setFocus = (index: number, focus: string) =>
+    setEntries((cur) => cur.map((e, i) => (i === index ? { ...e, focus } : e)));
 
   const handleSave = async () => {
     setSaving(true);
@@ -350,13 +397,15 @@ function PhotosCard({
         body: JSON.stringify({
           password: adminPassword,
           action: 'set',
-          heroes: heroes.map((h) => h.trim()).filter(Boolean),
+          // All five slots in order — empty urls hold their POSITION
+          // (slot index is the slot's job on the page).
+          pinned: entries.map((e) => ({ url: e.url.trim(), focus: e.focus })),
           folderId: folderInput.trim(),
         }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast({ title: t.weddings.photosSaved, status: 'success', duration: 3000, isClosable: true });
+        toast({ title: t.weddings.pinnedSaved, status: 'success', duration: 3000, isClosable: true });
       } else {
         setError(data.error || t.weddings.saveFailed(res.status));
       }
@@ -368,38 +417,52 @@ function PhotosCard({
   };
 
   return (
-    <SectionCard title={t.weddings.photosTitle} subtitle={t.weddings.photosSubtitle}>
+    <SectionCard title={t.weddings.pinnedTitle}>
+      {/* What "pinned" means — Alex: these are the photos we DON'T
+          want randomized, and they should say so explicitly. */}
+      <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" mb={4}>
+        {t.weddings.pinnedIntro}
+      </Text>
+
       {error && <ErrorBox message={error} />}
 
-      <VStack spacing={2.5} align="stretch">
-        {heroes.map((value, i) => (
-          <Flex key={i} align="center" gap={3}>
+      <VStack spacing={5} align="stretch">
+        {entries.map((entry, i) => (
+          <Box key={i}>
             <Text
-              w={{ base: '56px', md: '72px' }}
-              flexShrink={0}
               fontSize={{ base: 'xs', md: '2xs' }}
               fontWeight="500"
               textTransform="uppercase"
-              letterSpacing={{ base: '0.1em', md: '0.15em' }}
-              color="gray.600"
+              letterSpacing={{ base: '0.15em', md: '0.22em' }}
+              color="brand.accent"
             >
-              {t.weddings.heroLabel(i + 1)}
+              {t.weddings.pinnedSlotLabels[i]}
+            </Text>
+            <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5" mt={0.5} mb={1.5}>
+              {t.weddings.pinnedSlotDescs[i]}
             </Text>
             <Input
-              value={value}
-              onChange={(e) => setHero(i, e.target.value)}
+              value={entry.url}
+              onChange={(e) => setUrl(i, e.target.value)}
               placeholder="https://drive.google.com/file/d/..."
               {...inputStyles}
             />
-            {value.trim() !== '' && <UrlThumb url={value.trim()} />}
-          </Flex>
+            {entry.url.trim() !== '' && (
+              <Box mt={3}>
+                <DragFocusEditor
+                  src={toPreviewUrl(entry.url.trim())}
+                  aspect={PINNED_SLOT_ASPECTS[i]}
+                  focus={entry.focus}
+                  onChange={(focus) => setFocus(i, focus)}
+                  editorLabel={t.weddings.positionLabel}
+                />
+              </Box>
+            )}
+          </Box>
         ))}
       </VStack>
-      <Text fontSize="xs" color="gray.500" fontWeight="300" mt={2} lineHeight="1.5">
-        {t.weddings.heroesHelp}
-      </Text>
 
-      <Box mt={5}>
+      <Box mt={6}>
         <Field label={t.weddings.folderLabel} help={t.weddings.folderHelp}>
           <Input
             value={folderInput}
@@ -423,6 +486,124 @@ function PhotosCard({
         </CTAButton>
       </Flex>
     </SectionCard>
+  );
+}
+
+// ── Drag-to-focus editor (shared by pinned + journal cards) ────────
+
+/**
+ * The preview IS the viewport: a box with the real slot's aspect ratio
+ * showing the photo object-fit cover at the current focus. Dragging
+ * pans the photo live — what you see in the box is exactly the crop
+ * the public page renders. Replaces the dropdowns Alex couldn't see
+ * the effect of.
+ */
+function DragFocusEditor({
+  src,
+  aspect,
+  focus,
+  onChange,
+  editorLabel,
+}: {
+  src: string;
+  aspect: number;
+  focus: string;
+  onChange: (focus: string) => void;
+  editorLabel: string;
+}) {
+  const { t } = useAdminLang();
+  const [dragging, setDragging] = useState(false);
+  // Drag-start snapshot lives in a ref — pointermove math needs it but
+  // must not trigger renders itself (onChange already does).
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startFx: number;
+    startFy: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const rect = el.getBoundingClientRect();
+    const { x, y } = parseFocusPercent(focus);
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startFx: x,
+      startFy: y,
+      width: Math.max(1, rect.width),
+      height: Math.max(1, rect.height),
+    };
+    setDragging(true);
+  };
+
+  const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    // Dragging the photo right shows more of its LEFT side, so the
+    // focus percentage moves opposite to the pointer.
+    const nx = clamp(d.startFx - ((e.clientX - d.startX) / d.width) * 100, 0, 100);
+    const ny = clamp(d.startFy - ((e.clientY - d.startY) / d.height) * 100, 0, 100);
+    onChange(`${Math.round(nx)}% ${Math.round(ny)}%`);
+  };
+
+  const endDrag = () => {
+    dragRef.current = null;
+    setDragging(false);
+  };
+
+  return (
+    <Box maxW="340px" w="100%">
+      <Box
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        w="100%"
+        borderRadius="sm"
+        overflow="hidden"
+        bg="gray.100"
+        cursor={dragging ? 'grabbing' : 'grab'}
+        sx={{ aspectRatio: String(aspect), touchAction: 'none' }}
+      >
+        <Box
+          as="img"
+          src={src}
+          alt=""
+          draggable={false}
+          w="100%"
+          h="100%"
+          objectFit="cover"
+          objectPosition={focus}
+          pointerEvents="none"
+          sx={{ userSelect: 'none' }}
+        />
+      </Box>
+      <Flex align="center" gap={2} mt={0.5}>
+        <Text
+          fontSize="2xs"
+          fontWeight="500"
+          textTransform="uppercase"
+          letterSpacing="0.1em"
+          color="gray.500"
+          whiteSpace="nowrap"
+        >
+          {editorLabel}
+        </Text>
+        <Box flex={1} />
+        <CTAButton onClick={() => onChange(DEFAULT_FOCUS)} variant="ghost" size="sm">
+          {t.weddings.focusReset}
+        </CTAButton>
+      </Flex>
+      <Text fontSize="2xs" color="gray.400" fontWeight="300" lineHeight="1.5">
+        {t.weddings.dragHint}
+      </Text>
+    </Box>
   );
 }
 
@@ -520,10 +701,10 @@ function JournalCard({
     setEntries((cur) =>
       cur.length >= MAX_FEATURED || cur.some((e) => e.slug === slug)
         ? cur
-        : [...cur, { slug, focusStage: 'center', focusThumb: 'center' }],
+        : [...cur, { slug, focusStage: DEFAULT_FOCUS, focusThumb: DEFAULT_FOCUS }],
     );
 
-  const setFocus = (slug: string, field: 'focusStage' | 'focusThumb', value: FocusValue) =>
+  const setFocus = (slug: string, field: 'focusStage' | 'focusThumb', value: string) =>
     setEntries((cur) => cur.map((e) => (e.slug === slug ? { ...e, [field]: value } : e)));
 
   const handleSave = async () => {
@@ -537,7 +718,7 @@ function JournalCard({
           password: adminPassword,
           action: 'set',
           // Full objects, in display order — the API validates each
-          // focus value against its FOCUS_VALUES allowlist.
+          // focus value (percent pair or legacy keyword).
           featured: entries,
         }),
       });
@@ -579,8 +760,8 @@ function JournalCard({
         </Badge>
       }
     >
-      {/* What the two focus selects are for — sits above the list so
-          the controls below explain themselves. */}
+      {/* What the drag editors are for — sits above the list so the
+          controls below explain themselves. */}
       <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" mb={4}>
         {t.weddings.focusHelp}
       </Text>
@@ -602,93 +783,18 @@ function JournalCard({
             </Text>
           ) : (
             <VStack spacing={2} align="stretch">
-              {entries.map((entry, i) => {
-                const post = bySlug.get(entry.slug);
-                return (
-                  <Flex
-                    key={entry.slug}
-                    align="flex-start"
-                    gap={3}
-                    bg="gray.50"
-                    border="1px solid"
-                    borderColor="gray.200"
-                    borderRadius="sm"
-                    p={2}
-                  >
-                    <PostThumb coverUrl={post?.cover_image_url ?? null} />
-                    <Box flex={1} minW={0}>
-                      <Text
-                        fontSize="sm"
-                        fontWeight="500"
-                        color={post ? 'gray.800' : 'orange.600'}
-                        noOfLines={1}
-                        pt={1}
-                      >
-                        {post ? post.title : t.weddings.unavailablePost(entry.slug)}
-                      </Text>
-                      {/* The two focal-point anchors — side by side when
-                          there's room, stacked under the title on narrow
-                          widths so the row never overflows. */}
-                      <Stack
-                        direction={{ base: 'column', sm: 'row' }}
-                        spacing={{ base: 1.5, sm: 4 }}
-                        mt={1.5}
-                      >
-                        <FocusSelect
-                          label={t.weddings.focusStageLabel}
-                          value={entry.focusStage}
-                          onChange={(v) => setFocus(entry.slug, 'focusStage', v)}
-                        />
-                        <FocusSelect
-                          label={t.weddings.focusThumbLabel}
-                          value={entry.focusThumb}
-                          onChange={(v) => setFocus(entry.slug, 'focusThumb', v)}
-                        />
-                      </Stack>
-                    </Box>
-                    <HStack spacing={0} flexShrink={0}>
-                      <IconButton
-                        aria-label={t.weddings.moveUpAria}
-                        icon={<Icon as={FaChevronUp} boxSize={3} />}
-                        onClick={() => move(i, -1)}
-                        isDisabled={i === 0}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="gray.500"
-                        _hover={{ color: 'brand.accent' }}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                      <IconButton
-                        aria-label={t.weddings.moveDownAria}
-                        icon={<Icon as={FaChevronDown} boxSize={3} />}
-                        onClick={() => move(i, 1)}
-                        isDisabled={i === entries.length - 1}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="gray.500"
-                        _hover={{ color: 'brand.accent' }}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                      <IconButton
-                        aria-label={t.weddings.removeAria}
-                        icon={<Icon as={FaTimes} boxSize={3.5} />}
-                        onClick={() => remove(entry.slug)}
-                        variant="ghost"
-                        size="sm"
-                        minW="40px"
-                        minH="40px"
-                        color="red.500"
-                        _hover={{ bg: 'red.50', color: 'red.600' }}
-                        sx={{ WebkitTapHighlightColor: 'transparent' }}
-                      />
-                    </HStack>
-                  </Flex>
-                );
-              })}
+              {entries.map((entry, i) => (
+                <FeaturedRow
+                  key={entry.slug}
+                  entry={entry}
+                  post={bySlug.get(entry.slug)}
+                  isFirst={i === 0}
+                  isLast={i === entries.length - 1}
+                  onMove={(delta) => move(i, delta)}
+                  onRemove={() => remove(entry.slug)}
+                  onFocusChange={(field, value) => setFocus(entry.slug, field, value)}
+                />
+              ))}
             </VStack>
           )}
 
@@ -726,45 +832,128 @@ function JournalCard({
   );
 }
 
-// One labeled focal-point dropdown. Compact on purpose — a pair of
-// these sits inside every featured row.
-function FocusSelect({
-  label,
-  value,
-  onChange,
+/**
+ * One featured slideshow entry: title row with reorder/remove, plus a
+ * per-row "Adjust photo position" disclosure hiding the two drag
+ * editors — open, a row is ~700px of editors on mobile, so collapsed
+ * is the default and the list stays scannable.
+ */
+function FeaturedRow({
+  entry,
+  post,
+  isFirst,
+  isLast,
+  onMove,
+  onRemove,
+  onFocusChange,
 }: {
-  label: string;
-  value: FocusValue;
-  onChange: (v: FocusValue) => void;
+  entry: FeaturedEntry;
+  post: JournalPostRow | undefined;
+  isFirst: boolean;
+  isLast: boolean;
+  onMove: (delta: -1 | 1) => void;
+  onRemove: () => void;
+  onFocusChange: (field: 'focusStage' | 'focusThumb', value: string) => void;
 }) {
   const { t } = useAdminLang();
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const coverSrc = post?.cover_image_url ? toPreviewUrl(post.cover_image_url) : null;
+
   return (
-    <HStack spacing={1.5} align="center">
-      <Text
-        fontSize="2xs"
-        fontWeight="500"
-        textTransform="uppercase"
-        letterSpacing="0.1em"
-        color="gray.500"
-        whiteSpace="nowrap"
-      >
-        {label}
-      </Text>
-      <Select
-        value={value}
-        onChange={(e) => onChange(e.target.value as FocusValue)}
-        aria-label={label}
-        size={{ base: 'md', md: 'sm' } as any}
-        maxW="160px"
-        {...inputStyles}
-      >
-        {FOCUS_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {t.weddings.focusOptions[opt.key]}
-          </option>
-        ))}
-      </Select>
-    </HStack>
+    <Box bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="sm" p={2}>
+      <Flex align="center" gap={3}>
+        <PostThumb coverUrl={post?.cover_image_url ?? null} />
+        <Text
+          flex={1}
+          minW={0}
+          fontSize="sm"
+          fontWeight="500"
+          color={post ? 'gray.800' : 'orange.600'}
+          noOfLines={1}
+        >
+          {post ? post.title : t.weddings.unavailablePost(entry.slug)}
+        </Text>
+        <HStack spacing={0} flexShrink={0}>
+          <IconButton
+            aria-label={t.weddings.moveUpAria}
+            icon={<Icon as={FaChevronUp} boxSize={3} />}
+            onClick={() => onMove(-1)}
+            isDisabled={isFirst}
+            variant="ghost"
+            size="sm"
+            minW="40px"
+            minH="40px"
+            color="gray.500"
+            _hover={{ color: 'brand.accent' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
+          <IconButton
+            aria-label={t.weddings.moveDownAria}
+            icon={<Icon as={FaChevronDown} boxSize={3} />}
+            onClick={() => onMove(1)}
+            isDisabled={isLast}
+            variant="ghost"
+            size="sm"
+            minW="40px"
+            minH="40px"
+            color="gray.500"
+            _hover={{ color: 'brand.accent' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
+          <IconButton
+            aria-label={t.weddings.removeAria}
+            icon={<Icon as={FaTimes} boxSize={3.5} />}
+            onClick={onRemove}
+            variant="ghost"
+            size="sm"
+            minW="40px"
+            minH="40px"
+            color="red.500"
+            _hover={{ bg: 'red.50', color: 'red.600' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          />
+        </HStack>
+      </Flex>
+
+      {/* No cover, nothing to position — the disclosure only exists
+          when there's an image to drag. */}
+      {coverSrc && (
+        <Box mt={1}>
+          <CTAButton
+            onClick={() => setAdjustOpen((o) => !o)}
+            icon={adjustOpen ? FaChevronUp : FaChevronDown}
+            variant="ghost"
+            size="sm"
+          >
+            {t.weddings.adjustPosition}
+          </CTAButton>
+          {adjustOpen && (
+            <Stack
+              direction={{ base: 'column', lg: 'row' }}
+              spacing={{ base: 4, lg: 6 }}
+              mt={2}
+              pb={1}
+              px={1}
+            >
+              <DragFocusEditor
+                src={coverSrc}
+                aspect={1150 / 470}
+                focus={entry.focusStage}
+                onChange={(v) => onFocusChange('focusStage', v)}
+                editorLabel={t.weddings.focusStageLabel}
+              />
+              <DragFocusEditor
+                src={coverSrc}
+                aspect={2.6}
+                focus={entry.focusThumb}
+                onChange={(v) => onFocusChange('focusThumb', v)}
+                editorLabel={t.weddings.focusThumbLabel}
+              />
+            </Stack>
+          )}
+        </Box>
+      )}
+    </Box>
   );
 }
 

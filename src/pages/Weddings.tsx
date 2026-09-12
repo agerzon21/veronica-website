@@ -61,6 +61,12 @@ interface WPhoto {
   alt?: string;
 }
 
+interface PinnedPhoto {
+  url: string;
+  fullUrl: string;
+  focus: string;
+}
+
 interface Vendor {
   name: string;
   category: string;
@@ -100,7 +106,6 @@ function shuffled<T>(arr: T[]): T[] {
   return out;
 }
 
-const SPRINKLE_ALT = 'Wedding photography by Veronika Gerzon';
 
 /** Journal covers arrive as w800 thumbs; the slideshow stage renders big. */
 const coverLarge = (url: string | null): string =>
@@ -140,7 +145,8 @@ const Weddings = () => {
   const ctaRef = useRef<HTMLDivElement>(null);
   const isCtaInView = useInView(ctaRef, { once: true, amount: 0.3 });
 
-  const [heroes, setHeroes] = useState<WPhoto[]>([]);
+  // POSITIONAL pinned slots: 0-2 package cards, 3 FAQ, 4 quote background.
+  const [pinned, setPinned] = useState<Array<PinnedPhoto | null>>([]);
   const [pool, setPool] = useState<WPhoto[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [featured, setFeatured] = useState<FeaturedItem[]>([]);
@@ -166,13 +172,12 @@ const Weddings = () => {
         const res = await fetch('/api/gallery/wedding-page');
         const data = await res.json();
         if (cancelled || !res.ok || !data.success) return;
-        const allHeroes: WPhoto[] = Array.isArray(data.heroes) ? data.heroes : [];
-        setHeroes(allHeroes);
-        // The once-per-visit shuffle. Every reload deals the folder's
-        // photos into the layout slots in a new order. Hero slots 5-6
-        // have no anchored placement, so they join the ambient pool.
+        setPinned(Array.isArray(data.pinned) ? data.pinned : []);
+        // The once-per-visit shuffle: the folder's photos become the
+        // background tapestry, dealt into fixed decorative slots in a
+        // new order on every visit.
         const photos: WPhoto[] = Array.isArray(data.photos) ? data.photos : [];
-        setPool(shuffled([...allHeroes.slice(4), ...photos]));
+        setPool(shuffled(photos));
         setVendors(Array.isArray(data.vendors) ? data.vendors : []);
         setSelectedWork(Array.isArray(data.selectedWork) ? data.selectedWork : []);
 
@@ -196,7 +201,9 @@ const Weddings = () => {
               .map((e) => {
                 const p = bySlug.get(e.slug);
                 if (!p) return null;
-                const isAdvice = (p.tags ?? []).some((t) => /advice|guide/i.test(t));
+                const isAdvice =
+                  p.session_type === 'article' ||
+                  (p.tags ?? []).some((t) => /advice|guide/i.test(t));
                 return {
                   slug: p.slug,
                   title: p.title,
@@ -218,10 +225,9 @@ const Weddings = () => {
     };
   }, []);
 
-  // Deal the shuffled pool into fixed slots. Sections render only the
-  // photos their slot actually received, so a small folder degrades to
-  // fewer bands rather than broken layouts.
-  const slots = useMemo(() => {
+  // Deal the shuffled pool into the tapestry: fixed decorative slots
+  // per section, filled in whatever order this visit's shuffle dealt.
+  const decor = useMemo(() => {
     let cursor = 0;
     const take = (n: number) => {
       const s = pool.slice(cursor, cursor + n);
@@ -229,24 +235,19 @@ const Weddings = () => {
       return s;
     };
     return {
-      // First claim: one photograph per package card, so the tiers are
-      // never plain white once the folder is configured.
-      packageShots: take(3),
-      trio: take(3),
-      fullbleed1: take(1),
-      stagger: take(2),
-      faqSide: take(1),
-      quartet: take(4),
+      approach: take(3),
+      packages: take(4),
+      journal: take(2),
+      faq: take(2),
+      vendors: take(2),
     };
   }, [pool]);
 
-  // The big top hero is FIXED: the curated local photo Alex signed off
-  // on, served from /assets (fast, no Drive dependency). Admin hero
-  // slots anchor the rest of the page: 1-2 flank the approach, 3 is the
-  // mid-page full-bleed, 4 backs the closing CTA, 5-6 join the pool.
-  const approachPair = heroes.slice(0, 2);
-  const midHero = heroes[2] ?? null;
-  const ctaHero = heroes[3] ?? null;
+  // The big top hero stays FIXED: the curated local photo, served from
+  // /assets. The five admin pinned slots are positional:
+  const pkgPin = (i: number): PinnedPhoto | null => pinned[i] ?? null;
+  const faqPin = pinned[3] ?? null;
+  const ctaPin = pinned[4] ?? null;
 
   const faqSchema = {
     '@context': 'https://schema.org',
@@ -314,8 +315,9 @@ const Weddings = () => {
         </Flex>
       </Box>
 
-      {/* ─── Approach ─── */}
-      <Box bg="white" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }}>
+      {/* ─── Approach — tapestry prints live behind the words ─── */}
+      <Box bg="white" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
+        <DecorPrints photos={decor.approach} slots={DECOR_APPROACH} />
         <Flex justify="center" ref={introRef}>
           <MotionDiv
             initial={{ opacity: 0, y: 24 }}
@@ -356,41 +358,12 @@ const Weddings = () => {
           </MotionDiv>
         </Flex>
 
-        {/* Two pinned heroes flank the pitch when Vero has set them */}
-        {approachPair.length === 2 && (
-          <SimpleGrid columns={2} spacing={{ base: 3, md: 5 }} maxW="1000px" mx="auto" mt={{ base: 10, md: 16 }}>
-            <SprinkleTile photo={approachPair[0]} ratio={4 / 5} />
-            <SprinkleTile photo={approachPair[1]} ratio={4 / 5} extraProps={{ mt: { base: 6, md: 12 } }} />
-          </SimpleGrid>
-        )}
       </Box>
 
-      {/* ─── Sprinkle: trio ─── */}
-      {slots.trio.length === 3 && (
-        <Box bg="white" pb={{ base: 12, md: 16 }} px={{ base: 4, md: 8 }}>
-          <Grid
-            templateColumns={{ base: '1fr 1fr', md: '2fr 1fr' }}
-            templateRows={{ md: '1fr 1fr' }}
-            gap={{ base: 3, md: 4 }}
-            maxW="1200px"
-            mx="auto"
-            aspectRatio={{ md: 3 / 2 }}
-          >
-            <GridItem colSpan={{ base: 2, md: 1 }} rowSpan={{ base: 1, md: 2 }}>
-              <SprinkleTile photo={slots.trio[0]} cover full aspect={{ base: 3 / 2, md: 'auto' }} />
-            </GridItem>
-            <GridItem>
-              <SprinkleTile photo={slots.trio[1]} cover aspect={{ base: 1, md: 'auto' }} />
-            </GridItem>
-            <GridItem>
-              <SprinkleTile photo={slots.trio[2]} cover aspect={{ base: 1, md: 'auto' }} />
-            </GridItem>
-          </Grid>
-        </Box>
-      )}
-
-      {/* ─── Packages ─── */}
-      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }}>
+      {/* ─── Packages — cream section keeps its rhythm; prints peek from
+          the gutters behind the cards ─── */}
+      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
+        <DecorPrints photos={decor.packages} slots={DECOR_PACKAGES} />
         <Box maxW="1200px" mx="auto">
           <VStack spacing={3} mb={{ base: 4, md: 6 }} textAlign="center">
             <Text textStyle="eyebrow">Wedding Photography</Text>
@@ -406,13 +379,14 @@ const Weddings = () => {
             {weddingData.broadNote}
           </Text>
 
-          {/* Each card is one link: the whole tier clicks through to the
-              contact form with the package preselected. Cards carry a
-              photograph (pool when the folder is set, curated fallback
-              otherwise) so the tiers are never walls of white. */}
+          {/* Each card is one link to the prefilled contact form. With a
+              pinned photo (admin slots 1-3, with focus) the WHOLE card is
+              the photograph: it shows through at the top and dissolves
+              into white where the text lives (Alex's transparency idea).
+              Without one, the curated fallback rides on top as before. */}
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={{ base: 5, md: 6 }}>
             {weddingData.packages.map((pkg, i) => {
-              const shot = slots.packageShots[i] ?? null;
+              const pin = pkgPin(i);
               const fallback = FEATURED[i + 1];
               return (
                 <Flex
@@ -421,6 +395,7 @@ const Weddings = () => {
                   to={`/contact?package=${encodeURIComponent(pkg.name)}`}
                   role="group"
                   direction="column"
+                  position="relative"
                   bg="white"
                   borderRadius="sm"
                   border="1px solid"
@@ -433,19 +408,49 @@ const Weddings = () => {
                     borderColor: 'brand.accent',
                   }}
                 >
-                  <Box h={{ base: '170px', md: '190px' }} overflow="hidden" flexShrink={0}>
-                    <Image
-                      src={shot ? shot.url : photoUrl(fallback.id)}
-                      alt={shot ? SPRINKLE_ALT : fallback.alt}
-                      w="100%"
-                      h="100%"
-                      objectFit="cover"
-                      loading="lazy"
-                      transition="transform 0.6s ease"
-                      _groupHover={{ transform: 'scale(1.05)' }}
-                    />
-                  </Box>
-                  <Flex direction="column" p={{ base: 6, md: 7 }} flex="1">
+                  {pin ? (
+                    <>
+                      <Image
+                        src={pin.fullUrl}
+                        alt=""
+                        position="absolute"
+                        inset={0}
+                        w="100%"
+                        h="100%"
+                        objectFit="cover"
+                        objectPosition={pin.focus}
+                        loading="lazy"
+                        transition="transform 0.7s ease"
+                        _groupHover={{ transform: 'scale(1.04)' }}
+                      />
+                      <Box
+                        position="absolute"
+                        inset={0}
+                        bg="linear-gradient(180deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.28) 130px, rgba(255,255,255,0.9) 185px, rgba(255,255,255,0.99) 215px, #ffffff 245px)"
+                      />
+                    </>
+                  ) : (
+                    <Box h={{ base: '170px', md: '190px' }} overflow="hidden" flexShrink={0}>
+                      <Image
+                        src={photoUrl(fallback.id)}
+                        alt={fallback.alt}
+                        w="100%"
+                        h="100%"
+                        objectFit="cover"
+                        loading="lazy"
+                        transition="transform 0.6s ease"
+                        _groupHover={{ transform: 'scale(1.05)' }}
+                      />
+                    </Box>
+                  )}
+                  <Flex
+                    direction="column"
+                    p={{ base: 6, md: 7 }}
+                    pt={pin ? { base: '210px', md: '235px' } : { base: 6, md: 7 }}
+                    flex="1"
+                    position="relative"
+                    zIndex={1}
+                  >
                     <Text textStyle="eyebrow">{pkg.coverage}</Text>
                     <Text as="h3" textStyle="cardTitle" mt={2}>
                       {pkg.name}
@@ -513,12 +518,12 @@ const Weddings = () => {
           </Box>
 
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={{ base: 8, md: 12 }} mt={{ base: 12, md: 16 }}>
-            <VStack align="flex-start" spacing={3}>
+            <VStack align="flex-start" spacing={3} bg="rgba(255,255,255,0.82)" p={{ base: 4, md: 6 }} borderRadius="sm">
               <Text textStyle="eyebrow">Travel</Text>
               <Box w="28px" h="1px" bg="brand.accent" />
               <Text textStyle="bodyCopy">{weddingData.travel}</Text>
             </VStack>
-            <VStack align="flex-start" spacing={3}>
+            <VStack align="flex-start" spacing={3} bg="rgba(255,255,255,0.82)" p={{ base: 4, md: 6 }} borderRadius="sm">
               <Text textStyle="eyebrow">Booking your date</Text>
               <Box w="28px" h="1px" bg="brand.accent" />
               <Text textStyle="bodyCopy">{weddingData.booking}</Text>
@@ -527,28 +532,14 @@ const Weddings = () => {
         </Box>
       </Box>
 
-      {/* ─── Full-bleed breath: pinned hero, else the pool's next ─── */}
-      {(midHero ?? slots.fullbleed1[0]) && (
-        <Box h={{ base: '42vh', md: '64vh' }} overflow="hidden">
-          <Image
-            src={(midHero ?? slots.fullbleed1[0]).fullUrl}
-            alt={SPRINKLE_ALT}
-            w="100%"
-            h="100%"
-            objectFit="cover"
-            loading="lazy"
-          />
-        </Box>
-      )}
-      {/* ─── From the Journal — the slow slideshow (Alex's pick, option 8).
-          One grand stage crossfading through the picks every ~5s, the
-          title and a type label over the photo, dots to jump, and a
-          thumbnail strip beneath (single row on desktop, 3-across grid
-          on phones — no hidden sideways scrolling). Per-entry focal
-          points from the admin keep faces out of the crop, on both the
-          stage and the thumbs. CSS opacity transitions only. ─── */}
+
+
+      {/* ─── From the Journal — the slow slideshow (Alex's pick), with
+          tapestry prints behind it. Per-entry focal points from the
+          admin keep faces in frame on stage and thumbs alike. ─── */}
       {featured.length > 0 && (
-        <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 4, md: 12 }}>
+        <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 4, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
+          <DecorPrints photos={decor.journal} slots={DECOR_JOURNAL} />
           <VStack spacing={3} mb={{ base: 8, md: 10 }} textAlign="center">
             <Text textStyle="eyebrow">From the Journal</Text>
             <Box w="35px" h="1px" bg="brand.accent" />
@@ -558,7 +549,6 @@ const Weddings = () => {
           </VStack>
 
           <Box maxW="1150px" mx="auto">
-            {/* Stage */}
             <Box
               position="relative"
               h={{ base: '46vh', md: '470px' }}
@@ -619,7 +609,6 @@ const Weddings = () => {
                 );
               })}
 
-              {/* Dots */}
               <HStack position="absolute" right={{ base: 3, md: 6 }} bottom={{ base: 3, md: 6 }} spacing={2} zIndex={2}>
                 {featured.map((p, i) => (
                   <Box
@@ -641,7 +630,6 @@ const Weddings = () => {
               </HStack>
             </Box>
 
-            {/* Thumbnail strip: one row on desktop, 3-across grid on phones */}
             <Grid
               templateColumns={{ base: 'repeat(3, 1fr)', md: `repeat(${featured.length}, 1fr)` }}
               gap={{ base: 2, md: 2.5 }}
@@ -709,28 +697,11 @@ const Weddings = () => {
         </Box>
       )}
 
-
-
-      {/* ─── Sprinkle: stagger ─── */}
-      {slots.stagger.length === 2 && (
-        <Box bg="white" pb={{ base: 12, md: 16 }} px={{ base: 4, md: 8 }}>
-          <Grid
-            templateColumns={{ base: '1fr', sm: '3fr 2fr' }}
-            gap={{ base: 3, md: 4 }}
-            maxW="1200px"
-            mx="auto"
-            alignItems="start"
-          >
-            <SprinkleTile photo={slots.stagger[0]} ratio={3 / 4} />
-            <SprinkleTile photo={slots.stagger[1]} ratio={4 / 5} extraProps={{ mt: { base: 0, sm: 16 } }} />
-          </Grid>
-        </Box>
-      )}
-
       {/* ─── FAQ — editorial split: a sticky intro column (with one ambient
           photograph and the ask-me-directly path) beside the numbered
           questions. On mobile the intro stacks above the list. ─── */}
-      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }}>
+      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" sx={{ isolation: 'isolate' }}>
+        <DecorPrints photos={decor.faq} slots={DECOR_FAQ} />
         <Grid
           templateColumns={{ base: '1fr', lg: '5fr 7fr' }}
           gap={{ base: 10, lg: 16 }}
@@ -751,9 +722,25 @@ const Weddings = () => {
               >
                 Everything couples ask me, answered the way I answer it in my inbox.
               </Text>
-              {slots.faqSide[0] && (
-                <Box display={{ base: 'none', lg: 'block' }} w="100%" maxW="360px">
-                  <SprinkleTile photo={slots.faqSide[0]} ratio={3 / 4} />
+              {faqPin && (
+                <Box
+                  display={{ base: 'none', lg: 'block' }}
+                  w="100%"
+                  maxW="360px"
+                  aspectRatio={3 / 4}
+                  overflow="hidden"
+                  borderRadius="sm"
+                  bg="gray.100"
+                >
+                  <Image
+                    src={faqPin.fullUrl}
+                    alt=""
+                    w="100%"
+                    h="100%"
+                    objectFit="cover"
+                    objectPosition={faqPin.focus}
+                    loading="lazy"
+                  />
                 </Box>
               )}
               <Text textStyle="bodyCopy" color="gray.600">
@@ -773,20 +760,10 @@ const Weddings = () => {
         </Grid>
       </Box>
 
-      {/* ─── Sprinkle: quartet filmstrip ─── */}
-      {slots.quartet.length === 4 && (
-        <Box bg="white" py={{ base: 12, md: 16 }} px={{ base: 4, md: 8 }}>
-          <SimpleGrid columns={{ base: 2, md: 4 }} spacing={{ base: 3, md: 4 }} maxW="1200px" mx="auto">
-            {slots.quartet.map((p, i) => (
-              <SprinkleTile key={i} photo={p} ratio={3 / 4} />
-            ))}
-          </SimpleGrid>
-        </Box>
-      )}
-
       {/* ─── Recommended vendors ─── */}
       {vendors.length > 0 && (
-        <Box bg="white" pb={{ base: 16, md: 24 }} pt={{ base: 4, md: 8 }} px={{ base: 6, md: 12 }}>
+        <Box bg="white" pb={{ base: 16, md: 24 }} pt={{ base: 4, md: 8 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
+          <DecorPrints photos={decor.vendors} slots={DECOR_VENDORS} />
           <Box maxW="1000px" mx="auto">
             <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
               <Text textStyle="eyebrow">Recommended Vendors</Text>
@@ -940,16 +917,17 @@ const Weddings = () => {
 
       {/* ─── CTA ─── */}
       <Box position="relative" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }} overflow="hidden">
-        {ctaHero ? (
+        {ctaPin ? (
           <>
             <Image
-              src={ctaHero.fullUrl}
+              src={ctaPin.fullUrl}
               alt=""
               position="absolute"
               inset={0}
               w="100%"
               h="100%"
               objectFit="cover"
+              objectPosition={ctaPin.focus}
               loading="lazy"
             />
             <Box position="absolute" inset={0} bg="rgba(15,15,15,0.55)" />
@@ -964,10 +942,10 @@ const Weddings = () => {
             transition={{ duration: 0.7, ease: 'easeOut' }}
           >
             <VStack spacing={6} textAlign="center" maxW="560px">
-              <Text as="h2" textStyle="sectionTitle" color={ctaHero ? 'white' : undefined}>
+              <Text as="h2" textStyle="sectionTitle" color={ctaPin ? 'white' : undefined}>
                 Tell me about your day
               </Text>
-              <Text textStyle="bodyLead" color={ctaHero ? 'whiteAlpha.900' : undefined}>
+              <Text textStyle="bodyLead" color={ctaPin ? 'whiteAlpha.900' : undefined}>
                 Where you're getting married, roughly when, and how much of it you'd like
                 photographed. That's enough for me to come back with a recommendation.
               </Text>
@@ -1051,47 +1029,102 @@ function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
   );
 }
 
+
 /**
- * One non-interactive sprinkle photograph. `ratio` crops to a fixed
- * shape; `cover` fills the parent grid cell; `full` requests w2000.
+ * One tapestry slot: where a background print sits inside its section.
+ * Percent offsets so wide screens breathe; `mob` marks the few slots
+ * that survive on phones (smaller, via mw). Rotations alternate so the
+ * collage reads as scattered prints, not a grid.
  */
-function SprinkleTile({
-  photo,
-  ratio,
-  cover,
-  full,
-  aspect,
-  extraProps,
-}: {
-  photo: WPhoto;
-  ratio?: number;
-  cover?: boolean;
-  full?: boolean;
-  aspect?: Record<string, number | string>;
-  extraProps?: Record<string, unknown>;
-}) {
-  const cropped = cover || ratio !== undefined;
+interface DecorSlot {
+  top?: string;
+  bottom?: string;
+  left?: string;
+  right?: string;
+  w: number;
+  rot: number;
+  mob?: boolean;
+  mw?: number;
+}
+
+const DECOR_APPROACH: DecorSlot[] = [
+  { left: '1%', top: '8%', w: 190, rot: -6 },
+  { right: '2%', top: '30%', w: 230, rot: 4 },
+  { left: '3%', bottom: '2%', w: 150, rot: 2 },
+];
+const DECOR_PACKAGES: DecorSlot[] = [
+  { left: '-1%', top: '1.5%', w: 200, rot: -5 },
+  { right: '-1%', top: '10%', w: 170, rot: 6, mob: true, mw: 88 },
+  { right: '4%', bottom: '2.5%', w: 210, rot: -3 },
+  { left: '2%', bottom: '16%', w: 150, rot: 3 },
+];
+const DECOR_JOURNAL: DecorSlot[] = [
+  { left: '0.5%', top: '12%', w: 160, rot: -4 },
+  { right: '1%', bottom: '9%', w: 190, rot: 5 },
+];
+const DECOR_FAQ: DecorSlot[] = [
+  { right: '2%', top: '5%', w: 170, rot: 4 },
+  { left: '3%', bottom: '5%', w: 150, rot: -5, mob: true, mw: 88 },
+];
+const DECOR_VENDORS: DecorSlot[] = [
+  { left: '1%', top: '9%', w: 150, rot: -4 },
+  { right: '2%', bottom: '7%', w: 170, rot: 3 },
+];
+
+/**
+ * The background tapestry. Absolutely positioned white-bordered prints
+ * at fixed slots, zIndex -1 inside an isolated section: they paint ABOVE
+ * the section's background but BELOW every piece of content, so the
+ * layout, spacing, and the page's white/cream rhythm never move — the
+ * photographs are fabric, not blocks. pointer-events none throughout;
+ * a print that fails to load removes itself.
+ */
+function DecorPrints({ photos, slots }: { photos: WPhoto[]; slots: DecorSlot[] }) {
   return (
-    <Box
-      w="100%"
-      h={cover ? '100%' : 'auto'}
-      bg="gray.100"
-      borderRadius="sm"
-      overflow="hidden"
-      aspectRatio={aspect ?? ratio}
-      {...extraProps}
-    >
-      <Image
-        src={full || !cropped ? photo.fullUrl : photo.url}
-        alt={SPRINKLE_ALT}
-        w="100%"
-        h={cropped ? '100%' : 'auto'}
-        objectFit={cropped ? 'cover' : undefined}
-        display="block"
-        loading="lazy"
-      />
-    </Box>
+    <>
+      {slots.map((slot, i) => {
+        const photo = photos[i];
+        if (!photo) return null;
+        return (
+          <Box
+            key={i}
+            data-print=""
+            position="absolute"
+            top={slot.top}
+            bottom={slot.bottom}
+            left={slot.left}
+            right={slot.right}
+            w={{ base: slot.mob ? `${slot.mw ?? 90}px` : '0px', md: `${slot.w}px` }}
+            display={{ base: slot.mob ? 'block' : 'none', md: 'block' }}
+            transform={`rotate(${slot.rot}deg)`}
+            zIndex={-1}
+            pointerEvents="none"
+            bg="white"
+            p={{ base: 1, md: 2 }}
+            borderRadius="2px"
+            boxShadow="0 14px 30px -18px rgba(20, 15, 5, 0.4)"
+            aria-hidden="true"
+          >
+            <Box aspectRatio={4 / 3} overflow="hidden">
+              <Image
+                src={photo.url}
+                alt=""
+                w="100%"
+                h="100%"
+                objectFit="cover"
+                loading="lazy"
+                onError={(e) => {
+                  const print = (e.target as HTMLImageElement).closest('[data-print]') as HTMLElement | null;
+                  if (print) print.style.display = 'none';
+                }}
+              />
+            </Box>
+          </Box>
+        );
+      })}
+    </>
   );
 }
+
 
 export default Weddings;

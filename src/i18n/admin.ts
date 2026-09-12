@@ -1838,6 +1838,7 @@ const dict = {
     sessionOptionPortrait: { en: 'Portrait', ru: 'Портретная' },
     sessionOptionFamily: { en: 'Family', ru: 'Семейная' },
     sessionOptionMaternity: { en: 'Maternity', ru: 'Беременность' },
+    sessionOptionArticle: { en: 'Article / Advice (blog post)', ru: 'Статья / советы (блог)' },
 
     // Tags field
     tagsLabel: { en: 'Tags', ru: 'Теги' },
@@ -2337,26 +2338,57 @@ const dict = {
       ru: (status: number) => `Не удалось удалить (${status})`,
     },
 
-    // ── Card 1: Page photos ─────────────────────────────────────
-    photosTitle: { en: 'Page photos', ru: 'Фото страницы' },
-    photosSubtitle: {
-      en: 'Six pinned hero photos plus a Drive folder of extras.',
-      ru: 'Шесть закреплённых фото и папка Drive с дополнительными кадрами.',
+    // ── Card 1: Pinned photos ───────────────────────────────────
+    // Five POSITIONAL slots that never reshuffle, each with a fixed
+    // job on the page, plus the Drive folder feeding the background
+    // tapestry (which DOES reshuffle).
+    pinnedTitle: { en: 'Pinned photos', ru: 'Закреплённые фото' },
+    pinnedIntro: {
+      en: 'These photos are pinned: they never get shuffled with the rest. Each slot has one fixed job on the page. Paste a Google Drive file link or a direct https image link, then drag the preview to set the crop.',
+      ru: 'Эти фото закреплены: они не перемешиваются вместе с остальными. У каждого слота своя фиксированная роль на странице. Вставь ссылку на файл в Google Drive или прямую https-ссылку, затем перетащи превью, чтобы настроить кадр.',
     },
-    heroLabel: {
-      en: (n: number) => `Hero ${n}`,
-      ru: (n: number) => `Фото ${n}`,
+    // Slot labels + one-line descriptions, POSITIONAL (index = slot).
+    // Package names stay English: that is how the packages are named
+    // on the public page.
+    pinnedSlotLabels: {
+      en: [
+        'Package photo: Intimate Wedding',
+        'Package photo: Wedding Day',
+        'Package photo: Full Wedding Day',
+        'FAQ photo',
+        'Quote section background',
+      ],
+      ru: [
+        'Фото пакета: Intimate Wedding',
+        'Фото пакета: Wedding Day',
+        'Фото пакета: Full Wedding Day',
+        'Фото у блока вопросов',
+        'Фон блока с цитатой',
+      ],
     },
-    heroesHelp: {
-      en: 'Paste a Google Drive file link or a direct https image link. Heroes 1 and 2 flank the approach text, Hero 3 is the full-width photo mid-page, Hero 4 is the closing block background, and Heroes 5 and 6 join the ambient photo pool. The big photo at the very top of the page is fixed and not controlled here. Empty slots are simply skipped.',
-      ru: 'Вставь ссылку на файл в Google Drive или прямую https-ссылку на изображение. Фото 1 и 2 стоят по бокам от текста о подходе, Фото 3 идёт во всю ширину в середине страницы, Фото 4 служит фоном финального блока, а Фото 5 и 6 попадают в общий пул фоновых кадров. Большое фото в самом верху страницы фиксированное и здесь не настраивается. Пустые поля просто пропускаются.',
+    pinnedSlotDescs: {
+      en: [
+        'Behind the Intimate Wedding pricing card.',
+        'Behind the Wedding Day pricing card.',
+        'Behind the Full Wedding Day pricing card.',
+        'Sits beside the FAQ section.',
+        'Wide band behind the closing quote. Pick a wide, horizontal photo.',
+      ],
+      ru: [
+        'Фон карточки пакета Intimate Wedding.',
+        'Фон карточки пакета Wedding Day.',
+        'Фон карточки пакета Full Wedding Day.',
+        'Стоит рядом с блоком вопросов и ответов.',
+        'Широкая полоса за финальной цитатой. Выбери широкое горизонтальное фото.',
+      ],
     },
+    positionLabel: { en: 'Photo position', ru: 'Положение фото' },
+    pinnedSaved: { en: 'Pinned photos saved', ru: 'Закреплённые фото сохранены' },
     folderLabel: { en: 'Drive folder', ru: 'Папка Drive' },
     folderHelp: {
-      en: 'Photos from this folder are scattered through the weddings page and reshuffle on every visit.',
-      ru: 'Фото из этой папки разбрасываются по странице свадеб и перемешиваются при каждом заходе.',
+      en: 'Photos from this folder form the background tapestry: a collage scattered across the page that reshuffles on every visit.',
+      ru: 'Фото из этой папки образуют фоновое полотно: коллаж, рассыпанный по странице, он перемешивается при каждом заходе.',
     },
-    photosSaved: { en: 'Page photos saved', ru: 'Фото страницы сохранены' },
 
     // ── Card 2: From the Journal ────────────────────────────────
     journalTitle: { en: 'From the Journal', ru: 'Из дневника' },
@@ -2397,28 +2429,22 @@ const dict = {
     },
     featuredSaved: { en: 'Featured posts saved', ru: 'Подборка сохранена' },
 
-    // Focal-point controls for the journal slideshow — each featured
-    // entry anchors its cover separately in the big stage image and
-    // in the thumbnail strip, so crops stop cutting faces.
+    // Focal-point drag editors for the journal slideshow — each
+    // featured entry anchors its cover separately in the big stage
+    // image and in the thumbnail strip, so crops stop cutting faces.
     focusHelp: {
-      en: 'If a face gets cropped, choose which part of the photo stays in view. Large photo controls the big slideshow image, small photo controls its thumbnail.',
-      ru: 'Если лицо обрезается, выбери, какая часть фото остаётся в кадре. «Большое фото» отвечает за крупный слайд, «Маленькое фото» отвечает за его миниатюру.',
+      en: 'If a face gets cropped, open Adjust photo position and drag the previews. The large photo is the big slideshow image, the small photo is its thumbnail.',
+      ru: 'Если лицо обрезается, открой «Настроить положение фото» и перетащи превью. Большое фото отвечает за крупный слайд, маленькое фото отвечает за его миниатюру.',
     },
     focusStageLabel: { en: 'Large photo', ru: 'Большое фото' },
     focusThumbLabel: { en: 'Small photo', ru: 'Маленькое фото' },
-    // Human labels for the nine CSS object-position anchors. Keys are
-    // camelCase versions of the CSS values ('left top' → leftTop).
-    focusOptions: {
-      center: { en: 'Center', ru: 'По центру' },
-      top: { en: 'Top', ru: 'Сверху' },
-      bottom: { en: 'Bottom', ru: 'Снизу' },
-      left: { en: 'Left', ru: 'Слева' },
-      right: { en: 'Right', ru: 'Справа' },
-      leftTop: { en: 'Top left', ru: 'Сверху слева' },
-      rightTop: { en: 'Top right', ru: 'Сверху справа' },
-      leftBottom: { en: 'Bottom left', ru: 'Снизу слева' },
-      rightBottom: { en: 'Bottom right', ru: 'Снизу справа' },
+    adjustPosition: { en: 'Adjust photo position', ru: 'Настроить положение фото' },
+    // Shared strings for the drag-to-focus editor (pinned + journal).
+    dragHint: {
+      en: 'Drag the photo to choose what stays in view.',
+      ru: 'Перетащи фото, чтобы выбрать, что останется в кадре.',
     },
+    focusReset: { en: 'Reset', ru: 'Сбросить' },
 
     // ── Card 3: Selected work ───────────────────────────────────
     // Curates the clickable Selected Work mosaic — public wedding

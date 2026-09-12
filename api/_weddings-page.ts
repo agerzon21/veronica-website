@@ -43,10 +43,12 @@ function parseStringArray(raw: string | null | undefined, cap: number): string[]
 }
 
 /**
- * CSS object-position keywords the focus controls may use. An allowlist
- * because these values land verbatim in a style attribute.
+ * Focus values land verbatim in style attributes, so they are strictly
+ * validated: either a legacy CSS keyword (the first iteration used
+ * dropdowns) or, since the drag editors, a percentage pair like
+ * "37% 62%" with both numbers clamped 0-100 at parse time.
  */
-export const FOCUS_VALUES = [
+const FOCUS_KEYWORDS = [
   'center',
   'top',
   'bottom',
@@ -57,20 +59,69 @@ export const FOCUS_VALUES = [
   'left bottom',
   'right bottom',
 ] as const;
-export type FocusValue = (typeof FOCUS_VALUES)[number];
+const FOCUS_PERCENT_RE = /^(\d{1,3})% (\d{1,3})%$/;
+
+export function asFocus(v: unknown): string {
+  if (typeof v !== 'string') return '50% 50%';
+  const s = v.trim();
+  if ((FOCUS_KEYWORDS as readonly string[]).includes(s)) return s;
+  const m = s.match(FOCUS_PERCENT_RE);
+  if (m) {
+    const x = Math.min(100, Number(m[1]));
+    const y = Math.min(100, Number(m[2]));
+    return `${x}% ${y}%`;
+  }
+  return '50% 50%';
+}
+
+export function isValidFocus(v: unknown): boolean {
+  return (
+    typeof v === 'string' &&
+    ((FOCUS_KEYWORDS as readonly string[]).includes(v.trim()) || FOCUS_PERCENT_RE.test(v.trim()))
+  );
+}
 
 export interface FeaturedEntry {
   slug: string;
   /** Focal point of the cover in the big slideshow stage. */
-  focusStage: FocusValue;
+  focusStage: string;
   /** Focal point in the small thumbnail strip. */
-  focusThumb: FocusValue;
+  focusThumb: string;
 }
 
-const asFocus = (v: unknown): FocusValue =>
-  typeof v === 'string' && (FOCUS_VALUES as readonly string[]).includes(v)
-    ? (v as FocusValue)
-    : 'center';
+/**
+ * The five PINNED photo slots. Not "heroes" anymore (Alex's correction):
+ * these are the photos that must NOT reshuffle per visit, each with an
+ * explicit job — 0-2 back the three package cards, 3 sits beside the
+ * FAQ, 4 is the wide background of the closing quote section.
+ */
+export interface PinnedEntry {
+  url: string;
+  focus: string;
+}
+
+export function parsePinned(raw: string | null | undefined, cap: number): PinnedEntry[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const out: PinnedEntry[] = [];
+    for (const item of arr) {
+      if (typeof item === 'string') {
+        out.push({ url: item.trim(), focus: '50% 50%' });
+      } else if (item && typeof item === 'object' && typeof item.url === 'string') {
+        // Empty urls are kept: slots are POSITIONAL (0-2 packages, 3 FAQ,
+        // 4 quote background), so an unfilled slot must hold its place.
+        out.push({ url: item.url.trim(), focus: asFocus(item.focus) });
+      } else {
+        out.push({ url: '', focus: '50% 50%' });
+      }
+    }
+    return out.slice(0, cap);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * The featured list started life as a plain array of slugs; it is now an
@@ -122,9 +173,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as Array<{ key: string; value: string | null }>;
     const state = new Map(stateRows.map((r) => [r.key, r.value]));
 
-    const heroes = parseStringArray(state.get(KEY_HEROES), 6)
-      .map(heroToPhoto)
-      .filter((h): h is { url: string; fullUrl: string } => h !== null);
+    // POSITIONAL: index 0-2 = package cards, 3 = FAQ, 4 = quote section.
+    // Unfilled slots stay as null so nothing shifts.
+    const pinned = parsePinned(state.get(KEY_HEROES), 5).map((p) => {
+      const photo = p.url ? heroToPhoto(p.url) : null;
+      return photo ? { ...photo, focus: p.focus } : null;
+    });
 
     const featured = parseFeatured(state.get(KEY_FEATURED), 10);
     // Transitional: pages cached before the focus upgrade read this.
@@ -197,10 +251,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       photoUrl: normalizeImageUrl(v.photo_url),
     }));
 
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    // Short cache: Vero iterates on focus points and photo picks from the
+    // admin panel and needs to see results within a minute, not five.
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
     return res
       .status(200)
-      .json({ success: true, heroes, photos, vendors, featured, featuredSlugs, selectedWork });
+      .json({ success: true, pinned, photos, vendors, featured, featuredSlugs, selectedWork });
   } catch (err) {
     console.error('[gallery/wedding-page] failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

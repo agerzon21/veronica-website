@@ -5,7 +5,10 @@
  * clean and eliminates drift between them.
  */
 
-const SESSION_TYPES = new Set(['wedding', 'portrait', 'family', 'maternity']);
+// 'article' is the blog kind: advice and notes from behind the lens
+// rather than a photographed event. Timeline-wise identical — the
+// publish date IS the event date (Alex's framing).
+const SESSION_TYPES = new Set(['wedding', 'portrait', 'family', 'maternity', 'article']);
 
 export interface JournalInput {
   slug: string;
