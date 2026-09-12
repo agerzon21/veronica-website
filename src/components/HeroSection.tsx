@@ -1,9 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Box, Flex, VStack, Text, Icon, Image } from '@chakra-ui/react';
+import { Box, VStack, Text, Image } from '@chakra-ui/react';
 import { m, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
-import FaCamera from '../icons/fa/FaCamera';
-import FaGlobe from '../icons/fa/FaGlobe';
-import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
 import ImageCarousel from './ImageCarousel';
 import CTAButton from './ui/CTAButton';
 import PageHeader from './ui/PageHeader';
@@ -26,12 +23,6 @@ interface HeroSectionProps {
     desktopSkip?: boolean;
   }>;
 }
-
-const STATS = [
-  { label: 'Based in', value: 'Scranton, PA', icon: FaMapMarkerAlt },
-  { label: 'Experience', value: '12+ Years', icon: FaCamera },
-  { label: 'Available', value: 'Worldwide', icon: FaGlobe },
-];
 
 const ViewfinderCorner: React.FC<{
   corner: 'tl' | 'tr' | 'bl' | 'br';
@@ -435,27 +426,15 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // leading edge of the gold fill.
   const progressThumbTop = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
+  // The stats row moved to the About page's closing band: repeating
+  // "Based in / Experience / Available" on the homepage AND there was
+  // saying the same thing twice, and the zoom-out deserves to land on
+  // one clear invitation rather than a table of facts.
   const footerContent = (
     <VStack spacing={4} align="center">
-      {/* gap was 6 (24px) at base. Three cardTitle values (20px Cormorant)
-          plus two dividers need more than the 343px a 375px screen leaves, so
-          "Scranton, PA" wrapped and knocked the three blocks out of vertical
-          alignment. On main this row fit by a single pixel. */}
-      <Flex gap={{ base: 3, md: 10, lg: 14 }} align="center">
-        {STATS.map((stat, i) => (
-          <React.Fragment key={stat.label}>
-            <VStack spacing={2} minW={{ base: '80px', md: '100px' }}>
-              <Icon as={stat.icon} boxSize={4} color="brand.accent" />
-              <Text textStyle="metaCaption">{stat.label}</Text>
-              <Text textStyle="cardTitle">{stat.value}</Text>
-            </VStack>
-            {i < STATS.length - 1 && <Box w="1px" h="50px" bg="brand.accent" opacity={0.3} />}
-          </React.Fragment>
-        ))}
-      </Flex>
-      <Box mt={2}>
-        <CTAButton to="/contact">Book a Session</CTAButton>
-      </Box>
+      <CTAButton to="/contact" variant="solid" size="lg">
+        Book a Session
+      </CTAButton>
     </VStack>
   );
 
