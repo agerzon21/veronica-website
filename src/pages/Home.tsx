@@ -3,7 +3,7 @@ import { Box } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import HeroSection from '../components/HeroSection';
 import GoogleReviewsSection from '../components/GoogleReviewsSection';
-import { HomeCategories, HomeJournal, HomeClosing } from '../components/HomeChapters';
+import { HomeChapters } from '../components/HomeChapters';
 import InstagramFeed from '../components/InstagramFeed';
 import heroSlides from '../data/hero-slides.json';
 import heroVariants from '../data/hero-variants.json';
@@ -80,14 +80,11 @@ const Home: React.FC = () => {
         <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />
       </Helmet>
       <HeroSection images={CAROUSEL_IMAGES} />
-      {/* Her own photographs, before anyone else's feed: the homepage used
-          to go straight from the hero to Instagram, which meant the first
-          work a visitor saw was a grid of thumbnails. */}
-      <HomeCategories />
-      <HomeJournal />
+      {/* Her own work before anyone else's feed: three doors in one row —
+          portfolio, latest journal entry, wedding packages. */}
+      <HomeChapters />
       <InstagramFeed />
       <GoogleReviewsSection />
-      <HomeClosing />
     </Box>
   );
 };
