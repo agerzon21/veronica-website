@@ -61,18 +61,18 @@ const AuthorBadge = ({ review }: { review: Review }) => {
         <Flex
           boxSize="32px"
           borderRadius="full"
-          bg="brand.surface"
+          bg="whiteAlpha.200"
           border="1px solid"
-          borderColor="brand.accentBorder"
+          borderColor="whiteAlpha.400"
           align="center"
           justify="center"
         >
-          <Text textStyle="metaCaption">{initials}</Text>
+          <Text textStyle="metaCaption" color="whiteAlpha.900">{initials}</Text>
         </Flex>
       )}
       {/* Was brand.accent (#c9a96e) as TEXT on white — 2.24:1, fails AA.
           The eyebrow token carries brand.accentText instead. */}
-      <Text textStyle="eyebrow">— {review.author_name}</Text>
+      <Text textStyle="eyebrowOnDark">— {review.author_name}</Text>
     </HStack>
   );
 };
@@ -141,7 +141,30 @@ const GoogleReviewsSection = () => {
     // vertical interval; pt stays 0 because InstagramFeed already owns the
     // gap above this section and doubling it is exactly the "spacey" the
     // brief is about. Declared after layerStyle so it wins.
-    <Box ref={sectionRef} bg="white" layerStyle="section" pt={{ base: 0, md: 0 }} px={6}>
+    <Box
+      ref={sectionRef}
+      position="relative"
+      layerStyle="section"
+      pt={{ base: 16, md: 20 }}
+      px={6}
+      overflow="hidden"
+      sx={{ isolation: 'isolate' }}
+    >
+      {/* Words about photographs deserve a photograph behind them. The
+          scrim is heavy enough for AA on every string in here. */}
+      <Image
+        src="/assets/photos/site/home-cta-bg.webp"
+        alt=""
+        position="absolute"
+        inset={0}
+        w="100%"
+        h="100%"
+        objectFit="cover"
+        objectPosition="center 40%"
+        zIndex={-2}
+        loading="lazy"
+      />
+      <Box position="absolute" inset={0} bg="rgba(12, 10, 6, 0.76)" zIndex={-1} />
       <MotionDiv
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -150,7 +173,7 @@ const GoogleReviewsSection = () => {
       >
         {/* Header */}
         <VStack spacing={6} mb={{ base: 10, md: 14 }} maxW="measureWide" mx="auto">
-          <Text textStyle="eyebrow">Kind Words</Text>
+          <Text textStyle="eyebrowOnDark">Kind Words</Text>
           {/* 40px, not 35 — the one rule width PageHeader uses everywhere. */}
           <Box w="40px" h="1px" bg="brand.accent" />
 
@@ -167,20 +190,20 @@ const GoogleReviewsSection = () => {
               transition="all 0.3s"
               _groupHover={{ transform: 'translateY(-1px)' }}
             >
-              <Icon as={FaGoogle} boxSize={4} color="gray.600" />
+              <Icon as={FaGoogle} boxSize={4} color="whiteAlpha.800" />
               <FiveStars />
               <Text
                 textStyle="bodyCopy"
-                color="gray.700"
+                color="whiteAlpha.900"
                 textDecoration="underline"
                 textUnderlineOffset="4px"
-                textDecorationColor="gray.400"
+                textDecorationColor="whiteAlpha.500"
                 transition="color 0.3s, text-decoration-color 0.3s"
                 _groupHover={{
                   // accentText, not accent: this text sits on white, where
                   // #c9a96e is 2.24:1. The decoration colour below may stay
                   // decorative gold.
-                  color: 'brand.accentText',
+                  color: 'brand.accent',
                   textDecorationColor: 'brand.accent',
                 }}
               >
@@ -207,13 +230,13 @@ const GoogleReviewsSection = () => {
                 px={{ base: 2, md: 6 }}
                 align="start"
               >
-                <Box h="14px" w="100px" bg="gray.100" borderRadius="sm" />
+                <Box h="14px" w="100px" bg="whiteAlpha.300" borderRadius="sm" />
                 <VStack spacing={3} align="stretch" w="100%">
-                  <Box h="14px" w="100%" bg="gray.100" borderRadius="sm" />
-                  <Box h="14px" w="95%" bg="gray.100" borderRadius="sm" />
-                  <Box h="14px" w="80%" bg="gray.100" borderRadius="sm" />
+                  <Box h="14px" w="100%" bg="whiteAlpha.300" borderRadius="sm" />
+                  <Box h="14px" w="95%" bg="whiteAlpha.300" borderRadius="sm" />
+                  <Box h="14px" w="80%" bg="whiteAlpha.300" borderRadius="sm" />
                 </VStack>
-                <Box h="14px" w="140px" bg="gray.100" borderRadius="sm" />
+                <Box h="14px" w="140px" bg="whiteAlpha.300" borderRadius="sm" />
               </VStack>
             ))}
           </Flex>
@@ -230,14 +253,19 @@ const GoogleReviewsSection = () => {
                 key={t.id}
                 flex={1}
                 spacing={6}
-                px={{ base: 2, md: 6 }}
+                p={{ base: 6, md: 8 }}
                 align="start"
+                bg="rgba(255, 255, 255, 0.07)"
+                border="1px solid"
+                borderColor="whiteAlpha.300"
+                borderRadius="sm"
+                backdropFilter="blur(6px)"
               >
                 <FiveStars />
                 {/* The one paragraph of the card → bodyLead. The old italic
                     weight-200 treatment existed nowhere else on the site; the
                     curly quotes already mark this as speech. */}
-                <Text textStyle="bodyLead">“{t.text}”</Text>
+                <Text textStyle="bodyLead" color="whiteAlpha.900">“{t.text}”</Text>
                 <AuthorBadge review={t} />
               </VStack>
             ))}
