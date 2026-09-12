@@ -105,7 +105,7 @@ function JournalIndex() {
           w="100%"
           h="100%"
           objectFit="cover"
-          objectPosition="center"
+          objectPosition="center 60%"
           fetchPriority="high"
         />
         <Box position="absolute" inset={0} bg="rgba(0,0,0,0.45)" />
