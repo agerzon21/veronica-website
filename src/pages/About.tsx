@@ -46,14 +46,14 @@ const About = () => {
           crop keeps her and the lens in frame on wide screens, and the
           gradient runs sideways so the heading has dark to sit on while
           the right side of the photograph stays open. ─── */}
-      <Box position="relative" h={{ base: '50vh', md: '59vh' }} overflow="hidden">
+      <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
         <Image
           src="/assets/photos/site/vero-camera.webp"
           alt="Veronika Gerzon kneeling on the grass with her camera."
           w="100%"
           h="100%"
           objectFit="cover"
-          objectPosition={{ base: 'center 20%', md: 'center 22%' }}
+          objectPosition={{ base: 'center 20%', md: 'center 32%' }}
           fetchPriority="high"
         />
         <Box
@@ -272,11 +272,18 @@ const About = () => {
         </SimpleGrid>
       </Box>
 
-      {/* ─── Closing band: the details and the invitation in one dark
-          block, so the page ends on black straight into the footer
-          instead of trailing off through two pale strips. Icons match
-          the ones the homepage hero used to carry. ─── */}
-      <Box bg="#141414" py={{ base: 16, md: 22 }} px={{ base: 6, md: 12 }} ref={ctaRef}>
+      {/* ─── Closing band: the details and the invitation together, so the
+          page ends on one deliberate step instead of trailing off through
+          two pale strips. Cream-sunken, not black — the dark block read as
+          a different site. Icons are the ones the homepage hero carried. ─── */}
+      <Box
+        bg="brand.surfaceSunken"
+        borderTop="1px solid"
+        borderColor="brand.accentBorder"
+        py={{ base: 16, md: 22 }}
+        px={{ base: 6, md: 12 }}
+        ref={ctaRef}
+      >
         <MotionDiv
           initial={{ opacity: 0, y: 22 }}
           animate={isCtaInView ? { opacity: 1, y: 0 } : {}}
@@ -298,10 +305,8 @@ const About = () => {
                 <Flex key={stat.label} align="center" gap={{ base: 8, md: 16 }}>
                   <VStack spacing={2} minW={{ base: '120px', md: '140px' }}>
                     <Icon as={stat.icon} boxSize={4} color="brand.accent" />
-                    <Text textStyle="metaCaption" color="whiteAlpha.700">
-                      {stat.label}
-                    </Text>
-                    <Text textStyle="cardTitle" color="white">
+                    <Text textStyle="metaCaption">{stat.label}</Text>
+                    <Text textStyle="cardTitle" color="gray.700">
                       {stat.value}
                     </Text>
                   </VStack>
@@ -318,7 +323,7 @@ const About = () => {
                 fontWeight="300"
                 fontStyle="italic"
                 fontSize={{ base: '1.4rem', md: '1.8rem' }}
-                color="white"
+                color="gray.800"
                 lineHeight="1.6"
               >
                 Have a session in mind? I'd love to hear about it.
