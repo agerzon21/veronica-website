@@ -22,7 +22,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { extractFolderId } from '../_drive.js';
-import { KEY_HEROES, KEY_FOLDER, KEY_FEATURED, KEY_SELECTED } from '../_weddings-page.js';
+import {
+  KEY_HEROES,
+  KEY_FOLDER,
+  KEY_FEATURED,
+  KEY_SELECTED,
+  FOCUS_VALUES,
+  parseFeatured,
+} from '../_weddings-page.js';
 
 const MAX_HEROES = 6;
 // Alex capped the journal strip at six; the mosaic tops out at eight tiles.
@@ -73,7 +80,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         heroes: parse(state.get(KEY_HEROES)),
         folderId: state.get(KEY_FOLDER) ?? '',
-        featuredSlugs: parse(state.get(KEY_FEATURED)),
+        // Objects with per-entry focus points; legacy slug arrays are
+        // normalized by parseFeatured with centered defaults.
+        featured: parseFeatured(state.get(KEY_FEATURED), 6),
         selectedWork: parse(state.get(KEY_SELECTED)),
       });
     }
@@ -105,12 +114,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         writes.push([KEY_FOLDER, raw]);
       }
 
-      if (req.body?.featuredSlugs !== undefined) {
-        const slugs = cleanStringArray(req.body.featuredSlugs, MAX_FEATURED, 200);
-        if (slugs === null) {
-          return res.status(400).json({ success: false, error: 'featuredSlugs must be an array of slugs' });
+      if (req.body?.featured !== undefined) {
+        const input = req.body.featured;
+        if (!Array.isArray(input)) {
+          return res.status(400).json({ success: false, error: 'featured must be an array' });
         }
-        writes.push([KEY_FEATURED, JSON.stringify(slugs)]);
+        const entries: Array<{ slug: string; focusStage: string; focusThumb: string }> = [];
+        for (const item of input) {
+          const slug = typeof item?.slug === 'string' ? item.slug.trim() : '';
+          if (!slug || slug.length > 200) {
+            return res.status(400).json({ success: false, error: 'each featured entry needs a slug' });
+          }
+          const okFocus = (v: unknown) =>
+            v === undefined || (typeof v === 'string' && (FOCUS_VALUES as readonly string[]).includes(v));
+          if (!okFocus(item.focusStage) || !okFocus(item.focusThumb)) {
+            return res.status(400).json({ success: false, error: 'invalid focus value' });
+          }
+          entries.push({
+            slug,
+            focusStage: item.focusStage ?? 'center',
+            focusThumb: item.focusThumb ?? 'center',
+          });
+        }
+        writes.push([KEY_FEATURED, JSON.stringify(entries.slice(0, MAX_FEATURED))]);
       }
 
       if (req.body?.selectedWork !== undefined) {

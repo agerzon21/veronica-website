@@ -1,6 +1,6 @@
 import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, IconButton,
-  Switch, Input, Textarea, Stack,
+  Switch, Input, Textarea, Select, Stack,
 } from '@chakra-ui/react';
 import { useEffect, useState, type ReactNode } from 'react';
 import FaBookOpen from '../icons/fa/FaBookOpen';
@@ -26,8 +26,11 @@ import { useAdminLang } from '../i18n/admin';
  *
  *   1. Page photos — six pinned hero links + the Drive sprinkle-pool
  *      folder. Saved together via weddings-settings.
- *   2. From the Journal — the ordered featured-post list (max 6),
- *      picked from published journal posts. Saved via weddings-settings.
+ *   2. From the Journal — the ordered featured-post list (max 6) for
+ *      the page's slideshow, picked from published journal posts; each
+ *      entry carries two focal-point anchors (big stage + thumbnail
+ *      strip) so cover crops stop cutting faces. Saved via
+ *      weddings-settings.
  *   3. Selected work — the ordered clickable mosaic (max 8), picked
  *      from published wedding gallery photos; each links to its
  *      /photo/weddings/<slug> page. Saved via weddings-settings.
@@ -51,10 +54,72 @@ const MAX_SELECTED_WORK = 8;
 // Add-picker page size — Alex refuses to scroll a 97-row list.
 const PICKER_PAGE_SIZE = 10;
 
+// CSS object-position keywords the focus selects may use. Mirrors the
+// FOCUS_VALUES allowlist in api/_weddings-page.ts — values land in a
+// style attribute on the public page, so only these nine are legal.
+const FOCUS_VALUES = [
+  'center',
+  'top',
+  'bottom',
+  'left',
+  'right',
+  'left top',
+  'right top',
+  'left bottom',
+  'right bottom',
+] as const;
+type FocusValue = (typeof FOCUS_VALUES)[number];
+
+// CSS value → i18n label key for the two focus selects. Kept as one
+// ordered list so both dropdowns render identically.
+const FOCUS_OPTIONS = [
+  { value: 'center', key: 'center' },
+  { value: 'top', key: 'top' },
+  { value: 'bottom', key: 'bottom' },
+  { value: 'left', key: 'left' },
+  { value: 'right', key: 'right' },
+  { value: 'left top', key: 'leftTop' },
+  { value: 'right top', key: 'rightTop' },
+  { value: 'left bottom', key: 'leftBottom' },
+  { value: 'right bottom', key: 'rightBottom' },
+] as const;
+
+// One featured journal entry: which post, plus where its cover anchors
+// in the slideshow's big stage and in the thumbnail strip.
+interface FeaturedEntry {
+  slug: string;
+  focusStage: FocusValue;
+  focusThumb: FocusValue;
+}
+
+const asFocus = (v: unknown): FocusValue =>
+  typeof v === 'string' && (FOCUS_VALUES as readonly string[]).includes(v)
+    ? (v as FocusValue)
+    : 'center';
+
+/** Defensive parse of the settings `featured` array into typed entries. */
+function parseFeaturedEntries(input: unknown): FeaturedEntry[] {
+  if (!Array.isArray(input)) return [];
+  const out: FeaturedEntry[] = [];
+  for (const item of input) {
+    const slug =
+      item && typeof item === 'object' && typeof (item as { slug?: unknown }).slug === 'string'
+        ? ((item as { slug: string }).slug || '').trim()
+        : '';
+    if (!slug) continue;
+    out.push({
+      slug,
+      focusStage: asFocus((item as { focusStage?: unknown }).focusStage),
+      focusThumb: asFocus((item as { focusThumb?: unknown }).focusThumb),
+    });
+  }
+  return out;
+}
+
 interface WeddingsSettings {
   heroes: string[];
   folderId: string;
-  featuredSlugs: string[];
+  featured: FeaturedEntry[];
   selectedWork: string[];
 }
 
@@ -160,7 +225,7 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
         setSettings({
           heroes: Array.isArray(data.heroes) ? data.heroes : [],
           folderId: typeof data.folderId === 'string' ? data.folderId : '',
-          featuredSlugs: Array.isArray(data.featuredSlugs) ? data.featuredSlugs : [],
+          featured: parseFeaturedEntries(data.featured),
           selectedWork: Array.isArray(data.selectedWork) ? data.selectedWork : [],
         });
       } else {
@@ -238,7 +303,7 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
           />
           <JournalCard
             adminPassword={adminPassword}
-            initialFeatured={settings.featuredSlugs}
+            initialFeatured={settings.featured}
           />
           <SelectedWorkCard
             adminPassword={adminPassword}
@@ -393,12 +458,14 @@ function JournalCard({
   initialFeatured,
 }: {
   adminPassword: string;
-  initialFeatured: string[];
+  initialFeatured: FeaturedEntry[];
 }) {
   const { t } = useAdminLang();
   const toast = useToast();
   const [posts, setPosts] = useState<JournalPostRow[] | null>(null);
-  const [order, setOrder] = useState<string[]>(initialFeatured.slice(0, MAX_FEATURED));
+  const [entries, setEntries] = useState<FeaturedEntry[]>(
+    initialFeatured.slice(0, MAX_FEATURED),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,7 +504,7 @@ function JournalCard({
   }, [adminPassword]);
 
   const move = (index: number, delta: -1 | 1) =>
-    setOrder((cur) => {
+    setEntries((cur) => {
       const target = index + delta;
       if (target < 0 || target >= cur.length) return cur;
       const next = [...cur];
@@ -445,10 +512,19 @@ function JournalCard({
       return next;
     });
 
-  const remove = (slug: string) => setOrder((cur) => cur.filter((s) => s !== slug));
+  const remove = (slug: string) => setEntries((cur) => cur.filter((e) => e.slug !== slug));
 
+  // Adding via the picker creates a centered entry — Vero adjusts the
+  // two anchors afterwards only when a crop actually cuts something.
   const add = (slug: string) =>
-    setOrder((cur) => (cur.length >= MAX_FEATURED || cur.includes(slug) ? cur : [...cur, slug]));
+    setEntries((cur) =>
+      cur.length >= MAX_FEATURED || cur.some((e) => e.slug === slug)
+        ? cur
+        : [...cur, { slug, focusStage: 'center', focusThumb: 'center' }],
+    );
+
+  const setFocus = (slug: string, field: 'focusStage' | 'focusThumb', value: FocusValue) =>
+    setEntries((cur) => cur.map((e) => (e.slug === slug ? { ...e, [field]: value } : e)));
 
   const handleSave = async () => {
     setSaving(true);
@@ -460,7 +536,9 @@ function JournalCard({
         body: JSON.stringify({
           password: adminPassword,
           action: 'set',
-          featuredSlugs: order,
+          // Full objects, in display order — the API validates each
+          // focus value against its FOCUS_VALUES allowlist.
+          featured: entries,
         }),
       });
       const data = await res.json();
@@ -477,8 +555,8 @@ function JournalCard({
   };
 
   const bySlug = new Map((posts ?? []).map((p) => [p.slug, p]));
-  const available = (posts ?? []).filter((p) => !order.includes(p.slug));
-  const atCap = order.length >= MAX_FEATURED;
+  const available = (posts ?? []).filter((p) => !entries.some((e) => e.slug === p.slug));
+  const atCap = entries.length >= MAX_FEATURED;
 
   return (
     <SectionCard
@@ -497,10 +575,16 @@ function JournalCard({
           py={0.5}
           borderRadius="sm"
         >
-          {t.weddings.featuredCount(order.length, MAX_FEATURED)}
+          {t.weddings.featuredCount(entries.length, MAX_FEATURED)}
         </Badge>
       }
     >
+      {/* What the two focus selects are for — sits above the list so
+          the controls below explain themselves. */}
+      <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" mb={4}>
+        {t.weddings.focusHelp}
+      </Text>
+
       {error && <ErrorBox message={error} />}
 
       {loading ? (
@@ -512,18 +596,18 @@ function JournalCard({
           {/* Featured list — ordered; a slug whose post got unpublished
               or deleted still renders (as "unavailable") so it can be
               removed rather than silently lingering in settings. */}
-          {order.length === 0 ? (
+          {entries.length === 0 ? (
             <Text fontSize="sm" color="gray.500" fontWeight="300" py={2}>
               {t.weddings.featuredEmpty}
             </Text>
           ) : (
             <VStack spacing={2} align="stretch">
-              {order.map((slug, i) => {
-                const post = bySlug.get(slug);
+              {entries.map((entry, i) => {
+                const post = bySlug.get(entry.slug);
                 return (
                   <Flex
-                    key={slug}
-                    align="center"
+                    key={entry.slug}
+                    align="flex-start"
                     gap={3}
                     bg="gray.50"
                     border="1px solid"
@@ -532,16 +616,36 @@ function JournalCard({
                     p={2}
                   >
                     <PostThumb coverUrl={post?.cover_image_url ?? null} />
-                    <Text
-                      flex={1}
-                      minW={0}
-                      fontSize="sm"
-                      fontWeight="500"
-                      color={post ? 'gray.800' : 'orange.600'}
-                      noOfLines={1}
-                    >
-                      {post ? post.title : t.weddings.unavailablePost(slug)}
-                    </Text>
+                    <Box flex={1} minW={0}>
+                      <Text
+                        fontSize="sm"
+                        fontWeight="500"
+                        color={post ? 'gray.800' : 'orange.600'}
+                        noOfLines={1}
+                        pt={1}
+                      >
+                        {post ? post.title : t.weddings.unavailablePost(entry.slug)}
+                      </Text>
+                      {/* The two focal-point anchors — side by side when
+                          there's room, stacked under the title on narrow
+                          widths so the row never overflows. */}
+                      <Stack
+                        direction={{ base: 'column', sm: 'row' }}
+                        spacing={{ base: 1.5, sm: 4 }}
+                        mt={1.5}
+                      >
+                        <FocusSelect
+                          label={t.weddings.focusStageLabel}
+                          value={entry.focusStage}
+                          onChange={(v) => setFocus(entry.slug, 'focusStage', v)}
+                        />
+                        <FocusSelect
+                          label={t.weddings.focusThumbLabel}
+                          value={entry.focusThumb}
+                          onChange={(v) => setFocus(entry.slug, 'focusThumb', v)}
+                        />
+                      </Stack>
+                    </Box>
                     <HStack spacing={0} flexShrink={0}>
                       <IconButton
                         aria-label={t.weddings.moveUpAria}
@@ -560,7 +664,7 @@ function JournalCard({
                         aria-label={t.weddings.moveDownAria}
                         icon={<Icon as={FaChevronDown} boxSize={3} />}
                         onClick={() => move(i, 1)}
-                        isDisabled={i === order.length - 1}
+                        isDisabled={i === entries.length - 1}
                         variant="ghost"
                         size="sm"
                         minW="40px"
@@ -572,7 +676,7 @@ function JournalCard({
                       <IconButton
                         aria-label={t.weddings.removeAria}
                         icon={<Icon as={FaTimes} boxSize={3.5} />}
-                        onClick={() => remove(slug)}
+                        onClick={() => remove(entry.slug)}
                         variant="ghost"
                         size="sm"
                         minW="40px"
@@ -619,6 +723,48 @@ function JournalCard({
         </>
       )}
     </SectionCard>
+  );
+}
+
+// One labeled focal-point dropdown. Compact on purpose — a pair of
+// these sits inside every featured row.
+function FocusSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: FocusValue;
+  onChange: (v: FocusValue) => void;
+}) {
+  const { t } = useAdminLang();
+  return (
+    <HStack spacing={1.5} align="center">
+      <Text
+        fontSize="2xs"
+        fontWeight="500"
+        textTransform="uppercase"
+        letterSpacing="0.1em"
+        color="gray.500"
+        whiteSpace="nowrap"
+      >
+        {label}
+      </Text>
+      <Select
+        value={value}
+        onChange={(e) => onChange(e.target.value as FocusValue)}
+        aria-label={label}
+        size={{ base: 'md', md: 'sm' } as any}
+        maxW="160px"
+        {...inputStyles}
+      >
+        {FOCUS_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {t.weddings.focusOptions[opt.key]}
+          </option>
+        ))}
+      </Select>
+    </HStack>
   );
 }
 

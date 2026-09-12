@@ -76,6 +76,18 @@ interface FeaturedPost {
   cover_image_url: string | null;
   published_at: string;
   session_type: string | null;
+  tags?: string[];
+}
+
+/** One slide in the journal slideshow, joined from settings + journal. */
+interface FeaturedItem {
+  slug: string;
+  title: string;
+  cover: string | null;
+  /** Vero tags advice articles with "advice"; everything else is a wedding. */
+  label: 'Advice' | 'Real Wedding';
+  focusStage: string;
+  focusThumb: string;
 }
 
 /** Fisher-Yates. Runtime-only (inside an effect) — never at module init. */
@@ -90,9 +102,37 @@ function shuffled<T>(arr: T[]): T[] {
 
 const SPRINKLE_ALT = 'Wedding photography by Veronika Gerzon';
 
-/** Journal covers arrive as w800 thumbs; the index preview renders big. */
+/** Journal covers arrive as w800 thumbs; the slideshow stage renders big. */
 const coverLarge = (url: string | null): string =>
   url ? url.replace(/([?&]sz=)w\d+/, '$1w2000') : '';
+
+/**
+ * The type chip over a slide. Width hugs the text — the box ends where
+ * the words end (Alex's screenshot note), never stretching to the title
+ * width. Gold-filled for advice articles, hairline-outlined for real
+ * weddings.
+ */
+function JournalLabel({ label }: { label: 'Advice' | 'Real Wedding' }) {
+  return (
+    <Box
+      alignSelf="flex-start"
+      w="fit-content"
+      fontSize="10px"
+      fontWeight="500"
+      letterSpacing="0.18em"
+      textTransform="uppercase"
+      px={2}
+      py={1}
+      borderRadius="2px"
+      border="1px solid"
+      borderColor={label === 'Advice' ? 'transparent' : 'whiteAlpha.600'}
+      bg={label === 'Advice' ? 'rgba(201,169,110,0.92)' : 'transparent'}
+      color={label === 'Advice' ? '#1c1509' : 'white'}
+    >
+      {label}
+    </Box>
+  );
+}
 
 const Weddings = () => {
   const introRef = useRef<HTMLDivElement>(null);
@@ -103,10 +143,21 @@ const Weddings = () => {
   const [heroes, setHeroes] = useState<WPhoto[]>([]);
   const [pool, setPool] = useState<WPhoto[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [featured, setFeatured] = useState<FeaturedPost[]>([]);
+  const [featured, setFeatured] = useState<FeaturedItem[]>([]);
   const [selectedWork, setSelectedWork] = useState<Array<{ slug: string; url: string; alt: string }>>([]);
-  // Which journal pick the desktop index is previewing (hover-driven).
-  const [journalIdx, setJournalIdx] = useState(0);
+  // Journal slideshow: active slide + hover-pause for the autoplay.
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [slidePaused, setSlidePaused] = useState(false);
+
+  useEffect(() => {
+    if (featured.length < 2 || slidePaused) return;
+    // Re-created whenever slideIdx changes, so a manual thumb/dot click
+    // earns a full interval before the next auto-advance.
+    const t = setInterval(() => {
+      setSlideIdx((i) => (i + 1) % featured.length);
+    }, 4800);
+    return () => clearInterval(t);
+  }, [featured.length, slidePaused, slideIdx]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,15 +176,38 @@ const Weddings = () => {
         setVendors(Array.isArray(data.vendors) ? data.vendors : []);
         setSelectedWork(Array.isArray(data.selectedWork) ? data.selectedWork : []);
 
-        const slugs: string[] = Array.isArray(data.featuredSlugs) ? data.featuredSlugs : [];
-        if (slugs.length > 0) {
+        // Featured entries carry per-entry focal points; fall back to the
+        // legacy slug array for a stale edge-cached payload.
+        const entries: Array<{ slug: string; focusStage?: string; focusThumb?: string }> =
+          Array.isArray(data.featured)
+            ? data.featured
+            : Array.isArray(data.featuredSlugs)
+              ? data.featuredSlugs.map((s: string) => ({ slug: s }))
+              : [];
+        if (entries.length > 0) {
           const jr = await fetch('/api/journal/list');
           const jd = await jr.json();
           if (cancelled || !jr.ok || !jd.success) return;
           const bySlug = new Map<string, FeaturedPost>(
             (jd.posts as FeaturedPost[]).map((p) => [p.slug, p]),
           );
-          setFeatured(slugs.map((s) => bySlug.get(s)).filter((p): p is FeaturedPost => Boolean(p)));
+          setFeatured(
+            entries
+              .map((e) => {
+                const p = bySlug.get(e.slug);
+                if (!p) return null;
+                const isAdvice = (p.tags ?? []).some((t) => /advice|guide/i.test(t));
+                return {
+                  slug: p.slug,
+                  title: p.title,
+                  cover: p.cover_image_url,
+                  label: isAdvice ? ('Advice' as const) : ('Real Wedding' as const),
+                  focusStage: e.focusStage ?? 'center',
+                  focusThumb: e.focusThumb ?? 'center',
+                };
+              })
+              .filter((p): p is FeaturedItem => Boolean(p)),
+          );
         }
       } catch {
         // Static page still stands on its own; photo bands just stay out.
@@ -466,16 +540,16 @@ const Weddings = () => {
           />
         </Box>
       )}
-
-      {/* ─── From the Journal — an editorial index, not a card strip.
-          Desktop: the six titles as a numbered serif list; hovering a
-          title crossfades its cover into the preview frame beside it
-          (CSS opacity only — no motion machinery, LazyMotion-safe).
-          Mobile: a two-column card grid that scrolls vertically like
-          the rest of the page — no sideways gesture to discover. ─── */}
+      {/* ─── From the Journal — the slow slideshow (Alex's pick, option 8).
+          One grand stage crossfading through the picks every ~5s, the
+          title and a type label over the photo, dots to jump, and a
+          thumbnail strip beneath (single row on desktop, 3-across grid
+          on phones — no hidden sideways scrolling). Per-entry focal
+          points from the admin keep faces out of the crop, on both the
+          stage and the thumbs. CSS opacity transitions only. ─── */}
       {featured.length > 0 && (
-        <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 6, md: 12 }}>
-          <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
+        <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 4, md: 12 }}>
+          <VStack spacing={3} mb={{ base: 8, md: 10 }} textAlign="center">
             <Text textStyle="eyebrow">From the Journal</Text>
             <Box w="35px" h="1px" bg="brand.accent" />
             <Text textStyle="bodyCopy" color="gray.600" maxW="560px">
@@ -483,130 +557,159 @@ const Weddings = () => {
             </Text>
           </VStack>
 
-          {/* Desktop index */}
-          <Grid
-            display={{ base: 'none', lg: 'grid' }}
-            templateColumns="7fr 5fr"
-            gap={{ lg: 14 }}
-            maxW="1100px"
-            mx="auto"
-            alignItems="stretch"
-          >
-            <Flex direction="column" justify="center" borderTop="1px solid" borderColor="brand.accentBorder">
-              {featured.map((post, i) => (
-                <Box
-                  key={post.slug}
-                  as={RouterLink}
-                  to={`/journal/${post.slug}`}
-                  state={{ back: { to: '/wedding-photography', label: 'Back to weddings' } }}
-                  role="group"
-                  onMouseEnter={() => setJournalIdx(i)}
-                  onFocus={() => setJournalIdx(i)}
-                  py={4}
-                  borderBottom="1px solid"
-                  borderColor="brand.accentBorder"
-                >
-                  <HStack spacing={5} align="baseline">
-                    <Text
-                      fontFamily="heading"
-                      fontWeight="300"
-                      fontSize="sm"
-                      color={i === journalIdx ? 'brand.accent' : 'gray.400'}
-                      transition="color 0.25s ease"
-                      minW="26px"
-                    >
-                      {String(i + 1).padStart(2, '0')}
-                    </Text>
-                    <Text
-                      fontFamily="heading"
-                      fontWeight="300"
-                      fontSize="1.3rem"
-                      lineHeight="1.35"
-                      color={i === journalIdx ? 'gray.900' : 'gray.500'}
-                      transition="color 0.25s ease"
-                      noOfLines={2}
-                      flex="1"
-                    >
-                      {post.title}
-                    </Text>
-                    <Icon
-                      as={FaArrowRight}
-                      boxSize={3}
-                      color="brand.accentText"
-                      opacity={i === journalIdx ? 1 : 0}
-                      transform={i === journalIdx ? 'translateX(0)' : 'translateX(-6px)'}
-                      transition="opacity 0.25s ease, transform 0.25s ease"
-                    />
-                  </HStack>
-                </Box>
-              ))}
-              <Box pt={5}>
-                <CTAButton to="/journal" variant="ghost" size="sm">
-                  View the full journal
-                </CTAButton>
-              </Box>
-            </Flex>
-
-            {/* Preview frame — all covers stacked, active one visible */}
-            <Box position="relative" overflow="hidden" borderRadius="sm" bg="brand.surface" minH="460px">
-              {featured.map((post, i) => (
-                <Image
-                  key={post.slug}
-                  src={coverLarge(post.cover_image_url)}
-                  alt=""
-                  position="absolute"
-                  inset={0}
-                  w="100%"
-                  h="100%"
-                  objectFit="cover"
-                  opacity={i === journalIdx ? 1 : 0}
-                  transition="opacity 0.45s ease"
-                  loading="lazy"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              ))}
-            </Box>
-          </Grid>
-
-          {/* Mobile / tablet: tidy vertical card grid */}
-          <SimpleGrid display={{ base: 'grid', lg: 'none' }} columns={2} spacing={{ base: 3, md: 4 }} maxW="720px" mx="auto">
-            {featured.map((post) => (
-              <Box
-                key={post.slug}
-                as={RouterLink}
-                to={`/journal/${post.slug}`}
-                state={{ back: { to: '/wedding-photography', label: 'Back to weddings' } }}
-              >
-                <Box aspectRatio={4 / 3} overflow="hidden" borderRadius="sm" bg="brand.surface">
-                  {post.cover_image_url && (
+          <Box maxW="1150px" mx="auto">
+            {/* Stage */}
+            <Box
+              position="relative"
+              h={{ base: '46vh', md: '470px' }}
+              borderRadius="sm"
+              overflow="hidden"
+              bg="brand.surface"
+              onMouseEnter={() => setSlidePaused(true)}
+              onMouseLeave={() => setSlidePaused(false)}
+            >
+              {featured.map((p, i) => {
+                const active = i === Math.min(slideIdx, featured.length - 1);
+                return (
+                  <Box
+                    key={p.slug}
+                    as={RouterLink}
+                    to={`/journal/${p.slug}`}
+                    state={{ back: { to: '/wedding-photography', label: 'Back to weddings' } }}
+                    position="absolute"
+                    inset={0}
+                    opacity={active ? 1 : 0}
+                    transition="opacity 0.8s ease"
+                    pointerEvents={active ? 'auto' : 'none'}
+                  >
                     <Image
-                      src={post.cover_image_url}
+                      src={coverLarge(p.cover)}
                       alt=""
                       w="100%"
                       h="100%"
                       objectFit="cover"
-                      loading="lazy"
+                      objectPosition={p.focusStage}
+                      loading={i === 0 ? undefined : 'lazy'}
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}
                     />
-                  )}
+                    <Box
+                      position="absolute"
+                      inset={0}
+                      bg="linear-gradient(180deg, transparent 55%, rgba(10,8,4,0.68) 100%)"
+                    />
+                    <Flex position="absolute" inset={0} align="flex-end" p={{ base: 4, md: 8 }}>
+                      <VStack align="flex-start" spacing={{ base: 1.5, md: 2.5 }}>
+                        <JournalLabel label={p.label} />
+                        <Text
+                          fontFamily="heading"
+                          fontWeight="400"
+                          color="white"
+                          fontSize={{ base: 'xl', md: '3xl' }}
+                          lineHeight="1.2"
+                          noOfLines={2}
+                          textShadow="0 1px 12px rgba(0,0,0,0.45)"
+                        >
+                          {p.title}
+                        </Text>
+                      </VStack>
+                    </Flex>
+                  </Box>
+                );
+              })}
+
+              {/* Dots */}
+              <HStack position="absolute" right={{ base: 3, md: 6 }} bottom={{ base: 3, md: 6 }} spacing={2} zIndex={2}>
+                {featured.map((p, i) => (
+                  <Box
+                    key={p.slug}
+                    as="button"
+                    type="button"
+                    aria-label={p.title}
+                    onClick={() => setSlideIdx(i)}
+                    w={i === slideIdx ? '9px' : '7px'}
+                    h={i === slideIdx ? '9px' : '7px'}
+                    borderRadius="full"
+                    bg={i === slideIdx ? 'brand.accent' : 'whiteAlpha.600'}
+                    border="none"
+                    p={0}
+                    cursor="pointer"
+                    transition="all 0.3s ease"
+                  />
+                ))}
+              </HStack>
+            </Box>
+
+            {/* Thumbnail strip: one row on desktop, 3-across grid on phones */}
+            <Grid
+              templateColumns={{ base: 'repeat(3, 1fr)', md: `repeat(${featured.length}, 1fr)` }}
+              gap={{ base: 2, md: 2.5 }}
+              mt={{ base: 2.5, md: 3.5 }}
+            >
+              {featured.map((p, i) => (
+                <Box
+                  key={p.slug}
+                  as="button"
+                  type="button"
+                  aria-label={p.title}
+                  onClick={() => setSlideIdx(i)}
+                  position="relative"
+                  h={{ base: '58px', md: '66px' }}
+                  borderRadius="sm"
+                  overflow="hidden"
+                  bg="brand.surface"
+                  border="none"
+                  p={0}
+                  cursor="pointer"
+                  opacity={i === slideIdx ? 1 : 0.5}
+                  boxShadow={i === slideIdx ? 'inset 0 0 0 2px var(--chakra-colors-brand-accent)' : undefined}
+                  transition="opacity 0.3s ease"
+                  _hover={{ opacity: 1 }}
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <Image
+                    src={p.cover ?? undefined}
+                    alt=""
+                    w="100%"
+                    h="100%"
+                    objectFit="cover"
+                    objectPosition={p.focusThumb}
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <Box
+                    position="absolute"
+                    left={1.5}
+                    bottom={1.5}
+                    fontSize="8px"
+                    fontWeight="500"
+                    letterSpacing="0.12em"
+                    textTransform="uppercase"
+                    px={1.5}
+                    py={0.5}
+                    borderRadius="2px"
+                    bg={p.label === 'Advice' ? 'rgba(201,169,110,0.92)' : 'blackAlpha.600'}
+                    color={p.label === 'Advice' ? '#1c1509' : 'white'}
+                  >
+                    {p.label}
+                  </Box>
                 </Box>
-                <Text textStyle="cardTitle" fontSize="sm" mt={2} noOfLines={2}>
-                  {post.title}
-                </Text>
-              </Box>
-            ))}
-          </SimpleGrid>
-          <Flex justify="center" mt={{ base: 6, md: 8 }} display={{ base: 'flex', lg: 'none' }}>
-            <CTAButton to="/journal" variant="ghost" size="sm">
-              View the full journal
-            </CTAButton>
-          </Flex>
+              ))}
+            </Grid>
+
+            <Flex justify="center" mt={{ base: 6, md: 8 }}>
+              <CTAButton to="/journal" variant="ghost" size="sm">
+                View the full journal
+              </CTAButton>
+            </Flex>
+          </Box>
         </Box>
       )}
+
+
 
       {/* ─── Sprinkle: stagger ─── */}
       {slots.stagger.length === 2 && (
