@@ -1,30 +1,31 @@
 {
-  "broadNote": "Every wedding is different. These are starting points, not boxes: each package trims down for a quieter day or builds up with more hours, a second photographer, and add-ons.",
+  "broadNote": "Every wedding is different. These are starting points, not boxes: each package trims down for a quieter day or builds up with more hours and a second photographer. The exact quote depends on your guest count, locations, and travel, and it is always confirmed before you book.",
   "packages": [
     {
       "name": "Intimate Wedding",
       "price": "from $500",
       "coverage": "Up to 3 hours",
       "tagline": "Elopements, small ceremonies, and quiet celebrations.",
+      "buildsOn": "",
       "includes": [
-        "Ceremony",
-        "Couple portraits",
-        "Family and group photos",
-        "Details and candid moments"
+        "Ceremony, couple portraits, and family photos",
+        "Details and candid moments in between",
+        "Every delivered photo professionally color corrected",
+        "A set of fully retouched photos you choose",
+        "Private online gallery with a print release"
       ]
     },
     {
       "name": "Wedding Day",
       "price": "from $900",
       "coverage": "Up to 6 hours",
-      "tagline": "The main chapters of the day, without full-day coverage.",
+      "tagline": "The main chapters, from getting ready into the reception.",
+      "buildsOn": "Everything in Intimate Wedding, plus",
       "includes": [
-        "Getting ready",
-        "First look",
-        "Ceremony",
-        "Family and wedding party photos",
-        "Couple portraits",
-        "Beginning of the reception"
+        "Getting ready and the first look",
+        "The full ceremony and your wedding party",
+        "A longer couple session in the best light",
+        "The start of your reception"
       ]
     },
     {
@@ -32,23 +33,23 @@
       "price": "from $1,200",
       "coverage": "Up to 8 hours",
       "tagline": "The whole story, from the quiet morning to the dance floor.",
+      "buildsOn": "Everything in Wedding Day, plus",
       "includes": [
-        "Everything in Wedding Day",
-        "Reception and grand entrance",
-        "First dance, speeches, and toasts",
-        "Cake cutting",
-        "Candid moments throughout the day"
+        "Your reception's big moments, into the dancing",
+        "Speeches, traditions, and the party as it happens",
+        "Complimentary drone clips when venue and weather allow",
+        "The complete story of the day, told in full"
       ]
     }
   ],
   "addOns": [
     {
-      "name": "Additional coverage",
-      "detail": "$150 per hour, on any package."
+      "name": "More hours",
+      "detail": "Any package extends at $150 per hour, so a timeline that runs long is never a problem."
     },
     {
       "name": "Second photographer",
-      "detail": "From $1,300 for 6 hours or $1,700 for 8. Worth it for large guest lists, separate getting-ready locations, busy timelines, and when you simply want more candid coverage of your guests."
+      "detail": "Add a second photographer to Wedding Day for $400 or to Full Wedding Day for $500, bringing them to $1,300 and $1,700 total. Two sets of eyes means more angles, more of your guests, and the moments one camera can't be everywhere for."
     }
   ],
   "travel": "Travel within about two hours of the Scranton and Poconos area is included in every package. Weddings across Pennsylvania, New Jersey, New York, and beyond are welcome. Longer distances are quoted individually up front, and destination weddings get a custom quote.",
@@ -60,7 +61,7 @@
     },
     {
       "q": "How much does wedding photography cost?",
-      "a": "Coverage starts at $500 for an intimate wedding and $1,200 for a full day. Every package can be tailored, trimmed down for a small ceremony or extended with more hours and a second photographer. Your final price is confirmed before you book."
+      "a": "Coverage starts at $500 for an intimate wedding and $1,200 for a full day. Every package can be tailored, trimmed down for a small ceremony or extended with more hours and a second photographer. Your final price depends on your guest count, locations, and travel, and it is confirmed before you book."
     },
     {
       "q": "Do you require a deposit?",
@@ -68,7 +69,7 @@
     },
     {
       "q": "What exactly do we receive?",
-      "a": "Every delivered photo is professionally color corrected, and your package includes a set of fully retouched photos that you pick yourself. RAW files are not included, and advanced retouching beyond the included set can always be added."
+      "a": "Every delivered photo is professionally color corrected, and your package includes a set of fully retouched photos that you pick yourself. Photos arrive in a private online gallery with a print release, so you can print and share them anywhere. RAW files are not included, and advanced retouching beyond the included set can always be added."
     },
     {
       "q": "What is the difference between color correction and retouching?",
