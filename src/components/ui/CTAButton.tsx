@@ -8,7 +8,12 @@ import type { IconType } from 'react-icons';
 // "Leave a Review looks different from Book a Session" mess. Don't do that.
 // Every CTA goes through this component; if it can't, fix the component.
 
-type Variant = 'outline' | 'solid' | 'ghost' | 'danger';
+// 'tab' / 'tabMuted' are the pair Alex picked for About (D8): a hairline plate
+// with a solid gold spine down its left edge, like the marker beside a printed
+// caption. The spine thickens on hover. 'tab' is the emphasized one; 'tabMuted'
+// carries a grey spine that warms to gold, so a pair reads as primary +
+// secondary without changing shape.
+type Variant = 'outline' | 'solid' | 'ghost' | 'danger' | 'tab' | 'tabMuted';
 type Tone = 'light' | 'dark';
 type Size = 'sm' | 'md' | 'lg';
 
@@ -58,6 +63,12 @@ interface CTAButtonProps {
 const GOLD = '#c9a96e';
 const GOLD_HOVER = '#d4b87a';
 const GOLD_ACTIVE = '#b8964f';
+// Same two tokens as brand.accentBorder / brand.accentText in the theme. They
+// are repeated as literals here for the same reason the golds above are: this
+// file's style objects are plain values, not Chakra props resolved per key.
+const GOLD_BORDER = '#e8d9a8';
+const GOLD_TEXT = '#8a6e35';
+const SPINE_MUTED = 'rgba(43, 39, 36, 0.3)';
 const DANGER = '#c53030';
 const DANGER_HOVER = '#e53e3e';
 const DANGER_ACTIVE = '#9b2c2c';
@@ -125,6 +136,43 @@ const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
       _active: { bg: 'rgba(201, 169, 110, 0.15)' },
     };
   }
+  if (variant === 'tab' || variant === 'tabMuted') {
+    return {
+      // The spine is a pseudo-element pulled out over the left border, so it
+      // reads as one continuous edge rather than a stripe sitting inside a box.
+      position: 'relative',
+      bg: 'transparent',
+      color: variant === 'tab' ? 'gray.700' : tone === 'dark' ? 'gray.300' : 'gray.600',
+      border: '1px solid',
+      borderColor: GOLD_BORDER,
+      _before: {
+        content: '""',
+        position: 'absolute',
+        left: '-1px',
+        top: '-1px',
+        bottom: '-1px',
+        width: '5px',
+        bg: variant === 'tab' ? GOLD : SPINE_MUTED,
+        transition: 'width 0.4s cubic-bezier(0.22, 1, 0.36, 1), background 0.35s ease',
+      },
+      _hover: {
+        color: GOLD_TEXT,
+        borderColor: GOLD,
+        textDecoration: 'none',
+        _before: { width: '11px', bg: GOLD },
+      },
+      _active: { bg: 'rgba(201, 169, 110, 0.12)' },
+      // No hover on a phone, so the spine can't be the thing that arrives on
+      // interaction. Both spines sit at their halfway width and the muted one
+      // goes gold, which is what the picked mock showed on mobile.
+      sx: {
+        '@media (hover: none)': {
+          '&::before': { width: '8px', background: GOLD },
+        },
+      },
+    };
+  }
+
   if (variant === 'danger') {
     return {
       bg: 'transparent',
@@ -183,6 +231,10 @@ const CTAButton = ({
   // `not-allowed` for disabled, `pointer` otherwise) so the reason is
   // visible on hover.
   const inactive = isLoading || isDisabled;
+  // A variant may carry its own `sx` (the tab pair uses one for its no-hover
+  // media query). The literal `sx` at the bottom of this object would silently
+  // clobber it, so pull it out here and merge the two.
+  const { sx: variantSx, ...variantStyle } = variantStyles(variant, tone);
   const common = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -198,7 +250,7 @@ const CTAButton = ({
     whiteSpace: (wrapText ? 'normal' : 'nowrap') as 'normal' | 'nowrap',
     textAlign: 'center' as const,
     ...sizeStyles[size],
-    ...variantStyles(variant, tone),
+    ...variantStyle,
     ...(h !== undefined ? { h } : {}),
     ...(flex !== undefined ? { flex } : {}),
     ...(fullWidth
@@ -211,7 +263,7 @@ const CTAButton = ({
             ),
           }
       : {}),
-    sx: { WebkitTapHighlightColor: 'transparent' },
+    sx: { WebkitTapHighlightColor: 'transparent', ...variantSx },
   };
 
   const content = (

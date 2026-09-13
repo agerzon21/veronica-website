@@ -4,7 +4,7 @@ import FaCamera from '../icons/fa/FaCamera';
 import FaGlobe from '../icons/fa/FaGlobe';
 import { Helmet } from 'react-helmet-async';
 import { m, useInView } from 'framer-motion';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
 
@@ -28,13 +28,137 @@ const MotionDiv = m.div;
 
 const FADE_IN = { duration: 0.75, ease: 'easeOut' } as const;
 
+const STATS = [
+  { label: 'Based in', value: 'Scranton, PA', icon: FaMapMarkerAlt },
+  // countTo drives the tick-up; suffix is everything the number is not, so
+  // the label reads correctly at every frame of the count.
+  { label: 'Experience', value: '12+ Years', icon: FaCamera, countTo: 12, suffix: '+ Years' },
+  { label: 'Available', value: 'Worldwide', icon: FaGlobe },
+] as const;
+
+/**
+ * The years figure counts up once the band is on screen. Until it starts it
+ * renders the real string, so a crawler, a JS-off visitor, or a headless
+ * browser (where requestAnimationFrame never fires) all still read
+ * "12+ Years" rather than "0+ Years".
+ */
+const COUNT_MS = 950;
+
+const StatValue = ({
+  value,
+  countTo,
+  suffix,
+  play,
+}: {
+  value: string;
+  countTo?: number;
+  suffix?: string;
+  play: boolean;
+}) => {
+  const [n, setN] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!play || countTo === undefined) return;
+    let raf = 0;
+    let start: number | null = null;
+    const step = (t: number) => {
+      if (start === null) start = t;
+      const p = Math.min(1, (t - start) / COUNT_MS);
+      // easeOutCubic — quick off the mark, settles rather than stopping dead.
+      setN(Math.round(countTo * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    // Backstop: if rAF never fires (headless Chrome does exactly this), the
+    // figure still lands on its real value instead of sitting at zero.
+    const settle = setTimeout(() => setN(countTo), COUNT_MS + 150);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(settle);
+    };
+  }, [play, countTo]);
+
+  return (
+    <Text textStyle="cardTitle" color="gray.700" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+      {n === null ? value : `${n}${suffix ?? ''}`}
+    </Text>
+  );
+};
+
+/**
+ * Three facts that arrive one after another rather than all at once: each
+ * block rises out from behind its own mask, the hairlines between them draw
+ * downward, and the years figure ticks up to twelve.
+ */
+const StatsBand = () => {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.5 });
+
+  return (
+    <Flex
+      ref={ref}
+      gap={{ base: 8, md: 16 }}
+      direction={{ base: 'column', sm: 'row' }}
+      align="center"
+      justify="center"
+      w="100%"
+    >
+      {STATS.map((stat, i, arr) => (
+        <Flex key={stat.label} align="center" gap={{ base: 8, md: 16 }}>
+          <VStack spacing={2} minW={{ base: '120px', md: '140px' }}>
+            <MotionDiv
+              initial={{ opacity: 0, scale: 0.75 }}
+              animate={inView ? { opacity: 1, scale: 1 } : {}}
+              transition={{ duration: 0.5, ease: 'easeOut', delay: i * 0.14 }}
+            >
+              <Icon as={stat.icon} boxSize={4} color="brand.accent" display="block" />
+            </MotionDiv>
+            {/* overflow hidden is the mask the two lines slide up out of. */}
+            <Box overflow="hidden">
+              <MotionDiv
+                initial={{ y: '110%' }}
+                animate={inView ? { y: '0%' } : {}}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: i * 0.14 + 0.1 }}
+              >
+                <Text textStyle="metaCaption">{stat.label}</Text>
+              </MotionDiv>
+            </Box>
+            <Box overflow="hidden">
+              <MotionDiv
+                initial={{ y: '110%' }}
+                animate={inView ? { y: '0%' } : {}}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: i * 0.14 + 0.18 }}
+              >
+                <StatValue
+                  value={stat.value}
+                  countTo={'countTo' in stat ? stat.countTo : undefined}
+                  suffix={'suffix' in stat ? stat.suffix : undefined}
+                  play={inView}
+                />
+              </MotionDiv>
+            </Box>
+          </VStack>
+          {i < arr.length - 1 && (
+            <MotionDiv
+              style={{ transformOrigin: 'top' }}
+              initial={{ scaleY: 0 }}
+              animate={inView ? { scaleY: 1 } : {}}
+              transition={{ duration: 0.5, ease: 'easeOut', delay: i * 0.14 + 0.34 }}
+            >
+              <Box display={{ base: 'none', sm: 'block' }} w="1px" h="50px" bg="brand.accent" opacity={0.3} />
+            </MotionDiv>
+          )}
+        </Flex>
+      ))}
+    </Flex>
+  );
+};
+
 const About = () => {
   const approachRef = useRef<HTMLDivElement>(null);
   const isApproachInView = useInView(approachRef, { once: true, amount: 0.15 });
   const angleRef = useRef<HTMLDivElement>(null);
   const isAngleInView = useInView(angleRef, { once: true, amount: 0.15 });
-  const ctaRef = useRef<HTMLDivElement>(null);
-  const isCtaInView = useInView(ctaRef, { once: true, amount: 0.3 });
 
   return (
     <Box minH="100vh" overflowX="clip">
@@ -202,10 +326,10 @@ const About = () => {
                     image. I know how to guide you naturally because I have been in your shoes.
                   </Text>
                   <HStack spacing={4} flexWrap="wrap" pt={1}>
-                    <CTAButton to="/gallery" variant="outline" size="sm">
+                    <CTAButton to="/gallery" variant="tab" size="sm">
                       See my work
                     </CTAButton>
-                    <CTAButton to="/journal" variant="ghost" size="sm">
+                    <CTAButton to="/journal" variant="tabMuted" size="sm">
                       Read the journal
                     </CTAButton>
                   </HStack>
@@ -216,125 +340,100 @@ const About = () => {
         </Box>
       </Box>
 
-      {/* ─── Whatever the angle asks for: the floor shot ─── */}
-      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }}>
-        <SimpleGrid
-          ref={angleRef}
-          columns={{ base: 1, lg: 2 }}
-          spacing={{ base: 10, lg: 16 }}
-          maxW="1100px"
-          mx="auto"
-          alignItems="center"
-        >
-          <Box aspectRatio={4 / 5} overflow="hidden" borderRadius="sm" bg="white">
-            <Image
-              src="/assets/photos/site/about-bg.webp"
-              alt="Veronika Gerzon lying on a dance floor to photograph guests dancing above her."
-              w="100%"
-              h="100%"
-              objectFit="cover"
-              objectPosition="center 62%"
-              loading="lazy"
-            />
-          </Box>
-          <MotionDiv
-            initial={{ opacity: 0, y: 24 }}
-            animate={isAngleInView ? { opacity: 1, y: 0 } : {}}
-            transition={FADE_IN}
-          >
-            <VStack align="flex-start" spacing={5}>
-              <Text textStyle="eyebrow">Whatever the Angle Asks For</Text>
-              <Box w="35px" h="1px" bg="brand.accent" />
-              <Text
-                fontFamily="heading"
-                fontWeight="300"
-                fontSize={{ base: '1.5rem', md: '1.95rem' }}
-                lineHeight="1.45"
-                color="gray.800"
-              >
-                If the shot is on the floor,{' '}
-                <Box as="em" fontStyle="italic" color="brand.accentText">
-                  that is where I will be.
-                </Box>
-              </Text>
-              <Text textStyle="bodyCopy">
-                Flat on the dance floor at midnight, knee deep in a field, up on a chair for
-                the one frame that shows the whole room. The picture decides where I stand,
-                and I have never been precious about my dress.
-              </Text>
-              <HStack spacing={4} flexWrap="wrap" pt={1}>
-                <CTAButton to="/wedding-photography" variant="outline" size="sm">
-                  Wedding coverage
-                </CTAButton>
-              </HStack>
-            </VStack>
-          </MotionDiv>
-        </SimpleGrid>
-      </Box>
-
-      {/* ─── Closing band: the details and the invitation together, so the
-          page ends on one deliberate step instead of trailing off through
-          two pale strips. Cream-sunken, not black — the dark block read as
-          a different site. Icons are the ones the homepage hero carried. ─── */}
+      {/* ─── Closing section: the floor shot, the invitation and the facts
+          in ONE block. It was three — the angle story, a stats strip, and a
+          lone CTA — and the page trailed off through all of them. This is
+          the same shape as the section above it: photograph on one side, two
+          eyebrow blocks separated by a hairline on the other, and the pair
+          of buttons at the end. The facts sit underneath as a footing rather
+          than as their own band. ─── */}
       <Box
-        bg="brand.surfaceSunken"
+        bg="brand.surface"
         borderTop="1px solid"
         borderColor="brand.accentBorder"
-        py={{ base: 16, md: 22 }}
+        py={{ base: 16, md: 24 }}
         px={{ base: 6, md: 12 }}
-        ref={ctaRef}
+        ref={angleRef}
       >
-        <MotionDiv
-          initial={{ opacity: 0, y: 22 }}
-          animate={isCtaInView ? { opacity: 1, y: 0 } : {}}
-          transition={FADE_IN}
-        >
-          <VStack spacing={{ base: 10, md: 12 }} maxW="1000px" mx="auto">
-            <Flex
-              gap={{ base: 8, md: 16 }}
-              direction={{ base: 'column', sm: 'row' }}
-              align="center"
-              justify="center"
-              w="100%"
+        <VStack spacing={{ base: 14, md: 20 }} maxW="1100px" mx="auto">
+          <SimpleGrid
+            columns={{ base: 1, lg: 2 }}
+            spacing={{ base: 10, lg: 16 }}
+            w="100%"
+            alignItems="center"
+          >
+            <Box aspectRatio={4 / 5} overflow="hidden" borderRadius="sm" bg="white">
+              <Image
+                src="/assets/photos/site/about-bg.webp"
+                alt="Veronika Gerzon lying on a dance floor to photograph guests dancing above her."
+                w="100%"
+                h="100%"
+                objectFit="cover"
+                objectPosition="center 62%"
+                loading="lazy"
+              />
+            </Box>
+            <MotionDiv
+              initial={{ opacity: 0, y: 24 }}
+              animate={isAngleInView ? { opacity: 1, y: 0 } : {}}
+              transition={FADE_IN}
             >
-              {[
-                { label: 'Based in', value: 'Scranton, PA', icon: FaMapMarkerAlt },
-                { label: 'Experience', value: '12+ Years', icon: FaCamera },
-                { label: 'Available', value: 'Worldwide', icon: FaGlobe },
-              ].map((stat, i, arr) => (
-                <Flex key={stat.label} align="center" gap={{ base: 8, md: 16 }}>
-                  <VStack spacing={2} minW={{ base: '120px', md: '140px' }}>
-                    <Icon as={stat.icon} boxSize={4} color="brand.accent" />
-                    <Text textStyle="metaCaption">{stat.label}</Text>
-                    <Text textStyle="cardTitle" color="gray.700">
-                      {stat.value}
-                    </Text>
-                  </VStack>
-                  {i < arr.length - 1 && (
-                    <Box display={{ base: 'none', sm: 'block' }} w="1px" h="50px" bg="brand.accent" opacity={0.3} />
-                  )}
-                </Flex>
-              ))}
-            </Flex>
+              <VStack align="flex-start" spacing={5}>
+                <Text textStyle="eyebrow">Whatever the Angle Asks For</Text>
+                <Box w="35px" h="1px" bg="brand.accent" />
+                <Text
+                  fontFamily="heading"
+                  fontWeight="300"
+                  fontSize={{ base: '1.5rem', md: '1.95rem' }}
+                  lineHeight="1.45"
+                  color="gray.800"
+                >
+                  If the shot is on the floor,{' '}
+                  <Box as="em" fontStyle="italic" color="brand.accentText">
+                    that is where I will be.
+                  </Box>
+                </Text>
+                <Text textStyle="bodyCopy">
+                  Flat on the dance floor at midnight, knee deep in a field, up on a chair for
+                  the one frame that shows the whole room. The picture decides where I stand,
+                  and I have never been precious about my dress.
+                </Text>
 
-            <VStack spacing={5} textAlign="center">
-              <Text
-                fontFamily="heading"
-                fontWeight="300"
-                fontStyle="italic"
-                fontSize={{ base: '1.4rem', md: '1.8rem' }}
-                color="gray.800"
-                lineHeight="1.6"
-              >
-                Have a session in mind? I'd love to hear about it.
-              </Text>
-              <CTAButton to="/contact" variant="solid" size="lg">
-                Book a Session
-              </CTAButton>
-            </VStack>
-          </VStack>
-        </MotionDiv>
+                {/* Same hairline the section above uses to turn one column
+                    into two thoughts. */}
+                <Box w="100%" h="1px" bg="brand.accentBorder" my={{ base: 2, md: 3 }} />
+
+                <Text textStyle="eyebrow">Your Turn</Text>
+                <Text
+                  fontFamily="heading"
+                  fontWeight="300"
+                  fontStyle="italic"
+                  fontSize={{ base: '1.3rem', md: '1.6rem' }}
+                  lineHeight="1.5"
+                  color="gray.800"
+                >
+                  Have a session in mind? I&apos;d love to hear about it.
+                </Text>
+                {/* Two buttons, matching the pair in the section above — same
+                    components, same sizes, same order of weight. */}
+                <HStack spacing={4} flexWrap="wrap" pt={1}>
+                  <CTAButton to="/wedding-photography" variant="tab" size="sm">
+                    Wedding coverage
+                  </CTAButton>
+                  <CTAButton to="/contact" variant="tabMuted" size="sm">
+                    Book a session
+                  </CTAButton>
+                </HStack>
+              </VStack>
+            </MotionDiv>
+          </SimpleGrid>
+
+          <Box w="100%" h="1px" bg="brand.accentBorder" />
+
+          <StatsBand />
+        </VStack>
       </Box>
+
     </Box>
   );
 };

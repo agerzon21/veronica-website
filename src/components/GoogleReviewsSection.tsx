@@ -86,7 +86,19 @@ const GoogleReviewsSection = () => {
     target: parallaxRef,
     offset: ['start end', 'end start'],
   });
-  const parallaxY = useTransform(bandProgress, [0, 1], ['-9%', '9%']);
+  // Alex tuned these on a live preview. Two notes on the numbers:
+  //
+  // The drift he picked is 50% OF THE BAND's height. framer-motion's '%'
+  // translation is a percentage of the ELEMENT's own height, and the backdrop
+  // is taller than the band by twice the overscan below — so the band figure
+  // has to be divided by (1 + 2 x overscan) before it goes in here.
+  // 50 / 2.02 = 24.75.
+  //
+  // Overscan is 51%, not the 45% he had on screen, because drift has to stay
+  // within it or the backdrop's own edge slides into the band. At 45% against
+  // 50% drift there was a bare strip at the extremes; the broken scrim in that
+  // preview is why it was not visible. 51 gives it a point of margin.
+  const parallaxY = useTransform(bandProgress, [0, 1], ['-24.75%', '24.75%']);
   const [testimonials, setTestimonials] = useState<Review[]>([]);
   const [rating, setRating] = useState<string>(FALLBACK_RATING);
   const [reviewCount, setReviewCount] = useState<number>(FALLBACK_REVIEW_COUNT);
@@ -171,7 +183,7 @@ const GoogleReviewsSection = () => {
       <MotionDiv
         // The extra height is what the drift travels through; without it
         // the top and bottom edges would slide into view.
-        style={{ y: parallaxY, position: 'absolute', top: '-18%', bottom: '-18%', left: 0, right: 0, zIndex: -2 }}
+        style={{ y: parallaxY, position: 'absolute', top: '-51%', bottom: '-51%', left: 0, right: 0, zIndex: -2 }}
       >
         <Image
           src="/assets/photos/site/home-cta-bg.webp"
@@ -180,7 +192,7 @@ const GoogleReviewsSection = () => {
           w="100%"
           h="100%"
           objectFit="cover"
-          objectPosition="center 38%"
+          objectPosition="center 0%"
           loading="lazy"
         />
         <Image
@@ -194,7 +206,19 @@ const GoogleReviewsSection = () => {
           loading="lazy"
         />
       </MotionDiv>
-      <Box position="absolute" inset={0} bg="rgba(12, 10, 6, 0.76)" zIndex={-1} />
+      {/* Desktop runs with NO wash at all. The backdrop is a portrait frame
+          anchored to its top, so what the band sees is the dark blue sky, and
+          the old warm-black wash was flattening exactly the colour that makes
+          it worth using. Mobile keeps a wash: it is a different photograph
+          (the lighthouse portrait, which is bright), it was never tuned, and
+          white review text needs something behind it there. The tint is the
+          cool blue rather than the old near-black, per the same call. */}
+      <Box
+        position="absolute"
+        inset={0}
+        bg={{ base: 'rgba(10, 16, 32, 0.62)', md: 'transparent' }}
+        zIndex={-1}
+      />
       <MotionDiv
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
