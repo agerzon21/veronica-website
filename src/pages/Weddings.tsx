@@ -318,7 +318,7 @@ const Weddings = () => {
         <Image
           src="/assets/photos/weddings/ocean-vows-ceremony.webp"
           alt="Wedding couple exchanging vows by the ocean."
-          display={{ base: 'block', md: 'none' }}
+          display={{ base: 'block', lg: 'none' }}
           objectFit="cover"
           objectPosition="center 35%"
           w="100%"
@@ -328,7 +328,7 @@ const Weddings = () => {
         <Image
           src="/assets/photos/site/weddings-hero.webp"
           alt="Bride and groom kissing on a pier at sunset, her veil lifting in the wind."
-          display={{ base: 'none', md: 'block' }}
+          display={{ base: 'none', lg: 'block' }}
           objectFit="cover"
           objectPosition="center 45%"
           w="100%"
@@ -430,7 +430,11 @@ const Weddings = () => {
               the photograph: it shows through at the top and dissolves
               into white where the text lives (Alex's transparency idea).
               Without one, the curated fallback rides on top as before. */}
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={{ base: 5, md: 6 }}>
+          {/* 1 -> 2 -> 3. It used to jump straight from one to three at 768px,
+              so every width from a large phone to a landscape tablet got a
+              single card stretched across the whole column with its photograph
+              cropped to a letterbox. Two up carries that range properly. */}
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={{ base: 5, md: 6 }}>
             {weddingData.packages.map((pkg, i) => {
               const pin = pkgPin(i);
               const fallback = FEATURED[i + 1];
@@ -592,7 +596,7 @@ const Weddings = () => {
             </VStack>
           </Box>
 
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={{ base: 8, md: 12 }} mt={{ base: 12, md: 16 }}>
+          <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={{ base: 8, md: 12 }} mt={{ base: 12, md: 16 }}>
             <VStack align="flex-start" spacing={3} bg="rgba(255,255,255,0.82)" p={{ base: 4, md: 6 }} borderRadius="sm">
               <Text textStyle="eyebrow">Travel</Text>
               <Box w="28px" h="1px" bg="brand.accent" />
@@ -709,7 +713,11 @@ const Weddings = () => {
             </Box>
 
             <Grid
-              templateColumns={{ base: 'repeat(3, 1fr)', md: `repeat(${featured.length + 1}, 1fr)` }}
+              templateColumns={{
+                base: 'repeat(3, 1fr)',
+                sm: 'repeat(4, 1fr)',
+                lg: `repeat(${featured.length + 1}, 1fr)`,
+              }}
               gap={{ base: 2, md: 2.5 }}
               mt={{ base: 2.5, md: 3.5 }}
             >
@@ -1004,8 +1012,8 @@ const Weddings = () => {
           <Box w="35px" h="1px" bg="brand.accent" />
         </VStack>
         <Grid
-          templateColumns={{ base: 'repeat(2, 1fr)', md: 'repeat(6, 1fr)' }}
-          autoRows={{ base: '34vw', md: '200px' }}
+          templateColumns={{ base: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)', lg: 'repeat(6, 1fr)' }}
+          autoRows={{ base: '34vw', md: '22vw', lg: '200px' }}
           autoFlow="dense"
           gap={{ base: 3, md: 4 }}
           maxW="1200px"
@@ -1399,20 +1407,86 @@ function planTapestry(pool: WPhoto[]): Tapestry {
  * and the page's white/cream rhythm never move. pointer-events none
  * throughout; a print that fails to load removes itself.
  */
+/**
+ * The width of the widest text column any section here uses. Everything is
+ * centred inside it, so the space a print can live in is whatever is left
+ * over on each side.
+ */
+const CONTENT_W = 1150;
+
+/** A print needs at least this much gutter before it is worth drawing. */
+const MIN_GUTTER = 128;
+
+/**
+ * Live viewport width. The tapestry has to be measured, not guessed: its
+ * whole problem was being positioned in percentages of the section while its
+ * WIDTH was a fixed pixel number, so the two scaled against each other.
+ */
+function useViewportWidth() {
+  const [w, setW] = useState(() => (typeof window === 'undefined' ? 1440 : window.innerWidth));
+  useEffect(() => {
+    let frame = 0;
+    const onResize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setW(window.innerWidth));
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  return w;
+}
+
+/**
+ * The tapestry, confined to the gutters.
+ *
+ * IT USED TO BE POSITIONED IN PERCENTAGES AND SIZED IN PIXELS, which is why
+ * everything between the phone layout and a wide desktop was a mess: `left:
+ * 4.5%` is 86px of a 1920px window but 40px of a 900px one, while the print
+ * stayed 140px wide either way. On a wide screen it sat in the margin; on a
+ * laptop it sat on the paragraph. The breakpoint could not save it either,
+ * because the failure is continuous, not a step.
+ *
+ * Now the gutter is measured and the print is fitted INTO it: its offset is
+ * the slot's percentage of the GUTTER rather than of the section, and its
+ * width is capped so it can never reach the text column. Below MIN_GUTTER
+ * there is nowhere for a print to be, so none are drawn and the in-flow seams
+ * carry the collage instead — the same argument MobilePrintSeam already makes
+ * for phones, applied at every width where it is true.
+ */
 function DecorPrints({ items }: { items: PlacedPrint[] }) {
+  const vw = useViewportWidth();
+  const gutter = Math.max(0, (vw - CONTENT_W) / 2);
+  if (gutter < MIN_GUTTER) return null;
+
   return (
     <>
-      {items.map((item, i) => (
+      {items.map((item, i) => {
+        // planTapestry has already turned the slot numbers into CSS percentage
+        // STRINGS, so read the number back out. The value was always a hint
+        // about how far in the print sits; measured against the gutter instead
+        // of the section, that hint survives at any width.
+        const pct = parseFloat(item.left ?? item.right ?? '0') || 0;
+        const depth = Math.min(1, Math.max(0, pct / 8)); // slots run roughly 0-8%
+        const w = Math.min(item.w, gutter - 16);
+        if (w < 90) return null;
+        // Non-overlap is arithmetic here, not a tuned constant: the deepest a
+        // print may sit is whatever is left of the gutter once its own width
+        // is accounted for, so `inset + w` can never reach the text column.
+        const maxInset = Math.max(0, gutter - w - 8);
+        const inset = Math.min(gutter * depth * 0.55, maxInset);
+        return (
         <Box
           key={i}
           data-print=""
           position="absolute"
           top={item.top}
           bottom={item.bottom}
-          left={item.left}
-          right={item.right}
-          w={`${item.w}px`}
-          display={{ base: 'none', md: 'block' }}
+          left={item.left !== undefined ? `${inset}px` : undefined}
+          right={item.right !== undefined ? `${inset}px` : undefined}
+          w={`${w}px`}
           transform={`rotate(${item.rot}deg)`}
           zIndex={-1}
           pointerEvents="none"
@@ -1439,25 +1513,30 @@ function DecorPrints({ items }: { items: PlacedPrint[] }) {
             />
           </Box>
         </Box>
-      ))}
+        );
+      })}
     </>
   );
 }
 
 /**
- * The mobile tapestry: a row of four small slanted prints woven BETWEEN
+ * The in-flow tapestry: a row of four small slanted prints woven BETWEEN
  * sections in normal flow. Absolute prints can never be collision-proof
  * on a narrow column (one landed on the FAQ), so phones get the collage
  * as seams instead, where overlap is structurally impossible. Hidden
  * from md up, where the gutters take over.
  */
 function MobilePrintSeam({ photos }: { photos: WPhoto[] }) {
+  const vw = useViewportWidth();
   if (photos.length === 0) return null;
+  // Hidden exactly when the gutters are wide enough for real prints, so the
+  // two treatments hand over at the same point instead of overlapping or
+  // leaving a dead band between them.
+  if ((vw - CONTENT_W) / 2 >= MIN_GUTTER) return null;
   const tilt = [-5, 2.5, -2, 4];
   const lift = [5, -7, 6, -4];
   return (
     <Flex
-      display={{ base: 'flex', md: 'none' }}
       justify="center"
       align="center"
       gap={2}

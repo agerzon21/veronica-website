@@ -60,11 +60,15 @@ import { scheduleAnalytics, trackPageView } from './utils/analytics';
 const scrollPositions = new Map<string, number>();
 
 /**
- * The homepage hero is a 360vh scroll-driven cinematic. Restoring into the
- * middle of it drops the visitor mid-animation on a camera that never zoomed,
- * so this one always starts at the top.
+ * Routes that always open at the top.
+ *
+ * The homepage used to be in here, on the theory that landing inside its 360vh
+ * cinematic would look broken. That was wrong: the hero is driven by scroll
+ * POSITION, not by elapsed time, so any offset inside it renders exactly the
+ * frame you would see having scrolled there by hand. The spring smoothing
+ * catches up over a few frames and then it is simply the hero, mid-zoom.
  */
-const NO_RESTORE = new Set(['/']);
+const NO_RESTORE = new Set<string>();
 
 /**
  * How long to keep asking for the saved position while the page fills in.
@@ -125,6 +129,13 @@ const SCROLL_KEYS = new Set([
 const CANCEL_GRACE_MS = 250;
 
 /**
+ * How long to keep holding the position after first reaching it. Covers late
+ * layout shifts from content above the viewport that would otherwise drag the
+ * page somewhere else a beat after it looked correct.
+ */
+const HOLD_MS = 700;
+
+/**
  * True while restoreTo is driving the window. The scroll sampler checks this
  * so a restore cannot overwrite the very position it is trying to reach.
  */
@@ -166,8 +177,25 @@ const restoreTo = (top: number) => {
     armed = true;
   }, CANCEL_GRACE_MS);
 
+  // Landing is not the end of it. Anything still resolving ABOVE the viewport
+  // — a lazy photograph without reserved height, a font swap, a grid that
+  // reflows — changes the height of the document above us afterwards, and
+  // Chrome's scroll anchoring then deliberately moves the page to keep its
+  // chosen anchor still. On the weddings page at desktop widths that landed
+  // people on the FAQ heading instead of where they left, and only when the
+  // FAQ was partly on screen, because that is when the anchor gets chosen
+  // inside it. `overflow-anchor: none` stops the browser doing it, and holding
+  // the number for a beat afterwards catches the rest.
+  const root = document.documentElement;
+  const priorAnchor = root.style.overflowAnchor;
+  root.style.overflowAnchor = 'none';
+  const releaseAnchor = () => {
+    root.style.overflowAnchor = priorAnchor;
+  };
+
   const cleanup = () => {
     restoring = false;
+    releaseAnchor();
     window.clearTimeout(armTimer);
     window.removeEventListener('wheel', onWheel);
     window.removeEventListener('touchstart', onTouchStart);
@@ -181,18 +209,30 @@ const restoreTo = (top: number) => {
   // Bounded by wall-clock rather than a frame count, and it stops the instant
   // the position sticks, so a page that is ready immediately costs one frame.
   const startedAt = performance.now();
+  let landedAt = 0;
+
   const tick = () => {
     if (cancelled) {
       debugScroll('cancelled by the visitor', top);
       return cleanup();
     }
-    window.scrollTo(0, top);
+    if (Math.abs(window.scrollY - top) >= 2) window.scrollTo(0, top);
     frames += 1;
-    if (Math.abs(window.scrollY - top) < 2) {
-      debugScroll('landed', top, frames + ' frames');
-      return cleanup();
-    }
-    if (performance.now() - startedAt > RESTORE_BUDGET_MS) {
+
+    const now = performance.now();
+    const onTarget = Math.abs(window.scrollY - top) < 2;
+
+    if (onTarget) {
+      if (!landedAt) {
+        landedAt = now;
+        debugScroll('landed', top, frames + ' frames');
+      }
+      // Keep watching for a moment in case something above us settles late.
+      if (now - landedAt > HOLD_MS) return cleanup();
+    } else if (landedAt) {
+      debugScroll('drifted, re-asserting', top, 'was ' + window.scrollY);
+      landedAt = 0;
+    } else if (now - startedAt > RESTORE_BUDGET_MS) {
       debugScroll('gave up short', top, 'reached ' + window.scrollY);
       return cleanup();
     }
