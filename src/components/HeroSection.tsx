@@ -116,7 +116,12 @@ const FOOTER_GAP = 88;
 // gives up the difference, which is the right trade for a CTA you can see.
 // Desktop has no chrome bar, so both stay at zero / 88 there.
 const FOOTER_GAP_PORTRAIT = 56;
-const MOBILE_CHROME_RESERVE = 100;
+// Raised from 100: the CTA is anchored to the camera's centre and the scroll
+// cue to the viewport bottom, so the space between them is only ever what is
+// left over — and at 100 they were nearly touching. Every extra point here
+// lifts the CTA by that much. Paired with a lower cue (see below), the two get
+// ~60px of air between them. The camera gives up ~29px of width for it.
+const MOBILE_CHROME_RESERVE = 140;
 
 // The hero header is now the shared PageHeader (eyebrow → 40px rule →
 // pageTitle h1). pageTitle is 36 / 52 / 68px against the old hand-rolled
@@ -474,14 +479,17 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   );
 
   // Tapping the cue is the point of it on a phone, where there is no hover to
-  // suggest it does anything. Lands just past the hero's own scroll length.
+  // suggest it does anything.
+  //
+  // This used to subtract a viewport height, which lands on the last frame of
+  // the PINNED range — where the sticky is still showing the settled camera.
+  // The arrow therefore appeared to do nothing, or to snap back to the hero.
+  // The section's bottom edge is the top of whatever comes next, which is
+  // where an arrow pointing down should take you.
   const scrollPastHero = () => {
     const el = sectionRef.current;
     if (!el) return;
-    window.scrollTo({
-      top: el.offsetTop + el.offsetHeight - window.innerHeight,
-      behavior: 'smooth',
-    });
+    window.scrollTo({ top: el.offsetTop + el.offsetHeight, behavior: 'smooth' });
   };
 
   // The stats row moved to the About page's closing band: repeating
@@ -773,7 +781,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             onClick={scrollPastHero}
             aria-label="Scroll to the rest of the page"
             position="absolute"
-            bottom={{ base: '104px', md: '40px' }}
+            bottom={{ base: '84px', md: '40px' }}
             left="50%"
             zIndex={5}
             display="flex"

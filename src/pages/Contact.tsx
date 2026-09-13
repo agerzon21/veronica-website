@@ -326,7 +326,11 @@ const Contact = () => {
                         required
                         defaultValue={
                           packageParam
-                            ? `Hi Veronika! We're interested in the ${packageParam} package. Our date and venue are: `
+                            // Was "Our date and venue are:" — both of which the
+                            // fields above already collect, so it asked the
+                            // same question twice and left them retyping it.
+                            // This opens on what the form has no field for.
+                            ? `Hi Veronika! We're interested in the ${packageParam} package. Here's a bit about our day: `
                             : undefined
                         }
                         {...inputStyles}

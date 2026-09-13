@@ -53,8 +53,10 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
+  // No Home entry: the logo is the home link on every page, which is the
+  // convention everyone already knows, and the row earned more useful
+  // destinations than it has room for.
   const menuItems = [
-    { name: 'Home', path: '/' },
     { name: 'Gallery', path: '/gallery' },
     { name: 'Weddings', path: '/wedding-photography' },
     { name: 'Journal', path: '/journal' },
@@ -109,7 +111,11 @@ const Navbar = () => {
           flexShrink={0}
         >
           <Image
-            src="/assets/images/logo.svg"
+            // The wordmark's "Vero" is pure black, which disappears against the
+            // gray.900 mobile menu behind it. logo-light.svg is the same file
+            // with only the two dark inks lifted — the grey disc and the white
+            // monogram are untouched, so it is the same mark, not a restyle.
+            src={isOpen ? '/assets/images/logo-light.svg' : '/assets/images/logo.svg'}
             // The width/height ATTRIBUTES stay: they hand the browser the
             // aspect ratio before the SVG lands, which is what stops the nav
             // reflowing. But `width` is ALSO a presentational hint, so with no

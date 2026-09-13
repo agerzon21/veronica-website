@@ -195,6 +195,16 @@ const GoogleReviewsSection = () => {
           objectPosition="center 0%"
           loading="lazy"
         />
+        {/* The phone photograph is SQUARE (3000x2971) and this band is a narrow
+            column, so `cover` fills the height exactly and crops only the
+            sides. That left no vertical overflow, which meant the
+            `objectPosition: center 35%` this used to carry was doing literally
+            nothing — the framing could not be adjusted at all.
+            A transform moves the picture itself, which works regardless of
+            which axis is overflowing. Alex tuned these on a live preview. The
+            1.1 scale is what keeps the frame covered at a 5% shift: scaling is
+            centred, so a scale of s leaves (s-1)/2 of spare height at each
+            edge, and anything past that pulls the image's own edge into view. */}
         <Image
           src="/assets/photos/portraits/white-dress-lighthouse.webp"
           alt=""
@@ -202,7 +212,8 @@ const GoogleReviewsSection = () => {
           w="100%"
           h="100%"
           objectFit="cover"
-          objectPosition="center 35%"
+          objectPosition="center"
+          transform="translate(0%, 5%) scale(1.1)"
           loading="lazy"
         />
       </MotionDiv>

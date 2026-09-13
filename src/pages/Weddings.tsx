@@ -698,6 +698,7 @@ const Weddings = () => {
                     p={0}
                     cursor="pointer"
                     transition="all 0.3s ease"
+                    sx={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                   />
                 ))}
               </HStack>
@@ -726,8 +727,20 @@ const Weddings = () => {
                   opacity={i === slideIdx ? 1 : 0.5}
                   boxShadow={i === slideIdx ? 'inset 0 0 0 2px var(--chakra-colors-brand-accent)' : undefined}
                   transition="opacity 0.3s ease"
+                  // Rapid taps here were occasionally landing the visitor on
+                  // /contact. Without touch-action, Safari holds every tap for
+                  // ~300ms to see whether a second one arrives, and a fast pair
+                  // is taken as double-tap-to-zoom. Once the page zooms, the
+                  // visual viewport moves under the finger and the NEXT tap
+                  // lands at different document coordinates — the nearest thing
+                  // below this strip being the FAQ's "Ask me directly" button,
+                  // which goes to /contact. `manipulation` opts these targets
+                  // out of double-tap zoom (pinch-zoom is untouched, so this
+                  // costs no accessibility), which removes both the delay and
+                  // the coordinate shift. Not reproduced on a device, so this
+                  // is the likely mechanism rather than a confirmed one.
                   _hover={{ opacity: 1 }}
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  sx={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                 >
                   <Image
                     src={p.cover ?? undefined}
@@ -1048,7 +1061,7 @@ const Weddings = () => {
               as={RouterLink}
               to="/gallery/weddings"
               role="group"
-              direction="column"
+              direction={{ base: 'row', md: 'column' }}
               align="center"
               justify="center"
               textAlign="center"
@@ -1062,15 +1075,19 @@ const Weddings = () => {
               transition="background 0.25s ease, border-color 0.25s ease"
               _hover={{ bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }}
             >
+              {/* On a phone this is the journal strip's invitation exactly:
+                  one line, an arrow after it, no second BROWSE row. Desktop
+                  keeps the stacked two-line treatment, which is what the
+                  mosaic cell is shaped for. */}
               <Text
                 fontFamily="heading"
                 fontWeight="300"
-                fontSize={{ base: '1.05rem', md: '1.3rem' }}
-                lineHeight="1.25"
+                fontSize={{ base: '14px', md: '1.3rem' }}
+                lineHeight={{ base: '1.15', md: '1.25' }}
                 color="gray.800"
               >
                 See the full
-                <br />
+                <Box as="br" display={{ base: 'none', md: 'inline' }} />{' '}
                 wedding gallery
               </Text>
               <HStack
@@ -1079,8 +1096,10 @@ const Weddings = () => {
                 transition="transform 0.25s ease"
                 _groupHover={{ transform: 'translateX(3px)' }}
               >
-                <Text textStyle="ctaLabel">Browse</Text>
-                <Icon as={FaArrowRight} boxSize={3} />
+                <Text textStyle="ctaLabel" display={{ base: 'none', md: 'block' }}>
+                  Browse
+                </Text>
+                <Icon as={FaArrowRight} boxSize={{ base: 2.5, md: 3 }} />
               </HStack>
             </Flex>
           </GridItem>

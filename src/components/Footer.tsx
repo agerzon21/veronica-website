@@ -118,15 +118,13 @@ const Footer = () => {
             ))}
           </HStack>
 
-          {/* Meta — location + copyright, same register as the legal row. */}
-          <VStack spacing={2}>
-            <Text textStyle="metaCaption" textAlign="center">
-              Scranton, PA · Available Worldwide
-            </Text>
-            <Text textStyle="metaCaption" textAlign="center">
-              © {year} Vero Photography · Photographs © Veronika Gerzon
-            </Text>
-          </VStack>
+          {/* One line. The location was already stated in the FAQ, on About
+              and in the Instagram bio, and the second copyright was saying
+              the same thing twice: a photographer's site owning its own
+              photographs is the assumption, not news. */}
+          <Text textStyle="metaCaption" textAlign="center">
+            © {year} Vero Photography
+          </Text>
         </VStack>
       </Box>
     </Box>
