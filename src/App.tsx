@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigationType } from 'react-router-dom';
 import { Box, Spinner } from '@chakra-ui/react';
 // ChakraProvider without the toast machinery, composed from Chakra's public
 // exports. ChakraProvider always mounts ToastProvider, whose component imports
@@ -11,7 +11,7 @@ import AppChakraProvider from './components/ui/AppChakraProvider';
 // animation, variants, exit animations and AnimatePresence, which is
 // everything the public pages do. Portal loads the full set itself; see there.
 import { LazyMotion, domAnimation } from 'framer-motion';
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 // Home and IndividualPhoto stay EAGER on purpose.
 //   Home — the LCP route. Lazying it would add a round trip to the one page
@@ -52,13 +52,100 @@ import ChunkErrorBoundary, { prefetchChunk } from './components/ChunkErrorBounda
 import theme from './theme';
 import { scheduleAnalytics, trackPageView } from './utils/analytics';
 
+/**
+ * Scroll positions per history entry. A plain Map, not state: writing it must
+ * never cause a render, and it should die with the tab — these are positions
+ * within THIS session's history, not something to persist.
+ */
+const scrollPositions = new Map<string, number>();
+
+/**
+ * The homepage hero is a 360vh scroll-driven cinematic. Restoring into the
+ * middle of it drops the visitor mid-animation on a camera that never zoomed,
+ * so this one always starts at the top.
+ */
+const NO_RESTORE = new Set(['/']);
+
+/**
+ * Puts the visitor back where they were when they press Back, instead of at
+ * the top of the page they are returning to.
+ *
+ * We cannot just hand this to the browser. main.tsx sets
+ * `history.scrollRestoration = 'manual'` deliberately: the gallery modal opens
+ * with a raw `history.pushState` and closes with `history.back()`, and the
+ * browser's own restoration was overriding ImageModal's scroll-to-centre work
+ * on that pop. So restoration is done here, by history entry.
+ *
+ * THE KEY GUARD IS NOT OPTIONAL. That same modal close fires a pop which
+ * React Router reports as a POP on the SAME entry — same key, same pathname,
+ * only `navigationType` flips. Without the guard this effect would re-run and
+ * scroll the gallery to the top, which is the exact bug main.tsx is protecting
+ * against. Acting only when the entry itself changes leaves the modal alone.
+ */
+const restoreTo = (top: number) => {
+  let frames = 0;
+  let cancelled = false;
+  const stop = () => {
+    cancelled = true;
+  };
+  // The moment the visitor scrolls for themselves, get out of their way.
+  const opts = { passive: true, once: true } as const;
+  window.addEventListener('wheel', stop, opts);
+  window.addEventListener('touchstart', stop, opts);
+  window.addEventListener('keydown', stop, { once: true });
+
+  const cleanup = () => {
+    window.removeEventListener('wheel', stop);
+    window.removeEventListener('touchstart', stop);
+    window.removeEventListener('keydown', stop);
+  };
+
+  // Pages here finish loading well after mount — journal lists, Instagram,
+  // gallery dimensions — so the document is often still too short to hold the
+  // saved position on the first frame. Keep asking for a few frames until it
+  // lands or the page turns out to be genuinely shorter than it was.
+  const tick = () => {
+    if (cancelled) return cleanup();
+    window.scrollTo(0, top);
+    if (Math.abs(window.scrollY - top) < 2 || (frames += 1) > 30) return cleanup();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
+  const navigationType = useNavigationType();
+  const handledKey = useRef<string | null>(null);
+
+  // Record the outgoing position. The cleanup runs just before the next
+  // entry's effect, so it captures where this entry was left.
+  useEffect(() => {
+    const save = () => scrollPositions.set(key, window.scrollY);
+    window.addEventListener('pagehide', save);
+    return () => {
+      save();
+      window.removeEventListener('pagehide', save);
+    };
+  }, [key]);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    // Same history entry as last time — a modal opening or closing, not a
+    // navigation. See the note above.
+    if (handledKey.current === key) return;
+    handledKey.current = key;
+
     trackPageView(pathname);
-  }, [pathname]);
+
+    if (navigationType === 'POP' && !NO_RESTORE.has(pathname)) {
+      const saved = scrollPositions.get(key);
+      if (saved != null && saved > 0) {
+        restoreTo(saved);
+        return;
+      }
+    }
+    window.scrollTo(0, 0);
+  }, [key, pathname, navigationType]);
 
   return null;
 }

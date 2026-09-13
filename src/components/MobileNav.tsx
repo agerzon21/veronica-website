@@ -11,8 +11,10 @@ interface MobileNavProps {
 }
 
 const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
+  // No Home entry: the logo is the home link on every page, which is the
+  // convention everyone already knows, and the row earned more useful
+  // destinations than it has room for.
   const menuItems = [
-    { name: 'Home', path: '/' },
     { name: 'Gallery', path: '/gallery' },
     { name: 'Weddings', path: '/wedding-photography' },
     { name: 'Journal', path: '/journal' },
