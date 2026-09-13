@@ -47,9 +47,10 @@ export function useSmartBack(fallback: BackTarget) {
   // have to switch element types on a value they cannot know at compile time.
   // `to` comes back as well, for anything that wants it for a title or href.
   if (canGoBack) {
-    // No label to borrow from history, so "Back" unless a caller named it.
-    // Better a plain word than a confident wrong one.
-    return { label: explicit?.label ?? 'Back', onClick: goBack, to };
+    // The label is the caller's best guess at where back leads, and it is
+    // usually right — a post's parent really is the journal. Falling back to a
+    // bare "Back" here threw away good copy for no gain.
+    return { label: explicit?.label ?? fallback.label, onClick: goBack, to };
   }
 
   return {

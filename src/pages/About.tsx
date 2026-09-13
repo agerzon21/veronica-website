@@ -28,12 +28,23 @@ const MotionDiv = m.div;
 
 const FADE_IN = { duration: 0.75, ease: 'easeOut' } as const;
 
+/**
+ * The three facts, as one line under the hero title (Alex picked S3).
+ *
+ * They used to close the page, which put the least interesting thing last and
+ * made the story trail off into a table. At the top they are the page
+ * introducing itself, and they cost no height: the hero already had room.
+ *
+ * Each carries its icon, and two of them say more than they used to — "12+
+ * Years" and "Worldwide" were fragments that only made sense next to a label
+ * column that no longer exists.
+ */
 const STATS = [
-  { label: 'Based in', value: 'Scranton, PA', icon: FaMapMarkerAlt },
+  { value: 'Scranton, PA', icon: FaMapMarkerAlt },
   // countTo drives the tick-up; suffix is everything the number is not, so
-  // the label reads correctly at every frame of the count.
-  { label: 'Experience', value: '12+ Years', icon: FaCamera, countTo: 12, suffix: '+ Years' },
-  { label: 'Available', value: 'Worldwide', icon: FaGlobe },
+  // the line reads correctly at every frame of the count.
+  { value: '12+ Years Experience', icon: FaCamera, countTo: 12, suffix: '+ Years Experience' },
+  { value: 'Available Worldwide', icon: FaGlobe },
 ] as const;
 
 /**
@@ -78,97 +89,73 @@ const StatValue = ({
     };
   }, [play, countTo]);
 
-  return (
-    <Text
-      fontFamily="heading"
-      fontWeight="500"
-      fontSize={{ base: '0.95rem', md: '1.1rem' }}
-      lineHeight="1.25"
-      textAlign="center"
-      color="gray.700"
-      sx={{ fontVariantNumeric: 'tabular-nums' }}
-    >
-      {n === null ? value : `${n}${suffix ?? ''}`}
-    </Text>
-  );
+  // Plain text: the caller owns the type, because this renders inside a line
+  // whose styling belongs to the hero, not to the number.
+  return <>{n === null ? value : `${n}${suffix ?? ''}`}</>;
 };
 
 /**
- * Three facts that arrive one after another rather than all at once: each
- * block rises out from behind its own mask, the hairlines between them draw
- * downward, and the years figure ticks up to twelve.
+ * The line itself. Each fact rises out from behind its own mask a beat after
+ * the one before, and the years tick up to twelve — the same arrival the band
+ * had, at a size that belongs in a hero rather than a section.
  */
-const StatsBand = () => {
+const HeroFacts = () => {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.5 });
+  const inView = useInView(ref, { once: true, amount: 0.6 });
 
   return (
-    <Box w="100%" pt={{ base: 4, md: 6 }}>
-      {/* Drawn, not static: the rule arrives with the facts. */}
-      <MotionDiv
-        style={{ transformOrigin: 'left', height: '1px', background: 'var(--chakra-colors-brand-accentBorder)' }}
-        initial={{ scaleX: 0 }}
-        animate={inView ? { scaleX: 1 } : {}}
-        transition={{ duration: 0.7, ease: 'easeOut' }}
-      />
-      <Flex
-        ref={ref}
-        gap={{ base: 3, md: 5 }}
-        direction="row"
-        align="flex-start"
-        justify="space-between"
-        w="100%"
-        pt={{ base: 5, md: 6 }}
-      >
+    <Flex
+      ref={ref}
+      mt={{ base: 4, md: 5 }}
+      gap={{ base: 2.5, md: 4 }}
+      align="center"
+      justify={{ base: 'center', md: 'flex-start' }}
+      wrap="wrap"
+      rowGap={2}
+    >
       {STATS.map((stat, i, arr) => (
-        <Flex key={stat.label} align="flex-start" gap={{ base: 3, md: 5 }} flex="1">
-          <VStack spacing={1.5} flex="1" minW={0}>
+        <Flex key={stat.value} align="center" gap={{ base: 2.5, md: 4 }}>
+          <Box overflow="hidden">
             <MotionDiv
-              initial={{ opacity: 0, scale: 0.75 }}
-              animate={inView ? { opacity: 1, scale: 1 } : {}}
-              transition={{ duration: 0.5, ease: 'easeOut', delay: i * 0.14 }}
+              initial={{ y: '115%' }}
+              animate={inView ? { y: '0%' } : {}}
+              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1], delay: 0.15 + i * 0.13 }}
             >
-              <Icon as={stat.icon} boxSize={3.5} color="brand.accent" display="block" />
+              <Flex align="center" gap={{ base: 1.5, md: 2 }}>
+                <Icon as={stat.icon} boxSize={3} color="brand.accent" flex="none" />
+                <Text
+                  fontSize={{ base: '0.625rem', md: '0.6875rem' }}
+                  fontWeight="400"
+                  letterSpacing={{ base: '0.14em', md: '0.18em' }}
+                  textTransform="uppercase"
+                  color="whiteAlpha.900"
+                  whiteSpace="nowrap"
+                  sx={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  <StatValue
+                    value={stat.value}
+                    countTo={'countTo' in stat ? stat.countTo : undefined}
+                    suffix={'suffix' in stat ? stat.suffix : undefined}
+                    play={inView}
+                  />
+                </Text>
+              </Flex>
             </MotionDiv>
-            {/* overflow hidden is the mask the two lines slide up out of. */}
-            <Box overflow="hidden">
-              <MotionDiv
-                initial={{ y: '110%' }}
-                animate={inView ? { y: '0%' } : {}}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: i * 0.14 + 0.1 }}
-              >
-                <Text textStyle="metaCaption">{stat.label}</Text>
-              </MotionDiv>
-            </Box>
-            <Box overflow="hidden">
-              <MotionDiv
-                initial={{ y: '110%' }}
-                animate={inView ? { y: '0%' } : {}}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: i * 0.14 + 0.18 }}
-              >
-                <StatValue
-                  value={stat.value}
-                  countTo={'countTo' in stat ? stat.countTo : undefined}
-                  suffix={'suffix' in stat ? stat.suffix : undefined}
-                  play={inView}
-                />
-              </MotionDiv>
-            </Box>
-          </VStack>
+          </Box>
+          {/* A gold dot between, not a bullet character: it keeps its colour
+              and its size independent of the type around it. */}
           {i < arr.length - 1 && (
             <MotionDiv
-              style={{ transformOrigin: 'top' }}
-              initial={{ scaleY: 0 }}
-              animate={inView ? { scaleY: 1 } : {}}
-              transition={{ duration: 0.5, ease: 'easeOut', delay: i * 0.14 + 0.34 }}
+              initial={{ opacity: 0, scale: 0 }}
+              animate={inView ? { opacity: 1, scale: 1 } : {}}
+              transition={{ duration: 0.4, ease: 'easeOut', delay: 0.3 + i * 0.13 }}
             >
-              <Box w="1px" h={{ base: '44px', md: '48px' }} bg="brand.accent" opacity={0.3} />
+              <Box w="3px" h="3px" borderRadius="full" bg="brand.accent" />
             </MotionDiv>
           )}
         </Flex>
       ))}
-      </Flex>
-    </Box>
+    </Flex>
   );
 };
 
@@ -225,6 +212,7 @@ const About = () => {
                 </>
               }
             />
+            <HeroFacts />
           </Box>
         </Flex>
       </Box>
@@ -451,11 +439,6 @@ const About = () => {
                   </CTAButton>
                 </Flex>
 
-                {/* The three facts, IN this column rather than in a band of
-                    their own. They were getting a full-width strip, a divider
-                    and their own vertical interval to say nine words, while
-                    this column sat with room to spare underneath. */}
-                <StatsBand />
               </VStack>
             </MotionDiv>
           </SimpleGrid>

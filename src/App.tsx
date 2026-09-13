@@ -104,6 +104,26 @@ const debugScroll = (...args: unknown[]) => {
  * scroll the gallery to the top, which is the exact bug main.tsx is protecting
  * against. Acting only when the entry itself changes leaves the modal alone.
  */
+/** Keys that mean "I want to scroll", as opposed to tabbing or typing. */
+const SCROLL_KEYS = new Set([
+  'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ',
+]);
+
+/**
+ * How long to let the restore run before user input is allowed to cancel it.
+ *
+ * This guard used to cancel on ANY wheel or touchstart, which quietly broke
+ * the two gestures people actually use to go back. A macOS two-finger
+ * swipe-back IS a stream of horizontal wheel events, and an iOS edge-swipe
+ * begins with a touchstart — so the very gesture that triggered the back
+ * navigation immediately cancelled the restore it triggered. Buttons worked,
+ * swipes did not, which is exactly the split Alex reported.
+ *
+ * Now: nothing can cancel for the first quarter second, and only VERTICAL
+ * intent counts afterwards.
+ */
+const CANCEL_GRACE_MS = 250;
+
 /**
  * True while restoreTo is driving the window. The scroll sampler checks this
  * so a restore cannot overwrite the very position it is trying to reach.
@@ -114,31 +134,58 @@ const restoreTo = (top: number) => {
   restoring = true;
   let frames = 0;
   let cancelled = false;
+  let armed = false;
+  let touchY: number | null = null;
+
   const stop = () => {
     cancelled = true;
   };
-  // The moment the visitor scrolls for themselves, get out of their way.
-  const opts = { passive: true, once: true } as const;
-  window.addEventListener('wheel', stop, opts);
-  window.addEventListener('touchstart', stop, opts);
-  window.addEventListener('keydown', stop, { once: true });
+
+  const onWheel = (e: WheelEvent) => {
+    // Horizontal-only deltas are the swipe-back gesture, not a scroll.
+    if (armed && Math.abs(e.deltaY) > 0) stop();
+  };
+  const onTouchStart = (e: TouchEvent) => {
+    touchY = e.touches[0]?.clientY ?? null;
+  };
+  const onTouchMove = (e: TouchEvent) => {
+    if (!armed || touchY === null) return;
+    const y = e.touches[0]?.clientY;
+    if (y != null && Math.abs(y - touchY) > 12) stop();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (armed && SCROLL_KEYS.has(e.key)) stop();
+  };
+
+  const passive = { passive: true } as const;
+  window.addEventListener('wheel', onWheel, passive);
+  window.addEventListener('touchstart', onTouchStart, passive);
+  window.addEventListener('touchmove', onTouchMove, passive);
+  window.addEventListener('keydown', onKey);
+  const armTimer = window.setTimeout(() => {
+    armed = true;
+  }, CANCEL_GRACE_MS);
 
   const cleanup = () => {
     restoring = false;
-    window.removeEventListener('wheel', stop);
-    window.removeEventListener('touchstart', stop);
-    window.removeEventListener('keydown', stop);
+    window.clearTimeout(armTimer);
+    window.removeEventListener('wheel', onWheel);
+    window.removeEventListener('touchstart', onTouchStart);
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('keydown', onKey);
   };
 
   // Pages here finish loading well after mount — lazy route chunks first, then
   // journal lists, Instagram and gallery dimensions — so the document is
-  // usually far too short to hold the saved position on the first frame. The
-  // old 30-frame budget (~500ms) expired long before the content arrived.
-  // Bounded by wall-clock instead, and it stops the instant the position
-  // sticks, so a page that is ready immediately costs one frame.
+  // usually far too short to hold the saved position on the first frame.
+  // Bounded by wall-clock rather than a frame count, and it stops the instant
+  // the position sticks, so a page that is ready immediately costs one frame.
   const startedAt = performance.now();
   const tick = () => {
-    if (cancelled) return cleanup();
+    if (cancelled) {
+      debugScroll('cancelled by the visitor', top);
+      return cleanup();
+    }
     window.scrollTo(0, top);
     frames += 1;
     if (Math.abs(window.scrollY - top) < 2) {

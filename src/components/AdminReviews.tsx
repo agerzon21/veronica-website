@@ -17,6 +17,7 @@ import CTAButton from './ui/CTAButton';
 import MobileSheetModal, { MobileSheetFooter } from './ui/MobileSheetModal';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
+import { toDirectImageUrl, isDriveUrl, driveFileId } from '../utils/driveImage';
 
 /**
  * "Reviews" tab in /admin — manage the testimonials that show up on the
@@ -746,7 +747,10 @@ function ReviewEditorModal({
         review: {
           ...(review ? { id: review.id } : {}),
           author_name: form.author_name.trim(),
-          author_photo_url: form.author_photo_url.trim() || null,
+          // A pasted Drive share link points at the VIEWER PAGE, not the
+          // file, and renders as a broken image. Rewriting it here means the
+          // database holds a usable URL and every consumer stays dumb.
+          author_photo_url: toDirectImageUrl(form.author_photo_url) || null,
           rating: Math.max(1, Math.min(5, Math.round(form.rating))),
           publish_date: form.publish_date || null,
           source: form.source,
@@ -823,9 +827,16 @@ function ReviewEditorModal({
           <Input
             value={form.author_photo_url}
             onChange={(e) => update('author_photo_url', e.target.value)}
-            placeholder="https://..."
+            placeholder="https://... or a Google Drive share link"
             {...inputStyles}
           />
+          {isDriveUrl(form.author_photo_url) && (
+            <Text fontSize="xs" color={driveFileId(form.author_photo_url) ? 'green.600' : 'red.500'} mt={1.5}>
+              {driveFileId(form.author_photo_url)
+                ? 'Google Drive link recognised. It will be converted to a direct image link on save. Make sure the file is shared as "Anyone with the link" or it will not load.'
+                : 'That looks like a Google Drive link but no file id could be found in it. Use the link from the Share button.'}
+            </Text>
+          )}
         </Field>
 
         <Field label={t.reviewsEditor.ratingLabel}>

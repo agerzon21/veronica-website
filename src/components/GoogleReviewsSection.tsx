@@ -6,6 +6,7 @@ import { m, useInView, useScroll, useTransform } from 'framer-motion';
 import FaGoogle from '../icons/fa/FaGoogle';
 import FaStar from '../icons/fa/FaStar';
 import CTAButton from './ui/CTAButton';
+import { toDirectImageUrl } from '../utils/driveImage';
 
 const MotionDiv = m.div;
 
@@ -44,36 +45,71 @@ const getInitials = (name: string): string => {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 };
 
+/**
+ * The attribution block: a rectangle ruled off from the quote, with the
+ * client's own photograph filling a square at its left edge and the name in
+ * the remainder.
+ *
+ * The photograph was a 32px circle, which is avatar furniture — too small to
+ * recognise anyone in, and a shape that appears nowhere else on a site built
+ * out of squared frames and hairlines. At 88px it is a portrait, which is the
+ * point: these are Vero's own photographs of the people doing the recommending.
+ *
+ * Legacy rows may still hold a raw Drive share link, so they are normalised on
+ * the way out as well as on the way in.
+ */
 const AuthorBadge = ({ review }: { review: Review }) => {
   const initials = getInitials(review.author_name);
+  const photo = toDirectImageUrl(review.author_photo_url, 240);
   return (
-    <HStack spacing={3} align="center">
-      {review.author_photo_url ? (
-        <Image
-          src={review.author_photo_url}
-          alt={review.author_name}
-          boxSize="32px"
-          borderRadius="full"
-          objectFit="cover"
-          loading="lazy"
-        />
-      ) : (
-        <Flex
-          boxSize="32px"
-          borderRadius="full"
-          bg="whiteAlpha.200"
-          border="1px solid"
-          borderColor="whiteAlpha.400"
-          align="center"
-          justify="center"
-        >
-          <Text textStyle="metaCaption" color="whiteAlpha.900">{initials}</Text>
-        </Flex>
-      )}
-      {/* Was brand.accent (#c9a96e) as TEXT on white — 2.24:1, fails AA.
-          The eyebrow token carries brand.accentText instead. */}
-      <Text textStyle="eyebrowOnDark">— {review.author_name}</Text>
-    </HStack>
+    <Flex
+      w="100%"
+      mt="auto"
+      border="1px solid"
+      borderColor="whiteAlpha.300"
+      bg="rgba(255, 255, 255, 0.05)"
+      align="stretch"
+      overflow="hidden"
+    >
+      <Box
+        flex="none"
+        w={{ base: '76px', md: '88px' }}
+        h={{ base: '76px', md: '88px' }}
+        borderRight="1px solid"
+        borderColor="whiteAlpha.300"
+        bg="whiteAlpha.200"
+        position="relative"
+      >
+        {photo ? (
+          <Image
+            src={photo}
+            alt={review.author_name}
+            w="100%"
+            h="100%"
+            objectFit="cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <Flex w="100%" h="100%" align="center" justify="center">
+            <Text
+              fontFamily="heading"
+              fontWeight="300"
+              fontSize={{ base: '1.5rem', md: '1.75rem' }}
+              letterSpacing="0.06em"
+              color="whiteAlpha.900"
+            >
+              {initials}
+            </Text>
+          </Flex>
+        )}
+      </Box>
+      <Flex flex="1" align="center" px={{ base: 4, md: 5 }} minW={0}>
+        <Text textStyle="eyebrowOnDark" noOfLines={2}>
+          {review.author_name}
+        </Text>
+      </Flex>
+    </Flex>
   );
 };
 
@@ -318,7 +354,7 @@ const GoogleReviewsSection = () => {
                 key={t.id}
                 flex={1}
                 spacing={6}
-                p={{ base: 6, md: 8 }}
+                p={{ base: 5, md: 6 }}
                 align="start"
                 bg="rgba(255, 255, 255, 0.07)"
                 border="1px solid"
