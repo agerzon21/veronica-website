@@ -1,5 +1,5 @@
 import { Box, Text, Flex, Image, Spinner } from '@chakra-ui/react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import { Helmet } from 'react-helmet-async';
@@ -8,6 +8,7 @@ import { m } from 'framer-motion';
 import GalleryCategories from '../components/GalleryCategories';
 import GalleryGrid from '../components/GalleryGrid';
 import NotFound from './NotFound';
+import { useSmartBack } from '../components/ui/useSmartBack';
 
 // Match the shape /api/gallery returns — kept local here (rather
 // than a shared type file) since the API is the source of truth and
@@ -67,6 +68,7 @@ export const categoryDetails: Record<Category, {
 };
 
 const Gallery = () => {
+  const back = useSmartBack({ to: '/gallery', label: 'Back' });
   const { category } = useParams();
   const [images, setImages] = useState<PublicPhoto[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -202,7 +204,19 @@ const Gallery = () => {
           transform="translateY(-50%)"
           zIndex={2}
         >
-          <Link to="/gallery" style={{ textDecoration: 'none' }}>
+          {/* Was a hard link to /gallery, so arriving here from the weddings
+              page and pressing Back dropped you on the gallery index — a page
+              you had never seen. */}
+          <Box
+            as="button"
+            type="button"
+            onClick={back.onClick}
+            aria-label={back.label}
+            display="block"
+            bg="transparent"
+            border="none"
+            p={0}
+          >
             <Flex
               align="center"
               color="whiteAlpha.800"
@@ -212,9 +226,9 @@ const Gallery = () => {
               gap={2}
             >
               <ArrowBackIcon />
-              <Text textStyle="ctaLabel">Back</Text>
+              <Text textStyle="ctaLabel">{back.label}</Text>
             </Flex>
-          </Link>
+          </Box>
         </Box>
       </Box>
 

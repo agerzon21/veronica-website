@@ -162,14 +162,19 @@ const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
         _before: { width: '11px', bg: GOLD },
       },
       _active: { bg: 'rgba(201, 169, 110, 0.12)' },
-      // No hover on a phone, so the spine can't be the thing that arrives on
-      // interaction. Both spines sit at their halfway width and the muted one
-      // goes gold, which is what the picked mock showed on mobile.
+      // No hover on a phone, so the spine sits at its halfway width to read as
+      // a real control. It must NOT also go gold: doing that made both buttons
+      // in a pair identical on touch while desktop still showed one gold and
+      // one grey, so the ranking simply vanished on phones. Width only.
       sx: {
         '@media (hover: none)': {
-          '&::before': { width: '8px', background: GOLD },
+          '&::before': { width: '8px' },
         },
       },
+      // Both variants get the SAME box. Left to the size scale the two came
+      // out at different heights, because only one of them carries a border
+      // colour heavy enough to define its own edge.
+      h: { base: '48px', md: '42px' },
     };
   }
 

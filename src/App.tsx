@@ -67,6 +67,28 @@ const scrollPositions = new Map<string, number>();
 const NO_RESTORE = new Set(['/']);
 
 /**
+ * How long to keep asking for the saved position while the page fills in.
+ * Generous on purpose: a cold lazy chunk plus its data can easily take a
+ * second, and being early is the whole failure mode here.
+ */
+const RESTORE_BUDGET_MS = 1800;
+
+/**
+ * Opt-in tracing. `localStorage.setItem('vero_scroll_debug', '1')` then reload,
+ * and every save, restore and give-up prints. Off by default so it costs a
+ * single property read per navigation in production.
+ */
+const debugScroll = (...args: unknown[]) => {
+  try {
+    if (localStorage.getItem('vero_scroll_debug') === '1') {
+      console.info('[scroll]', ...args);
+    }
+  } catch {
+    /* private mode — never let tracing break navigation */
+  }
+};
+
+/**
  * Puts the visitor back where they were when they press Back, instead of at
  * the top of the page they are returning to.
  *
@@ -100,14 +122,25 @@ const restoreTo = (top: number) => {
     window.removeEventListener('keydown', stop);
   };
 
-  // Pages here finish loading well after mount — journal lists, Instagram,
-  // gallery dimensions — so the document is often still too short to hold the
-  // saved position on the first frame. Keep asking for a few frames until it
-  // lands or the page turns out to be genuinely shorter than it was.
+  // Pages here finish loading well after mount — lazy route chunks first, then
+  // journal lists, Instagram and gallery dimensions — so the document is
+  // usually far too short to hold the saved position on the first frame. The
+  // old 30-frame budget (~500ms) expired long before the content arrived.
+  // Bounded by wall-clock instead, and it stops the instant the position
+  // sticks, so a page that is ready immediately costs one frame.
+  const startedAt = performance.now();
   const tick = () => {
     if (cancelled) return cleanup();
     window.scrollTo(0, top);
-    if (Math.abs(window.scrollY - top) < 2 || (frames += 1) > 30) return cleanup();
+    frames += 1;
+    if (Math.abs(window.scrollY - top) < 2) {
+      debugScroll('landed', top, frames + ' frames');
+      return cleanup();
+    }
+    if (performance.now() - startedAt > RESTORE_BUDGET_MS) {
+      debugScroll('gave up short', top, 'reached ' + window.scrollY);
+      return cleanup();
+    }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -118,15 +151,31 @@ function ScrollToTop() {
   const navigationType = useNavigationType();
   const handledKey = useRef<string | null>(null);
 
-  // Record the outgoing position. The cleanup runs just before the next
-  // entry's effect, so it captures where this entry was left.
+  // Record the position CONTINUOUSLY while this entry is on screen.
+  //
+  // This used to save once, in the effect's cleanup. That never worked: a
+  // cleanup runs during the commit of the NEXT render, by which point React
+  // has already swapped the old route's DOM out for the new one. The document
+  // is a different height at that moment, so the browser has already clamped
+  // window.scrollY — usually to 0. Every position saved was the position
+  // AFTER leaving, which is why nothing ever restored.
+  //
+  // Sampling on scroll, throttled to a frame, means the last value recorded is
+  // the real one from just before the navigation.
   useEffect(() => {
-    const save = () => scrollPositions.set(key, window.scrollY);
-    window.addEventListener('pagehide', save);
-    return () => {
-      save();
-      window.removeEventListener('pagehide', save);
+    let queued = false;
+    const sample = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        scrollPositions.set(key, window.scrollY);
+      });
     };
+    // Seed it, in case they never scroll at all.
+    scrollPositions.set(key, window.scrollY);
+    window.addEventListener('scroll', sample, { passive: true });
+    return () => window.removeEventListener('scroll', sample);
   }, [key]);
 
   useEffect(() => {
@@ -140,9 +189,11 @@ function ScrollToTop() {
     if (navigationType === 'POP' && !NO_RESTORE.has(pathname)) {
       const saved = scrollPositions.get(key);
       if (saved != null && saved > 0) {
+        debugScroll('restore', pathname, key, saved);
         restoreTo(saved);
         return;
       }
+      debugScroll('pop with nothing saved', pathname, key, saved);
     }
     window.scrollTo(0, 0);
   }, [key, pathname, navigationType]);

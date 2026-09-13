@@ -1,4 +1,4 @@
-import { Box, VStack, HStack, Text, Flex, Image, SimpleGrid, Icon } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, Image, SimpleGrid, Icon } from '@chakra-ui/react';
 import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
 import FaCamera from '../icons/fa/FaCamera';
 import FaGlobe from '../icons/fa/FaGlobe';
@@ -79,7 +79,15 @@ const StatValue = ({
   }, [play, countTo]);
 
   return (
-    <Text textStyle="cardTitle" color="gray.700" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+    <Text
+      fontFamily="heading"
+      fontWeight="500"
+      fontSize={{ base: '0.95rem', md: '1.1rem' }}
+      lineHeight="1.25"
+      textAlign="center"
+      color="gray.700"
+      sx={{ fontVariantNumeric: 'tabular-nums' }}
+    >
       {n === null ? value : `${n}${suffix ?? ''}`}
     </Text>
   );
@@ -95,23 +103,32 @@ const StatsBand = () => {
   const inView = useInView(ref, { once: true, amount: 0.5 });
 
   return (
-    <Flex
-      ref={ref}
-      gap={{ base: 8, md: 16 }}
-      direction={{ base: 'column', sm: 'row' }}
-      align="center"
-      justify="center"
-      w="100%"
-    >
+    <Box w="100%" pt={{ base: 4, md: 6 }}>
+      {/* Drawn, not static: the rule arrives with the facts. */}
+      <MotionDiv
+        style={{ transformOrigin: 'left', height: '1px', background: 'var(--chakra-colors-brand-accentBorder)' }}
+        initial={{ scaleX: 0 }}
+        animate={inView ? { scaleX: 1 } : {}}
+        transition={{ duration: 0.7, ease: 'easeOut' }}
+      />
+      <Flex
+        ref={ref}
+        gap={{ base: 3, md: 5 }}
+        direction="row"
+        align="flex-start"
+        justify="space-between"
+        w="100%"
+        pt={{ base: 5, md: 6 }}
+      >
       {STATS.map((stat, i, arr) => (
-        <Flex key={stat.label} align="center" gap={{ base: 8, md: 16 }}>
-          <VStack spacing={2} minW={{ base: '120px', md: '140px' }}>
+        <Flex key={stat.label} align="flex-start" gap={{ base: 3, md: 5 }} flex="1">
+          <VStack spacing={1.5} flex="1" minW={0}>
             <MotionDiv
               initial={{ opacity: 0, scale: 0.75 }}
               animate={inView ? { opacity: 1, scale: 1 } : {}}
               transition={{ duration: 0.5, ease: 'easeOut', delay: i * 0.14 }}
             >
-              <Icon as={stat.icon} boxSize={4} color="brand.accent" display="block" />
+              <Icon as={stat.icon} boxSize={3.5} color="brand.accent" display="block" />
             </MotionDiv>
             {/* overflow hidden is the mask the two lines slide up out of. */}
             <Box overflow="hidden">
@@ -145,12 +162,13 @@ const StatsBand = () => {
               animate={inView ? { scaleY: 1 } : {}}
               transition={{ duration: 0.5, ease: 'easeOut', delay: i * 0.14 + 0.34 }}
             >
-              <Box display={{ base: 'none', sm: 'block' }} w="1px" h="50px" bg="brand.accent" opacity={0.3} />
+              <Box w="1px" h={{ base: '44px', md: '48px' }} bg="brand.accent" opacity={0.3} />
             </MotionDiv>
           )}
         </Flex>
       ))}
-    </Flex>
+      </Flex>
+    </Box>
   );
 };
 
@@ -285,6 +303,16 @@ const About = () => {
                     exactly what you felt that day.
                   </Text>
 
+                  {/* The button belongs to the paragraph that earned it, and
+                      it is centred in the column rather than hung off the left
+                      edge — the same arrangement repeats in the closing
+                      section below, so the page has one rhythm. */}
+                  <Flex w="100%" justify="center" pt={1}>
+                    <CTAButton to="/gallery" variant="tab" size="sm">
+                      See my work
+                    </CTAButton>
+                  </Flex>
+
                   <Box w="100%" h="1px" bg="brand.accentBorder" my={{ base: 2, md: 3 }} />
 
                   <Text textStyle="eyebrow">A Unique Perspective</Text>
@@ -325,14 +353,11 @@ const About = () => {
                     comfortable, and how small adjustments in posing and light transform an
                     image. I know how to guide you naturally because I have been in your shoes.
                   </Text>
-                  <HStack spacing={4} flexWrap="wrap" pt={1}>
-                    <CTAButton to="/gallery" variant="tab" size="sm">
-                      See my work
-                    </CTAButton>
+                  <Flex w="100%" justify="center" pt={1}>
                     <CTAButton to="/journal" variant="tabMuted" size="sm">
                       Read the journal
                     </CTAButton>
-                  </HStack>
+                  </Flex>
                 </VStack>
               </MotionDiv>
             </Box>
@@ -355,7 +380,7 @@ const About = () => {
         px={{ base: 6, md: 12 }}
         ref={angleRef}
       >
-        <VStack spacing={{ base: 14, md: 20 }} maxW="1100px" mx="auto">
+        <Box maxW="1100px" mx="auto">
           <SimpleGrid
             columns={{ base: 1, lg: 2 }}
             spacing={{ base: 10, lg: 16 }}
@@ -399,6 +424,12 @@ const About = () => {
                   and I have never been precious about my dress.
                 </Text>
 
+                <Flex w="100%" justify="center" pt={1}>
+                  <CTAButton to="/wedding-photography" variant="tab" size="sm">
+                    Wedding coverage
+                  </CTAButton>
+                </Flex>
+
                 {/* Same hairline the section above uses to turn one column
                     into two thoughts. */}
                 <Box w="100%" h="1px" bg="brand.accentBorder" my={{ base: 2, md: 3 }} />
@@ -414,24 +445,21 @@ const About = () => {
                 >
                   Have a session in mind? I&apos;d love to hear about it.
                 </Text>
-                {/* Two buttons, matching the pair in the section above — same
-                    components, same sizes, same order of weight. */}
-                <HStack spacing={4} flexWrap="wrap" pt={1}>
-                  <CTAButton to="/wedding-photography" variant="tab" size="sm">
-                    Wedding coverage
-                  </CTAButton>
+                <Flex w="100%" justify="center" pt={1}>
                   <CTAButton to="/contact" variant="tabMuted" size="sm">
                     Book a session
                   </CTAButton>
-                </HStack>
+                </Flex>
+
+                {/* The three facts, IN this column rather than in a band of
+                    their own. They were getting a full-width strip, a divider
+                    and their own vertical interval to say nine words, while
+                    this column sat with room to spare underneath. */}
+                <StatsBand />
               </VStack>
             </MotionDiv>
           </SimpleGrid>
-
-          <Box w="100%" h="1px" bg="brand.accentBorder" />
-
-          <StatsBand />
-        </VStack>
+        </Box>
       </Box>
 
     </Box>

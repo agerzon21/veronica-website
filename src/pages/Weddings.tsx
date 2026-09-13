@@ -1056,12 +1056,18 @@ const Weddings = () => {
           {/* The mosaic's dense packing always leaves the last cell open at
               eight photos — so the gallery invitation lives there instead
               of floating under the grid. */}
-          <GridItem colSpan={{ base: 2, md: 2 }} rowSpan={1}>
+          {/* Desktop only. On a phone this cell inherits the mosaic's row
+              height (34vw, ~130px) no matter what is inside it, which is why
+              restyling the contents last time changed nothing: the BOX was the
+              problem, not the type. The phone gets the same invitation as a
+              46px bar under the grid instead — identical to the journal
+              strip's. */}
+          <GridItem colSpan={2} rowSpan={1} display={{ base: 'none', md: 'block' }}>
             <Flex
               as={RouterLink}
               to="/gallery/weddings"
               role="group"
-              direction={{ base: 'row', md: 'column' }}
+              direction="column"
               align="center"
               justify="center"
               textAlign="center"
@@ -1082,12 +1088,12 @@ const Weddings = () => {
               <Text
                 fontFamily="heading"
                 fontWeight="300"
-                fontSize={{ base: '14px', md: '1.3rem' }}
-                lineHeight={{ base: '1.15', md: '1.25' }}
+                fontSize="1.3rem"
+                lineHeight="1.25"
                 color="gray.800"
               >
                 See the full
-                <Box as="br" display={{ base: 'none', md: 'inline' }} />{' '}
+                <br />
                 wedding gallery
               </Text>
               <HStack
@@ -1096,14 +1102,48 @@ const Weddings = () => {
                 transition="transform 0.25s ease"
                 _groupHover={{ transform: 'translateX(3px)' }}
               >
-                <Text textStyle="ctaLabel" display={{ base: 'none', md: 'block' }}>
-                  Browse
-                </Text>
-                <Icon as={FaArrowRight} boxSize={{ base: 2.5, md: 3 }} />
+                <Text textStyle="ctaLabel">Browse</Text>
+                <Icon as={FaArrowRight} boxSize={3} />
               </HStack>
             </Flex>
           </GridItem>
         </Grid>
+
+        {/* The phone's invitation. Same height, type and arrow as "View the
+            full journal" in the section above, because they are the same
+            thing and should not look like two different components. */}
+        <Flex
+          as={RouterLink}
+          to="/gallery/weddings"
+          role="group"
+          display={{ base: 'flex', md: 'none' }}
+          align="center"
+          justify="center"
+          gap={2}
+          h="46px"
+          px={2}
+          mt={3}
+          maxW="1200px"
+          mx="auto"
+          textAlign="center"
+          borderRadius="sm"
+          bg="brand.surface"
+          border="1px solid"
+          borderColor="brand.accentBorder"
+          transition="background 0.25s ease, border-color 0.25s ease"
+          _hover={{ bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }}
+        >
+          <Text fontFamily="heading" fontWeight="300" fontSize="14px" lineHeight="1.15" color="gray.800">
+            See the full wedding gallery
+          </Text>
+          <Icon
+            as={FaArrowRight}
+            boxSize={2.5}
+            color="brand.accentText"
+            transition="transform 0.25s ease"
+            _groupHover={{ transform: 'translateX(3px)' }}
+          />
+        </Flex>
       </Box>
 
       <MobilePrintSeam photos={tapestry.seams[5]} />

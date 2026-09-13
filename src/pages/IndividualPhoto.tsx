@@ -18,7 +18,8 @@ import { useCopyNotification } from '../components/CopyNotification';
 import LoadingImage from '../components/ui/LoadingImage';
 import PageHeader from '../components/ui/PageHeader';
 import CTAButton from '../components/ui/CTAButton';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
+import { useSmartBack } from '../components/ui/useSmartBack';
 import { Helmet } from 'react-helmet-async';
 import { m, AnimatePresence } from 'framer-motion';
 
@@ -44,6 +45,13 @@ const MotionDiv = m.div;
 
 const IndividualPhoto: React.FC = () => {
   const { category, photoId } = useParams<{ category: string; photoId: string }>();
+  // Called up here, before any early return, because hooks cannot be
+  // conditional — the label is derived from the route param rather than the
+  // fetched photo for the same reason.
+  const back = useSmartBack({
+    to: `/gallery/${category}`,
+    label: `Back to ${category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Gallery'}`,
+  });
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [loading, setLoading] = useState(true);
   // True only when the API said 404 — the slug genuinely doesn't exist.
@@ -59,7 +67,6 @@ const IndividualPhoto: React.FC = () => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const dragDistanceRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
   const { show: showCopied, Notification: CopyNotification } = useCopyNotification();
 
   const toggleFullscreen = () => {
@@ -455,12 +462,10 @@ const IndividualPhoto: React.FC = () => {
                 </Flex>
 
                 {/* Back to gallery */}
-                <CTAButton
-                  onClick={() => navigate(`/gallery/${category}`)}
-                  variant="ghost"
-                  size="sm"
-                >
-                  ← Back to {categoryLabel}
+                {/* Was always /gallery/<category>, even when the visitor
+                    arrived from a related-photo link or another page. */}
+                <CTAButton onClick={back.onClick} variant="ghost" size="sm">
+                  ← {back.label}
                 </CTAButton>
               </VStack>
             </MotionDiv>

@@ -14,6 +14,7 @@ import FaTimes from '../icons/fa/FaTimes';
 import ReactMarkdown from 'react-markdown';
 import PageHeader from '../components/ui/PageHeader';
 import CTAButton from '../components/ui/CTAButton';
+import { useSmartBack } from '../components/ui/useSmartBack';
 
 /**
  * Individual journal post page — rendered when the URL is
@@ -951,8 +952,14 @@ const DEFAULT_BACK = { to: '/journal', label: 'Back to the journal' };
  * journal. Used twice — header and the not-found screen.
  */
 function BackToJournalLink({ back = DEFAULT_BACK }: { back?: { to: string; label: string } }) {
+  // Pushing `back.to` as a NEW entry landed the visitor at the top of the page
+  // they came from and left the old entry stranded in history. A real back
+  // step returns them to the exact spot instead. useSmartBack keeps the
+  // explicit label this component is already given, and only falls back to
+  // pushing when there is no in-site entry behind us (a cold link-share).
+  const smart = useSmartBack(back);
   return (
-    <RouterLink to={back.to}>
+    <Box as="button" type="button" onClick={smart.onClick} bg="transparent" border="none" p={0}>
       <HStack
         as="span"
         display="inline-flex"
@@ -963,9 +970,9 @@ function BackToJournalLink({ back = DEFAULT_BACK }: { back?: { to: string; label
         transition="color 0.2s"
       >
         <Icon as={FaArrowLeft} boxSize={3} />
-        <Text as="span">{back.label}</Text>
+        <Text as="span">{smart.label}</Text>
       </HStack>
-    </RouterLink>
+    </Box>
   );
 }
 
