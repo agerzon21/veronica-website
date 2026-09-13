@@ -104,7 +104,14 @@ const debugScroll = (...args: unknown[]) => {
  * scroll the gallery to the top, which is the exact bug main.tsx is protecting
  * against. Acting only when the entry itself changes leaves the modal alone.
  */
+/**
+ * True while restoreTo is driving the window. The scroll sampler checks this
+ * so a restore cannot overwrite the very position it is trying to reach.
+ */
+let restoring = false;
+
 const restoreTo = (top: number) => {
+  restoring = true;
   let frames = 0;
   let cancelled = false;
   const stop = () => {
@@ -117,6 +124,7 @@ const restoreTo = (top: number) => {
   window.addEventListener('keydown', stop, { once: true });
 
   const cleanup = () => {
+    restoring = false;
     window.removeEventListener('wheel', stop);
     window.removeEventListener('touchstart', stop);
     window.removeEventListener('keydown', stop);
@@ -151,33 +159,16 @@ function ScrollToTop() {
   const navigationType = useNavigationType();
   const handledKey = useRef<string | null>(null);
 
-  // Record the position CONTINUOUSLY while this entry is on screen.
+  // RESTORE FIRST, SAVE SECOND. This order is load-bearing.
   //
-  // This used to save once, in the effect's cleanup. That never worked: a
-  // cleanup runs during the commit of the NEXT render, by which point React
-  // has already swapped the old route's DOM out for the new one. The document
-  // is a different height at that moment, so the browser has already clamped
-  // window.scrollY — usually to 0. Every position saved was the position
-  // AFTER leaving, which is why nothing ever restored.
+  // Both effects depend on `key`, so on every navigation React runs them in
+  // declaration order. When the sampler below was declared first AND seeded
+  // itself with `scrollPositions.set(key, window.scrollY)`, that seed ran
+  // before this effect and overwrote the stored position with the live scroll
+  // — which, one frame after a route swap, is 0. The restore then read back
+  // its own zero. The trace said it plainly: "pop with nothing saved ... 0".
   //
-  // Sampling on scroll, throttled to a frame, means the last value recorded is
-  // the real one from just before the navigation.
-  useEffect(() => {
-    let queued = false;
-    const sample = () => {
-      if (queued) return;
-      queued = true;
-      requestAnimationFrame(() => {
-        queued = false;
-        scrollPositions.set(key, window.scrollY);
-      });
-    };
-    // Seed it, in case they never scroll at all.
-    scrollPositions.set(key, window.scrollY);
-    window.addEventListener('scroll', sample, { passive: true });
-    return () => window.removeEventListener('scroll', sample);
-  }, [key]);
-
+  // The seed is gone and this effect now reads before anything can write.
   useEffect(() => {
     // Same history entry as last time — a modal opening or closing, not a
     // navigation. See the note above.
@@ -197,6 +188,30 @@ function ScrollToTop() {
     }
     window.scrollTo(0, 0);
   }, [key, pathname, navigationType]);
+
+  // Record the position CONTINUOUSLY while this entry is on screen.
+  //
+  // Saving once, in a cleanup, never worked either: a cleanup runs during the
+  // commit of the NEXT render, when React has already swapped the old route's
+  // DOM for the new one. The document is a different height by then and the
+  // browser has clamped window.scrollY. Sampling on scroll means the last
+  // value recorded is the real one from just before the navigation.
+  useEffect(() => {
+    let queued = false;
+    const sample = () => {
+      // A restore in flight scrolls the window itself, and those events would
+      // otherwise write the half-restored position back over the target while
+      // the page is still filling in.
+      if (restoring || queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        if (!restoring) scrollPositions.set(key, window.scrollY);
+      });
+    };
+    window.addEventListener('scroll', sample, { passive: true });
+    return () => window.removeEventListener('scroll', sample);
+  }, [key]);
 
   return null;
 }

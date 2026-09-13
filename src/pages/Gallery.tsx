@@ -115,7 +115,7 @@ const Gallery = () => {
           <meta property="og:image" content={`https://vero.photography${GALLERY_HERO_IMAGE}`} />
         </Helmet>
         {/* Hero */}
-        <Box position="relative" h={{ base: '45vh', lg: '50vh' }} overflow="hidden">
+        <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
           <Image
             src={GALLERY_HERO_IMAGE}
             alt="Gallery"
@@ -168,7 +168,7 @@ const Gallery = () => {
         <meta property="og:image" content={`https://vero.photography${categoryInfo.image}`} />
       </Helmet>
       {/* Category Hero */}
-      <Box position="relative" h={{ base: '40vh', lg: '45vh' }} overflow="hidden">
+      <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
         <Image
           src={categoryInfo.image}
           alt={categoryInfo.title}

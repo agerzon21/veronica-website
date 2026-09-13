@@ -310,7 +310,11 @@ const Weddings = () => {
           small screens keep the ocean ceremony shot that was made for
           this slot. Desktop sits a little taller than 49vh and anchors
           at 45% so the groom's head clears the top edge. ─── */}
-      <Box position="relative" h={{ base: '52vh', md: '58vh' }} overflow="hidden">
+      {/* One hero height across the whole site. These were 45/53 here, 46/50
+          on the journal, 45/50 and 40/45 across the two gallery views and
+          52/58 on weddings — five different first impressions for one site.
+          About's is the reference. */}
+      <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
         <Image
           src="/assets/photos/weddings/ocean-vows-ceremony.webp"
           alt="Wedding couple exchanging vows by the ocean."

@@ -98,7 +98,11 @@ function JournalIndex() {
       {/* Hero — every other section of the site opens on a photograph;
           the journal was the one page that opened on white. Served from
           /assets (no Drive dependency, no layout shift). */}
-      <Box position="relative" h={{ base: '46vh', md: '50vh' }} overflow="hidden">
+      {/* One hero height across the whole site. These were 45/53 here, 46/50
+          on the journal, 45/50 and 40/45 across the two gallery views and
+          52/58 on weddings — five different first impressions for one site.
+          About's is the reference. */}
+      <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
         <Image
           src="/assets/photos/site/journal-hero.webp"
           alt="A couple outside a stone building, the bride leaning back across a bench as the groom watches."
