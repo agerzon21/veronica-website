@@ -280,8 +280,12 @@ const InstagramFeed = () => {
 
   const openPost = PHOTOS[openIdx ?? -1] as Photo | undefined;
 
+  // pt is trimmed against layerStyle="section" (declared after it so it wins):
+  // the chapter row above already closes with its own padding, and the two
+  // together were the "too much white space" note. pb stays on the section
+  // interval — the run into Kind Words is correct as is.
   return (
-    <Box ref={sectionRef} layerStyle="section" px={4} bg="white">
+    <Box ref={sectionRef} layerStyle="section" pt={{ base: 8, md: 12 }} px={4} bg="white">
       {/* Eyebrow + 40px rule. Not PageHeader: this section has no title of its
           own, and PageHeader requires one. Same tokens either way. */}
       <VStack spacing={{ base: 4, md: 5 }} mb={{ base: 10, md: 12 }}>

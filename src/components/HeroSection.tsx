@@ -107,6 +107,16 @@ const CAMERA_GAP = 24;
 // made it look welded to the camera. The budget below reserves this
 // instead of a second CAMERA_GAP, so the camera never grows into it.
 const FOOTER_GAP = 88;
+// Portrait phones get a tighter gap AND a reserved strip at the bottom of the
+// viewport. The sticky inner is sized to 100lvh — the CHROME-HIDDEN viewport —
+// so anything positioned near its bottom edge sits BEHIND iOS Safari's and
+// Chrome's toolbar whenever that toolbar is showing. The CTA was landing at
+// roughly lvh-32, i.e. fully underneath a ~90px bar. Reserving the strip pulls
+// the whole stack up into the always-visible part of the screen; the camera
+// gives up the difference, which is the right trade for a CTA you can see.
+// Desktop has no chrome bar, so both stay at zero / 88 there.
+const FOOTER_GAP_PORTRAIT = 56;
+const MOBILE_CHROME_RESERVE = 100;
 
 // The hero header is now the shared PageHeader (eyebrow → 40px rule →
 // pageTitle h1). pageTitle is 36 / 52 / 68px against the old hand-rolled
@@ -122,10 +132,22 @@ const HEADER_CONTENT_LG = 195;
 const headerContentFor = (vw: number) =>
   vw >= 992 ? HEADER_CONTENT_LG : vw >= 768 ? HEADER_CONTENT_MD : HEADER_CONTENT_BASE;
 
-// Just the CTA button now that the stats row lives on the About page:
-// button height plus a little slack, not the 150px the three-column
-// stat block needed.
-const FOOTER_CONTENT = 64;
+// The hero CTA is a camera focus point (Alex picked A3a): four gold brackets
+// that snap tight around the label on hover, the same mark the viewfinder
+// corners above make at viewport scale. Only the two edges each corner draws
+// carry a width — the other two are zeroed, or the bracket closes into a box.
+const FOCUS_CORNERS = [
+  { corner: 'tl', hover: 'translate(13px, 10px)', edges: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 } },
+  { corner: 'tr', hover: 'translate(-13px, 10px)', edges: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 } },
+  { corner: 'bl', hover: 'translate(13px, -10px)', edges: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 } },
+  { corner: 'br', hover: 'translate(-13px, -10px)', edges: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 } },
+] as const;
+
+// Just the CTA now that the stats row lives on the About page. Raised from 64
+// when the CTA became the focus point above: that treatment carries real
+// padding inside its brackets (~75px tall at md against the old ~46px), and
+// this number is what stops the camera growing into it.
+const FOOTER_CONTENT = 84;
 const FOOTER_RESERVED = FOOTER_CONTENT + SAFE_BUFFER;
 
 // CameraBody rendered at a configurable CSS-natural width (passed in as px).
@@ -238,8 +260,14 @@ const computeCameraSize = (
   isPortrait: boolean;
   verticalShiftPx: number;
   extractFooter: boolean;
+  footerGap: number;
 } => {
   const isPortrait = vh > vw;
+  // Phone-shaped viewports only. A landscape phone is already in extracted-
+  // footer mode, and a desktop window has no browser chrome overlaying it.
+  const isPhonePortrait = isPortrait && vw < 768;
+  const footerGap = isPhonePortrait ? FOOTER_GAP_PORTRAIT : FOOTER_GAP;
+  const chromeReserve = isPhonePortrait ? MOBILE_CHROME_RESERVE : 0;
   const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
   // width / height of the camera box. Matches the image's own aspect so
   // everything (natural size, scale-down math, LCD bounds) lines up with
@@ -266,7 +294,8 @@ const computeCameraSize = (
   // sits just below the sticky and is revealed by additional scroll.
   const headerReserved = NAVBAR_HEIGHT + SAFE_BUFFER + headerContentFor(vw);
 
-  const fullAvailableH = vh - headerReserved - FOOTER_RESERVED - CAMERA_GAP - FOOTER_GAP;
+  const fullAvailableH =
+    vh - headerReserved - FOOTER_RESERVED - CAMERA_GAP - footerGap - chromeReserve;
   const extractFooter = fullAvailableH < MIN_FULL_LAYOUT_CAMERA_HEIGHT;
 
   const availableH = extractFooter
@@ -285,7 +314,7 @@ const computeCameraSize = (
   const minCameraCenterY = headerReserved + CAMERA_GAP + finalHeight / 2;
   const verticalShiftPx = Math.max(0, minCameraCenterY - vh / 2);
 
-  return { natural, final, finalHeight, isPortrait, verticalShiftPx, extractFooter };
+  return { natural, final, finalHeight, isPortrait, verticalShiftPx, extractFooter, footerGap };
 };
 
 const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
@@ -357,7 +386,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // so the two stay visually balanced around the (shifted) camera.
   const anchorOffset = size.finalHeight / 2 + CAMERA_GAP;
   const headerBottomOffset = anchorOffset - size.verticalShiftPx;
-  const footerTopOffset = size.finalHeight / 2 + FOOTER_GAP + size.verticalShiftPx;
+  const footerTopOffset = size.finalHeight / 2 + size.footerGap + size.verticalShiftPx;
 
   // Motion-y at scroll end translates the camera body down by verticalShiftPx
   // so its center matches the header/footer anchor. Expressed as a percentage
@@ -393,6 +422,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const CAMERA_ZOOM_END = CAMERA_ZOOM_VH / PINNED_SCROLL_VH;
   const TEXT_FADE_START = TEXT_FADE_START_VH / PINNED_SCROLL_VH;
   const TEXT_FADE_END = (TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH) / PINNED_SCROLL_VH;
+
+  // Once the camera has settled the screen is completely still, and nothing
+  // says the page continues — the hero still has STABLE_SCROLL_VH of pinned
+  // scroll left, plus everything below it. This cue fades in exactly when the
+  // animations finish and rides out with the sticky.
+  const ANIMATIONS_SETTLED = ANIMATIONS_END_VH / PINNED_SCROLL_VH;
 
   // Scale animates DOWN from 1 (full natural size, LCD covers viewport) to
   // finalScale (camera at small final size). Direction is critical for iOS.
@@ -432,6 +467,23 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // leading edge of the gold fill.
   const progressThumbTop = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
+  const nextCueOpacity = useTransform(
+    scrollYProgress,
+    [ANIMATIONS_SETTLED - 0.02, ANIMATIONS_SETTLED + 0.05],
+    [0, 1],
+  );
+
+  // Tapping the cue is the point of it on a phone, where there is no hover to
+  // suggest it does anything. Lands just past the hero's own scroll length.
+  const scrollPastHero = () => {
+    const el = sectionRef.current;
+    if (!el) return;
+    window.scrollTo({
+      top: el.offsetTop + el.offsetHeight - window.innerHeight,
+      behavior: 'smooth',
+    });
+  };
+
   // The stats row moved to the About page's closing band: repeating
   // "Based in / Experience / Available" on the homepage AND there was
   // saying the same thing twice, and the zoom-out deserves to land on
@@ -447,14 +499,47 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         as={RouterLink}
         to="/contact"
         role="group"
+        position="relative"
         display="inline-flex"
-        flexDirection="column"
         alignItems="center"
-        gap={{ base: 3, md: 4 }}
-        px={2}
-        py={1}
-        sx={{ WebkitTapHighlightColor: 'transparent' }}
+        justifyContent="center"
+        px={{ base: 8, md: 12 }}
+        py={{ base: 5, md: 6 }}
+        sx={{
+          WebkitTapHighlightColor: 'transparent',
+          // There is no hover on a phone, so the lock cannot be the thing that
+          // arrives on interaction. The corners sit at their snapped position
+          // and breathe instead, which is what the picked mock did on mobile.
+          '@media (hover: none)': {
+            '& .focus-cnr': { animation: 'heroFocusPulse 2.6s ease-in-out infinite' },
+            '& .focus-tl': { transform: 'translate(10px, 8px)' },
+            '& .focus-tr': { transform: 'translate(-10px, 8px)' },
+            '& .focus-bl': { transform: 'translate(10px, -8px)' },
+            '& .focus-br': { transform: 'translate(-10px, -8px)' },
+          },
+          '@keyframes heroFocusPulse': {
+            '0%, 100%': { borderColor: brand.accent },
+            '50%': { borderColor: brand.accentBorder },
+          },
+        }}
       >
+        {FOCUS_CORNERS.map(({ corner, edges, hover }) => (
+          <Box
+            key={corner}
+            className={`focus-cnr focus-${corner}`}
+            position="absolute"
+            width="15px"
+            height="15px"
+            borderWidth="1.5px"
+            borderStyle="solid"
+            borderColor="brand.accent"
+            // Only the two sides this corner actually draws keep a width; the
+            // other two are zeroed so the box does not close into a rectangle.
+            transition="transform 0.4s cubic-bezier(0.34, 1.4, 0.64, 1)"
+            _groupHover={{ transform: hover }}
+            {...edges}
+          />
+        ))}
         <Text
           fontFamily="heading"
           fontWeight="300"
@@ -466,17 +551,6 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         >
           Book a Session
         </Text>
-        <Box position="relative" w={{ base: '150px', md: '190px' }} h="1px" bg="brand.accentBorder">
-          <Box
-            position="absolute"
-            inset={0}
-            bg="brand.accent"
-            transformOrigin="left"
-            transform="scaleX(0.28)"
-            transition="transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)"
-            _groupHover={{ transform: 'scaleX(1)' }}
-          />
-        </Box>
       </Box>
     </VStack>
   );
@@ -680,6 +754,59 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             Scroll
           </Text>
         </MotionBox>
+
+        {/* "There is more below" — the mark Alex picked (B7). A hairline ring
+            around a down arrow, bobbing, which is the one option in that set
+            that also reads as tappable. That matters: it appears after the
+            cinematic, on a completely still screen, and on a phone there is no
+            hover to suggest it does anything. So it IS a button.
+
+            Bottom offset matches the viewfinder corners for the same reason
+            they use it — the sticky is 100lvh, so anything nearer the bottom
+            edge than ~100px sits behind iOS Safari's toolbar. Only rendered in
+            the full layout: in extracted-footer mode the footer is already
+            visible below the sticky, which makes the point by itself. */}
+        {!size.extractFooter && (
+          <MotionBox
+            as="button"
+            type="button"
+            onClick={scrollPastHero}
+            aria-label="Scroll to the rest of the page"
+            position="absolute"
+            bottom={{ base: '104px', md: '40px' }}
+            left="50%"
+            zIndex={5}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            width="40px"
+            height="40px"
+            borderRadius="full"
+            border="1px solid"
+            borderColor="brand.accentBorder"
+            bg="transparent"
+            cursor="pointer"
+            transition="border-color 0.3s ease, background 0.3s ease"
+            _hover={{ borderColor: 'brand.accent', bg: 'rgba(201, 169, 110, 0.08)' }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            style={{ opacity: nextCueOpacity, x: '-50%' }}
+          >
+            <m.svg
+              width="12"
+              height="14"
+              viewBox="0 0 12 14"
+              fill="none"
+              stroke={brand.accent}
+              strokeWidth="1"
+              aria-hidden="true"
+              animate={{ y: [0, 3.5, 0] }}
+              transition={{ duration: 2.2, ease: 'easeInOut', repeat: Infinity }}
+            >
+              <path d="M6 1 L6 12" />
+              <path d="M1.6 7.8 L6 12.4 L10.4 7.8" />
+            </m.svg>
+          </MotionBox>
+        )}
 
         {/* Scroll hint — pinned higher on mobile (110px) so it clears the
             iOS Safari / Chrome bottom toolbar; tighter on desktop where

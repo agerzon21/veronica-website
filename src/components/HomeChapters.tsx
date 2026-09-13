@@ -120,8 +120,13 @@ export function HomeChapters() {
   const isAdvice =
     post?.session_type === 'article' || (post?.tags ?? []).some((t) => /advice|guide/i.test(t));
 
+  // Asymmetric padding on purpose. The gap ABOVE is shared with the hero's
+  // own trailing white, and the gap BELOW is shared with the Instagram
+  // section's top padding — 80 + 96 was reading as a hole in the page. Both
+  // ends give up roughly half; the interval between the feed and Kind Words
+  // is untouched because that one already reads right.
   return (
-    <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 4, md: 8 }}>
+    <Box bg="white" pt={{ base: 12, md: 16 }} pb={{ base: 6, md: 8 }} px={{ base: 4, md: 8 }}>
       <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
         <Text textStyle="eyebrow">Where to Begin</Text>
         <Box w="40px" h="1px" bg="brand.accent" />
