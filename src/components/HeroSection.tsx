@@ -116,12 +116,19 @@ const FOOTER_GAP = 88;
 // gives up the difference, which is the right trade for a CTA you can see.
 // Desktop has no chrome bar, so both stay at zero / 88 there.
 const FOOTER_GAP_PORTRAIT = 56;
-// Raised from 100: the CTA is anchored to the camera's centre and the scroll
-// cue to the viewport bottom, so the space between them is only ever what is
-// left over — and at 100 they were nearly touching. Every extra point here
-// lifts the CTA by that much. Paired with a lower cue (see below), the two get
-// ~60px of air between them. The camera gives up ~29px of width for it.
+// Strip reserved at the bottom of the viewport, BELOW the CTA. The CTA is
+// anchored to the camera's centre and the scroll cue to the viewport bottom,
+// so the space between them is only ever what is left over — reserve nothing
+// and they collide, which is exactly what desktop was doing.
+//
+// Phones need more of it because the sticky is sized to 100lvh (the
+// chrome-hidden viewport), so the bottom ~90px can sit behind Safari's
+// toolbar and the cue has to clear that as well as the CTA.
+//
+// Desktop has no toolbar, so this is purely the cue's own room: the 40px ring
+// at 28px from the bottom, plus air above it.
 const MOBILE_CHROME_RESERVE = 140;
+const DESKTOP_CUE_RESERVE = 104;
 
 // The hero header is now the shared PageHeader (eyebrow → 40px rule →
 // pageTitle h1). pageTitle is 36 / 52 / 68px against the old hand-rolled
@@ -272,7 +279,7 @@ const computeCameraSize = (
   // footer mode, and a desktop window has no browser chrome overlaying it.
   const isPhonePortrait = isPortrait && vw < 768;
   const footerGap = isPhonePortrait ? FOOTER_GAP_PORTRAIT : FOOTER_GAP;
-  const chromeReserve = isPhonePortrait ? MOBILE_CHROME_RESERVE : 0;
+  const chromeReserve = isPhonePortrait ? MOBILE_CHROME_RESERVE : DESKTOP_CUE_RESERVE;
   const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
   // width / height of the camera box. Matches the image's own aspect so
   // everything (natural size, scale-down math, LCD bounds) lines up with
@@ -781,7 +788,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             onClick={scrollPastHero}
             aria-label="Scroll to the rest of the page"
             position="absolute"
-            bottom={{ base: '84px', md: '40px' }}
+            bottom={{ base: '84px', md: '28px' }}
             left="50%"
             zIndex={5}
             display="flex"
