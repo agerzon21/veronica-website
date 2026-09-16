@@ -44,6 +44,11 @@ const CREAM_SUNKEN = '#f5efe4';
 const GOLD_FIELD = '#a58b58'; //  ~3.0:1 on cream — input borders, WCAG 1.4.11
 const STATUS_OK = '#2f7a4d'; //  ~4.6:1 on cream — validated / confirmation sent
 const STATUS_WARN = '#a9631a'; //  ~4.6:1 on cream — confirmation could not send
+// ~5.6:1 on cream. Chakra's gray.600 (#4a5568) is 7.1:1 and technically
+// safer, but it is a COOL blue-grey and everything else on these pages is
+// warm, so beside cream and gold it reads as a different family rather than
+// as quiet text. This is the warm equivalent, still well clear of AA.
+const MUTED_TEXT = '#6a635b';
 
 export const brand = {
   /** The signature gold. Borders, icons, dividers, rules, decorative fills. NEVER text. */
@@ -70,6 +75,8 @@ export const brand = {
   success: STATUS_OK,
   /** A confirmation that could not be delivered. Not an error, a caution. */
   caution: STATUS_WARN,
+  /** Secondary text on cream: captions, counters, trust lines. Warm, not cool. */
+  mutedText: MUTED_TEXT,
 } as const;
 
 const theme = extendTheme({

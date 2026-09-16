@@ -92,14 +92,14 @@ const ContactRail = ({ onChannelClick }: { onChannelClick?: (label: string) => v
           </Grid>
         ))}
       </VStack>
-      <Text mt={4} fontSize="15px" lineHeight="1.7" color="gray.600">
+      <Text mt={4} fontSize="15px" lineHeight="1.7" color="brand.mutedText">
         Once both are done, the date is yours.
       </Text>
     </GridItem>
 
     <GridItem area="reach" mt={{ base: 12, lg: 0 }} sx={railItemSx}>
       <SectionHead title="Need a faster reply?" />
-      <Text mt={-2} mb={4} fontSize="15px" lineHeight="1.7" color="gray.600">
+      <Text mt={-2} mb={4} fontSize="15px" lineHeight="1.7" color="brand.mutedText">
         Reach out to me directly.
       </Text>
       <VStack as="ul" spacing={2.5} align="stretch" m={0} sx={{ listStyle: 'none' }}>
@@ -133,7 +133,7 @@ const ContactRail = ({ onChannelClick }: { onChannelClick?: (label: string) => v
                 >
                   {c.label}
                 </Text>
-                <Text fontSize="14px" color="gray.600" textAlign="right" sx={{ overflowWrap: 'anywhere' }}>
+                <Text fontSize="14px" color="brand.mutedText" textAlign="right" sx={{ overflowWrap: 'anywhere' }}>
                   {c.value}
                 </Text>
               </Flex>

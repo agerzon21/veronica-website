@@ -112,6 +112,46 @@ const Contact = () => {
   const [error, setError] = useState('');
   const [typing, setTyping] = useState(false);
 
+  // Is the bar hovering over the form, or has it landed at its natural place?
+  // It matters visually: floating on a background the same colour as the page,
+  // it reads as the bottom of the page and hides the fact that there is more
+  // to scroll to. Observed on the trust line directly beneath it, so there is
+  // no scroll listener.
+  const [floating, setFloating] = useState(true);
+  const trustRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = trustRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([entry]) => {
+      setFloating(!entry.isIntersecting && entry.boundingClientRect.top > 0);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  // Below lg the bar stands down while a text field has focus, because iOS
+  // Safari mispositions bottom-pinned elements over the on-screen keyboard.
+  // Synced from the FORM rather than from each field, and read one tick later,
+  // because blur fires before the next focus: a per-field handler would flash
+  // the bar off and on every time you moved between fields. Setting it only
+  // on focus is worse still, which is what this replaced: the flag latched
+  // true on the first tap and never cleared, so on a phone the submit bar
+  // disappeared for good and the form could not be sent at all.
+  // setTimeout rather than requestAnimationFrame: rAF does not fire in
+  // headless Chrome, which would make this impossible to test.
+  const syncTyping = (e: { currentTarget: HTMLElement }) => {
+    const form = e.currentTarget;
+    window.setTimeout(() => {
+      const el = document.activeElement as HTMLElement | null;
+      setTyping(
+        !!el &&
+          form.contains(el) &&
+          (el.tagName === 'TEXTAREA' ||
+            (el.tagName === 'INPUT' && (el as HTMLInputElement).type !== 'radio')),
+      );
+    }, 0);
+  };
+
   // A carried package answers the question, so the chooser comes off screen
   // and a hidden input posts the value instead.
   const typeHidden = pkg !== null;
@@ -246,7 +286,7 @@ const Contact = () => {
     fontWeight: '400',
     letterSpacing: '0.15em',
     textTransform: 'uppercase' as const,
-    color: 'gray.600',
+    color: 'brand.mutedText',
   };
 
   const errorLine = (field: FieldName) =>
@@ -288,7 +328,7 @@ const Contact = () => {
         </Flex>
       </Box>
 
-      <Box maxW="1120px" mx="auto" px={{ base: 5, md: 10 }} pt={{ base: 12, md: 16 }} pb={{ base: 16, md: 22 }}>
+      <Box maxW="1120px" mx="auto" px={{ base: 5, md: 10 }} pt={{ base: 12, md: 16 }} pb={{ base: 16, md: '88px' }}>
         <MotionDiv
           ref={contentRef}
           initial={{ opacity: 0, y: 20 }}
@@ -297,7 +337,11 @@ const Contact = () => {
         >
           <Grid
             templateColumns={{ base: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 320px' }}
-            columnGap={{ lg: 18 }}
+            // 72px explicitly, NOT a scale number. 18 is not a Chakra spacing
+            // token, so it passed through as a literal 18px, and the submit
+            // bar's -72px right margin then overshot the gap by 54px and
+            // covered the rail.
+            columnGap={{ lg: '72px' }}
             // The last row is flexible so the tall form column cannot inflate
             // the rows beside it. Without it the form's height is shared across
             // all three, pushing the rail down and leaving a hole at the top.
@@ -380,6 +424,8 @@ const Contact = () => {
                 mx="auto"
                 // The other half of the bar's negative margin below.
                 mb={{ base: '336px', lg: '332px' }}
+                onFocus={syncTyping}
+                onBlur={syncTyping}
               >
                 {/* Honeypot. Bots fill it, humans never see it, and the API
                     returns a fake success when it arrives populated. */}
@@ -398,7 +444,6 @@ const Contact = () => {
                       value={name}
                       onChange={(e) => { setName(e.target.value); clearIfFixed('name'); }}
                       onBlur={(e) => judge('name', e.target.value)}
-                      onFocus={() => setTyping(true)}
                       h="48px"
                       sx={fieldSx('name')}
                     />
@@ -419,7 +464,6 @@ const Contact = () => {
                       value={email}
                       onChange={(e) => { setEmail(e.target.value); clearIfFixed('email'); }}
                       onBlur={(e) => judge('email', e.target.value)}
-                      onFocus={() => setTyping(true)}
                       h="48px"
                       sx={fieldSx('email')}
                     />
@@ -472,7 +516,7 @@ const Contact = () => {
                   <Grid templateColumns={{ base: 'minmax(0,1fr)', sm: 'minmax(0,1fr) minmax(0,1fr)' }} gap={6}>
                     <Box>
                       <Text as="label" htmlFor="date" sx={labelSx}>
-                        Preferred date <Text as="span" textTransform="none" letterSpacing="0.02em" fontSize="12px" color="gray.500">optional</Text>
+                        Preferred date <Text as="span" textTransform="none" letterSpacing="0.02em" fontSize="12px" color="brand.mutedText">optional</Text>
                       </Text>
                       <Input
                         id="date"
@@ -480,7 +524,6 @@ const Contact = () => {
                         type="date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        onFocus={() => setTyping(true)}
                         h="48px"
                         sx={{
                           ...fieldSx('name'),
@@ -500,7 +543,7 @@ const Contact = () => {
                     </Box>
                     <Box>
                       <Text as="label" htmlFor="location" sx={labelSx}>
-                        Location <Text as="span" textTransform="none" letterSpacing="0.02em" fontSize="12px" color="gray.500">optional</Text>
+                        Location <Text as="span" textTransform="none" letterSpacing="0.02em" fontSize="12px" color="brand.mutedText">optional</Text>
                       </Text>
                       <Input
                         id="location"
@@ -509,7 +552,6 @@ const Contact = () => {
                         placeholder="Venue, town, address, or still deciding"
                         value={place}
                         onChange={(e) => setPlace(e.target.value)}
-                        onFocus={() => setTyping(true)}
                         h="48px"
                         sx={fieldSx('name')}
                       />
@@ -527,7 +569,6 @@ const Contact = () => {
                     value={message}
                     onChange={(e) => { setMessage(e.target.value); clearIfFixed('message'); }}
                     onBlur={(e) => judge('message', e.target.value)}
-                    onFocus={() => setTyping(true)}
                     minH={{ base: '204px', md: '140px' }}
                     lineHeight="1.6"
                     p={3}
@@ -576,17 +617,52 @@ const Contact = () => {
                   },
                 }}
                 display={typing ? { base: 'none', lg: 'flex' } : 'flex'}
+                borderTop="1px solid"
+                borderTopColor={floating ? 'brand.accentBorder' : 'transparent'}
+                boxShadow={floating ? '0 -12px 24px -20px rgba(40, 30, 10, 0.55)' : 'none'}
+                transition="box-shadow 0.25s, border-color 0.25s"
+                // A short fade above the bar while it floats, so the content
+                // passing underneath is visible as content rather than reading
+                // as the end of the page. Nothing once the bar has landed.
+                _before={{
+                  content: '""',
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  // Percentages on an absolutely positioned child resolve
+                  // against the PADDING box, so a plain 100% would sit over
+                  // the 1px hairline above and paint it out. The extra pixel
+                  // lands the fade exactly on top of the border instead.
+                  bottom: 'calc(100% + 1px)',
+                  height: '28px',
+                  pointerEvents: 'none',
+                  opacity: floating ? 1 : 0,
+                  transition: 'opacity 0.25s',
+                  // brand.surface at zero alpha, NOT `transparent` — the
+                  // keyword interpolates through rgba(0,0,0,0) and greys the
+                  // middle of the fade.
+                  bgGradient: 'linear(to-t, brand.surface, rgba(253, 249, 240, 0))',
+                }}
               >
-                <Text fontSize="13px" lineHeight="1.35" textAlign="center" color={requiredLeft === 0 ? 'brand.success' : 'gray.600'} m={0} aria-live="polite">
-                  {requiredLeft === 0
-                    ? '✓ All set'
-                    : `* ${requiredLeft} required field${requiredLeft === 1 ? '' : 's'} left`}
+                <Text fontSize="13px" lineHeight="1.35" textAlign="center" color={requiredLeft === 0 ? 'brand.success' : 'brand.mutedText'} m={0} aria-live="polite">
+                  {requiredLeft === 0 ? (
+                    '✓ All set'
+                  ) : (
+                    <>
+                      <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">*</Text>
+                      {` ${requiredLeft} required field${requiredLeft === 1 ? '' : 's'} left`}
+                    </>
+                  )}
                 </Text>
                 <Box w="100%" maxW="320px">
+                  {/* Muted until the required fields are filled, but still
+                      pressable: pressing it is what shows WHICH fields are
+                      missing. A disabled submit tells you nothing, which is
+                      why GOV.UK advises against it. */}
                   <CTAButton
                     type="submit"
                     form="contact-form"
-                    variant="solid"
+                    variant={requiredLeft === 0 ? 'solid' : 'solidMuted'}
                     size="lg"
                     fullWidth
                     isLoading={isSubmitting}
@@ -597,10 +673,10 @@ const Contact = () => {
                 </Box>
               </Flex>
 
-              <Flex align="center" justify="center" gap={2.5} wrap="wrap" mt={5} w="100%" maxW={{ base: '640px', lg: 'none' }} mx="auto">
-                <Text textStyle="metaCaption" color="gray.600">No obligation</Text>
+              <Flex ref={trustRef} align="center" justify="center" gap={2.5} wrap="wrap" mt={5} w="100%" maxW={{ base: '640px', lg: 'none' }} mx="auto">
+                <Text textStyle="metaCaption" color="brand.mutedText">No obligation</Text>
                 <Box w="3px" h="3px" borderRadius="full" bg="brand.accent" />
-                <Text textStyle="metaCaption" color="gray.600">Get a reply within 24 hours</Text>
+                <Text textStyle="metaCaption" color="brand.mutedText">Get a reply within 24 hours</Text>
               </Flex>
             </GridItem>
 

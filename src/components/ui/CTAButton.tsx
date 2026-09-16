@@ -13,7 +13,7 @@ import type { IconType } from 'react-icons';
 // caption. The spine thickens on hover. 'tab' is the emphasized one; 'tabMuted'
 // carries a grey spine that warms to gold, so a pair reads as primary +
 // secondary without changing shape.
-type Variant = 'outline' | 'solid' | 'ghost' | 'danger' | 'tab' | 'tabMuted';
+type Variant = 'outline' | 'solid' | 'solidMuted' | 'ghost' | 'danger' | 'tab' | 'tabMuted';
 type Tone = 'light' | 'dark';
 type Size = 'sm' | 'md' | 'lg';
 
@@ -71,11 +71,13 @@ interface CTAButtonProps {
 const GOLD = '#c9a96e';
 const GOLD_HOVER = '#d4b87a';
 const GOLD_ACTIVE = '#b8964f';
-// Same two tokens as brand.accentBorder / brand.accentText in the theme. They
-// are repeated as literals here for the same reason the golds above are: this
-// file's style objects are plain values, not Chakra props resolved per key.
+// Same tokens as brand.accentBorder / brand.accentText / brand.surfaceSunken
+// in the theme. They are repeated as literals here for the same reason the
+// golds above are: this file's style objects are plain values, not Chakra
+// props resolved per key.
 const GOLD_BORDER = '#e8d9a8';
 const GOLD_TEXT = '#8a6e35';
+const SUNKEN = '#f5efe4';
 const SPINE_MUTED = 'rgba(43, 39, 36, 0.3)';
 const DANGER = '#c53030';
 const DANGER_HOVER = '#e53e3e';
@@ -129,6 +131,30 @@ const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
         textDecoration: 'none',
       },
       _active: { bg: GOLD_ACTIVE, transform: 'translateY(0)' },
+    };
+  }
+  // The muted twin of `solid`: a primary action whose preconditions are not
+  // met yet. It deliberately is NOT `outline`, because outline is a real
+  // secondary CTA and reads as "the lesser of two buttons" rather than "not
+  // ready yet". Sunken fill, gold text, pale border.
+  if (variant === 'solidMuted') {
+    return {
+      bg: SUNKEN,
+      color: GOLD_TEXT,
+      border: '1px solid',
+      borderColor: GOLD_BORDER,
+      // Does not go gold on hover. Gold is what the READY state looks like,
+      // so borrowing it here would signal the preconditions are met. Warming
+      // the border plus the shared lift is enough to say "pressable", which
+      // matters because this button genuinely is: pressing it is how you find
+      // out what is still missing.
+      _hover: {
+        borderColor: GOLD,
+        color: GOLD_TEXT,
+        transform: 'translateY(-2px)',
+        textDecoration: 'none',
+      },
+      _active: { bg: GOLD_BORDER, transform: 'translateY(0)' },
     };
   }
   if (variant === 'ghost') {

@@ -190,7 +190,7 @@ const ThankYou = () => {
         </Flex>
       </Box>
 
-      <Box maxW="1120px" mx="auto" px={{ base: 5, md: 10 }} pt={{ base: 12, md: 16 }} pb={{ base: 16, md: 22 }}>
+      <Box maxW="1120px" mx="auto" px={{ base: 5, md: 10 }} pt={{ base: 12, md: 16 }} pb={{ base: 16, md: '88px' }}>
         <MotionDiv
           ref={contentRef}
           initial={{ opacity: 0, y: 20 }}
@@ -199,7 +199,10 @@ const ThankYou = () => {
         >
           <Grid
             templateColumns={{ base: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 320px' }}
-            columnGap={{ lg: 18 }}
+            // 72px explicitly: 18 is not a Chakra spacing token and passes
+            // through as a literal 18px. Kept identical to the contact page so
+            // the two columns line up across the two routes.
+            columnGap={{ lg: '72px' }}
             templateRows={{ lg: 'auto auto 1fr' }}
             templateAreas={{
               base: `"col" "reserve" "reach"`,
@@ -235,7 +238,7 @@ const ThankYou = () => {
                 >
                   Thank you
                 </Text>
-                <Text mt={3.5} fontSize={{ base: '1rem', md: '1.0625rem' }} fontWeight="300" lineHeight="1.75" color="gray.600" maxW="46ch">
+                <Text mt={3.5} fontSize={{ base: '1rem', md: '1.0625rem' }} fontWeight="300" lineHeight="1.75" color="brand.mutedText" maxW="46ch">
                   {lead}
                 </Text>
               </Box>
@@ -325,7 +328,7 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
   }[status];
 
   return (
-    <Box borderLeft="2px solid" borderLeftColor={panel.border} bg={panel.bg} px={5} py={4.5} role="status">
+    <Box borderLeft="2px solid" borderLeftColor={panel.border} bg={panel.bg} px={5} py="18px" role="status">
       <Flex align="center" gap={3} mb={2.5} minH="18px">
         <Flex align="center" justify="center" flex="none" w="18px" h="18px">
           {panel.icon}
