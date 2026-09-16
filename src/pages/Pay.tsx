@@ -28,7 +28,10 @@ const ZelleLogo = ({ width = 120 }: { width?: number }) => (
 
 const Pay = () => {
   const contentRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(contentRef, { once: true, amount: 0.15 });
+  // 'some', not a fraction. A fraction of a tall page body can exceed anything
+  // the viewport shows at once, leaving the page blank until a scroll fires the
+  // observer. See the note on the contact page.
+  const isInView = useInView(contentRef, { once: true, amount: 'some' });
   const { show: showCopied, Notification: CopyNotification } = useCopyNotification('Number Copied');
 
   const handleCopy = () => {

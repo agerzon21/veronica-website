@@ -9,7 +9,8 @@ const MotionDiv = m.div;
 
 const NotFound = () => {
   const contentRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(contentRef, { once: true, amount: 0.15 });
+  // 'some', not a fraction. See the note on the contact page.
+  const isInView = useInView(contentRef, { once: true, amount: 'some' });
 
   return (
     <Box minH="100vh" bg="white">

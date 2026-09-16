@@ -41,7 +41,11 @@ const LEAD_IDLE = <>If you have already sent a message, I'll personally reply wi
 
 const ThankYou = () => {
   const contentRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(contentRef, { once: true, amount: 0.15 });
+  // 'some', not a fraction: the target is the whole page body, and
+  // IntersectionObserver measures the visible slice against the TARGET'S own
+  // height, so a fraction of a tall page can exceed anything the viewport can
+  // show and the content never reveals. See the note on the contact page.
+  const isInView = useInView(contentRef, { once: true, amount: 'some' });
 
   const location = useLocation();
 

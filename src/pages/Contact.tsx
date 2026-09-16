@@ -182,7 +182,22 @@ const SECTION_OF: Record<string, string> = {
 
 const Contact = () => {
   const contentRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(contentRef, { once: true, amount: 0.15 });
+  // 'some', NOT a fraction. IntersectionObserver measures the visible slice
+  // against the TARGET'S OWN height, and this target is the whole page body.
+  // On a tall phone layout 15% of it is more than the viewport can show at
+  // once, so the observer never reports it visible, the content stays at
+  // opacity 0, and the page renders blank until a scroll nudges it. That is
+  // the empty contact page in Chrome on iOS: Safari has less browser chrome,
+  // so it sat just the right side of the threshold.
+  const isInView = useInView(contentRef, { once: true, amount: 'some' });
+  // Belt and braces. A page that can render blank is the worst failure mode
+  // there is, so reveal it regardless if the observer has not fired shortly
+  // after mount.
+  const [revealFallback, setRevealFallback] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setRevealFallback(true), 700);
+    return () => window.clearTimeout(t);
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -234,6 +249,37 @@ const Contact = () => {
   // it reads as the bottom of the page and hides the fact that there is more
   // to scroll to. Observed on the trust line directly beneath it, so there is
   // no scroll listener.
+  // How much of the screen the on-screen keyboard is covering.
+  //
+  // iOS does not shrink the LAYOUT viewport when the keyboard opens, so an
+  // element pinned to the bottom of it ends up underneath the keyboard. The
+  // prototype dodged that by dropping the bar out of sticky positioning
+  // altogether, but then touching a field and scrolling without typing left
+  // the bar behind, which is exactly what Alex hit. The visual viewport knows
+  // where the keyboard actually is, so lift the bar above it instead and let
+  // it stay pinned.
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [vvSupported, setVvSupported] = useState(false);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    setVvSupported(true);
+    const update = () => {
+      const overlap = window.innerHeight - vv.height - vv.offsetTop;
+      // A browser toolbar is only tens of pixels; a keyboard is hundreds. The
+      // threshold keeps a disappearing Safari toolbar from being mistaken for
+      // one and shunting the bar up the screen.
+      setKeyboardInset(overlap > 120 ? Math.round(overlap) : 0);
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    update();
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
   const [floating, setFloating] = useState(true);
   const trustRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -549,7 +595,7 @@ const Contact = () => {
         <MotionDiv
           ref={contentRef}
           initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          animate={isInView || revealFallback ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8, ease: 'easeOut' }}
         >
           <Grid
@@ -988,7 +1034,8 @@ const Contact = () => {
                 align="center"
                 gap={2.5}
                 position="sticky"
-                bottom={0}
+                // Sits on top of the keyboard rather than underneath it.
+                bottom={keyboardInset ? `${keyboardInset}px` : 0}
                 zIndex={40}
                 bg="brand.surface"
                 mt="-300px"
@@ -997,18 +1044,21 @@ const Contact = () => {
                 px={{ base: 5, md: 10, lg: 0 }}
                 sx={{
                   '@media (max-width: 991px)': {
-                    // The home indicator overlays the bottom of the screen on a
-                    // modern iPhone, so the inset has to be added to the
-                    // padding or the button sits underneath it.
-                    paddingBottom: 'calc(14px + env(safe-area-inset-bottom, 0px))',
-                    // While a field has focus the on-screen keyboard is up, and
-                    // iOS Safari mispositions bottom-pinned elements over it.
-                    // The bar stops being pinned and simply sits in the flow.
-                    //
-                    // It is NOT hidden. Hiding it is what this replaced, and it
-                    // took the only submit control on the page off the screen
-                    // entirely while there was plenty of room to show it.
-                    ...(typing
+                    // ONLY while the bar is actually pinned, which is the only
+                    // time the home indicator can overlap it.
+                    // env(safe-area-inset-bottom) is 0 while Safari's bottom
+                    // toolbar is on screen and about 34px once it auto-hides,
+                    // so applying this unconditionally made the gap above the
+                    // trust line grow and shrink as the toolbar came and went.
+                    paddingBottom: floating
+                      ? 'calc(14px + env(safe-area-inset-bottom, 0px))'
+                      : '14px',
+                    // FALLBACK ONLY, for browsers with no visualViewport. Where
+                    // there is one, the bar is lifted above the keyboard by
+                    // keyboardInset instead and stays pinned. Going static made
+                    // it scroll away the moment you touched a field and then
+                    // scrolled without typing.
+                    ...(typing && !vvSupported
                       ? {
                           position: 'static',
                           boxShadow: 'none',
