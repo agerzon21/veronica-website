@@ -44,6 +44,7 @@ type Row = {
   name: string;
   email: string;
   shoot_type: string | null;
+  package: string | null;
   preferred_date: string | null;
   location: string | null;
   message: string | null;
@@ -153,6 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         name,
         email,
         shoot_type,
+        package,
         preferred_date,
         location,
         message,

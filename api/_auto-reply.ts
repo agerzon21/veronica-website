@@ -16,6 +16,12 @@ export interface ContactPayload {
   name: string;
   email: string;
   shoot_type?: string;
+  /**
+   * The resolved wedding package, e.g. "Full Wedding Day; Up to 8 hours;
+   * from $1,200". Always built server side by resolvePackage() from the
+   * package NAME, never taken from the browser: ?package= is editable.
+   */
+  package?: string;
   date?: string;
   location?: string;
   message?: string;
@@ -51,12 +57,15 @@ export function buildAutoReplyHtml(data: ContactPayload): string {
   const safeFirst = escapeHtml(firstName);
   const shootBlurb = escapeHtml(getShootBlurb(data.shoot_type));
 
+  const trimmedPackage = (data.package || '').trim();
   const trimmedDate = (data.date || '').trim();
   const trimmedLocation = (data.location || '').trim();
   const detailsBlock =
-    trimmedDate || trimmedLocation
+    trimmedPackage || trimmedDate || trimmedLocation
       ? `<p style="margin:8px 0 0;font-size:13px;color:#888;">Your inquiry:</p>
 <p style="margin:6px 0 16px;padding:8px 14px;background:#f7f5f1;border-radius:4px;color:#5a5a5a;font-size:14px;line-height:1.7;">${
+          trimmedPackage ? `<strong style="color:#2d2d2d;">Wedding package:</strong> ${escapeHtml(trimmedPackage)}<br>` : ''
+        }${
           trimmedDate ? `<strong style="color:#2d2d2d;">Preferred date:</strong> ${escapeHtml(trimmedDate)}<br>` : ''
         }${
           trimmedLocation ? `<strong style="color:#2d2d2d;">Location:</strong> ${escapeHtml(trimmedLocation)}` : ''
@@ -89,9 +98,14 @@ ${detailsBlock}${messageBlock}
 export function buildAutoReplyText(data: ContactPayload): string {
   const firstName = (data.name || '').trim().split(/\s+/)[0] || 'there';
   const shootBlurb = getShootBlurb(data.shoot_type);
+  const trimmedPackage = (data.package || '').trim();
   const trimmedDate = (data.date || '').trim();
   const trimmedLocation = (data.location || '').trim();
   const detailsLines: string[] = [];
+  // Kept in step with buildAutoReplyHtml above. An HTML-only field is
+  // invisible in plaintext clients and hurts the deliverability posture
+  // this file is built around.
+  if (trimmedPackage) detailsLines.push(`  Wedding package: ${trimmedPackage}`);
   if (trimmedDate) detailsLines.push(`  Preferred date: ${trimmedDate}`);
   if (trimmedLocation) detailsLines.push(`  Location: ${trimmedLocation}`);
   const detailsBlock = detailsLines.length
@@ -272,6 +286,7 @@ export async function sendAutoReply(
 function buildLeadNotificationHtml(data: ContactPayload): string {
   const safeName = escapeHtml(data.name || 'Someone');
   const safeEmail = escapeHtml(data.email || '');
+  const trimmedPackage = (data.package || '').trim();
   const trimmedDate = (data.date || '').trim();
   const trimmedLocation = (data.location || '').trim();
   const trimmedMessage = (data.message || '').trim();
@@ -290,6 +305,13 @@ function buildLeadNotificationHtml(data: ContactPayload): string {
   if (data.shoot_type) {
     rows.push(
       `<tr><td style="padding:4px 12px 4px 0;color:#888;font-size:13px;white-space:nowrap;">Type</td><td style="padding:4px 0;color:#2d2d2d;font-size:14px;">${escapeHtml(data.shoot_type)}</td></tr>`,
+    );
+  }
+  // Sits between Type and Preferred date, so the row reads in the same order
+  // as the inbox body Vero sees in the Messages panel.
+  if (trimmedPackage) {
+    rows.push(
+      `<tr><td style="padding:4px 12px 4px 0;color:#888;font-size:13px;white-space:nowrap;">Wedding package</td><td style="padding:4px 0;color:#2d2d2d;font-size:14px;">${escapeHtml(trimmedPackage)}</td></tr>`,
     );
   }
   if (trimmedDate) {
@@ -335,6 +357,8 @@ function buildLeadNotificationText(data: ContactPayload): string {
     `From:  ${name} <${data.email || ''}>`,
   ];
   if (data.shoot_type) lines.push(`Type: ${data.shoot_type}`);
+  const trimmedPackage = (data.package || '').trim();
+  if (trimmedPackage) lines.push(`Wedding package: ${trimmedPackage}`);
   if ((data.date || '').trim()) lines.push(`Preferred date: ${data.date}`);
   if ((data.location || '').trim()) lines.push(`Location: ${data.location}`);
   const trimmedMessage = (data.message || '').trim();

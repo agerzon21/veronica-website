@@ -2659,6 +2659,7 @@ const dict = {
     // rather than form inputs, so their labels double as row headers.
     emailLabel: { en: 'Email', ru: 'Email' },
     shootTypeLabel: { en: 'Type', ru: 'Тип съёмки' },
+    packageLabel: { en: 'Wedding package', ru: 'Свадебный пакет' },
     preferredDateLabel: { en: 'Preferred date', ru: 'Желаемая дата' },
     locationLabel: { en: 'Location', ru: 'Локация' },
     messageLabel: { en: 'Message', ru: 'Сообщение' },

@@ -408,7 +408,11 @@ const Weddings = () => {
 
       {/* ─── Packages — cream section keeps its rhythm; prints peek from
           the gutters behind the cards ─── */}
-      <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
+      {/* id is the deep-link target: the contact page's package plate links
+          back to /wedding-photography#packages so someone can change their
+          mind without hunting for this section. scrollMarginTop keeps the
+          heading clear of the sticky header when the browser jumps here. */}
+      <Box id="packages" scrollMarginTop={{ base: '64px', md: '72px' }} bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
         <DecorPrints items={tapestry.packages} />
         <Box maxW="1200px" mx="auto">
           <VStack spacing={3} mb={{ base: 4, md: 6 }} textAlign="center">

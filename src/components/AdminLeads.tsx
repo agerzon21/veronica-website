@@ -66,15 +66,17 @@ type LeadStatus = (typeof STATUS_VALUES)[number];
  */
 function exportCsv(rows: LeadRow[]): void {
   const esc = (v: string | null): string => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  // These two arrays are POSITIONAL. A field added to one must be added to
+  // the other at the same index or every column after it shifts.
   const header = [
-    'created_at', 'name', 'email', 'shoot_type', 'preferred_date',
+    'created_at', 'name', 'email', 'shoot_type', 'package', 'preferred_date',
     'location', 'status', 'contacted_at', 'notes', 'message',
   ];
   const lines = [
     header.join(','),
     ...rows.map((r) =>
       [
-        r.created_at, r.name, r.email, r.shoot_type, r.preferred_date,
+        r.created_at, r.name, r.email, r.shoot_type, r.package, r.preferred_date,
         r.location, r.status, r.contacted_at, r.notes, r.message,
       ].map(esc).join(','),
     ),
@@ -93,6 +95,8 @@ export interface LeadRow {
   name: string;
   email: string;
   shoot_type: string | null;
+  /** Resolved at submission time, e.g. "Full Wedding Day; Up to 8 hours; from $1,200". */
+  package: string | null;
   preferred_date: string | null;
   location: string | null;
   message: string | null;
@@ -398,6 +402,14 @@ function LeadCard({
                 <Text>{row.shoot_type}</Text>
               </>
             )}
+            {/* Name only here. The full string carries coverage and price,
+                which would swamp a one-line summary; the drawer shows it whole. */}
+            {row.package && (
+              <>
+                <Text>·</Text>
+                <Text>{row.package.split(';')[0]}</Text>
+              </>
+            )}
             {row.preferred_date && (
               <>
                 <Text>·</Text>
@@ -663,6 +675,9 @@ function LeadEditorModal({
           } />
           {lead.shoot_type && (
             <DetailRow icon={FaCamera} label={t.leadsEditor.shootTypeLabel} value={lead.shoot_type} />
+          )}
+          {lead.package && (
+            <DetailRow icon={FaCamera} label={t.leadsEditor.packageLabel} value={lead.package} />
           )}
           {lead.preferred_date && (
             <DetailRow icon={FaCalendarAlt} label={t.leadsEditor.preferredDateLabel} value={formatDate(lead.preferred_date)} />

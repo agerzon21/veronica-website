@@ -1,0 +1,30 @@
+-- The wedding package a lead had chosen before they reached the contact form.
+--
+-- Until now the package existed only as prose. The weddings page links each
+-- card to /contact?package=<name>, and the contact page used that to seed the
+-- message textarea with a sentence naming it. If the visitor deleted that
+-- sentence while typing, the package went with it, and nothing downstream ever
+-- knew a package concept existed: not this table, not the emails, not the
+-- inbox body Veronika actually reads.
+--
+-- Stored as ONE resolved display string ("Full Wedding Day; Up to 8 hours;
+-- from $1,200") rather than three columns. It is written once at submission
+-- time and only ever read back whole, for the Leads panel, the CSV export and
+-- the inbox body. Keeping the price AS QUOTED also keeps the record honest:
+-- package prices change, and a 2026 enquiry should not silently re-quote
+-- itself at 2027 rates when someone opens it later.
+--
+-- The string is built SERVER side from the package name, never accepted from
+-- the browser. ?package= is a query parameter a visitor can edit, so trusting
+-- a client-sent price would let someone quote themselves $1 and receive a
+-- confirmation email agreeing to it.
+--
+-- TEXT and unconstrained, following the reasoning in 014: the shape of a form
+-- field should not need a migration every time the marketing copy moves.
+--
+-- Run manually once against production Neon via the console SQL editor.
+-- IMPORTANT: run this BEFORE deploying the code that writes to it. The insert
+-- in api/contact.ts is caught and non-fatal, so a missing column would not
+-- error loudly, it would just stop recording leads.
+ALTER TABLE contact_submissions
+  ADD COLUMN IF NOT EXISTS package TEXT;

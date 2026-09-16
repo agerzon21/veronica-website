@@ -7,6 +7,7 @@ import {
   type ContactPayload,
 } from './_auto-reply.js';
 import { recordContactSubmission } from './_inbox-record.js';
+import { resolvePackage } from './_packages.js';
 import { processInboundMessage } from './_ai-reply.js';
 import { getDb } from './_db.js';
 
@@ -23,11 +24,12 @@ async function logSubmission(data: ContactPayload): Promise<string | null> {
     const sql = getDb();
     const rows = (await sql`
       insert into contact_submissions
-        (name, email, shoot_type, preferred_date, location, message)
+        (name, email, shoot_type, package, preferred_date, location, message)
       values (
         ${data.name},
         ${data.email},
         ${data.shoot_type ?? null},
+        ${data.package ?? null},
         ${data.date ?? null},
         ${data.location ?? null},
         ${data.message ?? null}
@@ -57,6 +59,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!data.name || !data.email) {
     return res.status(400).json({ success: false, error: 'Name and email are required' });
   }
+
+  // The package arrives as a NAME, from ?package= on the weddings page, which
+  // is a query parameter the visitor can edit. Re-resolve it against our own
+  // data before anything stores or emails it, so the coverage and price are
+  // ours and an unrecognised value is dropped rather than quoted back.
+  data.package = resolvePackage(data.package) ?? undefined;
 
   // Three parallel best-effort operations. allSettled (not all) so one
   // rejection doesn't cancel the others.
