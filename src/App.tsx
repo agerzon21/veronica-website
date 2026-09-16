@@ -21,6 +21,7 @@ import { HelmetProvider } from 'react-helmet-async';
 //   page an extra RTT for ~14KB. Not worth it.
 import Home from './pages/Home';
 import IndividualPhoto from './pages/IndividualPhoto';
+import { scrollBehavior } from './utils/motion';
 
 // Everything below is code-split. Admin alone is ~359KB of the old single
 // bundle, Journal ~139KB, Portal ~91KB — none of which a homepage visitor
@@ -242,7 +243,7 @@ const restoreTo = (top: number) => {
 };
 
 function ScrollToTop() {
-  const { pathname, key } = useLocation();
+  const { pathname, key, hash } = useLocation();
   const navigationType = useNavigationType();
   const handledKey = useRef<string | null>(null);
 
@@ -273,8 +274,34 @@ function ScrollToTop() {
       }
       debugScroll('pop with nothing saved', pathname, key, saved);
     }
+
+    // A hash deep link, /wedding-photography#packages for one, has to win over
+    // the scroll to the top. The browser's own hash scroll has ALREADY failed
+    // by the time this runs: every route below is code-split and the
+    // prerendered file is an empty <div id="root">, so at the moment the
+    // document loads there is no element with that id to scroll to. Nothing
+    // retries it, which is why these links have only ever landed at the top of
+    // the page. Poll briefly until the element appears.
+    //
+    // setTimeout rather than requestAnimationFrame: rAF does not fire in
+    // headless Chrome, which would make this impossible to test.
+    if (hash) {
+      const id = decodeURIComponent(hash.slice(1));
+      let tries = 0;
+      const seek = () => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+          return;
+        }
+        if (tries++ < 40) window.setTimeout(seek, 50);
+      };
+      seek();
+      return;
+    }
+
     window.scrollTo(0, 0);
-  }, [key, pathname, navigationType]);
+  }, [key, pathname, hash, navigationType]);
 
   // Record the position CONTINUOUSLY while this entry is on screen.
   //

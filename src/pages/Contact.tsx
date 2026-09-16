@@ -8,6 +8,7 @@ import PageHeader from '../components/ui/PageHeader';
 import { prefetchChunk } from '../components/ChunkErrorBoundary';
 import ContactRail, { SectionHead } from '../components/ContactRail';
 import weddingData from '../data/wedding-page.json';
+import { scrollBehavior } from '../utils/motion';
 
 const MotionDiv = m.div;
 
@@ -216,7 +217,7 @@ const Contact = () => {
         return next;
       });
       document.getElementById(missing[0] === 'shoot_type' ? 'shoot_type_group' : missing[0])
-        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        ?.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
       return;
     }
 
@@ -538,6 +539,32 @@ const Contact = () => {
                           '&::-webkit-date-and-time-value': {
                             height: '46px', lineHeight: '46px', margin: 0, textAlign: 'left',
                           },
+                          // iOS Safari gives a date input no picker indicator
+                          // at all, so once a date is chosen the field reads as
+                          // plain text and nothing suggests it can be tapped
+                          // again to change it. Paint our own calendar mark,
+                          // and hide the native one where it does exist, on
+                          // Android Chrome, so the two never double up. The
+                          // native indicator keeps its hit area, it is only
+                          // made invisible.
+                          '@media (max-width: 991px)': {
+                            paddingRight: '42px',
+                            // KEBAB-CASE ON PURPOSE, do not "tidy" this to
+                            // backgroundImage. Chakra routes the camelCase
+                            // prop through its gradient transform, which
+                            // mangled this data URI: the string reached the
+                            // bundle but the declaration it produced was
+                            // invalid, so the CSS parser discarded it and the
+                            // field computed background-image:none while every
+                            // other background longhand applied. A hyphenated
+                            // key is not in Chakra's style-prop map, so it
+                            // passes straight through to Emotion untouched.
+                            'background-image': `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238a6e35' stroke-width='1.3'%3E%3Crect x='2.6' y='4.2' width='14.8' height='13'/%3E%3Cpath d='M2.6 8.2h14.8M6.6 2.6v3.2M13.4 2.6v3.2'/%3E%3C/svg%3E")`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'right 13px center',
+                            backgroundSize: '17px 17px',
+                            '&::-webkit-calendar-picker-indicator': { opacity: 0 },
+                          },
                         }}
                       />
                     </Box>
@@ -608,6 +635,27 @@ const Contact = () => {
                 mx={{ base: -5, md: -10, lg: '-40px' }}
                 px={{ base: 5, md: 10, lg: 0 }}
                 sx={{
+                  '@media (max-width: 991px)': {
+                    // The home indicator overlays the bottom of the screen on a
+                    // modern iPhone, so the inset has to be added to the
+                    // padding or the button sits underneath it.
+                    paddingBottom: 'calc(14px + env(safe-area-inset-bottom, 0px))',
+                    // While a field has focus the on-screen keyboard is up, and
+                    // iOS Safari mispositions bottom-pinned elements over it.
+                    // The bar stops being pinned and simply sits in the flow.
+                    //
+                    // It is NOT hidden. Hiding it is what this replaced, and it
+                    // took the only submit control on the page off the screen
+                    // entirely while there was plenty of room to show it.
+                    ...(typing
+                      ? {
+                          position: 'static',
+                          boxShadow: 'none',
+                          borderTopColor: 'transparent',
+                          '&::before': { opacity: 0 },
+                        }
+                      : {}),
+                  },
                   '@media (min-width: 62em)': {
                     // Reaches the rail on the right and past the fields on the
                     // left, so no field edge or error glow shows beside it. The
@@ -616,7 +664,6 @@ const Contact = () => {
                     paddingRight: '32px',
                   },
                 }}
-                display={typing ? { base: 'none', lg: 'flex' } : 'flex'}
                 borderTop="1px solid"
                 borderTopColor={floating ? 'brand.accentBorder' : 'transparent'}
                 boxShadow={floating ? '0 -12px 24px -20px rgba(40, 30, 10, 0.55)' : 'none'}

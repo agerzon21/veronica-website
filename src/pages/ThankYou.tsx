@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ReactGA from 'react-ga4';
 import { ensureAnalytics, trackAdsLeadConversion, trackContactSubmission } from '../utils/analytics';
+import { scrollBehavior } from '../utils/motion';
 
 const MotionDiv = m.div;
 
@@ -151,6 +152,33 @@ const ThankYou = () => {
     trackAdsLeadConversion();
   }, [justSubmitted]);
 
+  // Put the confirmation where it can actually be read.
+  //
+  // Submitting navigates to this route, and the router's ScrollToTop takes the
+  // window to 0, which leaves the visitor staring at the hero with the panel
+  // somewhere below the fold, having to work out for themselves whether the
+  // message sent. Scrolling unconditionally is no better: this page is far
+  // shorter than the form was, so on a tall screen the block is often already
+  // fully visible and moving would overshoot it. So move only when it is not
+  // already clear of the header and fully in view.
+  const confirmRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!justSubmitted) return;
+    const el = confirmRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    // Skip only when the block is ALREADY at the top of the screen. The
+    // prototype's test was "anywhere fully in view", which it could afford
+    // because it revealed the panel in place on a page with no hero above it.
+    // Here the visitor always arrives fresh underneath a 45-53vh photograph,
+    // so the confirmation measured y=541 on a 900px screen: fully visible by
+    // that test, yet sitting below the hero, which is exactly the "shot back
+    // to the top of the page" this is meant to fix.
+    const r = el.getBoundingClientRect();
+    if (r.top >= 0 && r.top <= 140) return;
+    el.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+  }, [justSubmitted]);
+
   const lead =
     autoReplyStatus === 'idle' ? LEAD_IDLE
     : autoReplyStatus === 'failed' ? LEAD_FAILED
@@ -210,7 +238,14 @@ const ThankYou = () => {
             }}
           >
             <GridItem area="col" minW={0} alignSelf="start" w="100%" maxW={{ base: '640px', lg: 'none' }} mx="auto">
-              <Box mb={7}>
+              <Box
+                ref={confirmRef}
+                tabIndex={-1}
+                mb={7}
+                // Matches the prototype's .done rule. The header is 88px, so
+                // the block needs clearance or block:'start' parks it behind.
+                sx={{ scrollMarginTop: '96px', outline: 'none' }}
+              >
                 <Text
                   as="span"
                   display="block"
