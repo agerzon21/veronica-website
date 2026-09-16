@@ -21,7 +21,6 @@ import { HelmetProvider } from 'react-helmet-async';
 //   page an extra RTT for ~14KB. Not worth it.
 import Home from './pages/Home';
 import IndividualPhoto from './pages/IndividualPhoto';
-import { scrollBehavior } from './utils/motion';
 
 // Everything below is code-split. Admin alone is ~359KB of the old single
 // bundle, Journal ~139KB, Portal ~91KB — none of which a homepage visitor
@@ -288,13 +287,30 @@ function ScrollToTop() {
     if (hash) {
       const id = decodeURIComponent(hash.slice(1));
       let tries = 0;
+      let settled = 0;
+      let last = Number.NaN;
+      // Finding the element is NOT enough, and scrolling to it once is not
+      // either. Photographs above the target finish loading after the scroll
+      // and push it down the document: on the live site
+      // /wedding-photography#packages landed 237px past the heading on a phone,
+      // while a local build landed it exactly. The local build is missing most
+      // of the gallery images, so nothing shifted there, which is a good reason
+      // not to trust a local build for anchor positions. So re-assert until the
+      // target's position stops moving.
+      //
+      // The corrections are instant on purpose. Repeated smooth scrolls cancel
+      // and restart each other's animation and the page visibly stutters.
       const seek = () => {
         const el = document.getElementById(id);
-        if (el) {
-          el.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+        if (!el) {
+          if (tries++ < 40) window.setTimeout(seek, 50);
           return;
         }
-        if (tries++ < 40) window.setTimeout(seek, 50);
+        const top = Math.round(el.getBoundingClientRect().top);
+        el.scrollIntoView({ block: 'start', behavior: 'auto' });
+        settled = Math.abs(top - last) <= 2 ? settled + 1 : 0;
+        last = top;
+        if (settled < 3 && tries++ < 40) window.setTimeout(seek, 100);
       };
       seek();
       return;

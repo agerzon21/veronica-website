@@ -11,7 +11,19 @@ import { Box, Flex, Grid, GridItem, Text, VStack } from '@chakra-ui/react';
  */
 
 /** The label-and-hairline heading used by every section on both pages. */
-export const SectionHead = ({ title, required }: { title: string; required?: boolean }) => (
+export const SectionHead = ({
+  title,
+  required,
+  // The progress square that closes off a FORM section's rule. The rail's own
+  // headings never had one in the approved design, so it is opt-in.
+  square,
+  active,
+}: {
+  title: string;
+  required?: boolean;
+  square?: boolean;
+  active?: boolean;
+}) => (
   <Flex align="center" gap={3} mb={5}>
     <Text
       as="h2"
@@ -25,13 +37,71 @@ export const SectionHead = ({ title, required }: { title: string; required?: boo
     >
       {title}
       {required && (
-        <Text as="span" color="red.600" fontWeight="500">
+        // aria-hidden because a screen reader otherwise reads the glyph out as
+        // "star". The control itself carries aria-required, which is what
+        // actually conveys this.
+        <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">
           {' *'}
         </Text>
       )}
     </Text>
     <Box flex={1} h="1px" bg="brand.accentBorder" />
+    {square && (
+      <Box
+        flex="none"
+        w="7px"
+        h="7px"
+        border="1px solid"
+        borderColor="brand.accent"
+        bg={active ? 'brand.accent' : 'transparent'}
+        transition="background 0.3s"
+        aria-hidden="true"
+      />
+    )}
   </Flex>
+);
+
+/**
+ * The channel marks. Drawn here rather than pulled from an icon set so the
+ * stroke weight matches the prototype's line work exactly, and painted in
+ * currentColor so the row tints them with the same gold as the rest of the
+ * rail. Without these the three rows read as a plain list and the channel is
+ * not identifiable at a glance.
+ */
+const markProps = {
+  as: 'svg' as const,
+  flex: 'none',
+  w: '18px',
+  h: '18px',
+  viewBox: '0 0 20 20',
+  'aria-hidden': true,
+  color: 'brand.accentText',
+};
+
+const IconEmail = () => (
+  <Box {...markProps}>
+    <rect x="2" y="4.5" width="16" height="11" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M2.6 5.2 10 11l7.4-5.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+  </Box>
+);
+
+const IconWhatsApp = () => (
+  <Box {...markProps}>
+    <path
+      d="M10 2.4a7.6 7.6 0 0 0-6.5 11.5l-1 3.7 3.8-1A7.6 7.6 0 1 0 10 2.4z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+    />
+  </Box>
+);
+
+const IconInstagram = () => (
+  <Box {...markProps}>
+    <rect x="2.5" y="2.5" width="15" height="15" rx="4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    <circle cx="10" cy="10" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    <circle cx="14.4" cy="5.6" r=".9" fill="currentColor" />
+  </Box>
 );
 
 const CHANNELS = [
@@ -39,9 +109,20 @@ const CHANNELS = [
     label: 'Email',
     value: 'vero@vero.photography',
     href: 'mailto:vero@vero.photography?subject=Photography%20Inquiry',
+    icon: IconEmail,
   },
-  { label: 'WhatsApp', value: '+1 (570) 909-5707', href: 'https://wa.me/15709095707' },
-  { label: 'Instagram', value: '@vero.art.photo', href: 'https://www.instagram.com/vero.art.photo' },
+  {
+    label: 'WhatsApp',
+    value: '+1 (570) 909-5707',
+    href: 'https://wa.me/15709095707',
+    icon: IconWhatsApp,
+  },
+  {
+    label: 'Instagram',
+    value: '@vero.art.photo',
+    href: 'https://www.instagram.com/vero.art.photo',
+    icon: IconInstagram,
+  },
 ];
 
 const STEPS: Array<[string, string, string]> = [
@@ -111,6 +192,7 @@ const ContactRail = ({ onChannelClick }: { onChannelClick?: (label: string) => v
               onClick={() => onChannelClick?.(c.label)}
               {...(c.href.startsWith('http') ? { target: '_blank', rel: 'noopener' } : {})}
               align="center"
+              gap={3.5}
               px={4}
               py={3}
               bg="white"
@@ -120,7 +202,15 @@ const ContactRail = ({ onChannelClick }: { onChannelClick?: (label: string) => v
               borderLeftColor="brand.accent"
               transition="background 0.2s, border-color 0.2s"
               _hover={{ bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }}
+              // Keyboard visitors were getting the browser's default ring here
+              // rather than the gold one the rest of the page uses.
+              _focusVisible={{
+                outline: '2px solid',
+                outlineColor: 'brand.accentText',
+                outlineOffset: '2px',
+              }}
             >
+              <c.icon />
               {/* Label left, value hard right. Stacked, these rows were mostly
                   empty air on a phone. */}
               <Flex flex={1} align="baseline" justify="space-between" gap={3.5} minW={0}>

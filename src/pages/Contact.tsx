@@ -45,6 +45,97 @@ const SHOOT_TYPES = [
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/**
+ * The field frame: the focus brackets and the green tick.
+ *
+ * MODULE SCOPE ON PURPOSE. Declared inside Contact this would be a new
+ * component type on every render, so React would unmount and remount the input
+ * inside it and the field would lose focus on each keystroke.
+ *
+ * The brackets are four 12px corners, two drawn on this box and two on an inner
+ * one, because a single element has only ::before and ::after. They sit 7px
+ * outside the control, clear of the label 12px above it, and slide in on
+ * :focus-within. It is the same treatment as the homepage CTA, and the form
+ * lost its visual link to the rest of the site without it.
+ */
+const BRACKET = {
+  content: '""',
+  position: 'absolute',
+  width: '12px',
+  height: '12px',
+  border: '0 solid',
+  borderColor: '#c9a96e',
+  pointerEvents: 'none',
+  opacity: 0,
+  transition: 'opacity 0.18s ease, transform 0.38s cubic-bezier(0.22, 1, 0.36, 1)',
+} as const;
+
+const FieldWrap = ({
+  state,
+  tick = false,
+  children,
+}: {
+  state: FieldState;
+  tick?: boolean;
+  children: React.ReactNode;
+}) => (
+  <Box
+    position="relative"
+    sx={{
+      '&::before': {
+        ...BRACKET, top: '-7px', left: '-7px',
+        borderTopWidth: '1.5px', borderLeftWidth: '1.5px', transform: 'translate(-5px, -5px)',
+      },
+      '&::after': {
+        ...BRACKET, top: '-7px', right: '-7px',
+        borderTopWidth: '1.5px', borderRightWidth: '1.5px', transform: 'translate(5px, -5px)',
+      },
+      '&:focus-within::before, &:focus-within::after': { opacity: 1, transform: 'none' },
+      '&:focus-within .fw-br::before, &:focus-within .fw-br::after': { opacity: 1, transform: 'none' },
+    }}
+  >
+    {children}
+    <Box
+      className="fw-br"
+      position="absolute"
+      inset={0}
+      pointerEvents="none"
+      aria-hidden="true"
+      sx={{
+        '&::before': {
+          ...BRACKET, bottom: '-7px', left: '-7px',
+          borderBottomWidth: '1.5px', borderLeftWidth: '1.5px', transform: 'translate(-5px, 5px)',
+        },
+        '&::after': {
+          ...BRACKET, bottom: '-7px', right: '-7px',
+          borderBottomWidth: '1.5px', borderRightWidth: '1.5px', transform: 'translate(5px, 5px)',
+        },
+      }}
+    />
+    {/* The date control deliberately has no tick: its own calendar mark already
+        sits in that corner, and the prototype gives it none either. */}
+    {tick && (
+      <Box
+        as="svg"
+        viewBox="0 0 16 16"
+        aria-hidden="true"
+        position="absolute"
+        right="14px"
+        top="16px"
+        w="16px"
+        h="16px"
+        color="brand.success"
+        pointerEvents="none"
+        opacity={state === 'valid' ? 1 : 0}
+        transform={state === 'valid' ? 'none' : 'scale(0.6)'}
+        transition="opacity 0.2s, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)"
+      >
+        <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      </Box>
+    )}
+  </Box>
+);
+
 const GREETING = (name: string) => `We're interested in the ${name} package.`;
 const PROMPT_LINE = 'Our plans so far: ';
 const BLANKS = `\n\n${PROMPT_LINE}`;
@@ -66,8 +157,28 @@ const prefillFor = (name: string) => GREETING(name) + BLANKS;
  */
 const GREETING_LINE = /^[^\n]*?\binterested in the[^\n]*?\bpackage\.([ \t]*\n?)/m;
 
-type FieldName = 'name' | 'email' | 'shoot_type' | 'message';
+// Date and location are VALIDATED but not REQUIRED: filling one in turns it
+// green, leaving it empty is fine. Keeping the two ideas apart matters, because
+// the counter in the submit bar is "how many required fields are left" and
+// folding the optional pair into the same list would quietly add two to it.
+type FieldName = 'name' | 'email' | 'shoot_type' | 'message' | 'date' | 'location';
 type FieldState = '' | 'valid' | 'error';
+
+const REQUIRED: FieldName[] = ['name', 'email', 'shoot_type', 'message'];
+
+/**
+ * Which section each control belongs to, so the progress square on that
+ * section's heading can fill while you are working in it. Keyed by control id
+ * rather than by marking up the three section containers, two of which are
+ * textually identical and would be a coin flip to edit correctly.
+ */
+const SECTION_OF: Record<string, string> = {
+  name: 'you',
+  email: 'you',
+  date: 'session',
+  location: 'session',
+  message: 'message',
+};
 
 const Contact = () => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -106,11 +217,16 @@ const Contact = () => {
   const [shootType, setShootType] = useState(initialPackage ? 'Wedding Photography' : '');
 
   const [state, setState] = useState<Record<FieldName, FieldState>>({
-    name: '', email: '', shoot_type: '', message: '',
+    name: '', email: '', shoot_type: '', message: '', date: '', location: '',
   });
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Spoken, not shown. A failed submit used to be completely silent for a
+  // screen reader: no count, no field names, and no focus move either, so the
+  // button appeared to do nothing at all.
+  const [announce, setAnnounce] = useState('');
+  const [activeSection, setActiveSection] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
 
   // Is the bar hovering over the form, or has it landed at its natural place?
@@ -144,11 +260,19 @@ const Contact = () => {
     const form = e.currentTarget;
     window.setTimeout(() => {
       const el = document.activeElement as HTMLElement | null;
+      const inForm = !!el && form.contains(el);
       setTyping(
-        !!el &&
-          form.contains(el) &&
+        inForm &&
+          !!el &&
           (el.tagName === 'TEXTAREA' ||
             (el.tagName === 'INPUT' && (el as HTMLInputElement).type !== 'radio')),
+      );
+      // The same pass drives the progress square: the chips have no id of
+      // their own, so they are recognised by their group instead.
+      setActiveSection(
+        inForm && el
+          ? SECTION_OF[el.id] ?? (el.closest('#shoot_type_group') ? 'session' : null)
+          : null,
       );
     }, 0);
   };
@@ -168,28 +292,54 @@ const Contact = () => {
       email: EMAIL_RE.test(email.trim()),
       shoot_type: typeHidden ? true : shootType.length > 0,
       message: messageHasWords,
+      date: date.trim().length > 0,
+      location: place.trim().length > 0,
     };
-  }, [name, email, shootType, message, prefill, typeHidden]);
+  }, [name, email, shootType, message, date, place, prefill, typeHidden]);
 
-  const requiredLeft = (Object.keys(valid) as FieldName[]).filter((k) => !valid[k]).length;
+  // REQUIRED, not every key of `valid`. The optional pair are in there too now.
+  const requiredLeft = REQUIRED.filter((k) => !valid[k]).length;
 
   const messageFor = (field: FieldName): string => ({
     name: 'Add your name',
     email: email.trim() ? 'That email does not look quite right' : 'Add an email so I can reply',
     shoot_type: 'Choose what you are booking',
     message: 'Tell me more about what you have in mind, so I can give you a helpful reply',
+    // Neither can be wrong, only present or absent, so these never render.
+    // They exist so the map stays exhaustive over FieldName.
+    date: '',
+    location: '',
   }[field]);
+
+  // Validity of a field for a GIVEN value, rather than for the value as of the
+  // last render. `valid` is a useMemo, so reading it from an onChange handler
+  // sees the previous keystroke: pasting a name into a flagged field left it
+  // red until you typed another character. This takes the incoming value.
+  const validFor = (field: FieldName, value: string): boolean => {
+    if (field === 'email') return EMAIL_RE.test(value.trim());
+    if (field === 'shoot_type') return typeHidden ? true : value.length > 0;
+    if (field === 'message') {
+      return prefill
+        ? value.replace(GREETING_LINE, '').split(PROMPT_LINE).join('').trim().length > 0
+        : value.trim().length > 0;
+    }
+    return value.trim().length > 0;
+  };
 
   // Reward early, judge late: an errored field clears the moment it is right,
   // but a field is only marked wrong once they leave it.
   const judge = (field: FieldName, value: string) => {
+    const ok = validFor(field, value);
+    const required = REQUIRED.includes(field);
     setState((s) => ({
       ...s,
-      [field]: value.trim() ? (valid[field] ? 'valid' : 'error') : submitted ? 'error' : '',
+      // An OPTIONAL field left empty is never an error, however many times the
+      // form has been submitted.
+      [field]: value.trim() ? (ok ? 'valid' : 'error') : required && submitted ? 'error' : '',
     }));
   };
-  const clearIfFixed = (field: FieldName) => {
-    setState((s) => (s[field] === 'error' && valid[field] ? { ...s, [field]: 'valid' } : s));
+  const clearIfFixed = (field: FieldName, value: string) => {
+    setState((s) => (s[field] === 'error' && validFor(field, value) ? { ...s, [field]: 'valid' } : s));
   };
 
   // ── the package plate ──────────────────────────────────────────────────
@@ -197,9 +347,22 @@ const Contact = () => {
     // Take OUR sentence out and leave everything they wrote. If nothing of
     // theirs remains, clear the box rather than stranding an empty prompt.
     const rest = message.replace(GREETING_LINE, '').replace(/^\s+/, '');
-    setMessage(rest.trim() === BLANKS.trim() ? '' : rest);
+    const next = rest.trim() === BLANKS.trim() ? '' : rest;
+    setMessage(next);
     setPkg(null);
     setShootType('Wedding Photography');
+    // Re-judge what the removal just changed. Clicking into the message box and
+    // then pressing Remove left the now-EMPTY box outlined in red with "Tell me
+    // more about what you have in mind" under it: the textarea's blur fires
+    // first and marks it, then the click empties it, and nothing recomputed the
+    // state afterwards. A field that is empty and not yet submitted is neutral,
+    // not wrong. Checked directly rather than through validFor, whose `prefill`
+    // still refers to the package being removed in this very handler.
+    setState((s) => ({
+      ...s,
+      message: next.trim() ? 'valid' : submitted ? 'error' : '',
+      shoot_type: '',
+    }));
   };
 
   // ── submit ─────────────────────────────────────────────────────────────
@@ -207,19 +370,31 @@ const Contact = () => {
     e.preventDefault();
     setSubmitted(true);
 
-    const missing = (Object.keys(valid) as FieldName[]).filter((k) => !valid[k]);
+    const missing = REQUIRED.filter((k) => !valid[k]);
     if (missing.length) {
       setState((s) => {
         const next = { ...s };
-        (Object.keys(valid) as FieldName[]).forEach((k) => {
+        REQUIRED.forEach((k) => {
           next[k] = valid[k] ? (k === 'shoot_type' ? '' : 'valid') : 'error';
         });
         return next;
       });
-      document.getElementById(missing[0] === 'shoot_type' ? 'shoot_type_group' : missing[0])
-        ?.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
+      const firstId = missing[0] === 'shoot_type' ? 'shoot_type_group' : missing[0];
+      const target = document.getElementById(firstId);
+      target?.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
+      // Move the CARET, not just the viewport. Without this a keyboard visitor
+      // is scrolled up to the offending field while focus stays on the submit
+      // button at the bottom of the page, so they have to tab backwards through
+      // the whole form to reach what they were sent to.
+      const control =
+        missing[0] === 'shoot_type'
+          ? target?.querySelector<HTMLElement>('button')
+          : (target as HTMLElement | null);
+      control?.focus({ preventScroll: true });
+      setAnnounce(`${missing.length} field${missing.length === 1 ? ' needs' : 's need'} attention.`);
       return;
     }
+    setAnnounce('');
 
     setIsSubmitting(true);
     setError('');
@@ -277,7 +452,26 @@ const Contact = () => {
     scrollMarginTop: '88px',
     scrollMarginBottom: '112px',
     _placeholder: { color: 'gray.500' },
-    _focus: { borderColor: 'brand.accentText', boxShadow: 'accentFocus' },
+    // Chakra paints its own _invalid styling in its own red once isInvalid is
+    // set. Pin it to ours so the two can never disagree.
+    _invalid: {
+      borderColor: 'red.600',
+      boxShadow: '0 0 0 3px rgba(197, 48, 48, 0.14)',
+    },
+    // The prototype's resting error glow. Without it a missing field is a thin
+    // red line and very little else.
+    boxShadow: state[field] === 'error' ? '0 0 0 3px rgba(197, 48, 48, 0.14)' : undefined,
+    // Keep the red WHILE the field has focus. Clicking into the field you have
+    // just been told to fix used to swap the red border and glow for the
+    // ordinary gold ring, so while you were typing there was no longer any
+    // sign of which field had been flagged.
+    _focus:
+      state[field] === 'error'
+        ? {
+            borderColor: 'red.600',
+            boxShadow: '0 0 0 1px #c53030, 0 0 0 4px rgba(197, 48, 48, 0.12)',
+          }
+        : { borderColor: 'brand.accentText', boxShadow: 'accentFocus' },
   });
 
   const labelSx = {
@@ -290,12 +484,34 @@ const Contact = () => {
     color: 'brand.mutedText',
   };
 
+  // The id is what each control's aria-describedby points at, so the message
+  // is read out with the field rather than being sighted-only. The alert mark
+  // is the prototype's ICON_ALERT: without it the line is colour alone, which
+  // a colour-blind visitor cannot read as an error at all.
   const errorLine = (field: FieldName) =>
     state[field] === 'error' && (
-      <Text mt={3} fontSize="13px" color="red.600">
-        {messageFor(field)}
-      </Text>
+      <Flex id={`${field}-err`} align="center" gap="6px" mt={3} fontSize="13px" color="red.600">
+        <Box as="svg" flex="none" w="14px" h="14px" viewBox="0 0 14 14" aria-hidden="true">
+          <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M7 3.8v4M7 9.6v.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </Box>
+        <Box as="span">{messageFor(field)}</Box>
+      </Flex>
     );
+
+  // aria-describedby ONLY, and the required/invalid state goes through Chakra's
+  // isRequired/isInvalid props instead.
+  //
+  // Chakra runs Input and Textarea props through useFormControl, which derives
+  // aria-invalid and aria-required from those two props and OVERWRITES whatever
+  // you passed for the attributes directly. Setting them by hand looked right
+  // in the source and rendered nothing at all; aria-describedby survived from
+  // the very same spread, which is what gave the game away.
+  //
+  // Naming the error line even when it is not rendered is deliberate: pointing
+  // at a missing id is harmless, and it means the association is already in
+  // place the instant the error appears.
+  const describe = (field: FieldName) => ({ 'aria-describedby': `${field}-err` });
 
   return (
     <Box position="relative" minH="100vh" bg="brand.surface">
@@ -380,6 +596,11 @@ const Contact = () => {
                     textTransform="uppercase"
                     textShadow="0 1px 6px rgba(0,0,0,0.5)"
                     _hover={{ color: 'brand.accentSoft' }}
+                    // Inset, because an outset ring on a control sitting in the
+                    // corner of the photograph is clipped by the plate.
+                    _focusVisible={{ outline: '2px solid', outlineColor: 'white', outlineOffset: '-4px' }}
+                    // Tabbing back up to this left it tucked under the navbar.
+                    sx={{ scrollMarginTop: '88px', scrollMarginBottom: '112px' }}
                   >
                     <Box as="span" aria-hidden="true">✕</Box> Remove
                   </Flex>
@@ -391,9 +612,22 @@ const Contact = () => {
                       {pkg.name}
                     </Text>
                     <Flex align="center" justify="space-between" gap={3} mt={1.5}>
-                      <Text fontSize="13px" color="whiteAlpha.900">
-                        {pkg.coverage} · {pkg.price}
-                      </Text>
+                      <Flex align="center" gap={2} minW={0} fontSize="13px" color="whiteAlpha.900">
+                        <Box as="span">{pkg.coverage}</Box>
+                        {/* The same gold dot as the trust line further down,
+                            rather than a typographic middot in the body colour,
+                            which read as one undifferentiated run of text. */}
+                        <Box
+                          as="span"
+                          flex="none"
+                          w="3px"
+                          h="3px"
+                          borderRadius="full"
+                          bg="brand.accent"
+                          aria-hidden="true"
+                        />
+                        <Box as="span">{pkg.price}</Box>
+                      </Flex>
                       <Box
                         as="a"
                         href="/wedding-photography#packages"
@@ -419,6 +653,11 @@ const Contact = () => {
               <Box
                 as="form"
                 onSubmit={handleSubmit}
+                // The browser's own validation bubble pre-empts all of this:
+                // a half-typed email made Chrome show its grey tooltip and
+                // handleSubmit never ran, so the designed red copy never
+                // appeared and the other empty fields were never flagged.
+                noValidate
                 id="contact-form"
                 w="100%"
                 maxW={{ base: '640px', lg: 'none' }}
@@ -432,59 +671,115 @@ const Contact = () => {
                     returns a fake success when it arrives populated. */}
                 <input type="hidden" name="botcheck" defaultValue="" />
 
+                {/* Assertive, and visually hidden. This is what makes a failed
+                    submit audible; the focus move above is what makes it
+                    navigable. */}
+                <Text
+                  as="p"
+                  aria-live="assertive"
+                  m={0}
+                  sx={{
+                    position: 'absolute',
+                    width: '1px',
+                    height: '1px',
+                    padding: 0,
+                    margin: '-1px',
+                    overflow: 'hidden',
+                    clip: 'rect(0 0 0 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                  }}
+                >
+                  {announce}
+                </Text>
+
                 <Box mb={12}>
-                  <SectionHead title="You" />
+                  <SectionHead title="You" square active={activeSection === 'you'} />
                   <Box>
                     <Text as="label" htmlFor="name" sx={labelSx}>
-                      Full name <Text as="span" color="red.600" fontWeight="500">*</Text>
+                      Full name <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">*</Text>
                     </Text>
-                    <Input
-                      id="name"
-                      name="name"
-                      autoComplete="name"
-                      value={name}
-                      onChange={(e) => { setName(e.target.value); clearIfFixed('name'); }}
-                      onBlur={(e) => judge('name', e.target.value)}
-                      h="48px"
-                      sx={fieldSx('name')}
-                    />
+                    <FieldWrap state={state.name} tick>
+                      <Input
+                        id="name"
+                        name="name"
+                        autoComplete="name"
+                        value={name}
+                        onChange={(e) => { setName(e.target.value); clearIfFixed('name', e.target.value); }}
+                        onBlur={(e) => judge('name', e.target.value)}
+                        isRequired
+                        isInvalid={state.name === 'error'}
+                        {...describe('name')}
+                        h="48px"
+                        sx={fieldSx('name')}
+                      />
+                    </FieldWrap>
                     {errorLine('name')}
                   </Box>
                   <Box mt={6}>
                     <Text as="label" htmlFor="email" sx={labelSx}>
-                      Email <Text as="span" color="red.600" fontWeight="500">*</Text>
+                      Email <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">*</Text>
                     </Text>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      inputMode="email"
-                      autoComplete="email"
-                      autoCapitalize="off"
-                      spellCheck={false}
-                      value={email}
-                      onChange={(e) => { setEmail(e.target.value); clearIfFixed('email'); }}
-                      onBlur={(e) => judge('email', e.target.value)}
-                      h="48px"
-                      sx={fieldSx('email')}
-                    />
+                    <FieldWrap state={state.email} tick>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        value={email}
+                        onChange={(e) => { setEmail(e.target.value); clearIfFixed('email', e.target.value); }}
+                        onBlur={(e) => judge('email', e.target.value)}
+                        isRequired
+                        isInvalid={state.email === 'error'}
+                        {...describe('email')}
+                        h="48px"
+                        sx={fieldSx('email')}
+                      />
+                    </FieldWrap>
                     {errorLine('email')}
                   </Box>
                 </Box>
 
                 <Box mb={12}>
-                  <SectionHead title="The session" />
+                  <SectionHead title="The session" square active={activeSection === 'session'} />
                   {/* Hidden entirely while a package is carried: the package
                       already says this is a wedding, so offering to change it
                       to Maternity makes no sense. Removing it brings it back. */}
                   {typeHidden ? (
                     <input type="hidden" name="shoot_type" value={shootType} readOnly />
                   ) : (
-                    <Box id="shoot_type_group" mb={6}>
-                      <Text as="span" sx={labelSx}>
-                        Type <Text as="span" color="red.600" fontWeight="500">*</Text>
+                    // A plain comment, NOT the {/* */} form: this is a ternary
+                    // branch, an expression position, where the braces open an
+                    // object literal and the JSX below is then read as a
+                    // less-than operator.
+                    //
+                    // A group with a name: the five buttons were otherwise
+                    // announced one by one with nothing saying what they were
+                    // choosing between.
+                    <Box id="shoot_type_group" mb={6} role="group" aria-labelledby="shoot_type_label">
+                      <Text as="span" id="shoot_type_label" sx={labelSx}>
+                        Type <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">*</Text>
                       </Text>
-                      <Flex wrap="wrap" gap={2}>
+                      <Flex
+                        wrap="wrap"
+                        gap={2}
+                        // The flagged control has to LOOK flagged. With only the
+                        // sentence beneath it turning red, a missing Type
+                        // scrolled the visitor to a chip row that looked exactly
+                        // as it had a moment earlier.
+                        sx={
+                          state.shoot_type === 'error'
+                            ? {
+                                outline: '1.5px solid #c53030',
+                                outlineOffset: '6px',
+                                boxShadow: '0 0 0 9px rgba(197, 48, 48, 0.07)',
+                              }
+                            : undefined
+                        }
+                      >
                         {SHOOT_TYPES.map((t) => (
                           <Box
                             key={t.value}
@@ -504,6 +799,14 @@ const Contact = () => {
                             bg={shootType === t.value ? 'brand.accentText' : 'white'}
                             color={shootType === t.value ? 'white' : 'gray.700'}
                             transition="background 0.2s, color 0.2s, border-color 0.2s"
+                            // Without a hover the chips do not read as
+                            // pressable until you have already pressed one.
+                            _hover={{ borderColor: 'brand.accentText' }}
+                            _focusVisible={{
+                              outline: '2px solid',
+                              outlineColor: 'brand.accentText',
+                              outlineOffset: '2px',
+                            }}
                             sx={{ scrollMarginTop: '88px', scrollMarginBottom: '112px' }}
                           >
                             {t.label}
@@ -514,21 +817,41 @@ const Contact = () => {
                     </Box>
                   )}
 
-                  <Grid templateColumns={{ base: 'minmax(0,1fr)', sm: 'minmax(0,1fr) minmax(0,1fr)' }} gap={6}>
+                  <Grid
+                    // 560px, matching the prototype, not Chakra's sm (480px).
+                    // Between 480 and 559 these sat side by side at roughly
+                    // 208px each, squeezing the native date control and the
+                    // long "Venue, town, address, or still deciding" placeholder.
+                    templateColumns="minmax(0,1fr)"
+                    sx={{
+                      '@media (min-width: 560px)': {
+                        gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)',
+                      },
+                    }}
+                    gap={6}
+                  >
                     <Box>
                       <Text as="label" htmlFor="date" sx={labelSx}>
                         Preferred date <Text as="span" textTransform="none" letterSpacing="0.02em" fontSize="12px" color="brand.mutedText">optional</Text>
                       </Text>
-                      <Input
-                        id="date"
-                        name="date"
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        h="48px"
-                        sx={{
-                          ...fieldSx('name'),
-                          borderColor: 'brand.field',
+                      {/* No tick on this one: the prototype gives the date
+                          field none, and its own calendar mark already sits in
+                          the corner a tick would occupy. */}
+                      <FieldWrap state={state.date}>
+                        <Input
+                          id="date"
+                          name="date"
+                          type="date"
+                          value={date}
+                          onChange={(e) => setDate(e.target.value)}
+                          onBlur={(e) => judge('date', e.target.value)}
+                          h="48px"
+                          sx={{
+                          // Its OWN state, not the name field's. Borrowing
+                          // another field's state is what made the optional
+                          // fields flash green and red for input they had
+                          // nothing to do with.
+                          ...fieldSx('date'),
                           // iOS lays a chosen date out by its own shadow-DOM
                           // defaults: pinned to the top of the box and centred.
                           // Both need overriding, and the value element needs
@@ -565,42 +888,66 @@ const Contact = () => {
                             backgroundSize: '17px 17px',
                             '&::-webkit-calendar-picker-indicator': { opacity: 0 },
                           },
-                        }}
-                      />
+                          }}
+                        />
+                      </FieldWrap>
                     </Box>
                     <Box>
                       <Text as="label" htmlFor="location" sx={labelSx}>
                         Location <Text as="span" textTransform="none" letterSpacing="0.02em" fontSize="12px" color="brand.mutedText">optional</Text>
                       </Text>
-                      <Input
-                        id="location"
-                        name="location"
-                        autoComplete="off"
-                        placeholder="Venue, town, address, or still deciding"
-                        value={place}
-                        onChange={(e) => setPlace(e.target.value)}
-                        h="48px"
-                        sx={fieldSx('name')}
-                      />
+                      <FieldWrap state={state.location} tick>
+                        <Input
+                          id="location"
+                          name="location"
+                          autoComplete="off"
+                          placeholder="Venue, town, address, or still deciding"
+                          value={place}
+                          onChange={(e) => setPlace(e.target.value)}
+                          onBlur={(e) => judge('location', e.target.value)}
+                          h="48px"
+                          // Its own state. This field was wired to the NAME
+                          // field's: typing a name turned the untouched, empty
+                          // Location box green, and a failed submit turned it
+                          // red with no message under it.
+                          sx={fieldSx('location')}
+                        />
+                      </FieldWrap>
                     </Box>
                   </Grid>
                 </Box>
 
                 <Box>
-                  <SectionHead title="Your message" required />
-                  <Textarea
-                    id="message"
-                    name="message"
-                    rows={5}
-                    placeholder="The day, your ideas, any questions"
-                    value={message}
-                    onChange={(e) => { setMessage(e.target.value); clearIfFixed('message'); }}
-                    onBlur={(e) => judge('message', e.target.value)}
-                    minH={{ base: '204px', md: '140px' }}
-                    lineHeight="1.6"
-                    p={3}
-                    sx={fieldSx('message')}
-                  />
+                  <SectionHead title="Your message" required square active={activeSection === 'message'} />
+                  <FieldWrap state={state.message} tick>
+                    <Textarea
+                      id="message"
+                      name="message"
+                      rows={5}
+                      placeholder="The day, your ideas, any questions"
+                      value={message}
+                      onChange={(e) => { setMessage(e.target.value); clearIfFixed('message', e.target.value); }}
+                      onBlur={(e) => judge('message', e.target.value)}
+                      isRequired
+                      isInvalid={state.message === 'error'}
+                      {...describe('message')}
+                      // The section heading is an h2, not a label, so without
+                      // this the box announces as its placeholder text and is
+                      // unfindable by name in a screen reader's control list.
+                      aria-label="Your message"
+                      lineHeight="1.6"
+                      p={3}
+                      sx={{
+                        ...fieldSx('message'),
+                        // 560px, the width at which the greeting stops
+                        // wrapping, NOT Chakra's md (768px). Between 561 and
+                        // 767 the box was opening 64px taller than the approved
+                        // design for no reason, since nothing wraps there.
+                        minHeight: '204px',
+                        '@media (min-width: 561px)': { minHeight: '140px' },
+                      }}
+                    />
+                  </FieldWrap>
                   {errorLine('message')}
                 </Box>
 
