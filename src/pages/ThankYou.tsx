@@ -1,11 +1,11 @@
-import { Box, VStack, Text, Flex, Icon, Spinner } from '@chakra-ui/react';
+import { Box, Flex, Grid, GridItem, Icon, Image, Spinner, Text } from '@chakra-ui/react';
 import FaCheckCircle from '../icons/fa/FaCheckCircle';
 import FaExclamationCircle from '../icons/fa/FaExclamationCircle';
-import FaInstagram from '../icons/fa/FaInstagram';
 import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
-import FaWhatsapp from '../icons/fa/FaWhatsapp';
 import { Helmet } from 'react-helmet-async';
 import CTAButton from '../components/ui/CTAButton';
+import PageHeader from '../components/ui/PageHeader';
+import ContactRail, { SectionHead } from '../components/ContactRail';
 import { m, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -16,7 +16,7 @@ const MotionDiv = m.div;
 
 // idle      → direct visit / back-navigation; nothing was submitted here
 // sending   → waiting on Resend to confirm the recipient accepted it
-// delivered → the recipient's mail server confirmed receipt (green)
+// delivered → the recipient's mail server confirmed receipt
 // pending   → sent fine, but no delivery confirmation inside our window
 // failed    → bounced, rejected, or suppressed
 //
@@ -24,6 +24,19 @@ const MotionDiv = m.div;
 // This page promises the customer their confirmation is real, so it waits
 // for the actual delivery event rather than assuming.
 type AutoReplyStatus = 'idle' | 'sending' | 'delivered' | 'pending' | 'failed';
+
+const LEAD_SENT = (
+  <>
+    Your message is in. A confirmation is on its way from{' '}
+    <Text as="span" color="brand.accentText" fontWeight="400">vero@vero.photography</Text>, and
+    I'll personally reply within 24 hours.
+  </>
+);
+// Their message arrived; the confirmation email did not. Promising one that
+// bounced sends them watching an inbox for something that is never coming.
+const LEAD_FAILED = <>Your message is in. I'll personally reply within 24 hours.</>;
+// Nothing was submitted here, so nothing may be claimed.
+const LEAD_IDLE = <>If you have already sent a message, I'll personally reply within 24 hours.</>;
 
 const ThankYou = () => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -69,6 +82,11 @@ const ThankYou = () => {
   // returned a permission error, so the page fell back to a 10-second
   // timer and told customers "Confirmation Sent" on faith. The key is
   // full-access now, so the promise can be real again.
+  //
+  // Gated on the submission state ONLY. Never on a motion preference: whether
+  // a confirmation arrived is not an animation, and withholding the outcome
+  // from someone who asked for less movement leaves them on a frozen spinner
+  // with no result at all.
   useEffect(() => {
     if (!justSubmitted || !emailId) return;
 
@@ -133,282 +151,200 @@ const ThankYou = () => {
     trackAdsLeadConversion();
   }, [justSubmitted]);
 
-
-  const handleWhatsAppClick = () => {
-    const phoneNumber = '+15709095707';
-    const message = 'Hello Veronika, I would like to discuss a photography project.';
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-    trackContactSubmission('WhatsApp');
-    window.open(whatsappUrl, '_blank');
-  };
-
-  const handleInstagramClick = () => {
-    trackContactSubmission('Instagram');
-    window.open('https://www.instagram.com/vero.art.photo', '_blank');
-  };
-
-  const handleEmailClick = () => {
-    trackContactSubmission('Email');
-    window.location.href = 'mailto:vero@vero.photography?subject=Photography%20Inquiry';
-  };
+  const lead =
+    autoReplyStatus === 'idle' ? LEAD_IDLE
+    : autoReplyStatus === 'failed' ? LEAD_FAILED
+    : LEAD_SENT;
 
   return (
-    <Box position="relative" minH="100vh" overflow="hidden">
+    <Box position="relative" minH="100vh" bg="brand.surface">
       <Helmet>
         <title>Thank You - Vero Photography</title>
         <meta name="robots" content="noindex, nofollow" />
         <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />
       </Helmet>
 
-      <Box
-        position="absolute"
-        inset={0}
-        backgroundImage="url('/assets/photos/site/contact-bg.webp')"
-        backgroundSize={{ base: '300%', md: 'cover' }}
-        backgroundPosition={{ base: '25% center', md: 'center' }}
-        filter="brightness(0.4)"
-      />
+      {/* The same hero as /contact, unchanged. The page keeps its identity and
+          only the working column changes state; rewriting the hero made the
+          whole thing feel like a different site. */}
+      <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden" bg="#3a342d">
+        <Image
+          src="/assets/photos/site/contact-bg.webp"
+          alt=""
+          w="100%"
+          h="100%"
+          objectFit="cover"
+          objectPosition={{ base: '13% 30%', md: 'center 30%' }}
+          fetchPriority="high"
+        />
+        <Box position="absolute" inset={0} bg="rgba(0,0,0,0.45)" />
+        <Flex position="absolute" inset={0} align="center" justify="center" px={6} pt={{ base: '64px', md: '72px' }}>
+          <Box maxW="46ch">
+            <PageHeader
+              onDark
+              eyebrow="Get in touch"
+              title="Book a session"
+              lead="Tell me about your vision and let's create something beautiful together."
+            />
+          </Box>
+        </Flex>
+      </Box>
 
-      <Flex
-        position="relative"
-        zIndex={2}
-        minH="100vh"
-        align="center"
-        justify="center"
-        px={6}
-        py={{ base: 24, md: 16 }}
-      >
-        <Box ref={contentRef} w="100%" maxW="520px">
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8, ease: "easeOut" }}
+      <Box maxW="1120px" mx="auto" px={{ base: 5, md: 10 }} pt={{ base: 12, md: 16 }} pb={{ base: 16, md: 22 }}>
+        <MotionDiv
+          ref={contentRef}
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+        >
+          <Grid
+            templateColumns={{ base: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 320px' }}
+            columnGap={{ lg: 18 }}
+            templateRows={{ lg: 'auto auto 1fr' }}
+            templateAreas={{
+              base: `"col" "reserve" "reach"`,
+              lg: `"col reserve" "col reach" "col ."`,
+            }}
           >
-            <VStack spacing={10}>
-              {/* Header */}
-              <VStack spacing={4}>
-                <Text as="h1" textStyle="pageTitle" color="white" textAlign="center" m={0}>
+            <GridItem area="col" minW={0} alignSelf="start" w="100%" maxW={{ base: '640px', lg: 'none' }} mx="auto">
+              <Box mb={7}>
+                <Text
+                  as="span"
+                  display="block"
+                  fontSize="0.6875rem"
+                  fontWeight="500"
+                  letterSpacing="0.32em"
+                  textTransform="uppercase"
+                  lineHeight="1"
+                  color="brand.accentText"
+                  mr="-0.32em"
+                >
+                  {/* Nothing was submitted on a direct visit, so the eyebrow
+                      must not announce one. */}
+                  {justSubmitted ? 'Sent' : 'Contact'}
+                </Text>
+                <Box w="40px" h="1px" bg="brand.accent" my={4} />
+                <Text
+                  as="h2"
+                  fontFamily="heading"
+                  fontWeight="300"
+                  fontSize={{ base: '2.25rem', md: '2.75rem' }}
+                  lineHeight="1.05"
+                  color="gray.800"
+                  m={0}
+                >
                   Thank you
                 </Text>
-                <Box w="40px" h="1px" bg="brand.accent" />
-                <Text
-                  textStyle="bodyLead"
-                  color="whiteAlpha.800"
-                  textAlign="center"
-                  lineHeight="1.9"
-                  maxW="440px"
-                >
-                  {justSubmitted ? (
-                    <>
-                      Your message is in. A confirmation is on its way from{' '}
-                      <Text as="span" color="brand.accent">vero@vero.photography</Text> — and I'll personally reply within 24 hours.
-                    </>
-                  ) : (
-                    <>Your message is in. I'll personally reply within 24 hours.</>
-                  )}
+                <Text mt={3.5} fontSize={{ base: '1rem', md: '1.0625rem' }} fontWeight="300" lineHeight="1.75" color="gray.600" maxW="46ch">
+                  {lead}
                 </Text>
-              </VStack>
+              </Box>
 
-              {/* Auto-reply status block */}
-              {justSubmitted && (
-                <AutoReplyStatusBlock status={autoReplyStatus} />
-              )}
+              <SectionHead title="Your confirmation" />
+              <AutoReplyStatusBlock status={autoReplyStatus} />
 
-              {/* Generic spam warning for users who land here without submitting */}
-              {!justSubmitted && (
-                <Box
-                  w="100%"
-                  maxW="460px"
-                  bg="rgba(201, 169, 110, 0.08)"
-                  borderLeft="2px solid #c9a96e"
-                  px={5}
-                  py={4}
-                >
-                  <Text textStyle="metaCaption" color="whiteAlpha.900" mb={2}>
-                    Heads up
-                  </Text>
-                  <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-                    My reply might land in your <Text as="span" color="brand.accentText" fontWeight="400">Spam</Text> or <Text as="span" color="brand.accentText" fontWeight="400">Promotions</Text> folder — please check there if you don't see it in your inbox.
-                  </Text>
-                </Box>
-              )}
-
-              <Box w="100%" maxW="320px">
+              <Box mt={8} maxW="320px" mx="auto">
                 <CTAButton to="/" variant="solid" size="lg" fullWidth>
                   Back to home
                 </CTAButton>
               </Box>
+            </GridItem>
 
-              <Flex align="center" w="100%" gap={4}>
-                <Box flex={1} h="1px" bg="whiteAlpha.200" />
-                <Text textStyle="metaCaption" color="whiteAlpha.700">
-                  or message me directly
-                </Text>
-                <Box flex={1} h="1px" bg="whiteAlpha.200" />
-              </Flex>
-
-              <Flex gap={{ base: 6, md: 16 }} direction="row" justify="center">
-                <ContactPill icon={FaWhatsapp} label="WhatsApp" iconSize={6} onClick={handleWhatsAppClick} />
-                <ContactPill icon={FaInstagram} label="Instagram" iconSize={6} onClick={handleInstagramClick} />
-                <ContactPill icon={FaRegEnvelope} label="Email" iconSize={5} onClick={handleEmailClick} />
-              </Flex>
-            </VStack>
-          </MotionDiv>
-        </Box>
-      </Flex>
+            <ContactRail onChannelClick={trackContactSubmission} />
+          </Grid>
+        </MotionDiv>
+      </Box>
     </Box>
   );
 };
 
-interface ContactPillProps {
-  icon: React.ElementType;
-  label: string;
-  iconSize: number;
-  onClick: () => void;
-}
-
-const ContactPill = ({ icon, label, iconSize, onClick }: ContactPillProps) => (
-  <VStack
-    as="button"
-    type="button"
-    onClick={onClick}
-    cursor="pointer"
-    spacing={2}
-    transition="all 0.4s"
-    _hover={{ transform: 'translateY(-3px)', '& svg': { color: 'white' } }}
-    sx={{ WebkitTapHighlightColor: 'transparent' }}
-    data-group
-  >
-    <Flex h="24px" align="center"><Icon as={icon} color="brand.accent" boxSize={iconSize} transition="all 0.4s" /></Flex>
-    <Text textStyle="metaCaption" color="whiteAlpha.800"
-      _groupHover={{ color: 'brand.accent' }} transition="all 0.4s"
-    >
-      {label}
-    </Text>
-  </VStack>
-);
-
+/**
+ * Four states, not two. A bounced confirmation has to say so: its whole job is
+ * to stop someone watching an inbox for mail that will never arrive, and point
+ * them at the direct reply instead.
+ */
 const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
-  if (status === 'sending') {
-    return (
-      <Box
-        w="100%"
-        maxW="460px"
-        bg="rgba(201, 169, 110, 0.08)"
-        borderLeft="2px solid #c9a96e"
-        px={5}
-        py={4}
-      >
-        <Flex align="center" gap={3} mb={2}>
-          <Spinner size="sm" color="brand.accentText" thickness="2px" speed="0.8s" />
-          <Text
-            textStyle="metaCaption"
-            color="whiteAlpha.900"
-          >
-            Delivering Confirmation…
-          </Text>
+  const panel = {
+    sending: {
+      border: 'brand.accent',
+      bg: 'brand.surfaceSunken',
+      icon: <Spinner size="sm" color="brand.accentText" thickness="2px" speed="0.8s" />,
+      title: 'Delivering confirmation…',
+      body: <>Waiting for it to reach your inbox, this usually takes a few seconds. Hang tight.</>,
+    },
+    delivered: {
+      border: 'brand.success',
+      bg: 'rgba(47, 122, 77, 0.07)',
+      icon: <Icon as={FaCheckCircle} color="brand.success" boxSize={4} />,
+      title: 'Confirmation sent',
+      body: (
+        <>
+          Look for an email from <Gold>vero@vero.photography</Gold>, it is on its way and can take
+          a couple of minutes to arrive. If you don't see it, <Gold>check your Spam or Promotions
+          folder</Gold>, and mark it as <Gold>Not Spam</Gold> so my real reply reaches your inbox.
+        </>
+      ),
+    },
+    pending: {
+      border: 'brand.accent',
+      bg: 'brand.surfaceSunken',
+      icon: <Icon as={FaRegEnvelope} color="brand.accentText" boxSize={4} />,
+      title: 'Confirmation on its way',
+      body: (
+        <>
+          Your confirmation was sent and is taking a little longer than usual to land. Give it a
+          minute or two, and <Gold>check your Spam or Promotions folder</Gold> if it is not in
+          your inbox.
+        </>
+      ),
+    },
+    failed: {
+      border: 'brand.caution',
+      bg: 'rgba(169, 99, 26, 0.07)',
+      icon: <Icon as={FaExclamationCircle} color="brand.caution" boxSize={4} />,
+      title: "Confirmation couldn't send",
+      body: (
+        <>
+          No worries, I still got your message and will personally reach out within 24 hours. My
+          reply might land in <Gold>Spam</Gold> or <Gold>Promotions</Gold>, so please check there too.
+        </>
+      ),
+    },
+    idle: {
+      border: 'brand.accent',
+      bg: 'brand.surfaceSunken',
+      icon: <Icon as={FaExclamationCircle} color="brand.accentText" boxSize={4} />,
+      title: 'Heads up',
+      body: (
+        <>
+          If you have already written to me, my reply might land in your <Gold>Spam</Gold> or{' '}
+          <Gold>Promotions</Gold> folder, so please check there if you don't see it in your inbox.
+        </>
+      ),
+    },
+  }[status];
+
+  return (
+    <Box borderLeft="2px solid" borderLeftColor={panel.border} bg={panel.bg} px={5} py={4.5} role="status">
+      <Flex align="center" gap={3} mb={2.5} minH="18px">
+        <Flex align="center" justify="center" flex="none" w="18px" h="18px">
+          {panel.icon}
         </Flex>
-        <Text fontSize="sm" color="whiteAlpha.700" fontWeight="300" lineHeight="1.7">
-          Waiting for it to reach your inbox — this usually takes a few seconds. Hang tight.
+        <Text fontSize="12px" fontWeight="500" letterSpacing="0.16em" textTransform="uppercase" color="gray.800">
+          {panel.title}
         </Text>
-      </Box>
-    );
-  }
-
-  if (status === 'delivered') {
-    return (
-      <MotionDiv
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        style={{ width: '100%', maxWidth: '460px' }}
-      >
-        <Box
-          bg="rgba(104, 211, 145, 0.08)"
-          borderLeft="2px solid #68d391"
-          px={5}
-          py={4}
-        >
-          <Flex align="center" gap={3} mb={2}>
-            <Icon as={FaCheckCircle} color="#68d391" boxSize={4} />
-            <Text
-              textStyle="metaCaption"
-              color="whiteAlpha.900"
-            >
-              Confirmation Sent
-            </Text>
-          </Flex>
-          <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Look for an email from <Text as="span" color="brand.accent" fontWeight="400">vero@vero.photography</Text> — it's on its way and can take a couple of minutes to arrive. If you don't see it, <Text as="span" color="brand.accent" fontWeight="400">check your Spam or Promotions folder</Text>, and mark it as <Text as="span" color="brand.accent" fontWeight="400">Not Spam</Text> so my real reply reaches your inbox.
-          </Text>
-        </Box>
-      </MotionDiv>
-    );
-  }
-
-  if (status === 'pending') {
-    return (
-      <MotionDiv
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        style={{ width: '100%', maxWidth: '460px' }}
-      >
-        <Box
-          bg="rgba(201, 169, 110, 0.08)"
-          borderLeft="2px solid #c9a96e"
-          px={5}
-          py={4}
-        >
-          <Flex align="center" gap={3} mb={2}>
-            <Icon as={FaRegEnvelope} color="brand.accentText" boxSize={4} />
-            <Text
-              textStyle="metaCaption"
-              color="whiteAlpha.900"
-            >
-              Confirmation On Its Way
-            </Text>
-          </Flex>
-          <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            Your confirmation was sent and is taking a little longer than usual to land. Give it a minute or two, and <Text as="span" color="brand.accentText" fontWeight="400">check your Spam or Promotions folder</Text> if it's not in your inbox.
-          </Text>
-        </Box>
-      </MotionDiv>
-    );
-  }
-
-  if (status === 'failed') {
-    return (
-      <MotionDiv
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        style={{ width: '100%', maxWidth: '460px' }}
-      >
-        <Box
-          bg="rgba(246, 173, 85, 0.08)"
-          borderLeft="2px solid #f6ad55"
-          px={5}
-          py={4}
-        >
-          <Flex align="center" gap={3} mb={2}>
-            <Icon as={FaExclamationCircle} color="#f6ad55" boxSize={4} />
-            <Text
-              textStyle="metaCaption"
-              color="whiteAlpha.900"
-            >
-              Confirmation Couldn't Send
-            </Text>
-          </Flex>
-          <Text fontSize="sm" color="whiteAlpha.800" fontWeight="300" lineHeight="1.7">
-            No worries — I still got your message and will personally reach out within 24 hours. My reply might land in <Text as="span" color="brand.accent" fontWeight="400">Spam</Text> or <Text as="span" color="brand.accent" fontWeight="400">Promotions</Text>, so please check there too.
-          </Text>
-        </Box>
-      </MotionDiv>
-    );
-  }
-
-  return null;
+      </Flex>
+      <Text fontSize="15px" fontWeight="300" lineHeight="1.7" color="gray.700" m={0}>
+        {panel.body}
+      </Text>
+    </Box>
+  );
 };
+
+const Gold = ({ children }: { children: React.ReactNode }) => (
+  <Text as="span" color="brand.accentText" fontWeight="400">
+    {children}
+  </Text>
+);
 
 export default ThankYou;

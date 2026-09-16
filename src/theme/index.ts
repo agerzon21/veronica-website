@@ -41,6 +41,9 @@ const GOLD_SOFT = '#d4b87a'; //  1.92:1 — hover fill on dark
 const GOLD_BORDER = '#e8d9a8'; //  1.41:1 — borders on cream
 const CREAM = '#fdf9f0';
 const CREAM_SUNKEN = '#f5efe4';
+const GOLD_FIELD = '#a58b58'; //  ~3.0:1 on cream — input borders, WCAG 1.4.11
+const STATUS_OK = '#2f7a4d'; //  ~4.6:1 on cream — validated / confirmation sent
+const STATUS_WARN = '#a9631a'; //  ~4.6:1 on cream — confirmation could not send
 
 export const brand = {
   /** The signature gold. Borders, icons, dividers, rules, decorative fills. NEVER text. */
@@ -57,6 +60,16 @@ export const brand = {
   surface: CREAM,
   /** Recessed surface — inputs, wells. */
   surfaceSunken: CREAM_SUNKEN,
+  /**
+   * Input borders on cream. accentBorder is 1.41:1 and decorative, which is
+   * below the 3:1 WCAG 1.4.11 asks of a control's boundary, so a field
+   * outlined in it is not reliably visible as a field.
+   */
+  field: GOLD_FIELD,
+  /** A control that validated, and the confirmation that a message arrived. */
+  success: STATUS_OK,
+  /** A confirmation that could not be delivered. Not an error, a caution. */
+  caution: STATUS_WARN,
 } as const;
 
 const theme = extendTheme({

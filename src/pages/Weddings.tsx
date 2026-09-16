@@ -442,11 +442,24 @@ const Weddings = () => {
             {weddingData.packages.map((pkg, i) => {
               const pin = pkgPin(i);
               const fallback = FEATURED[i + 1];
+              // The photograph travels with the click. This page has already
+              // resolved it, admin pin or curated fallback, so the contact
+              // page's package plate can show the very image they tapped
+              // instead of re-deriving the rule or refetching this page's
+              // whole payload for one background.
+              //
+              // In history state, NOT a query parameter: ?photo= is editable
+              // by anyone, and an arbitrary URL dropped into an <img src> on a
+              // page wearing Vero's branding is an injection. State cannot be
+              // forged by a shared link. It also does not survive a refresh or
+              // a cold link, so the contact page keeps its own fallback.
+              const packagePhoto = pin?.fullUrl ?? photoUrl(fallback.id);
               return (
                 <Flex
                   key={pkg.name}
                   as={RouterLink}
                   to={`/contact?package=${encodeURIComponent(pkg.name)}`}
+                  state={{ packagePhoto, packageFocus: pin?.focus ?? 'center' }}
                   role="group"
                   direction="column"
                   position="relative"
@@ -890,7 +903,7 @@ const Weddings = () => {
               )}
               <Text textStyle="bodyCopy" color="gray.600">
                 Have a question that isn't here? Ask me directly and you'll hear back
-                within a day or two.
+                within 24 hours.
               </Text>
             </VStack>
             <Flex justify="center" w="100%" mt={5}>

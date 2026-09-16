@@ -25,6 +25,14 @@ interface CTAButtonProps {
   href?: string;
   onClick?: (e: React.MouseEvent) => void;
   type?: 'button' | 'submit';
+  // The id of the <form> this button submits, for a submit button that sits
+  // OUTSIDE its form in the markup. The contact page needs it: its submit bar
+  // is sticky, and a sticky element cannot leave its containing block, so
+  // inside the form the bar was clamped and hung below the fold. Moving the
+  // bar out fixes that, and this attribute is what still connects the button
+  // to the form. Per the note at the top of this file, the fix belongs here
+  // rather than in a hand-rolled button beside it.
+  form?: string;
   icon?: IconType;
   variant?: Variant;
   tone?: Tone;
@@ -216,6 +224,7 @@ const CTAButton = ({
   href,
   onClick,
   type = 'button',
+  form,
   icon,
   variant = 'outline',
   tone = 'light',
@@ -315,7 +324,7 @@ const CTAButton = ({
   }
 
   return (
-    <Box as="button" type={type} onClick={onClick} disabled={inactive} aria-label={ariaLabel} {...common}>
+    <Box as="button" type={type} form={form} onClick={onClick} disabled={inactive} aria-label={ariaLabel} {...common}>
       {content}
     </Box>
   );
