@@ -598,11 +598,22 @@ const Contact = () => {
                     _hover={{ color: 'brand.accentSoft' }}
                     // Inset, because an outset ring on a control sitting in the
                     // corner of the photograph is clipped by the plate.
-                    _focusVisible={{ outline: '2px solid', outlineColor: 'white', outlineOffset: '-4px' }}
+                    _focusVisible={{ outline: '2px solid #e3c98f', outlineOffset: '-4px' }}
                     // Tabbing back up to this left it tucked under the navbar.
                     sx={{ scrollMarginTop: '88px', scrollMarginBottom: '112px' }}
                   >
-                    <Box as="span" aria-hidden="true">✕</Box> Remove
+                    {/* Drawn, for the same reason as the tick in the submit
+                        bar: the glyph fell back to another face entirely and
+                        sat smaller and lighter than the label beside it. */}
+                    <Box as="svg" viewBox="0 0 12 12" aria-hidden="true" w="11px" h="11px" flex="none">
+                      <path
+                        d="M1.5 1.5 10.5 10.5M10.5 1.5 1.5 10.5"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                    </Box>
+                    Remove
                   </Flex>
                   <Box position="absolute" left={0} right={0} bottom={0} zIndex={1} px={5} py={4}>
                     <Text fontSize="10px" letterSpacing="0.2em" textTransform="uppercase" color="brand.accentSoft">
@@ -639,6 +650,9 @@ const Contact = () => {
                         borderBottom="1px solid"
                         borderColor="brand.accentSoft"
                         pb={0.5}
+                        _focusVisible={{ outline: '2px solid #e3c98f', outlineOffset: '3px' }}
+                        // Tabbing back up to this left it under the navbar.
+                        sx={{ scrollMarginTop: '88px', scrollMarginBottom: '112px' }}
                       >
                         Change
                       </Box>
@@ -1040,7 +1054,25 @@ const Contact = () => {
               >
                 <Text fontSize="13px" lineHeight="1.35" textAlign="center" color={requiredLeft === 0 ? 'brand.success' : 'brand.mutedText'} m={0} aria-live="polite">
                   {requiredLeft === 0 ? (
-                    '✓ All set'
+                    <>
+                      {/* Drawn, not the U+2713 glyph. The self-hosted Jost is a
+                          latin subset, so that character fell back to whatever
+                          face the device happened to have and sat at a different
+                          weight and baseline from every other mark here. */}
+                      <Box
+                        as="svg"
+                        viewBox="0 0 16 16"
+                        aria-hidden="true"
+                        display="inline-block"
+                        w="14px"
+                        h="14px"
+                        verticalAlign="-2px"
+                        mr="4px"
+                      >
+                        <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                      </Box>
+                      All set
+                    </>
                   ) : (
                     <>
                       <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">*</Text>
