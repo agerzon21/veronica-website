@@ -1034,8 +1034,11 @@ const Contact = () => {
                 align="center"
                 gap={2.5}
                 position="sticky"
-                // Sits on top of the keyboard rather than underneath it.
-                bottom={keyboardInset ? `${keyboardInset}px` : 0}
+                // Always flush to the bottom. Lifting the bar above the
+                // keyboard put it straight over the field being typed into, so
+                // you could not see what you were writing. While the keyboard
+                // is up the bar hides instead; see the media query below.
+                bottom={0}
                 zIndex={40}
                 bg="brand.surface"
                 mt="-300px"
@@ -1053,11 +1056,21 @@ const Contact = () => {
                     paddingBottom: floating
                       ? 'calc(14px + env(safe-area-inset-bottom, 0px))'
                       : '14px',
-                    // FALLBACK ONLY, for browsers with no visualViewport. Where
-                    // there is one, the bar is lifted above the keyboard by
-                    // keyboardInset instead and stays pinned. Going static made
-                    // it scroll away the moment you touched a field and then
-                    // scrolled without typing.
+                    // While the on-screen keyboard is up, the bar gets out of
+                    // the way completely.
+                    //
+                    // Keyed on THE KEYBOARD, not on focus, and that distinction
+                    // is the whole fix. Focus outlives the keyboard: press iOS
+                    // Done, or scroll so the keyboard dismisses, and the field
+                    // is still focused. Keying this on focus is what left the
+                    // bar missing long after the keyboard had gone. The visual
+                    // viewport tells us what the keyboard is actually doing, so
+                    // the bar comes back the instant it closes.
+                    ...(keyboardInset > 0 ? { display: 'none' } : {}),
+                    // Fallback for browsers with no visualViewport, where the
+                    // keyboard is invisible to us and focus is the only signal
+                    // available. Static rather than hidden, so that at worst
+                    // the bar scrolls with the page instead of vanishing.
                     ...(typing && !vvSupported
                       ? {
                           position: 'static',
