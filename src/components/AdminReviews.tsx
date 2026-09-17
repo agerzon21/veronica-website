@@ -667,11 +667,18 @@ function ReviewCard({
                 </Text>
               </HStack>
             )}
-            {row.review_url && (
+            {row.review_url ? (
               <HStack spacing={1} color="gray.500">
                 <Icon as={FaExternalLinkAlt} boxSize={2.5} />
                 <Text fontSize="xs" fontWeight="300">
                   {t.reviews.linked}
+                </Text>
+              </HStack>
+            ) : (
+              <HStack spacing={1} color="orange.600">
+                <Icon as={FaExternalLinkAlt} boxSize={2.5} />
+                <Text fontSize="xs" fontWeight="400">
+                  {t.reviews.noLink}
                 </Text>
               </HStack>
             )}

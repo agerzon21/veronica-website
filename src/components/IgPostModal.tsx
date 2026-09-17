@@ -334,7 +334,16 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
   );
 };
 
-function NavArrow({ direction, onClick }: { direction: 'prev' | 'next'; onClick: () => void }) {
+// Exported for ReviewModal, whose side arrows are meant to be these exactly.
+export function NavArrow({
+  direction,
+  onClick,
+  label,
+}: {
+  direction: 'prev' | 'next';
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <Box
       as="button"
@@ -362,7 +371,7 @@ function NavArrow({ direction, onClick }: { direction: 'prev' | 'next'; onClick:
       _hover={{ bg: 'rgba(255, 255, 255, 0.2)', color: 'white' }}
       zIndex={2}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
-      aria-label={direction === 'prev' ? 'Previous post' : 'Next post'}
+      aria-label={label ?? (direction === 'prev' ? 'Previous post' : 'Next post')}
     >
       <Icon as={direction === 'prev' ? ChevronLeftIcon : ChevronRightIcon} boxSize={6} />
     </Box>

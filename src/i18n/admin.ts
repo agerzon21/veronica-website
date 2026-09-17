@@ -2167,6 +2167,9 @@ const dict = {
       ru: (n: number) => `${n} фото`,
     },
     linked: { en: 'Linked', ru: 'Есть ссылка' },
+    // Shown on reviews still missing their link, so it is easy to see which
+    // ones have no "Read it on Google" button on the site yet.
+    noLink: { en: 'No link yet', ru: 'Нет ссылки' },
 
     // Source badges — kept as brand names (Google/Yelp/Instagram/Email
     // stay English in RU too, since they're recognized in Cyrillic UIs
