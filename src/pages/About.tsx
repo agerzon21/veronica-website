@@ -307,16 +307,17 @@ const About = () => {
           crop keeps her and the lens in frame on wide screens, and the
           gradient runs sideways so the heading has dark to sit on while
           the right side of the photograph stays open. ─── */}
-      {/* Below lg the approach card overlaps the bottom 44px of the hero, so
-          the hero is 44px taller there and its text is centred in the part the
-          card leaves alone. Without that, the card covered the facts line on
-          short phones (375x667 lost "Available Worldwide" entirely).
-          The height is a MINIMUM with the text in flow: on the smallest
-          phones (320x568) the text is taller than the old fixed height, and
-          it used to be clipped; now the hero grows to fit it. */}
+      {/* Same 45vh / 53vh band every other page opens with (Alex wanted the
+          heroes to match). Below lg the approach card overlaps its bottom
+          44px, so the text is centred in the part the card leaves alone
+          (the bottom padding); without that the card covered the facts line
+          on short phones.
+          The height is a MINIMUM with the text in flow: only where the text
+          cannot fit (the smallest phones, 375x667 and below) does the hero
+          grow past 45vh, instead of clipping its text. */}
       <Flex
         position="relative"
-        minH={{ base: 'calc(45vh + 44px)', md: 'calc(53vh + 44px)', lg: '53vh' }}
+        minH={{ base: '45vh', md: '53vh' }}
         overflow="hidden"
       >
         <Image
@@ -346,7 +347,7 @@ const About = () => {
           justify={{ base: 'center', md: 'flex-start' }}
           px={{ base: 6, md: '7vw' }}
           pt={{ base: '64px', md: '72px' }}
-          pb={{ base: '60px', lg: 0 }}
+          pb={{ base: '52px', lg: 0 }}
         >
           <Box maxW={{ base: '520px', md: '620px' }} textAlign={{ base: 'center', md: 'left' }}>
             <PageHeader

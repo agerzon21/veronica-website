@@ -2240,8 +2240,16 @@ const dict = {
     editTitle: { en: 'Edit Review', ru: 'Редактировать отзыв' },
 
     // Toast titles on save success
-    reviewSaved: { en: 'Review saved', ru: 'Отзыв сохранён' },
-    reviewCreated: { en: 'Review added', ru: 'Отзыв добавлен' },
+    // No rebuild needed for reviews: the homepage reads them live, through
+    // a one-minute cache (api/reviews.ts).
+    reviewSaved: {
+      en: 'Review saved. The homepage shows it within a minute or two.',
+      ru: 'Отзыв сохранён. На главной он появится в течение пары минут.',
+    },
+    reviewCreated: {
+      en: 'Review added. The homepage shows it within a minute or two.',
+      ru: 'Отзыв добавлен. На главной он появится в течение пары минут.',
+    },
 
     // Errors
     saveFailed: {
@@ -2310,10 +2318,10 @@ const dict = {
     },
 
     // Photos the reviewer attached (migration 033), one link per row.
-    photosLabel: { en: 'Photos from the review', ru: 'Фото из отзыва' },
+    photosLabel: { en: 'Photos for this review', ru: 'Фото к отзыву' },
     photosHelp: {
-      en: 'The photos the client attached to their review. One link per row. Google Drive share links work best.',
-      ru: 'Фото, которые клиент прикрепил к отзыву. По одной ссылке в строке. Лучше всего подходят ссылки на Google Drive.',
+      en: 'Shown in the review popup under "From the session": the ones the client attached on Google, or originals from their session. One link per row. Google Drive share links work best.',
+      ru: 'Показываются во всплывающем окне отзыва под заголовком «From the session»: фото, прикреплённые клиентом в Google, или оригиналы с его съёмки. По одной ссылке в строке. Лучше всего подходят ссылки на Google Drive.',
     },
     photoAria: {
       en: (n: number) => `Photo ${n} link`,
@@ -2337,8 +2345,8 @@ const dict = {
       ru: 'Похоже на ссылку Google Drive, но в ней нет id файла. Возьми ссылку из кнопки «Поделиться».',
     },
     googlePhotoWarning: {
-      en: 'Photo links copied from Google Maps tend to stop working. Save the photo to Google Drive and paste that link instead.',
-      ru: 'Ссылки на фото из Google Maps со временем перестают работать. Сохрани фото в Google Drive и вставь ссылку оттуда.',
+      en: 'This works for now, but Google can change or retire links like this at any time, and it breaks if the client removes the photo. A Google Drive link stays put.',
+      ru: 'Сейчас это работает, но Google может в любой момент изменить или отключить такую ссылку, и она сломается, если клиент удалит фото. Ссылка на Google Drive надёжнее.',
     },
     photoBroken: {
       en: 'This link does not load as an image. Check that it opens a photo and, for Drive, that sharing is on.',

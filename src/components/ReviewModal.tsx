@@ -114,7 +114,6 @@ const ReviewPhotos = ({ review }: { review: PublicReview }) => {
   const photos = (review.photo_urls ?? []).filter(Boolean);
   const [active, setActive] = useState(0);
   const [failed, setFailed] = useState<Record<number, boolean>>({});
-  const name = firstName(review.author_name);
 
   const step = (d: 1 | -1) => {
     if (photos.length < 2) return;
@@ -144,7 +143,9 @@ const ReviewPhotos = ({ review }: { review: PublicReview }) => {
 
   return (
     <Box mt={8} onTouchStart={stop} onTouchEnd={stop}>
-      <SectionHead title={photos.length === 1 ? `The photo ${name} shared` : `Photos ${name} shared`} />
+      {/* Neutral on purpose: the photos may be the ones the client attached
+          on Google, or Vero's originals from the same session. */}
+      <SectionHead title="From the session" />
       <Box
         position="relative"
         h={{ base: '320px', md: '420px' }}
@@ -164,7 +165,7 @@ const ReviewPhotos = ({ review }: { review: PublicReview }) => {
           <Image
             key={photos[active]}
             src={toDirectImageUrl(photos[active], 1600)}
-            alt={`Photo ${active + 1} of ${photos.length} shared by ${review.author_name}`}
+            alt={`Photo ${active + 1} of ${photos.length} from the session with ${review.author_name}`}
             w="100%"
             h="100%"
             objectFit="contain"

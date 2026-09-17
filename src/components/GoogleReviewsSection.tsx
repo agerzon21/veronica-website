@@ -385,12 +385,54 @@ const GoogleReviewsSection = () => {
           <ReviewsCarousel reviews={reviews} onOpen={setOpenIndex} onWarm={preloadReviewModal} />
         ) : null}
 
-        {/* CTA — links to write-review URL */}
-        <Flex justify="center" mt={{ base: 10, md: 14 }}>
-          <CTAButton href={GOOGLE_WRITE_REVIEW_URL} variant="solid">
-            Leave a Review
-          </CTAButton>
-        </Flex>
+        {/* The ask (Alex, 2026-09-17): not just "leave a review" but the
+            reason to, which is that a review with photos can end up right
+            here. "May feature" because Vero chooses which ones show. */}
+        {/* Desktop has no wash over its photograph, and this sits on the
+            bright sand spray, so a soft dark halo behind the words keeps them
+            readable without adding a box. Phones already have the wash. */}
+        <VStack
+          spacing={4}
+          mt={{ base: 10, md: 14 }}
+          maxW="measure"
+          mx="auto"
+          textAlign="center"
+          position="relative"
+          sx={{
+            '@media (min-width: 48em)': {
+              textShadow: '0 1px 2px rgba(10, 16, 32, 0.35)',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                inset: '-56px -120px',
+                background:
+                  'radial-gradient(closest-side, rgba(10, 16, 32, 0.55), rgba(10, 16, 32, 0.28) 55%, rgba(10, 16, 32, 0) 100%)',
+                zIndex: -1,
+                pointerEvents: 'none',
+              },
+            },
+          }}
+        >
+          <Text
+            fontFamily="heading"
+            fontWeight="300"
+            fontStyle="italic"
+            fontSize={{ base: '1.5rem', md: '1.85rem' }}
+            lineHeight="1.3"
+            color="white"
+          >
+            Picture yourself right here.
+          </Text>
+          <Text textStyle="bodyCopy" color="whiteAlpha.800" maxW="30rem">
+            Leave a Google review with a few favorites from your session, and we may feature it on
+            this page.
+          </Text>
+          <Box pt={2}>
+            <CTAButton href={GOOGLE_WRITE_REVIEW_URL} variant="solid" icon={FaGoogle}>
+              Share your story
+            </CTAButton>
+          </Box>
+        </VStack>
       </MotionDiv>
 
       {/* Portalled to <body>. This section is `isolation: isolate`, which

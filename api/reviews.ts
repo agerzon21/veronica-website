@@ -21,9 +21,9 @@
  * review lives on ("Read it on Google"), and `review_url` / `photo_urls`
  * (migration 033) are what that popup shows.
  *
- * Edge-cached (max-age=300, s-maxage=1800): reviews change on the
- * order of days/weeks, so a 30-min CDN cache dramatically cuts DB
- * load without users seeing stale content in practice.
+ * Edge-cached for a minute (s-maxage=60, stale-while-revalidate=300).
+ * It was 30 minutes, which made admin edits look broken: a newly added
+ * link or photo did not appear until the cache ran out.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -103,7 +103,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=1800, stale-while-revalidate=3600');
+    // A minute at the edge, not thirty: an admin edit (a new review, its link
+    // or photos) should show on the homepage almost at once, and the band only
+    // fetches when a visitor scrolls near it, so this costs very little.
+    // Browsers always ask the edge rather than keeping their own copy.
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({
       success: true,
       reviews: rows,
