@@ -1,0 +1,36 @@
+-- A link to each review where it was posted, and the photos the reviewer
+-- attached to it.
+--
+-- The homepage cards now open into a full view. That view carries a button to
+-- the review on Google (or wherever it lives), so a visitor can check it was
+-- really written by a client, and it shows the photos the client attached. The
+-- Alli Pad review that arrived on 2026-09-16 prompted this: very long, with
+-- four of Vero's own photos attached on Google.
+--
+-- Why typed in rather than fetched from Google (researched 2026-09-16):
+--   * The Places API returns at most 5 reviews and has no field for review
+--     photos at all, needs a billing account, and its terms forbid storing
+--     review content.
+--   * The Business Profile API does return review photos (since 2026-04-20),
+--     but access needs an approval form, an owner OAuth token, and its terms
+--     cap storage at 30 days. Its photo URLs are documented as not static.
+--   So each review's photos are pasted in by hand. A Google Drive share link
+--   is the durable choice: the admin rewrites it to a direct image link on
+--   save, the same way it already does for author_photo_url. Links copied off
+--   Google Maps (lh3.googleusercontent.com) tend to die, and the admin warns
+--   about them.
+--
+-- review_url: the link from Google Maps' "Share review" button (a
+-- maps.app.goo.gl short link), or the equivalent on another site. Only https
+-- links are accepted, because it is rendered as an href on the public site.
+--
+-- photo_urls: ordered, TEXT[] like gallery_photos.keywords (009). Never NULL,
+-- so neither the API nor the client has to special-case "no photos".
+--
+-- Run manually once against production Neon via the console SQL editor.
+-- IMPORTANT: run this BEFORE deploying the code that reads it. api/reviews.ts
+-- selects both columns, so without them the homepage reviews section returns a
+-- 500 and disappears.
+ALTER TABLE reviews
+  ADD COLUMN IF NOT EXISTS review_url TEXT,
+  ADD COLUMN IF NOT EXISTS photo_urls TEXT[] NOT NULL DEFAULT '{}';

@@ -10,6 +10,12 @@
  * One endpoint for both create + update: if `review.id` is present we
  * UPDATE that row, otherwise we INSERT. The admin form always sends
  * the full shape either way, so no partial-patch complexity.
+ *
+ * The one exception is the two columns from migration 033 (`review_url`,
+ * `photo_urls`). An UPDATE that does not mention them at all leaves them
+ * alone instead of clearing them, so an admin tab still running the
+ * previous bundle during a deploy cannot wipe a review's photos by
+ * flipping a switch.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -18,6 +24,23 @@ import { requireAdmin } from '../_admin-auth.js';
 
 type Source = 'google' | 'yelp' | 'instagram' | 'email' | 'manual';
 const ALLOWED_SOURCES: readonly Source[] = ['google', 'yelp', 'instagram', 'email', 'manual'] as const;
+
+// Drive thumbnail links run to ~90 characters and Maps share links to ~40;
+// this only exists to stop a pasted paragraph being stored as a URL.
+const MAX_URL_LENGTH = 1000;
+const MAX_PHOTOS = 12;
+
+// https only. Both fields end up as an href or an img src on the public
+// site, so a `javascript:` link must never get in, and an http image would
+// be blocked as mixed content anyway.
+function isHttpsUrl(value: string): boolean {
+  if (value.length > MAX_URL_LENGTH) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 interface ValidatedReview {
   id: string | null;
@@ -30,6 +53,9 @@ interface ValidatedReview {
   featured: boolean;
   visible: boolean;
   sort_order: number;
+  // undefined = the request did not mention the field (see header).
+  review_url: string | null | undefined;
+  photo_urls: string[] | undefined;
 }
 
 type ValidationResult =
@@ -108,6 +134,42 @@ function validateReviewInput(body: unknown): ValidationResult {
   const sort_order =
     typeof sortRaw === 'number' && Number.isFinite(sortRaw) ? Math.trunc(sortRaw) : 0;
 
+  let review_url: string | null | undefined;
+  if ('review_url' in r) {
+    const raw = typeof r.review_url === 'string' ? r.review_url.trim() : '';
+    if (raw && !isHttpsUrl(raw)) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'The review link must be a full address starting with https://',
+      };
+    }
+    review_url = raw || null;
+  }
+
+  let photo_urls: string[] | undefined;
+  if ('photo_urls' in r && r.photo_urls !== null && r.photo_urls !== undefined) {
+    if (!Array.isArray(r.photo_urls)) {
+      return { ok: false, status: 400, error: 'photo_urls must be a list' };
+    }
+    // Blank rows are the admin's empty "add another" slots, not errors.
+    const cleaned = r.photo_urls
+      .map((u) => (typeof u === 'string' ? u.trim() : ''))
+      .filter(Boolean);
+    if (cleaned.length > MAX_PHOTOS) {
+      return { ok: false, status: 400, error: `A review can have at most ${MAX_PHOTOS} photos` };
+    }
+    const bad = cleaned.findIndex((u) => !isHttpsUrl(u));
+    if (bad !== -1) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Photo ${bad + 1} must be a full address starting with https://`,
+      };
+    }
+    photo_urls = cleaned;
+  }
+
   return {
     ok: true,
     value: {
@@ -121,6 +183,8 @@ function validateReviewInput(body: unknown): ValidationResult {
       featured,
       visible,
       sort_order,
+      review_url,
+      photo_urls,
     },
   };
 }
@@ -136,6 +200,8 @@ type ReturnedRow = {
   featured: boolean;
   visible: boolean;
   sort_order: number;
+  review_url: string | null;
+  photo_urls: string[];
   created_at: string;
   updated_at: string;
 };
@@ -170,7 +236,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           source = ${v.source},
           featured = ${v.featured},
           visible = ${v.visible},
-          sort_order = ${v.sort_order}
+          sort_order = ${v.sort_order},
+          review_url = CASE
+            WHEN ${v.review_url !== undefined}::boolean THEN ${v.review_url ?? null}::text
+            ELSE review_url
+          END,
+          photo_urls = COALESCE(${v.photo_urls ?? null}::text[], photo_urls)
         WHERE id = ${v.id}
         RETURNING
           id,
@@ -183,6 +254,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           featured,
           visible,
           sort_order,
+          review_url,
+          photo_urls,
           created_at,
           updated_at
       `) as ReturnedRow[];
@@ -197,11 +270,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       INSERT INTO reviews (
         author_name, author_photo_url, rating, text,
-        publish_date, source, featured, visible, sort_order
+        publish_date, source, featured, visible, sort_order,
+        review_url, photo_urls
       )
       VALUES (
         ${v.author_name}, ${v.author_photo_url}, ${v.rating}, ${v.text},
-        ${v.publish_date}, ${v.source}, ${v.featured}, ${v.visible}, ${v.sort_order}
+        ${v.publish_date}, ${v.source}, ${v.featured}, ${v.visible}, ${v.sort_order},
+        ${v.review_url ?? null}, ${v.photo_urls ?? []}::text[]
       )
       RETURNING
         id,
@@ -214,6 +289,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         featured,
         visible,
         sort_order,
+        review_url,
+        photo_urls,
         created_at,
         updated_at
     `) as ReturnedRow[];

@@ -182,7 +182,7 @@ Steps (takes ~2 minutes):
 
   1. Open VS Code in the VeronicaWebsite repo
   2. Terminal → run:
-     IG_ACCESS_TOKEN=<current-token-from-vercel> node scripts/refresh-instagram-token.mjs
+     vercel env pull .vercel/.env.preview.local --environment=preview --yes && node --env-file=.vercel/.env.preview.local scripts/refresh-instagram-token.mjs
   3. Copy the new token from the script output
   4. Vercel → Settings → Environment Variables → edit IG_ACCESS_TOKEN → paste → Save
      ${VERCEL_ENV_LINK}
@@ -211,7 +211,7 @@ The site keeps working while you rotate — this email is a reminder, not an eme
       <ol style="font-size:13px;line-height:1.7;color:#444;margin:0;padding-left:20px;">
         <li>Open VS Code in the VeronicaWebsite repo</li>
         <li>In the terminal, run:
-          <div style="margin:6px 0 4px;background:#1e1e1e;color:#d4d4d4;padding:8px 10px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:11px;border-radius:2px;word-break:break-all;">IG_ACCESS_TOKEN=&lt;current-token&gt; node scripts/refresh-instagram-token.mjs</div>
+          <div style="margin:6px 0 4px;background:#1e1e1e;color:#d4d4d4;padding:8px 10px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:11px;border-radius:2px;word-break:break-all;">vercel env pull .vercel/.env.preview.local --environment=preview --yes &amp;&amp; node --env-file=.vercel/.env.preview.local scripts/refresh-instagram-token.mjs</div>
         </li>
         <li>Copy the new token from the output</li>
         <li>

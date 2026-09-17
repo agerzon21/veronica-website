@@ -315,8 +315,13 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
 
+  // Pulls the live token into the local env file, then runs the script with
+  // it, so there is nothing to paste and the local copy is never a rotation
+  // behind (IG_ACCESS_TOKEN is one Vercel entry covering Production and
+  // Preview). The old form put `<current-token-from-vercel>` in the command,
+  // and zsh reads `<` as a file redirect, so it never ran.
   const ROTATE_COMMAND =
-    'IG_ACCESS_TOKEN=<current-token-from-vercel> node scripts/refresh-instagram-token.mjs';
+    'vercel env pull .vercel/.env.preview.local --environment=preview --yes && node --env-file=.vercel/.env.preview.local scripts/refresh-instagram-token.mjs';
 
   const handleCopyCommand = () => {
     // Fire-and-forget clipboard write; ignore rejection (e.g. insecure context)
@@ -502,7 +507,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
                   py={2}
                   whiteSpace="nowrap"
                 >
-                  IG_ACCESS_TOKEN=&lt;current-token-from-vercel&gt; node scripts/refresh-instagram-token.mjs
+                  {ROTATE_COMMAND}
                 </Text>
               </Box>
               <IconButton

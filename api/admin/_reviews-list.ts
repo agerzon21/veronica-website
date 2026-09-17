@@ -26,6 +26,8 @@ type Row = {
   featured: boolean;
   visible: boolean;
   sort_order: number;
+  review_url: string | null;
+  photo_urls: string[];
   created_at: string;
   updated_at: string;
 };
@@ -53,6 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         featured,
         visible,
         sort_order,
+        -- Must stay in this list. The inline Visible/Featured switches post
+        -- this whole row back to reviews-upsert, which replaces every column,
+        -- so a column missing here is a column every toggle wipes.
+        review_url,
+        photo_urls,
         created_at,
         updated_at
       FROM reviews

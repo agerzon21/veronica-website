@@ -5,8 +5,12 @@
  * Meta's long-lived tokens last 60 days but can be refreshed any time
  * before expiry. The refreshed token starts a new 60-day window.
  *
- * Run this every ~50 days to keep the integration live forever:
- *   IG_ACCESS_TOKEN=<current-token> node scripts/refresh-instagram-token.mjs
+ * Run this every ~50 days to keep the integration live forever. From the
+ * repo root, pulling the live token first so the local copy is current:
+ *   vercel env pull .vercel/.env.preview.local --environment=preview --yes && node --env-file=.vercel/.env.preview.local scripts/refresh-instagram-token.mjs
+ * or with the token pasted in (single quotes, no angle brackets, since zsh
+ * reads `<` as a file redirect):
+ *   IG_ACCESS_TOKEN='paste-token-here' node scripts/refresh-instagram-token.mjs
  *
  * It prints the new token; paste it into Vercel → Project → Settings →
  * Environment Variables → IG_ACCESS_TOKEN (overwrite the existing value).

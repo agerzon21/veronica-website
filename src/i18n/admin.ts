@@ -2160,6 +2160,14 @@ const dict = {
     // Fallback used when a review has no author name on record.
     unnamedAuthor: { en: '(unnamed)', ru: '(без имени)' },
 
+    // Card meta for the popup fields (migration 033). "фото" does not
+    // decline, so RU needs no plural rules here.
+    photoCount: {
+      en: (n: number) => `${n} photo${n === 1 ? '' : 's'}`,
+      ru: (n: number) => `${n} фото`,
+    },
+    linked: { en: 'Linked', ru: 'Есть ссылка' },
+
     // Source badges — kept as brand names (Google/Yelp/Instagram/Email
     // stay English in RU too, since they're recognized in Cyrillic UIs
     // the same way). "Manual" is the odd one out — translated for
@@ -2190,10 +2198,10 @@ const dict = {
     // Empty state
     emptyTitle: { en: 'No reviews yet', ru: 'Пока нет отзывов' },
     emptyDescription: {
-      en: 'Add a testimonial you got via Google, Instagram DMs, or email. Featured ones show up first on the home page.',
+      en: 'Add a testimonial you got via Google, Instagram DMs, or email. Featured ones appear on the home page.',
       // Slightly re-shaped in RU so the "featured on home" idea reads
       // naturally as a second sentence.
-      ru: 'Добавь отзыв, полученный в Google, Instagram-директе или по почте. Отмеченные «В избранном» появятся первыми на главной.',
+      ru: 'Добавь отзыв, полученный в Google, Instagram-директе или по почте. Отмеченные «В избранном» появятся на главной.',
     },
 
     // Google Aggregate card — the "5.0 · 15 reviews" badge on the home
@@ -2282,6 +2290,58 @@ const dict = {
     sourceEmail: { en: 'Email', ru: 'Email' },
     sourceManual: { en: 'Manual entry', ru: 'Вручную' },
 
+    // Link to the review where it was posted (migration 033). The public
+    // popup turns it into a "Read it on Google" button.
+    reviewUrlLabel: { en: 'Link to the review', ru: 'Ссылка на отзыв' },
+    reviewUrlHelp: {
+      en: 'On Google Maps, open the review, tap Share and copy the link. The popup on the site gets a button that opens it, so visitors can see it is real.',
+      ru: 'В Google Maps открой отзыв, нажми «Поделиться» и скопируй ссылку. Во всплывающем окне на сайте появится кнопка, которая его открывает, чтобы посетители видели, что отзыв настоящий.',
+    },
+    reviewUrlButtonPreview: {
+      en: (label: string) => `On the site, the button will read "${label}".`,
+      ru: (label: string) => `На сайте кнопка будет называться «${label}».`,
+    },
+    urlNeedsHttps: {
+      en: 'Paste the full link, starting with https://',
+      ru: 'Вставь полную ссылку, начиная с https://',
+    },
+
+    // Photos the reviewer attached (migration 033), one link per row.
+    photosLabel: { en: 'Photos from the review', ru: 'Фото из отзыва' },
+    photosHelp: {
+      en: 'The photos the client attached to their review. One link per row. Google Drive share links work best.',
+      ru: 'Фото, которые клиент прикрепил к отзыву. По одной ссылке в строке. Лучше всего подходят ссылки на Google Drive.',
+    },
+    photoAria: {
+      en: (n: number) => `Photo ${n} link`,
+      ru: (n: number) => `Ссылка на фото ${n}`,
+    },
+    addPhoto: { en: 'Add photo', ru: 'Добавить фото' },
+    removePhotoAria: {
+      en: (n: number) => `Remove photo ${n}`,
+      ru: (n: number) => `Убрать фото ${n}`,
+    },
+    photoLimit: {
+      en: (max: number) => `That is the maximum of ${max} photos.`,
+      ru: (max: number) => `Это максимум: ${max} фото.`,
+    },
+    driveRecognised: {
+      en: 'Google Drive link recognised. Sharing must be set to "Anyone with the link", or it will not load on the site.',
+      ru: 'Ссылка на Google Drive распознана. Доступ должен быть открыт «Всем, у кого есть ссылка», иначе на сайте фото не загрузится.',
+    },
+    driveNoId: {
+      en: 'That looks like a Google Drive link, but it has no file id. Use the link from the Share button.',
+      ru: 'Похоже на ссылку Google Drive, но в ней нет id файла. Возьми ссылку из кнопки «Поделиться».',
+    },
+    googlePhotoWarning: {
+      en: 'Photo links copied from Google Maps tend to stop working. Save the photo to Google Drive and paste that link instead.',
+      ru: 'Ссылки на фото из Google Maps со временем перестают работать. Сохрани фото в Google Drive и вставь ссылку оттуда.',
+    },
+    photoBroken: {
+      en: 'This link does not load as an image. Check that it opens a photo and, for Drive, that sharing is on.',
+      ru: 'По этой ссылке не загружается изображение. Проверь, что она открывает фото, а для Drive, что доступ открыт.',
+    },
+
     textLabel: { en: 'Review text', ru: 'Текст отзыва' },
     textPlaceholder: {
       en: 'What the client wrote about working with you.',
@@ -2294,9 +2354,11 @@ const dict = {
       en: 'When off, the review is hidden from the public site.',
       ru: 'Если выключено — отзыв не будет показан на сайте.',
     },
+    // api/reviews.ts serves only rows that are visible AND featured, so this
+    // switch decides whether the review is on the home page at all.
     featuredHelp: {
-      en: 'Featured reviews appear first on the home page.',
-      ru: 'Отмеченные отзывы показываются первыми на главной.',
+      en: 'Only featured reviews appear on the home page.',
+      ru: 'На главной показываются только отмеченные отзывы.',
     },
 
     // Danger zone — superadmin-only, mirrors journalEditor.dangerZone*

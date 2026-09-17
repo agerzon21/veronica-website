@@ -16,8 +16,10 @@
  * api/admin/_reviews-aggregate.ts).
  *
  * Minimal payload — the admin view carries the moderation metadata
- * (visible/featured/source/sort_order), the public payload doesn't
- * need any of it.
+ * (visible/featured/sort_order), the public payload doesn't need any of
+ * it. `source` IS public now: the full-review popup names the site the
+ * review lives on ("Read it on Google"), and `review_url` / `photo_urls`
+ * (migration 033) are what that popup shows.
  *
  * Edge-cached (max-age=300, s-maxage=1800): reviews change on the
  * order of days/weeks, so a 30-min CDN cache dramatically cuts DB
@@ -40,6 +42,9 @@ type PublicReview = {
   rating: number;
   text: string;
   publish_date: string | null;
+  source: 'google' | 'yelp' | 'instagram' | 'email' | 'manual';
+  review_url: string | null;
+  photo_urls: string[];
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -65,7 +70,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           author_photo_url,
           rating,
           text,
-          to_char(publish_date, 'YYYY-MM-DD') AS publish_date
+          to_char(publish_date, 'YYYY-MM-DD') AS publish_date,
+          source,
+          review_url,
+          photo_urls
         FROM reviews
         WHERE visible = true AND featured = true
         ORDER BY

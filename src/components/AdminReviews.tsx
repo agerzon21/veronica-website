@@ -2,14 +2,18 @@ import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, Wrap, IconButton,
   Switch, Input, Textarea, Select, Stack,
 } from '@chakra-ui/react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import FaCamera from '../icons/fa/FaCamera';
 import FaEdit from '../icons/fa/FaEdit';
 import FaEnvelope from '../icons/fa/FaEnvelope';
+import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaGoogle from '../icons/fa/FaGoogle';
+import FaImage from '../icons/fa/FaImage';
 import FaInstagram from '../icons/fa/FaInstagram';
 import FaPlus from '../icons/fa/FaPlus';
 import FaStar from '../icons/fa/FaStar';
 import FaSyncAlt from '../icons/fa/FaSyncAlt';
+import FaTimes from '../icons/fa/FaTimes';
 import FaTrash from '../icons/fa/FaTrash';
 import FaUser from '../icons/fa/FaUser';
 import FaYelp from '../icons/fa/FaYelp';
@@ -18,6 +22,7 @@ import MobileSheetModal, { MobileSheetFooter } from './ui/MobileSheetModal';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
 import { toDirectImageUrl, isDriveUrl, driveFileId } from '../utils/driveImage';
+import { isGooglePhotoCdnUrl, isHttpsUrl, verifyLabel } from '../utils/reviewSource';
 
 /**
  * "Reviews" tab in /admin — manage the testimonials that show up on the
@@ -52,6 +57,18 @@ export interface ReviewRow {
   featured: boolean;
   visible: boolean;
   text: string;
+  // The list endpoint has always returned this; the editor now sends it back
+  // so saving a review no longer resets its position to 0.
+  sort_order?: number;
+  review_url: string | null;
+  photo_urls: string[];
+}
+
+// Each photo row carries a stable key so removing one from the middle does not
+// hand its preview state (loaded / broken) to the row below it.
+interface PhotoRow {
+  key: number;
+  url: string;
 }
 
 interface FormState {
@@ -63,7 +80,12 @@ interface FormState {
   featured: boolean;
   visible: boolean;
   text: string;
+  review_url: string;
+  photos: PhotoRow[];
 }
+
+// Matches MAX_PHOTOS in api/admin/_reviews-upsert.ts.
+const MAX_PHOTOS = 12;
 
 const EMPTY_FORM: FormState = {
   author_name: '',
@@ -74,6 +96,8 @@ const EMPTY_FORM: FormState = {
   featured: false,
   visible: true,
   text: '',
+  review_url: '',
+  photos: [],
 };
 
 // Editor is either closed, opened for create, or opened on an existing row.
@@ -628,12 +652,28 @@ function ReviewCard({
             {!row.visible && <Chip label={t.reviews.hidden} tone="gray" />}
           </HStack>
 
-          <HStack spacing={3} align="center">
+          <HStack spacing={3} align="center" wrap="wrap">
             <StarRow rating={row.rating} />
             {row.publish_date && (
               <Text fontSize="xs" color="gray.500" fontWeight="300">
                 {formatDate(row.publish_date)}
               </Text>
+            )}
+            {(row.photo_urls?.length ?? 0) > 0 && (
+              <HStack spacing={1} color="gray.500">
+                <Icon as={FaCamera} boxSize={3} />
+                <Text fontSize="xs" fontWeight="300">
+                  {t.reviews.photoCount(row.photo_urls.length)}
+                </Text>
+              </HStack>
+            )}
+            {row.review_url && (
+              <HStack spacing={1} color="gray.500">
+                <Icon as={FaExternalLinkAlt} boxSize={2.5} />
+                <Text fontSize="xs" fontWeight="300">
+                  {t.reviews.linked}
+                </Text>
+              </HStack>
             )}
           </HStack>
 
@@ -734,9 +774,33 @@ function ReviewEditorModal({
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // Keys only need to be unique within this editor session.
+  const nextPhotoKey = useRef(form.photos.length);
+  const addPhoto = () =>
+    setForm((f) =>
+      f.photos.length >= MAX_PHOTOS
+        ? f
+        : { ...f, photos: [...f.photos, { key: nextPhotoKey.current++, url: '' }] },
+    );
+  const setPhoto = (key: number, url: string) =>
+    setForm((f) => ({ ...f, photos: f.photos.map((p) => (p.key === key ? { ...p, url } : p)) }));
+  const removePhoto = (key: number) =>
+    setForm((f) => ({ ...f, photos: f.photos.filter((p) => p.key !== key) }));
+
+  const reviewUrl = form.review_url.trim();
+
   const handleSave = async () => {
     if (!form.author_name.trim() || !form.text.trim()) {
       setError(t.reviewsEditor.requiredFields);
+      return;
+    }
+    // The server rejects these too; catching them here keeps the message
+    // next to the field it is about.
+    if (
+      (reviewUrl && !isHttpsUrl(reviewUrl)) ||
+      form.photos.some((p) => p.url.trim() && !isHttpsUrl(p.url))
+    ) {
+      setError(t.reviewsEditor.urlNeedsHttps);
       return;
     }
     setSaving(true);
@@ -757,6 +821,14 @@ function ReviewEditorModal({
           featured: form.featured,
           visible: form.visible,
           text: form.text.trim(),
+          sort_order: review?.sort_order ?? 0,
+          review_url: reviewUrl || null,
+          // Same Drive rewrite as the author photo, at a size that still
+          // looks sharp full width in the popup. The site asks Drive for
+          // smaller copies for the thumbnails.
+          photo_urls: form.photos
+            .map((p) => toDirectImageUrl(p.url, 1600))
+            .filter(Boolean),
         },
       };
       const res = await fetch('/api/admin/reviews-upsert', {
@@ -833,8 +905,8 @@ function ReviewEditorModal({
           {isDriveUrl(form.author_photo_url) && (
             <Text fontSize="xs" color={driveFileId(form.author_photo_url) ? 'green.600' : 'red.500'} mt={1.5}>
               {driveFileId(form.author_photo_url)
-                ? 'Google Drive link recognised. It will be converted to a direct image link on save. Make sure the file is shared as "Anyone with the link" or it will not load.'
-                : 'That looks like a Google Drive link but no file id could be found in it. Use the link from the Share button.'}
+                ? t.reviewsEditor.driveRecognised
+                : t.reviewsEditor.driveNoId}
             </Text>
           )}
         </Field>
@@ -871,6 +943,28 @@ function ReviewEditorModal({
           </Field>
         </Stack>
 
+        <Field label={t.reviewsEditor.reviewUrlLabel} help={t.reviewsEditor.reviewUrlHelp}>
+          <Input
+            type="url"
+            inputMode="url"
+            value={form.review_url}
+            onChange={(e) => update('review_url', e.target.value)}
+            placeholder="https://maps.app.goo.gl/..."
+            {...inputStyles}
+          />
+          {reviewUrl && (
+            <Text
+              fontSize="xs"
+              mt={1.5}
+              color={isHttpsUrl(reviewUrl) ? 'gray.600' : 'red.500'}
+            >
+              {isHttpsUrl(reviewUrl)
+                ? t.reviewsEditor.reviewUrlButtonPreview(verifyLabel(form.source, reviewUrl))
+                : t.reviewsEditor.urlNeedsHttps}
+            </Text>
+          )}
+        </Field>
+
         <Field label={t.reviewsEditor.textLabel} required>
           <Textarea
             value={form.text}
@@ -879,6 +973,41 @@ function ReviewEditorModal({
             rows={6}
             {...inputStyles}
           />
+        </Field>
+
+        <Field label={t.reviewsEditor.photosLabel} help={t.reviewsEditor.photosHelp}>
+          <VStack align="stretch" spacing={2.5}>
+            {form.photos.map((p, i) => (
+              <PhotoUrlRow
+                key={p.key}
+                index={i}
+                value={p.url}
+                onChange={(url) => setPhoto(p.key, url)}
+                onRemove={() => removePhoto(p.key)}
+              />
+            ))}
+            {form.photos.some((p) => driveFileId(p.url.trim())) && (
+              <Text fontSize="xs" color="green.600" lineHeight="1.5">
+                {t.reviewsEditor.driveRecognised}
+              </Text>
+            )}
+            <Flex align="center" gap={3} wrap="wrap">
+              <CTAButton
+                onClick={addPhoto}
+                icon={FaPlus}
+                variant="outline"
+                size="sm"
+                isDisabled={form.photos.length >= MAX_PHOTOS}
+              >
+                {t.reviewsEditor.addPhoto}
+              </CTAButton>
+              {form.photos.length >= MAX_PHOTOS && (
+                <Text fontSize="xs" color="gray.500">
+                  {t.reviewsEditor.photoLimit(MAX_PHOTOS)}
+                </Text>
+              )}
+            </Flex>
+          </VStack>
         </Field>
 
         <Stack direction={{ base: 'column', md: 'row' }} spacing={4} pt={1}>
@@ -934,6 +1063,100 @@ function ReviewEditorModal({
         )}
       </VStack>
     </MobileSheetModal>
+  );
+}
+
+// ── One photo link in the editor's list ─────────────────────────────
+// A preview square, the link, and a remove button. The preview is how Vero
+// finds out a link is wrong BEFORE it is on the homepage: an unshared Drive
+// file or a dead Maps image shows the broken state right here.
+function PhotoUrlRow({
+  index,
+  value,
+  onChange,
+  onRemove,
+}: {
+  index: number;
+  value: string;
+  onChange: (url: string) => void;
+  onRemove: () => void;
+}) {
+  const { t } = useAdminLang();
+  const url = value.trim();
+  const valid = !!url && isHttpsUrl(url);
+  const preview = valid ? toDirectImageUrl(url, 200) : '';
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [preview]);
+
+  let hint: { text: string; color: string } | null = null;
+  if (url && !valid) hint = { text: t.reviewsEditor.urlNeedsHttps, color: 'red.500' };
+  else if (url && isDriveUrl(url) && !driveFileId(url)) hint = { text: t.reviewsEditor.driveNoId, color: 'red.500' };
+  // Before `broken`: a dead Maps image link is exactly the case this advice is
+  // for, and it says what to do instead.
+  else if (url && isGooglePhotoCdnUrl(url)) hint = { text: t.reviewsEditor.googlePhotoWarning, color: broken ? 'red.500' : 'orange.600' };
+  else if (broken) hint = { text: t.reviewsEditor.photoBroken, color: 'red.500' };
+  // A recognised Drive link is not a problem, so its reminder is said once
+  // under the whole list rather than repeated under every row.
+
+  return (
+    <Box>
+      <Flex align="center" gap={2}>
+        <Flex
+          flex="none"
+          boxSize="44px"
+          borderRadius="sm"
+          overflow="hidden"
+          bg="gray.50"
+          border="1px solid"
+          borderColor={broken ? 'red.300' : 'gray.200'}
+          align="center"
+          justify="center"
+        >
+          {preview && !broken ? (
+            <Box
+              as="img"
+              src={preview}
+              alt=""
+              w="100%"
+              h="100%"
+              objectFit="cover"
+              referrerPolicy="no-referrer"
+              onError={() => setBroken(true)}
+            />
+          ) : (
+            <Icon as={FaImage} boxSize={4} color={broken ? 'red.400' : 'gray.300'} />
+          )}
+        </Flex>
+        <Input
+          flex="1"
+          minW={0}
+          type="url"
+          inputMode="url"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://drive.google.com/file/d/..."
+          aria-label={t.reviewsEditor.photoAria(index + 1)}
+          {...inputStyles}
+        />
+        <IconButton
+          aria-label={t.reviewsEditor.removePhotoAria(index + 1)}
+          icon={<Icon as={FaTimes} boxSize={3.5} />}
+          onClick={onRemove}
+          variant="ghost"
+          flex="none"
+          minW="44px"
+          minH="44px"
+          color="gray.500"
+          _hover={{ bg: 'red.50', color: 'red.600' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        />
+      </Flex>
+      {hint && (
+        <Text fontSize="xs" color={hint.color} mt={1} pl="52px" lineHeight="1.5">
+          {hint.text}
+        </Text>
+      )}
+    </Box>
   );
 }
 
@@ -1212,6 +1435,8 @@ function reviewToForm(r: ReviewRow): FormState {
     featured: !!r.featured,
     visible: r.visible !== false, // default to true when undefined
     text: r.text ?? '',
+    review_url: r.review_url ?? '',
+    photos: (r.photo_urls ?? []).map((url, key) => ({ key, url })),
   };
 }
 
