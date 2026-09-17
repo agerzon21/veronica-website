@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Icon, Spinner } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import type { IconType } from 'react-icons';
@@ -13,7 +13,13 @@ import type { IconType } from 'react-icons';
 // caption. The spine thickens on hover. 'tab' is the emphasized one; 'tabMuted'
 // carries a grey spine that warms to gold, so a pair reads as primary +
 // secondary without changing shape.
-type Variant = 'outline' | 'solid' | 'solidMuted' | 'ghost' | 'danger' | 'tab' | 'tabMuted';
+//
+// 'photoTab' replaced that pair on About (Alex picked treatment 5 of five,
+// 2026-09-17): a full-width plate carrying a fan of three small photographs,
+// then the label, then a thin arrow. Pass the photos as `thumbs`. A phone has
+// no hover, so the fan also spreads once when the button first scrolls fully
+// into view; that is the one moment of motion a touch visitor gets.
+type Variant = 'outline' | 'solid' | 'solidMuted' | 'ghost' | 'danger' | 'tab' | 'tabMuted' | 'photoTab';
 type Tone = 'light' | 'dark';
 type Size = 'sm' | 'md' | 'lg';
 
@@ -66,6 +72,9 @@ interface CTAButtonProps {
   // Flex sizing, for the same reason as `h` — a CTA that is one sized child
   // of a column rather than a self-sizing button.
   flex?: string | Record<string, string>;
+  // 'photoTab' only: up to three small photos for the fan, left to right.
+  // The middle one sits on top. 2:3 portrait files fit the slots uncropped.
+  thumbs?: string[];
 }
 
 const GOLD = '#c9a96e';
@@ -79,6 +88,48 @@ const GOLD_BORDER = '#e8d9a8';
 const GOLD_TEXT = '#8a6e35';
 const SUNKEN = '#f5efe4';
 const SPINE_MUTED = 'rgba(43, 39, 36, 0.3)';
+// photoTab's label. Warm, because the cool Chakra greys the tab pair used read
+// as out of place on the cream sections.
+const WARM_INK = '#4a4038';
+
+// The fan's three photos at rest and spread (hover, press, or the one-time
+// play on a phone). Index 1 is the middle, raised photo.
+const FAN_REST = ['rotate(-6deg)', 'translateY(-2px)', 'rotate(6deg)'];
+const FAN_SPREAD = ['translateX(-5px) rotate(-12deg)', 'translateY(-6px)', 'translateX(5px) rotate(12deg)'];
+const fanRules = (transforms: string[]) =>
+  Object.fromEntries(transforms.map((t, i) => [`& .cta-fan-${i}`, { transform: t }]));
+
+// The flutter (Alex, 2026-09-17): on hover (or the one-time play on a phone)
+// the three photos swing past their spread position, back, and out again
+// before settling, each a beat after the one before, like prints caught by a
+// breath of air.
+//
+// Two layers, on purpose. The outer .cta-fan-N moves between rest and spread
+// with a plain transition; the inner .cta-fan-print carries the flutter as an
+// offset that starts and ends at `none`. With both on one element, Chromium
+// snapped the prints back when the hover ended instead of easing them home:
+// a transition never starts from a value an animation owned.
+const FLUTTER_FRAMES = [
+  ['none', 'translate(-3px, -4px) rotate(-6deg)', 'translate(2px, -1px) rotate(4deg)', 'translate(-1px, -2px) rotate(-3deg)', 'none'],
+  ['none', 'translateY(-4px) rotate(3deg)', 'translateY(2px) rotate(-2.5deg)', 'translateY(-2px) rotate(1.5deg)', 'none'],
+  ['none', 'translate(3px, -4px) rotate(6deg)', 'translate(-2px, -1px) rotate(-4deg)', 'translate(1px, -2px) rotate(3deg)', 'none'],
+];
+const flutterKeyframes = Object.fromEntries(
+  FLUTTER_FRAMES.map((frames, i) => [
+    `@keyframes ctaFanFlutter${i}`,
+    Object.fromEntries(frames.map((t, f) => [`${[0, 28, 54, 78, 100][f]}%`, { transform: t }])),
+  ]),
+);
+const flutterRules = {
+  ...fanRules(FAN_SPREAD),
+  ...Object.fromEntries(
+    [0, 1, 2].map((i) => [
+      `& .cta-fan-${i} > .cta-fan-print`,
+      { animation: `ctaFanFlutter${i} 0.75s cubic-bezier(0.37, 0, 0.3, 1) ${i * 0.07}s backwards` },
+    ]),
+  ),
+};
+
 const DANGER = '#c53030';
 const DANGER_HOVER = '#e53e3e';
 const DANGER_ACTIVE = '#9b2c2c';
@@ -212,6 +263,57 @@ const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
     };
   }
 
+  if (variant === 'photoTab') {
+    return {
+      position: 'relative',
+      w: '100%',
+      justifyContent: 'flex-start',
+      gap: { base: 4, md: 5 },
+      minH: { base: '70px', md: '66px' },
+      px: { base: '14px', md: '16px' },
+      py: 2,
+      bg: 'white',
+      color: WARM_INK,
+      fontWeight: 500,
+      fontSize: 'xs',
+      letterSpacing: '0.16em',
+      // Labels wrap on the narrowest phones (320px) instead of pushing the
+      // arrow out past the border.
+      whiteSpace: 'normal',
+      lineHeight: 1.4,
+      border: '1px solid',
+      borderColor: GOLD_BORDER,
+      _hover: {
+        borderColor: GOLD,
+        color: GOLD_TEXT,
+        transform: 'translateY(-2px)',
+        boxShadow: '0 12px 26px -20px rgba(20, 15, 5, 0.5)',
+        textDecoration: 'none',
+      },
+      _active: { bg: SUNKEN, transform: 'translateY(0)' },
+      sx: {
+        ...flutterKeyframes,
+        '& .cta-arrow': { transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)' },
+        // Hover only where hover exists; on a phone :hover sticks after a tap.
+        '@media (hover: hover)': {
+          '&:hover': flutterRules,
+          '&:hover .cta-arrow': { transform: 'translateX(5px)' },
+        },
+        '&[data-play="true"]': {
+          ...flutterRules,
+          '& .cta-arrow': { transform: 'translateX(5px)' },
+        },
+        '&:active': {
+          ...fanRules(FAN_SPREAD),
+          '& .cta-arrow': { transform: 'translateX(5px)' },
+        },
+        '@media (prefers-reduced-motion: reduce)': {
+          '& .cta-fan *, & .cta-arrow': { transition: 'none', animation: 'none !important' },
+        },
+      },
+    };
+  }
+
   if (variant === 'danger') {
     return {
       bg: 'transparent',
@@ -244,6 +346,72 @@ const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
   };
 };
 
+const PhotoFan = ({ thumbs }: { thumbs: string[] }) => (
+  // pl offsets the first photo's negative margin, so the fan starts flush.
+  <Box className="cta-fan" as="span" display="flex" flex="none" pl="10px" aria-hidden="true">
+    {thumbs.slice(0, 3).map((src, i) => (
+      // Outer span: the pose (rest or spread), eased by a transition.
+      <Box
+        key={`${i}-${src}`}
+        as="span"
+        className={`cta-fan-${i}`}
+        display="block"
+        position="relative"
+        zIndex={i === 1 ? 1 : 0}
+        ml="-10px"
+        transform={FAN_REST[i]}
+        transition="transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)"
+      >
+        {/* Inner span: the print itself, and the flutter on top of the pose. */}
+        <Box
+          as="span"
+          className="cta-fan-print"
+          display="block"
+          w="32px"
+          h="48px"
+          bg={SUNKEN}
+          border="2px solid white"
+          boxShadow="0 5px 12px -5px rgba(20, 15, 5, 0.55)"
+          overflow="hidden"
+        >
+          <Box
+            as="img"
+            src={src}
+            alt=""
+            width={32}
+            height={48}
+            loading="lazy"
+            decoding="async"
+            display="block"
+            w="100%"
+            h="100%"
+            objectFit="cover"
+          />
+        </Box>
+      </Box>
+    ))}
+  </Box>
+);
+
+const ThinArrow = () => (
+  <Box
+    as="svg"
+    className="cta-arrow"
+    viewBox="0 0 20 10"
+    w="20px"
+    h="10px"
+    flex="none"
+    ml="auto"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.2"
+    color={GOLD_TEXT}
+    aria-hidden="true"
+  >
+    <path d="M0 5h18.5M14.2 1l4.2 4-4.2 4" />
+  </Box>
+);
+
 const CTAButton = ({
   children,
   to,
@@ -265,7 +433,36 @@ const CTAButton = ({
   'aria-label': ariaLabel,
   h,
   flex,
+  thumbs,
 }: CTAButtonProps) => {
+  // photoTab's one-time spread on touch screens. Hooks run for every variant;
+  // the effect bails out unless this is a photoTab on a device without hover.
+  const isPhotoTab = variant === 'photoTab';
+  const rootRef = useRef<HTMLElement | null>(null);
+  const [play, setPlay] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!isPhotoTab || !el || typeof IntersectionObserver === 'undefined') return;
+    if (!window.matchMedia?.('(hover: none)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timers: number[] = [];
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        // A beat after it lands, so the eye is already on it.
+        timers.push(window.setTimeout(() => setPlay(true), 250));
+        timers.push(window.setTimeout(() => setPlay(false), 1500));
+      },
+      { threshold: 0.9 },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+  }, [isPhotoTab]);
+
   // Either a pending action or an explicit `isDisabled` should kill clicks
   // and dim the button. We keep the cursor distinct (`wait` for loading,
   // `not-allowed` for disabled, `pointer` otherwise) so the reason is
@@ -306,7 +503,13 @@ const CTAButton = ({
     sx: { WebkitTapHighlightColor: 'transparent', ...variantSx },
   };
 
-  const content = (
+  const content = isPhotoTab ? (
+    <>
+      {thumbs && thumbs.length > 0 && <PhotoFan thumbs={thumbs} />}
+      <Box as="span" textAlign="left" minW={0}>{children}</Box>
+      <ThinArrow />
+    </>
+  ) : (
     <>
       {isLoading ? (
         <Spinner size="xs" />
@@ -321,9 +524,15 @@ const CTAButton = ({
     </>
   );
 
+  // Only photoTab needs these: the element to watch, and the play flag its
+  // styles key off.
+  const photoTabProps = isPhotoTab
+    ? { ref: rootRef as React.Ref<HTMLDivElement>, 'data-play': play ? 'true' : undefined }
+    : {};
+
   if (to) {
     return (
-      <Box as={RouterLink} to={to} aria-label={ariaLabel} {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})} {...common}>
+      <Box as={RouterLink} to={to} aria-label={ariaLabel} {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})} {...photoTabProps} {...common}>
         {content}
       </Box>
     );
@@ -342,6 +551,7 @@ const CTAButton = ({
         {...(download !== undefined
           ? { download: typeof download === 'string' ? download : '' }
           : {})}
+        {...photoTabProps}
         {...common}
       >
         {content}
@@ -350,7 +560,7 @@ const CTAButton = ({
   }
 
   return (
-    <Box as="button" type={type} form={form} onClick={onClick} disabled={inactive} aria-label={ariaLabel} {...common}>
+    <Box as="button" type={type} form={form} onClick={onClick} disabled={inactive} aria-label={ariaLabel} {...photoTabProps} {...common}>
       {content}
     </Box>
   );

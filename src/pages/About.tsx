@@ -1,4 +1,4 @@
-import { Box, VStack, Text, Flex, Image, SimpleGrid, Icon } from '@chakra-ui/react';
+import { Box, VStack, Text, Flex, Image, Icon, Grid, GridItem } from '@chakra-ui/react';
 import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
 import FaCamera from '../icons/fa/FaCamera';
 import FaGlobe from '../icons/fa/FaGlobe';
@@ -20,10 +20,17 @@ const MotionDiv = m.div;
  * story, details, CTA.
  *
  * EVERY PHOTOGRAPH HERE IS PORTRAIT (checked: 1600x2400, 3033x4360,
- * 3808x5712). They are framed accordingly — the only full-bleed use is
- * the hero, which is deliberately anchored high so the subject survives
- * the landscape crop; everywhere else they sit in portrait frames that
- * respect the original shape.
+ * 3808x5712, and vero-ceremony-lawn at 960x1440). They are framed
+ * accordingly — the only full-bleed use is the hero, which is deliberately
+ * anchored high so the subject survives the landscape crop; everywhere else
+ * they sit in portrait frames that respect the original shape.
+ *
+ * PHONES (below lg) got their own arrangement in 2026-09 (Alex picked "H" of
+ * seven mocks): the first block of text is a white card that rides up over
+ * the bottom of the hero, so the first screen shows words and a card cut off
+ * by the screen edge, which is what says "keep scrolling". Each section's two
+ * portraits then sit side by side (PortraitPair). Desktop keeps its layout;
+ * only its buttons and the fourth photograph changed.
  */
 
 const FADE_IN = { duration: 0.75, ease: 'easeOut' } as const;
@@ -159,11 +166,136 @@ const HeroFacts = () => {
   );
 };
 
+/**
+ * The three small photos on each button. They come from the wedding collage
+ * Drive folder: its portrait frames were the only ones that fit the 2:3 slots
+ * without heavy cropping, and the twelve were then chosen by eye
+ * (2026-09-17). Local files, 96x144, so the buttons do not wait on Drive.
+ */
+const tabThumbs = (key: 'work' | 'journal' | 'wedding' | 'book') =>
+  [1, 2, 3].map((n) => `/assets/photos/site/about-tabs/about-tab-${key}-${n}.webp`);
+
+interface Frame {
+  src: string;
+  alt: string;
+  position?: string;
+}
+
+/**
+ * One section's two portraits.
+ *
+ * Phones: side by side, the second dropped lower. The label that opens the
+ * text below is tucked into the gap that leaves under the first photo (Alex,
+ * 2026-09-17), so the pair reads as the start of a section rather than a
+ * wall of photographs, and there are words on screen sooner.
+ *
+ * Desktop (lg): the same two frames become the overlapping pair. The first
+ * fills the column; the second rides over one of its bottom corners in a
+ * white border, the photographer and the subject in one composition. Which
+ * corner is per section: the dance floor shot has Vero lying in its bottom
+ * right, so its inset takes the bottom left instead (Alex, 2026-09-17).
+ *
+ * `tuck` repeats a label the text column shows on desktop. Each copy is
+ * display:none at the other size, so a screen reader meets it once.
+ */
+const PortraitPair = ({
+  main,
+  mainRatio,
+  inset,
+  insetSide,
+  insetHang,
+  tuck,
+}: {
+  main: Frame;
+  mainRatio: number | Record<string, number>;
+  inset: Frame;
+  // Which bottom corner the inset covers on desktop, and how far it hangs
+  // past the column there (negative).
+  insetSide: 'left' | 'right';
+  insetHang: string;
+  tuck: React.ReactNode;
+}) => (
+  <Box
+    display={{ base: 'grid', lg: 'block' }}
+    gridTemplateColumns="1fr 1fr"
+    // auto 1fr, not auto auto: the tall right photo spans both rows, and with
+    // two auto rows the grid shares its extra height between them, which
+    // pushed the tucked label well below the left photo on wider phones.
+    gridTemplateRows="auto 1fr"
+    columnGap={3}
+    rowGap="14px"
+    alignItems="start"
+    position="relative"
+    pb={{ lg: 14 }}
+  >
+    <Box
+      gridColumn={1}
+      gridRow={1}
+      aspectRatio={mainRatio}
+      overflow="hidden"
+      borderRadius="sm"
+      bg="brand.surface"
+    >
+      <Image
+        src={main.src}
+        alt={main.alt}
+        w="100%"
+        h="100%"
+        objectFit="cover"
+        objectPosition={main.position ?? 'center'}
+        loading="lazy"
+      />
+    </Box>
+    <Box
+      gridColumn={2}
+      gridRow="1 / span 2"
+      mt={{ base: '40px', lg: 0 }}
+      position={{ base: 'relative', lg: 'absolute' }}
+      {...(insetSide === 'right' ? { right: { lg: insetHang } } : { left: { lg: insetHang } })}
+      bottom={{ lg: 0 }}
+      w={{ lg: '52%' }}
+      aspectRatio={2 / 3}
+      overflow="hidden"
+      borderRadius="sm"
+      bg="blackAlpha.700"
+      border={{ base: 'none', lg: '6px solid white' }}
+      boxShadow={{ base: 'none', lg: '0 26px 60px -30px rgba(20, 15, 5, 0.6)' }}
+    >
+      <Image
+        src={inset.src}
+        alt={inset.alt}
+        w="100%"
+        h="100%"
+        objectFit="cover"
+        objectPosition={inset.position ?? 'center'}
+        loading="lazy"
+      />
+    </Box>
+    <Box gridColumn={1} gridRow={2} display={{ base: 'block', lg: 'none' }} minW={0}>
+      {tuck}
+    </Box>
+  </Box>
+);
+
+// The tucked label wraps inside half a phone's width, so it needs a real
+// line height; the eyebrow style's 1 is for single lines. It carries the same
+// short gold rule as every other label on the page.
+const TuckedEyebrow = ({ children }: { children: React.ReactNode }) => (
+  <VStack align="flex-start" spacing={4}>
+    <Text textStyle="eyebrow" lineHeight="1.7">
+      {children}
+    </Text>
+    <Box w="35px" h="1px" bg="brand.accent" />
+  </VStack>
+);
+
 const About = () => {
+  // amount 'some', not a fraction: these wrap whole sections, and a fraction
+  // of a tall section can exceed a short screen, leaving the text invisible.
   const approachRef = useRef<HTMLDivElement>(null);
-  const isApproachInView = useInView(approachRef, { once: true, amount: 0.15 });
+  const isApproachInView = useInView(approachRef, { once: true, amount: 'some' });
   const angleRef = useRef<HTMLDivElement>(null);
-  const isAngleInView = useInView(angleRef, { once: true, amount: 0.15 });
+  const isAngleInView = useInView(angleRef, { once: true, amount: 'some' });
 
   return (
     <Box minH="100vh" overflowX="clip">
@@ -175,10 +307,23 @@ const About = () => {
           crop keeps her and the lens in frame on wide screens, and the
           gradient runs sideways so the heading has dark to sit on while
           the right side of the photograph stays open. ─── */}
-      <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
+      {/* Below lg the approach card overlaps the bottom 44px of the hero, so
+          the hero is 44px taller there and its text is centred in the part the
+          card leaves alone. Without that, the card covered the facts line on
+          short phones (375x667 lost "Available Worldwide" entirely).
+          The height is a MINIMUM with the text in flow: on the smallest
+          phones (320x568) the text is taller than the old fixed height, and
+          it used to be clipped; now the hero grows to fit it. */}
+      <Flex
+        position="relative"
+        minH={{ base: 'calc(45vh + 44px)', md: 'calc(53vh + 44px)', lg: '53vh' }}
+        overflow="hidden"
+      >
         <Image
           src="/assets/photos/site/vero-camera.webp"
           alt="Veronika Gerzon kneeling on the grass with her camera."
+          position="absolute"
+          inset={0}
           w="100%"
           h="100%"
           objectFit="cover"
@@ -194,12 +339,14 @@ const About = () => {
           }}
         />
         <Flex
-          position="absolute"
-          inset={0}
+          position="relative"
+          flex="1"
+          minW={0}
           align="center"
           justify={{ base: 'center', md: 'flex-start' }}
           px={{ base: 6, md: '7vw' }}
           pt={{ base: '64px', md: '72px' }}
+          pb={{ base: '60px', lg: 0 }}
         >
           <Box maxW={{ base: '520px', md: '620px' }} textAlign={{ base: 'center', md: 'left' }}>
             <PageHeader
@@ -215,55 +362,44 @@ const About = () => {
             <HeroFacts />
           </Box>
         </Flex>
-      </Box>
+      </Flex>
 
       {/* ─── Who she is: approach and the modeling story as ONE section.
-          Two portraits offset against each other on cream, the quote
-          bridging them. Four sections was one too many (Alex). ─── */}
-      <Box bg="white" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative">
+          Desktop: the portrait pair on the left, both blocks of text on the
+          right, centred against it (the 1fr rows above and below take the
+          slack). Phones reorder the same three pieces: the approach card
+          first, over the hero, then the pair, then the modeling story. ─── */}
+      <Box
+        bg="white"
+        pt={{ base: 0, lg: 24 }}
+        pb={{ base: 16, md: 24 }}
+        px={{ base: 6, md: 12 }}
+        position="relative"
+      >
         <Box maxW="1150px" mx="auto" ref={approachRef}>
-          <SimpleGrid columns={{ base: 1, lg: 12 }} spacing={{ base: 10, lg: 14 }} alignItems="center">
-            {/* Offset portrait pair */}
-            <Box gridColumn={{ lg: 'span 5' }} position="relative" pb={{ lg: 14 }}>
-              <Box aspectRatio={3 / 4} overflow="hidden" borderRadius="sm" bg="brand.surface">
-                <Image
-                  src="/assets/photos/site/vero-portrait-tulips.webp"
-                  alt="Portrait of Veronika Gerzon in a field of tulips."
-                  w="100%"
-                  h="100%"
-                  objectFit="cover"
-                  objectPosition="center 55%"
-                  loading="lazy"
-                />
-              </Box>
-              {/* The artistic frame overlaps the corner of the first, which
-                  is the whole point of the pairing: the photographer and
-                  the subject in one composition. */}
-              <Box
-                display={{ base: 'none', lg: 'block' }}
-                position="absolute"
-                right="-14%"
-                bottom="0"
-                w="52%"
-                aspectRatio={2 / 3}
-                overflow="hidden"
-                borderRadius="sm"
-                bg="blackAlpha.700"
-                boxShadow="0 26px 60px -30px rgba(20, 15, 5, 0.6)"
-                border="6px solid white"
-              >
-                <Image
-                  src="/assets/photos/site/vero-art.webp"
-                  alt="Silhouette of Veronika Gerzon behind layers of backlit fabric."
-                  w="100%"
-                  h="100%"
-                  objectFit="cover"
-                  loading="lazy"
-                />
-              </Box>
-            </Box>
-
-            <Box gridColumn={{ lg: 'span 7' }} pl={{ lg: 16 }}>
+          <Grid
+            templateColumns={{ base: 'minmax(0, 1fr)', lg: '5fr 7fr' }}
+            templateRows={{ lg: '1fr auto auto 1fr' }}
+            columnGap={{ lg: 14 }}
+          >
+            {/* The approach. On phones this is the card: white, a gold top
+                edge, pulled 44px up over the hero. */}
+            <GridItem
+              gridColumn={{ lg: 2 }}
+              gridRow={{ base: 1, lg: 2 }}
+              position="relative"
+              zIndex={1}
+              mt={{ base: '-44px', lg: 0 }}
+              mx={{ base: -2, lg: 0 }}
+              pl={{ base: 4, lg: 16 }}
+              pr={{ base: 4, lg: 0 }}
+              pt={{ base: 7, lg: 0 }}
+              pb={{ base: 1, lg: 0 }}
+              bg={{ base: 'white', lg: 'transparent' }}
+              borderTop={{ base: '2px solid', lg: 'none' }}
+              borderColor="brand.accent"
+              boxShadow={{ base: '0 -18px 30px -22px rgba(10, 8, 5, 0.55)', lg: 'none' }}
+            >
               <MotionDiv
                 initial={{ opacity: 0, y: 24 }}
                 animate={isApproachInView ? { opacity: 1, y: 0 } : {}}
@@ -291,19 +427,67 @@ const About = () => {
                     exactly what you felt that day.
                   </Text>
 
-                  {/* The button belongs to the paragraph that earned it, and
-                      it is centred in the column rather than hung off the left
-                      edge — the same arrangement repeats in the closing
-                      section below, so the page has one rhythm. */}
-                  <Flex w="100%" justify="center" pt={1}>
-                    <CTAButton to="/gallery" variant="tab" size="sm">
+                  {/* The button belongs to the paragraph that earned it. */}
+                  <Box w="100%" pt={1}>
+                    <CTAButton to="/gallery" variant="photoTab" thumbs={tabThumbs('work')}>
                       See my work
                     </CTAButton>
-                  </Flex>
+                  </Box>
+                </VStack>
+              </MotionDiv>
+            </GridItem>
 
-                  <Box w="100%" h="1px" bg="brand.accentBorder" my={{ base: 2, md: 3 }} />
+            {/* The pair. Second in the source as well as on screen, so a screen
+                reader meets the card first; grid placement puts it in the left
+                column on desktop. */}
+            <GridItem
+              gridColumn={{ lg: 1 }}
+              gridRow={{ base: 2, lg: '1 / span 4' }}
+              alignSelf={{ lg: 'center' }}
+              mt={{ base: 10, lg: 0 }}
+            >
+              <PortraitPair
+                main={{
+                  src: '/assets/photos/site/vero-portrait-tulips.webp',
+                  alt: 'Portrait of Veronika Gerzon in a field of tulips.',
+                  position: 'center 55%',
+                }}
+                mainRatio={3 / 4}
+                inset={{
+                  src: '/assets/photos/site/vero-art.webp',
+                  alt: 'Silhouette of Veronika Gerzon behind layers of backlit fabric.',
+                  position: 'center 40%',
+                }}
+                insetSide="right"
+                insetHang="-14%"
+                tuck={<TuckedEyebrow>A Unique Perspective</TuckedEyebrow>}
+              />
+            </GridItem>
 
-                  <Text textStyle="eyebrow">A Unique Perspective</Text>
+            {/* The modeling story. Its label is tucked beside the pair on
+                phones, so here it only shows from lg up. */}
+            <GridItem
+              gridColumn={{ lg: 2 }}
+              gridRow={{ base: 3, lg: 3 }}
+              pl={{ lg: 16 }}
+              mt={{ base: 5, lg: 5 }}
+            >
+              <MotionDiv
+                initial={{ opacity: 0, y: 24 }}
+                animate={isApproachInView ? { opacity: 1, y: 0 } : {}}
+                transition={FADE_IN}
+              >
+                <VStack align="flex-start" spacing={5}>
+                  <Box
+                    display={{ base: 'none', lg: 'block' }}
+                    w="100%"
+                    h="1px"
+                    bg="brand.accentBorder"
+                    my={3}
+                  />
+                  <Text textStyle="eyebrow" display={{ base: 'none', lg: 'block' }}>
+                    A Unique Perspective
+                  </Text>
                   <Text
                     fontFamily="heading"
                     fontStyle="italic"
@@ -315,51 +499,31 @@ const About = () => {
                     "Having been on both sides of the camera gives me an understanding that
                     most photographers simply don't have."
                   </Text>
-                  {/* The artistic frame rides beside the quote on phones,
-                      where the overlap treatment has no room. */}
-                  <Box
-                    display={{ base: 'block', lg: 'none' }}
-                    w="100%"
-                    aspectRatio={3 / 2}
-                    overflow="hidden"
-                    borderRadius="sm"
-                    bg="blackAlpha.700"
-                  >
-                    <Image
-                      src="/assets/photos/site/vero-art.webp"
-                      alt="Silhouette of Veronika Gerzon behind layers of backlit fabric."
-                      w="100%"
-                      h="100%"
-                      objectFit="cover"
-                      objectPosition="center 40%"
-                      loading="lazy"
-                    />
-                  </Box>
                   <Text textStyle="bodyCopy">
                     Before picking up a camera, I spent years working as a model. That
                     experience taught me how it feels to be directed, what makes a subject
                     comfortable, and how small adjustments in posing and light transform an
                     image. I know how to guide you naturally because I have been in your shoes.
                   </Text>
-                  <Flex w="100%" justify="center" pt={1}>
-                    <CTAButton to="/journal" variant="tabMuted" size="sm">
+                  <Box w="100%" pt={1}>
+                    <CTAButton to="/journal" variant="photoTab" thumbs={tabThumbs('journal')}>
                       Read the journal
                     </CTAButton>
-                  </Flex>
+                  </Box>
                 </VStack>
               </MotionDiv>
-            </Box>
-          </SimpleGrid>
+            </GridItem>
+          </Grid>
         </Box>
       </Box>
 
-      {/* ─── Closing section: the floor shot, the invitation and the facts
-          in ONE block. It was three — the angle story, a stats strip, and a
-          lone CTA — and the page trailed off through all of them. This is
-          the same shape as the section above it: photograph on one side, two
-          eyebrow blocks separated by a hairline on the other, and the pair
-          of buttons at the end. The facts sit underneath as a footing rather
-          than as their own band. ─── */}
+      {/* ─── Closing section: the angle story, the floor shot and the
+          ceremony-lawn portrait, then the invitation. On phones it mirrors the
+          section above exactly (Alex, 2026-09-17): text and button, the pair
+          with the next label tucked in, text and button. On desktop it keeps
+          its old shape, the photographs on the left and both thoughts on the
+          right, centred against them by the 1fr rows. The ceremony-lawn frame
+          was added 2026-09-17 so the invitation has a photograph of its own. ─── */}
       <Box
         bg="brand.surface"
         borderTop="1px solid"
@@ -369,82 +533,120 @@ const About = () => {
         ref={angleRef}
       >
         <Box maxW="1100px" mx="auto">
-          <SimpleGrid
-            columns={{ base: 1, lg: 2 }}
-            spacing={{ base: 10, lg: 16 }}
-            w="100%"
-            alignItems="center"
+          <Grid
+            templateColumns={{ base: 'minmax(0, 1fr)', lg: '1fr 1fr' }}
+            templateRows={{ lg: '1fr auto auto 1fr' }}
+            columnGap={{ lg: 16 }}
           >
-            <Box aspectRatio={4 / 5} overflow="hidden" borderRadius="sm" bg="white">
-              <Image
-                src="/assets/photos/site/about-bg.webp"
-                alt="Veronika Gerzon lying on a dance floor to photograph guests dancing above her."
-                w="100%"
-                h="100%"
-                objectFit="cover"
-                objectPosition="center 62%"
-                loading="lazy"
-              />
-            </Box>
-            <MotionDiv
-              initial={{ opacity: 0, y: 24 }}
-              animate={isAngleInView ? { opacity: 1, y: 0 } : {}}
-              transition={FADE_IN}
-            >
-              <VStack align="flex-start" spacing={5}>
-                <Text textStyle="eyebrow">Whatever the Angle Asks For</Text>
-                <Box w="35px" h="1px" bg="brand.accent" />
-                <Text
-                  fontFamily="heading"
-                  fontWeight="300"
-                  fontSize={{ base: '1.5rem', md: '1.95rem' }}
-                  lineHeight="1.45"
-                  color="gray.800"
-                >
-                  If the shot is on the floor,{' '}
-                  <Box as="em" fontStyle="italic" color="brand.accentText">
-                    that is where I will be.
+            {/* The angle story. */}
+            <GridItem gridColumn={{ lg: 2 }} gridRow={{ base: 1, lg: 2 }}>
+              <MotionDiv
+                initial={{ opacity: 0, y: 24 }}
+                animate={isAngleInView ? { opacity: 1, y: 0 } : {}}
+                transition={FADE_IN}
+              >
+                <VStack align="flex-start" spacing={5}>
+                  <Text textStyle="eyebrow">Whatever the Angle Asks For</Text>
+                  <Box w="35px" h="1px" bg="brand.accent" />
+                  <Text
+                    fontFamily="heading"
+                    fontWeight="300"
+                    fontSize={{ base: '1.5rem', md: '1.95rem' }}
+                    lineHeight="1.45"
+                    color="gray.800"
+                  >
+                    If the shot is on the floor,{' '}
+                    <Box as="em" fontStyle="italic" color="brand.accentText">
+                      that is where I will be.
+                    </Box>
+                  </Text>
+                  <Text textStyle="bodyCopy">
+                    Flat on the dance floor at midnight, knee deep in a field, up on a chair for
+                    the one frame that shows the whole room. The picture decides where I stand,
+                    and I have never been precious about my dress.
+                  </Text>
+                  <Box w="100%" pt={1}>
+                    <CTAButton to="/wedding-photography" variant="photoTab" thumbs={tabThumbs('wedding')}>
+                      Wedding coverage
+                    </CTAButton>
                   </Box>
-                </Text>
-                <Text textStyle="bodyCopy">
-                  Flat on the dance floor at midnight, knee deep in a field, up on a chair for
-                  the one frame that shows the whole room. The picture decides where I stand,
-                  and I have never been precious about my dress.
-                </Text>
+                </VStack>
+              </MotionDiv>
+            </GridItem>
 
-                <Flex w="100%" justify="center" pt={1}>
-                  <CTAButton to="/wedding-photography" variant="tab" size="sm">
-                    Wedding coverage
-                  </CTAButton>
-                </Flex>
+            {/* The pair. Between the two thoughts on phones, the left column
+                on desktop. */}
+            <GridItem
+              gridColumn={{ lg: 1 }}
+              gridRow={{ base: 2, lg: '1 / span 4' }}
+              alignSelf={{ lg: 'center' }}
+              mt={{ base: 10, lg: 0 }}
+            >
+              <PortraitPair
+                main={{
+                  src: '/assets/photos/site/about-bg.webp',
+                  alt: 'Veronika Gerzon lying on a dance floor to photograph guests dancing above her.',
+                  position: 'center 62%',
+                }}
+                mainRatio={{ base: 3 / 4, lg: 4 / 5 }}
+                inset={{
+                  src: '/assets/photos/site/vero-ceremony-lawn.webp',
+                  alt: 'Veronika Gerzon with her camera on the lawn before an outdoor ceremony.',
+                  position: 'center 30%',
+                }}
+                // Bottom left: the bottom right is where Vero is lying in the
+                // floor shot, and the lower left of that frame is floor and
+                // the group's feet. 9% stays inside the page margin down to
+                // 992px.
+                insetSide="left"
+                insetHang="-9%"
+                tuck={<TuckedEyebrow>Your Turn</TuckedEyebrow>}
+              />
+            </GridItem>
 
-                {/* Same hairline the section above uses to turn one column
-                    into two thoughts. */}
-                <Box w="100%" h="1px" bg="brand.accentBorder" my={{ base: 2, md: 3 }} />
-
-                <Text textStyle="eyebrow">Your Turn</Text>
-                <Text
-                  fontFamily="heading"
-                  fontWeight="300"
-                  fontStyle="italic"
-                  fontSize={{ base: '1.3rem', md: '1.6rem' }}
-                  lineHeight="1.5"
-                  color="gray.800"
-                >
-                  Have a session in mind? I&apos;d love to hear about it.
-                </Text>
-                <Flex w="100%" justify="center" pt={1}>
-                  <CTAButton to="/contact" variant="tabMuted" size="sm">
-                    Book a session
-                  </CTAButton>
-                </Flex>
-
-              </VStack>
-            </MotionDiv>
-          </SimpleGrid>
+            {/* The invitation. Its label is tucked beside the pair on phones,
+                so here it only shows from lg up, after the same hairline the
+                section above uses to turn one column into two thoughts. */}
+            <GridItem gridColumn={{ lg: 2 }} gridRow={{ base: 3, lg: 3 }} mt={5}>
+              <MotionDiv
+                initial={{ opacity: 0, y: 24 }}
+                animate={isAngleInView ? { opacity: 1, y: 0 } : {}}
+                transition={FADE_IN}
+              >
+                <VStack align="flex-start" spacing={5}>
+                  <Box
+                    display={{ base: 'none', lg: 'block' }}
+                    w="100%"
+                    h="1px"
+                    bg="brand.accentBorder"
+                    my={3}
+                  />
+                  <Text textStyle="eyebrow" display={{ base: 'none', lg: 'block' }}>
+                    Your Turn
+                  </Text>
+                  <Text
+                    fontFamily="heading"
+                    fontWeight="300"
+                    fontStyle="italic"
+                    fontSize={{ base: '1.3rem', md: '1.6rem' }}
+                    lineHeight="1.5"
+                    color="gray.800"
+                  >
+                    Have a session in mind? I&apos;d love to hear about it.
+                  </Text>
+                  {/* Same button as the other three, by request: the booking
+                      link does not need to shout to be found. */}
+                  <Box w="100%" pt={1}>
+                    <CTAButton to="/contact" variant="photoTab" thumbs={tabThumbs('book')}>
+                      Book a session
+                    </CTAButton>
+                  </Box>
+                </VStack>
+              </MotionDiv>
+            </GridItem>
+          </Grid>
         </Box>
       </Box>
-
     </Box>
   );
 };
