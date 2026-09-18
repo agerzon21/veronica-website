@@ -14,7 +14,7 @@ import FaDownload from '../icons/fa/FaDownload';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaHeart from '../icons/fa/FaHeart';
 import FaRegHeart from '../icons/fa/FaRegHeart';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
 import { m } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -97,12 +97,68 @@ interface ImageModalProps {
 // native viewer where size isn't a problem.
 const LARGE_FILE_THRESHOLD = 40 * 1024 * 1024;
 
-// How many photos to preload on either side of the currently-viewed one.
-// Symmetric (forward = back) so arrow-key nav in either direction feels
-// the same. Preloads go direct to Drive (viewUrl → drive.google.com/
-// thumbnail), so they cost us nothing — the trade-off is a bit of the
-// client's own bandwidth for photos they're about to see anyway.
-const PRELOAD_RADIUS = 10;
+/**
+ * How many photos to preload on either side of the current one.
+ *
+ * This used to be a flat 10, on the reasoning that preloads go straight to
+ * Drive and so "cost us nothing". True of our bandwidth, badly false of the
+ * client's memory. Ten either side is twenty-one images at full size, and at
+ * 2000px each that is roughly 220MB of decoded bitmap. A desktop shrugs. An
+ * iPhone holding a 943 photo grid does not: Safari stops decoding, and when it
+ * does, it fires NEITHER load nor error. The spinner then span forever, every
+ * arrow press queued twenty more full-size decodes, and the gallery was dead
+ * until the tab was closed. Desktop never saw it.
+ */
+const PRELOAD_RADIUS_ROOMY = 10;
+const PRELOAD_RADIUS_TIGHT = 2;
+
+/**
+ * Widths we will ask Drive for, in buckets.
+ *
+ * Buckets rather than the exact pixel figure so that two phones of similar
+ * size still share a cache entry, and so a rotation does not refetch.
+ */
+const WIDTH_BUCKETS = [800, 1200, 1600, 2000] as const;
+
+/** The ceiling for a device we are being careful with. */
+const TIGHT_MAX_WIDTH = 1200;
+
+/** The smallest bucket that still covers this screen at its pixel density. */
+function deviceImageWidth(): number {
+  if (typeof window === 'undefined') return 2000;
+  // Capped at 2: beyond that the extra pixels are invisible on a photo while
+  // the decode cost keeps climbing with their square.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Longest side, so a rotation does not trigger a refetch at a bigger size.
+  const longest = Math.max(window.innerWidth, window.innerHeight);
+  let needed = Math.ceil(longest * dpr);
+  // Without this, the rotation allowance alone pushes a 390 by 844 phone to
+  // 1688 and therefore into the 2000 bucket, which is the exact request that
+  // was breaking it. 1200 already exceeds what a phone can resolve.
+  if (isTightMemory()) needed = Math.min(needed, TIGHT_MAX_WIDTH);
+  return WIDTH_BUCKETS.find((w) => w >= needed) ?? 2000;
+}
+
+/** Is this a device we should be careful with? */
+function isTightMemory(): boolean {
+  if (typeof window === 'undefined') return false;
+  const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+  if (nav.connection?.saveData) return true;
+  if (typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 4) return true;
+  return Math.min(window.innerWidth, window.innerHeight) < 768;
+}
+
+/**
+ * Rewrite a Drive thumbnail url to a different width.
+ *
+ * The api builds these at a fixed sz=w2000 (api/_drive.ts). Rewriting here
+ * rather than there keeps the decision with the only code that knows the
+ * screen it is about to draw on. Anything that does not match is returned
+ * untouched, so a non-Drive url still works.
+ */
+export function sizedViewUrl(url: string, width: number): string {
+  return url.replace(/([?&]sz=)w\d+/i, `$1w${width}`);
+}
 
 // formatFileSize was used by the removed "Original · XX MB" menu item;
 // keeping the definition would be dead code, so it's been removed.
@@ -361,11 +417,50 @@ const ImageModal = ({
   // false in the img's onLoad. Prevents the confused "did my click even
   // work?" state when Drive takes a couple seconds to serve a fresh one.
   const [currentImageLoading, setCurrentImageLoading] = useState(true);
+
+  /**
+   * The url actually drawn, sized to this screen.
+   *
+   * The api hands us a fixed 2000px url. On a phone that is several times more
+   * pixels than the display can show, and the decode is what tipped Safari
+   * over. Recomputed on resize so a rotation or a desktop window resize picks
+   * a sensible bucket rather than keeping whatever the first paint chose.
+   */
+  const [displayWidth, setDisplayWidth] = useState(deviceImageWidth);
+  useEffect(() => {
+    const onResize = () => setDisplayWidth(deviceImageWidth());
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, []);
+  const displayUrl = useMemo(
+    () => sizedViewUrl(imageUrl, displayWidth),
+    [imageUrl, displayWidth],
+  );
+
   useEffect(() => {
     setCurrentImageLoading(true);
-  }, [imageUrl]);
+  }, [displayUrl]);
 
-  // Preload a sliding window of ±PRELOAD_RADIUS photos around the current
+  /**
+   * Never spin forever.
+   *
+   * When Safari runs out of image memory it fires NEITHER load nor error, so
+   * both handlers below are dead and the spinner is permanent. A client is
+   * then looking at a black screen with no way to understand it. After this
+   * long we stop claiming to be loading, which lets the failure state below
+   * render something honest instead.
+   */
+  useEffect(() => {
+    if (!currentImageLoading) return;
+    const t = window.setTimeout(() => setCurrentImageLoading(false), 15000);
+    return () => window.clearTimeout(t);
+  }, [currentImageLoading, displayUrl]);
+
+  // Preload a sliding window of neighbours around the current
   // index. Cheap for us (viewUrl → Drive direct, not our proxy) and huge
   // for perceived speed — arrow-key mashing hits pre-warmed browser cache
   // instead of triggering fresh Drive fetches per click.
@@ -376,12 +471,16 @@ const ImageModal = ({
   useEffect(() => {
     if (typeof currentIndex !== 'number' || !getViewUrl) return;
     const preloaders: HTMLImageElement[] = [];
-    for (let offset = -PRELOAD_RADIUS; offset <= PRELOAD_RADIUS; offset++) {
+    const radius = isTightMemory() ? PRELOAD_RADIUS_TIGHT : PRELOAD_RADIUS_ROOMY;
+    const width = deviceImageWidth();
+    for (let offset = -radius; offset <= radius; offset++) {
       if (offset === 0) continue; // current photo is the <img src> below
       const url = getViewUrl(currentIndex + offset);
       if (!url) continue;
       const img = new Image();
-      img.src = url;
+      // Same width the visible photo asks for, so a preload warms the cache
+      // entry the modal will actually use rather than a second, larger one.
+      img.src = sizedViewUrl(url, width);
       preloaders.push(img);
     }
     // No cleanup needed — the Image instances get GC'd naturally when
@@ -1065,7 +1164,7 @@ const ImageModal = ({
       >
         <img
           ref={imgRef}
-          src={imageUrl}
+          src={displayUrl}
           alt={imageAlt}
           draggable={false}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
