@@ -8,23 +8,30 @@ import FaSync from '../icons/fa/FaSync';
 import FaUndo from '../icons/fa/FaUndo';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
-import ClientGallery, { type DriveFile, type FolderSection } from './ClientGallery';
+import ClientGallery, {
+  galleryDrawsNavRow,
+  type DriveFile,
+  type FolderSection,
+  type GalleryNav,
+} from './ClientGallery';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import PortalHeader, {
   ScrollStrip,
   formatMoney,
   isPortalComplete,
+  useNavSelectionLock,
   type PortalNavItem,
   type PortalProgressData,
 } from './PortalHeader';
 import {
-  ACTIVATION_LINE,
   AT_BOTTOM_THRESHOLD,
   HEADER_CLEARANCE,
+  PORTAL_HEADER_H,
   PORTAL_NAV_H,
-  SECTION_SCROLL_MARGIN,
   STICKY_BOTTOM,
+  portalChrome,
+  type PortalChrome,
 } from './portalLayout';
 import { scrollBehavior } from '../utils/motion';
 import type { ContractTemplate } from '../data/contract-template';
@@ -358,6 +365,56 @@ const ClientPortalView = ({
   // nothing left to do the progress has nothing left to say.
   const portalComplete = isPortalComplete(progress);
 
+  // How tall this portal's sticky chrome is, which is the header plus the
+  // second nav row for as long as that row is mounted. Once the booking is
+  // complete the row is gone and there is only the header, so a section that
+  // reserved room for both would leave a nav row of empty space above its
+  // heading. Every scroll target and every scan threshold below comes off
+  // this one answer, because they have to agree: the margin decides where a
+  // tapped heading lands and the activation line decides whether the nav
+  // believes it arrived.
+  //
+  // What comes back is RESPONSIVE, and the argument is about desktop widths
+  // only. Below `md` the second row does not render in any state, so the
+  // chrome is the 60px header alone whatever this says, and portalChrome is
+  // what knows that. A phone taking the two-row margin would drop every
+  // heading a nav row below chrome that is not there, and its scan would call
+  // a section current 48px before the reader reached it: neither looks broken,
+  // they just look like a badly built page.
+  const chrome = portalChrome(!portalComplete);
+
+  // Whether the Photos section renders the gallery at all. Three states, kept
+  // mutually exclusive down in the section itself; this is the test for the
+  // two that show a gallery. A Drive URL plus files is the ordinary one. A
+  // Drive URL plus a warning is a listing that threw: no files came back, and
+  // the gallery is still what renders, because its failure UI is what gives
+  // the client a way into Drive.
+  //
+  // It is hoisted up here out of the render because the nav handoff below has
+  // to know whether there is a gallery on the page at all, and it used to ask
+  // a different question, see below.
+  const galleryRendered = Boolean(data.drive_url) && (photosDelivered || Boolean(data.warning));
+
+  // Does the gallery draw its own sticky nav row? If it does, this portal's
+  // row has to stand down for it, because they pin to the same band.
+  //
+  // The predicate is the gallery's own, imported rather than restated. The
+  // handoff used to be guarded by photosDelivered, which is ALMOST the same
+  // question and differs in exactly the state where the Drive listing failed:
+  // the gallery renders, so its strip was drawn, but no files came back, so
+  // the guard read "no gallery nav to hand off to" and this row never hid.
+  // Both rows then pinned to the same 48px and painted over each other.
+  // Favorites are on in the full portal by construction, since it always
+  // passes onToggleFavorite below.
+  const galleryOwnsNavRow =
+    galleryRendered &&
+    galleryDrawsNavRow({
+      rootFiles: data.rootFiles,
+      sections: data.sections,
+      favoritesEnabled: true,
+      sectionNavInHeader: false,
+    });
+
   // The portal's sections, in DOM order. Built once here rather than inside
   // the nav, because the header and the second row render the same list and
   // only one of them is on screen at a time.
@@ -375,18 +432,51 @@ const ClientPortalView = ({
   navItems.push({ id: 'photos-section', label: 'Photos' });
   navItems.push({ id: 'gallery-share-section', label: 'Share' });
 
-  const [activeNavId, setActiveNavId] = useActiveSection(navItems);
+  const [activeNavId, setActiveNavId] = useActiveSection(navItems, chrome);
 
   const handleNavSelect = useCallback(
     (id: string) => {
       const el = document.getElementById(id);
       if (!el) return;
-      // Optimistic highlight so the tapped item lights up immediately. The
-      // scan below corrects it as the smooth scroll settles.
+      // The tap IS the answer: this lights the item up at once and holds the
+      // scroll scan off it until the smooth scroll has landed on it, so the
+      // sections the page travels through on the way do not each take a turn
+      // in the highlight. See useNavSelectionLock.
       setActiveNavId(id);
       el.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     },
     [setActiveNavId],
+  );
+
+  // ─── The gallery's own section nav, borrowed for the phone header ───
+  //
+  // The gallery hands it up (see ClientGallery's onSectionNav) rather than
+  // this component building a second one, because there must be exactly one
+  // of these on the page: two would double the gallery's scroll listeners and
+  // give the header and the strip separate opinions about which section the
+  // reader is in, which drifts apart over a long scroll.
+  //
+  // This is why the portal re-renders when the reader crosses a gallery
+  // section boundary, which it did not before. That is a handful of renders
+  // per scroll of the page, at the same moments the portal's own nav scan
+  // already re-rendered it, and it is the price of one source of truth.
+  //
+  // The setter goes down as-is: a useState setter is stable for the life of
+  // the component, which is what the effect reporting into it depends on.
+  const [gallerySectionNav, setGallerySectionNav] = useState<GalleryNav | null>(null);
+
+  // Picking a section from the header's menu. The item carries its own
+  // scrollTo, so there is no second implementation of where a section is, and
+  // setActiveId is the gallery's held-pick setter, so the highlight stays on
+  // what was tapped while the scroll is in flight.
+  const handleGallerySelect = useCallback(
+    (id: string) => {
+      const item = gallerySectionNav?.items.find((i) => i.id === id);
+      if (!item || item.disabled) return;
+      gallerySectionNav!.setActiveId(id);
+      item.scrollTo();
+    },
+    [gallerySectionNav],
   );
 
   // ─── Sign out ───
@@ -432,26 +522,37 @@ const ClientPortalView = ({
   // is above the sticky nav bottom, its bottom is still below it).
   const photosSectionRef = useRef<HTMLDivElement | null>(null);
   const [isPhotosInView, setIsPhotosInView] = useState(false);
-  // Only meaningful when photos are actually delivered — otherwise
-  // there's no gallery TopSectionNav to swap in, so hiding the portal
-  // nav in the empty-placeholder zone would just leave the user with
-  // no nav at all. Guard the observer with a data-derived check so the
-  // swap only kicks in when there's something to swap TO.
+  // Only meaningful when the gallery is drawing a strip of its own:
+  // otherwise there is nothing to swap in, and hiding this row would leave
+  // the client with no navigation at all. The guard is the gallery's own
+  // predicate rather than a second reading of the same data, so the row that
+  // stands down and the row that takes over are decided by one fact.
   useEffect(() => {
-    if (!photosDelivered) {
+    if (!galleryOwnsNavRow) {
       // Nothing to swap to → make sure the portal nav stays visible.
       setIsPhotosInView(false);
       return;
     }
     const el = photosSectionRef.current;
     if (!el) return;
-    // STICKY_BOTTOM is where the portal's chrome ends: the header plus the
-    // second nav row. It has to be the SAME number the nav's own active scan
-    // is built on, or the nav flickers on and off right at this boundary
-    // instead of failing in a way anyone would notice.
+    // The band is PORTAL_HEADER_H to STICKY_BOTTOM: the 48px under the header
+    // that both rows pin to. This asks whether the gallery's strip is in that
+    // band AT ALL, which is not the same as whether the reader is inside the
+    // Photos section, and the difference is a real 48px of scrolling.
+    //
+    // The strip is sticky within the gallery, so on the way IN it reaches the
+    // band as the section's top passes STICKY_BOTTOM, and on the way OUT it is
+    // pushed up with the section's bottom and has not left the band until that
+    // bottom passes PORTAL_HEADER_H. Testing the bottom against STICKY_BOTTOM,
+    // as this did, brought this row back 48px early: for that much scrolling
+    // the two rows were both painted, one sliding out under the other.
+    //
+    // Both edges are the numbers the nav's own active scan is built on, so the
+    // nav cannot flicker on and off at this boundary instead of failing in a
+    // way anyone would notice.
     const check = () => {
       const rect = el.getBoundingClientRect();
-      setIsPhotosInView(rect.top < STICKY_BOTTOM && rect.bottom > STICKY_BOTTOM);
+      setIsPhotosInView(rect.top < STICKY_BOTTOM && rect.bottom > PORTAL_HEADER_H);
     };
     check();
     window.addEventListener('scroll', check, { passive: true });
@@ -460,7 +561,7 @@ const ClientPortalView = ({
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [photosDelivered]);
+  }, [galleryOwnsNavRow]);
 
   // ─── Gallery Pass management state ───
   const toast = useToast();
@@ -687,7 +788,22 @@ const ClientPortalView = ({
   };
 
   return (
-    <Box bg="white" minH="100vh" pt={HEADER_CLEARANCE}>
+    <Box
+      bg="white"
+      minH="100vh"
+      pt={HEADER_CLEARANCE}
+      // Belt and braces against the page being draggable sideways on a phone.
+      // CLIP, not hidden: `overflow-x: hidden` forces the other axis to auto
+      // and turns this Box into a scrollport, which would break the two sticky
+      // nav rows inside it (they would stick to this box rather than to the
+      // viewport). `clip` does not create a scroll container, so sticky keeps
+      // working, and the fixed header is unaffected either way because its
+      // containing block is the viewport. The actual overflow was the nav
+      // strips' chevron hit area and is fixed at source in ScrollChevron; this
+      // is here so the next stray pixel is a visual bug rather than a page
+      // that slides around under the reader's thumb.
+      overflowX="clip"
+    >
       {/* Keyframes for the refresh spinner. A page-global animation that has
           to exist somewhere in the DOM.
 
@@ -708,12 +824,39 @@ const ClientPortalView = ({
       {/* The portal's own header, in place of the public site navbar.
           Logo, progress, balance. Once the booking is signed, paid and
           delivered it carries the section nav instead of the progress,
-          as a segmented control, and the second row below stands down. */}
+          as a segmented control, and the second row below stands down.
+
+          On a phone it carries everything: the same list below goes in as
+          `accountNav` and opens behind the burger, and the gallery's sections,
+          once there are any, take the middle slot as a section bar. Both are
+          the same data the desktop rows render, handed over rather than
+          rebuilt, so a phone and a desktop cannot disagree about where the
+          client is. */}
       <PortalHeader
         progress={progress}
         navItems={navItems}
         activeNavId={activeNavId}
         onNavSelect={handleNavSelect}
+        sectionNav={
+          gallerySectionNav
+            ? {
+                items: gallerySectionNav.items,
+                activeId: gallerySectionNav.activeId,
+                onSelect: handleGallerySelect,
+              }
+            : undefined
+        }
+        // The items above arrive an effect late, because the gallery builds
+        // them and the gallery is a sibling of the header. This is the same
+        // fact one render earlier: galleryOwnsNavRow is the gallery's own
+        // predicate, called on the very data the gallery is about to be handed,
+        // so it answers "there will be a section bar" before there is one.
+        // Without it the header spends its first commit painting the 1-2-3
+        // progress into a slot the sections are about to take, and the client
+        // watches it vanish. One predicate for both, so the slot cannot be
+        // reserved for a bar that never comes.
+        sectionNavExpected={galleryOwnsNavRow}
+        accountNav={{ items: navItems, activeId: activeNavId, onSelect: handleNavSelect }}
       />
 
       {/* Second sticky row: the portal's section nav, for as long as the
@@ -721,10 +864,11 @@ const ClientPortalView = ({
           block) → conditional Next Steps → conditional Contract / Balance
           → Password → Photos → Share.
 
-          Hides at every width when the client scrolls into the photos
-          section, where the gallery's own sticky section nav takes over
-          that slot so the two do not stack. It keeps its height while
-          hidden, see the note on the component. */}
+          DESKTOP only now: it is display:none below `md`, where the header's
+          burger carries this very list instead. Hides on a desktop when the
+          client scrolls into the photos section, where the gallery's own
+          sticky section nav takes over that slot so the two do not stack. It
+          keeps its height while hidden, see the note on the component. */}
       {!portalComplete && (
         <PortalTopNav
           items={navItems}
@@ -736,9 +880,10 @@ const ClientPortalView = ({
 
       {/* ─── Welcome block ───
           id="portal-top-section" is the scroll target for the Top
-          item in the nav above. SECTION_SCROLL_MARGIN keeps the
+          item in the nav above. The chrome's scroll margin keeps the
           heading from being clipped by the sticky chrome; it is
-          derived from the header and nav heights rather than typed
+          derived from the header and nav heights, and from whether
+          this portal still has a second row at all, rather than typed
           out, so it can never drift from them.
 
           Content: title + welcome + labeled session-info rows
@@ -749,7 +894,7 @@ const ClientPortalView = ({
           so it matches every other button on the site. */}
       <Box
         id="portal-top-section"
-        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+        sx={{ scrollMarginTop: chrome.scrollMargin }}
         px={{ base: 4, md: 8 }}
         py={{ base: 8, md: 10 }}
         textAlign="center"
@@ -870,7 +1015,7 @@ const ClientPortalView = ({
           space, so it's a no-op for pending/no-contract flows. */}
       <Box
         id="next-steps-section"
-        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+        sx={{ scrollMarginTop: chrome.scrollMargin }}
       >
         <NextStepsPanel
           contractStatus={data.contract_status}
@@ -900,7 +1045,7 @@ const ClientPortalView = ({
         bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+        sx={{ scrollMarginTop: chrome.scrollMargin }}
       >
         {data.contract_status === 'pending' && (
           <ContractSignSection
@@ -928,7 +1073,7 @@ const ClientPortalView = ({
           px={6}
           borderTop="1px solid"
           borderColor="gray.100"
-          sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+          sx={{ scrollMarginTop: chrome.scrollMargin }}
         >
           <VStack spacing={4} maxW="540px" mx="auto" textAlign="center">
             <Text
@@ -1187,7 +1332,7 @@ const ClientPortalView = ({
         bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+        sx={{ scrollMarginTop: chrome.scrollMargin }}
       >
         <ChangePasswordSection
           credentials={credentials}
@@ -1228,11 +1373,10 @@ const ClientPortalView = ({
         bg="white"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+        sx={{ scrollMarginTop: chrome.scrollMargin }}
       >
         {(() => {
-          const ready = data.drive_url && (photosDelivered || data.warning);
-          if (ready) {
+          if (galleryRendered) {
             return (
               <ClientGallery
                 clientName={data.client_name}
@@ -1247,6 +1391,15 @@ const ClientPortalView = ({
                 // sign in, there's no place to persist their picks).
                 favorites={favorites}
                 onToggleFavorite={handleToggleFavorite}
+                // This portal keeps a nav row under the header until the
+                // booking is complete, so the gallery's own headings have to
+                // clear it even in the states where the gallery draws no
+                // strip of its own. Desktop widths only; portalChrome knows a
+                // phone has no second row in any state.
+                portalNavRow={!portalComplete}
+                // And the gallery hands its section nav back up, for the
+                // phone header's middle slot. See gallerySectionNav above.
+                onSectionNav={setGallerySectionNav}
               />
             );
           }
@@ -1298,7 +1451,7 @@ const ClientPortalView = ({
         py={{ base: 12, md: 14 }}
         px={6}
         mt={6}
-        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+        sx={{ scrollMarginTop: chrome.scrollMargin }}
       >
         <VStack maxW="520px" mx="auto" spacing={6}>
           {/* Section header */}
@@ -2756,18 +2909,37 @@ function ChangePasswordSection({
  * "click Photos, Share lights up" and "scroll up, skip Contract" bugs.
  *
  * The rule: the current section is the one with the LARGEST top that is still
- * above ACTIVATION_LINE, which is whichever section the client most recently
- * scrolled into. ACTIVATION_LINE is derived from the header and nav heights in
- * portalLayout.ts, the same numbers the Photos handoff measures against, so
- * the two cannot drift apart at that boundary.
+ * above the chrome's activation line, which is whichever section the client
+ * most recently scrolled into. That line is derived from the header and nav
+ * heights in portalLayout.ts, the same numbers the section scroll margins and
+ * the Photos handoff are built on, so a heading cannot land somewhere the scan
+ * disagrees is arrival. It moves with the chrome: a finished portal has no
+ * second row, and a line left 48px lower than the chrome it is meant to sit
+ * under would call a section current before the reader had reached it.
  *
  * It lives here, above both navs, rather than inside one of them: the header
  * and the second sticky row render the same list and only one is mounted at a
  * time. Two copies of this scan would mean the highlight jumped the moment a
  * client paid their last installment.
+ *
+ * The setter it hands back is the "the reader picked this" signal, not a plain
+ * setState: it takes a hold on the scan (see useNavSelectionLock) so the smooth
+ * scroll that follows cannot light up every section it travels through. Every
+ * caller gets that for free, which matters because the header's segmented
+ * control and the second sticky row are two different components calling it.
+ *
+ * The hold is page-wide, not this scan's own, so it also stops the GALLERY's
+ * scan for the length of the scroll. That is the point of it on a phone: the
+ * burger and the photo section bar are 8px apart in the same header, and a pick
+ * in one used to leave the other rattling through every section the page flew
+ * over on the way.
  */
-function useActiveSection(items: PortalNavItem[]): [string | null, (id: string) => void] {
+function useActiveSection(
+  items: PortalNavItem[],
+  chrome: PortalChrome,
+): [string | null, (id: string) => void] {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const lock = useNavSelectionLock();
   // The list is rebuilt on every render, so the effect keys off its contents
   // rather than the array's identity.
   const idKey = items.map((i) => i.id).join('|');
@@ -2786,22 +2958,30 @@ function useActiveSection(items: PortalNavItem[]): [string | null, (id: string) 
       const atBottom =
         scrollBottom >= document.documentElement.scrollHeight - AT_BOTTOM_THRESHOLD;
       if (atBottom) {
-        setActiveId(ids[ids.length - 1]);
+        setActiveId(lock.resolve(ids[ids.length - 1]));
         return;
       }
 
+      // Asked for per frame rather than closed over: the line sits under
+      // whatever chrome the CURRENT width has, which is one row on a phone and
+      // may be two on a desktop. This listener already re-runs on resize, so
+      // reading it here is what makes crossing the breakpoint free.
+      const { activationLine } = chrome.metrics();
       let currentId: string | null = null;
       let bestTop = -Infinity;
       ids.forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
         const top = el.getBoundingClientRect().top;
-        if (top <= ACTIVATION_LINE && top > bestTop) {
+        if (top <= activationLine && top > bestTop) {
           bestTop = top;
           currentId = id;
         }
       });
-      setActiveId(currentId);
+      // Every path out of the scan goes through the lock, the at-the-bottom
+      // one included: a pick made near the foot of the page would otherwise be
+      // overruled by that rule on the very next frame.
+      setActiveId(lock.resolve(currentId));
     };
     const onScroll = () => {
       if (raf !== null) return;
@@ -2810,14 +2990,28 @@ function useActiveSection(items: PortalNavItem[]): [string | null, (id: string) 
     update();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
+    // And once more whenever a pick anywhere on the page stops being held. A
+    // scan that stood still through somebody else's scroll has had its last
+    // scroll event by then, so without this it would keep showing where the
+    // reader WAS until they moved the page again. See NavSelectionLock.watch.
+    const unwatch = lock.watch(update);
     return () => {
       if (raf !== null) cancelAnimationFrame(raf);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
+      unwatch();
     };
-  }, [idKey]);
+  }, [idKey, lock, chrome]);
 
-  return [activeId, setActiveId];
+  const select = useCallback(
+    (id: string) => {
+      lock.hold(id);
+      setActiveId(id);
+    },
+    [lock],
+  );
+
+  return [activeId, select];
 }
 
 /**
@@ -2833,15 +3027,18 @@ function useActiveSection(items: PortalNavItem[]): [string | null, (id: string) 
  * is signed, paid and delivered the same list moves INTO the header as a
  * segmented control and this row does not mount at all.
  *
- * Coordination with the gallery's own section nav: when the client scrolls
- * into the Photos section this row hides, so the two strips do not stack. That
+ * Coordination with the gallery's own section nav: this row hides for exactly
+ * as long as the gallery's strip is in the band, so the two never stack. That
  * hand off now happens at EVERY width. It used to be desktop only, because the
  * gallery's strip was desktop only and a phone fell back to a bottom sheet
  * drawer; the drawer is gone and the strip renders on phones too, so leaving
  * this row up on mobile would pin two translucent nav bars at the same
- * top offset, on top of each other. Safe because the full portal always passes
- * onToggleFavorite, so the gallery's strip always has at least Info and
- * Favorites to show and a phone is never left with no navigation in Photos.
+ * top offset, on top of each other.
+ *
+ * It only stands down for a strip that is actually there, which is what
+ * galleryOwnsNavRow decides, off the gallery's own predicate. So the reader is
+ * never left inside Photos with no navigation at all: either the gallery drew
+ * a strip and it has the band, or it did not and this row keeps it.
  *
  * CENTRED at every width now, including a phone, where it used to start hard
  * against the left edge. Centring is only safe inside a horizontal scroller
@@ -2891,6 +3088,10 @@ function PortalTopNav({ items, activeId, onSelect, isPhotosInView }: PortalTopNa
       // the gallery's own row pins to the same offset and takes the band over.
       visibility={isPhotosInView ? 'hidden' : 'visible'}
       pointerEvents={isPhotosInView ? 'none' : 'auto'}
+      // Desktop only. A phone's whole chrome is the 60px header, which carries
+      // this list behind its burger, and portalChrome answers 60px there in
+      // every state because of this line.
+      display={{ base: 'none', md: 'block' }}
       position="sticky"
       top={HEADER_CLEARANCE}
       zIndex={10}

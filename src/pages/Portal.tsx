@@ -15,13 +15,73 @@ import CTAButton from '../components/ui/CTAButton';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import PortalHeader from '../components/PortalHeader';
-import { HEADER_CLEARANCE } from '../components/portalLayout';
+import { HEADER_CLEARANCE, portalChrome } from '../components/portalLayout';
 import ClientGallery, {
   useGalleryNav,
   type DriveFile,
   type FolderSection,
 } from '../components/ClientGallery';
 import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
+
+/**
+ * The portal session, kept for the length of the browser tab.
+ *
+ * Until now the credentials lived in React state and nowhere else, so ANY
+ * reload signed the client out. That was mostly invisible, until it was not:
+ * the chunk error boundary reloads the page by design when a lazily loaded
+ * route fails, which on a phone with a flaky connection happens when you tap a
+ * photo and the lightbox chunk does not arrive. The client was then dumped at
+ * the login form mid gallery with no explanation, which is what was reported
+ * as "it randomly logs me out".
+ *
+ * sessionStorage rather than localStorage on purpose: it is scoped to this tab
+ * and dies when the tab closes, so a shared or borrowed phone does not keep a
+ * client signed in. It does mean the portal password sits in tab storage for
+ * the length of the visit. That is a real trade off, and the right one here:
+ * every call this page makes already re-sends the same credential, the gallery
+ * password is by design a bearer token in a shareable link, and anything able
+ * to read sessionStorage on this origin could read the page itself anyway.
+ */
+const SESSION_KEY = 'vg:portalSession';
+
+type StoredSession =
+  | { kind: 'client'; email: string; password: string }
+  | { kind: 'gallery'; password: string };
+
+function storeSession(session: StoredSession): void {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // Private mode can throw. The visit still works, it just will not
+    // survive a reload, which is exactly the old behaviour.
+  }
+}
+
+function readStoredSession(): StoredSession | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredSession;
+    if (parsed?.kind === 'client' && parsed.email && parsed.password) return parsed;
+    if (parsed?.kind === 'gallery' && parsed.password) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function hasStoredSession(): boolean {
+  return readStoredSession() !== null;
+}
+
+function clearStoredSession(): void {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* nothing to do */
+  }
+}
+
 
 const MotionDiv = m.div;
 
@@ -120,6 +180,11 @@ const Portal = () => {
 
   const [clientData, setClientData] = useState<ClientPortalData | null>(null);
   const [galleryData, setGalleryData] = useState<GalleryData | null>(null);
+  /**
+   * True while we are trying a stored session, so the login form does not
+   * flash before we know whether the client is still signed in.
+   */
+  const [restoring, setRestoring] = useState(() => hasStoredSession());
 
   /**
    * Sign out.
@@ -133,7 +198,68 @@ const Portal = () => {
    * kind of small rudeness that makes people avoid signing out on a shared
    * laptop, which is the one place it matters.
    */
+  /**
+   * Put the client back where they were after a reload.
+   *
+   * Runs once on mount. A stored session that no longer authenticates is
+   * dropped silently and the login form shows, which covers a rotated
+   * password, a deleted portal, and a session copied between tabs.
+   */
+  useEffect(() => {
+    const stored = readStoredSession();
+    if (!stored) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const endpoint = stored.kind === 'client' ? '/api/portal/client' : '/api/portal/gallery';
+        const body =
+          stored.kind === 'client'
+            ? { email: stored.email, password: stored.password }
+            : { password: stored.password };
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.success) {
+          if (stored.kind === 'client') {
+            setEmail(stored.email);
+            setClientPassword(stored.password);
+            setClientData(data as ClientPortalData);
+          } else {
+            setGalleryPassword(stored.password);
+            setGalleryData({
+              clientName: data.client_name ?? null,
+              driveUrl: data.drive_url,
+              rootFiles: data.rootFiles ?? [],
+              sections: data.sections ?? [],
+              warning: data.warning,
+              expiresAt: data.gallery_expires_at ?? null,
+            });
+          }
+        } else {
+          clearStoredSession();
+        }
+      } catch {
+        // Offline on reload. Keep the stored session: the next load can still
+        // restore it, and clearing here would punish a dropped connection by
+        // making them sign in again.
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Once, on mount. Deliberately not reactive to the state it sets: the
+    // effect reads the stored session and nothing from this render, so there
+    // is nothing for the dependency rule to complain about.
+  }, []);
+
   const handleLogout = () => {
+    clearStoredSession();
     setClientData(null);
     setClientPassword('');
     setError('');
@@ -173,6 +299,7 @@ const Portal = () => {
       const data = await res.json();
 
       if (res.ok && data.success) {
+        storeSession({ kind: 'client', email: email.trim(), password: clientPassword.trim() });
         setClientData(data as ClientPortalData);
       } else if (res.status === 401) {
         setError("That email and password didn't match. Double-check and try again.");
@@ -201,6 +328,15 @@ const Portal = () => {
       const data = await res.json();
 
       if (res.ok && data.success) {
+        // The same store the client login does, and for the same reason: a
+        // chunk recovery reload is exactly what happens when a guest taps a
+        // photo on a flaky connection, and without this the reload drops them
+        // back at the password form. A link carrying ?password= survives on
+        // its own, because the recovery preserves the query and the auto
+        // submit runs again, so ONLY the typed login was losing its session.
+        // That is the narrower half of the bug, and it is still the half a
+        // guest hits after the link has been used once.
+        storeSession({ kind: 'gallery', password: galleryPassword.trim() });
         setGalleryData({
           clientName: data.client_name ?? null,
           driveUrl: data.drive_url,
@@ -249,6 +385,11 @@ const Portal = () => {
   // length check hides the strip.
   const galleryNav = useGalleryNav({
     sections: galleryData?.sections ?? [],
+    // One row of chrome here, not two: the nav is IN the header on this route,
+    // so there is nothing pinned under it. Passing the full portal's two-row
+    // chrome is what used to land every section heading a whole nav row too
+    // low, and left the scan calling a section current 48px before it was.
+    chrome: portalChrome(false),
     enabled: !!galleryData,
   });
   const onGallerySelect = useCallback(
@@ -304,7 +445,10 @@ const Portal = () => {
             handler and useGalleryNav only includes it when one exists.
 
             Passing sectionNavInHeader stops ClientGallery rendering its own
-            sticky strip, so the guest gets one bar rather than two.
+            sticky strip, so the guest gets one bar rather than two. Nothing
+            passes portalNavRow either, and the two together are how the
+            gallery knows its headings have one row of chrome to clear here
+            rather than the full portal's two.
 
             The padding clears that fixed header. ClientGallery does not pad
             for it itself, so the same component can be embedded inside
@@ -314,6 +458,18 @@ const Portal = () => {
           navItems={galleryNav.items}
           activeNavId={galleryNav.activeId}
           onNavSelect={onGallerySelect}
+          // The same list again, for the phone, where the header draws it as
+          // the photo section bar rather than as a segmented control. One
+          // useGalleryNav behind both, so the two renderings cannot disagree.
+          //
+          // No accountNav goes with it, and that is the whole reason a guest
+          // on a shared link gets no burger: there is no account here to open
+          // a menu onto.
+          sectionNav={{
+            items: galleryNav.items,
+            activeId: galleryNav.activeId,
+            onSelect: onGallerySelect,
+          }}
         />
         <Box pt={HEADER_CLEARANCE}>
           <ClientGallery
@@ -327,6 +483,27 @@ const Portal = () => {
             sectionNavInHeader
           />
         </Box>
+        <Footer />
+      </>
+    );
+  }
+
+  // Trying a stored session. Showing the login form here would flash it at a
+  // client who IS signed in, and worse, invite them to type a password they
+  // did not need to, so hold a quiet placeholder until we know.
+  if (restoring) {
+    return (
+      <>
+        <Helmet>
+          <title>Client Portal | Vero Photography</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
+        <Navbar />
+        <Flex minH="60vh" align="center" justify="center" pt={{ base: 24, md: 20 }}>
+          <Text fontSize="sm" color="gray.400" fontWeight="300" letterSpacing="0.1em">
+            Opening your portal...
+          </Text>
+        </Flex>
         <Footer />
       </>
     );
