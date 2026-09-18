@@ -445,19 +445,36 @@ function PrefetchPublicRoutes() {
  * back to the public site — that's handled inside Admin.tsx, which
  * renders <Navbar /> + <Footer /> inline on the login branch only.
  *
- * ExitIntentPopup is also skipped on /admin — that popup targets
- * prospects, not Vero.
+ * /portal and /portal/pass follow the SAME pattern, for the same
+ * reason and with the same catch. A client standing in their portal
+ * does not need Gallery / Journal / About / Contact and a link to
+ * the Client Portal they are already inside; PortalHeader gives them
+ * the logo, their progress and their balance instead. But those two
+ * paths serve the LOGIN FORM as well as the logged-in view, and
+ * which one you get depends on auth state, not on the URL, so hiding
+ * the chrome here would strip it off a genuinely public page.
+ * Portal.tsx renders <Navbar /> + <Footer /> inline on its
+ * logged-out branch, exactly as Admin.tsx does.
+ *
+ * /portal/welcome and /portal/reset are deliberately NOT in this
+ * check. They are one-off public landing pages with no portal
+ * header of their own, so they keep the site chrome.
+ *
+ * ExitIntentPopup is also skipped on both: that popup targets
+ * prospects, not Vero and not a signed client.
  */
 function AppShell() {
   const { pathname } = useLocation();
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
+  const isPortal = pathname === '/portal' || pathname.startsWith('/portal/');
+  const ownChrome = isAdmin || isPortal;
   return (
     <>
       <SEO />
       <ScrollToTop />
       <AnalyticsBoot />
-      {!isAdmin && <PrefetchPublicRoutes />}
-      {!isAdmin && <Navbar />}
+      {!ownChrome && <PrefetchPublicRoutes />}
+      {!ownChrome && <Navbar />}
       {/* The fallback reserves a full viewport height on purpose. <Footer />
           renders after <Routes>, so a null or short fallback would paint the
           footer high and then shove it down when the chunk lands — turning a
@@ -499,8 +516,8 @@ function AppShell() {
       </Routes>
       </Suspense>
       </Box>
-      {!isAdmin && <Footer />}
-      {!isAdmin && <ExitIntentPopup />}
+      {!ownChrome && <Footer />}
+      {!ownChrome && <ExitIntentPopup />}
     </>
   );
 }

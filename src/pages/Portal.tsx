@@ -5,14 +5,22 @@ import ToastHost from '../components/ui/ToastHost';
 // code-split, the extra features land in Portal's chunk, not the homepage's.
 import { LazyMotion, domMax } from 'framer-motion';
 import { Box, Flex, VStack, Text, Input, HStack, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { m, AnimatePresence } from 'framer-motion';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
-import ClientGallery, { type DriveFile, type FolderSection } from '../components/ClientGallery';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
+import PortalHeader from '../components/PortalHeader';
+import { HEADER_CLEARANCE } from '../components/portalLayout';
+import ClientGallery, {
+  useGalleryNav,
+  type DriveFile,
+  type FolderSection,
+} from '../components/ClientGallery';
 import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
 
 const MotionDiv = m.div;
@@ -113,6 +121,31 @@ const Portal = () => {
   const [clientData, setClientData] = useState<ClientPortalData | null>(null);
   const [galleryData, setGalleryData] = useState<GalleryData | null>(null);
 
+  /**
+   * Sign out.
+   *
+   * There is no session to end. The credentials live in this component's React
+   * state and nowhere else, which is why a refresh already drops a client back
+   * to the login form. So signing out is: forget the data, forget the
+   * password, land back on the login form at the top of the page.
+   *
+   * The email stays filled in. It is not the secret, and retyping it is the
+   * kind of small rudeness that makes people avoid signing out on a shared
+   * laptop, which is the one place it matters.
+   */
+  const handleLogout = () => {
+    setClientData(null);
+    setClientPassword('');
+    setError('');
+    setTab('client');
+    if (location.pathname !== '/portal') {
+      navigate('/portal', { replace: true });
+    } else {
+      // Same route, so the app's ScrollToTop will not fire.
+      window.scrollTo({ top: 0 });
+    }
+  };
+
   const switchTab = (next: Tab) => {
     if (next === tab) return;
     setTab(next);
@@ -209,11 +242,30 @@ const Portal = () => {
   // Pass the credentials through so child sections (e.g. Gallery Pass
   // management) can re-authenticate against the API without us having to
   // mint a session token in this MVP.
+  // The gallery's own nav, lifted so the header can carry it on the
+  // gallery-only route. Built here rather than inside ClientGallery because
+  // the header is a sibling, not a child. Safe to call unconditionally: with
+  // no sections it simply returns a one-item list and the header's own
+  // length check hides the strip.
+  const galleryNav = useGalleryNav({
+    sections: galleryData?.sections ?? [],
+    enabled: !!galleryData,
+  });
+  const onGallerySelect = useCallback(
+    (id: string) => {
+      const item = galleryNav.items.find((i) => i.id === id);
+      if (!item || item.disabled) return;
+      galleryNav.setActiveId(id);
+      item.scrollTo();
+    },
+    [galleryNav],
+  );
+
   if (clientData) {
     return (
       <>
         <Helmet>
-          <title>{clientData.client_name ? `${clientData.client_name} — Portal` : 'Client Portal'} | Vero Photography</title>
+          <title>{clientData.client_name ? `${clientData.client_name}, Portal` : 'Client Portal'} | Vero Photography</title>
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
         <ClientPortalView
@@ -225,7 +277,13 @@ const Portal = () => {
           // next mutating API call (rotate gallery pass, sign contract,
           // etc.) would 401 because we'd still be sending the old one.
           onPasswordChanged={(newPassword) => setClientPassword(newPassword)}
+          onLogout={handleLogout}
         />
+        {/* Only the NAVBAR was the problem here: it offered a signed-in client
+            a link to the Client Portal they were already standing in. The
+            footer carries contact and privacy, which a client has more reason
+            to want, not less, so it stays. */}
+        <Footer />
       </>
     );
   }
@@ -235,15 +293,29 @@ const Portal = () => {
     return (
       <>
         <Helmet>
-          <title>{galleryData.clientName ? `${galleryData.clientName} — Gallery` : 'Gallery'} | Vero Photography</title>
+          <title>{galleryData.clientName ? `${galleryData.clientName}, Gallery` : 'Gallery'} | Vero Photography</title>
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
-        {/* pt="72px" clears the fixed site Navbar on this standalone
-            route. ClientGallery itself no longer pads for Navbar so
-            it can also be embedded inside ClientPortalView (where the
-            portal wrapper already handles Navbar clearance) without
-            double-padding the photos section. */}
-        <Box pt="72px">
+        {/* A guest on a shared gallery link has no contract and no balance,
+            so the header shows no progress and no money. What it DOES carry is
+            the gallery's own navigation, because here that is the only
+            navigation there is: Info plus one item per folder. Favourites is
+            absent by construction, since this route passes no favourite
+            handler and useGalleryNav only includes it when one exists.
+
+            Passing sectionNavInHeader stops ClientGallery rendering its own
+            sticky strip, so the guest gets one bar rather than two.
+
+            The padding clears that fixed header. ClientGallery does not pad
+            for it itself, so the same component can be embedded inside
+            ClientPortalView (where the portal wrapper already handles the
+            clearance) without doubling up. */}
+        <PortalHeader
+          navItems={galleryNav.items}
+          activeNavId={galleryNav.activeId}
+          onNavSelect={onGallerySelect}
+        />
+        <Box pt={HEADER_CLEARANCE}>
           <ClientGallery
             clientName={galleryData.clientName}
             driveUrl={galleryData.driveUrl}
@@ -252,14 +324,25 @@ const Portal = () => {
             warning={galleryData.warning}
             galleryPassword={galleryPassword.trim()}
             expiresAt={galleryData.expiresAt}
+            sectionNavInHeader
           />
         </Box>
+        <Footer />
       </>
     );
   }
 
-  // Not yet authenticated → tabbed login form
+  // Not yet authenticated → tabbed login form.
+  //
+  // Renders the site Navbar + Footer inline. Both /portal and /portal/pass
+  // serve this form as well as the logged-in view, so App.tsx cannot tell the
+  // two apart by path and hides the global chrome for the whole route. The
+  // login form IS a public page and keeps its way back to the site, so it
+  // brings its own, exactly as the admin login screen does. The pt below
+  // assumes the Navbar is here; do not remove one without the other.
   return (
+    <>
+    <Navbar />
     <Box position="relative" minH="100vh" overflow="hidden" bg="#0a0a0a">
       <Helmet>
         <title>Portal | Vero Photography</title>
@@ -473,7 +556,7 @@ const Portal = () => {
                           )}
 
                           <Text fontSize="xs" color="whiteAlpha.500" textAlign="center" pt={1}>
-                            Full access — contract, payments, photos
+                            Full access: contract, payments, photos
                           </Text>
                         </VStack>
                       </Box>
@@ -513,7 +596,7 @@ const Portal = () => {
                           </CTAButton>
 
                           <Text fontSize="xs" color="whiteAlpha.500" textAlign="center" pt={1}>
-                            View photos only — for guests &amp; family
+                            View photos only, for guests and family
                           </Text>
                         </VStack>
                       </Box>
@@ -525,7 +608,7 @@ const Portal = () => {
               {/* Graceful offramp */}
               <VStack spacing={3} pt={2}>
                 <Text fontSize="xs" color="whiteAlpha.600" fontWeight="300" textAlign="center">
-                  Not a client? No problem —
+                  Not a client? No problem,
                 </Text>
                 <Text
                   as={RouterLink}
@@ -546,6 +629,8 @@ const Portal = () => {
         </Box>
       </Flex>
     </Box>
+    <Footer />
+    </>
   );
 };
 

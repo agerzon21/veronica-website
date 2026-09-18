@@ -1,16 +1,32 @@
 import { Box, VStack, Text, Flex, HStack, Icon, Input, Checkbox, SimpleGrid, useToast, Collapse } from '@chakra-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
-import FaChevronLeft from '../icons/fa/FaChevronLeft';
-import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaCopy from '../icons/fa/FaCopy';
+import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
 import FaSync from '../icons/fa/FaSync';
 import FaUndo from '../icons/fa/FaUndo';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
 import ClientGallery, { type DriveFile, type FolderSection } from './ClientGallery';
 import CTAButton from './ui/CTAButton';
+import ConfirmDialog from './ui/ConfirmDialog';
+import PortalHeader, {
+  ScrollStrip,
+  formatMoney,
+  isPortalComplete,
+  type PortalNavItem,
+  type PortalProgressData,
+} from './PortalHeader';
+import {
+  ACTIVATION_LINE,
+  AT_BOTTOM_THRESHOLD,
+  HEADER_CLEARANCE,
+  PORTAL_NAV_H,
+  SECTION_SCROLL_MARGIN,
+  STICKY_BOTTOM,
+} from './portalLayout';
+import { scrollBehavior } from '../utils/motion';
 import type { ContractTemplate } from '../data/contract-template';
 import { PAYMENT_HANDLES } from '../data/payment-handles';
 
@@ -121,10 +137,12 @@ interface ClientPortalViewProps {
   // authentication because the parent would still be sending the old
   // password.
   onPasswordChanged?: (newPassword: string) => void;
+  // Clears the parent's credentials and lands back on the login form. There
+  // is no stored session to end: the password lives in Portal.tsx React state
+  // and nowhere else, which is also why a plain page reload already signs the
+  // client out.
+  onLogout?: () => void;
 }
-
-const formatMoney = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
 const formatDate = (iso: string) => {
   // event_date, due_date, and similar date-only fields come back from
@@ -283,7 +301,13 @@ async function hasNewerDeploy(): Promise<boolean> {
   }
 }
 
-const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }: ClientPortalViewProps) => {
+const ClientPortalView = ({
+  data,
+  credentials,
+  onDataUpdate,
+  onPasswordChanged,
+  onLogout,
+}: ClientPortalViewProps) => {
   // Every client-visible noun that used to assume a wedding reads out of here.
   const wording = bookingWording(data.contract_template_key, data.session_type);
 
@@ -306,6 +330,68 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
     amountOwed !== null &&
     data.paid_to_date < amountOwed;
 
+  // Photos exist and have been released. Used in four places (the header's
+  // progress, the Next Steps panel, the nav handoff, and the Photos section
+  // itself), and computed once so they cannot disagree.
+  const photosDelivered =
+    data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0);
+
+  // An installment whose due date has come and gone unpaid. The ONLY thing
+  // that turns the header red. A balance that simply still exists is not
+  // overdue, and colouring it red would make every portal shout from the day
+  // it opens.
+  const balanceOverdue =
+    data.payment_plan_enabled &&
+    data.installments.some((inst) => inst.paid_at === null && new Date(inst.due_date) < new Date());
+
+  const progress: PortalProgressData = {
+    contractStatus: data.contract_status,
+    amountOwed,
+    retainerAmount: data.contract_retainer_amount,
+    paidToDate: data.paid_to_date,
+    photosDelivered,
+    overdue: balanceOverdue,
+  };
+
+  // Signed, paid and delivered. The section nav moves up into the header as a
+  // segmented control and the second sticky row stands down, because with
+  // nothing left to do the progress has nothing left to say.
+  const portalComplete = isPortalComplete(progress);
+
+  // The portal's sections, in DOM order. Built once here rather than inside
+  // the nav, because the header and the second row render the same list and
+  // only one of them is on screen at a time.
+  const navItems: PortalNavItem[] = [];
+  // Top first: a one tap way back to the welcome and refresh area.
+  navItems.push({ id: 'portal-top-section', label: 'Top', icon: FaChevronUp });
+  if (hasNextStep) navItems.push({ id: 'next-steps-section', label: 'Next Steps' });
+  if (data.contract_status !== 'none' && data.contract_status !== 'void') {
+    navItems.push({ id: 'contract-section', label: 'Contract' });
+  }
+  if (data.contract_total_amount !== null) {
+    navItems.push({ id: 'balance-section', label: 'Balance' });
+  }
+  navItems.push({ id: 'password-section', label: 'Password' });
+  navItems.push({ id: 'photos-section', label: 'Photos' });
+  navItems.push({ id: 'gallery-share-section', label: 'Share' });
+
+  const [activeNavId, setActiveNavId] = useActiveSection(navItems);
+
+  const handleNavSelect = useCallback(
+    (id: string) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      // Optimistic highlight so the tapped item lights up immediately. The
+      // scan below corrects it as the smooth scroll settles.
+      setActiveNavId(id);
+      el.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    },
+    [setActiveNavId],
+  );
+
+  // ─── Sign out ───
+  const [signOutOpen, setSignOutOpen] = useState(false);
+
   // Auto-scroll to Next Steps immediately after the client signs the
   // contract. Without this, the page just re-renders in place — but
   // the ContractSignSection (big signature-pad UI) collapses into a
@@ -326,7 +412,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         const target =
           document.getElementById('next-steps-section') ||
           document.getElementById('balance-section');
-        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
       });
     }
     prevContractStatus.current = data.contract_status;
@@ -349,22 +435,23 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
   // Only meaningful when photos are actually delivered — otherwise
   // there's no gallery TopSectionNav to swap in, so hiding the portal
   // nav in the empty-placeholder zone would just leave the user with
-  // no nav at all. Guard the observer with a data-derived hasFiles
-  // check so the swap only kicks in when there's something to swap TO.
-  const galleryHasFiles =
-    data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0);
+  // no nav at all. Guard the observer with a data-derived check so the
+  // swap only kicks in when there's something to swap TO.
   useEffect(() => {
-    if (!galleryHasFiles) {
+    if (!photosDelivered) {
       // Nothing to swap to → make sure the portal nav stays visible.
       setIsPhotosInView(false);
       return;
     }
     const el = photosSectionRef.current;
     if (!el) return;
-    const stickyNavBottom = 120; // Navbar 72 + portal nav ~48
+    // STICKY_BOTTOM is where the portal's chrome ends: the header plus the
+    // second nav row. It has to be the SAME number the nav's own active scan
+    // is built on, or the nav flickers on and off right at this boundary
+    // instead of failing in a way anyone would notice.
     const check = () => {
       const rect = el.getBoundingClientRect();
-      setIsPhotosInView(rect.top < stickyNavBottom && rect.bottom > stickyNavBottom);
+      setIsPhotosInView(rect.top < STICKY_BOTTOM && rect.bottom > STICKY_BOTTOM);
     };
     check();
     window.addEventListener('scroll', check, { passive: true });
@@ -373,7 +460,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [galleryHasFiles]);
+  }, [photosDelivered]);
 
   // ─── Gallery Pass management state ───
   const toast = useToast();
@@ -600,48 +687,59 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
   };
 
   return (
-    <Box bg="white" minH="100vh" pt="72px">
-      {/* Keyframes for the refresh spinner + the "Next Steps" pill's
-          urgency dot pulse. Both are page-global animations that need
-          to exist somewhere in the DOM. Hoisted above the sticky nav
-          so activating the nav's pulseUrgent animation on first paint
-          doesn't depend on later DOM. */}
+    <Box bg="white" minH="100vh" pt={HEADER_CLEARANCE}>
+      {/* Keyframes for the refresh spinner. A page-global animation that has
+          to exist somewhere in the DOM.
+
+          The old pulseUrgent keyframe went with the red pulsing dot on the
+          "Next Steps" pill. The header's progress now carries urgency, in one
+          place and in one colour at a time, and red there means an overdue
+          balance and nothing else. A permanently pulsing red pill beside an
+          amber step was two things shouting the same news. */}
       <Box
         as="style"
         dangerouslySetInnerHTML={{
           __html: `
             @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            @keyframes pulseUrgent {
-              0%, 100% { opacity: 1; transform: scale(1); }
-              50% { opacity: 0.55; transform: scale(1.25); }
-            }
           `,
         }}
       />
 
-      {/* Portal-level top sticky nav — MOVED ABOVE the header so the
-          "Your Portal / Welcome" block scrolls away naturally and the
-          nav is what stays visible + pinned. Pills: Top (jumps back to
-          header) → conditional Next Steps → conditional Contract /
-          Balance → Photos → Share → Password. Auto-hides on desktop
-          when the user scrolls into the photos section — the gallery's
-          own sticky section-nav (also sticky top:72px) takes over that
-          space so the two don't stack. On mobile, this stays visible
-          even in photos since the gallery doesn't have its own top nav
-          there (the sticky bottom bar's Jump drawer handles gallery-
-          section navigation on mobile). */}
-      <PortalTopNav
-        hasContract={data.contract_status !== 'none' && data.contract_status !== 'void'}
-        hasBalance={data.contract_total_amount !== null}
-        hasNextStep={hasNextStep}
-        isPhotosInView={isPhotosInView}
+      {/* The portal's own header, in place of the public site navbar.
+          Logo, progress, balance. Once the booking is signed, paid and
+          delivered it carries the section nav instead of the progress,
+          as a segmented control, and the second row below stands down. */}
+      <PortalHeader
+        progress={progress}
+        navItems={navItems}
+        activeNavId={activeNavId}
+        onNavSelect={handleNavSelect}
       />
 
-      {/* ─── Header ───
+      {/* Second sticky row: the portal's section nav, for as long as the
+          header is busy showing progress. Top (jumps back to the welcome
+          block) → conditional Next Steps → conditional Contract / Balance
+          → Password → Photos → Share.
+
+          Hides at every width when the client scrolls into the photos
+          section, where the gallery's own sticky section nav takes over
+          that slot so the two do not stack. It keeps its height while
+          hidden, see the note on the component. */}
+      {!portalComplete && (
+        <PortalTopNav
+          items={navItems}
+          activeId={activeNavId}
+          onSelect={handleNavSelect}
+          isPhotosInView={isPhotosInView}
+        />
+      )}
+
+      {/* ─── Welcome block ───
           id="portal-top-section" is the scroll target for the Top
-          pill in the nav above. scrollMarginTop keeps the header
-          from being clipped by the fixed site Navbar (72px) + the
-          sticky PortalTopNav (~48px).
+          item in the nav above. SECTION_SCROLL_MARGIN keeps the
+          heading from being clipped by the sticky chrome; it is
+          derived from the header and nav heights rather than typed
+          out, so it can never drift from them.
 
           Content: title + welcome + labeled session-info rows
           (Email / Event / Type / Location / Delivery). Every info
@@ -651,7 +749,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           so it matches every other button on the site. */}
       <Box
         id="portal-top-section"
-        sx={{ scrollMarginTop: '140px' }}
+        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
         px={{ base: 4, md: 8 }}
         py={{ base: 8, md: 10 }}
         textAlign="center"
@@ -700,10 +798,13 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           )}
         </VStack>
 
-        {/* Refresh — canonical CTAButton (outline, small). Same look
-            as every other outline button on the site so it doesn't
-            read as a random one-off. */}
-        <Box mt={6}>
+        {/* Refresh and Sign Out, centred as a pair. Both are canonical
+            CTAButtons so they read as part of the site rather than as
+            one-offs. Sign Out uses the outlined danger treatment: a
+            hairline that only fills on hover, which is the quiet end of
+            the scale. Nothing here is destructive, but it does end the
+            visit, so it should not sit in gold next to Refresh. */}
+        <HStack mt={6} spacing={3} justify="center" flexWrap="wrap">
           <CTAButton
             onClick={handleRefresh}
             icon={FaSync}
@@ -714,7 +815,17 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           >
             Refresh Portal
           </CTAButton>
-        </Box>
+          {onLogout && (
+            <CTAButton
+              onClick={() => setSignOutOpen(true)}
+              icon={FaSignOutAlt}
+              variant="danger"
+              size="sm"
+            >
+              Sign Out
+            </CTAButton>
+          )}
+        </HStack>
 
         {/* Update-available notice — surfaces when Refresh detected a
             newer build. Non-blocking; the client keeps their session
@@ -759,7 +870,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           space, so it's a no-op for pending/no-contract flows. */}
       <Box
         id="next-steps-section"
-        sx={{ scrollMarginTop: '140px' }}
+        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
       >
         <NextStepsPanel
           contractStatus={data.contract_status}
@@ -771,9 +882,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           // Once photos land, the "All Set / awaiting delivery" state
           // is no longer relevant — client isn't waiting anymore.
           // Panel returns null in that case (fully-paid + delivered).
-          photosDelivered={
-            data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0)
-          }
+          photosDelivered={photosDelivered}
         />
       </Box>
 
@@ -791,7 +900,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: '140px' }}
+        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
       >
         {data.contract_status === 'pending' && (
           <ContractSignSection
@@ -819,7 +928,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           px={6}
           borderTop="1px solid"
           borderColor="gray.100"
-          sx={{ scrollMarginTop: '140px' }}
+          sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
         >
           <VStack spacing={4} maxW="540px" mx="auto" textAlign="center">
             <Text
@@ -1078,7 +1187,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         bg="gray.50"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: '140px' }}
+        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
       >
         <ChangePasswordSection
           credentials={credentials}
@@ -1119,12 +1228,10 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         bg="white"
         borderTop="1px solid"
         borderColor="gray.100"
-        sx={{ scrollMarginTop: '140px' }}
+        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
       >
         {(() => {
-          const hasFiles =
-            data.rootFiles.length > 0 || data.sections.some((s) => s.files.length > 0);
-          const ready = data.drive_url && (hasFiles || data.warning);
+          const ready = data.drive_url && (photosDelivered || data.warning);
           if (ready) {
             return (
               <ClientGallery
@@ -1191,7 +1298,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         py={{ base: 12, md: 14 }}
         px={6}
         mt={6}
-        sx={{ scrollMarginTop: '140px' }}
+        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
       >
         <VStack maxW="520px" mx="auto" spacing={6}>
           {/* Section header */}
@@ -1480,6 +1587,23 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         </VStack>
       </Box>
 
+      {/* Sign out asks first. Nothing is lost by signing out, but a
+          client who taps it by accident has to find their password
+          again, and on a phone that is a real errand. Reuses the shared
+          ConfirmDialog rather than window.confirm or a new modal. */}
+      <ConfirmDialog
+        isOpen={signOutOpen}
+        title="Sign out?"
+        body="You will need your email and password to get back in."
+        confirmLabel="Sign Out"
+        cancelLabel="Stay Signed In"
+        danger
+        onConfirm={() => {
+          setSignOutOpen(false);
+          onLogout?.();
+        }}
+        onCancel={() => setSignOutOpen(false)}
+      />
     </Box>
   );
 };
@@ -2623,129 +2747,58 @@ function ChangePasswordSection({
 }
 
 /**
- * Portal-level top sticky nav. Horizontal pill bar under the fixed
- * Navbar (72px). Jumps between the major portal sections (Contract /
- * Balance / Photos / Share / Password), highlighting whichever is
- * currently at the top of the viewport via IntersectionObserver.
+ * Which section is the client currently reading?
  *
- * Coordination with the gallery's own section-nav (which is desktop-
- * only, position: sticky top:72px): when the user scrolls into the
- * Photos section, this portal-nav hides on desktop so the two nav
- * strips don't stack. Mobile keeps this visible even in Photos
- * because the gallery has no top nav there — its Jump drawer handles
- * gallery-section navigation instead.
+ * A rAF-throttled scroll scan, not an IntersectionObserver. IO fires on
+ * threshold changes, so between fires the answer goes stale, and when a tiny
+ * section sits fully inside the observation zone alongside a big one poking in
+ * from below, IO's "topmost" pick is the wrong one. That pair of facts was the
+ * "click Photos, Share lights up" and "scroll up, skip Contract" bugs.
+ *
+ * The rule: the current section is the one with the LARGEST top that is still
+ * above ACTIVATION_LINE, which is whichever section the client most recently
+ * scrolled into. ACTIVATION_LINE is derived from the header and nav heights in
+ * portalLayout.ts, the same numbers the Photos handoff measures against, so
+ * the two cannot drift apart at that boundary.
+ *
+ * It lives here, above both navs, rather than inside one of them: the header
+ * and the second sticky row render the same list and only one is mounted at a
+ * time. Two copies of this scan would mean the highlight jumped the moment a
+ * client paid their last installment.
  */
-interface PortalTopNavProps {
-  hasContract: boolean;
-  hasBalance: boolean;
-  // True when there's an outstanding retainer or balance after the
-  // contract's signed. When true, an emphasized "Next Steps" pill
-  // appears between Contract and Balance to draw the eye to the
-  // action the client needs to take. Disappears once fully paid.
-  hasNextStep: boolean;
-  isPhotosInView: boolean;
-}
-
-function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: PortalTopNavProps) {
+function useActiveSection(items: PortalNavItem[]): [string | null, (id: string) => void] {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
+  // The list is rebuilt on every render, so the effect keys off its contents
+  // rather than the array's identity.
+  const idKey = items.map((i) => i.id).join('|');
 
-  // Overflow indicators. When the pill list is wider than the visible
-  // strip (common on mobile with 4-5 pills), users don't intuit that
-  // they can scroll horizontally. Fade masks alone weren't obvious
-  // enough — so we also show subtle tappable chevrons on whichever
-  // side has more content, and hide the one on the side you've
-  // scrolled all the way to.
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const check = () => {
-      setCanScrollLeft(el.scrollLeft > 4);
-      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-    };
-    check();
-    el.addEventListener('scroll', check, { passive: true });
-    window.addEventListener('resize', check);
-    return () => {
-      el.removeEventListener('scroll', check);
-      window.removeEventListener('resize', check);
-    };
-  }, []);
-  const scrollBy = (delta: number) => {
-    scrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
-  };
-
-  // Build the list of sections that actually exist on this portal.
-  // Photos, Share, and Password always exist; Contract, Balance, and
-  // Next Steps are conditional. The `emphasized` flag marks pills
-  // that should stand out visually (always gold-filled) — used for
-  // Next Steps to signal urgency about an unpaid balance/retainer.
-  const pills: { id: string; label: string; emphasized?: boolean; icon?: typeof FaChevronLeft }[] = [];
-  // Top pill first — scrolls back up to the header block
-  // (portal-top-section wrapper). Analogous to the "Info" pill in
-  // ClientGallery's top nav; gives the user a one-tap way back to
-  // the welcome / refresh area after they've scrolled down.
-  pills.push({ id: 'portal-top-section', label: 'Top', icon: FaChevronUp });
-  // Next Steps next — matches the DOM order (we moved the panel to
-  // the top of the section list) and puts the "what do I need to
-  // do?" pill left of the more informational Contract/Balance pills.
-  if (hasNextStep) pills.push({ id: 'next-steps-section', label: 'Next Steps', emphasized: true });
-  if (hasContract) pills.push({ id: 'contract-section', label: 'Contract' });
-  if (hasBalance) pills.push({ id: 'balance-section', label: 'Balance' });
-  pills.push({ id: 'password-section', label: 'Password' });
-  pills.push({ id: 'photos-section', label: 'Photos' });
-  pills.push({ id: 'gallery-share-section', label: 'Share' });
-
-  // Active-section tracking via a rAF-throttled scroll listener.
-  // Every animation frame, we look at ALL sections' positions and
-  // pick the one whose top has most recently scrolled above the
-  // sticky nav bottom (~150px, giving a little tolerance beyond
-  // the actual 130px). That's the section the user is currently
-  // reading.
-  //
-  // Rule: the "current" section is the one with the LARGEST top
-  // value that's still ≤ 150. That's whichever section is closest
-  // to (and above) the sticky nav bottom line — the section the
-  // user has most recently scrolled INTO.
-  //
-  // Why this over IntersectionObserver: IO fires on threshold
-  // changes but between fires the state can be stale. And when a
-  // tiny section is fully in the observation zone alongside a big
-  // section poking in from below, IO's "topmost by boundingClient
-  // Rect" can pick the wrong one — this was the "click Photos,
-  // Share lights up" and "scroll up, skip Contract" bugs.
-  useEffect(() => {
-    const ACTIVATION_LINE = 150;
-    const AT_BOTTOM_THRESHOLD = 80;
+    const ids = idKey ? idKey.split('|') : [];
+    if (ids.length === 0) return;
     let raf: number | null = null;
     const update = () => {
       raf = null;
 
-      // Special case: when scrolled to the very bottom of the page,
-      // force-highlight the LAST pill. Otherwise short trailing
-      // sections (Password especially) never satisfy "top ≤ 150"
-      // because there isn't enough content below them for the browser
-      // to push their top up to the activation line.
+      // At the very bottom of the page, force the LAST section. Short trailing
+      // sections never satisfy "top is above the line", because there is not
+      // enough content below them for the browser to push their top that far.
       const scrollBottom = window.scrollY + window.innerHeight;
       const atBottom =
         scrollBottom >= document.documentElement.scrollHeight - AT_BOTTOM_THRESHOLD;
-      if (atBottom && pills.length > 0) {
-        setActiveId(pills[pills.length - 1].id);
+      if (atBottom) {
+        setActiveId(ids[ids.length - 1]);
         return;
       }
 
       let currentId: string | null = null;
       let bestTop = -Infinity;
-      pills.forEach((p) => {
-        const el = document.getElementById(p.id);
+      ids.forEach((id) => {
+        const el = document.getElementById(id);
         if (!el) return;
         const top = el.getBoundingClientRect().top;
         if (top <= ACTIVATION_LINE && top > bestTop) {
           bestTop = top;
-          currentId = p.id;
+          currentId = id;
         }
       });
       setActiveId(currentId);
@@ -2762,230 +2815,148 @@ function PortalTopNav({ hasContract, hasBalance, hasNextStep, isPhotosInView }: 
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [pills.length]);
+  }, [idKey]);
 
-  // Keep the active pill visually in view within the horizontal strip.
+  return [activeId, setActiveId];
+}
+
+/**
+ * The portal's second sticky row: its section nav.
+ *
+ * Sits directly under PortalHeader, so its `top` is the header's height and
+ * its own height is PORTAL_NAV_H. Both come from portalLayout.ts, because the
+ * Photos handoff below measures a section against the sum of the two. Typing
+ * either one out here would show up as the nav flickering on and off at the
+ * Photos boundary rather than as anything obviously broken.
+ *
+ * It renders only while the header is busy showing progress. Once the booking
+ * is signed, paid and delivered the same list moves INTO the header as a
+ * segmented control and this row does not mount at all.
+ *
+ * Coordination with the gallery's own section nav: when the client scrolls
+ * into the Photos section this row hides, so the two strips do not stack. That
+ * hand off now happens at EVERY width. It used to be desktop only, because the
+ * gallery's strip was desktop only and a phone fell back to a bottom sheet
+ * drawer; the drawer is gone and the strip renders on phones too, so leaving
+ * this row up on mobile would pin two translucent nav bars at the same
+ * top offset, on top of each other. Safe because the full portal always passes
+ * onToggleFavorite, so the gallery's strip always has at least Info and
+ * Favorites to show and a phone is never left with no navigation in Photos.
+ *
+ * CENTRED at every width now, including a phone, where it used to start hard
+ * against the left edge. Centring is only safe inside a horizontal scroller
+ * because the row is minW="max-content": see the note in ScrollStrip.
+ */
+interface PortalTopNavProps {
+  items: PortalNavItem[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  isPhotosInView: boolean;
+}
+
+function PortalTopNav({ items, activeId, onSelect, isPhotosInView }: PortalTopNavProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
+
+  // Keep the active pill inside the visible part of the strip.
   //
-  // Scrolls the strip container directly instead of using pill.
-  // scrollIntoView() — the latter treats `block: 'nearest'` as
-  // "scroll the page to bring the element into view" when the whole
-  // sticky nav container is off-screen (which happens on tall pages
-  // when the user is far past the section it points at). That was
-  // causing the mysterious "click Bottom → page scrolls to true
-  // bottom, then springs back up" behavior. Direct container scroll
-  // touches only the strip's own scrollLeft and can never move the
-  // main window scroll.
+  // Scrolls the container directly rather than calling pill.scrollIntoView():
+  // the latter reads block:'nearest' as "scroll the PAGE until this is
+  // reachable" whenever the whole sticky row is off screen, which is what
+  // produced the "tap an item, the page springs to the bottom and back" bounce
+  // on long portals.
   useEffect(() => {
     if (!activeId) return;
     const pill = pillRefs.current[activeId];
     const container = scrollRef.current;
     if (!pill || !container) return;
-    const targetLeft =
-      pill.offsetLeft - container.clientWidth / 2 + pill.offsetWidth / 2;
-    container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    container.scrollTo({
+      left: pill.offsetLeft - container.clientWidth / 2 + pill.offsetWidth / 2,
+      behavior: scrollBehavior(),
+    });
   }, [activeId]);
 
-  const handleClick = (id: string) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    // Optimistic highlight so the clicked pill flips gold immediately.
-    // The IntersectionObserver reads scroll position and can lag a beat
-    // behind smooth-scroll, which was showing up as "click Balance,
-    // Contract stays highlighted for a moment" during testing. The
-    // observer will still correct the state as the scroll settles, so
-    // this is a purely visual head-start.
-    setActiveId(id);
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  // Fewer than 2 pills = no navigation needed (can't "jump between"
-  // one section). Skip render entirely rather than showing a strip
-  // with a single dead pill.
-  if (pills.length < 2) return null;
+  // Fewer than two items is not navigation, it is a label.
+  if (items.length < 2) return null;
 
   return (
     <Box
-      // Hide on desktop when user is inside the photos section — the
-      // gallery's own section-nav (position: sticky top:72px, desktop-
-      // only) takes over that same visual slot. Mobile keeps this
-      // visible even in Photos since there's no gallery top nav there.
-      display={{ base: 'block', md: isPhotosInView ? 'none' : 'block' }}
+      // Hidden, NOT unmounted, and not display:none either. This row is
+      // sticky, so it still takes its PORTAL_NAV_H out of the normal flow
+      // above the Photos section. Taking that height away on the way in and
+      // handing it back on the way out moves every following section by
+      // PORTAL_NAV_H, which moves the very rectangle the handoff measures, and
+      // the two chase each other for the width of the boundary. That is the
+      // flicker. Keeping the height reserved makes the handoff a clean swap:
+      // the gallery's own row pins to the same offset and takes the band over.
+      visibility={isPhotosInView ? 'hidden' : 'visible'}
+      pointerEvents={isPhotosInView ? 'none' : 'auto'}
       position="sticky"
-      top="72px"
+      top={HEADER_CLEARANCE}
       zIndex={10}
+      h={`${PORTAL_NAV_H}px`}
       bg="rgba(255, 255, 255, 0.94)"
       backdropFilter="blur(10px)"
-      py={3}
     >
-      <Box position="relative">
-        {/* Overflow indicators — subtle tappable chevrons on each
-            side, visible only when there's content to scroll to that
-            side. Combined with the wider (44px) fade masks below,
-            makes the scrollability obvious on narrow phones where
-            the fade alone was too subtle to read as a "there's more"
-            cue. */}
-        <ScrollChevron
-          direction="left"
-          visible={canScrollLeft}
-          onClick={() => scrollBy(-200)}
-        />
-        <ScrollChevron
-          direction="right"
-          visible={canScrollRight}
-          onClick={() => scrollBy(200)}
-        />
-        <Box
-          ref={scrollRef}
-          overflowX="auto"
-          sx={{
-            maskImage:
-              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
-            WebkitMaskImage:
-              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
-            '&::-webkit-scrollbar': { display: 'none' },
-            scrollbarWidth: 'none',
-          }}
-        >
-          <Flex
-            gap={2}
-            px={{ base: 8, md: 12 }}
-            justify={{ base: 'flex-start', md: 'center' }}
-            minW="max-content"
-            align="center"
-          >
-          {pills.map((p) => {
-            const active = activeId === p.id;
-            // Emphasized pills (Next Steps) get an outlined-with-red-
-            // border treatment + a small pulsing red dot before the
-            // label. This signals urgency without pretending to be
-            // "selected" (which is what always-solid-gold did — made
-            // the portal look broken to users who saw the pill lit
-            // even before they'd scrolled anywhere).
-            //
-            // When emphasized AND active: fills solid gold like all
-            // other active pills. So "active" is one consistent look
-            // regardless of pill type — users can trust that if any
-            // pill is filled gold, it's the current section.
-            const emphasized = p.emphasized && !active;
-            return (
-              <Box
-                key={p.id}
-                ref={(el: HTMLDivElement | null) => {
-                  pillRefs.current[p.id] = el;
-                }}
-                as="button"
-                type="button"
-                onClick={() => handleClick(p.id)}
-                flexShrink={0}
-                display="inline-flex"
-                alignItems="center"
-                gap={2}
-                px={{ base: 4, md: 5 }}
-                py={2}
-                fontSize="2xs"
-                fontWeight={emphasized ? '600' : '500'}
-                letterSpacing="0.2em"
-                textTransform="uppercase"
-                color={active ? 'white' : emphasized ? 'red.500' : 'gray.700'}
-                bg={active ? 'brand.accent' : 'transparent'}
-                border="1px solid"
-                borderColor={
-                  active
-                    ? 'brand.accent'
-                    : emphasized
-                    ? 'red.400'
-                    : 'gray.200'
-                }
-                borderRadius="full"
-                transition="all 0.25s ease"
-                cursor="pointer"
-                _hover={
-                  active
-                    ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
-                    : emphasized
-                    ? {
-                        borderColor: 'red.500',
-                        bg: 'rgba(229, 62, 62, 0.06)',
-                      }
-                    : {
-                        borderColor: 'brand.accent',
-                        color: 'brand.accent',
-                        bg: 'rgba(201, 169, 110, 0.06)',
-                      }
-                }
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                {emphasized && (
-                  <Box
-                    as="span"
-                    w="6px"
-                    h="6px"
-                    borderRadius="full"
-                    bg="red.500"
-                    // Subtle pulse to draw the eye without being obnoxious.
-                    // Uses keyframes defined at the top of ClientPortalView.
-                    sx={{ animation: 'pulseUrgent 1.8s ease-in-out infinite' }}
-                  />
-                )}
-                {p.icon && <Icon as={p.icon} boxSize={2.5} />}
-                {p.label}
-              </Box>
-            );
-          })}
-          </Flex>
+      <Flex h="100%" align="center">
+        <Box flex="1" minW={0}>
+          <ScrollStrip scrollRef={scrollRef}>
+            {items.map((item) => {
+              const active = activeId === item.id;
+              return (
+                <Box
+                  key={item.id}
+                  ref={(el: HTMLDivElement | null) => {
+                    pillRefs.current[item.id] = el;
+                  }}
+                  as="button"
+                  type="button"
+                  onClick={() => onSelect(item.id)}
+                  aria-current={active ? 'true' : undefined}
+                  flexShrink={0}
+                  display="inline-flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={2}
+                  px={{ base: 4, md: 5 }}
+                  // 44px on a phone is the minimum a thumb gets. It very
+                  // nearly fills PORTAL_NAV_H, which is the point: the row is
+                  // as short as it can be while still being tappable.
+                  h={{ base: '44px', md: '32px' }}
+                  fontSize="2xs"
+                  fontWeight="500"
+                  letterSpacing="0.2em"
+                  textTransform="uppercase"
+                  whiteSpace="nowrap"
+                  color={active ? 'white' : 'gray.700'}
+                  bg={active ? 'brand.accent' : 'transparent'}
+                  border="1px solid"
+                  borderColor={active ? 'brand.accent' : 'gray.200'}
+                  borderRadius="full"
+                  transition="all 0.25s ease"
+                  cursor="pointer"
+                  _hover={
+                    active
+                      ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
+                      : {
+                          borderColor: 'brand.accent',
+                          color: 'brand.accentText',
+                          bg: 'rgba(201, 169, 110, 0.06)',
+                        }
+                  }
+                  sx={{
+                    WebkitTapHighlightColor: 'transparent',
+                    '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+                  }}
+                >
+                  {item.icon && <Icon as={item.icon} boxSize={2.5} />}
+                  {item.label}
+                </Box>
+              );
+            })}
+          </ScrollStrip>
         </Box>
-      </Box>
-    </Box>
-  );
-}
-
-// Overflow scroll indicator for horizontal nav strips. Positioned
-// absolutely over the strip's left/right edges; shown only when
-// there's content in that direction. Tap-to-scroll for accessibility
-// (200px per tap covers roughly one pill on any screen size).
-function ScrollChevron({
-  direction,
-  visible,
-  onClick,
-}: {
-  direction: 'left' | 'right';
-  visible: boolean;
-  onClick: () => void;
-}) {
-  if (!visible) return null;
-  return (
-    <Box
-      as="button"
-      type="button"
-      onClick={onClick}
-      aria-label={direction === 'left' ? 'Scroll left' : 'Scroll right'}
-      position="absolute"
-      top="50%"
-      transform="translateY(-50%)"
-      {...(direction === 'left' ? { left: 1 } : { right: 1 })}
-      zIndex={2}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      w="28px"
-      h="28px"
-      borderRadius="full"
-      bg="rgba(255, 255, 255, 0.9)"
-      backdropFilter="blur(6px)"
-      color="brand.accent"
-      border="1px solid"
-      borderColor="rgba(201, 169, 110, 0.35)"
-      boxShadow="0 2px 6px rgba(0, 0, 0, 0.08)"
-      cursor="pointer"
-      transition="all 0.2s"
-      _hover={{
-        bg: 'brand.accent',
-        color: 'white',
-        borderColor: 'brand.accent',
-      }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      <Icon as={direction === 'left' ? FaChevronLeft : FaChevronRight} boxSize={2.5} />
+      </Flex>
     </Box>
   );
 }

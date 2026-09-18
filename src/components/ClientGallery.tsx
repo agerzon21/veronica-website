@@ -7,18 +7,9 @@ import {
   Icon,
   Input,
   SimpleGrid,
-  Drawer,
-  DrawerOverlay,
-  DrawerContent,
-  DrawerHeader,
-  DrawerBody,
-  DrawerCloseButton,
-  useDisclosure,
 } from '@chakra-ui/react';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, Fragment } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
-import FaChevronLeft from '../icons/fa/FaChevronLeft';
-import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaClock from '../icons/fa/FaClock';
 import FaCopy from '../icons/fa/FaCopy';
@@ -30,7 +21,6 @@ import FaGoogle from '../icons/fa/FaGoogle';
 import FaHeart from '../icons/fa/FaHeart';
 import FaImage from '../icons/fa/FaImage';
 import FaInfoCircle from '../icons/fa/FaInfoCircle';
-import FaListUl from '../icons/fa/FaListUl';
 import FaMobileAlt from '../icons/fa/FaMobileAlt';
 import FaPlay from '../icons/fa/FaPlay';
 import FaRegHeart from '../icons/fa/FaRegHeart';
@@ -38,6 +28,19 @@ import FaShareAlt from '../icons/fa/FaShareAlt';
 import FaStar from '../icons/fa/FaStar';
 import CTAButton from './ui/CTAButton';
 import ImageModal from './ImageModal';
+// The portal header owns the scroll-strip treatment (centred while the items
+// fit, edge fades and tappable chevrons once they do not). The gallery's own
+// strip uses the same one rather than a second copy of it, so a phone reads
+// both navs identically.
+import { ScrollStrip } from './PortalHeader';
+import {
+  ACTIVATION_LINE,
+  AT_BOTTOM_THRESHOLD,
+  AT_TOP_THRESHOLD,
+  HEADER_CLEARANCE,
+  PORTAL_NAV_H,
+  SECTION_SCROLL_MARGIN,
+} from './portalLayout';
 
 // Same URL used by the homepage GoogleReviewsSection — single source of
 // truth would be nicer, but keeping the duplication local rather than
@@ -99,6 +102,13 @@ interface ClientGalleryProps {
   // update.
   favorites?: string[];
   onToggleFavorite?: (photoId: string, currentlyFavorite: boolean) => void;
+  // Set by the gallery-only route (/portal/pass), where there is no
+  // contract and so no progress indicator: the portal header carries
+  // the section nav itself and this component must not render its own
+  // sticky strip as well. The parent drives that header with
+  // useGalleryNav (exported below), which is the same hook this file
+  // uses, so the two can never drift apart.
+  sectionNavInHeader?: boolean;
 }
 
 interface GridTileProps {
@@ -382,6 +392,7 @@ const ClientGallery = ({
   expiresAt,
   favorites,
   onToggleFavorite,
+  sectionNavInHeader = false,
 }: ClientGalleryProps) => {
   const favoritesEnabled = Boolean(onToggleFavorite);
   const favoritesSet = new Set(favorites ?? []);
@@ -426,10 +437,25 @@ const ClientGallery = ({
   // Refs per thumbnail (indexed against the flat allFiles array) so
   // ImageModal can animate open from the clicked thumbnail's rect.
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  // Refs per section header so the sticky section-nav can scroll to them.
-  // Keyed by section.id since sections can be reordered without remounting.
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+
+  // The strip is worth showing once there is more than one section, or
+  // once favorites give Info and Favorites something to bookend.
+  const showSectionNav = !sectionNavInHeader && (sections.length > 1 || favoritesEnabled);
+
+  // Section nav data: the item list, which one is current, and the
+  // scroll handlers. Lives in a hook rather than inside the strip so
+  // the portal header can render the very same items as a segmented
+  // control on a finished portal, off one implementation.
+  const sectionNav = useGalleryNav({
+    sections,
+    favoritesEnabled,
+    sectionsWithFavorites,
+    filterActive,
+    // Nothing reads the active id when no strip is on screen, so skip
+    // this copy's scroll listeners entirely.
+    enabled: showSectionNav,
+  });
 
   // Watch whether ANY part of the gallery is in the viewport. Used to
   // gate the sticky bottom action bar (Download All + Share): it only
@@ -448,13 +474,6 @@ const ClientGallery = ({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
-
-  const scrollToSection = useCallback((id: string) => {
-    const el = sectionRefs.current[id];
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
   }, []);
 
   const handleOpen = (i: number) => {
@@ -493,37 +512,16 @@ const ClientGallery = ({
     // in a Box with the necessary Navbar clearance so both routes
     // reach here without double-padding.
     <Box ref={galleryRootRef} minH="100vh">
-      {/* Top nav MOVED ABOVE the header so it mirrors the portal-level
-          nav (which also sits above the portal header). Desktop-only
-          (mobile navigates via the sticky bottom bar's Jump drawer).
-          Renders whenever we have >1 section OR the favorites feature
-          is on (Info + Favorites are useful even without multiple
-          sections). */}
-      {(sections.length > 1 || favoritesEnabled) && (
+      {/* Top nav sits ABOVE the header so it mirrors the portal-level
+          nav (which also sits above the portal header). Rendered at
+          every width now: phones get the same pill strip, scrolled
+          sideways, instead of the old bottom-sheet drawer. Skipped
+          when the portal header carries these items itself. */}
+      {showSectionNav && (
         <TopSectionNav
-          sections={sections}
-          sectionRefs={sectionRefs}
-          onSectionClick={scrollToSection}
-          sectionsWithFavorites={sectionsWithFavorites}
-          filterActive={filterActive}
-          scrollToInfo={() => {
-            const el = document.getElementById('gallery-info-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            else window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          scrollToFavorites={
-            favoritesEnabled
-              ? () => {
-                  const el = document.getElementById('gallery-favorites-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  else
-                    window.scrollTo({
-                      top: document.body.scrollHeight,
-                      behavior: 'smooth',
-                    });
-                }
-              : null
-          }
+          items={sectionNav.items}
+          activeId={sectionNav.activeId}
+          setActiveId={sectionNav.setActiveId}
         />
       )}
 
@@ -532,12 +530,12 @@ const ClientGallery = ({
           count (with favorite total in parens), expiration ribbon,
           save-tips card. Padding matches other portal sections
           (was thicker before; Alex correctly flagged it as visually
-          heavier than its neighbors). scrollMarginTop accounts for
-          the fixed site Navbar (72px) + sticky TopSectionNav
-          (~52px on desktop). */}
+          heavier than its neighbors). scrollMarginTop clears the fixed
+          portal header plus the sticky section strip, at both widths
+          now that phones get the strip too. */}
       <Box
         id="gallery-info-section"
-        sx={{ scrollMarginTop: { base: '90px', md: '140px' } }}
+        sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
         px={{ base: 4, md: 8 }}
         pt={{ base: 6, md: 8 }}
         pb={{ base: 6, md: 8 }}
@@ -693,8 +691,17 @@ const ClientGallery = ({
             mb={5}
           >
             Loved your photos? A few kind words on Google mean the world.
-            <Text as="span" fontStyle="normal" color="gray.600" fontWeight="400">
-              {' — Veronika'}
+            {/* Signature on its own line, so it does not need a dash to
+                separate it from the sentence above. */}
+            <Text
+              as="span"
+              display="block"
+              mt={2}
+              fontStyle="normal"
+              color="gray.600"
+              fontWeight="400"
+            >
+              Veronika
             </Text>
           </Text>
           <CTAButton
@@ -760,21 +767,18 @@ const ClientGallery = ({
             return (
               <Box
                 key={section.id}
-                ref={(el: HTMLDivElement | null) => {
-                  sectionRefs.current[section.id] = el;
-                }}
-                // Consistent breathing room above every section header —
-                // even the first one — now that the sticky top nav bar
+                // The nav finds sections by DOM id rather than by a ref
+                // held in this component, so the portal header can drive
+                // the same navigation from outside the gallery.
+                id={gallerySectionDomId(section.id)}
+                // Consistent breathing room above every section header,
+                // even the first one, now that the sticky top nav bar
                 // is gone. (Previously the first section had mt=0 so it
                 // could sit tight against that nav bar's bottom edge.)
                 mt={{ base: 8, md: 12 }}
                 // scroll-margin-top so smooth-scroll lands the section
-                // header below the fixed Navbar (72px) + the sticky
-                // TopSectionNav strip (~52px on desktop). 140px = the
-                // sum plus a bit of breathing room. Mobile doesn't
-                // have the top strip so it's slightly excessive there,
-                // which is fine — just lands a touch lower, no bug.
-                sx={{ scrollMarginTop: '140px' }}
+                // header below the fixed header plus the sticky strip.
+                sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
               >
                 {/* Section header — matches the gallery's main header
                     treatment but scaled down: small gold uppercase label,
@@ -864,7 +868,7 @@ const ClientGallery = ({
       ) : (
         <Box textAlign="center" py={20} px={6}>
           <Text color="gray.500" fontWeight="300" mb={4}>
-            Photo previews aren't loading — but your gallery is ready.
+            Photo previews aren't loading, but your gallery is ready.
           </Text>
           <CTAButton href={driveUrl} icon={FaExternalLinkAlt}>
             View in Google Drive
@@ -937,11 +941,11 @@ const ClientGallery = ({
       {galleryPassword && (
         <Box
           id="gallery-share-section"
-          // Scroll offset accounts for the fixed Navbar (72px) plus,
-          // on desktop, the sticky section nav (~52px). Without this,
-          // smooth-scroll from the sticky Share button lands the
-          // section under those bars and clips its header + intro.
-          sx={{ scrollMarginTop: { base: '90px', md: '140px' } }}
+          // Scroll offset clears the fixed portal header plus the
+          // sticky section nav. Without this, smooth-scroll from the
+          // sticky Share button lands the section under those bars and
+          // clips its header and intro.
+          sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
         >
           <GalleryShareSection galleryPassword={galleryPassword} />
         </Box>
@@ -950,30 +954,13 @@ const ClientGallery = ({
       {/* Sticky bottom action bar. Auto-hides while the photo modal is
           open (selectedIndex non-null) so it doesn't float over the
           modal's controls. Also hides when the gallery is scrolled out
-          of view — matters in the full portal, where without this the
+          of view: matters in the full portal, where without this the
           bar would linger over the contract / balance / password
-          sections and look out of context. Desktop no longer has a
-          right-side rail timeline — the top sticky section nav (above)
-          is the desktop navigation. Mobile still gets the "Jump"
-          drawer via this bar. */}
+          sections and look out of context. Navigation is not its job
+          at any width, the sticky section strip above handles that on
+          phones as well as desktop. */}
       {selectedIndex === null && totalCount > 0 && isGalleryVisible && (
-        <GalleryActionBar
-          driveUrl={driveUrl}
-          sections={sections}
-          hasSections={sections.length > 0}
-          scrollToSection={scrollToSection}
-          favoritesEnabled={favoritesEnabled}
-          scrollToInfo={() => {
-            const el = document.getElementById('gallery-info-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            else window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          scrollToFavorites={() => {
-            const el = document.getElementById('gallery-favorites-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            else window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-          }}
-        />
+        <GalleryActionBar driveUrl={driveUrl} />
       )}
     </Box>
   );
@@ -981,154 +968,51 @@ const ClientGallery = ({
 
 /**
  * Sticky bottom action bar. Always visible while the user is browsing the
- * gallery grid (auto-hides when the photo modal opens — see caller).
+ * gallery grid (auto-hides when the photo modal opens, see caller).
  * Contains the two things clients most often reach for:
- *   1. Download All → opens the Drive folder for the full-quality set
- *   2. Share → smooth-scrolls to the share section (present on both
+ *   1. Download All, opens the Drive folder for the full-quality set
+ *   2. Share, smooth-scrolls to the share section (present on both
  *      /portal/pass and inside ClientPortalView via #gallery-share-section)
- * On mobile, a third "Jump to" button appears when there are sections,
- * opening a bottom-sheet drawer of the section list — the mobile
- * equivalent of the desktop right-rail timeline (which is too narrow
- * to work well on phone screens).
+ * Both are unconditional, which is the whole point of the bar. Section
+ * navigation is not here at any width: the sticky pill strip at the top
+ * now renders on phones too, so there is one way to move around the
+ * gallery rather than two that have to agree with each other.
  */
 interface GalleryActionBarProps {
   driveUrl: string;
-  sections: FolderSection[];
-  hasSections: boolean;
-  scrollToSection: (id: string) => void;
-  favoritesEnabled: boolean;
-  scrollToInfo: () => void;
-  scrollToFavorites: () => void;
 }
 
-function GalleryActionBar({
-  driveUrl,
-  sections,
-  hasSections,
-  scrollToSection,
-  favoritesEnabled,
-  scrollToInfo,
-  scrollToFavorites,
-}: GalleryActionBarProps) {
-  const jumpDrawer = useDisclosure();
-
+function GalleryActionBar({ driveUrl }: GalleryActionBarProps) {
   const handleShareClick = useCallback(() => {
     // The share target has id="gallery-share-section" on both routes:
-    // /portal/pass → GalleryShareSection below; full-portal →
-    // ClientPortalView Gallery Pass section. Fall back to scrolling to
-    // the very bottom of the page if neither is present (defensive).
-    const el = document.getElementById('gallery-share-section');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    }
+    // /portal/pass renders GalleryShareSection below, the full portal
+    // renders ClientPortalView's Gallery Pass section. Fall back to
+    // scrolling to the very bottom if neither is present (defensive).
+    scrollToElementId('gallery-share-section', 'bottom');
   }, []);
 
-  const jumpAndClose = useCallback(
-    (fn: () => void) => {
-      fn();
-      jumpDrawer.onClose();
-    },
-    [jumpDrawer],
-  );
-
   return (
-    <>
-      <Box
-        position="fixed"
-        bottom={{ base: 3, md: 5 }}
-        left="50%"
-        transform="translateX(-50%)"
-        zIndex={40}
-        bg="rgba(255, 255, 255, 0.92)"
-        backdropFilter="blur(10px)"
-        border="1px solid"
-        borderColor="rgba(201, 169, 110, 0.35)"
-        borderRadius="full"
-        boxShadow="0 10px 30px rgba(0, 0, 0, 0.12)"
-        px={{ base: 2, md: 3 }}
-        py={{ base: 1.5, md: 2 }}
-      >
-        <Flex gap={{ base: 1, md: 2 }} align="center">
-          <ActionBarButton
-            href={driveUrl}
-            newTab
-            icon={FaDownload}
-            label="Download All"
-          />
-          <ActionBarDivider />
-          <ActionBarButton
-            onClick={handleShareClick}
-            icon={FaShareAlt}
-            label="Share"
-          />
-          {hasSections && (
-            <>
-              <ActionBarDivider display={{ base: 'block', md: 'none' }} />
-              <ActionBarButton
-                onClick={jumpDrawer.onOpen}
-                icon={FaListUl}
-                label="Jump"
-                display={{ base: 'inline-flex', md: 'none' }}
-              />
-            </>
-          )}
-        </Flex>
-      </Box>
-
-      {/* Mobile-only jump drawer. Section list + Top/Bottom.
-          Desktop uses the right-rail timeline instead. */}
-      <Drawer
-        isOpen={jumpDrawer.isOpen}
-        onClose={jumpDrawer.onClose}
-        placement="bottom"
-        size="sm"
-      >
-        <DrawerOverlay bg="blackAlpha.500" />
-        <DrawerContent
-          borderTopRadius="xl"
-          maxH="70vh"
-          bg="white"
-        >
-          <DrawerCloseButton mt={1} />
-          <DrawerHeader
-            fontSize="sm"
-            fontWeight="500"
-            letterSpacing="0.15em"
-            textTransform="uppercase"
-            color="brand.accentText"
-            borderBottom="1px solid"
-            borderColor="gray.100"
-          >
-            Jump to
-          </DrawerHeader>
-          <DrawerBody py={2} px={0}>
-            <VStack align="stretch" spacing={0}>
-              <DrawerRow
-                label="Info"
-                icon={FaInfoCircle}
-                onClick={() => jumpAndClose(scrollToInfo)}
-              />
-              {sections.map((s) => (
-                <DrawerRow
-                  key={s.id}
-                  label={s.name}
-                  onClick={() => jumpAndClose(() => scrollToSection(s.id))}
-                />
-              ))}
-              {favoritesEnabled && (
-                <DrawerRow
-                  label="Favorites"
-                  icon={FaHeart}
-                  onClick={() => jumpAndClose(scrollToFavorites)}
-                />
-              )}
-            </VStack>
-          </DrawerBody>
-        </DrawerContent>
-      </Drawer>
-    </>
+    <Box
+      position="fixed"
+      bottom={{ base: 3, md: 5 }}
+      left="50%"
+      transform="translateX(-50%)"
+      zIndex={40}
+      bg="rgba(255, 255, 255, 0.92)"
+      backdropFilter="blur(10px)"
+      border="1px solid"
+      borderColor="rgba(201, 169, 110, 0.35)"
+      borderRadius="full"
+      boxShadow="0 10px 30px rgba(0, 0, 0, 0.12)"
+      px={{ base: 2, md: 3 }}
+      py={{ base: 1.5, md: 2 }}
+    >
+      <Flex gap={{ base: 1, md: 2 }} align="center">
+        <ActionBarButton href={driveUrl} newTab icon={FaDownload} label="Download All" />
+        <ActionBarDivider />
+        <ActionBarButton onClick={handleShareClick} icon={FaShareAlt} label="Share" />
+      </Flex>
+    </Box>
   );
 }
 
@@ -1138,12 +1022,11 @@ interface ActionBarButtonProps {
   onClick?: () => void;
   icon: typeof FaDownload;
   label: string;
-  display?: any;
 }
 
-function ActionBarButton({ href, newTab, onClick, icon, label, display }: ActionBarButtonProps) {
+function ActionBarButton({ href, newTab, onClick, icon, label }: ActionBarButtonProps) {
   const common = {
-    display: display ?? 'inline-flex',
+    display: 'inline-flex',
     alignItems: 'center',
     gap: 2,
     px: { base: 3, md: 4 },
@@ -1187,56 +1070,8 @@ function ActionBarButton({ href, newTab, onClick, icon, label, display }: Action
   );
 }
 
-function ActionBarDivider({ display }: { display?: any }) {
-  return (
-    <Box
-      w="1px"
-      h="18px"
-      bg="rgba(201, 169, 110, 0.35)"
-      display={display ?? 'block'}
-      flexShrink={0}
-    />
-  );
-}
-
-function DrawerRow({
-  label,
-  icon,
-  onClick,
-}: {
-  label: string;
-  icon?: typeof FaChevronUp;
-  onClick: () => void;
-}) {
-  return (
-    <Box
-      as="button"
-      type="button"
-      onClick={onClick}
-      w="100%"
-      textAlign="left"
-      px={6}
-      py={4}
-      fontSize="sm"
-      fontWeight="400"
-      color="gray.800"
-      bg="transparent"
-      border="none"
-      borderBottom="1px solid"
-      borderColor="gray.100"
-      cursor="pointer"
-      display="flex"
-      alignItems="center"
-      gap={3}
-      transition="background 0.15s"
-      _hover={{ bg: 'gray.50' }}
-      _active={{ bg: 'gray.100' }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      {icon && <Icon as={icon} boxSize={3} color="gray.400" />}
-      <Box as="span">{label}</Box>
-    </Box>
-  );
+function ActionBarDivider() {
+  return <Box w="1px" h="18px" bg="rgba(201, 169, 110, 0.35)" flexShrink={0} />;
 }
 
 /**
@@ -1401,7 +1236,7 @@ function FavoritesInfoSection({
   return (
     <Box
       id="gallery-favorites-section"
-      sx={{ scrollMarginTop: { base: '90px', md: '140px' } }}
+      sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
       mt={{ base: 10, md: 14 }}
       pt={{ base: 8, md: 10 }}
       borderTop="1px solid"
@@ -1435,7 +1270,7 @@ function FavoritesInfoSection({
         </Text>
         <Box w="30px" h="1px" bg="brand.accent" mx="auto" mb={2} />
         <Text fontSize="xs" color="gray.500" fontWeight="300" maxW="440px" mx="auto" lineHeight="1.7">
-          A quick way to keep track of the photos you love — for
+          A quick way to keep track of the photos you love, for
           picking prints, sharing with family, or building an album.
         </Text>
       </Box>
@@ -1472,7 +1307,7 @@ function FavoritesInfoSection({
                 </Text>
               </Flex>
               <Text fontSize="xs" color="gray.700" fontWeight="300" lineHeight="1.7">
-                Tap the heart on any photo — in the grid or in the lightbox —
+                Tap the heart on any photo, in the grid or in the lightbox,
                 to mark it as a favorite. Use the toggle here to show only
                 your favorites across every section, then toggle back off to
                 see the whole gallery again.
@@ -1589,7 +1424,7 @@ function FilterActiveBanner({
         <Flex align="center" gap={2.5}>
           <Icon as={FaHeart} boxSize={3.5} color="#ff4c68" flexShrink={0} />
           <Text fontSize={{ base: 'xs', md: 'sm' }} color="gray.700" fontWeight="400">
-            Filtering by favorites —{' '}
+            Filtering by favorites:{' '}
             <Text as="span" fontWeight="600">
               showing {shownCount} of {totalCount} photos
             </Text>
@@ -1606,89 +1441,160 @@ function FilterActiveBanner({
 }
 
 /**
- * Sticky top section-nav bar. Horizontal strip of pill buttons under the
- * fixed Navbar (top: 72px). Each pill scrolls to its section on click,
- * and the currently-visible section auto-highlights via
- * IntersectionObserver. If the pill list overflows the viewport width
- * (long section names or lots of them), we fade the edges as a scroll-
- * ability cue and auto-scroll the active pill into view when the user
- * scrolls the page to it.
- *
- * Chose this over a right-side rail after user testing: the rail ate
- * too much of the photo grid area on desktop. A thin top strip is a
- * much smaller footprint for the same navigation.
+ * Everything the section nav scrolls to is addressed by DOM id, never by
+ * a ref held inside this file. That is what lets the portal header drive
+ * the same navigation from outside the gallery.
  */
-interface TopSectionNavProps {
-  sections: FolderSection[];
-  sectionRefs: React.MutableRefObject<{ [id: string]: HTMLDivElement | null }>;
-  onSectionClick: (id: string) => void;
-  // Section IDs that contain at least one favorited photo. Used to
-  // grey out (and disable) pills whose sections would be empty in
-  // the filtered view.
-  sectionsWithFavorites: Set<string>;
-  // When true, the favorites filter is active — pills for sections
-  // in `sectionsWithFavorites` render normally; all other section
-  // pills render greyed + non-interactive.
-  filterActive: boolean;
-  scrollToInfo: () => void;
-  // Null when favorites feature is disabled (guests on /portal/pass)
-  // — pill is omitted entirely from the nav rather than shown as an
-  // inactive control.
-  scrollToFavorites: (() => void) | null;
+const scrollBehavior = (): ScrollBehavior =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 'auto'
+    : 'smooth';
+
+/**
+ * Scroll to an element by id. `fallback` says where to go when the
+ * element is not on the page, which is what happens to a section while
+ * the favorites filter is hiding it.
+ */
+function scrollToElementId(id: string, fallback?: 'top' | 'bottom') {
+  const behavior = scrollBehavior();
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior, block: 'start' });
+    return;
+  }
+  if (fallback === 'top') {
+    window.scrollTo({ top: 0, behavior });
+  } else if (fallback === 'bottom') {
+    window.scrollTo({ top: document.body.scrollHeight, behavior });
+  }
 }
 
-// Sentinel activeId values for the Info + Favorites bookend pills.
-// Kept as string literals so they share the same activeId state as
-// section IDs and pillRefs keys.
+/** DOM id for a folder section's wrapper in the grid. */
+export const gallerySectionDomId = (sectionId: string) => `gallery-section-${sectionId}`;
+
+// The Info and Favorites bookends. These are real element ids, so the
+// whole nav is addressed one way and activeId can hold any of them.
 const INFO_ID = 'gallery-info-section';
 const FAVORITES_ID = 'gallery-favorites-section';
 
-// Distance from the top/bottom of the page where we consider the user
-// to have "arrived" there. Top threshold has to be larger than the
-// scrollMarginTop for section headers (~92px) + the sticky nav's height,
-// otherwise the very first section immediately steals the highlight
-// the moment the user starts scrolling down from a fresh page load.
-const AT_TOP_THRESHOLD = 200;
-const AT_BOTTOM_THRESHOLD = 80;
+/**
+ * One entry in the gallery's section nav.
+ *
+ * `kind` is how a renderer knows where the dividers belong: Info, then
+ * the folder sections, then Favorites. The label is always written out,
+ * Info and Favorites included. Their icon sits next to the word, it does
+ * not stand in for it.
+ */
+export interface GalleryNavItem {
+  /** The element this scrolls to. Doubles as the React key and the active id. */
+  id: string;
+  label: string;
+  kind: 'info' | 'section' | 'favorites';
+  icon?: typeof FaInfoCircle;
+  /** True when the favorites filter is on and this section holds none. */
+  disabled: boolean;
+  scrollTo: () => void;
+}
 
-function TopSectionNav({
+export interface UseGalleryNavOptions {
+  sections: FolderSection[];
+  /** Full portal only. Guests on /portal/pass get no Favorites item. */
+  favoritesEnabled?: boolean;
+  /** Section ids holding at least one favorite. Only read while filtering. */
+  sectionsWithFavorites?: Set<string>;
+  /** True while the "show only favorites" filter is on. */
+  filterActive?: boolean;
+  /** False skips the scroll listeners, for a copy nothing is rendering. */
+  enabled?: boolean;
+}
+
+export interface GalleryNav {
+  items: GalleryNavItem[];
+  activeId: string | null;
+  setActiveId: (id: string) => void;
+}
+
+/**
+ * The gallery's section nav as data: what the items are, which one the
+ * reader is inside, and how to get to each.
+ *
+ * It lives in a hook rather than inside the strip below because a
+ * finished portal renders these same items as a segmented control up in
+ * the portal header, with no strip at all. Two renderers, one source of
+ * items and one definition of "current", so they cannot drift.
+ *
+ * For the header to own the nav, the parent calls this with the same
+ * sections it hands to ClientGallery and passes sectionNavInHeader so
+ * the gallery does not also draw a strip:
+ *
+ *   const nav = useGalleryNav({ sections });
+ *   <PortalHeader navItems={nav.items} activeNavId={nav.activeId}
+ *     onNavSelect={(id) => { nav.setActiveId(id); }} />
+ *   <ClientGallery sections={sections} sectionNavInHeader ... />
+ *
+ * Each item carries its own scrollTo, so the header's handler is just
+ * `item.scrollTo()`. Nothing about section positions has to be
+ * reimplemented up there.
+ */
+export function useGalleryNav({
   sections,
-  sectionRefs,
-  onSectionClick,
+  favoritesEnabled = false,
   sectionsWithFavorites,
-  filterActive,
-  scrollToInfo,
-  scrollToFavorites,
-}: TopSectionNavProps) {
+  filterActive = false,
+  enabled = true,
+}: UseGalleryNavOptions): GalleryNav {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
 
-  // Overflow indicators — same pattern as PortalTopNav. Tappable
-  // chevrons on each side, visible only when there's content to
-  // scroll to that side. Combined with the fade masks below, makes
-  // horizontal scrollability obvious on galleries with many or
-  // long section names.
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const check = () => {
-      setCanScrollLeft(el.scrollLeft > 4);
-      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-    };
-    check();
-    el.addEventListener('scroll', check, { passive: true });
-    window.addEventListener('resize', check);
-    return () => {
-      el.removeEventListener('scroll', check);
-      window.removeEventListener('resize', check);
-    };
-  }, [sections]);
-  const scrollBy = (delta: number) => {
-    scrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
-  };
+  // Keys rather than the objects themselves: ClientGallery rebuilds the
+  // sections array and the favorites Set on every render, so identity
+  // says nothing. Without this the scroll listeners below would tear
+  // down and resubscribe on every frame of a scroll.
+  const sectionsKey = sections.map((s) => `${s.id}::${s.name}`).join('||');
+  const favoritesKey = sectionsWithFavorites
+    ? [...sectionsWithFavorites].sort().join('||')
+    : '';
+
+  const items = useMemo<GalleryNavItem[]>(() => {
+    const built: GalleryNavItem[] = [
+      {
+        id: INFO_ID,
+        label: 'Info',
+        kind: 'info',
+        icon: FaInfoCircle,
+        disabled: false,
+        scrollTo: () => scrollToElementId(INFO_ID, 'top'),
+      },
+    ];
+    sections.forEach((section) => {
+      const id = gallerySectionDomId(section.id);
+      built.push({
+        id,
+        label: section.name,
+        kind: 'section',
+        // Greyed out (and inert) when the filter is on and this section
+        // has nothing hearted in it. The item stays in the list so the
+        // nav does not reshuffle as the filter toggles.
+        disabled: filterActive && !(sectionsWithFavorites?.has(section.id) ?? false),
+        scrollTo: () => scrollToElementId(id),
+      });
+    });
+    if (favoritesEnabled) {
+      built.push({
+        id: FAVORITES_ID,
+        label: 'Favorites',
+        kind: 'favorites',
+        icon: FaHeart,
+        disabled: false,
+        scrollTo: () => scrollToElementId(FAVORITES_ID, 'bottom'),
+      });
+    }
+    return built;
+    // sectionsKey and favoritesKey stand in for sections and
+    // sectionsWithFavorites, see above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionsKey, favoritesKey, favoritesEnabled, filterActive]);
 
   // Bookkeeping ref that mirrors scroll position, used inside the
   // active-section scan to know whether to defer to Info/Favorites
@@ -1698,11 +1604,12 @@ function TopSectionNav({
 
   // Watch scroll position for the "am I at the top / bottom of the
   // page?" cases. At the very top, Info lights up; at the very
-  // bottom, Favorites lights up (if enabled) — matching where those
+  // bottom, Favorites lights up (if enabled), matching where those
   // targets sit in the DOM. Without these overrides, short trailing
   // sections would never satisfy the section-scan's activation
-  // threshold and the last pill would never light.
+  // threshold and the last item would never light.
   useEffect(() => {
+    if (!enabled) return;
     const updateExtremes = () => {
       const y = window.scrollY;
       const winH = window.innerHeight;
@@ -1712,15 +1619,15 @@ function TopSectionNav({
         setActiveId(INFO_ID);
       } else if (y + winH >= docH - AT_BOTTOM_THRESHOLD) {
         isAtExtremeRef.current = 'bottom';
-        // Favorites is the last pill only when the feature's enabled.
+        // Favorites is the last item only when the feature is enabled.
         // Otherwise let the section-scan pick whatever section is
         // closest to the bottom.
-        if (scrollToFavorites) setActiveId(FAVORITES_ID);
+        if (favoritesEnabled) setActiveId(FAVORITES_ID);
       } else {
         isAtExtremeRef.current = null;
-        // Don't clear activeId here — leave whatever section the
-        // scan picked. Only take over when the user genuinely
-        // reaches an extreme.
+        // Don't clear activeId here, leave whatever section the scan
+        // picked. Only take over when the user genuinely reaches an
+        // extreme.
       }
     };
     updateExtremes();
@@ -1730,43 +1637,31 @@ function TopSectionNav({
       window.removeEventListener('scroll', updateExtremes);
       window.removeEventListener('resize', updateExtremes);
     };
-  }, [scrollToFavorites]);
+  }, [favoritesEnabled, enabled]);
 
   // Active-section tracking via a rAF-throttled scroll listener.
   // Same approach as PortalTopNav: on every scroll frame, pick the
-  // section with the largest top value that's still ≤ 150 (just
-  // below the sticky nav bottom). That's the section the user has
-  // most recently scrolled INTO.
-  //
-  // Includes gallery-info-section and gallery-favorites-section in
-  // the scan (via document.getElementById) — without them, the Info
-  // and Favorites pills only ever lit up via the "at page extreme"
-  // special case, which didn't fire on regular scroll-back-to-top.
+  // item whose element has the largest top value that is still at or
+  // above ACTIVATION_LINE (just below the sticky chrome). That is the
+  // section the reader has most recently scrolled INTO.
   useEffect(() => {
-    const ACTIVATION_LINE = 150;
+    if (!enabled) return;
     let raf: number | null = null;
     const update = () => {
       raf = null;
       if (isAtExtremeRef.current !== null) return;
       let currentId: string | null = null;
       let bestTop = -Infinity;
-
-      // Walk every candidate id: Info + section refs + Favorites.
-      // Info first so we don't drop it, and Favorites separately
-      // because it lives in its own DOM subtree (not sectionRefs).
-      const consider = (id: string, el: HTMLElement | null) => {
+      items.forEach((item) => {
+        // Missing element: a section the favorites filter is hiding.
+        const el = document.getElementById(item.id);
         if (!el) return;
         const top = el.getBoundingClientRect().top;
         if (top <= ACTIVATION_LINE && top > bestTop) {
           bestTop = top;
-          currentId = id;
+          currentId = item.id;
         }
-      };
-
-      consider(INFO_ID, document.getElementById(INFO_ID));
-      Object.entries(sectionRefs.current).forEach(([id, el]) => consider(id, el));
-      consider(FAVORITES_ID, document.getElementById(FAVORITES_ID));
-
+      });
       if (currentId) setActiveId(currentId);
     };
     const onScroll = () => {
@@ -1781,16 +1676,48 @@ function TopSectionNav({
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [sections, sectionRefs]);
+  }, [items, enabled]);
+
+  return { items, activeId, setActiveId };
+}
+
+/**
+ * Sticky section-nav strip. A horizontal row of pills directly under the
+ * fixed portal header. Each pill scrolls to its section, and the section
+ * the reader is inside highlights itself.
+ *
+ * Renders at every width. Phones used to navigate through a bottom-sheet
+ * "Jump" drawer instead, which meant two navigations to keep in step and
+ * a sheet that covered the photos it was navigating.
+ *
+ * The scrolling behaviour is ScrollStrip, the very component the portal's
+ * own second nav row uses: centred while the items fit, and when they do
+ * not, edge fades plus a tappable chevron on whichever side still has
+ * something on it. One implementation, so the gallery strip and the portal
+ * strip cannot read differently on the same phone.
+ *
+ * Chose this over a right-side rail after user testing: the rail ate
+ * too much of the photo grid area on desktop. A thin top strip is a
+ * much smaller footprint for the same navigation.
+ */
+interface TopSectionNavProps {
+  items: GalleryNavItem[];
+  activeId: string | null;
+  setActiveId: (id: string) => void;
+}
+
+function TopSectionNav({ items, activeId, setActiveId }: TopSectionNavProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
 
   // Whenever the active pill changes, scroll it into view within the
-  // horizontal strip so it stays visible even when the section list
+  // horizontal strip so it stays visible even when the item list
   // overflows the viewport. Scrolls the container directly rather
-  // than using pill.scrollIntoView() — the latter would move the
+  // than using pill.scrollIntoView(): the latter would move the
   // page vertically when the sticky nav is out of view (block:
   // 'nearest' has an escape hatch to page-scroll when the element
   // isn't reachable within its scroll containers). That was
-  // producing the "click Bottom → page springs back up" bounce.
+  // producing the "click Bottom, page springs back up" bounce.
   useEffect(() => {
     if (!activeId) return;
     const pill = pillRefs.current[activeId];
@@ -1798,180 +1725,65 @@ function TopSectionNav({
     if (!pill || !container) return;
     const targetLeft =
       pill.offsetLeft - container.clientWidth / 2 + pill.offsetWidth / 2;
-    container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    container.scrollTo({ left: targetLeft, behavior: scrollBehavior() });
   }, [activeId]);
 
   return (
     <Box
-      // Desktop-only. Mobile navigates via the sticky bottom bar's
-      // "Jump" drawer instead — the top strip's horizontal scroll is
-      // less nice on phone screens than a full-height bottom-sheet
-      // list, and we don't need both.
-      display={{ base: 'none', md: 'block' }}
       position="sticky"
-      top="72px"
+      // Sits directly under the fixed portal header, and is exactly
+      // PORTAL_NAV_H tall, so the two together really do end at
+      // STICKY_BOTTOM, which is what every scroll margin here assumes.
+      top={HEADER_CLEARANCE}
+      h={`${PORTAL_NAV_H}px`}
+      display="flex"
+      alignItems="center"
       zIndex={10}
       bg="rgba(255, 255, 255, 0.94)"
       backdropFilter="blur(10px)"
-      py={3}
     >
-      <Box position="relative">
-        {/* Overflow indicators — subtle tappable chevrons that appear
-            on whichever side has more content to scroll to. Combined
-            with the wider (44px) fade masks below, makes the strip
-            readably scrollable on narrow phones + long section-name
-            lists. */}
-        <ScrollChevron
-          direction="left"
-          visible={canScrollLeft}
-          onClick={() => scrollBy(-200)}
-        />
-        <ScrollChevron
-          direction="right"
-          visible={canScrollRight}
-          onClick={() => scrollBy(200)}
-        />
-        <Box
-          ref={scrollRef}
-          overflowX="auto"
-          sx={{
-            maskImage:
-              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
-            WebkitMaskImage:
-              'linear-gradient(90deg, transparent 0, black 44px, black calc(100% - 44px), transparent 100%)',
-            '&::-webkit-scrollbar': { display: 'none' },
-            scrollbarWidth: 'none',
-          }}
-        >
-          <Flex
-            gap={2}
-            // Generous horizontal padding so first/last pills sit within
-            // the "solid" (unfaded) part of the mask and never look cut
-            // off. Also centers the pill list on wide screens when the
-            // content is narrower than the viewport.
-            px={12}
-            justify="center"
-            minW="max-content"
-            align="center"
-        >
-          <NavPill
-            pillRef={(el) => {
-              pillRefs.current[INFO_ID] = el;
-            }}
-            icon={FaInfoCircle}
-            label="Info"
-            active={activeId === INFO_ID}
-            onClick={() => {
-              setActiveId(INFO_ID);
-              scrollToInfo();
-            }}
-          />
-          <NavStripDivider />
-          {sections.map((section) => {
-            // Grey + disable the pill when the favorites filter is
-            // on and this section has zero favorited photos. Users
-            // still see the section name (so the nav layout doesn't
-            // shift when they toggle the filter), just clearly can't
-            // navigate to it.
-            const disabled = filterActive && !sectionsWithFavorites.has(section.id);
-            return (
+      <Box flex="1" minW={0}>
+        {/* Centring, the edge fades and the tappable chevrons all come
+            from ScrollStrip, which is what the portal's own nav row uses.
+            Its horizontal padding matches the fade exactly, so the first
+            and last pills never sit underneath the gradient on a narrow
+            phone. */}
+        <ScrollStrip scrollRef={scrollRef}>
+          {items.map((item, i) => (
+            <Fragment key={item.id}>
+              {/* Divider wherever the kind changes, so Info and
+                  Favorites read as page-level next to the
+                  section-level items between them. */}
+              {i > 0 && items[i - 1].kind !== item.kind && <NavStripDivider />}
               <NavPill
-                key={section.id}
                 pillRef={(el) => {
-                  pillRefs.current[section.id] = el;
+                  pillRefs.current[item.id] = el;
                 }}
-                label={section.name}
-                active={activeId === section.id}
-                disabled={disabled}
+                icon={item.icon}
+                label={item.label}
+                active={activeId === item.id}
+                disabled={item.disabled}
                 onClick={() => {
-                  if (disabled) return;
                   // Optimistic highlight: flip active immediately so
                   // the pill lights up on tap even before smooth-
-                  // scroll + scroll-scan settle. The scan will correct
-                  // any drift as the scroll lands.
-                  setActiveId(section.id);
-                  onSectionClick(section.id);
+                  // scroll and the scroll-scan settle. The scan will
+                  // correct any drift as the scroll lands.
+                  setActiveId(item.id);
+                  item.scrollTo();
                 }}
               />
-            );
-          })}
-          {scrollToFavorites && (
-            <>
-              <NavStripDivider />
-              <NavPill
-                pillRef={(el) => {
-                  pillRefs.current[FAVORITES_ID] = el;
-                }}
-                icon={FaHeart}
-                label="Favorites"
-                active={activeId === FAVORITES_ID}
-                onClick={() => {
-                  setActiveId(FAVORITES_ID);
-                  scrollToFavorites();
-                }}
-              />
-            </>
-          )}
-          </Flex>
-        </Box>
+            </Fragment>
+          ))}
+        </ScrollStrip>
       </Box>
     </Box>
   );
 }
 
-// Overflow scroll indicator. Shown on horizontal scroll strips
-// (TopSectionNav, PortalTopNav in ClientPortalView) only when the
-// content overflows in the given direction. Tap-to-scroll for
-// accessibility (200px per tap ≈ one pill on any screen).
-function ScrollChevron({
-  direction,
-  visible,
-  onClick,
-}: {
-  direction: 'left' | 'right';
-  visible: boolean;
-  onClick: () => void;
-}) {
-  if (!visible) return null;
-  return (
-    <Box
-      as="button"
-      type="button"
-      onClick={onClick}
-      aria-label={direction === 'left' ? 'Scroll left' : 'Scroll right'}
-      position="absolute"
-      top="50%"
-      transform="translateY(-50%)"
-      {...(direction === 'left' ? { left: 1 } : { right: 1 })}
-      zIndex={2}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      w="28px"
-      h="28px"
-      borderRadius="full"
-      bg="rgba(255, 255, 255, 0.9)"
-      backdropFilter="blur(6px)"
-      color="brand.accent"
-      border="1px solid"
-      borderColor="rgba(201, 169, 110, 0.35)"
-      boxShadow="0 2px 6px rgba(0, 0, 0, 0.08)"
-      cursor="pointer"
-      transition="all 0.2s"
-      _hover={{
-        bg: 'brand.accent',
-        color: 'white',
-        borderColor: 'brand.accent',
-      }}
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      <Icon as={direction === 'left' ? FaChevronLeft : FaChevronRight} boxSize={2.5} />
-    </Box>
-  );
-}
-
 // A single pill in the top nav strip. Handles active-vs-inactive
-// styling and (optionally) leading icon for the Top/Bottom pills.
+// styling and, for the Info and Favorites bookends, a small icon
+// alongside the word. The word is always there, the icon never
+// replaces it.
 function NavPill({
   pillRef,
   icon,
@@ -1998,12 +1810,17 @@ function NavPill({
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
+      aria-current={active ? 'true' : undefined}
       flexShrink={0}
       display="inline-flex"
       alignItems="center"
+      justifyContent="center"
       gap={1.5}
       px={{ base: 4, md: 5 }}
       py={2}
+      // Thumb-sized on phones, where this strip is now the only way to
+      // move between sections. Still inside the PORTAL_NAV_H band.
+      minH={{ base: '44px', md: 'auto' }}
       fontSize="2xs"
       fontWeight="500"
       letterSpacing="0.2em"
@@ -2027,7 +1844,10 @@ function NavPill({
               bg: 'rgba(201, 169, 110, 0.06)',
             }
       }
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
+      sx={{
+        WebkitTapHighlightColor: 'transparent',
+        '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+      }}
     >
       {icon && <Icon as={icon} boxSize={2.5} />}
       <Box as="span">{label}</Box>
@@ -2117,7 +1937,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
         </VStack>
 
         <Text fontSize="sm" color="gray.600" fontWeight="300" textAlign="center" lineHeight="1.7">
-          Want to share these with family or friends? Anyone with the link below can view the gallery — no account needed.
+          Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.
         </Text>
 
         {/* One-click link — HERO action. The primary way we want people
@@ -2143,7 +1963,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
             color="brand.accentText"
             mb={4}
           >
-            Easiest — one-click link
+            Easiest: one-click link
           </Text>
           <CTAButton
             onClick={() => copy(directUrl, setUrlCopied)}
@@ -2166,7 +1986,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
             {directUrl}
           </Text>
           <Text mt={2} fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6">
-            Paste anywhere — text, email, WhatsApp. Opens the gallery instantly, no password to type.
+            Paste anywhere: text, email, WhatsApp. Opens the gallery instantly, no password to type.
           </Text>
         </Box>
 
