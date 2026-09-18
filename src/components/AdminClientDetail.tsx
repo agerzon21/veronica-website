@@ -34,6 +34,12 @@ interface PortalDetail {
   client_email: string | null;
   event_date: string | null;
   gallery_password: string;
+  /**
+   * Short-lived HMAC from the admin endpoint, appended to the preview link so
+   * Vero can see an undelivered gallery. Null when the signing secret is not
+   * configured, in which case the preview simply behaves like a client's.
+   */
+  gallery_preview_token?: string | null;
   gallery_enabled: boolean;
   drive_url: string | null;
   gallery_delivered_at: string | null;
@@ -46,6 +52,12 @@ interface PortalDetail {
   contract_total_amount: number | null;
   contract_retainer_amount: number | null;
   paid_to_date: number;
+  /**
+   * Sum of the charges added after the booking (extra time, costs paid on the
+   * day). Owed on top of contract_total_amount, so every balance on this
+   * screen is total + charges_total - paid_to_date, never total - paid.
+   */
+  charges_total: number;
   setup_token: string | null;
   invite_email_id: string | null;
   invite_sent_at: string | null;
@@ -58,6 +70,19 @@ interface PaymentEntry {
   method: string | null;
   note: string | null;
   paid_at: string;
+}
+
+/** A charge reason, as stored. The table CHECKs these same three values. */
+type ChargeReason = 'overtime' | 'expense' | 'other';
+
+interface ChargeEntry {
+  id: string;
+  amount: number;
+  // Widened to string because it arrives from the database, and a value this
+  // bundle predates should still render rather than crash the screen.
+  reason: string;
+  note: string | null;
+  charged_at: string;
 }
 
 const formatDate = (iso: string | null): string => {
@@ -148,9 +173,15 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   const { t } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
+  const [charges, setCharges] = useState<ChargeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingField, setSavingField] = useState<string | null>(null);
+  // Two-step confirm for delivering with money outstanding. Same inline
+  // pattern as the delete confirmations further down this file (there is no
+  // modal component in here), so the warning stays on the page next to the
+  // amounts it is talking about.
+  const [unpaidConfirm, setUnpaidConfirm] = useState(false);
 
   const reload = async () => {
     setLoading(true);
@@ -165,6 +196,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       if (res.ok && data.success) {
         setPortal(data.portal);
         setPayments(data.payments);
+        setCharges(data.charges ?? []);
       } else {
         setError(data.error || t.clientDetail.serverErrorStatus(res.status));
       }
@@ -204,34 +236,41 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
     }
   };
 
-  const markDelivered = async () => {
-    // Soft guardrail: warn if there's an outstanding balance. We don't
+  const markDelivered = async (confirmUnpaid = false) => {
+    // Soft guard rail: stop and show the outstanding balance first. We don't
     // block delivery because there are legitimate edge cases (cash
     // hand-off at the shoot, comp gifts, payment plans not tracked in
     // here yet). But she's much more likely to FORGET to log a payment
     // than to genuinely want to deliver unpaid, so confirm first.
+    //
+    // This matters more than it used to: since the gallery gate landed,
+    // this button is what actually releases the photos to the client, so
+    // the confirmation is the last step before they can see them.
+    //
+    // The condition here is deliberately WIDER than the server's, which only
+    // refuses on a SIGNED contract. Anything the server would refuse is
+    // already confirmed by the time we post, so a 409 surprise is impossible.
+    //
+    // Charges count towards what is owed, same as the server's check does:
+    // delivering over an unpaid parking expense is the same mistake as
+    // delivering over an unpaid balance.
     if (
+      !confirmUnpaid &&
       portal &&
       portal.contract_total_amount !== null &&
-      portal.paid_to_date < portal.contract_total_amount
+      portal.paid_to_date < portal.contract_total_amount + (portal.charges_total ?? 0)
     ) {
-      const remaining = portal.contract_total_amount - portal.paid_to_date;
-      const ok = window.confirm(
-        t.clientDetail.outstandingConfirm(
-          `$${remaining.toFixed(0)}`,
-          `$${portal.paid_to_date.toFixed(0)}`,
-          `$${portal.contract_total_amount.toFixed(0)}`,
-        ),
-      );
-      if (!ok) return;
+      setUnpaidConfirm(true);
+      return;
     }
+    setUnpaidConfirm(false);
     setSavingField('deliver');
     setError('');
     try {
       const res = await fetch('/api/admin/portal-deliver', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, id: portalId }),
+        body: JSON.stringify({ password: adminPassword, id: portalId, confirmUnpaid }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -263,10 +302,13 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
     );
   }
 
+  // The one place this screen decides what is owed:
+  //   contract total + charges added after the booking - paid to date.
+  const chargesTotal = portal.charges_total ?? 0;
+  const amountOwed =
+    portal.contract_total_amount !== null ? portal.contract_total_amount + chargesTotal : null;
   const balanceRemaining =
-    portal.contract_total_amount !== null
-      ? Math.max(portal.contract_total_amount - portal.paid_to_date, 0)
-      : null;
+    amountOwed !== null ? Math.max(amountOwed - portal.paid_to_date, 0) : null;
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
 
   return (
@@ -320,7 +362,15 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
           {portal.drive_url && (
             <Flex align="center" gap={2} wrap="wrap">
               <CTAButton
-                href={`/portal/pass?password=${encodeURIComponent(portal.gallery_password)}`}
+                href={
+                  `/portal/pass?password=${encodeURIComponent(portal.gallery_password)}` +
+                  // Undelivered galleries are withheld from the client, so
+                  // without this the preview would show Vero the withheld
+                  // notice instead of the gallery she is about to release.
+                  (portal.gallery_preview_token
+                    ? `&preview=${encodeURIComponent(portal.gallery_preview_token)}`
+                    : '')
+                }
                 variant="outline"
                 size="sm"
               >
@@ -364,10 +414,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 </Badge>
               )}
             </Box>
-            {!portal.gallery_delivered_at && portal.drive_url && (
+            {!portal.gallery_delivered_at && portal.drive_url && !unpaidConfirm && (
               <Box w={{ base: '100%', md: 'auto' }}>
                 <CTAButton
-                  onClick={markDelivered}
+                  // Arrow, not a bare reference: markDelivered's first
+                  // parameter is confirmUnpaid, and handing it the click
+                  // event straight would make every press a truthy
+                  // "deliver anyway" and skip the guard rail entirely.
+                  onClick={() => markDelivered()}
                   variant="solid"
                   size="sm"
                   isLoading={savingField === 'deliver'}
@@ -379,6 +433,43 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
               </Box>
             )}
           </Stack>
+
+          {/* Outstanding-balance confirmation. Replaces the button rather
+              than sitting beside it, so the only way past it is to read it:
+              delivering is what releases the photos to the client now, not
+              just an email. Override stays available on purpose. */}
+          {unpaidConfirm && balanceRemaining !== null && amountOwed !== null && (
+            <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm" p={4}>
+              <Text fontSize="sm" fontWeight="500" color="orange.800" mb={1}>
+                {t.clientDetail.outstandingHeading}
+              </Text>
+              <Text fontSize="sm" color="orange.900" fontWeight="300" mb={4}>
+                {/* The third number is what is owed in total, charges
+                    included, so it matches the Remaining stat below. */}
+                {t.clientDetail.outstandingBody(
+                  formatMoney(balanceRemaining),
+                  formatMoney(portal.paid_to_date),
+                  formatMoney(amountOwed),
+                )}
+              </Text>
+              {/* column-reverse on mobile keeps the consequential action off
+                  the top of the tap zone, same as the Danger Zone below. */}
+              <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2}>
+                <CTAButton onClick={() => setUnpaidConfirm(false)} variant="ghost" size="sm">
+                  {t.common.cancel}
+                </CTAButton>
+                <CTAButton
+                  onClick={() => markDelivered(true)}
+                  variant="solid"
+                  size="sm"
+                  isLoading={savingField === 'deliver'}
+                  loadingText={t.clientDetail.delivering}
+                >
+                  {t.clientDetail.deliverAnyway}
+                </CTAButton>
+              </Stack>
+            </Box>
+          )}
         </VStack>
       </Section>
 
@@ -520,10 +611,19 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       {portal.contract_total_amount !== null && (
         <Section title={t.clientDetail.sectionPayments}>
           <VStack align="stretch" spacing={5}>
-            {/* 3-up stat row. On mobile the columns stay side-by-side but
-                spacing shrinks so 3 numbers fit without wrapping. */}
-            <SimpleGrid columns={3} spacing={{ base: 3, md: 6 }} fontSize="sm">
+            {/* 3-up stat row, 4-up once something has been charged. On mobile
+                the columns stay side-by-side but spacing shrinks so the
+                numbers fit without wrapping, which is why a fourth one drops
+                to a 2x2 there rather than squeezing onto one row. */}
+            <SimpleGrid
+              columns={{ base: chargesTotal > 0 ? 2 : 3, md: chargesTotal > 0 ? 4 : 3 }}
+              spacing={{ base: 3, md: 6 }}
+              fontSize="sm"
+            >
               <Stat label={t.clientDetail.statTotal} value={formatMoney(portal.contract_total_amount)} />
+              {chargesTotal > 0 && (
+                <Stat label={t.clientDetail.statCharges} value={formatMoney(chargesTotal)} />
+              )}
               <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
               <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
             </SimpleGrid>
@@ -540,6 +640,30 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                     <PaymentRow
                       key={p.id}
                       entry={p}
+                      portalId={portalId}
+                      adminPassword={adminPassword}
+                      onDeleted={reload}
+                    />
+                  ))}
+                </VStack>
+              </Box>
+            )}
+
+            {/* Charges: money owed rather than money in, so it sits below the
+                payment log with its own form and its own list. Every line here
+                is printed in the client's portal with its reason and note. */}
+            <AddChargeForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
+
+            {charges.length > 0 && (
+              <Box>
+                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+                  {t.clientDetail.chargesHistory}
+                </Text>
+                <VStack align="stretch" spacing={2}>
+                  {charges.map((c) => (
+                    <ChargeRow
+                      key={c.id}
+                      entry={c}
                       portalId={portalId}
                       adminPassword={adminPassword}
                       onDeleted={reload}
@@ -1264,6 +1388,250 @@ function PaymentRow({
         // icon inside a hair-thin Box was impossible to hit reliably.
         <IconButton
           aria-label={t.clientDetail.deletePaymentAria}
+          onClick={() => setConfirming(true)}
+          icon={<Icon as={FaTrash} boxSize={3} />}
+          variant="ghost"
+          size="sm"
+          minW={{ base: '44px', md: 'auto' }}
+          minH={{ base: '44px', md: 'auto' }}
+          color="gray.400"
+          _hover={{ color: 'red.500', bg: 'transparent' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        />
+      )}
+    </Flex>
+  );
+}
+
+/**
+ * Add a charge: extra time, or a cost paid on the day.
+ *
+ * Shaped like AddPaymentForm above on purpose, with two differences that
+ * matter. The reason is a picker rather than free text, because it is a
+ * checked column and it is the label the client reads. And the note is
+ * required: the reason alone tells the client "Expense", which explains
+ * nothing, while "Parking at the venue" is a receipt they can agree with.
+ * The placeholder changes with the reason so there is always an example of
+ * the right shape of answer on screen.
+ */
+function AddChargeForm({
+  portalId,
+  adminPassword,
+  onAdded,
+}: {
+  portalId: string;
+  adminPassword: string;
+  onAdded: () => void;
+}) {
+  const { t } = useAdminLang();
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState<ChargeReason>('overtime');
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
+
+  const submit = async () => {
+    setErr('');
+    const n = parseFloat(amount);
+    if (!Number.isFinite(n) || n <= 0) {
+      setErr(t.clientDetail.enterPositiveAmount);
+      return;
+    }
+    if (!note.trim()) {
+      setErr(t.clientDetail.chargeNoteRequired);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/payment-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          id: portalId,
+          action: 'add-charge',
+          amount: n,
+          reason,
+          note: note.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAmount('');
+        setNote('');
+        setReason('overtime');
+        onAdded();
+      } else {
+        setErr(data.error || `${t.clientDetail.serverErrorStatus(res.status)}.`);
+      }
+    } catch {
+      setErr(t.common.couldNotReach);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Box bg="gray.50" borderRadius="sm" border="1px solid" borderColor="gray.200" p={4}>
+      <Text fontSize="xs" color="gray.500" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
+        {t.clientDetail.addACharge}
+      </Text>
+      <Text fontSize="xs" color="gray.500" fontWeight="300" mb={3}>
+        {t.clientDetail.addAChargeHelp}
+      </Text>
+      <VStack align="stretch" spacing={3}>
+        <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={3}>
+          <Box>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>{t.clientDetail.amountLabel}</Text>
+            <Input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0"
+              h={{ base: '44px', sm: '36px' }}
+              bg="white"
+              fontSize={{ base: 'md', sm: 'sm' }}
+              borderRadius="sm"
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+            />
+          </Box>
+          <Box>
+            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>{t.clientDetail.reasonLabel}</Text>
+            <Select
+              value={reason}
+              onChange={(e) => setReason(e.target.value as ChargeReason)}
+              h={{ base: '44px', sm: '36px' }}
+              bg="white"
+              fontSize={{ base: 'md', sm: 'sm' }}
+              borderRadius="sm"
+              focusBorderColor="brand.accent"
+            >
+              <option value="overtime">{t.clientDetail.reasonOvertime}</option>
+              <option value="expense">{t.clientDetail.reasonExpense}</option>
+              <option value="other">{t.clientDetail.reasonOther}</option>
+            </Select>
+          </Box>
+        </SimpleGrid>
+        <Box>
+          <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" mb={1}>{t.clientDetail.chargeNoteLabel}</Text>
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={t.clientDetail.chargeNotePlaceholder[reason]}
+            h={{ base: '44px', sm: '36px' }}
+            bg="white"
+            fontSize={{ base: 'md', sm: 'sm' }}
+            borderRadius="sm"
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+          />
+          <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+            {t.clientDetail.chargeNoteHelp}
+          </Text>
+        </Box>
+        {err && <Text fontSize="sm" color="red.500">{err}</Text>}
+        <CTAButton onClick={submit} variant="solid" size="sm" isLoading={submitting} loadingText={t.clientDetail.saving}>
+          {t.clientDetail.addCharge}
+        </CTAButton>
+      </VStack>
+    </Box>
+  );
+}
+
+/**
+ * One charge, deletable. Undoing a charge is a delete rather than a negative
+ * correction, so this row is the only way back out, which is why it carries
+ * the same two-step confirm PaymentRow does.
+ */
+function ChargeRow({
+  entry,
+  portalId,
+  adminPassword,
+  onDeleted,
+}: {
+  entry: ChargeEntry;
+  portalId: string;
+  adminPassword: string;
+  onDeleted: () => void;
+}) {
+  const { t } = useAdminLang();
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // A reason this bundle does not recognise falls through to the generic
+  // label rather than rendering the raw storage value at Vero.
+  const reasonLabel =
+    entry.reason === 'overtime'
+      ? t.clientDetail.reasonOvertime
+      : entry.reason === 'expense'
+        ? t.clientDetail.reasonExpense
+        : t.clientDetail.reasonOther;
+
+  const del = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/payment-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          id: portalId,
+          action: 'delete-charge',
+          charge_id: entry.id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) onDeleted();
+    } finally {
+      setSubmitting(false);
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <Flex
+      justify="space-between"
+      align="center"
+      bg="white"
+      border="1px solid"
+      borderColor="gray.100"
+      borderRadius="sm"
+      px={3}
+      py={2.5}
+      gap={3}
+    >
+      <Box flex="1" minW={0}>
+        <HStack spacing={2} flexWrap="wrap">
+          <Text fontSize="sm" fontWeight="500" color="gray.800">
+            +${entry.amount.toFixed(0)}
+          </Text>
+          <Text fontSize="sm" color="gray.500">· {reasonLabel}</Text>
+          <Text fontSize="sm" color="gray.400">· {formatDate(entry.charged_at)}</Text>
+        </HStack>
+        {entry.note && (
+          <Text fontSize="xs" color="gray.500" mt={0.5}>{entry.note}</Text>
+        )}
+      </Box>
+      {confirming ? (
+        <HStack spacing={2}>
+          <Box as="button" onClick={() => setConfirming(false)} fontSize="xs" color="gray.500" cursor="pointer" bg="transparent" border="none">
+            {t.common.cancel}
+          </Box>
+          <Box
+            as="button"
+            onClick={del}
+            fontSize="xs"
+            color="red.600"
+            cursor="pointer"
+            bg="transparent"
+            border="none"
+            disabled={submitting}
+          >
+            {submitting ? t.clientDetail.deleting : t.clientDetail.confirmDelete}
+          </Box>
+        </HStack>
+      ) : (
+        <IconButton
+          aria-label={t.clientDetail.deleteChargeAria}
           onClick={() => setConfirming(true)}
           icon={<Icon as={FaTrash} boxSize={3} />}
           variant="ghost"

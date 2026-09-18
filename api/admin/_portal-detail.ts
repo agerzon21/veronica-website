@@ -1,14 +1,16 @@
 /**
- * Admin: get full detail for a single portal, including payment entries.
+ * Admin: get full detail for a single portal, including payment entries and
+ * the charges added to the booking after the fact.
  *
  * POST { password, id }
- *   → 200 { success, portal, payments }
+ *   → 200 { success, portal, payments, charges }
  *   → 401 on bad admin password
  *   → 404 if no portal with that id
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
+import { makeGalleryPreviewToken } from '../portal/_gallery-gate.js';
 import { requireAdmin } from '../_admin-auth.js';
 
 type PortalRow = {
@@ -52,6 +54,15 @@ type PaymentRow = {
   method: string | null;
   note: string | null;
   paid_at: string;
+  created_at: string;
+};
+
+type ChargeRow = {
+  id: string;
+  amount: string;
+  reason: string;
+  note: string | null;
+  charged_at: string;
   created_at: string;
 };
 
@@ -119,13 +130,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       order by paid_at desc, created_at desc
     `) as PaymentRow[];
 
+    /**
+     * Charges arrive with migration 035, applied by hand like 030 above, so
+     * this is fetched separately and allowed to fail for exactly the reason
+     * the invite columns are: a table this deploy expects and the database
+     * does not have yet must cost the Payments section its charge list, not
+     * take the whole client screen down.
+     *
+     * The total is summed from the rows rather than read back off
+     * client_portals.charges_total, so the number in the stat row can never
+     * disagree with the lines listed underneath it.
+     */
+    let charges: ChargeRow[] = [];
+    try {
+      charges = (await sql`
+        select id, amount, reason, note, charged_at, created_at
+        from portal_charges
+        where client_portal_id = ${id}
+        order by charged_at desc, created_at desc
+      `) as ChargeRow[];
+    } catch {
+      /* pre-migration-035 database: no charges exist, so none are shown */
+    }
+    const chargesTotal = charges.reduce((sum, c) => sum + parseFloat(c.amount), 0);
+
     return res.status(200).json({
       success: true,
       portal: {
         ...r,
+        // Lets the admin's "Preview Client Gallery" button open a gallery that
+        // has not been released yet. Minted here because this endpoint is
+        // already behind requireAdmin, and short lived, so a link pasted
+        // somewhere by accident stops working on its own.
+        gallery_preview_token: makeGalleryPreviewToken(r.id),
         contract_total_amount: r.contract_total_amount ? parseFloat(r.contract_total_amount) : null,
         contract_retainer_amount: r.contract_retainer_amount ? parseFloat(r.contract_retainer_amount) : null,
         paid_to_date: parseFloat(r.paid_to_date),
+        // Owed = contract_total_amount + charges_total - paid_to_date. Every
+        // screen that prints a remaining balance needs this third number.
+        charges_total: chargesTotal,
         // We never return the raw blob URL — only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,
@@ -147,6 +190,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         note: p.note,
         paid_at: p.paid_at,
         created_at: p.created_at,
+      })),
+      charges: charges.map((c) => ({
+        id: c.id,
+        amount: parseFloat(c.amount),
+        reason: c.reason,
+        note: c.note,
+        charged_at: c.charged_at,
+        created_at: c.created_at,
       })),
     });
   } catch (err) {

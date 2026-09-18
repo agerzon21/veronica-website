@@ -85,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const inviteUrl = `${siteOrigin}/portal/welcome?token=${newToken}`;
       const sent = await sendEmail({
         to: portal.client_email,
-        subject: 'Your client portal is ready — Vero Photography',
+        subject: 'Your client portal is ready, from Vero Photography',
         text: buildInviteText(portal.client_display_name, inviteUrl),
         html: buildInviteHtml(portal.client_display_name, inviteUrl),
       });

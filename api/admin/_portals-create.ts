@@ -338,7 +338,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
           await sendEmail({
             to: simpleClientEmail,
-            subject: 'Your photos are ready — Vero Photography',
+            subject: 'Your photos are ready, from Vero Photography',
             text: buildGalleryReadyText(simpleClientFirstName, siteOrigin, galleryPassword, expiresAt),
             html: buildGalleryReadyHtml(simpleClientFirstName, siteOrigin, galleryPassword, expiresAt),
           });
@@ -364,7 +364,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const inviteUrl = `${siteOrigin}/portal/welcome?token=${setupToken}`;
         const sent = await sendEmail({
           to: clientEmail,
-          subject: 'Your client portal is ready — Vero Photography',
+          subject: 'Your client portal is ready, from Vero Photography',
           text: buildInviteText(clientDisplayName, inviteUrl),
           html: buildInviteHtml(clientDisplayName, inviteUrl),
         });

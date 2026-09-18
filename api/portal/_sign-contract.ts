@@ -230,7 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sendEmail({
         to: portal.client_email,
         cc: FROM_ADDRESS,
-        subject: `Signed: ${filledTemplate.title} — Vero Photography`,
+        subject: `Signed: ${filledTemplate.title}, from Vero Photography`,
         text: buildSignedEmailText(portal.client_display_name, signerName),
         html: buildSignedEmailHtml(portal.client_display_name, signerName),
         attachments: [
@@ -282,7 +282,7 @@ function buildSignedEmailText(clientLabel: string | null, signerName: string): s
   const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
   return `${greeting}
 
-Thank you for signing your contract — you're officially on the books.
+Thank you for signing your contract, you are officially on the books.
 
 Your signed copy is attached to this email for your records. You can also access it any time from your Client Portal at vero.photography/portal.
 

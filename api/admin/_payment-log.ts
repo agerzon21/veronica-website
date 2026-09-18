@@ -1,28 +1,68 @@
 /**
- * Admin: log a payment entry against a portal and recompute paid_to_date.
+ * Admin: log money in (payment entries) and money owed (charges) against a
+ * portal, and recompute the two totals the balance is derived from.
  *
  * POST {
  *   password, id,
- *   action: 'add' | 'delete',
+ *   action: 'add' | 'delete' | 'add-charge' | 'delete-charge',
  *
  *   // add:
  *   amount?, method?, note?, paid_at?
  *
  *   // delete:
  *   entry_id?
+ *
+ *   // add-charge:
+ *   amount?, reason? ('overtime' | 'expense' | 'other'), note?, charged_at?
+ *
+ *   // delete-charge:
+ *   charge_id?
  * }
- *   → 200 { success, paid_to_date, payments[] }
+ *   → 200 { success, paid_to_date, payments[] }      for add / delete
+ *   → 200 { success, charges_total, charges[] }      for add-charge / delete-charge
  *
  * Why we materialize paid_to_date on the portal row instead of computing
  * via sum() at read time: paid_to_date is read on every portal load
  * (for the balance display), but updated infrequently. Materializing
  * saves the sum() join on every read; the recompute on add/delete is
  * cheap because we already touch the row.
+ *
+ * charges_total is the mirror image and is maintained here for exactly the
+ * same reasons, by the same recompute-by-sum. See
+ * db/migrations/035-portal-charges.sql. The invariant both halves serve:
+ *
+ *   amount still owed = contract_total_amount + charges_total - paid_to_date
+ *
+ * Charges are additive only (the table CHECKs amount > 0). Undoing one is a
+ * delete, not a negative charge, so the client never reads a correction
+ * sitting next to the mistake it corrects.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+
+/**
+ * The reasons a charge can carry. Same three the table CHECKs, repeated here
+ * so a typo comes back as a 400 naming the valid values rather than a 500
+ * from a constraint violation. Each one is a label the client reads.
+ */
+const CHARGE_REASONS = new Set(['overtime', 'expense', 'other']);
+
+/**
+ * A date input sends 'YYYY-MM-DD', an API caller may send a full ISO string,
+ * and either may be absent. Anything unparseable falls back to now rather
+ * than failing the write: the amount is the part that matters, and a charge
+ * filed on today's date is a smaller problem than a charge that was refused.
+ */
+function parseWhen(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return new Date().toISOString();
+  // Just a date, so treat it as start-of-day UTC.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T00:00:00Z`).toISOString();
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
 
 async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: string, res: VercelResponse) {
   const sumRows = (await sql`
@@ -61,6 +101,48 @@ async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: strin
   });
 }
 
+/** The charges half of the same bookkeeping. Deliberately shaped like recomputeAndReturn above. */
+async function recomputeChargesAndReturn(
+  sql: ReturnType<typeof getDb>,
+  portalId: string,
+  res: VercelResponse,
+) {
+  const sumRows = (await sql`
+    select coalesce(sum(amount), 0) as total
+    from portal_charges
+    where client_portal_id = ${portalId}
+  `) as Array<{ total: string }>;
+  const newTotal = parseFloat(sumRows[0]?.total ?? '0');
+  await sql`update client_portals set charges_total = ${newTotal}, updated_at = now() where id = ${portalId}`;
+
+  const charges = (await sql`
+    select id, amount, reason, note, charged_at, created_at
+    from portal_charges
+    where client_portal_id = ${portalId}
+    order by charged_at desc, created_at desc
+  `) as Array<{
+    id: string;
+    amount: string;
+    reason: string;
+    note: string | null;
+    charged_at: string;
+    created_at: string;
+  }>;
+
+  return res.status(200).json({
+    success: true,
+    charges_total: newTotal,
+    charges: charges.map((c) => ({
+      id: c.id,
+      amount: parseFloat(c.amount),
+      reason: c.reason,
+      note: c.note,
+      charged_at: c.charged_at,
+      created_at: c.created_at,
+    })),
+  });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -91,20 +173,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const method = typeof req.body?.method === 'string' ? req.body.method.trim() : null;
       const note = typeof req.body?.note === 'string' ? req.body.note.trim() : null;
-      const paidAtRaw = typeof req.body?.paid_at === 'string' ? req.body.paid_at.trim() : '';
       // Accept either an ISO timestamp or YYYY-MM-DD (from a date input).
-      // If just a date, treat as start-of-day UTC.
-      let paidAt: string;
-      if (paidAtRaw) {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(paidAtRaw)) {
-          paidAt = new Date(`${paidAtRaw}T00:00:00Z`).toISOString();
-        } else {
-          const d = new Date(paidAtRaw);
-          paidAt = Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-        }
-      } else {
-        paidAt = new Date().toISOString();
-      }
+      const paidAt = parseWhen(req.body?.paid_at);
 
       await sql`
         insert into payment_entries (client_portal_id, amount, method, note, paid_at)
@@ -113,7 +183,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return recomputeAndReturn(sql, id, res);
     }
 
-    return res.status(400).json({ success: false, error: 'action must be add or delete' });
+    if (action === 'delete-charge') {
+      const chargeId = typeof req.body?.charge_id === 'string' ? req.body.charge_id.trim() : '';
+      if (!chargeId) return res.status(400).json({ success: false, error: 'charge_id required' });
+      await sql`delete from portal_charges where id = ${chargeId} and client_portal_id = ${id}`;
+      return recomputeChargesAndReturn(sql, id, res);
+    }
+
+    if (action === 'add-charge') {
+      const amount = Number(req.body?.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ success: false, error: 'amount must be a positive number' });
+      }
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+      if (!CHARGE_REASONS.has(reason)) {
+        return res
+          .status(400)
+          .json({ success: false, error: 'reason must be overtime, expense or other' });
+      }
+      const note = typeof req.body?.note === 'string' ? req.body.note.trim() : null;
+      const chargedAt = parseWhen(req.body?.charged_at);
+
+      await sql`
+        insert into portal_charges (client_portal_id, amount, reason, note, charged_at)
+        values (${id}, ${amount}, ${reason}, ${note || null}, ${chargedAt})
+      `;
+      return recomputeChargesAndReturn(sql, id, res);
+    }
+
+    return res
+      .status(400)
+      .json({ success: false, error: 'action must be add, delete, add-charge or delete-charge' });
   } catch (err) {
     console.error('[admin/payment-log] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

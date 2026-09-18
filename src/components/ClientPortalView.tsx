@@ -25,6 +25,12 @@ export interface ClientPortalData {
   rootFiles: DriveFile[];
   sections: FolderSection[];
   warning?: string;
+  // True while the photos exist but have not been released yet. The server
+  // withholds the data itself in that case (drive_url null, both lists
+  // empty), so this is the only way to tell "Vero has not pressed Mark as
+  // Delivered yet" apart from "no photos uploaded yet", and the Photos
+  // section says a different thing for each. See api/portal/_gallery-gate.ts.
+  gallery_withheld?: boolean;
 
   // Session metadata — surfaced in the portal header so clients see
   // what they booked without having to open the contract. Every field
@@ -67,6 +73,23 @@ export interface ClientPortalData {
     method: string | null;
     note: string | null;
     paid_at: string;
+  }>;
+  /**
+   * Charges added after the booking: extra time at the client's request, and
+   * costs paid on the day. Owed on top of contract_total_amount, which is why
+   * every remaining-balance sum in this file reads
+   * contract_total_amount + charges_total - paid_to_date.
+   */
+  charges_total: number;
+  charges: Array<{
+    id: string;
+    amount: number;
+    // 'overtime' | 'expense' | 'other' as stored. Kept as a string because it
+    // comes off the wire, and a value this bundle predates should render as
+    // the generic label rather than break the balance section.
+    reason: string;
+    note: string | null;
+    charged_at: string;
   }>;
 
   // Gallery Pass settings — Phase 1c
@@ -123,6 +146,23 @@ const formatDate = (iso: string) => {
     timeZone: 'UTC',
   });
 };
+
+/**
+ * What a charge's reason is called in front of the client.
+ *
+ * The stored values are 'overtime', 'expense' and 'other', which are storage
+ * words, not copy. Anything unrecognised falls through to the neutral label
+ * rather than printing a raw column value at someone reading their receipt,
+ * and the note underneath carries the specifics either way.
+ */
+const CHARGE_REASON_LABELS: Record<string, string> = {
+  overtime: 'Additional time',
+  expense: 'Expense',
+  other: 'Additional charge',
+};
+
+const chargeReasonLabel = (reason: string): string =>
+  CHARGE_REASON_LABELS[reason] ?? CHARGE_REASON_LABELS.other;
 
 /**
  * The nouns the portal's copy hangs on, per booking type.
@@ -247,10 +287,15 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
   // Every client-visible noun that used to assume a wedding reads out of here.
   const wording = bookingWording(data.contract_template_key, data.session_type);
 
-  const remaining =
-    data.contract_total_amount !== null
-      ? data.contract_total_amount - data.paid_to_date
-      : null;
+  // What the booking comes to, and what is left on it. Charges added after
+  // the fact (extra time, costs paid on the day) are owed just like the
+  // contract total, so they belong in every sum here. The client reads them
+  // itemized in the Balance section below, so the number that changed is
+  // always explained by a line they can point at.
+  const chargesTotal = data.charges_total ?? 0;
+  const amountOwed =
+    data.contract_total_amount !== null ? data.contract_total_amount + chargesTotal : null;
+  const remaining = amountOwed !== null ? amountOwed - data.paid_to_date : null;
 
   // Whether the NextStepsPanel will render anything — same conditions
   // it uses internally, mirrored here so PortalTopNav can decide
@@ -258,8 +303,8 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
   // auto-scroll after signing.
   const hasNextStep =
     data.contract_status === 'signed' &&
-    data.contract_total_amount !== null &&
-    data.paid_to_date < data.contract_total_amount;
+    amountOwed !== null &&
+    data.paid_to_date < amountOwed;
 
   // Auto-scroll to Next Steps immediately after the client signs the
   // contract. Without this, the page just re-renders in place — but
@@ -721,6 +766,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           total={data.contract_total_amount}
           retainer={data.contract_retainer_amount}
           paidToDate={data.paid_to_date}
+          chargesTotal={chargesTotal}
           wording={wording}
           // Once photos land, the "All Set / awaiting delivery" state
           // is no longer relevant — client isn't waiting anymore.
@@ -786,13 +832,16 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
               Balance
             </Text>
             <Box w="30px" h="1px" bg="brand.accent" />
-            {/* Equal-width grid keeps the four stats aligned even when
-                the Retainer column drops out. On mobile we go to 2x2
+            {/* Equal-width grid keeps the stats aligned even when the
+                Retainer or Added column drops out. On mobile we go to 2x2
                 so amounts don't truncate; desktop sits on one row. */}
             <SimpleGrid
               columns={{
                 base: 2,
-                md: data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 ? 4 : 3,
+                md:
+                  3 +
+                  (data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 ? 1 : 0) +
+                  (chargesTotal > 0 ? 1 : 0),
               }}
               spacing={{ base: 5, md: 8 }}
               w="100%"
@@ -805,6 +854,16 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                   note="Part of total"
                 />
               )}
+              {/* Sits between Total and Paid so the column order reads as
+                  the arithmetic: this much, plus this, less what you paid,
+                  leaves this. */}
+              {chargesTotal > 0 && (
+                <BalanceStat
+                  label="Added"
+                  value={formatMoney(chargesTotal)}
+                  note="Listed below"
+                />
+              )}
               <BalanceStat label="Paid" value={formatMoney(data.paid_to_date)} />
               <BalanceStat
                 label="Remaining"
@@ -812,6 +871,65 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                 emphasize={remaining > 0}
               />
             </SimpleGrid>
+
+            {/* Itemized charges: extra time, and costs paid on the day.
+                A receipt, not a demand: each line says what it was for and
+                what it cost, and nothing here scolds. Sits above the
+                payments list so the reading order matches the stat row
+                (what the booking came to, what was added, what was paid). */}
+            {data.charges.length > 0 && (
+              <Box w="100%" pt={6}>
+                <Text
+                  fontSize="2xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.25em"
+                  color="brand.accent"
+                  mb={2}
+                >
+                  Added To Your Booking
+                </Text>
+                <Text fontSize="xs" color="gray.500" fontWeight="300" mb={4} lineHeight="1.7">
+                  From the Additional Time and Expenses section of your contract.
+                </Text>
+                <VStack spacing={2} align="stretch">
+                  {data.charges.map((c) => (
+                    <Flex
+                      key={c.id}
+                      align="center"
+                      justify="space-between"
+                      bg="white"
+                      border="1px solid"
+                      borderColor="gray.200"
+                      borderRadius="sm"
+                      px={4}
+                      py={3}
+                      textAlign="left"
+                      gap={3}
+                    >
+                      <VStack align="start" spacing={0.5} flex="1" minW={0}>
+                        <HStack spacing={2} flexWrap="wrap">
+                          <Text fontSize="sm" color="gray.800" fontWeight="500">
+                            {formatMoney(c.amount)}
+                          </Text>
+                          <Text fontSize="sm" color="gray.500">
+                            · {chargeReasonLabel(c.reason)}
+                          </Text>
+                          <Text fontSize="sm" color="gray.400">
+                            · {formatDate(c.charged_at)}
+                          </Text>
+                        </HStack>
+                        {c.note && (
+                          <Text fontSize="xs" color="gray.600" fontWeight="300">
+                            {c.note}
+                          </Text>
+                        )}
+                      </VStack>
+                    </Flex>
+                  ))}
+                </VStack>
+              </Box>
+            )}
 
             {/* Itemized payment log — every entry Veronika has recorded
                 (retainer, balance, etc.), with method and notes. Doesn't
@@ -1041,7 +1159,15 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
               </Text>
               <Box w="30px" h="1px" bg="brand.accent" mx="auto" mb={5} />
               <Text fontSize="sm" color="gray.500" fontWeight="300" lineHeight="1.7">
-                Your gallery will appear here once Veronika delivers your photos.
+                {/* Two different waits, and saying the wrong one is worse than
+                    saying nothing: withheld means the photos are finished and
+                    waiting on release, so "will appear once Veronika delivers
+                    them" would read as a stall. The server sends no amounts
+                    here and neither does this copy, because the balance is a
+                    conversation with Veronika, not a notice on a page. */}
+                {data.gallery_withheld
+                  ? 'Your photos are ready and will be released here shortly. Veronika will email you the moment they are open.'
+                  : 'Your gallery will appear here once Veronika delivers your photos.'}
               </Text>
             </Box>
           );
@@ -1447,6 +1573,7 @@ function NextStepsPanel({
   total,
   retainer,
   paidToDate,
+  chargesTotal,
   wording,
   photosDelivered,
 }: {
@@ -1454,6 +1581,10 @@ function NextStepsPanel({
   total: number | null;
   retainer: number | null;
   paidToDate: number;
+  // Extra time and costs paid on the day, owed on top of the contract total.
+  // The retainer is untouched by these: it reserves the date and is agreed up
+  // front, while charges land after the shoot, so they fall on the balance.
+  chargesTotal: number;
   // Event vs session nouns, resolved once by the parent from the booking's
   // type. This panel is where the wedding assumptions were thickest: it
   // talked about reserving "the date" and paying cash on the day of "the
@@ -1471,10 +1602,11 @@ function NextStepsPanel({
   // dedicated section for it.
   if (contractStatus !== 'signed' || total === null) return null;
 
+  const owed = total + chargesTotal;
   const retainerOutstanding = retainer !== null && retainer > 0 && paidToDate < retainer;
   const retainerToSend = retainerOutstanding ? retainer - paidToDate : 0;
-  const balanceOutstanding = !retainerOutstanding && paidToDate < total;
-  const balanceToSend = balanceOutstanding ? total - paidToDate : 0;
+  const balanceOutstanding = !retainerOutstanding && paidToDate < owed;
+  const balanceToSend = balanceOutstanding ? owed - paidToDate : 0;
   const fullyPaid = !retainerOutstanding && !balanceOutstanding;
 
   // Fully paid AND photos delivered → nothing to say. The Photos
@@ -1546,6 +1678,15 @@ function NextStepsPanel({
               <Text fontSize="lg" color="gray.800" fontWeight="400">
                 Remaining balance: <strong>${balanceToSend.toFixed(0)}</strong>
               </Text>
+              {/* The number moved because something was added to it, so say
+                  so here and point at the lines that explain it. Stated, not
+                  justified: the Balance section carries the detail. */}
+              {chargesTotal > 0 && (
+                <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
+                  This includes ${chargesTotal.toFixed(0)} added after {wording.occasion}, listed
+                  line by line under Balance below.
+                </Text>
+              )}
             </VStack>
 
             {/* The actual clause from the contract, restated here so

@@ -15,7 +15,7 @@ import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
 import { loadDraft, saveDraft, clearDraft, sweepDrafts } from './draftStore';
-import { translationTargetFor, shouldAutoTranslate } from './translationDirection';
+import { translationTargetFor } from './translationDirection';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminLang } from '../i18n/admin';
 
@@ -274,7 +274,6 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     // by parking a prompt and navigating, and an unread key would otherwise
     // surface later in an unrelated conversation.
     if (parked) setInput(parked);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A fresh request outranks whatever is in the composer, which is what makes
@@ -308,7 +307,6 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     saveDraft('assistant', prevScopeRef.current, inputRef.current);
     prevScopeRef.current = draftScope;
     setInput(loadDraft('assistant', draftScope));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftScope]);
 
   // Debounced so typing does not hit localStorage on every keystroke. Keyed
@@ -367,6 +365,19 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     return embedded;
   });
   const [translations, setTranslations] = useState<Record<number, string>>({});
+  /**
+   * The customer-facing draft a turn produced, by turn index.
+   *
+   * This is the whole point of the rewrite. The assistant answers Vero in HER
+   * language and writes the draft inside that same message in the CUSTOMER's
+   * language, so every drafting turn is mixed. The panel used to translate the
+   * WHOLE turn, with a target derived from the text rather than from her
+   * setting, so running the panel in English produced an English answer
+   * rendered back into Russian: a translation of something she could already
+   * read, of text she was never going to send. Only the draft needs
+   * translating, and only when it is not already in her language.
+   */
+  const [draftTexts, setDraftTexts] = useState<Record<number, string>>({});
   // Indices already translated or in flight. A ref, not state, so the effect
   // below can consult it without listing it as a dependency.
   const translatedTurns = useRef<Set<number>>(new Set());
@@ -384,10 +395,11 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         const res = await fetch('/api/admin/messages-translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // Direction comes from the text, not the panel language, so a
-          // generated English reply always renders in Russian for Vero rather
-          // than being "translated" into the language it is already in.
-          body: JSON.stringify({ password: adminPassword, text, targetLang: translationTargetFor(text) }),
+          // INTO the panel language. What is being translated is a draft
+          // written for the customer, and the reader is whoever is running the
+          // panel, so her setting is exactly the right target. Callers skip
+          // this entirely when the draft is already in that language.
+          body: JSON.stringify({ password: adminPassword, text, targetLang: lang }),
         });
         const data = await res.json();
         if (res.ok && data.success && typeof data.translated === 'string') {
@@ -401,7 +413,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         if (force) setTranslatingTurn(null);
       }
     },
-    [adminPassword],
+    [adminPassword, lang],
   );
 
   const toggleTranslations = () => {
@@ -416,29 +428,30 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     });
   };
 
-  // Translate assistant turns as they arrive. Skips anything already mostly in
-  // the target script, so a Russian reply is not round-tripped through a
-  // translator for no reason.
+  // Translate the DRAFTS a turn produced, never the turn itself.
+  //
+  // A draft is skipped when it is already in the panel language, which is the
+  // common case for an English-speaking admin and was previously the source of
+  // an English answer being shown back in Russian. translationTargetFor names
+  // the language a piece of text should be translated INTO, so when it already
+  // names the panel language, the text is in the OTHER one and is worth
+  // translating.
   useEffect(() => {
-    if (!embedded || !showTranslations) return;
-    // Auto-translate only English content; see translationDirection.ts for why
-    // the test counts characters instead of asking whether the turn is purely
-    // one script.
+    if (!showTranslations) return;
     (async () => {
-      for (let i = 0; i < messages.length; i++) {
-        const m = messages[i];
-        if (m.role !== 'assistant' || m.pending) continue;
-        if (!shouldAutoTranslate(m.content)) continue;
-        await translateTurn(i, m.content);
+      for (const [idxKey, draft] of Object.entries(draftTexts)) {
+        const i = Number(idxKey);
+        if (!draft.trim()) continue;
+        if (translationTargetFor(draft) !== lang) continue;
+        await translateTurn(i, draft);
       }
     })();
-    // `translations` is deliberately NOT a dependency. It was, and since this
-    // effect SETS it, every success re-ran the loop from index 0 and abandoned
-    // the in-flight fetch — each turn costing several duplicate paid calls. The
-    // already-done set lives in a ref precisely so it can be read here without
+    // `translations` is deliberately NOT a dependency: this effect sets it, so
+    // listing it would re-run the loop on every success and abandon the
+    // in-flight fetch, costing several duplicate paid calls per turn. The
+    // already-done set lives in a ref so it can be read here without
     // retriggering.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, showTranslations, embedded, translateTurn]);
+  }, [draftTexts, showTranslations, lang, translateTurn]);
 
 
   // Load persisted history on mount so returning to the tab feels
@@ -589,6 +602,10 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     setSending(true);
     setInput('');
     clearDraft('assistant', draftScope);
+    // Where this send's turns will land, captured before the optimistic
+    // append. Used further down to file the draft against the turn that
+    // carried it. Safe because `sending` serialises sends.
+    const optimisticBase = messages.length;
     // Optimistically show the user's turn + a pending assistant turn
     // so the UI doesn't sit blank while OpenAI is thinking.
     setMessages((prev) => [
@@ -614,19 +631,25 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        // Built OUT HERE, not inside the updater. It depends only on the
+        // response, and React does not promise to run an updater synchronously,
+        // so reading a count assigned inside one gave the value from before the
+        // send. The draft index below depends on this length.
+        //
+        // Splice in EVERY assistant turn this send produced, not just the last
+        // one. A turn that carries a tool call usually carries prose too, the
+        // rewritten draft typically, and rendering only the final turn meant
+        // the rewrite was invisible until a reload pulled the stored
+        // transcript, which read as the messages reordering themselves.
+        const turns: ChatMessage[] =
+          Array.isArray(data.assistantTurns) && data.assistantTurns.length > 0
+            ? data.assistantTurns.map((m: { content: string }) => ({
+                role: 'assistant' as const,
+                content: m.content,
+              }))
+            : [{ role: 'assistant', content: data.reply as string }];
+        const turnCount = turns.length;
         setMessages((prev) => {
-          // Splice in EVERY assistant turn this send produced, not just the
-          // last one. A turn that carries a tool call usually carries prose
-          // too — the rewritten draft — and rendering only the final turn meant
-          // the rewrite was invisible until a reload pulled the stored
-          // transcript, which read as the messages reordering themselves.
-          const turns: ChatMessage[] =
-            Array.isArray(data.assistantTurns) && data.assistantTurns.length > 0
-              ? data.assistantTurns.map((m: { content: string }) => ({
-                  role: 'assistant' as const,
-                  content: m.content,
-                }))
-              : [{ role: 'assistant', content: data.reply }];
           const next = [...prev];
           const lastIdx = next.length - 1;
           // The splice consumes the pending bubble, so no thinking dots linger.
@@ -634,7 +657,15 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
           else next.push(...turns);
           return next;
         });
-        // One toast per DB write the assistant made this turn.
+        // The turn index the draft belongs to. Sends are serialised by the
+        // `sending` flag, so the arithmetic is safe: before the fetch this
+        // appended the user turn and one pending bubble, and the splice below
+        // replaces that bubble with `turns`.
+        if (typeof data.draftText === 'string' && data.draftText.trim()) {
+          const lastTurnIndex = optimisticBase + turnCount;
+          setDraftTexts((prev) => ({ ...prev, [lastTurnIndex]: data.draftText }));
+        }
+
         const writes = (data.dbWrites ?? []) as DbWrite[];
         // One toast per turn, not one per row. A refine turn routinely writes
         // the draft AND a knowledge entry, so this used to stack two cards on

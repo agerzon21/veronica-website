@@ -10,9 +10,13 @@
  * stops clients from casually handing their login to wedding guests. Anyone
  * they want to share photos with goes through the Gallery Pass tab instead.
  *
- * Returns the full client portal payload — contract status, payment info,
- * gallery files (if uploaded), and the manageable Gallery Pass settings.
+ * Returns the full client portal payload: contract status, payment info,
+ * gallery files (once released), and the manageable Gallery Pass settings.
  * Client-side UI renders progressively based on what's populated.
+ *
+ * Photo data is gated. Until Vero marks the gallery delivered, drive_url is
+ * null, the file lists are empty, and gallery_withheld is true. See
+ * ./_gallery-gate.ts.
  *
  * Only `mode='full'` portals can log in here. `mode='simple'` portals have
  * no email/password, so any lookup against them is impossible by design.
@@ -20,6 +24,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
+import { isGalleryReleased } from './_gallery-gate.js';
 import { getDb } from '../_db.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
@@ -28,6 +33,9 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type ClientPortalRow = {
   id: string;
+  // Always 'full' here (the lookup filters on it), but selected rather than
+  // assumed so isGalleryReleased is handed the row's real mode.
+  mode: 'simple' | 'full';
   // Selected only to authenticate. Never returned — check the response object
   // below; neither field appears in it.
   client_password_hash: string | null;
@@ -88,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, client_display_name, client_email, drive_url,
+      select id, mode, client_display_name, client_email, drive_url,
              event_date, session_type, contract_template_key, contract_variables,
              contract_status, contract_signed_at, contract_body, contract_signed_pdf_url,
              contract_total_amount, contract_retainer_amount, paid_to_date, payment_plan_enabled,
@@ -176,21 +184,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paid_at: p.paid_at,
     }));
 
+    /**
+     * Charges added to the booking after the fact: extra time, and costs paid
+     * on the day. The client sees these itemized, because a balance that grew
+     * with no line explaining it is the thing this feature exists to prevent.
+     *
+     * Fetched in its own try/catch because migration 035 is applied by hand:
+     * a portal must still open on a database that does not have the table
+     * yet, and on such a database there are no charges anyway.
+     *
+     * Summed from the rows rather than read off client_portals.charges_total
+     * so the total can never disagree with the lines shown beneath it.
+     */
+    let charges: Array<{
+      id: string;
+      amount: number;
+      reason: string;
+      note: string | null;
+      charged_at: string;
+    }> = [];
+    try {
+      const chargeRows = (await sql`
+        select id, amount, reason, note, charged_at
+        from portal_charges
+        where client_portal_id = ${row.id}
+        order by charged_at desc, created_at desc
+      `) as Array<{
+        id: string;
+        amount: string;
+        reason: string;
+        note: string | null;
+        charged_at: string;
+      }>;
+      charges = chargeRows.map((c) => ({
+        id: c.id,
+        amount: parseFloat(c.amount),
+        reason: c.reason,
+        note: c.note,
+        charged_at: c.charged_at,
+      }));
+    } catch {
+      /* pre-migration-035 database: nothing has been charged, so nothing shows */
+    }
+    const chargesTotal = charges.reduce((sum, c) => sum + c.amount, 0);
+
+    // The release gate. A full portal's photos are served only after Vero
+    // marks the gallery delivered, so pasting a Drive URL no longer publishes
+    // anything. See api/portal/_gallery-gate.ts for why the predicate lives
+    // in one place and why simple portals are out of scope.
+    const galleryReleased = isGalleryReleased(row);
+
     // Try to list Drive files if gallery is ready. Same fall-through pattern
-    // as /api/portal/gallery — a Drive listing failure is non-fatal because
+    // as /api/portal/gallery: a Drive listing failure is non-fatal because
     // the portal page can still show the contract / payment / "Open in Drive"
     // fallback link even without thumbnails.
     let tree: FolderTree = { rootFiles: [], sections: [] };
     let warning: string | undefined;
 
-    if (row.drive_url) {
+    if (galleryReleased && row.drive_url) {
       const folderId = extractFolderId(row.drive_url);
       if (folderId) {
         try {
           tree = await listFolderTree(folderId);
         } catch (err) {
           console.error('[portal/client] Drive listing failed:', err);
-          warning = 'Could not load photo previews — use "View in Drive" below.';
+          warning = 'Could not load photo previews. Use "View in Drive" below.';
         }
       }
     }
@@ -208,9 +266,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mode: 'full',
       client_name: row.client_display_name,
       client_email: row.client_email,
-      drive_url: row.drive_url,
+      // Null until release, not "present but hidden": the Drive URL is the
+      // photos. tree stays empty for the same reason, because it is never
+      // fetched while the gate is closed.
+      drive_url: galleryReleased ? row.drive_url : null,
       rootFiles: tree.rootFiles,
       sections: tree.sections,
+      // Lets the portal say "not released yet" instead of rendering an empty
+      // gallery that reads as a bug.
+      gallery_withheld: !galleryReleased,
       warning,
 
       // Session metadata — shown in the portal header
@@ -235,9 +299,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contract_total_amount: row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
       contract_retainer_amount: row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,
       paid_to_date: parseFloat(row.paid_to_date),
+      // Owed = contract_total_amount + charges_total - paid_to_date.
+      charges_total: chargesTotal,
       payment_plan_enabled: row.payment_plan_enabled,
       installments,
       payments,
+      charges,
 
       // Gallery Pass (manageable here)
       gallery_password: row.gallery_password,

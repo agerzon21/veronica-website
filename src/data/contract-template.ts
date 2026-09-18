@@ -197,6 +197,45 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         },
       ],
     },
+    // Gated on the RATE itself rather than on a yes/no flag, so there is exactly
+    // one thing to fill in and no way to switch the clause on without saying
+    // what the rate is. Session types set it by default; wedding offers it as a
+    // blank field, so an existing wedding contract renders byte for byte as
+    // before until somebody deliberately types a rate.
+    //
+    // Covers two different things on purpose. Overtime protects Vero's time when
+    // a session runs long because the Client asked it to. Out-of-pocket costs
+    // cover the parking and entry fees she currently absorbs. Both are billed
+    // through the portal as itemised charges, so the Client can see exactly what
+    // was added and why, and both are explicitly hers to waive.
+    {
+      title: 'ADDITIONAL TIME AND EXPENSES',
+      optional: true,
+      requireVariables: ['overtime_rate'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'The session covers the time listed above. If it runs beyond that at the Client\u2019s request, or because of a delay on the Client\u2019s side, the additional time is billed at {{overtime_rate}}, charged in half hour increments.',
+        },
+        {
+          kind: 'text',
+          text: 'Costs the Photographer pays on the day in order to carry out the session, such as parking or an entry fee, are added to the balance at cost.',
+        },
+        {
+          kind: 'bullets',
+          items: [
+            'Any such charge is itemised in the Client portal, with the reason shown, before it is due.',
+            'Charges are added to the remaining balance, which is payable before images are delivered.',
+            'The Photographer may waive any of these at her sole discretion, and frequently will.',
+          ],
+        },
+        {
+          kind: 'text',
+          emphasis: 'italic',
+          text: 'This does not apply where the session runs long for reasons within the Photographer\u2019s control.',
+        },
+      ],
+    },
     {
       number: 'IV',
       title: 'PAYMENT',
@@ -422,6 +461,17 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     label: 'Balance Due Window',
     defaultValue: 'TEN (10) Days',
     helpText: 'How long after the event date the remaining balance is due.',
+  },
+  {
+    key: 'overtime_rate',
+    label: 'Overtime Rate (optional)',
+    placeholder: 'e.g. $150 per hour',
+    // Deliberately NO defaultValue. The clause is gated on this field, so a
+    // blank one prunes it away and every wedding contract already out there
+    // keeps rendering exactly as it did. Vero opts a booking in by typing a
+    // rate.
+    helpText:
+      'Leave blank for none. Fill it in to add the clause covering extra time and out-of-pocket costs such as parking.',
   },
   {
     key: 'payment_methods',
@@ -690,6 +740,45 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       },
     ],
   },
+  // Gated on the RATE itself rather than on a yes/no flag, so there is exactly
+  // one thing to fill in and no way to switch the clause on without saying
+  // what the rate is. Session types set it by default; wedding offers it as a
+  // blank field, so an existing wedding contract renders byte for byte as
+  // before until somebody deliberately types a rate.
+  //
+  // Covers two different things on purpose. Overtime protects Vero's time when
+  // a session runs long because the Client asked it to. Out-of-pocket costs
+  // cover the parking and entry fees she currently absorbs. Both are billed
+  // through the portal as itemised charges, so the Client can see exactly what
+  // was added and why, and both are explicitly hers to waive.
+  {
+    title: 'ADDITIONAL TIME AND EXPENSES',
+    optional: true,
+    requireVariables: ['overtime_rate'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'The session covers the time listed above. If it runs beyond that at the Client\u2019s request, or because of a delay on the Client\u2019s side, the additional time is billed at {{overtime_rate}}, charged in half hour increments.',
+      },
+      {
+        kind: 'text',
+        text: 'Costs the Photographer pays on the day in order to carry out the session, such as parking or an entry fee, are added to the balance at cost.',
+      },
+      {
+        kind: 'bullets',
+        items: [
+          'Any such charge is itemised in the Client portal, with the reason shown, before it is due.',
+          'Charges are added to the remaining balance, which is payable before images are delivered.',
+          'The Photographer may waive any of these at her sole discretion, and frequently will.',
+        ],
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'This does not apply where the session runs long for reasons within the Photographer\u2019s control.',
+      },
+    ],
+  },
   // Same payment model as the wedding contract, on purpose: the balance falls
   // due after the session, and nothing is delivered until it is paid. The
   // gallery is the leverage, so there is no reason to demand money up front.
@@ -889,6 +978,14 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
     labelRu: 'Срок переноса',
     defaultValue: 'three (3) months',
     helpText: 'How long a rescheduled session stays claimable before the retainer is forfeited.',
+  },
+  {
+    key: 'overtime_rate',
+    label: 'Overtime Rate',
+    labelRu: 'Ставка за переработку',
+    defaultValue: '$150 per hour',
+    helpText:
+      'Billed only if the session runs long at the client\u2019s request. Clearing this removes the whole clause, including the one covering parking and entry fees.',
   },
   {
     key: 'payment_methods',

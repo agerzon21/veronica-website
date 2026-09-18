@@ -93,6 +93,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         created_at desc
     `) as Row[];
 
+    /**
+     * Charges added after the booking, so the Clients list prints the same
+     * remaining balance the client's own portal does. Kept out of the select
+     * above and allowed to fail because migration 035 is applied by hand:
+     * on a database without the column every portal simply has no charges,
+     * which is the number this list showed before charges existed.
+     */
+    const chargesById = new Map<string, number>();
+    try {
+      const chargeRows = (await sql`
+        select id, charges_total from client_portals
+      `) as Array<{ id: string; charges_total: string | null }>;
+      for (const c of chargeRows) {
+        chargesById.set(c.id, parseFloat(c.charges_total ?? '0') || 0);
+      }
+    } catch {
+      /* pre-migration-035 database: nothing has been charged */
+    }
+
     return res.status(200).json({
       success: true,
       level: auth.level,
@@ -109,6 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         contract_signed_at: r.contract_signed_at,
         contract_total_amount: r.contract_total_amount ? parseFloat(r.contract_total_amount) : null,
         paid_to_date: parseFloat(r.paid_to_date),
+        charges_total: chargesById.get(r.id) ?? 0,
         drive_url: r.drive_url,
         gallery_delivered_at: r.gallery_delivered_at,
         gallery_expires_at: r.gallery_expires_at,

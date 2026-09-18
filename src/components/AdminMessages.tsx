@@ -36,13 +36,13 @@ import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaClipboardList from '../icons/fa/FaClipboardList';
 import FaCommentDots from '../icons/fa/FaCommentDots';
-import FaEllipsisV from '../icons/fa/FaEllipsisV';
 import FaEnvelope from '../icons/fa/FaEnvelope';
 import FaEraser from '../icons/fa/FaEraser';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
+import FaFolder from '../icons/fa/FaFolder';
 import FaInstagram from '../icons/fa/FaInstagram';
 import FaLanguage from '../icons/fa/FaLanguage';
 import FaLightbulb from '../icons/fa/FaLightbulb';
@@ -63,13 +63,59 @@ import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 import { type ClientPrefill, type PrefillBooking } from './clientPrefill';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
-import { translationTargetFor } from './translationDirection';
+import { translationTargetFor, type ContentLang } from './translationDirection';
 
-// Vero speaks Russian natively — customer messages (usually English)
-// get translated to Russian; her replies get translated to English
-// before sending. If we ever localize this UI properly, flip this to
-// a per-user setting.
-const VERO_LANG = 'ru';
+/**
+ * The language a piece of text IS.
+ *
+ * translationTargetFor answers the opposite question, which language the text
+ * should be translated INTO, and it is deliberately symmetric between the two,
+ * so inverting it is the whole answer. Kept as its own name because at the call
+ * sites below "what language is this in" is what is actually being asked, and
+ * reading an inverted target there is how you talk yourself into a bug.
+ */
+function languageOf(text: string): ContentLang {
+  return translationTargetFor(text) === 'ru' ? 'en' : 'ru';
+}
+
+/**
+ * Which language THIS CONVERSATION is in, from the customer's most recent
+ * inbound message. Most recent rather than the first, because customers do
+ * switch mid-thread, and the language of the message you are answering is the
+ * one that matters.
+ *
+ * Null when they have not written anything yet, which is the honest answer: a
+ * thread Vero opened herself has no language of its own to disagree with.
+ *
+ * Done here rather than through the server's language detector. This used to be
+ * a fetch to messages-translate on EVERY send, just to read `detectedLang` off
+ * the response and throw the translation away, so every reply paid for a round
+ * trip before it started. The character-counting heuristic is enough to tell
+ * Russian from English, which is the only distinction the panel makes.
+ */
+function conversationLanguage(messages: Message[]): ContentLang | null {
+  const lastInbound = [...messages]
+    .reverse()
+    .find((m) => m.direction === 'inbound' && m.body.trim().length > 0);
+  return lastInbound ? languageOf(lastInbound.body) : null;
+}
+
+/**
+ * Is there a real keyboard in front of this person?
+ *
+ * `(hover: hover) and (pointer: fine)` is the standard proxy: a mouse or
+ * trackpad and a device that can hover, which in practice means a laptop or a
+ * desktop. It is deliberately NOT a width breakpoint. The question is about
+ * input hardware, not screen size, and a phone held in landscape is wide while
+ * a narrow window on a laptop is not.
+ *
+ * Called at keypress rather than read once into state so that plugging a
+ * keyboard into an iPad, or unplugging one, is picked up without a reload.
+ */
+function hasHardwareKeyboard(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
 
 /**
  * On-demand translation of one piece of text.
@@ -377,6 +423,182 @@ function formatPhoneNumbersInText(text: string): string {
   });
 }
 
+/** Which of the five things the collapsed AI strip is currently saying. */
+type AiStripTone = 'needs' | 'draft' | 'booking' | 'summary' | 'idle';
+
+interface AiStripLine {
+  tone: AiStripTone;
+  /** The single line the strip prints. */
+  text: string;
+  /**
+   * The same state in words. A coloured dot on its own is a signal only to
+   * people who can see the colour, so this goes on the dot's title and into
+   * the button's aria-label.
+   */
+  state: string;
+}
+
+/** The dot, by state. Amber, gold, green, blue, then nothing-yet grey. */
+const AI_STRIP_DOT: Record<AiStripTone, string> = {
+  // The two figures Vero sets herself count as gaps too, so this is the
+  // colour of "something is blocking the contract", not "ask the client".
+  needs: 'orange.400',
+  draft: 'brand.accent',
+  // Matches the booking-inquiry badge's own green, so the two agree.
+  booking: 'green.500',
+  summary: 'blue.400',
+  idle: 'gray.300',
+};
+
+/** Sentence-case label to bare noun: "Event date" becomes "event date". */
+const lowerFirst = (s: string): string =>
+  s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
+
+/**
+ * "24 Oct 2026".
+ *
+ * The date part is read as UTC, because the summariser hands back a plain
+ * 'YYYY-MM-DD' and parsing that locally slides it back a day anywhere west of
+ * Greenwich. English regardless of the admin language, like every other date
+ * helper in the panel (see AdminClientDetail, AdminDashboard) and like the
+ * session type standing next to it, which is a contract-template key.
+ */
+function formatStripDate(iso: string): string {
+  const [y, m, d] = iso.split('T')[0].split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * The summariser returns money as digits only, so the form can put it straight
+ * into a number input. The symbol goes back on here. Guarded rather than
+ * assumed: a row cached before that normalisation existed can still hold "$400",
+ * and "$$400" is a worse bug than an unformatted number.
+ */
+const withDollar = (raw: string): string => (raw.startsWith('$') ? raw : `$${raw}`);
+
+/** A draft preview is one line; anything past this is never seen anyway. */
+const DRAFT_PREVIEW_CHARS = 120;
+
+/**
+ * What the collapsed AI strip says, and which colour its dot is.
+ *
+ * The strip used to carry three permanent labels: a lightbulb, the literal
+ * word "AI", and a classification badge. All three occupied the widest line
+ * above the conversation forever and none of them changed as the booking did.
+ * The badge in particular read BOOKING INQUIRY on very nearly every thread,
+ * because spam is hidden before it ever reaches this view, so it cost the line
+ * and told Vero nothing. They are replaced by one line that says whatever is
+ * currently true and one dot that colours it.
+ *
+ * PRIORITY, first match wins:
+ *   1. needs:   a gap still blocks the contract         (amber)
+ *   2. draft:   a reply is written and unsent           (gold)
+ *   3. booking: the facts the thread has established    (green)
+ *   4. summary: what they are asking                    (blue)
+ *   5. idle:    no summary yet                          (grey)
+ *
+ * Pure, and out here rather than inside the markup, so the five branches read
+ * as one ordered list instead of a thicket of && in the JSX.
+ */
+/**
+ * Name at most three, then count the rest.
+ *
+ * A fresh booking inquiry can carry eight gaps. Joined in full they ran past
+ * the end of the strip and CSS-clamped to roughly two at phone width, so the
+ * line spent its whole width on an arbitrary prefix of the list. Three plus a
+ * count fits, and the count is the part that says "open me".
+ */
+const STRIP_LIST_MAX = 3;
+function joinCapped(items: string[]): string {
+  if (items.length <= STRIP_LIST_MAX) return items.join(', ');
+  const shown = items.slice(0, STRIP_LIST_MAX).join(', ');
+  return `${shown} +${items.length - STRIP_LIST_MAX}`;
+}
+
+function describeAiStrip(
+  summary: AiSummary | null,
+  draftBody: string | null,
+  lang: SummaryLang,
+  t: AdminT,
+): AiStripLine {
+  const localized = readSummaryLocale(summary, lang);
+
+  // The dot answers one question: whose turn is it. Amber means the client
+  // owes an answer, gold means Vero does, green means nobody does.
+  //
+  // `missing` and `decide` are deliberately NOT merged. They were, and the
+  // result was that almost every booking thread sat on amber, because `decide`
+  // holds the price and the retainer and those stay unset until she sets them.
+  // A permanently amber dot is the same failure as the permanent "BOOKING
+  // INQUIRY" badge this strip replaced: a signal that is always on tells you
+  // nothing.
+  //
+  // 1. The client owes an answer. Already localised by the summariser, so it
+  //    is lowercased and joined, never re-translated.
+  const missing = localized.missing ?? [];
+  if (missing.length > 0) {
+    const text = `${t.messages.aiStripNeeds} ${joinCapped(missing.map(lowerFirst))}`;
+    return { tone: 'needs', text, state: text };
+  }
+
+  // 2. A written reply waiting on her.
+  const draft = (draftBody ?? '').replace(/\s+/g, ' ').trim();
+  if (draft) {
+    return {
+      tone: 'draft',
+      text:
+        draft.length > DRAFT_PREVIEW_CHARS
+          ? `${draft.slice(0, DRAFT_PREVIEW_CHARS).trimEnd()}…`
+          : draft,
+      state: t.messages.aiDraftWaiting,
+    };
+  }
+
+  // 3. The client has answered everything and the ball is hers: the price and
+  //    the retainer are the usual two. Gold, like the draft, because both mean
+  //    the thread is waiting on her rather than on them.
+  const decide = localized.decide ?? [];
+  if (decide.length > 0) {
+    const text = `${t.messages.aiStripYourCall} ${joinCapped(decide.map(lowerFirst))}`;
+    return { tone: 'draft', text, state: text };
+  }
+
+  // 4. Nothing outstanding and nothing to send: show what was actually agreed.
+  //    `booking` is absent on pre-v2 cached summaries, hence the guard.
+  const b = summary?.booking;
+  if (b) {
+    const facts = [
+      b.session_type ? b.session_type.charAt(0).toUpperCase() + b.session_type.slice(1) : null,
+      b.event_date ? formatStripDate(b.event_date) : null,
+      b.total_amount ? withDollar(b.total_amount) : null,
+    ].filter((f): f is string => Boolean(f));
+    // A middot, not a dash: it separates without implying a range.
+    if (facts.length > 0) {
+      return { tone: 'booking', text: facts.join(' · '), state: t.messages.summaryGathered };
+    }
+  }
+
+  // 5. Not a booking thread, or too early to be one. The sentence it used to
+  //    show all the time.
+  if (localized.asking) {
+    return {
+      tone: 'summary',
+      text: formatPhoneNumbersInText(localized.asking),
+      state: t.messages.summaryTitle,
+    };
+  }
+
+  // 6. Nothing read yet. The strip is still the way into the panel, so it says
+  //    what the summary card says when it has nothing.
+  return { tone: 'idle', text: t.messages.summaryNone, state: t.messages.summaryNone };
+}
+
 const POLL_INTERVAL_MS = 30_000;
 
 /**
@@ -464,10 +686,12 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
     seedCounter.current += 1;
     setAssistantSeed({ text, token: seedCounter.current, convId: selectedId });
   };
-  // Mobile only: roll the panel down to its header so the conversation behind
-  // it is readable, then roll back up and keep typing. Distinct from closing,
-  // which throws the chat away.
-  const [refineCollapsed, setRefineCollapsed] = useState(false);
+  // NOTE: the panel used to roll down to a bar docked above the bottom nav on
+  // mobile, and that bar reopened it. It duplicated the AI strip at the top of
+  // the thread, which opens the same panel and is always visible, so there were
+  // two controls for one thing and the docked bar also sat on top of the
+  // composer (hence the clearance maths that used to live below). Only the X
+  // closes the panel now.
   // Restore whatever the rail was before the panel auto-folded it.
   const railBeforeRefine = useRef(false);
 
@@ -487,7 +711,6 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
     // collapsed rail, which on a phone rendered the desktop avatar strip.
     if (refineFor !== selectedId) railBeforeRefine.current = listCollapsed;
     setListCollapsed(true);
-    setRefineCollapsed(false);
     setRefineFor(selectedId);
     try {
       localStorage.setItem(REFINE_SESSION_KEY, selectedId);
@@ -517,7 +740,6 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
 
   const closeRefinePanel = () => {
     setRefineFor(null);
-    setRefineCollapsed(false);
     setListCollapsed(railBeforeRefine.current);
     try {
       localStorage.removeItem(REFINE_SESSION_KEY);
@@ -839,7 +1061,6 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                 onOpenClient={onOpenClient}
                 onRefine={openRefinePanel}
                 onReplySent={closeRefinePanel}
-                refineDocked={refineOpen && refineCollapsed}
                 panelTab={panelTab}
                 panelBodyEl={panelBodyEl}
                 onPanelDraftChange={setPanelHasDraft}
@@ -870,9 +1091,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
               flexDirection="column"
               overflow="hidden"
               position={{ base: 'fixed', lg: 'static' }}
-              // Rolled down: unpin the top so the box is only as tall as its
-              // header and the thread shows through above it.
-              top={{ base: refineCollapsed ? 'auto' : 0, lg: 'auto' }}
+              top={{ base: 0, lg: 'auto' }}
               left={{ base: 0, lg: 'auto' }}
               right={{ base: 0, lg: 'auto' }}
               // Ends exactly where the admin bottom nav starts instead of
@@ -894,28 +1113,11 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                 borderColor="gray.100"
                 flexShrink={0}
               >
-                {/* On mobile this row is the roll-up control: tap to drop the
-                    panel to its header and read the thread, tap again to come
-                    back to what you were typing. The chat is NOT unmounted, so
-                    the draft survives. Inert on desktop, where the panel is a
-                    column and nothing is covered. */}
-                <HStack
-                  as="button"
-                  type="button"
-                  spacing={2}
-                  minW={0}
-                  flex={1}
-                  bg="transparent"
-                  border="none"
-                  p={0}
-                  textAlign="left"
-                  cursor={{ base: 'pointer', lg: 'default' }}
-                  onClick={() => setRefineCollapsed((v) => !v)}
-                  aria-label={
-                    refineCollapsed ? t.messages.refineExpand : t.messages.refineCollapse
-                  }
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
-                >
+                {/* A label, not a control. This row used to roll the panel down
+                    to a docked bar on mobile; that bar was a second way to
+                    reopen the panel on top of the always-visible AI strip at
+                    the top of the thread, so it went. */}
+                <HStack spacing={2} minW={0} flex={1}>
                   <Icon as={FaRobot} boxSize={3.5} color="brand.accentText" />
                   <Text
                     fontSize="2xs"
@@ -927,14 +1129,6 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                   >
                     {t.messages.refinePanelTitle}
                   </Text>
-                  <Icon
-                    as={FaChevronDown}
-                    boxSize={2.5}
-                    color="gray.400"
-                    display={{ base: 'block', lg: 'none' }}
-                    transform={refineCollapsed ? 'rotate(180deg)' : 'rotate(0deg)'}
-                    transition="transform 0.2s ease"
-                  />
                 </HStack>
                 <IconButton
                   aria-label={t.messages.refineClose}
@@ -946,15 +1140,11 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                   onClick={closeRefinePanel}
                 />
               </Flex>
-              {/* The segmented control lives INSIDE the collapsible body, not
-                  in the header. The composer's mobile clearance math assumes
-                  the rolled-down bar is one header tall; a strip in the header
-                  would push Send back underneath it. */}
               <Box
                 flex="1"
                 minH={0}
                 overflow="hidden"
-                display={{ base: refineCollapsed ? 'none' : 'flex', lg: 'flex' }}
+                display="flex"
                 flexDirection="column"
               >
                 <Flex borderBottom="1px solid" borderColor="gray.200" flexShrink={0}>
@@ -1408,7 +1598,18 @@ function ConversationListRow({
                 {t.messages.followUpBadge}
               </Badge>
             )}
-            {!conv.ai_enabled && (
+            {/* "Needs Vero" means THIS THREAD IS WAITING ON A HUMAN, which is
+                not the same thing as ai_enabled being false.
+                ai_enabled is a latch: a spam match, the AI writing an email
+                draft, an Instagram bridge reply and the manual switch all turn
+                it off, and nothing ever turns it back on. Keyed on that alone
+                the badge lit up forever, including on threads Vero had already
+                answered and closed out, so the inbox was full of a marker that
+                meant nothing. The two extra conditions are what make it a
+                to-do: they spoke last (nobody has answered), and there is no
+                draft waiting (a draft already has its own gold badge above, and
+                two badges shouting about the same thread is noise). */}
+            {!conv.ai_enabled && conv.last_message_direction === 'inbound' && !conv.has_draft && (
               <Badge
                 bg="orange.100"
                 color="orange.700"
@@ -1569,7 +1770,6 @@ function ConversationView({
   onOpenClient,
   onRefine,
   onReplySent,
-  refineDocked = false,
   panelTab = 'summary',
   panelBodyEl = null,
   onPanelDraftChange,
@@ -1586,8 +1786,6 @@ function ConversationView({
   onRefine?: (tab?: AiPanelTab) => void;
   /** A reply actually went out — the refine panel has served its purpose. */
   onReplySent?: () => void;
-  /** The refine panel is rolled down to its bar, which sits over this pane. */
-  refineDocked?: boolean;
   /** Which AI tab the panel is showing. Drives what gets portalled. */
   panelTab?: AiPanelTab;
   /** Portal target inside the panel, owned by the parent. */
@@ -1857,18 +2055,32 @@ function ConversationView({
     }
   };
   const [sending, setSending] = useState(false);
+  // True only while the translate step of a send is in flight, so the button
+  // can say "Translating…" rather than "Sending…" for the second or two the
+  // extra call takes.
+  const [translatingSend, setTranslatingSend] = useState(false);
+  /**
+   * A reply typed in a language the thread is not in, parked while Vero picks
+   * what to do with it.
+   *
+   * This replaces a "Translate before sending" switch that lived in the
+   * composer. It defaulted to on, was nearly always bypassed because replies go
+   * through the assistant instead, and cost a row of the composer on a phone to
+   * ask a question that only matters when the two languages actually differ.
+   * They usually do not, and when they do, asking at the moment of sending is
+   * both louder and impossible to leave in the wrong position.
+   */
+  const [langMismatch, setLangMismatch] = useState<{
+    text: string;
+    /** The language the conversation is in. */
+    theirs: ContentLang;
+    /** The language Vero just typed in. */
+    yours: ContentLang;
+  } | null>(null);
   const [aiToggleLoading, setAiToggleLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
-  // Translate-before-sending defaults to ON. Vero speaks Russian
-  // natively; if the toggle were OFF by default and she typed in
-  // Russian, her reply would ship to an English-speaking customer
-  // untranslated — the worst-case failure. With it ON by default,
-  // the worst case is she types in English and the translate step
-  // is a no-op (English → English, ignored server-side). Alex's
-  // ask, explicitly.
-  const [translateOnSend, setTranslateOnSend] = useState(true);
   // Summary is EXPANDED by default when a conversation opens (per
   // Alex's ask — the summary is the first thing you want to see, not
   // the chat scroll). Vero taps the collapse chevron to reveal the
@@ -1880,28 +2092,13 @@ function ConversationView({
   // came to read. The header row stays visible with the one-line "asking"
   // gist, so nothing is hidden, just folded.
 
-  // Summary language toggle. Defaults to Russian since Vero speaks
-  // Russian — but the toggle lets an admin flip to English when
-  // helping her out. Persisted per-browser (localStorage) so the
-  // choice sticks across sessions.
-  // Follows the global admin language unless she has explicitly overridden it
-  // for the summary content. It used to default to a hardcoded 'ru' AND persist
-  // on mount, so the key was populated on the very first render and the
-  // "nothing stored, follow the global language" path could never run.
-  // Persisting now happens in the change handler, not on mount.
-  const [summaryLang, setSummaryLang] = useState<SummaryLang>(() => {
-    if (typeof window === 'undefined') return adminLang;
-    const stored = window.localStorage.getItem('vero_summary_lang');
-    return stored === 'ru' || stored === 'en' ? stored : adminLang;
-  });
-  const changeSummaryLang = (l: SummaryLang) => {
-    setSummaryLang(l);
-    try {
-      window.localStorage.setItem('vero_summary_lang', l);
-    } catch {
-      /* private mode */
-    }
-  };
+  // NOTE: the summary used to carry its own RU|EN toggle, persisted under
+  // `vero_summary_lang`. It let one panel disagree with the rest of the admin
+  // panel, which is one language control too many for a two-language app, so
+  // the summary follows `adminLang` like every other piece of copy. Nothing is
+  // lost by it: the server writes BOTH locales on every summary (see
+  // api/admin/_messages-summary.ts) and readSummaryLocale falls back through
+  // the other one anyway.
   // AI-off banner dismiss state — the banner auto-opens whenever a
   // conversation with AI disabled is opened, but Vero can dismiss it
   // for the current session (state resets when the ConversationView
@@ -2236,46 +2433,72 @@ function ConversationView({
     }
   };
 
-  const handleSend = async () => {
+  /**
+   * Press Send.
+   *
+   * The common case is silent: the thread and the reply are in the same
+   * language, so this is a plain send with nothing between the press and the
+   * message going out. Only a genuine mismatch stops to ask, and it asks
+   * because both answers are reasonable, sending Russian to an
+   * English-speaking client being the one outcome nobody wants.
+   */
+  const handleSend = () => {
     const raw = replyText.trim();
-    if (!raw) return;
+    if (!raw || sending) return;
+    const theirs = conversationLanguage(messages);
+    const yours = languageOf(raw);
+    // Nothing to ask about: they have not written yet, or she answered in the
+    // language they wrote in.
+    if (!theirs || theirs === yours) {
+      void deliverReply(raw, null);
+      return;
+    }
+    setLangMismatch({ text: raw, theirs, yours });
+  };
+
+  /**
+   * Actually send `raw`, translating it into `translateTo` first when asked.
+   *
+   * Translation degrades rather than blocks: a failed or unreachable translator
+   * warns and sends the original. Losing the message because a second service
+   * was down would be the worse outcome by a distance, and the original is at
+   * least readable.
+   */
+  const deliverReply = async (raw: string, translateTo: ContentLang | null) => {
+    if (sending) return;
     setSending(true);
     try {
-      // If translate-on-send is on, ask the backend to translate
-      // Vero's Russian text into the customer's language before
-      // sending. We infer target from the last inbound message —
-      // its detected language is more reliable than a guess.
       let outbound = raw;
-      if (translateOnSend) {
-        const targetLang = await inferCustomerLang(adminPassword, messages);
-        if (targetLang && targetLang !== VERO_LANG) {
-          try {
-            const tRes = await fetch('/api/admin/messages-translate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                password: adminPassword,
-                text: raw,
-                targetLang,
-              }),
-            });
-            const tData = await tRes.json();
-            if (tRes.ok && tData.success && typeof tData.translated === 'string') {
-              outbound = tData.translated;
-            } else {
-              toast({
-                title: tData.error || t.messages.translationFailedSending,
-                status: 'warning',
-                duration: 4000,
-              });
-            }
-          } catch {
+      if (translateTo) {
+        setTranslatingSend(true);
+        try {
+          const tRes = await fetch('/api/admin/messages-translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: adminPassword,
+              text: raw,
+              targetLang: translateTo,
+            }),
+          });
+          const tData = await tRes.json();
+          if (tRes.ok && tData.success && typeof tData.translated === 'string') {
+            outbound = tData.translated;
+          } else {
             toast({
-              title: t.messages.translationUnreachableSending,
+              title: tData.error || t.messages.translationFailedSending,
               status: 'warning',
               duration: 4000,
             });
           }
+        } catch {
+          toast({
+            title: t.messages.translationUnreachableSending,
+            status: 'warning',
+            duration: 4000,
+          });
+        } finally {
+          setTranslatingSend(false);
         }
       }
 
@@ -2324,6 +2547,12 @@ function ConversationView({
       });
     } finally {
       setSending(false);
+      // Whatever happened, the question the dialog was asking has been
+      // answered. Closed here rather than in the button handler so the dialog
+      // stays up showing its own spinner for the whole translate-then-send,
+      // instead of vanishing the moment she picks and leaving her watching
+      // nothing.
+      setLangMismatch(null);
     }
   };
 
@@ -2481,6 +2710,10 @@ function ConversationView({
   const contactIdentifier =
     rawIdentifier && rawIdentifier !== displayName ? rawIdentifier : null;
 
+  // One line and one dot for the AI strip below the header. Computed here, not
+  // in the markup, so the five states are readable in one place.
+  const aiStrip = describeAiStrip(aiSummary, pendingDraft?.body ?? null, adminLang, t);
+
   return (
     <>
       {/* Thread header — contact identity + per-convo AI toggle + Create client.
@@ -2631,118 +2864,48 @@ function ConversationView({
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               />
             )}
-            {/* "Wipe conversation" — super-admin test-reset button.
-                Sits to the LEFT of the AI toggle. Red-tint hover
-                distinguishes it as destructive; the equally-red
-                confirm dialog + explicit copy (message count + contact
-                name) make the consequence unmistakable, so accidental
-                taps get caught by the confirm modal.
-                Icon is an ERASER (FaEraser), not a refresh — Alex
-                flagged that a "reset" that looked like every other
-                refresh icon in the header was ambiguous. Eraser is
-                the unambiguous "wipe/clean" metaphor. Baseline color
-                is red (not gray) so it reads as destructive at a
-                glance without needing hover.
-                Available to BOTH admin and super — Vero uses this
-                heavily to reset test conversations while she's tuning
-                the AI assistant (she wants a clean slate without
-                needing a second IG test account). */}
-            {/* Delete beside the eraser. Two destructive controls sit
-                together, so they are visually distinct and separately
-                labelled: ERASER wipes the messages but keeps the thread
-                (so a re-test lands back in it), TRASH removes the thread
-                entirely. Without the second one, every reset left a dead
-                empty row in the inbox permanently. */}
-            {/* Fold this sender out of the inbox. Not a delete — mail
-                from a marketing sender is occasionally worth reading, so
-                a mistaken tap should cost a click to undo. Because email
-                threads are keyed on the sender's address, this covers
-                everything they send from now on. */}
-            {/* Secondary actions. On desktop they sit inline; on mobile they
-                move into the overflow menu below, because five icon buttons
-                plus the AI switch overflowed the row and squeezed the contact
-                name down to two characters. */}
-            <HStack spacing={1} display={{ base: 'none', md: 'inline-flex' }}>
-            {/* Personal — friends & family. Distinct from the eye beside it:
-                that one folds away marketing noise, this one says "not work",
-                which is what actually stops the assistant replying (see the
-                is_personal gate in api/_ai-reply.ts). Gold when active so it
-                reads as a deliberate state rather than a hidden thread. */}
-            <IconButton
-              aria-label={isPersonalThread ? t.messages.unmarkPersonal : t.messages.markPersonal}
-              title={isPersonalThread ? t.messages.unmarkPersonal : t.messages.markPersonal}
-              icon={<Icon as={FaUserFriends} boxSize={3.5} />}
-              onClick={handleTogglePersonal}
-              size="sm"
-              variant="ghost"
-              color={isPersonalThread ? 'brand.accentText' : 'gray.400'}
-              bg={isPersonalThread ? 'brand.surface' : 'transparent'}
-              _hover={{ color: 'brand.accentText', bg: 'brand.surface' }}
-              borderRadius="full"
-            />
-            <IconButton
-              aria-label={isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
-              title={isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
-              icon={<Icon as={isHidden ? FaEye : FaEyeSlash} boxSize={3.5} />}
-              onClick={handleTogglePromotional}
-              variant="ghost"
-              size="md"
-              w="36px"
-              h="36px"
-              minW="36px"
-              color={isHidden ? 'brand.accentText' : 'gray.400'}
-              _hover={{ color: 'brand.accent' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            />
-            <IconButton
-              aria-label={t.messages.deleteConversation}
-              title={t.messages.deleteConversation}
-              icon={<Icon as={FaTrash} boxSize={3.5} />}
-              onClick={() => setDeleteConfirmOpen(true)}
-              variant="ghost"
-              size="md"
-              w="36px"
-              h="36px"
-              minW="36px"
-              color="red.500"
-              _hover={{ bg: 'red.50' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            />
-            <IconButton
-              aria-label={t.messages.resetConversation}
-              title={t.messages.resetConversationTooltip}
-              icon={<Icon as={FaEraser} boxSize={3.5} />}
-              onClick={() => setResetConfirmOpen(true)}
-              variant="ghost"
-              size="md"
-              w="36px"
-              h="36px"
-              minW="36px"
-              minH="36px"
-              color="red.500"
-              bg="red.50"
-              _hover={{ bg: 'red.100', color: 'red.600' }}
-              _active={{ bg: 'red.200' }}
-              borderRadius="full"
-              flexShrink={0}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-            />
-            </HStack>
+            {/* Four loose icon buttons used to sit here on desktop, with a
+                mobile-only overflow menu carrying the same four actions below
+                them. Two implementations of one thing, and on desktop the row
+                was a wall of similar grey glyphs where the eraser and the trash
+                were one 36px slot apart.
+                They are two menus now, at EVERY width: one for filing and one
+                for the destructive pair. The mobile-only overflow is gone
+                rather than kept as a third variant, so there is one markup and
+                one behaviour to reason about; the width split it existed for
+                (five icons squeezing the contact name to two characters) does
+                not arise when the whole set is two triggers.
+                Both menus match the markup the overflow used, per the pattern
+                already in this file. */}
 
-            {/* Mobile overflow. Same actions, one 44px target. */}
+            {/* Filing: how this thread sits in the inbox. Neither action
+                destroys anything, which is exactly why they are kept away from
+                the pair below.
+                PERSONAL is distinct from the eye beside it: that one folds away
+                marketing noise, this one says "not work", which is what
+                actually stops the assistant replying (see the is_personal gate
+                in api/_ai-reply.ts). PROMOTIONAL is not a delete either: mail
+                from a marketing sender is occasionally worth reading, so a
+                mistaken tap costs one click to undo. Email threads are keyed on
+                the sender's address, so it covers everything they send from now
+                on. */}
             <Menu placement="bottom-end" autoSelect={false}>
               <MenuButton
                 as={IconButton}
-                aria-label={t.messages.moreActions}
-                icon={<Icon as={FaEllipsisV} boxSize={3.5} />}
+                aria-label={t.messages.filingActions}
+                title={t.messages.filingActions}
+                icon={<Icon as={FaFolder} boxSize={3.5} />}
                 size="sm"
                 variant="ghost"
-                color="gray.500"
+                // Gold whenever either flag is set, so the header still says at
+                // a glance that this thread is filed somewhere, which the two
+                // separate buttons used to say with their own colour.
+                color={isPersonalThread || isHidden ? 'brand.accentText' : 'gray.500'}
+                bg={isPersonalThread || isHidden ? 'brand.surface' : 'transparent'}
                 w="36px"
                 h="36px"
                 minW="36px"
                 borderRadius="full"
-                display={{ base: 'inline-flex', md: 'none' }}
                 flexShrink={0}
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               />
@@ -2759,6 +2922,40 @@ function ConversationView({
                 >
                   {isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
                 </MenuItem>
+              </MenuList>
+            </Menu>
+
+            {/* Danger: the two that delete things. They stay separately
+                labelled because they are genuinely different: ERASER wipes the
+                messages and keeps the thread (so a re-test lands back in it),
+                TRASH removes the thread entirely. Both still route through
+                ConfirmDialog, which names the contact and the message count,
+                and that dialog is the safeguard rather than a role gate: reset
+                is available to BOTH admin and super, because Vero leans on it
+                to clear test conversations while tuning the assistant. */}
+            <Menu placement="bottom-end" autoSelect={false}>
+              <MenuButton
+                as={IconButton}
+                aria-label={t.messages.dangerActions}
+                title={t.messages.dangerActions}
+                icon={<Icon as={FaTrash} boxSize={3.5} />}
+                size="sm"
+                variant="ghost"
+                // Red at rest, not on hover: this is the one control in the
+                // header that can lose data, and it should say so before it is
+                // touched.
+                color="red.500"
+                bg="red.50"
+                _hover={{ bg: 'red.100', color: 'red.600' }}
+                _active={{ bg: 'red.200' }}
+                w="36px"
+                h="36px"
+                minW="36px"
+                borderRadius="full"
+                flexShrink={0}
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              />
+              <MenuList minW="220px" zIndex={20}>
                 <MenuItem
                   icon={<Icon as={FaEraser} boxSize={3.5} />}
                   onClick={() => setResetConfirmOpen(true)}
@@ -2855,6 +3052,74 @@ function ConversationView({
         onConfirm={doDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
       />
+
+      {/* Language mismatch. Only ever appears when the thread is in one
+          language and the reply was typed in the other, so it is not a
+          confirmation step on the way to sending: matching languages send
+          straight through and never see this.
+          Three answers rather than two, because the old switch's behaviour has
+          to survive somewhere and "send it as I wrote it" is legitimate: a
+          quoted price, a link, a name. Translate leads, as the switch's default
+          did. Same stacked-buttons shape as the "Use this draft" dialog below,
+          which is the three-option pattern this panel already uses. */}
+      <Modal
+        isOpen={langMismatch !== null}
+        onClose={() => setLangMismatch(null)}
+        isCentered
+        size={{ base: 'xs', md: 'sm' } as never}
+      >
+        <ModalOverlay />
+        <ModalContent mx={4}>
+          <ModalHeader fontSize="md" fontWeight="500" color="gray.800" pb={1}>
+            {t.messages.langMismatchTitle}
+          </ModalHeader>
+          <ModalBody pt={0} pb={2}>
+            <Text fontSize="sm" color="gray.600" lineHeight="1.6">
+              {langMismatch
+                ? t.messages.langMismatchBody(langMismatch.theirs, langMismatch.yours)
+                : ''}
+            </Text>
+          </ModalBody>
+          <ModalFooter pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}>
+            <VStack spacing={2} w="100%" align="stretch">
+              <CTAButton
+                onClick={() => {
+                  if (langMismatch) {
+                    void deliverReply(langMismatch.text, langMismatch.theirs);
+                  }
+                }}
+                icon={FaLanguage}
+                variant="solid"
+                size="sm"
+                isLoading={sending}
+                loadingText={translatingSend ? t.messages.translating : t.common.sending}
+              >
+                {t.messages.langMismatchTranslate}
+              </CTAButton>
+              <Button
+                variant="outline"
+                size="sm"
+                minH="44px"
+                onClick={() => {
+                  if (langMismatch) void deliverReply(langMismatch.text, null);
+                }}
+                isDisabled={sending}
+              >
+                {t.messages.langMismatchSendAsIs}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                minH="44px"
+                onClick={() => setLangMismatch(null)}
+                isDisabled={sending}
+              >
+                {t.common.cancel}
+              </Button>
+            </VStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* "Use this draft" — ask, then act. Stacked full-width buttons on a
           phone; the draft itself is visible right behind the dialog, so the
@@ -2979,8 +3244,6 @@ function ConversationView({
               collapsed={false}
               onToggleCollapsed={() => {}}
               inPanel
-              language={summaryLang}
-              onChangeLanguage={changeSummaryLang}
               // Force=true so the Regenerate button always bypasses
               // the server-side cache. The initial auto-load on
               // conversation open (loadAiSummary() with no args) uses
@@ -3010,16 +3273,29 @@ function ConversationView({
           to occupy: directly below the contact header,
           where the summary strip used to be. It sat above the composer at first,
           which put it between the conversation and the reply box on a phone,
-          exactly the crowding the panel exists to remove. The classification badge stays on this row
-          rather than moving inside the panel, because it is the at-a-glance
-          spam-versus-booking read and burying it behind a tap loses it. */}
+          exactly the crowding the panel exists to remove.
+
+          The row carries no fixed label any more. A lightbulb, the word "AI"
+          and a classification badge held the widest line above the thread
+          permanently and said the same thing on every conversation: the badge
+          read BOOKING INQUIRY on nearly all of them, since spam is hidden
+          before it reaches this view. In their place: a dot whose colour is the
+          state, and a line that is whatever is currently true (describeAiStrip).
+
+          The gold knob on the right is the affordance. The whole row is still
+          the button, but a flat row with a grey chevron did not read as
+          pressable, and this is the control Vero has to find before anything
+          else in the panel exists for her. */}
       <Flex
         as="button"
         type="button"
         onClick={() => onRefine?.()}
-        aria-label={t.messages.aiPanelOpen}
+        // The word "AI" is gone from the row, so the accessible name is now the
+        // only thing that says what this opens, and it carries the state as
+        // well, since the dot's colour reaches nobody using a screen reader.
+        aria-label={`${t.messages.aiPanelOpen}. ${aiStrip.state}`}
         align="center"
-        gap={2}
+        gap={2.5}
         w="100%"
         textAlign="left"
         bg="brand.surface"
@@ -3030,54 +3306,44 @@ function ConversationView({
         minH="44px"
         flexShrink={0}
         cursor="pointer"
-        _hover={{ bg: 'rgba(201, 169, 110, 0.16)' }}
+        // The knob reacts to a hover anywhere on the row, because the row is
+        // what you press. Scoped by class rather than role="group": this
+        // element is a <button>, and role="group" would take that away.
+        _hover={{
+          bg: 'rgba(201, 169, 110, 0.16)',
+          '& .ai-strip-knob': { transform: 'scale(1.09)', boxShadow: 'accentGlow' },
+        }}
+        _active={{ '& .ai-strip-knob': { transform: 'scale(0.95)' } }}
         sx={{ WebkitTapHighlightColor: 'transparent' }}
       >
-        <Icon as={FaLightbulb} boxSize={3.5} color="brand.accentText" flexShrink={0} />
-        <Text
-          fontSize="2xs"
-          fontWeight="600"
-          letterSpacing="0.14em"
-          textTransform="uppercase"
-          color="brand.accentText"
+        {/* Colour is the whole signal here, so it also carries the state as
+            text for anyone hovering it. */}
+        <Box
+          title={aiStrip.state}
+          boxSize="8px"
+          borderRadius="full"
+          bg={AI_STRIP_DOT[aiStrip.tone]}
           flexShrink={0}
+        />
+        {/* Now the only content on the row, so it reads as body text rather
+            than as the caption it was beside three labels. */}
+        <Text fontSize="xs" color="gray.700" noOfLines={1} flex="1" minW={0}>
+          {aiStrip.text}
+        </Text>
+        <Flex
+          className="ai-strip-knob"
+          align="center"
+          justify="center"
+          boxSize="26px"
+          borderRadius="full"
+          bg="brand.accent"
+          color="white"
+          flexShrink={0}
+          transition="transform 0.15s ease, box-shadow 0.15s ease"
+          sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
         >
-          {t.messages.refinePanelTitle}
-        </Text>
-        {aiSummary && (
-          <Badge
-            flexShrink={0}
-            fontSize="2xs"
-            textTransform="uppercase"
-            letterSpacing="0.08em"
-            px={2}
-            py={0.5}
-            borderRadius="sm"
-            bg={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).bg}
-            color={(CLASSIFICATION_STYLE[aiSummary.classification] ?? CLASSIFICATION_STYLE.unclear).color}
-          >
-            {t.messages.classification[aiSummary.classification]}
-          </Badge>
-        )}
-        {pendingDraft && (
-          <Badge
-            flexShrink={0}
-            fontSize="2xs"
-            textTransform="uppercase"
-            letterSpacing="0.08em"
-            px={2}
-            py={0.5}
-            borderRadius="sm"
-            bg="brand.accent"
-            color="white"
-          >
-            {t.messages.aiDraftWaiting}
-          </Badge>
-        )}
-        <Text fontSize="xs" color="gray.600" noOfLines={1} flex="1" minW={0}>
-          {readSummaryLocale(aiSummary, summaryLang)?.asking ?? ''}
-        </Text>
-        <Icon as={FaChevronDown} boxSize={2.5} color="gray.400" flexShrink={0} transform="rotate(-90deg)" />
+          <Icon as={FaChevronRight} boxSize={2.5} />
+        </Flex>
       </Flex>
 
       {/* Message history — hidden on mobile when the summary is
@@ -3162,83 +3428,85 @@ function ConversationView({
         // exactly where the Send button sits, so Vero could type a reply
         // and have nowhere to tap. Matches the clearance the main admin
         // container already uses (src/pages/Admin.tsx).
-        // Clears the fixed bottom nav (80px). When the refine panel is rolled
-        // DOWN it parks its own 44px bar directly above that nav, on top of
-        // this composer — so the reply button needs to move up by that much
-        // too, or the thing you rolled the panel down to reach is covered.
-        pb={{
-          base: refineDocked
-            ? 'calc(124px + env(safe-area-inset-bottom))'
-            : 'calc(80px + env(safe-area-inset-bottom))',
-          md: 4,
-        }}
+        // The extra 44px this used to add while the refine panel was docked is
+        // gone with the docking itself: nothing parks above the nav any more.
+        pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 4 }}
         borderTop="1px solid"
         borderColor="gray.100"
         bg="white"
         flexShrink={0}
       >
-        <Textarea
-          value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          placeholder={t.messages.replyPlaceholder}
-          rows={3}
-          resize="vertical"
-          // 16px on mobile prevents iOS Safari from zooming the whole
-          // page in on focus. Regular sm on desktop.
-          fontSize={{ base: '16px', md: 'sm' }}
-          bg="white"
-          borderColor="gray.300"
-          _hover={{ borderColor: 'gray.400' }}
-          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-          onKeyDown={(e) => {
-            // Cmd/Ctrl+Enter to send
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              void handleSend();
-            }
-          }}
-        />
-        {/* Footer row: translate toggle + hint on the left, send on the
-            right. Stacks on mobile so nothing gets pushed off the
-            viewport and Send stays a full-width primary action. */}
-        <Stack
-          direction={{ base: 'column', md: 'row' }}
-          justify="space-between"
-          align={{ base: 'stretch', md: 'center' }}
-          mt={3}
-          spacing={3}
-        >
-          <VStack align="flex-start" spacing={1} flex={1} minW={0}>
-            <HStack spacing={2}>
-              <Switch
-                isChecked={translateOnSend}
-                onChange={(e) => setTranslateOnSend(e.target.checked)}
-                colorScheme="yellow"
-                size={{ base: 'md', md: 'sm' } as any}
-              />
-              <Icon as={FaLanguage} boxSize={3.5} color={translateOnSend ? 'brand.accent' : 'gray.400'} />
-              <Text
-                fontSize={{ base: 'xs', md: '2xs' }}
-                color={translateOnSend ? 'brand.accentText' : 'gray.500'}
-                fontWeight="500"
-              >
-                {t.messages.translateBeforeSending}
-              </Text>
-            </HStack>
-            <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" display={{ base: 'none', md: 'block' }}>
-              {t.messages.ctrlEnterSend}
-            </Text>
-          </VStack>
-          {/* Mic + send row. Same shared VoiceInput as the Assistant
-              chat — records via MediaRecorder, transcribes with Whisper,
-              appends the result to the current reply text. Vero can
-              dictate a reply in Russian and let the translate-before-
-              sending toggle ship it in English. */}
-          <Stack direction="row" spacing={2} justify={{ base: 'stretch', md: 'flex-end' }}>
+        {/* Field and buttons on ONE row from md up, the shape the assistant
+            chat's composer already landed on (AdminAssistantChat, the button
+            column beside its Textarea). Send used to sit in a footer row of its
+            own under the field, which on a desktop is a whole row spent on one
+            button and a hint. The field gets that width back.
+            Below md the panel is the full screen and the stacked shape is
+            right, with send as a full-width thumb target. */}
+        <Stack direction={{ base: 'column', md: 'row' }} spacing={2} align="stretch">
+          <Textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            placeholder={t.messages.replyPlaceholder}
+            rows={3}
+            resize="vertical"
+            // Desktop only, and it is the button column beside this that wants
+            // it: those two divide the row's height 2:1, and the mic cannot go
+            // below its own 48px, so at the three-row natural height the split
+            // came out with the mic TALLER than send. A definite height gives
+            // send the larger share it should have.
+            minH={{ md: '120px' }}
+            // 16px on mobile prevents iOS Safari from zooming the whole
+            // page in on focus. Regular sm on desktop.
+            fontSize={{ base: '16px', md: 'sm' }}
+            bg="white"
+            borderColor="gray.300"
+            _hover={{ borderColor: 'gray.400' }}
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+            flex={1}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              // An IME is mid-composition: Enter is picking a candidate, not
+              // ending the message.
+              if ((e.nativeEvent as unknown as { isComposing?: boolean }).isComposing) return;
+              // Shift+Enter is always a newline, on every device.
+              if (e.shiftKey) return;
+              if (e.metaKey || e.ctrlKey) {
+                e.preventDefault();
+                handleSend();
+                return;
+              }
+              // Plain Enter sends, but ONLY where there is a real keyboard.
+              // On a touch keyboard Enter is the only way to get a line break,
+              // so sending on it would make multi-line replies impossible to
+              // type and fire the message off mid-sentence. Asked at press
+              // time rather than cached, so a tablet that gains or loses a
+              // keyboard mid-session answers correctly; the width breakpoints
+              // are no use here because the question is about input hardware,
+              // not screen size.
+              if (hasHardwareKeyboard()) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
+          {/* Mic + send. Same shared VoiceInput as the assistant chat: records
+              via MediaRecorder and transcribes with Whisper, which is far more
+              reliable on iOS Safari than the browser's own SpeechRecognition.
+              column-reverse from md up puts SEND on top without reordering the
+              JSX, so the mic keeps first tab order. */}
+          <Stack
+            direction={{ base: 'row', md: 'column-reverse' }}
+            spacing={2}
+            w={{ base: '100%', md: '68px' }}
+            flex={{ md: '0 0 68px' }}
+            alignSelf={{ md: 'stretch' }}
+          >
             <VoiceInput
               adminPassword={adminPassword}
-              // Vero speaks Russian; hint Whisper accordingly. On
-              // English-typing days the translate step still runs.
+              // Vero speaks Russian; hint Whisper accordingly. If the thread is
+              // in English the pre-send check catches it and offers to
+              // translate, so dictating in Russian stays safe.
               language="ru"
               uiLang={adminLang}
               onTranscript={(text) => setReplyText((prev) => (prev ? `${prev} ${text}` : text))}
@@ -3247,27 +3515,44 @@ function ConversationView({
               ariaLabelUploading={t.messages.micTranscribing}
               variant="outline"
               size="lg"
-              minW={{ base: '48px', md: 'auto' }}
+              minW={{ base: '48px', md: '100%' }}
               minH={{ base: '48px', md: 'auto' }}
-              flex="0 0 auto"
+              // Bottom third of the icon column on desktop.
+              w={{ md: '100%' }}
+              h={{ md: '100%' }}
+              flex={{ base: '0 0 auto', md: '1 1 0' }}
               isDisabled={sending}
             />
             <CTAButton
               onClick={handleSend}
               icon={FaPaperPlane}
               variant="solid"
-              size="md"
-              // Full-width primary CTA on mobile so the composer's send
-              // action is thumb-obvious; hugs content on desktop.
-              fullWidth={{ base: true, md: false }}
+              size="sm"
+              fullWidth
+              // Top two thirds of the icon column on desktop.
+              h={{ md: '100%' }}
+              flex={{ base: '1 1 auto', md: '2 1 0' }}
+              aria-label={t.messages.send}
               isLoading={sending}
-              loadingText={translateOnSend ? t.messages.translating : t.common.sending}
+              // A word here would widen the 68px desktop column, so the spinner
+              // carries it and the ellipsis holds the space. Which phase a send
+              // is in is worth saying only when Vero asked for the extra step,
+              // and the language dialog's own button says it there.
+              loadingText="…"
               isDisabled={!replyText.trim()}
             >
-              {translateOnSend ? t.messages.translateAndSend : t.messages.send}
+              {/* Label on the phone row; icon-only in the desktop column. */}
+              <Box as="span" display={{ base: 'inline', md: 'none' }}>
+                {t.messages.send}
+              </Box>
             </CTAButton>
           </Stack>
         </Stack>
+        {/* The "⌘/Ctrl + Enter to send" hint is gone, for the reason the
+            assistant composer dropped its own: it spent a row above the send
+            button documenting a shortcut that does not exist on a phone and
+            that nobody needs told twice on a desktop. Both shortcuts still
+            work, and plain Enter now does too. See the Textarea's onKeyDown. */}
       </Box>
     </>
   );
@@ -3400,8 +3685,10 @@ function MessageBubble({
     ? FaRobot
     : FaUser;
 
-  // Targets the admin's reading language. This was VERO_LANG, so an English
-  // admin pressing Translate on a Russian message got Russian back.
+  // Direction comes from the message text, via translationTargetFor inside the
+  // hook. It was once pinned to Russian on the assumption that Vero is the only
+  // reader, so an English admin pressing Translate on a Russian message got
+  // Russian back.
   const {
     translation,
     detectedLang,
@@ -3707,8 +3994,6 @@ function SummaryCard({
   error,
   collapsed,
   onToggleCollapsed,
-  language,
-  onChangeLanguage,
   onRegenerate,
   inPanel = false,
 }: {
@@ -3718,25 +4003,19 @@ function SummaryCard({
   // Collapse state is lifted so the parent can react (focus mode).
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  language: SummaryLang;
-  onChangeLanguage: (l: SummaryLang) => void;
   onRegenerate: () => void;
   /** Rendered inside the AI panel, which owns opening and closing. */
   inPanel?: boolean;
 }) {
-  const { t } = useAdminLang();
+  // Content and chrome both read the ONE language control now. The card used to
+  // take a `language` prop fed by its own RU|EN toggle, which meant the summary
+  // could be in Russian inside an English panel; the prop went with the toggle.
+  const { t, lang } = useAdminLang();
   const classification = summary?.classification ?? 'unclear';
   const classStyle = CLASSIFICATION_STYLE[classification] ?? CLASSIFICATION_STYLE.unclear;
-  // The classification pill label follows the ADMIN panel language
-  // (chrome), not the summary content language toggle.
   const classLabel = t.messages.classification[classification];
-  const localized = readSummaryLocale(summary, language);
+  const localized = readSummaryLocale(summary, lang);
 
-  // These are CHROME, so they follow the admin panel language like every other
-  // label. They used to be indexed by `language`, the summary CONTENT toggle,
-  // which is why an English admin saw "СВОДКА" and "ОТКРЫТЬ СВОДКУ" sitting
-  // next to an English BOOKING INQUIRY badge inside the same card. The summary
-  // text itself still follows the content toggle; only the labels moved.
   const strings = {
     header: t.messages.summaryTitle,
     asking: t.messages.summaryAsking,
@@ -3806,9 +4085,9 @@ function SummaryCard({
               py={0.5}
               borderRadius="sm"
               // Inside the panel this row is a ~390px column carrying the
-              // heading, this badge, the RU/EN toggle and Regenerate. Held at
-              // flexShrink 0 the badge ran under the toggle. The heading is the
-              // fixed part; the badge is what gives.
+              // heading, this badge and Regenerate. Held at flexShrink 0 the
+              // badge ran under its neighbour. The heading is the fixed part;
+              // the badge is what gives.
               flexShrink={inPanel ? 1 : 0}
               minW={0}
               noOfLines={1}
@@ -3848,47 +4127,9 @@ function SummaryCard({
           </Flex>
         </Flex>
 
-        {/* RU/EN pill toggle — only visible when the summary is
-            expanded (in collapsed state the header row needs to stay
-            compact). Small enough to sit inline. */}
-        {!collapsed && (
-          <HStack
-            spacing={0}
-            bg="gray.100"
-            borderRadius="full"
-            p="2px"
-            flexShrink={0}
-            aria-label={t.messages.summaryLangAria}
-          >
-            {(['ru', 'en'] as const).map((lang) => {
-              const active = language === lang;
-              return (
-                <Box
-                  key={lang}
-                  as="button"
-                  type="button"
-                  onClick={() => onChangeLanguage(lang)}
-                  px={2.5}
-                  py={1}
-                  minH="28px"
-                  minW="34px"
-                  fontSize="2xs"
-                  fontWeight="600"
-                  letterSpacing="0.1em"
-                  color={active ? 'white' : 'gray.500'}
-                  bg={active ? 'brand.accent' : 'transparent'}
-                  borderRadius="full"
-                  border="none"
-                  cursor="pointer"
-                  transition="all 0.15s"
-                  sx={{ WebkitTapHighlightColor: 'transparent' }}
-                >
-                  {lang.toUpperCase()}
-                </Box>
-              );
-            })}
-          </HStack>
-        )}
+        {/* The RU|EN pill toggle that used to sit here is gone. It was a second
+            language control living inside a panel that already follows the
+            global one, and the two could disagree. */}
 
         {/* Regenerate — 44×44 tap target. */}
         <IconButton
@@ -4339,38 +4580,11 @@ function sanitizeSignaturePreview(html: string): string {
     .replace(/javascript\s*:/gi, '');
 }
 
-/**
- * Ask the backend to detect the language of the customer's most
- * recent inbound message. Used by translate-on-send to pick the
- * target language — more reliable than guessing from prior state
- * since customers can and do switch languages mid-thread.
- * Returns null if detection fails or there's no inbound to sample.
- */
-async function inferCustomerLang(
-  adminPassword: string,
-  messages: Message[],
-): Promise<string | null> {
-  const lastInbound = [...messages].reverse().find((m) => m.direction === 'inbound');
-  if (!lastInbound) return null;
-  try {
-    const res = await fetch('/api/admin/messages-translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        password: adminPassword,
-        text: lastInbound.body,
-        targetLang: VERO_LANG,
-      }),
-    });
-    const data = await res.json();
-    if (res.ok && data.success && typeof data.detectedLang === 'string' && data.detectedLang !== 'unknown') {
-      return data.detectedLang;
-    }
-  } catch {
-    // fall through
-  }
-  return null;
-}
+// NOTE: `inferCustomerLang` used to live here. It POSTed the last inbound
+// message to messages-translate purely to read `detectedLang` off the response
+// and discard the translation, on every single send. conversationLanguage at
+// the top of this file answers the same question from text already in memory,
+// so a send no longer waits on a network round trip to start.
 
 // ── Formatters ────────────────────────────────────────────────
 

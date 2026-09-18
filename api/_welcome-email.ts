@@ -29,7 +29,7 @@ export function buildWelcomeHtml(data: WelcomePayload): string {
 
 <p style="margin:0 0 16px;">Hi there,</p>
 
-<p style="margin:0 0 16px;">Thanks for stopping by — that genuinely means a lot. I'm Veronika, the photographer behind everything you've been browsing.</p>
+<p style="margin:0 0 16px;">Thanks for stopping by, that genuinely means a lot. I'm Veronika, the photographer behind everything you've been browsing.</p>
 
 <p style="margin:0 0 24px;">Here's a small thank-you to keep me in mind for whenever you're ready:</p>
 
@@ -40,7 +40,7 @@ export function buildWelcomeHtml(data: WelcomePayload): string {
   <p style="margin:0;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:18px;font-weight:500;color:#2d2d2d;letter-spacing:0.1em;background:#ffffff;padding:10px 16px;border-radius:4px;display:inline-block;border:1px solid #e3d4b4;">${safeCode}</p>
 </div>
 
-<p style="margin:0 0 16px;">Just mention this code when you book — wedding, portrait, family, maternity, anything. I'll take care of the rest.</p>
+<p style="margin:0 0 16px;">Just mention this code when you book: wedding, portrait, family, maternity, anything. I'll take care of the rest.</p>
 
 <p style="margin:0 0 28px;text-align:center;">
   <a href="https://vero.photography/contact" style="display:inline-block;background:#c9a96e;color:#ffffff;text-decoration:none;padding:12px 28px;font-size:12px;font-weight:400;letter-spacing:0.25em;text-transform:uppercase;border-radius:2px;">Book a Session</a>
@@ -53,7 +53,7 @@ export function buildWelcomeHtml(data: WelcomePayload): string {
 <p style="font-size:12px;color:#888;margin:0 0 8px;">Want to reach me directly?</p>
 <p style="font-size:13px;color:#5a5a5a;margin:0 0 12px;">Instagram: <a href="${INSTAGRAM_URL}" style="color:#c9a96e;text-decoration:none;">@vero.art.photo</a><br>WhatsApp: <a href="${WHATSAPP_URL}" style="color:#c9a96e;text-decoration:none;">${escapeHtml(WHATSAPP_PHONE)}</a></p>
 
-<p style="font-size:11px;color:#aaa;margin:16px 0 0;">You received this because you signed up at vero.photography. This is a one-time welcome — I don't run a regular newsletter. If you didn't sign up, just delete and ignore.</p>
+<p style="font-size:11px;color:#aaa;margin:16px 0 0;">You received this because you signed up at vero.photography. This is a one-time welcome, I don't run a regular newsletter. If you didn't sign up, just delete and ignore.</p>
 </body></html>`;
 }
 
@@ -88,7 +88,7 @@ You received this because you signed up at vero.photography. This is a one-time 
 export async function sendWelcomeEmail(data: WelcomePayload): Promise<{ id: string }> {
   return sendEmail({
     to: data.email,
-    subject: `Your 10% off — a little welcome from Vero Photography`,
+    subject: `Your 10% off, a little welcome from Vero Photography`,
     text: buildWelcomeText(data),
     html: buildWelcomeHtml(data),
   });

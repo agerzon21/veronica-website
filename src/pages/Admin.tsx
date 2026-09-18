@@ -400,9 +400,15 @@ const Admin = () => {
           pb={{ base: 'calc(80px + env(safe-area-inset-bottom))', md: 12 }}
           px={{ base: 4, md: 8 }}
           // Any single overflowing child would give the whole admin panel
-          // a horizontal page scroll — a classic mobile bug. This is a
-          // safety net; individual components should still be responsive.
-          overflowX="hidden"
+          // a horizontal page scroll, a classic mobile bug. This is a safety
+          // net; individual components should still be responsive.
+          //
+          // clip, NOT hidden. Setting one axis to hidden forces the other to
+          // compute to auto, which quietly makes this Box the nearest
+          // scrollport: a position:sticky child then sticks to a box that
+          // never scrolls, so the tab strip simply did nothing. clip does the
+          // same trimming without creating a scroll container.
+          overflowX="clip"
         >
           {view.kind === 'dashboard' && (
             <>
@@ -890,8 +896,27 @@ function AdminTabStrip({
   if (tabs.length < 2) return null;
 
   return (
-    <Box maxW="1200px" mx="auto" mb={6} display={{ base: 'none', md: 'block' }}>
-      <Flex align="center" justify="space-between" gap={4}>
+    // Sticky so the tabs stay reachable deep in a long client list or inbox,
+    // which is where you most want to switch away. The band is full bleed and
+    // painted, with negative side margins cancelling the shell's px padding,
+    // so rows scrolling underneath are covered rather than showing through a
+    // floating 1200px card. Needs overflowX="clip" on the shell above: with
+    // hidden, this sticks to a box that never scrolls and appears inert.
+    <Box
+      position="sticky"
+      top={0}
+      zIndex={15}
+      bg="gray.50"
+      mx={{ md: -8 }}
+      px={{ md: 8 }}
+      pt={{ md: 2 }}
+      pb={3}
+      mb={3}
+      display={{ base: 'none', md: 'block' }}
+      borderBottom="1px solid"
+      borderColor="blackAlpha.50"
+    >
+      <Flex maxW="1200px" mx="auto" align="center" justify="space-between" gap={4}>
         <HStack spacing={2}>
           {tabs.map((tab) => {
             const isActive = active === tab.id;

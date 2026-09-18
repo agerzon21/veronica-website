@@ -415,7 +415,7 @@ export async function sendLeadNotification(data: ContactPayload): Promise<{ id: 
   return sendEmail({
     to: notifyTo,
     replyTo: data.email,
-    subject: `${shoot} Inquiry — ${nameForSubject}`,
+    subject: `${shoot} Inquiry: ${nameForSubject}`,
     text: buildLeadNotificationText(data),
     html: buildLeadNotificationHtml(data),
   });

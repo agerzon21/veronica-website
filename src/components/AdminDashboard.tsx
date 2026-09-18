@@ -18,6 +18,9 @@ export interface AdminPortalSummary {
   contract_signed_at: string | null;
   contract_total_amount: number | null;
   paid_to_date: number;
+  // Extra time and costs added after the booking. Owed on top of the
+  // contract total, so the balance line has to add it in.
+  charges_total: number;
   drive_url: string | null;
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
@@ -323,7 +326,7 @@ function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
         <ContractStatusBadge status={portal.contract_status} />
       </Box>
       <Box flex="1.5" color="gray.700">
-        <BalanceLine paid={portal.paid_to_date} total={portal.contract_total_amount} />
+        <BalanceLine paid={portal.paid_to_date} total={portal.contract_total_amount} charges={portal.charges_total ?? 0} />
       </Box>
       <Box flex="1.5">
         <GalleryStatusBadge portal={portal} />
@@ -399,7 +402,7 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
           </VStack>
           <VStack align="flex-start" spacing={0.5} minW={0}>
             <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.balance}</Text>
-            <BalanceLine paid={portal.paid_to_date} total={portal.contract_total_amount} />
+            <BalanceLine paid={portal.paid_to_date} total={portal.contract_total_amount} charges={portal.charges_total ?? 0} />
           </VStack>
           <VStack align="flex-start" spacing={0.5} minW={0}>
             <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.gallery}</Text>
@@ -429,21 +432,31 @@ function ContractStatusBadge({ status }: { status: AdminPortalSummary['contract_
   );
 }
 
-function BalanceLine({ paid, total }: { paid: number; total: number | null }) {
+/**
+ * What the client still owes, at a glance.
+ *
+ * `owed` is the contract total plus anything charged after the booking, not
+ * the contract total alone: a portal with $150 of extra time logged against
+ * it is not paid off at the contract figure, and printing it as paid here
+ * while the client's own portal shows a balance is how the two screens end
+ * up telling different stories.
+ */
+function BalanceLine({ paid, total, charges }: { paid: number; total: number | null; charges: number }) {
   const { t } = useAdminLang();
   if (total === null) return <Text color="gray.500">—</Text>;
-  const remaining = total - paid;
-  if (remaining <= 0 && total > 0) {
+  const owed = total + charges;
+  const remaining = owed - paid;
+  if (remaining <= 0 && owed > 0) {
     return (
       <Badge colorScheme="green" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
-        {t.clients.balancePaid(formatMoney(total))}
+        {t.clients.balancePaid(formatMoney(owed))}
       </Badge>
     );
   }
   return (
     <Text fontSize="sm">
       <Text as="span" color="gray.700" fontWeight="500">{formatMoney(paid)}</Text>
-      <Text as="span" color="gray.400"> / {formatMoney(total)}</Text>
+      <Text as="span" color="gray.400"> / {formatMoney(owed)}</Text>
     </Text>
   );
 }

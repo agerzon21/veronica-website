@@ -85,19 +85,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await sendEmail({
       to: portal.client_email,
-      subject: 'Reset your portal password — Vero Photography',
+      subject: 'Reset your portal password, from Vero Photography',
       text:
         `Hi ${name},\n\n` +
         `Someone asked to reset the password for your Vero Photography client portal.\n\n` +
         `Set a new password here (the link works for one hour):\n${resetUrl}\n\n` +
-        `If this wasn't you, you can ignore this email — your password has not changed.\n\n` +
+        `If this wasn't you, you can ignore this email, your password has not changed.\n\n` +
         `— Vero Photography`,
       html:
         `<p>Hi ${name},</p>` +
         `<p>Someone asked to reset the password for your Vero Photography client portal.</p>` +
-        `<p><a href="${resetUrl}">Set a new password</a> — the link works for one hour.</p>` +
+        `<p><a href="${resetUrl}">Set a new password</a>. The link works for one hour.</p>` +
         `<p>If this wasn't you, you can ignore this email; your password has not changed.</p>` +
-        `<p>— Vero Photography</p>`,
+        `<p>Vero Photography</p>`,
     });
 
     console.log(`[portal/request-reset] reset link sent to ${email}`);

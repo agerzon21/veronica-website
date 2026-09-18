@@ -204,6 +204,17 @@ interface DbWrite {
   // roundtrip. Field is language-agnostic on purpose — it's just
   // "the toast text."
   content_summary: string;
+  /**
+   * For a draft write, the exact text that was stored.
+   *
+   * The panel needs this separately from the chat prose. The assistant answers
+   * Vero in HER language and writes the draft inside that same message in the
+   * CUSTOMER's language, so the turn is mixed. Translating the whole turn, as
+   * the panel used to, meant an English answer being rendered back into
+   * Russian for a reader whose panel was already in English. Only the draft
+   * ever needs translating, and only when it is not already in her language.
+   */
+  draft_text?: string;
 }
 
 type ChatLanguage = 'ru' | 'en';
@@ -599,10 +610,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .filter((m) => m.role === 'assistant' && isDisplayableTurn(m))
       .map((m) => ({ role: 'assistant' as const, content: m.content as string }));
 
+    // The newest draft this turn produced, so the panel can offer a
+    // translation of THAT rather than of the assistant's whole message.
+    const draftText =
+      [...dbWrites].reverse().find((w) => w.category === 'draft')?.draft_text ?? null;
+
     return res.status(200).json({
       success: true,
       reply: finalReply,
       assistantTurns,
+      draftText,
       dbWrites,
       messageCount: updatedThread.filter((m) => m.role === 'user' || m.role === 'assistant').length,
     });
@@ -1246,6 +1263,7 @@ async function executeToolCall(
       category: 'draft',
       label: 'Draft updated',
       content_summary: contentSummary,
+      draft_text: text,
     });
     return { success: true, action: 'draft_updated', message_id: updated[0].id };
   }

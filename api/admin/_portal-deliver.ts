@@ -1,18 +1,27 @@
 /**
- * Admin: mark a portal as delivered. Starts the gallery retention
- * countdown and (for full-mode portals with an email) sends the
- * "your photos are ready" email.
+ * Admin: mark a portal as delivered. This is the release switch: for
+ * full-mode portals, api/portal/_gallery-gate.ts serves no photo data at all
+ * until gallery_delivered_at is set, so pressing this is what actually
+ * publishes the gallery. It also starts the retention countdown and (for
+ * portals with an email on file) sends the "your photos are ready" email.
  *
- * POST { password, id, retention_months? (defaults to template's retention_months, then 3) }
+ * POST { password, id, retention_months? (defaults to template's retention_months, then 3), confirmUnpaid? }
  *   → 200 { success, gallery_delivered_at, gallery_expires_at }
  *   → 400 if portal has no drive_url yet
  *   → 401 on bad admin password
  *   → 404 if portal not found
+ *   → 409 { unpaid_balance, paid_to_date, contract_total_amount, charges_total }
+ *         if the contract is signed and not paid off, unless confirmUnpaid is
+ *         true. Charges added after the booking count towards what is owed,
+ *         so an unpaid parking expense holds the photos exactly like an
+ *         unpaid balance does.
  *
  * Pre-conditions:
  *   - drive_url must be set (delivery without a gallery doesn't make sense)
- *   - For full-mode, contract should be signed (warn but don't block —
- *     edge case where Vero delivers before signing for trusted clients).
+ *   - For full-mode, contract should be signed (warn but don't block: there
+ *     is an edge case where Vero delivers before signing for trusted clients)
+ *   - A signed contract must be paid off, or the caller must pass
+ *     confirmUnpaid (see the guard rail below)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -34,11 +43,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const reqRetention = Number(req.body?.retention_months);
   const retentionMonths = Number.isFinite(reqRetention) && reqRetention > 0 ? reqRetention : 3;
+  // Explicit opt-in, sent by the admin UI only after Vero has been shown the
+  // outstanding amount and chosen to deliver anyway. Strict === true so a
+  // stray 'false' string or a 1 from some future caller cannot wave the
+  // guard rail through by accident.
+  const confirmUnpaid = req.body?.confirmUnpaid === true;
 
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, mode, client_display_name, client_email, drive_url, gallery_password, gallery_delivered_at
+      select id, mode, client_display_name, client_email, drive_url, gallery_password, gallery_delivered_at,
+             contract_status, contract_total_amount, paid_to_date
       from client_portals
       where id = ${id}
       limit 1
@@ -50,12 +65,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       drive_url: string | null;
       gallery_password: string;
       gallery_delivered_at: string | null;
+      contract_status: 'none' | 'pending' | 'signed' | 'void';
+      // Postgres numerics arrive as strings, so both need parseFloat before
+      // any comparison. '250' < '90' is true as strings.
+      contract_total_amount: string | null;
+      paid_to_date: string;
     }>;
 
     if (rows.length === 0) return res.status(404).json({ success: false, error: 'Portal not found' });
     const portal = rows[0];
     if (!portal.drive_url) {
       return res.status(400).json({ success: false, error: 'Cannot deliver: paste a Drive folder URL first.' });
+    }
+
+    // Money guard rail. The contract says images are delivered after full
+    // payment, and since the gallery gate landed, this endpoint is the only
+    // thing that releases them, so the check belongs here rather than on the
+    // Drive URL field.
+    //
+    // Signed contracts only: a portal with no signed contract has no agreed
+    // total to hold anyone to, and simple gallery-only rows never have one.
+    // Not a lock either. Photographers do release early (cash handed over at
+    // the shoot, a comp gift, a payment plan tracked elsewhere), and Vero is
+    // far likelier to have forgotten to log a payment than to be delivering
+    // unpaid on purpose, so confirmUnpaid goes straight through.
+    const totalAmount =
+      portal.contract_total_amount !== null ? parseFloat(portal.contract_total_amount) : null;
+    const paidToDate = parseFloat(portal.paid_to_date ?? '0') || 0;
+
+    /**
+     * Charges added after the booking (extra time, costs paid on the day) are
+     * owed just like the contract total, so the guard rail has to see them or
+     * a client gets their photos while the parking is still unpaid.
+     *
+     * Read in its own statement, and allowed to fail, because migration 035 is
+     * applied by hand: on a database without the column the answer is 0, which
+     * is exactly how this endpoint behaved before charges existed.
+     */
+    let chargesTotal = 0;
+    try {
+      const chargeRows = (await sql`
+        select charges_total from client_portals where id = ${id} limit 1
+      `) as Array<{ charges_total: string | null }>;
+      chargesTotal = parseFloat(chargeRows[0]?.charges_total ?? '0') || 0;
+    } catch {
+      /* pre-migration-035 database: nothing has been charged */
+    }
+    const owed = totalAmount !== null ? totalAmount + chargesTotal : null;
+
+    if (
+      !confirmUnpaid &&
+      portal.contract_status === 'signed' &&
+      owed !== null &&
+      paidToDate < owed
+    ) {
+      const outstanding = owed - paidToDate;
+      return res.status(409).json({
+        success: false,
+        error: `Cannot deliver yet: $${outstanding.toFixed(0)} of $${owed.toFixed(0)} is still outstanding. Log the payment, or confirm to deliver anyway.`,
+        unpaid_balance: outstanding,
+        paid_to_date: paidToDate,
+        contract_total_amount: totalAmount,
+        charges_total: chargesTotal,
+      });
     }
 
     const deliveredAt = new Date().toISOString();
@@ -74,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // /portal (email + password login they set up at welcome time);
     // simple-mode clients go to /portal/pass (password-only), so we
     // also surface the password in their email. We don't fail the
-    // request if the email send fails — the gallery IS delivered in
+    // request if the email send fails: the gallery IS delivered in
     // the DB, the email is the notification on top.
     if (portal.client_email) {
       try {
@@ -83,14 +155,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
         await sendEmail({
           to: portal.client_email,
-          subject: 'Your photos are ready — Vero Photography',
+          subject: 'Your photos are ready, from Vero Photography',
           text:
             portal.mode === 'full'
-              ? buildFullDeliveryText(portal.client_display_name, expiresAt, siteOrigin)
+              ? buildFullDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
               : buildSimpleDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
           html:
             portal.mode === 'full'
-              ? buildFullDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin)
+              ? buildFullDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
               : buildSimpleDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
         });
       } catch (err) {
@@ -109,14 +181,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-function buildFullDeliveryText(clientLabel: string | null, expiresAt: string, siteOrigin: string): string {
+/**
+ * The full-portal client gets their own login link AND the Gallery Pass link,
+ * because those are two different doors: /portal is theirs alone (email +
+ * password), while /portal/pass is the one they forward to family and guests
+ * without handing over their login. The pass link is the same one-click shape
+ * the simple builders below and _share-gallery.ts use.
+ *
+ * The line about changing the password is verified, not aspirational: the
+ * Gallery Pass section of the portal calls /api/portal/gallery-pass with
+ * action 'rotate' or 'set', authenticated by the client's own credentials.
+ */
+function buildFullDeliveryText(
+  clientLabel: string | null,
+  expiresAt: string,
+  siteOrigin: string,
+  galleryPassword: string,
+): string {
   const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const shareUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
   return `${greeting}
 
 Your photos are ready. You can view and download them at:
 
 ${siteOrigin}/portal
+
+Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.
+
+${shareUrl}
+
+You can change that gallery password any time from your portal, so the link stays yours to control.
 
 The gallery will stay online until ${exp}. Please download and back up your favourites before then.
 
@@ -126,15 +221,24 @@ Warmly,
 Veronika`;
 }
 
-function buildFullDeliveryHtml(clientLabel: string | null, expiresAt: string, siteOrigin: string): string {
+function buildFullDeliveryHtml(
+  clientLabel: string | null,
+  expiresAt: string,
+  siteOrigin: string,
+  galleryPassword: string,
+): string {
   const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const shareUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
 <p>Hi ${firstName},</p>
 <p>Your photos are ready ✨ View them anytime in your portal:</p>
 <p style="margin:24px 0;"><a href="${siteOrigin}/portal" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open My Gallery</a></p>
+<p style="font-size:14px;color:#666;">Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.</p>
+<p style="font-size:13px;"><a href="${shareUrl}" style="word-break:break-all;color:#c9a96e;font-family:monospace;font-size:12px;">${shareUrl}</a></p>
+<p style="font-size:13px;color:#888;">You can change that gallery password any time from your portal, so the link stays yours to control.</p>
 <p style="font-size:14px;color:#666;">The gallery will stay online until <strong>${exp}</strong>. Please download and back up your favourites before then.</p>
 <p>If you have any questions or want to order prints, just reply to this email.</p>
 <p>Warmly,<br><em>Veronika</em></p>

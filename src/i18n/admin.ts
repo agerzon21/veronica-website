@@ -378,8 +378,10 @@ const dict = {
     // and anything already typed.
     refinePanelTitle: { en: 'AI', ru: 'AI' },
     refineClose: { en: 'Close AI panel', ru: 'Закрыть панель AI' },
-    refineCollapse: { en: 'Roll down — show the conversation', ru: 'Свернуть — показать переписку' },
-    refineExpand: { en: 'Back to the AI panel', ru: 'Вернуться к панели AI' },
+    // NOTE: refineCollapse / refineExpand were removed with the mobile bar the
+    // panel used to roll down into. It reopened the panel, which the AI strip
+    // at the top of the thread already does and always shows, so there were two
+    // controls for one thing. The X closes the panel now.
     // One panel per conversation, cycling the three AI surfaces that used to
     // be scattered down the thread as separate cards.
     aiTabSummary: { en: 'Summary', ru: 'Сводка' },
@@ -401,6 +403,21 @@ const dict = {
     draftGenerating: { en: 'Writing…', ru: 'Пишу…' },
     draftGenerateFailed: { en: 'Could not write a draft', ru: 'Не удалось написать черновик' },
     aiDraftWaiting: { en: 'Draft ready', ru: 'Есть черновик' },
+    // The only word the collapsed AI strip prints that is not data. It opens
+    // the gap line: "needs event date, total price". Everything else on that
+    // row comes from the thread itself, which is the point of the design, so
+    // this stays a bare verb rather than growing into a heading.
+    //
+    // The Russian takes a colon and the English does not, on purpose. The gap
+    // labels it prefixes are nominative ("дата съёмки"), and «не хватает»
+    // governs the genitive, so running them straight on would be wrong in
+    // every row. The colon turns the list into a list and the case stops
+    // mattering.
+    aiStripNeeds: { en: 'needs', ru: 'не хватает:' },
+    // The gold counterpart: the client has answered everything and the
+    // outstanding items are Vero's own, the price and the retainer typically.
+    // Same colon reasoning as above.
+    aiStripYourCall: { en: 'your call:', ru: 'за тобой:' },
     followUpBadge: { en: 'Follow up', ru: 'Напомнить' },
     railCollapse: { en: 'Collapse list', ru: 'Свернуть список' },
     railExpand: { en: 'Expand list', ru: 'Развернуть список' },
@@ -440,7 +457,12 @@ const dict = {
       ru: (n: number) => `Показать личные (${n})`,
     },
     hidePersonal: { en: 'Hide personal', ru: 'Скрыть личные' },
-    moreActions: { en: 'More actions', ru: 'Ещё действия' },
+    // The two menus the conversation header's action buttons collapsed into.
+    // `moreActions` went with the single overflow menu they replaced: one menu
+    // labelled "more" said nothing about what was inside it, and these two say
+    // which half of the actions they hold.
+    filingActions: { en: 'How this thread is filed', ru: 'Куда отнесён диалог' },
+    dangerActions: { en: 'Delete or reset', ru: 'Удалить или сбросить' },
 
     // ── Signature editor ─────────────────────────────────────────
     signatureTitle: { en: 'Email signature', ru: 'Подпись в письмах' },
@@ -515,7 +537,9 @@ const dict = {
     summaryTone: { en: 'Tone', ru: 'Тон' },
     summaryLoading: { en: 'Reading the thread…', ru: 'Читаю переписку…' },
     summaryNone: { en: 'No summary yet.', ru: 'Сводки пока нет.' },
-    summaryLangAria: { en: 'Summary language', ru: 'Язык сводки' },
+    // NOTE: summaryLangAria went with the summary's own RU|EN toggle. The
+    // summary follows the global admin language now, so there is one language
+    // control in the panel rather than two that could disagree.
     openSummary: { en: 'Open summary', ru: 'Открыть сводку' },
     closeSummaryOpenChat: { en: 'Close summary — open chat', ru: 'Закрыть сводку — открыть чат' },
     // Short pair for the desktop fold control, which sits beside a chevron.
@@ -568,11 +592,30 @@ const dict = {
     resetFailed: { en: 'Reset failed', ru: 'Не удалось сбросить' },
     // Composer
     replyPlaceholder: { en: 'Type a reply as Vero...', ru: 'Напиши ответ от имени Веро...' },
-    translateBeforeSending: { en: 'Translate before sending', ru: 'Перевести перед отправкой' },
-    ctrlEnterSend: { en: '⌘/Ctrl + Enter to send · Replies from you sent as human (not AI)', ru: '⌘/Ctrl + Enter — отправить · Твои ответы уходят как от человека (не AI)' },
     send: { en: 'Send', ru: 'Отправить' },
-    translateAndSend: { en: 'Translate & Send', ru: 'Перевести и отправить' },
     translating: { en: 'Translating…', ru: 'Перевожу…' },
+    // NOTE: `translateBeforeSending` (a switch in the composer) and
+    // `translateAndSend` (the label it changed the send button to) are gone,
+    // along with the ⌘/Ctrl + Enter hint that sat under them. The switch asked
+    // its question permanently and in advance; the dialog below asks it only
+    // when the two languages actually differ.
+    // ── Reply is in a different language than the thread ─────────
+    langMismatchTitle: { en: 'Send in their language?', ru: 'Отправить на их языке?' },
+    // Takes both languages as codes rather than as ready-made words so each
+    // locale can put them in the case its own sentence needs: Russian wants the
+    // prepositional ("на английском"), English wants the plain name.
+    langMismatchBody: {
+      en: (theirs: 'en' | 'ru', yours: 'en' | 'ru') => {
+        const name = (l: 'en' | 'ru') => (l === 'ru' ? 'Russian' : 'English');
+        return `They write in ${name(theirs)}, and this reply is in ${name(yours)}.`;
+      },
+      ru: (theirs: 'en' | 'ru', yours: 'en' | 'ru') => {
+        const name = (l: 'en' | 'ru') => (l === 'ru' ? 'русском' : 'английском');
+        return `Они пишут на ${name(theirs)}, а ответ написан на ${name(yours)}.`;
+      },
+    },
+    langMismatchTranslate: { en: 'Translate and send', ru: 'Перевести и отправить' },
+    langMismatchSendAsIs: { en: 'Send as is', ru: 'Отправить как есть' },
     micRecordReply: { en: 'Record voice reply', ru: 'Записать голосовой ответ' },
     // Classification pills
     classification: {
@@ -1657,14 +1700,23 @@ const dict = {
     notDelivered: { en: 'Not delivered yet', ru: 'Ещё не отправлена' },
     markAsDelivered: { en: 'Mark as Delivered', ru: 'Отметить как отправленную' },
     delivering: { en: 'Delivering...', ru: 'Отправляю...' },
-    // Free-form multi-line window.confirm text. Dollar amounts already
+    // Inline confirmation shown in place of the Mark as Delivered button
+    // when there's still a balance. Was a window.confirm; it is a panel now
+    // because delivering is what actually releases the photos to the client,
+    // so the warning should sit on the screen rather than in a browser popup
+    // that can be dismissed with a stray Enter. Dollar amounts arrive already
     // pre-formatted by the caller.
-    outstandingConfirm: {
-      en: (remaining: string, paid: string, total: string) =>
-        `Heads up — ${remaining} is still outstanding (paid ${paid} of ${total}).\n\nMake sure you've received the full payment, or that you've logged it in the Payments section above.\n\nDeliver anyway?`,
-      ru: (remaining: string, paid: string, total: string) =>
-        `Внимание — ещё не оплачено ${remaining} (оплачено ${paid} из ${total}).\n\nУбедись, что клиент отдал полную сумму, или запиши оплату в разделе «Оплаты» выше.\n\nВсё равно отправить галерею?`,
+    outstandingHeading: {
+      en: 'Balance still outstanding',
+      ru: 'Остаток ещё не оплачен',
     },
+    outstandingBody: {
+      en: (remaining: string, paid: string, total: string) =>
+        `${remaining} is still outstanding (paid ${paid} of ${total}). Delivering releases the photos to the client right away. Check the payment has arrived, or log it in Payments below first.`,
+      ru: (remaining: string, paid: string, total: string) =>
+        `Ещё не оплачено ${remaining} (оплачено ${paid} из ${total}). После отправки клиент сразу получит доступ к фотографиям. Убедись, что оплата пришла, или сначала запиши её в разделе «Оплаты» ниже.`,
+    },
+    deliverAnyway: { en: 'Deliver anyway', ru: 'Всё равно отправить' },
 
     // ─── Gallery Pass section ─────────────────────────
     passwordLabel: { en: 'Password', ru: 'Пароль' },
@@ -1771,6 +1823,40 @@ const dict = {
     // one screen.
     saving: { en: 'Saving...', ru: 'Сохраняю...' },
     sending: { en: 'Sending...', ru: 'Отправляю...' },
+
+    // ─── Charges (extra time + costs paid on the day) ──
+    // Owed on top of the contract total, the mirror image of a payment.
+    // Every one of these lines is printed in the client's own portal, which
+    // is why the note is guided and required rather than optional.
+    statCharges: { en: 'Charges', ru: 'Доплаты' },
+    addACharge: { en: 'Add a Charge', ru: 'Добавить доплату' },
+    addAChargeHelp: {
+      en: 'Extra time, or a cost you paid on the day. The client sees every line with its reason.',
+      ru: 'Переработка или расход, который ты оплатила в день съёмки. Клиент видит каждую строку с причиной.',
+    },
+    reasonLabel: { en: 'Reason', ru: 'Причина' },
+    reasonOvertime: { en: 'Extra time', ru: 'Переработка' },
+    reasonExpense: { en: 'Expense', ru: 'Расход' },
+    reasonOther: { en: 'Other', ru: 'Другое' },
+    chargeNoteLabel: { en: 'Note', ru: 'Заметка' },
+    // One example per reason, so there is always the right shape of answer
+    // on screen instead of an empty box.
+    chargeNotePlaceholder: {
+      overtime: { en: '45 minutes over', ru: '45 минут сверх времени' },
+      expense: { en: 'Parking at the venue', ru: 'Парковка на месте съёмки' },
+      other: { en: 'What this is for', ru: 'За что эта доплата' },
+    },
+    chargeNoteHelp: {
+      en: 'This is the line the client reads, so say what it was for.',
+      ru: 'Эту строку читает клиент, поэтому напиши, за что доплата.',
+    },
+    chargeNoteRequired: {
+      en: 'Add a short note, the client sees this line.',
+      ru: 'Добавь короткую заметку, клиент увидит эту строку.',
+    },
+    addCharge: { en: 'Add Charge', ru: 'Добавить доплату' },
+    chargesHistory: { en: 'Charge history', ru: 'История доплат' },
+    deleteChargeAria: { en: 'Delete charge', ru: 'Удалить доплату' },
 
     // ─── Details section ──────────────────────────────
     displayNameLabel: { en: 'Display Name', ru: 'Имя для отображения' },
