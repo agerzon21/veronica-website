@@ -882,7 +882,13 @@ const ImageModal = ({
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(0,0,0,0.92)',
+          // Fully opaque, not 0.92. Eight percent of the page behind was
+          // compositing through, so wherever that page was white you got a
+          // faint RGB(20,20,20) line and wherever it was dark you got black.
+          // The result read as stray white lines down the right and along the
+          // bottom, which is exactly what a client reported. Nothing behind a
+          // photo should be competing with it anyway.
+          background: 'rgb(0,0,0)',
         }}
         onClick={handleClose}
       />
