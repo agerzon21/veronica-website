@@ -13,7 +13,13 @@
  * the form cannot hold different opinions about which shoots name two people.
  */
 
-import { CONTRACT_TEMPLATES, CONTRACT_TYPE_ORDER } from '../data/contract-template';
+// The .js extension is REQUIRED, not stylistic. This module is imported by
+// api/admin/_messages-summary.ts, and the api functions run as real Node ESM
+// (package.json is type: module), where an extensionless relative specifier
+// throws ERR_MODULE_NOT_FOUND at load. api/admin.ts imports every admin
+// handler, so that one throw took the entire admin API down with
+// FUNCTION_INVOCATION_FAILED. Vite resolves the .js back to this .ts happily.
+import { CONTRACT_TEMPLATES, CONTRACT_TYPE_ORDER } from '../data/contract-template.js';
 
 /**
  * The contract details a thread established, as data rather than prose.
