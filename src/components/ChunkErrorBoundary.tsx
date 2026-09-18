@@ -27,6 +27,60 @@ import { ensureAnalytics } from '../utils/analytics';
 
 const RELOAD_KEY = 'chunkReloadAt';
 const RELOAD_COOLDOWN_MS = 30_000;
+/**
+ * Cache buster appended to the URL when recovering.
+ *
+ * Stripped again on the next successful boot, so it never lingers in a URL a
+ * client might copy or share.
+ */
+const FRESH_PARAM = 'fresh';
+
+/**
+ * Reload in a way a stale cache cannot satisfy.
+ *
+ * `location.reload()` re-requests the SAME url, and a browser holding a cached
+ * index.html is entitled to answer from that cache. It then hands back the
+ * very same dead chunk urls, the boundary trips again, and the 30 second
+ * cooldown blocks the next attempt: the page is stuck until someone knows to
+ * hard reload. That is what a client hit on a phone, where iOS is especially
+ * willing to serve a document from memory without revalidating, while the same
+ * deploy looked fine on a desktop that happened to have a fresher copy.
+ *
+ * Changing the url is the one thing no cache can answer from, so recovery
+ * actually recovers. `replace` rather than `assign`, so Back does not walk
+ * into the broken page again.
+ */
+function reloadFresh(): void {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set(FRESH_PARAM, String(Date.now()));
+    window.location.replace(url.toString());
+  } catch {
+    // A url we cannot parse is not worth failing over; the plain reload is
+    // still better than nothing.
+    window.location.reload();
+  }
+}
+
+/**
+ * Take the cache buster back out of the address bar.
+ *
+ * Called once the app has booted, which by definition means the fresh document
+ * arrived. Uses replaceState so it costs no history entry, and leaves every
+ * other query parameter alone: `/portal/pass?password=...` has to survive this
+ * untouched, since that link IS the client's way in.
+ */
+export function clearFreshParam(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(FRESH_PARAM)) return;
+    url.searchParams.delete(FRESH_PARAM);
+    window.history.replaceState(window.history.state, '', url.toString());
+  } catch {
+    // Cosmetic only.
+  }
+}
 
 /** True when this looks like a missing/failed JS chunk rather than a code bug. */
 export function isChunkLoadError(error: unknown): boolean {
@@ -76,7 +130,7 @@ export function attemptChunkRecovery(): boolean {
   } catch {
     // Non-fatal — worst case we lose loop protection for this tab.
   }
-  window.location.reload();
+  reloadFresh();
   return true;
 }
 
@@ -142,7 +196,7 @@ class ChunkErrorBoundary extends React.Component<Props, State> {
               {this.state.error.message || String(this.state.error)}
             </Text>
           )}
-          <Button onClick={() => window.location.reload()} colorScheme="blackAlpha" bg="black">
+          <Button onClick={reloadFresh} colorScheme="blackAlpha" bg="black">
             Reload the page
           </Button>
           <Text fontSize="sm" color="gray.500">

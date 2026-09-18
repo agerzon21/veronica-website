@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { attemptChunkRecovery } from './components/ChunkErrorBoundary';
+import { attemptChunkRecovery, clearFreshParam } from './components/ChunkErrorBoundary';
 
 // Routes are code-split, so a deploy that lands while a tab is open leaves the
 // page referencing chunk hashes that no longer exist. Vite fires this event
@@ -27,6 +27,10 @@ window.addEventListener('vite:preloadError', (event) => {
 if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';
 }
+
+// We got here, so the document that was fetched is a working one. Take the
+// recovery cache buster back out of the address bar before the client sees it.
+clearFreshParam();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
