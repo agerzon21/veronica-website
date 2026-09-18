@@ -326,6 +326,16 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
 export interface ContractTemplateField {
   key: string;
   label: string;
+  /**
+   * Russian label, used by the admin's missing-field message.
+   *
+   * Vero's panel defaults to Russian, and the per-type required-field check
+   * names the offending field by this label, so without it she gets one
+   * sentence in Russian naming an English field. Not a flat per-key map,
+   * because the same key reads "Event Location" on a wedding and "Session
+   * Location" on everything else.
+   */
+  labelRu?: string;
   // 'text' is the default. 'date' renders a date picker (we format to
   // human-readable on save). 'currency' is a number input rendered with
   // a $ prefix; the variable is stored as "$230". 'number' is a plain
@@ -344,6 +354,24 @@ export interface ContractTemplateSpec {
   name: string;          // shown in the admin dropdown
   template: ContractTemplate;
   fields: ContractTemplateField[];
+  /**
+   * The booking names two people, so the form shows a second name input and
+   * the derived display name reads "A & B". Wedding and engagement only; for
+   * every other type the partner_2 columns simply stay NULL.
+   */
+  couple?: boolean;
+  /**
+   * Clause flags forced on for this type, merged UNDER any explicit choice so
+   * they cannot be cleared by accident. This is how family always carries the
+   * minor and illness clauses without relying on anyone ticking a box.
+   */
+  defaultVariables?: Record<string, string>;
+  /** Clause flags offered as checkboxes. Keys index OPTIONAL_CLAUSES. */
+  optionalClauses?: string[];
+  /** Offers the half-day / full-day coverage presets. Wedding only. */
+  coveragePresets?: boolean;
+  /** Offers a free-text session label alongside the type. 'other' only. */
+  allowsCustomLabel?: boolean;
 }
 
 // Fields that show up in the admin's "Contract Variables" section.
@@ -410,14 +438,691 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
   },
 ];
 
+// ────────────────────────────────────────────────────────────────────
+// SESSION CONTRACTS
+//
+// Portrait, family, engagement, maternity and "other" share one body.
+// They are still six separate choices in the admin, because the choice is
+// what picks the title, the fields and which clauses appear, and because a
+// family client must never read portrait wording (or, worse, wedding wording).
+//
+// The wedding template above is NOT refactored into shared constants, even
+// where a section is identical. Every signed and every pending contract points
+// at it, and _portal-update.ts re-renders contract_body from the live template
+// whenever variables are edited, so a change here can rewrite a document
+// somebody has already read and signed. The duplication below is deliberate
+// and is the cheaper mistake. If a clause that appears in both ever changes,
+// it has to be changed in both places on purpose.
+//
+// Section numbering runs I to XIII exactly as the wedding contract does, and
+// every per-type clause is UNNUMBERED, the same way TWO-CAMERA COVERAGE and
+// RESPONSIBLE PARTY already are. So switching a clause on or off never
+// renumbers anything, and the PDF's signature heading stays "XIII. SIGNATURES".
+//
+// Variable names are reused from the wedding set wherever the meaning matches
+// ({{event_date}}, {{event_location}}, {{balance_due_window}} and so on). The
+// client only ever sees the LABEL, which says "Session", and reusing the keys
+// means the admin form, the variable editor and _portal-update.ts need no
+// special cases. Only genuinely new ideas get new keys.
+
+/** Variables the session templates accept, on top of the shared wedding set. */
+export interface SessionContractVariables {
+  /** How long a rescheduled session stays claimable. e.g. "three (3) months". */
+  reschedule_window: string;
+  /** 'other' only: free text describing what is being shot. Required there. */
+  session_scope: string;
+  /** Maternity only, always 'yes': switches on MATERNITY SESSION GUIDELINES. */
+  maternity_clauses_enabled: string;
+  /** Maternity only: the estimated due date, printed in the clause. */
+  due_date: string;
+  /** 'yes' switches on PHOTOGRAPHING A MINOR. Automatic for family. */
+  minors_clause_enabled: string;
+  /** 'yes' switches on ILLNESS. Automatic for family. */
+  illness_clause_enabled: string;
+  /** 'yes' switches on PERMITS AND LOCATION ACCESS. Automatic for engagement. */
+  permits_clause_enabled: string;
+  /** Engagement only: the wedding this session leads up to, if it is booked. */
+  wedding_date: string;
+}
+
+const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
+  {
+    number: 'I',
+    title: 'PARTIES',
+    paragraphs: [
+      { kind: 'text', text: 'This agreement is entered into on {{effective_date}} ("Effective Date") between:' },
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Photographer', value: '{{photographer_name}} ("Photographer")' },
+          { label: 'Client', value: '{{client_names}} ("Client(s)")' },
+        ],
+      },
+    ],
+  },
+  // Same clause the wedding contract carries, for the case where someone else
+  // is paying and signing (a parent booking a session, most often).
+  {
+    title: 'RESPONSIBLE PARTY',
+    optional: true,
+    requireVariables: ['responsible_party_name', 'responsible_party_relationship'],
+    paragraphs: [
+      { kind: 'text', text: 'The party signing this agreement and accepting financial responsibility on behalf of the Client(s) is:' },
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Name', value: '{{responsible_party_name}} ("Responsible Party")' },
+          { label: 'Relationship to Client(s)', value: '{{responsible_party_relationship}}' },
+        ],
+      },
+      { kind: 'text', emphasis: 'italic', text: 'The Responsible Party accepts all financial obligations described in this agreement and signs on behalf of the Client(s).' },
+    ],
+  },
+  {
+    number: 'II',
+    title: 'SESSION DETAILS',
+    paragraphs: [
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Title', value: '{{event_title}}' },
+          { label: 'Location', value: '{{event_location}}' },
+          { label: 'Date', value: '{{event_date}}' },
+          { label: 'Time', value: '{{event_time}}' },
+        ],
+      },
+    ],
+  },
+  // 'other' only. The whole point of the Other type is that it describes
+  // itself rather than inheriting another type's assumptions, so this is the
+  // one section that is required there and absent everywhere else.
+  {
+    title: 'SCOPE OF SESSION',
+    optional: true,
+    requireVariables: ['session_scope'],
+    paragraphs: [
+      { kind: 'text', text: 'This agreement covers the following session:' },
+      { kind: 'text', text: '{{session_scope}}' },
+    ],
+  },
+  {
+    number: 'III',
+    title: 'SERVICES',
+    paragraphs: [
+      { kind: 'text', text: 'The Photographer agrees to provide photography services for the session described above, for the duration listed.' },
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Deliverables', value: '{{deliverables}}' },
+          { label: 'Delivery Timeframe', value: '{{delivery_timeframe}} (after full payment is received)' },
+          { label: 'Delivery Method', value: 'Online gallery (Website Portal + Google Drive)' },
+        ],
+      },
+      {
+        kind: 'bullets',
+        items: [
+          'Photographer retains full creative control over shooting and editing style.',
+          'RAW/unedited images are not included.',
+          'Travel to the session location is included in the Total Payment above. Additional travel may be billed separately if discussed in advance.',
+        ],
+      },
+      { kind: 'text', text: 'The online gallery will remain hosted for {{retention_months}} months after delivery. After that, retention is at the Photographer’s discretion. The Client is responsible for downloading and backing up images during the hosting window.' },
+    ],
+  },
+  // Maternity only, and always on for that type rather than a checkbox Vero
+  // could forget. A maternity session has a hard biological deadline, which is
+  // the one thing the generic rescheduling clause cannot describe.
+  {
+    title: 'MATERNITY SESSION GUIDELINES',
+    optional: true,
+    requireVariables: ['maternity_clauses_enabled'],
+    paragraphs: [
+      {
+        kind: 'fields',
+        items: [{ label: 'Estimated Due Date', value: '{{due_date}}' }],
+      },
+      {
+        kind: 'text',
+        text: 'Maternity sessions are best photographed between roughly 28 and 36 weeks, and the session date above has been chosen with the estimated due date in mind. The Client agrees to tell the Photographer promptly if that estimate changes.',
+      },
+      {
+        kind: 'text',
+        text: 'If the Client gives birth, is placed on bed rest, or is otherwise medically unable to attend before the session takes place, the session may be rescheduled or converted to a newborn or family session by agreement, and the retainer will be carried over rather than forfeited.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'Because the window for this session closes on its own, the rescheduling window described below is understood to end at the birth.',
+      },
+    ],
+  },
+  // Family automatically; portrait and other can switch it on.
+  //
+  // Two separate ideas live here. A minor cannot be bound by a contract, so a
+  // parent or guardian has to sign. And images of children are handled the
+  // OTHER WAY AROUND from adults: nothing is published unless permission is
+  // given, rather than published unless permission is withdrawn.
+  {
+    title: 'PHOTOGRAPHING A MINOR',
+    optional: true,
+    requireVariables: ['minors_clause_enabled'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'Where any subject of this session is under 18, this agreement is signed by that subject’s parent or legal guardian, who confirms they have the authority to agree to it on the minor’s behalf.',
+      },
+      {
+        kind: 'text',
+        text: 'A parent or guardian is expected to be present for the duration of the session and remains responsible for the supervision and safety of any minor present.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'The Photographer will not publish, display or otherwise use images of a minor for portfolio, website, social media or marketing purposes without the separate written permission of the parent or guardian. This applies whatever the MODEL RELEASE section below allows for adult subjects.',
+      },
+    ],
+  },
+  // Family automatically; portrait and maternity can switch it on.
+  {
+    title: 'ILLNESS',
+    optional: true,
+    requireVariables: ['illness_clause_enabled'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'Everyone appearing in the session should be fever-free for at least 24 hours beforehand, without medication, and free of any contagious illness.',
+      },
+      {
+        kind: 'text',
+        text: 'If the Client tells the Photographer in advance that someone is unwell, the session will be rescheduled under the terms below and no fee is lost. If anyone arrives visibly unwell, the Photographer may end or reschedule the session, and in that case the session is treated as a Client cancellation.',
+      },
+    ],
+  },
+  // Engagement automatically; every other session type can switch it on.
+  {
+    title: 'PERMITS AND LOCATION ACCESS',
+    optional: true,
+    requireVariables: ['permits_clause_enabled'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'Where the session takes place on private property, or somewhere that charges an entry fee or requires a photography permit, obtaining that permission and paying any fee is the Client’s responsibility unless agreed otherwise in writing.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'If access is refused on the day, the Photographer will move to the nearest suitable alternative location. Time lost to securing access counts toward the session time booked.',
+      },
+    ],
+  },
+  // Engagement only, and only once a wedding date actually exists. The date
+  // itself is the gate, so nothing appears for a couple with no date yet.
+  {
+    title: 'RELATED WEDDING BOOKING',
+    optional: true,
+    requireVariables: ['wedding_date'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'The Client’s wedding is scheduled for {{wedding_date}}, and this session is to be completed before that date.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'This agreement covers this session only. Wedding coverage is booked under its own separate agreement, and nothing here reserves a wedding date.',
+      },
+    ],
+  },
+  // Offered on every type, wedding included.
+  {
+    title: 'OPTION FOR ADDITIONAL RETOUCHING',
+    optional: true,
+    requireVariables: ['additional_retouching_enabled'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'Following delivery of the initial gallery, the Client may select images from the gallery for advanced retouching beyond the standard color correction included in this package. Examples include, but are not limited to, skin smoothing, blemish removal, advanced color grading, and object removal.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'The number of images, turnaround time, and any associated additional fees will be agreed upon separately between the Client and Photographer prior to the additional work being performed.',
+      },
+    ],
+  },
+  // Same payment model as the wedding contract, on purpose: the balance falls
+  // due after the session, and nothing is delivered until it is paid. The
+  // gallery is the leverage, so there is no reason to demand money up front.
+  {
+    number: 'IV',
+    title: 'PAYMENT',
+    paragraphs: [
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Total Payment', value: '{{total_amount}}' },
+          { label: 'Retainer (Non-Refundable)', value: '{{retainer_amount}} (due at signing)' },
+          { label: 'Remaining Balance', value: '{{remaining_balance}} (due within {{balance_due_window}} after the session date)' },
+        ],
+      },
+      { kind: 'text', emphasis: 'italic', text: 'The session date is not reserved until this contract is signed and the retainer is paid.' },
+      { kind: 'text', emphasis: 'italic', text: 'Full payment must be received before delivery of any images.' },
+    ],
+  },
+  {
+    number: 'V',
+    title: 'PAYMENT METHODS',
+    paragraphs: [
+      { kind: 'text', text: 'Accepted payment methods:' },
+      { kind: 'bullets', items: ['{{payment_methods}}'] },
+    ],
+  },
+  // Softer than the wedding clause, deliberately. A session client has often
+  // paid in full weeks ahead, and forfeiting everything over a cancellation
+  // made in good time is the kind of term that gets argued rather than
+  // enforced. The retainer still does its job.
+  {
+    number: 'VI',
+    title: 'CANCELLATION / RESCHEDULING',
+    paragraphs: [
+      {
+        kind: 'bullets',
+        items: [
+          'The retainer is non-refundable.',
+          'If the Client cancels, the retainer is forfeited. Any amount already paid above the retainer is returned.',
+          'A session may be rescheduled once, subject to the Photographer’s availability. The retainer carries over to the new date.',
+          'A rescheduled session must take place within {{reschedule_window}} of the original date, after which the retainer is forfeited.',
+        ],
+      },
+    ],
+  },
+  {
+    number: 'VII',
+    title: 'FORCE MAJEURE',
+    paragraphs: [
+      { kind: 'text', text: 'If Photographer is unable to perform due to illness, emergency, or circumstances beyond control, Photographer will:' },
+      {
+        kind: 'bullets',
+        items: [
+          'reschedule the session to a mutually agreed date, OR',
+          'attempt to find a replacement photographer, OR',
+          'refund all payments received',
+        ],
+      },
+    ],
+  },
+  // The wedding list's first two bullets are about running an event (cooperation
+  // during a schedule, venue restrictions) and have no meaning for a session.
+  {
+    number: 'VIII',
+    title: 'LIABILITY',
+    paragraphs: [
+      { kind: 'text', text: 'Photographer is not liable for:' },
+      {
+        kind: 'bullets',
+        items: [
+          'weather conditions',
+          'equipment failure (reasonable backup efforts will be made)',
+          'the natural behaviour of children, infants or animals during the session',
+        ],
+      },
+      { kind: 'text', emphasis: 'italic', text: 'Total liability is limited to the amount paid under this agreement.' },
+    ],
+  },
+  {
+    number: 'IX',
+    title: 'CLIENT RESPONSIBILITIES',
+    paragraphs: [
+      { kind: 'text', text: 'Client agrees to:' },
+      {
+        kind: 'bullets',
+        items: [
+          'arrive at the agreed start time, understanding that lateness comes out of the session time booked',
+          'bring everyone who is meant to appear in the photographs',
+          'ensure Photographer has safe working conditions',
+        ],
+      },
+    ],
+  },
+  {
+    number: 'X',
+    title: 'COPYRIGHT & USAGE',
+    paragraphs: [
+      { kind: 'text', text: 'Photographer retains full copyright of all images.' },
+      { kind: 'text', text: 'Client receives a personal-use license to:' },
+      { kind: 'bullets', items: ['Download, print and/or share.'] },
+    ],
+  },
+  // Unchanged from the wedding contract: permission is granted, and a client
+  // who would rather not appear says so in writing. The one carve-out is
+  // minors, handled the other way around in PHOTOGRAPHING A MINOR above.
+  {
+    number: 'XI',
+    title: 'MODEL RELEASE',
+    paragraphs: [
+      { kind: 'text', text: 'Client grants Photographer permission to use images for:' },
+      { kind: 'bullets', items: ['Portfolio, website, social media and/or marketing.'] },
+      { kind: 'text', text: 'Client may request privacy in writing.' },
+    ],
+  },
+  {
+    number: 'XII',
+    title: 'ENTIRE AGREEMENT',
+    paragraphs: [
+      { kind: 'text', text: 'This Agreement represents the entire understanding between parties.' },
+    ],
+  },
+  {
+    title: 'ADDITIONAL NOTES',
+    optional: true,
+    paragraphs: [{ kind: 'text', text: '{{additional_notes}}' }],
+  },
+  {
+    number: 'XIII',
+    title: 'SIGNATURES',
+    paragraphs: [{ kind: 'signature_block' }],
+  },
+];
+
+/** One body, five titles. The title is what the client reads at the top. */
+function sessionTemplate(title: string): ContractTemplate {
+  return { title, sections: SESSION_CONTRACT_SECTIONS };
+}
+
+/**
+ * The variable fields every session type shows in the admin, in form order.
+ *
+ * Mirrors WEDDING_TEMPLATE_FIELDS, with session wording and two changed
+ * defaults Alex chose: two weeks rather than five, and a rescheduling window.
+ */
+const SESSION_BASE_FIELDS: ContractTemplateField[] = [
+  {
+    key: 'photographer_name',
+    label: 'Photographer Name',
+    labelRu: 'Имя фотографа',
+    defaultValue: 'Veronika Polbina',
+    helpText: 'Shows on the contract as the Photographer party.',
+  },
+  {
+    key: 'event_location',
+    label: 'Session Location',
+    labelRu: 'Место съёмки',
+    placeholder: 'Place name and full address',
+    helpText:
+      'Full address, not just the place name. Look it up in Google Maps or Waze first, confirm the street, city and state are right, and check the drive time so there are no surprises on the day.',
+    required: true,
+  },
+  {
+    key: 'effective_date',
+    label: 'Effective Date',
+    labelRu: 'Дата вступления в силу',
+    type: 'date',
+    helpText: 'The date the contract is meant to take effect. Usually today.',
+  },
+  {
+    key: 'deliverables',
+    label: 'Deliverables',
+    labelRu: 'Что получает клиент',
+    defaultValue: 'Edited digital images with color correction',
+    // Deliberately no image count in the default. Any number promised reads as
+    // too small next to what actually gets delivered, so the promise stays
+    // qualitative unless Vero types a number for a specific booking.
+    helpText: 'What the client receives. Leaving it as the default avoids promising a count.',
+  },
+  {
+    key: 'delivery_timeframe',
+    label: 'Delivery Timeframe',
+    labelRu: 'Срок сдачи',
+    defaultValue: 'Within 2 weeks after the session',
+    helpText: 'How long after the session the photos will be delivered.',
+  },
+  {
+    key: 'balance_due_window',
+    label: 'Balance Due Window',
+    labelRu: 'Срок оплаты остатка',
+    defaultValue: 'TEN (10) Days',
+    helpText: 'How long after the session date the remaining balance is due. Nothing is delivered until it is paid.',
+  },
+  {
+    key: 'reschedule_window',
+    label: 'Rescheduling Window',
+    labelRu: 'Срок переноса',
+    defaultValue: 'three (3) months',
+    helpText: 'How long a rescheduled session stays claimable before the retainer is forfeited.',
+  },
+  {
+    key: 'payment_methods',
+    label: 'Payment Methods',
+    labelRu: 'Способы оплаты',
+    defaultValue: 'Cash, Venmo, CashApp or Zelle',
+    helpText: 'Comma-separated payment methods the client can use.',
+  },
+  {
+    key: 'retention_months',
+    label: 'Gallery Retention (months)',
+    labelRu: 'Хранение галереи (месяцы)',
+    type: 'number',
+    defaultValue: '3',
+    helpText: 'How long the photo gallery stays online after delivery. Default is 3.',
+  },
+];
+
+/** Every optional clause a type can offer, so the form can render checkboxes. */
+export const OPTIONAL_CLAUSES: Record<string, { label: string; helpText: string }> = {
+  two_camera_enabled: {
+    label: 'Two-camera coverage',
+    helpText:
+      'Wedding only. Adds a clause saying the second camera is an assistant, not a second professional photographer.',
+  },
+  additional_retouching_enabled: {
+    label: 'Option for additional retouching',
+    helpText: 'Adds a clause saying advanced retouching can be bought separately after delivery.',
+  },
+  minors_clause_enabled: {
+    label: 'Photographing a minor',
+    helpText:
+      'A parent or guardian signs on the child’s behalf, and images of children are not published without their separate written permission.',
+  },
+  illness_clause_enabled: {
+    label: 'Illness',
+    helpText: 'Fever-free for 24 hours, and what happens when somebody turns up unwell.',
+  },
+  permits_clause_enabled: {
+    label: 'Permits and location access',
+    helpText: 'Entry fees and photography permits are the client’s to arrange. Useful for parks and private property.',
+  },
+};
+
 export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
   wedding: {
     key: 'wedding',
     name: 'Wedding',
     template: WEDDING_CONTRACT_TEMPLATE,
     fields: WEDDING_TEMPLATE_FIELDS,
+    couple: true,
+    coveragePresets: true,
+    optionalClauses: ['two_camera_enabled', 'additional_retouching_enabled'],
+  },
+  portrait: {
+    key: 'portrait',
+    name: 'Portrait',
+    template: sessionTemplate('PORTRAIT PHOTOGRAPHY CONTRACT'),
+    fields: SESSION_BASE_FIELDS,
+    optionalClauses: [
+      'additional_retouching_enabled',
+      'minors_clause_enabled',
+      'illness_clause_enabled',
+      'permits_clause_enabled',
+    ],
+  },
+  family: {
+    key: 'family',
+    name: 'Family',
+    template: sessionTemplate('FAMILY PHOTOGRAPHY CONTRACT'),
+    fields: SESSION_BASE_FIELDS,
+    // On automatically, not offered as a checkbox: a family session almost
+    // always includes a child, and these are the two clauses that would be
+    // missed exactly when they matter.
+    defaultVariables: { minors_clause_enabled: 'yes', illness_clause_enabled: 'yes' },
+    optionalClauses: ['additional_retouching_enabled', 'permits_clause_enabled'],
+  },
+  engagement: {
+    key: 'engagement',
+    name: 'Engagement',
+    template: sessionTemplate('ENGAGEMENT SESSION CONTRACT'),
+    fields: [
+      ...SESSION_BASE_FIELDS,
+      {
+        key: 'wedding_date',
+        label: 'Wedding Date (optional)',
+        labelRu: 'Дата свадьбы (необязательно)',
+        type: 'date',
+        helpText:
+          'If their wedding is already booked, this adds a clause noting the session comes first. Leave blank and the clause does not appear.',
+      },
+    ],
+    couple: true,
+    defaultVariables: { permits_clause_enabled: 'yes' },
+    optionalClauses: [
+      'additional_retouching_enabled',
+      'illness_clause_enabled',
+      'minors_clause_enabled',
+    ],
+  },
+  maternity: {
+    key: 'maternity',
+    name: 'Maternity',
+    template: sessionTemplate('MATERNITY PHOTOGRAPHY CONTRACT'),
+    fields: [
+      ...SESSION_BASE_FIELDS,
+      {
+        key: 'due_date',
+        label: 'Estimated Due Date',
+        labelRu: 'Предполагаемая дата родов',
+        type: 'date',
+        required: true,
+        helpText: 'Printed in the contract, and what the timing and reschedule wording hang on.',
+      },
+    ],
+    defaultVariables: { maternity_clauses_enabled: 'yes' },
+    optionalClauses: ['additional_retouching_enabled', 'illness_clause_enabled'],
+  },
+  other: {
+    key: 'other',
+    name: 'Other / Custom',
+    template: sessionTemplate('PHOTOGRAPHY SESSION CONTRACT'),
+    fields: [
+      ...SESSION_BASE_FIELDS,
+      {
+        key: 'session_scope',
+        label: 'What is being photographed',
+        labelRu: 'Что снимаем',
+        type: 'textarea',
+        required: true,
+        placeholder: 'e.g. A branding session for a small business, headshots plus workspace photographs.',
+        helpText:
+          'Printed in the contract as the scope. This is what makes an Other contract specific, since it inherits no wording from the named types.',
+      },
+    ],
+    allowsCustomLabel: true,
+    optionalClauses: [
+      'additional_retouching_enabled',
+      'minors_clause_enabled',
+      'illness_clause_enabled',
+      'permits_clause_enabled',
+    ],
   },
 };
+
+/**
+ * Variables that belong to ONE type and gate that type's own clause.
+ *
+ * The five session types share a single sections array, so the template alone
+ * cannot say which clauses a type is allowed to print. Without this list two
+ * things went wrong. Switching a maternity portal to portrait left
+ * maternity_clauses_enabled set, and the portrait contract carried on printing
+ * MATERNITY SESSION GUIDELINES with the due date still in it. And the admin's
+ * variable editor, which derives its rows from the template, offered every
+ * session type a session_scope box, so typing into it printed a SCOPE OF
+ * SESSION section on a booking whose type never offers one.
+ *
+ * A type owns one of these only if it declares it as a field, offers it as a
+ * checkbox, or forces it on. Everything else gets stripped before the body is
+ * rendered.
+ */
+export const TYPE_GATED_VARIABLES = [
+  'two_camera_enabled',
+  'maternity_clauses_enabled',
+  'due_date',
+  'minors_clause_enabled',
+  'illness_clause_enabled',
+  'permits_clause_enabled',
+  'wedding_date',
+  'session_scope',
+] as const;
+
+/** The subset of TYPE_GATED_VARIABLES this type is allowed to carry. */
+export function ownedGatedVariables(key: string): Set<string> {
+  const spec = CONTRACT_TEMPLATES[key];
+  const owned = new Set<string>();
+  if (!spec) return owned;
+  for (const f of spec.fields) owned.add(f.key);
+  for (const c of spec.optionalClauses ?? []) owned.add(c);
+  for (const k of Object.keys(spec.defaultVariables ?? {})) owned.add(k);
+  return new Set(TYPE_GATED_VARIABLES.filter((v) => owned.has(v)));
+}
+
+/**
+ * Drop any type-gated variable this type does not own.
+ *
+ * Call this on the way IN to rendering, wherever contract_variables are saved.
+ * It is what stops a clause following a booking across a type change, which is
+ * the cross-type leak with no warning sign: the contract simply carries a
+ * paragraph about somebody else's session and nothing looks wrong.
+ */
+export function stripForeignTypeVariables(
+  key: string,
+  vars: Record<string, string>,
+): Record<string, string> {
+  const owned = ownedGatedVariables(key);
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    if ((TYPE_GATED_VARIABLES as readonly string[]).includes(k) && !owned.has(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Registry order for the admin dropdown. Wedding first, Other last. */
+export const CONTRACT_TYPE_ORDER = [
+  'wedding',
+  'portrait',
+  'family',
+  'engagement',
+  'maternity',
+  'other',
+] as const;
+
+/** True when the key names a real template. Used to validate server-side. */
+export function isContractTemplateKey(key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(CONTRACT_TEMPLATES, key);
+}
+
+/**
+ * The variables a type requires before a contract can be created.
+ *
+ * Derived from the spec's own field list rather than hardcoded, so adding a
+ * required field to a type automatically starts being enforced in the admin
+ * form AND at the API, which is the half that matters: the form can be
+ * bypassed, and a maternity contract with no due date prints "[due_date]" to
+ * the client.
+ */
+export function requiredVariablesFor(key: string): string[] {
+  const spec = CONTRACT_TEMPLATES[key];
+  if (!spec) return [];
+  return spec.fields.filter((f) => f.required).map((f) => f.key);
+}
+
 
 /**
  * Apply variables to the template, returning a new template with all

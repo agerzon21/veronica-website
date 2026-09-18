@@ -1,4 +1,4 @@
-import { Box, VStack, HStack, Text, Input, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
 import { fmtAdminDateTime } from '../utils/adminDate';
 import { useEffect, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
@@ -6,7 +6,15 @@ import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
-import { CONTRACT_TEMPLATES, extractVariableKeys } from '../data/contract-template';
+import {
+  CONTRACT_TEMPLATES,
+  CONTRACT_TYPE_ORDER,
+  OPTIONAL_CLAUSES,
+  extractVariableKeys,
+  isContractTemplateKey,
+  requiredVariablesFor,
+  type ContractTemplateSpec,
+} from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
 
 interface Props {
@@ -71,6 +79,63 @@ const formatMoney = (amount: number | null): string => {
   if (amount === null || amount === undefined) return '—';
   return `$${amount.toFixed(0)}`;
 };
+
+/**
+ * CONTRACT_TEMPLATES lookup that cannot fall through to Object.prototype.
+ *
+ * The registry is a plain object and these keys come out of the database, so a
+ * bare CONTRACT_TEMPLATES[key] answers 'constructor' and 'toString' with
+ * something truthy: a row filed as 'constructor' rendered its type as "Object",
+ * and the variable editor below would have handed extractVariableKeys an
+ * undefined template and thrown the whole screen away. _portal-update.ts guards
+ * the identical trap on the way in (see the hasOwnProperty note at its template
+ * check), so guard it the same way on the way out.
+ */
+const templateSpecFor = (key: string | null | undefined): ContractTemplateSpec | undefined =>
+  key && isContractTemplateKey(key) ? CONTRACT_TEMPLATES[key] : undefined;
+
+// Contract/session type keys ('wedding', 'other') are storage values, not
+// labels, and 'other' in particular reads like a bug on screen. Unknown keys fall
+// through unchanged rather than rendering blank: a row pointing at a type we
+// no longer recognise should still say what it points at.
+const typeLabel = (key: string | null): string => {
+  if (!key) return '';
+  return templateSpecFor(key)?.name ?? key;
+};
+
+/**
+ * The shape a session label is stored in: lowercase, hyphenated.
+ *
+ * Every other place that writes this column already does this. The create
+ * form runs it on each keystroke of Session Label, and SessionTypePicker's
+ * Custom box runs the identical transform for gallery-only rows. This screen
+ * was the one that did not, so the same shoot could be filed as
+ * "Newborn Shoot" from here and "newborn-shoot" from there, and the Clients
+ * list, the calendar and the heading above all print the column raw.
+ *
+ * Live on every keystroke, like the create form, which is why the edge hyphens
+ * a half-typed word leaves behind ("newborn ") come off separately on save
+ * rather than fighting the cursor while she types.
+ */
+const sessionLabelSlug = (raw: string): string => raw.toLowerCase().replace(/\s+/g, '-');
+const cleanSessionLabel = (raw: string): string =>
+  sessionLabelSlug(raw.trim()).replace(/^-+|-+$/g, '');
+
+/**
+ * Every variable any type treats as a clause switch.
+ *
+ * OPTIONAL_CLAUSES alone is not the answer: maternity_clauses_enabled is never
+ * offered as a choice, so it lives only in the maternity spec's
+ * defaultVariables. Anything in here is a 'yes' / '' flag and must never reach
+ * a text input, because pruneEmptyOptionalSections reads any non-blank string
+ * as "clause on".
+ */
+const ALL_CLAUSE_KEYS = new Set<string>([
+  ...Object.keys(OPTIONAL_CLAUSES),
+  ...CONTRACT_TYPE_ORDER.flatMap((key) =>
+    Object.keys(CONTRACT_TEMPLATES[key].defaultVariables ?? {}),
+  ),
+]);
 
 const daysUntil = (iso: string | null): number | null => {
   if (!iso) return null;
@@ -385,7 +450,16 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
                   {t.clientDetail.status}
                 </Text>
-                <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
+                {/* There are six contract types now, and each one is worded
+                    differently. "Pending signature" on its own no longer says
+                    WHICH contract is pending, so the type rides next to the
+                    status instead of only being visible inside the PDF. */}
+                <HStack spacing={2} flexWrap="wrap">
+                  <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
+                  <Badge colorScheme="gray" variant="outline" fontSize="2xs">
+                    {typeLabel(portal.contract_template_key)}
+                  </Badge>
+                </HStack>
               </Box>
               {portal.contract_status === 'signed' && portal.contract_signed_pdf_available && (
                 <Box w={{ base: '100%', md: 'auto' }}>
@@ -393,6 +467,36 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 </Box>
               )}
             </Stack>
+
+            {/* The session type is a label (the kicker above, the Clients list,
+                the calendar). The contract type is what the contract was
+                actually rendered from. The two are written together now, but
+                rows predating that, and rows whose label was edited by hand,
+                can still disagree, and a page whose heading reads "portrait"
+                while it quietly holds a wedding contract is the worst version
+                of this. Saying so beats hoping nobody looks. */}
+            {portal.contract_status === 'pending' &&
+              portal.session_type &&
+              portal.session_type !== portal.contract_template_key &&
+              // Other / Custom is the one type whose label is SUPPOSED to
+              // differ: the create form files the booking under whatever Vero
+              // typed in Session Label ("newborn", "branding") while the
+              // contract renders from the generic session template. Without
+              // this, every Other booking accused itself of a mismatch and
+              // told her to overwrite the label that made it an Other booking.
+              !templateSpecFor(portal.contract_template_key)?.allowsCustomLabel && (
+                <Box p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
+                  <Text fontSize="xs" color="yellow.800">
+                    {/* "filed under X" rather than "a X shoot": the label is a
+                        raw stored word, and "a engagement shoot" is what the
+                        article version prints for half of them. */}
+                    {t.clientDetail.typeMismatchWarning(
+                      portal.session_type,
+                      typeLabel(portal.contract_template_key),
+                    )}
+                  </Text>
+                </Box>
+              )}
 
             {/* While the contract is pending, expose the same variable
                 fields that were used at creation. Saving re-renders the
@@ -476,11 +580,17 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             saving={savingField === 'event_date'}
             onSave={(v) => patch({ event_date: v }, 'event_date')}
           />
-          <InlineField
-            label={t.clientDetail.sessionTypeLabel}
-            value={portal.session_type ?? ''}
+          {/* The field decides which columns it is writing and hands the patch
+              over whole, because the two are not always the same value: an
+              Other booking is filed under Vero's own word ("newborn") while its
+              contract renders from the 'other' template. Sending
+              contract_template_key on a row with no pending contract is refused
+              server-side, so a gallery-only row sends the label alone and the
+              type field it never used stays at its default. */}
+          <SessionTypeField
+            portal={portal}
             saving={savingField === 'session_type'}
-            onSave={(v) => patch({ session_type: v }, 'session_type')}
+            onSave={(next) => patch(next, 'session_type')}
           />
           {/* Total + Retainer let her retro-fit old gallery-only rows
               with bookkeeping. Once a total is set, the Payments
@@ -614,6 +724,7 @@ function InlineField({
   helpText,
   type = 'text',
   placeholder,
+  normalize,
   saving,
   onSave,
 }: {
@@ -622,6 +733,11 @@ function InlineField({
   helpText?: string;
   type?: 'text' | 'date';
   placeholder?: string;
+  // Applied to what she types, before it reaches the draft. Only the session
+  // label uses it, so that a label typed here comes out in the same shape as
+  // one typed on either create screen. Normalising on save instead would leave
+  // the box showing text the database does not hold.
+  normalize?: (v: string) => string;
   saving?: boolean;
   onSave: (v: string) => Promise<boolean | void>;
 }) {
@@ -647,7 +763,7 @@ function InlineField({
           type={type}
           value={draft}
           onChange={(e) => {
-            setDraft(e.target.value);
+            setDraft(normalize ? normalize(e.target.value) : e.target.value);
             setTouched(true);
           }}
           placeholder={placeholder}
@@ -683,6 +799,248 @@ function InlineField({
           {helpText}
         </Text>
       )}
+    </Box>
+  );
+}
+
+/**
+ * Session type, picked from the contract types instead of typed by hand.
+ *
+ * Free text was survivable while there was one contract. With six, "famliy" on
+ * one row and "family" on the next is the difference between a Clients list you
+ * can read at a glance and a pile of strings, and nothing lined the label up
+ * with the contract the client was being asked to sign.
+ *
+ * While a contract is pending this writes BOTH columns, the label and the
+ * contract type, the same way the creation form sets them together. The server
+ * re-renders the contract body into the new type, so the alternative Vero used
+ * to have (void the portal, re-create it, re-send the invite) is gone. Once the
+ * contract is signed the server refuses the change, so the field goes read-only
+ * here rather than offering a choice that comes back as a 409.
+ *
+ * On a gallery-only row the contract type column holds an untouched default and
+ * means nothing, and there is no pending contract to re-render, so that case
+ * stays the free-text label box it always was. The gallery-only create screen
+ * still writes anything SessionTypePicker offers into this column (newborn,
+ * anniversary, boudoir, and a Custom box on top of those), and a screen that
+ * can only spell six words could not correct one of them.
+ *
+ * The list is the contract-type registry, but a stored key we no longer
+ * recognise is kept as an option, so opening this screen on an older row does
+ * not quietly relabel it on the next save.
+ *
+ * Other / Custom gets a Session Label box of its own next to the select. The
+ * select binds to the TEMPLATE key, so on an Other booking filed as 'newborn'
+ * it reads "Other / Custom" and the word 'newborn' appeared nowhere: the first
+ * save wrote the template key back over it and the only record of what the
+ * shoot actually was went with it. The label box is that record, and it is the
+ * same box the create form shows for the same reason.
+ */
+function SessionTypeField({
+  portal,
+  saving,
+  onSave,
+}: {
+  portal: PortalDetail;
+  saving?: boolean;
+  onSave: (patch: {
+    session_type: string;
+    contract_template_key?: string;
+  }) => Promise<boolean | void>;
+}) {
+  const { t } = useAdminLang();
+  // While the contract is pending the contract type is the authoritative
+  // answer, because that is what the client is actually being asked to sign.
+  // Everywhere else the label is all there is.
+  const editsContractType = portal.mode === 'full' && portal.contract_status === 'pending';
+  const storedLabel = portal.session_type ?? '';
+  const current = editsContractType ? portal.contract_template_key : storedLabel;
+  // A label that is only the template key is not a label. Rows saved before the
+  // label box existed hold 'other' in that column, and echoing it into the box
+  // would make Vero delete the word "other" by hand before she could type the
+  // real one. Same seeding rule the create form uses.
+  const seedLabel = isContractTemplateKey(storedLabel) ? '' : storedLabel;
+  const [draft, setDraft] = useState(current);
+  // Kept across a change of type on purpose: picking Portrait, thinking better
+  // of it and picking Other again must not lose the word she already typed.
+  const [labelDraft, setLabelDraft] = useState(seedLabel);
+
+  // Resync the local draft when a reload brings a fresh value in, same as
+  // InlineField above.
+  useEffect(() => {
+    setDraft(current);
+  }, [current]);
+  useEffect(() => {
+    setLabelDraft(seedLabel);
+  }, [seedLabel]);
+
+  const label = (
+    <Text
+      fontSize={{ base: 'xs', md: '2xs' }}
+      fontWeight="500"
+      color="brand.accent"
+      letterSpacing={{ base: '0.15em', md: '0.2em' }}
+      textTransform="uppercase"
+      mb={2}
+    >
+      {t.clientDetail.sessionTypeLabel}
+    </Text>
+  );
+
+  // Once the contract is signed the TYPE is frozen, because re-rendering the
+  // body would rewrite a document the client has already read, and the server
+  // refuses a changed contract_template_key on a signed row. The filing label
+  // is not part of that document: it is the kicker above, the Clients list and
+  // the calendar, and _portal-update.ts patches session_type unconditionally at
+  // any status. Locking both meant a typo in a label on a signed booking could
+  // only be fixed in the database, so only the type is read-only here.
+  if (portal.contract_status === 'signed') {
+    return (
+      <Box>
+        {label}
+        <Text fontSize="sm" color="gray.600">
+          {typeLabel(portal.contract_template_key) || t.clientDetail.typeNotSet}
+        </Text>
+        <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+          {t.clientDetail.contractTypeLocked}
+        </Text>
+        <Box mt={4}>
+          <InlineField
+            label={t.clientDetail.sessionLabelLabel}
+            value={storedLabel}
+            helpText={t.clientDetail.sessionLabelHelpSigned}
+            normalize={sessionLabelSlug}
+            saving={saving}
+            onSave={(v) => onSave({ session_type: cleanSessionLabel(v) || portal.contract_template_key })}
+          />
+        </Box>
+      </Box>
+    );
+  }
+
+  // With no pending contract there is no contract type to drive, and this
+  // column goes back to being the free text both create screens still write
+  // into it: AdminNewGalleryOnly files gallery-only rows through
+  // SessionTypePicker, whose standard chips include newborn, anniversary and
+  // boudoir, on top of a Custom box for anything else. A six-option select
+  // here could keep such a label but never write one, so this was the only
+  // screen in the app that could not spell what the screen that created the
+  // row had just written: a gallery row filed as 'newborn' could not be
+  // corrected to 'boudoir' at all.
+  if (!editsContractType) {
+    return (
+      <InlineField
+        label={t.clientDetail.sessionTypeLabel}
+        value={storedLabel}
+        helpText={t.clientDetail.sessionLabelHelp}
+        normalize={sessionLabelSlug}
+        saving={saving}
+        onSave={(v) => onSave({ session_type: cleanSessionLabel(v) })}
+      />
+    );
+  }
+
+  const knownTypes: readonly string[] = CONTRACT_TYPE_ORDER;
+  const options = current && !knownTypes.includes(current) ? [current, ...knownTypes] : knownTypes;
+  // Only the type whose spec says so gets a second box. Everything else files
+  // itself under the template key, exactly as the create form does, so there is
+  // no second picker to keep in agreement with the contract.
+  const wantsCustomLabel = Boolean(templateSpecFor(draft)?.allowsCustomLabel);
+  // A blank label falls back to the template key rather than writing an empty
+  // string, the same way the create form does: a row with no label loses its
+  // badge on the Clients list and on the calendar entirely.
+  const nextLabel = wantsCustomLabel ? cleanSessionLabel(labelDraft) || draft : draft;
+  // Compared RAW, not slugged. A legacy label stored as "Newborn Shoot" would
+  // otherwise differ from its own slug the moment the page opened, and the Save
+  // button would be sitting there on a row nobody had touched.
+  const dirty = draft !== current || (wantsCustomLabel && labelDraft.trim() !== seedLabel);
+
+  return (
+    <Box>
+      {label}
+      {/* Type, label and Save is three controls, and three controls sharing one
+          row on a phone leaves each of them about a third of 375px. Only the
+          Other type has the middle one, so only that case stacks. */}
+      <Flex
+        gap={2}
+        align="stretch"
+        direction={wantsCustomLabel ? { base: 'column', sm: 'row' } : 'row'}
+      >
+        <Select
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          // Nothing on the row yet: without a blank option the browser shows
+          // the first type as though it had already been chosen.
+          placeholder={current === '' ? t.clientDetail.typeNotSet : undefined}
+          h="44px"
+          bg="white"
+          color="gray.800"
+          borderColor={dirty ? 'brand.accent' : 'gray.300'}
+          // iOS Safari zooms on focus for any control under 16px, so mobile
+          // stays at md and desktop drops to sm. Same as InlineField.
+          fontSize={{ base: 'md', sm: 'sm' }}
+          borderRadius="sm"
+          focusBorderColor="brand.accent"
+        >
+          {options.map((k) => (
+            <option key={k} value={k}>
+              {typeLabel(k)}
+            </option>
+          ))}
+        </Select>
+        {wantsCustomLabel && (
+          <Input
+            value={labelDraft}
+            // Slugged live, the same way the create form slugs the same box, so
+            // one shoot is filed under one string wherever it was typed.
+            onChange={(e) => setLabelDraft(sessionLabelSlug(e.target.value))}
+            placeholder={t.clientDetail.sessionLabelPlaceholder}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            h="44px"
+            bg="white"
+            border="1px solid"
+            borderColor={dirty ? 'brand.accent' : 'gray.300'}
+            color="gray.800"
+            fontSize={{ base: 'md', sm: 'sm' }}
+            borderRadius="sm"
+            _hover={{ borderColor: dirty ? 'brand.accent' : 'gray.400' }}
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+          />
+        )}
+        {dirty && (
+          <CTAButton
+            onClick={async () => {
+              const ok = await onSave({
+                session_type: nextLabel,
+                contract_template_key: draft,
+              });
+              // A select has no half-typed state to preserve, so a refused save
+              // snaps back to what is actually stored instead of leaving a
+              // choice on screen that was never written. The server refuses a
+              // type whose required fields are blank (maternity with no due
+              // date, Other with no scope) and says which, and that message
+              // surfaces in the error box at the top of the page.
+              if (ok === false) {
+                setDraft(current);
+                setLabelDraft(seedLabel);
+              }
+            }}
+            variant="solid"
+            size="sm"
+            isLoading={saving}
+            loadingText={t.clientDetail.saving}
+          >
+            {t.common.save}
+          </CTAButton>
+        )}
+      </Flex>
+      <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+        {wantsCustomLabel
+          ? t.clientDetail.sessionTypeHelpCustom
+          : t.clientDetail.sessionTypeHelpStandard}
+      </Text>
     </Box>
   );
 }
@@ -1156,15 +1514,101 @@ function EditContractVariables({
     setVars(portal.contract_variables ?? {});
   }, [portal.contract_variables]);
 
+  /**
+   * Label and help text for one clause switch.
+   *
+   * The create form's dictionary first, because Vero's panel runs in Russian
+   * and the two screens flip the same flags, then OPTIONAL_CLAUSES as the
+   * English fallback for a clause added to a spec before it was translated,
+   * and the raw flag name last. Duplicating this wording here instead would
+   * mean two screens describing the same contract clause differently.
+   *
+   * maternity_clauses_enabled is in the dictionary but not in OPTIONAL_CLAUSES:
+   * its type forces it on, so it has never been a checkbox on the create form,
+   * and this screen is the only one that prints it.
+   */
+  const clauseCopy = (key: string): { label: string; help: string } => {
+    const translated = (
+      t.newClient.clauses as Record<string, { label: string; help: string } | undefined>
+    )[key];
+    const registry: { label: string; helpText: string } | undefined = OPTIONAL_CLAUSES[key];
+    return {
+      label: translated?.label ?? registry?.label ?? key,
+      help: translated?.help ?? registry?.helpText ?? '',
+    };
+  };
+
   // Combine the variables already saved on the portal with every
   // {{var}} reference in the current template. That way:
   //  - Existing variables show up populated (so she can edit typos).
   //  - Variables added to the template AFTER this portal was created
   //    (e.g. responsible_party_name) show up as empty fields so she
   //    can fill them in without having to recreate the portal.
-  const templateSpec = CONTRACT_TEMPLATES[portal.contract_template_key];
+  const templateSpec = templateSpecFor(portal.contract_template_key);
   const templateKeys = templateSpec ? extractVariableKeys(templateSpec.template) : [];
-  const keys = Array.from(new Set([...Object.keys(vars), ...templateKeys])).sort();
+
+  // extractVariableKeys only finds {{tokens}}, and the clause switches are not
+  // tokens: a clause is named in its section's require list and nowhere in the
+  // text itself. So without this they surface here only when the creation form
+  // happened to save one, which is backwards. The clauses are exactly how the
+  // six types differ, and a clause Vero cannot switch on for a pending contract
+  // is a clause that silently never reaches the client.
+  //
+  // They are checkboxes and never text boxes. pruneEmptyOptionalSections keeps
+  // a section when its flag is ANY non-blank string, so the word "no" typed
+  // into minors_clause_enabled switched the clause ON, and on a pending wedding
+  // a single character typed into two_camera_enabled added the two-camera
+  // clause to a contract waiting to be signed. A checkbox writes 'yes' or ''
+  // and nothing else.
+  const offeredClauses = templateSpec?.optionalClauses ?? [];
+  // Forced on by the type itself (family always carries the minor and illness
+  // clauses), so they are stated, not offered: the server merges them back in
+  // under whatever is posted, and a box that appears to clear them would be
+  // lying about what the client is going to sign.
+  const forcedClauses = Object.keys(templateSpec?.defaultVariables ?? {});
+  // Flags left behind by a type this portal used to be. Shown ONLY when they
+  // are already on, so they can be switched off and never switched on: the five
+  // session types share one body, so a maternity portal changed to portrait
+  // keeps printing MATERNITY SESSION GUIDELINES until somebody clears the flag,
+  // and nothing else on this screen can reach it. Read from the SAVED
+  // variables, not the draft, so a row does not vanish under her finger the
+  // moment she unticks it.
+  const strandedClauses = Object.entries(portal.contract_variables ?? {})
+    .filter(
+      ([k, v]) =>
+        ALL_CLAUSE_KEYS.has(k) &&
+        typeof v === 'string' &&
+        v.trim().length > 0 &&
+        !offeredClauses.includes(k) &&
+        !forcedClauses.includes(k),
+    )
+    .map(([k]) => k);
+
+  // This portal's own type, not every type's. Listing all six put due_date and
+  // session_scope rows on a pending WEDDING, where neither appears in the
+  // template: typing in them did nothing visible and wrote dead keys into
+  // contract_variables, and wedding is the one type that must look exactly as
+  // it always has. requiredVariablesFor stays in the union because a required
+  // field is not guaranteed to be a {{token}}; every one of them is today, so
+  // this adds no row to any type and changes nothing for wedding.
+  //
+  // Switching a pending WEDDING straight to maternity or Other is still
+  // refused server-side for the field it has never collected. The way through
+  // is one hop: the five session types share a single body, so any of them
+  // exposes due_date and session_scope here, and wedding to portrait to
+  // maternity gets there without re-creating the client.
+  const ownRequiredKeys = requiredVariablesFor(portal.contract_template_key);
+  // Clause flags are never free text, whichever list they came from.
+  const valueKeys = Array.from(
+    new Set([...Object.keys(vars), ...templateKeys, ...ownRequiredKeys]),
+  )
+    .filter((k) => !ALL_CLAUSE_KEYS.has(k))
+    .sort();
+  const clauseRows = [
+    ...forcedClauses.map((key) => ({ key, kind: 'forced' as const })),
+    ...offeredClauses.map((key) => ({ key, kind: 'offered' as const })),
+    ...strandedClauses.map((key) => ({ key, kind: 'stranded' as const })),
+  ];
 
   const handleSave = async () => {
     setSaving(true);
@@ -1193,7 +1637,7 @@ function EditContractVariables({
     }
   };
 
-  if (keys.length === 0) {
+  if (valueKeys.length === 0 && clauseRows.length === 0) {
     // No keys in vars AND no template keys (would only happen if the
     // template key on this portal is unknown). Direct edit fallback.
     return (
@@ -1233,7 +1677,7 @@ function EditContractVariables({
 
       {open && (
         <VStack align="stretch" spacing={3}>
-          {keys.map((k) => {
+          {valueKeys.map((k) => {
             const value = vars[k] ?? '';
             const isLong = value.length > 80 || k === 'additional_notes';
             return (
@@ -1263,6 +1707,67 @@ function EditContractVariables({
               </Box>
             );
           })}
+
+          {clauseRows.length > 0 && (
+            <Box pt={2} borderTop="1px solid" borderColor="gray.100">
+              <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
+                {t.clientDetail.contractClauses}
+              </Text>
+              <Text fontSize="xs" color="gray.500" mb={3} fontWeight="300">
+                {t.clientDetail.contractClausesHint}
+              </Text>
+              <VStack align="stretch" spacing={3}>
+                {clauseRows.map(({ key, kind }) => {
+                  const copy = clauseCopy(key);
+                  // The pruner's own test, so the box says exactly what the
+                  // rendered contract is going to do. A forced clause reads as
+                  // on whatever is stored, because the server merges the type's
+                  // default back in underneath whatever this form posts.
+                  const on = kind === 'forced' || (vars[key] ?? '').trim().length > 0;
+                  return (
+                    <Checkbox
+                      key={key}
+                      isChecked={on}
+                      isReadOnly={kind === 'forced'}
+                      onChange={(e) => {
+                        // isReadOnly already swallows this for a forced clause.
+                        // Belt and braces anyway: the two clauses that are
+                        // forced on by default are the minor and illness ones
+                        // on a family booking, and those are exactly the two
+                        // nobody notices are missing until they matter.
+                        if (kind === 'forced') return;
+                        setVars((v) => ({ ...v, [key]: e.target.checked ? 'yes' : '' }));
+                      }}
+                      colorScheme="yellow"
+                      alignItems="flex-start"
+                    >
+                      <Box>
+                        <Text fontSize="sm" color="gray.700" fontWeight="500">
+                          {copy.label}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
+                          {copy.help}
+                        </Text>
+                        {kind === 'forced' && (
+                          <Text fontSize="xs" color="gray.400" fontWeight="300" mt={1}>
+                            {t.clientDetail.clauseAlwaysOn(
+                              typeLabel(portal.contract_template_key),
+                            )}
+                          </Text>
+                        )}
+                        {kind === 'stranded' && (
+                          <Text fontSize="xs" color="orange.600" fontWeight="300" mt={1}>
+                            {t.clientDetail.clauseStranded}
+                          </Text>
+                        )}
+                      </Box>
+                    </Checkbox>
+                  );
+                })}
+              </VStack>
+            </Box>
+          )}
+
           {message && (
             <Text fontSize="xs" color={message.kind === 'ok' ? 'green.600' : 'red.500'}>
               {message.text}

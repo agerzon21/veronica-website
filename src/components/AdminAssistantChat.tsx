@@ -513,8 +513,24 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
       // `content_summary`. Accept either.
       const summary = write.content_summary ?? write.content_ru ?? write.label;
       toast({
-        duration: 4200,
+        duration: 3200,
         position: 'bottom-right',
+        // THE LOCKUP. Chakra gives every toast pointer-events: auto and parks
+        // it at the bottom-right corner, which in this panel is exactly where
+        // the assistant's composer sits. The toast lands under the cursor that
+        // just pressed Send, so two things happen at once: clicks hit the toast
+        // instead of the textarea, and a hovered toast never runs its dismiss
+        // timer, so it sits there forever. Three or four replies in, the panel
+        // is papered over with cream-on-cream cards that look like nothing at
+        // all, and the only way out is a page refresh. That is the bug Vero
+        // reported as "the entire screen becomes unclickable".
+        //
+        // Nothing in the card is interactive, so it has no business taking a
+        // click. containerStyle is spread after Chakra's own pointerEvents, so
+        // this wins. Measured with scratchpad/r4/repro-assistant-lockup.mjs,
+        // which drives the real panel and asks elementFromPoint what a click on
+        // the composer would actually hit.
+        containerStyle: { pointerEvents: 'none' },
         render: () => (
           <Box
             bg="linear-gradient(135deg, #fdf9f0 0%, #f5efe4 100%)"
@@ -620,9 +636,14 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         });
         // One toast per DB write the assistant made this turn.
         const writes = (data.dbWrites ?? []) as DbWrite[];
-        for (const write of writes) {
-          showAchievementToast(write);
-        }
+        // One toast per turn, not one per row. A refine turn routinely writes
+        // the draft AND a knowledge entry, so this used to stack two cards on
+        // every reply and the pile grew all session. The draft write is the one
+        // worth announcing (it says where to look); otherwise announce the
+        // first knowledge write and let the Context tab carry the rest.
+        const headline =
+          writes.find((w) => w.category === 'draft') ?? writes[0];
+        if (headline) showAchievementToast(headline);
         // The assistant can send the reply itself. When it does, the refine
         // session is finished for the same reason it is when she sends from
         // the draft card, so let the parent close the panel.

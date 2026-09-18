@@ -326,9 +326,20 @@ function renderFooter(label: string) {
 }
 
 function buildContractDocument(input: ContractPdfInput) {
+  const signatureSection = input.filled.sections.find((s) =>
+    s.paragraphs.some((p) => p.kind === 'signature_block'),
+  );
   const sectionsWithoutSignature = input.filled.sections.filter(
     (s) => !s.paragraphs.some((p) => p.kind === 'signature_block'),
   );
+  // Read from the signed body rather than hardcoded. Every contract type
+  // happens to number this XIII today, so this changes nothing now, but the
+  // body is frozen at signing and the PDF is generated from that snapshot: a
+  // literal here would eventually print a heading the signed document does not
+  // have. The fallback covers bodies frozen before this section had a number.
+  const signatureHeading = signatureSection
+    ? `${signatureSection.number ? `${signatureSection.number}. ` : ''}${signatureSection.title}`
+    : 'XIII. SIGNATURES';
   const dateLabel = new Date(input.audit.signed_at).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -358,7 +369,7 @@ function buildContractDocument(input: ContractPdfInput) {
   const signatureBlock = h(
     View,
     { style: styles.signatureSection, wrap: false },
-    h(Text, { style: styles.sectionTitle }, 'XIII. SIGNATURES'),
+    h(Text, { style: styles.sectionTitle }, signatureHeading),
     h(
       View,
       { style: styles.signatureRow },

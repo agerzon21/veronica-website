@@ -57,6 +57,17 @@ import { requireAdmin } from '../_admin-auth.js';
 import { deliverReply } from '../_reply-delivery.js';
 import { portalContextBlock } from '../_ai-reply.js';
 import { stripSubjectHeader, scrubSubjectLines } from '../_subject-strip.js';
+import { paymentFactsForAdmin } from '../../src/data/payment-handles.js';
+import {
+  CONTRACT_TEMPLATES,
+  CONTRACT_TYPE_ORDER,
+} from '../../src/data/contract-template.js';
+import {
+  applyHouseStyle,
+  looksLikeStandingRule,
+  ruleKey,
+  WRITING_RULES_CATEGORY,
+} from '../_house-style.js';
 
 const MODEL = 'gpt-4o-mini';
 const MAX_TOOL_ROUNDS = 8;
@@ -164,10 +175,14 @@ function trimHistory(messages: StoredMessage[], limit: number): StoredMessage[] 
   if (messages.length <= limit) return messages;
   let start = messages.length - limit;
   while (start < messages.length && messages[start].role !== 'user') start++;
-  // Everything after the cut was one enormous tool sequence — rather
-  // than send something malformed, send nothing and let the system
-  // prompt carry the turn.
-  return start >= messages.length ? [] : messages.slice(start);
+  // Everything after the cut was one enormous tool sequence. Rather than send
+  // something malformed, fall back to the most recent user turns only: dropping
+  // the whole window was throwing away what Vero had just told the assistant,
+  // which is the exact failure she reports as "it forgot what I said".
+  if (start >= messages.length) {
+    return messages.filter((m) => m.role === 'user').slice(-Math.min(limit, 8));
+  }
+  return messages.slice(start);
 }
 
 let cachedClient: OpenAI | null = null;
@@ -332,7 +347,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // turn so it reflects the current ai_context table), then all
     // prior turns, then the new user turn.
     const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
+      // The prompt itself goes through house style before the model reads it.
+      // This file's own instructions were full of em dashes, and a model copies
+      // the punctuation it is shown whatever the words say.
+      { role: 'system', content: applyHouseStyle(systemPrompt) },
       ...trimHistory(priorMessages, MAX_HISTORY_SENT).map(toOpenaiMessage),
       { role: 'user', content: userMessage },
     ];
@@ -347,6 +365,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ];
     const knowledgeWriteFailures: string[] = [];
     const dbWrites: DbWrite[] = [];
+
+    // Write the thread once here, holding nothing but Vero's message, before
+    // any model call happens.
+    //
+    // The transcript used to be saved in a single statement AFTER the whole
+    // tool loop, so anything that stopped the loop threw her turn away: a tool
+    // error, an OpenAI timeout, or simply the 60s function limit on a turn
+    // with several tool rounds. What she saw was the assistant forgetting an
+    // instruction she had definitely given, in the same conversation. Her
+    // words now survive the request that carried them, whatever happens next.
+    const persistThread = async (turns: StoredMessage[]): Promise<StoredMessage[]> => {
+      const thread = trimHistory([...priorMessages, ...turns], maxStored);
+      const json = JSON.stringify(thread);
+      await sql`
+        INSERT INTO assistant_chats (slot, messages)
+        VALUES (${slot}, ${json}::jsonb)
+        ON CONFLICT (slot) DO UPDATE
+          SET messages = ${json}::jsonb, updated_at = NOW()
+      `;
+      return thread;
+    };
+    await persistThread(newlyPersistedMessages);
 
     const client = getOpenAI();
     let finalReply = '';
@@ -366,7 +406,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // DISPLAYED text too — the model presents drafts inside its bubbles,
       // and a "Subject:" there reads exactly like the rule not working,
       // whatever the actual draft row says.
-      const shownContent = msg.content ? scrubSubjectLines(msg.content) : msg.content;
+      const shownContent = msg.content
+        ? applyHouseStyle(scrubSubjectLines(msg.content))
+        : msg.content;
 
       // Record the assistant's turn (whether it's a tool-call turn
       // or a final text turn) so the persisted history includes it.
@@ -430,13 +472,73 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       newlyPersistedMessages.push({ role: 'assistant', content: warn });
     }
 
-    if (!finalReply && dbWrites.length === 0) {
-      finalReply =
-        '(The assistant kept calling tools without giving a final answer. Try rephrasing.)';
-      // Persist it too. The client renders the turns below rather than `reply`,
-      // so without this the notice would be shown and then vanish on reload,
-      // and if any earlier round had prose it would never be shown at all.
-      newlyPersistedMessages.push({ role: 'assistant', content: finalReply });
+    // Backstop: Vero gave a standing instruction and the model did not save it.
+    //
+    // This is the failure she has hit over and over. The refine block above
+    // tells the model to rewrite the draft and then stop, and it obeys that
+    // literally: the turn ends with the rewrite and nothing is written down, so
+    // the same correction has to be given again tomorrow. Worse, it often says
+    // "noted, I've saved that" while having called no tool at all.
+    //
+    // So the code saves it instead of hoping. Narrow by design: only when the
+    // message reads as a standing rule (see looksLikeStandingRule) and no
+    // knowledge write succeeded this turn. What it captures is announced in the
+    // chat and is editable in the Context tab, so a wrong catch costs one line
+    // and one click.
+    let capturedRule: string | null = null;
+    if (
+      looksLikeStandingRule(userMessage) &&
+      !dbWrites.some((w) => w.type !== 'deleted' && w.category !== 'draft')
+    ) {
+      const key = ruleKey(userMessage).slice(0, 120);
+      // A rule naming a customer is not a rule. ai_context is loaded whole into
+      // the prompt that answers EVERY customer, so "reply to Anna and keep it
+      // short" would put Anna's name in front of everyone else. This is the
+      // same guard executeToolCall applies to model-chosen labels, using the
+      // same list of names currently in the inbox.
+      const lower = userMessage.toLowerCase();
+      const namesInPlay = contactNames
+        .map((n) => n.toLowerCase())
+        .filter((n) => n.length > 2);
+      const namesACustomer = namesInPlay.some((n) => lower.includes(n));
+
+      if (key && !namesACustomer) {
+        try {
+          // Read first, then insert or update. An ON CONFLICT clause needs a
+          // unique index to arbitrate on, and migrations are applied by hand
+          // AFTER a deploy, so for the window between the two there is no such
+          // index: every turn would have inserted another copy, and those
+          // copies would then make migration 034 unrunnable.
+          const [existingRule] = (await sql`
+            SELECT id FROM ai_context
+            WHERE category = ${WRITING_RULES_CATEGORY} AND label = ${key}
+            ORDER BY created_at ASC
+            LIMIT 1
+          `) as Array<{ id: string }>;
+          const content = applyHouseStyle(userMessage);
+          if (existingRule) {
+            await sql`
+              UPDATE ai_context
+              SET content = ${content}, active = TRUE, updated_at = NOW()
+              WHERE id = ${existingRule.id}
+            `;
+          } else {
+            await sql`
+              INSERT INTO ai_context (category, label, content, source, active)
+              VALUES (${WRITING_RULES_CATEGORY}, ${key}, ${content}, 'chatbot', TRUE)
+            `;
+          }
+          capturedRule = content;
+          dbWrites.push({
+            type: existingRule ? 'updated' : 'created',
+            category: WRITING_RULES_CATEGORY,
+            label: key,
+            content_summary: language === 'ru' ? 'Правило сохранено' : 'Rule saved',
+          });
+        } catch (err) {
+          console.error('[assistant-chat] rule backstop failed:', err);
+        }
+      }
     }
 
     // Drop a trailing "I've updated the draft" turn.
@@ -466,18 +568,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Added AFTER the splice above, deliberately, so the one line that proves a
+    // rule was written down can never be the short trailing turn that gets
+    // dropped. Vero has been told "I've saved that" by a model that saved
+    // nothing; this line is only ever printed when a row actually changed.
+    if (capturedRule) {
+      newlyPersistedMessages.push({
+        role: 'assistant',
+        content:
+          (language === 'ru' ? '📌 Правило сохранено: ' : '📌 Saved rule: ') +
+          capturedRule,
+      });
+    }
+
     // Persist the thread, bounded. Vero keeps far more scrollback than
     // the model is given, but not an unbounded amount.
-    const updatedThread = trimHistory(
-      [...priorMessages, ...newlyPersistedMessages],
-      maxStored,
-    );
-    await sql`
-      INSERT INTO assistant_chats (slot, messages)
-      VALUES (${slot}, ${JSON.stringify(updatedThread)}::jsonb)
-      ON CONFLICT (slot) DO UPDATE
-        SET messages = ${JSON.stringify(updatedThread)}::jsonb, updated_at = NOW()
-    `;
+    const updatedThread = await persistThread(newlyPersistedMessages);
 
     // Every assistant turn this send produced, not just the last one.
     //
@@ -942,9 +1048,19 @@ async function executeToolCall(
     // Match on (category, label) first. Those are the model's own
     // identifiers for a fact, so re-teaching the same fact now updates
     // it. A genuinely new fact gets a new label and still inserts.
+    //
+    // Except for writing rules, where the label is replaced outright by a key
+    // derived from the rule's own words. A model asked to save "no long dashes"
+    // twice invents two different labels, and both rows survive the check
+    // below; the reply engine then carries the same order three times over and
+    // still breaks it. ruleKey makes restatements collide on purpose.
+    const effectiveLabel =
+      category.toLowerCase() === WRITING_RULES_CATEGORY
+        ? ruleKey(content).slice(0, 120) || label
+        : label;
     const existing = (await sql`
       SELECT id FROM ai_context
-      WHERE LOWER(category) = LOWER(${category}) AND LOWER(label) = LOWER(${label})
+      WHERE LOWER(category) = LOWER(${category}) AND LOWER(label) = LOWER(${effectiveLabel})
       ORDER BY created_at ASC
       LIMIT 1
     `) as Array<{ id: string }>;
@@ -962,10 +1078,10 @@ async function executeToolCall(
 
     const created = (await sql`
       INSERT INTO ai_context (category, label, content, source, active)
-      VALUES (${category}, ${label}, ${content}, 'chatbot', TRUE)
+      VALUES (${category}, ${effectiveLabel}, ${content}, 'chatbot', TRUE)
       RETURNING id, category, label, content
     `) as Array<{ id: string; category: string; label: string; content: string }>;
-    dbWrites.push({ type: 'created', category, label, content_summary: contentSummary });
+    dbWrites.push({ type: 'created', category, label: effectiveLabel, content_summary: contentSummary });
     return { success: true, action: 'created', entry: created[0] };
   }
 
@@ -1086,7 +1202,7 @@ async function executeToolCall(
   if (name === 'update_draft') {
     const conversationId = String(args.conversation_id ?? '').trim();
     // Subject lines are stripped, not argued with. See _subject-strip.ts.
-    const text = stripSubjectHeader(String(args.text ?? '').trim());
+    const text = applyHouseStyle(stripSubjectHeader(String(args.text ?? '').trim()));
     const contentSummary = String(args.content_summary ?? '').trim() || 'Draft updated';
     if (!conversationId || !text) {
       return { error: 'conversation_id and text are required' };
@@ -1136,7 +1252,9 @@ async function executeToolCall(
 
   if (name === 'send_reply') {
     const conversationId = String(args.conversation_id ?? '').trim();
-    const text = String(args.text ?? '').trim();
+    // House style applies to anything that leaves for a customer, and this is
+    // the last gate before one does. See api/_house-style.ts.
+    const text = applyHouseStyle(String(args.text ?? '').trim());
     const contentSummary = String(args.content_summary ?? '').trim() || 'reply sent';
     if (!conversationId || !text) {
       return { error: 'conversation_id and text are required' };
@@ -1250,8 +1368,19 @@ function buildSystemPrompt(
   // treat panel documentation as something to quote at customers.
   const byCategory = new Map<string, typeof contextRows>();
   const systemRows: typeof contextRows = [];
+  // A third kind: standing instructions about HOW to write, as opposed to
+  // facts to cite or panel documentation. They were rendered in the knowledge
+  // dump below, under a heading that calls the whole table "DATA, not your
+  // identity" and tells the model not to treat it as its own voice. So "never
+  // use long dashes" was filed as a fact about Vero rather than an order to
+  // the assistant, and it read it that way for months.
+  const ruleRows: typeof contextRows = [];
   for (const row of contextRows) {
     if (!row.active) continue;
+    if (row.category === WRITING_RULES_CATEGORY) {
+      ruleRows.push(row);
+      continue;
+    }
     if (row.source === 'system') {
       systemRows.push(row);
       continue;
@@ -1259,6 +1388,22 @@ function buildSystemPrompt(
     if (!byCategory.has(row.category)) byCategory.set(row.category, []);
     byCategory.get(row.category)!.push(row);
   }
+
+  // Top of the prompt, above everything else, phrased as orders. The dash rule
+  // is hard-coded into the list as well as stored, because it is the one that
+  // has been repeated most and the one api/_house-style.ts enforces in code
+  // regardless of what this prompt achieves.
+  const houseRules = [
+    'Never use long dashes. No em dashes, no en dashes, ever. Use a comma, a period, a colon, or the word "to" for a range. This applies to what you write to Vero in this chat AND to every draft or reply you write for a customer.',
+    ...ruleRows.map((r) => r.content.trim()).filter(Boolean),
+  ];
+  const houseRulesBlock = `## HOUSE RULES, learned from Vero's corrections (these outrank everything below)
+${houseRules.map((r) => `- ${r}`).join('\n')}
+
+These are standing orders, not facts to cite. They were added because Vero
+corrected the same thing more than once. If she gives you another one, save it
+with upsert_knowledge under the category "${WRITING_RULES_CATEGORY}" so it
+appears in this list next time. That is the ONLY way it survives this chat.`;
 
   const systemKnowledge =
     systemRows.length === 0
@@ -1282,6 +1427,21 @@ function buildSystemPrompt(
             return `## ${cat}\n${items}`;
           })
           .join('\n\n');
+
+  // Rendered from the template registry rather than written out by hand, so a
+  // new type or a changed required field cannot leave this prompt describing
+  // the old set. What the assistant asks a customer for has to match what the
+  // admin form will refuse to submit without.
+  const bookingTypesBlock = CONTRACT_TYPE_ORDER.map((key) => {
+    const spec = CONTRACT_TEMPLATES[key];
+    const extras: string[] = [];
+    if (spec.couple) extras.push('both partners\' full names');
+    for (const f of spec.fields) {
+      if (f.required && f.key !== 'event_location') extras.push(f.label.toLowerCase());
+    }
+    const tail = extras.length ? `also needs ${extras.join(', ')}` : 'needs nothing beyond the basics';
+    return `- **${spec.name}**: ${tail}.`;
+  }).join('\n');
 
   const langName = LANGUAGE_NAMES[language];
   // Language-specific concrete examples so the model doesn't default
@@ -1343,10 +1503,11 @@ rewrite is lost the moment she looks away. Asking permission applies to
 send_reply and to nothing else.`
     : '';
 
-  return `You are Vero's INTERNAL personal AI assistant, talking privately to Vero (or Alex, her admin) inside her business admin panel. Vero is a professional photographer (portraits, weddings, families, maternity). This is a private back-office chat — NOT a customer-facing channel.
+  return `You are Vero's INTERNAL personal AI assistant, talking privately to Vero (or Alex, her admin) inside her business admin panel. Vero is a professional photographer. She shoots six kinds of booking, and they are not interchangeable: weddings, portrait sessions, family sessions, engagement sessions, maternity sessions, and anything else under a custom "Other" booking. This is a private back-office chat, NOT a customer-facing channel.
 
 You have full context that your only audience is Vero herself (or another admin helping her). Never introduce yourself as if you were meeting a stranger. Never talk ABOUT Vero in the third person to Vero. If she greets you with "hi" or "привет", greet her back naturally and briefly ("Привет! Что нужно?" / "Hey — what can I help with?"). Ask what she wants to work on, or offer a quick pointer if you know she's mid-way through something.
 
+${houseRulesBlock}
 ${openConversationBlock}
 
 ## Your job
@@ -1406,7 +1567,7 @@ ${knowledgeSummary}
 ## HELPING VERO ANSWER CUSTOMERS (reply co-pilot)
 This is the single most valuable thing you do for her. Her current habit is to copy a whole conversation into ChatGPT, work out a reply there, and paste it back. You have MORE context than that — the full thread, her pricing, her tone, her services — so there is no reason for her to leave.
 
-She can ask to reply to someone — "help me answer Sarah", "draft a reply to that wedding inquiry", or just "help me reply to someone". When she does:
+She can ask to reply to someone: "help me answer Sarah", "draft a reply to that family inquiry", or just "help me reply to someone". When she does:
 1. **If she named a person**, use list_conversations with that name and go straight to step 2. Don't make her pick from a list when she already told you who.
 2. **If she DIDN'T name anyone**, call list_conversations with no query, then show her the most recent 4-5 in a short numbered list — name, channel, and a few words about what they last said — and ask which one. Keep it scannable; she's picking, not reading.
 3. Use read_thread to read what was actually said. NEVER draft from the name alone.
@@ -1427,6 +1588,24 @@ If something is BROKEN rather than just unfamiliar — the site is down, emails 
 If the answer genuinely isn't below, say you don't know and suggest she ask Alex. Do NOT guess at steps — a confident wrong instruction wastes her time and makes her stop trusting you.
 
 ${systemKnowledge}
+
+${paymentFactsForAdmin()}
+
+## WORK OUT WHAT KIND OF BOOKING IT IS BEFORE YOU ASK FOR ANYTHING
+Vero shoots six kinds of booking and they ask for different things. Work out
+which one a conversation is about from what the customer actually said, and
+gather only what THAT type needs. If it is genuinely unclear, ask which kind of
+session they have in mind. Never assume a wedding.
+
+Every type needs: the date, the location, the client's full name, their email,
+and what they want covered. On top of that:
+${bookingTypesBlock}
+
+The failure to avoid: asking a family or portrait client for "your partner's
+name". Only a wedding or an engagement names two people. For every other type
+there is ONE client, and asking for a partner reads as though nobody was
+listening. If you catch yourself about to ask for a second name, check the type
+first.
 
 ## STYLE
 - Warm and casual, like a smart friend who happens to run the business's systems.

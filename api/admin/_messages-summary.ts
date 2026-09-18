@@ -47,6 +47,15 @@ import OpenAI from 'openai';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { FROM_ADDRESS } from '../_auto-reply.js';
+// The form this feeds owns these, and they are plain data with no React in
+// them. Importing rather than restating is the point: a session type the
+// summariser recognises but no template renders is a prefill that quietly
+// does nothing when Vero clicks Create client.
+import {
+  COUPLE_SESSION_TYPES,
+  toSessionType,
+  type SessionType,
+} from '../../src/components/clientPrefill.js';
 
 const MODEL = 'gpt-4o-mini';
 
@@ -58,8 +67,13 @@ const MODEL = 'gpt-4o-mini';
  * is exactly how the pre-`booking` rows survived long enough for Vero to be
  * looking at one. A version number rather than a presence check on some key,
  * because presence checks only ever retire one generation.
+ *
+ * 3 to 4: six contract types instead of a free-text session type, a per-type
+ * "Still needed" list, and three new keys. A version 3 row carries the old
+ * field set and, worse, the old gap list, which asks every client for a
+ * partner's full name the moment it decides the shoot is a couple one.
  */
-const SUMMARY_VERSION = 3;
+const SUMMARY_VERSION = 4;
 
 let cachedClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -145,15 +159,27 @@ interface LocalizedSummary {
  * reason they are typed data and not sentences.
  */
 export interface BookingFields {
+  /**
+   * One of the six contract types, or null when the thread never says. Never
+   * free text: readBooking coerces anything else to 'other', because a type
+   * the new-client form cannot find a template for prefills nothing.
+   */
   session_type: string | null;
   event_date: string | null;
   event_time: string | null;
   event_location: string | null;
   client_full_name: string | null;
+  /** Wedding and engagement only. Every other contract names one person. */
   partner_full_name: string | null;
   client_email: string | null;
   total_amount: string | null;
   retainer_amount: string | null;
+  /** Maternity only: the estimated due date the session is timed against. */
+  due_date: string | null;
+  /** Engagement only, and optional there: the wedding the session precedes. */
+  wedding_date: string | null;
+  /** 'other' only: what is being photographed, since nothing else says. */
+  session_scope: string | null;
   /**
    * Verbatim source sentences for the two values that cost money to get
    * wrong. Real threads renegotiate — one in this inbox contains $1,000,
@@ -174,12 +200,12 @@ export const EMPTY_BOOKING: BookingFields = {
   client_email: null,
   total_amount: null,
   retainer_amount: null,
+  due_date: null,
+  wedding_date: null,
+  session_scope: null,
   total_amount_quote: null,
   event_date_quote: null,
 };
-
-/** Session types where the contract names two people rather than one. */
-const COUPLE_SESSION_TYPES = new Set(['wedding', 'engagement', 'elopement', 'anniversary']);
 
 /**
  * What a contract needs, in the order it renders. Labels live here in both
@@ -192,16 +218,43 @@ const COUPLE_SESSION_TYPES = new Set(['wedding', 'engagement', 'elopement', 'ann
  * showing them under a heading that reads as "ask them for this" produced
  * advice like "ask Daria for the amount of the advance payment" — telling a
  * photographer to ask a client what deposit she would like to be charged.
+ *
+ * `types` replaced a single couple-only flag once there were six contracts
+ * rather than one. A family session has no second signatory, no due date and
+ * no scope paragraph, and a list that asks for them anyway sends Vero back to
+ * the client for answers the contract has nowhere to print. Absent means the
+ * field belongs to all six.
  */
 const BOOKING_REQUIREMENTS: Array<{
   key: keyof BookingFields;
   en: string;
   ru: string;
   source: 'client' | 'vero';
-  coupleOnly?: boolean;
+  /** Session types this field exists for. Absent means all of them. */
+  types?: readonly SessionType[];
+  /**
+   * Worth carrying when the thread happens to say it, never worth chasing:
+   * kept out of the "Still needed" list but still type-scoped, so the value
+   * is dropped rather than prefilled onto a contract with no field for it.
+   */
+  optional?: boolean;
 }> = [
   { key: 'session_type', en: 'Type of session', ru: 'Тип съёмки', source: 'client' },
+  {
+    key: 'session_scope',
+    en: 'What is being photographed',
+    ru: 'Что именно снимаем',
+    source: 'client',
+    types: ['other'],
+  },
   { key: 'event_date', en: 'Event date', ru: 'Дата съёмки', source: 'client' },
+  {
+    key: 'due_date',
+    en: 'Estimated due date',
+    ru: 'Предполагаемая дата родов',
+    source: 'client',
+    types: ['maternity'],
+  },
   { key: 'event_time', en: 'Coverage hours', ru: 'Часы съёмки', source: 'client' },
   { key: 'event_location', en: 'Location', ru: 'Место съёмки', source: 'client' },
   {
@@ -215,13 +268,23 @@ const BOOKING_REQUIREMENTS: Array<{
     en: "Partner's full name",
     ru: 'Полное имя партнёра',
     source: 'client',
-    coupleOnly: true,
+    types: COUPLE_SESSION_TYPES,
   },
   {
     key: 'client_email',
     en: 'Client email address',
     ru: 'Электронная почта клиента',
     source: 'client',
+  },
+  {
+    // The clause it drives only appears when a wedding is already booked, so
+    // an engagement thread with no wedding date is complete, not incomplete.
+    key: 'wedding_date',
+    en: 'Wedding date',
+    ru: 'Дата свадьбы',
+    source: 'client',
+    types: ['engagement'],
+    optional: true,
   },
   { key: 'total_amount', en: 'Total price', ru: 'Итоговая стоимость', source: 'vero' },
   { key: 'retainer_amount', en: 'Retainer amount', ru: 'Размер предоплаты', source: 'vero' },
@@ -237,9 +300,13 @@ export function computeGaps(
   source: 'client' | 'vero',
 ): string[] {
   if (!BOOKING_CLASSIFICATIONS.has(classification)) return [];
-  const couple = COUPLE_SESSION_TYPES.has(booking.session_type ?? '');
+  // Null means the thread has not said what kind of shoot this is, so every
+  // type-scoped field is skipped: the one thing worse than not asking for a
+  // due date is asking a client who is not pregnant for one.
+  const type = toSessionType(booking.session_type);
   return BOOKING_REQUIREMENTS.filter((f) => f.source === source)
-    .filter((f) => !f.coupleOnly || couple)
+    .filter((f) => !f.optional)
+    .filter((f) => !f.types || (type !== null && f.types.includes(type)))
     .filter((f) => !booking[f.key])
     .map((f) => f[locale]);
 }
@@ -478,15 +545,18 @@ Fill "booking" BEFORE writing "gathered" — decide the facts first, then descri
   2. NEVER INVENT ONE. If nobody stated it, the key is null. Do not guess it, do not infer it from what is typical for this kind of shoot, do not carry it in from your own knowledge. A null is correct and useful; a made-up value ends up on a contract.
   Thread metadata at the top of the conversation (the channel, the address the customer writes from, their display name) is supplied by the platform rather than typed by anyone. It is a valid source of facts under rule 1, and nothing it contains may ever be reported as something still to ask the customer for.
   If the same key is given more than one value over the thread, use the MOST RECENT.
-    - "session_type": one of "wedding", "engagement", "elopement", "anniversary", "portrait", "family", "maternity", "newborn", "event", "other". null only if the thread never says what kind of shoot this is.
+    - "session_type": EXACTLY one of "wedding", "portrait", "family", "engagement", "maternity", "other". Those six are the only contracts that exist, so choose the closest one rather than inventing a word for the shoot. The tests below OVERLAP, so work down them in order and take the FIRST that fits: a wedding with children in it is still a wedding, and a pregnancy shoot of one adult is still maternity. (1) "wedding": a wedding, an elopement or a vow renewal, however many family members are in it. (2) "engagement": a proposal, a save-the-date or an engagement shoot. (3) "maternity": a bump or pregnancy shoot. (4) "other": a newborn, a birthday, an anniversary, or a branding, product or event shoot. (5) "family": children, or more than one generation, where none of the above was named. (6) "portrait": one adult on their own, including headshots, boudoir and graduation. (7) "other" again for anything that fits none of them. null only if the thread never says what kind of shoot this is.
     - "event_date": the day of the shoot as YYYY-MM-DD, four-digit year, two-digit month, two-digit day. A day counts as soon as either side names it, including a day the customer proposed while asking whether Vero is free when Vero has not answered yet. Every transcript line is prefixed with the date that message was sent; when a day is named without a year ("October 7", "Nov 8", "7 октября"), take the year from that prefix, choosing the first such day falling on or after the date of the message that names it. The month and the day themselves must come from the thread's own words: never supply those yourself. null only when no single day is named at all: "sometime in October", "next summer", "a weekend in the spring", or two or more candidate days with no choice made between them.
     - "event_time": coverage hours or start time, worded as in the thread, e.g. "3:00 PM to 6:00 PM". null only if no time or duration is named.
     - "event_location": the venue, address or place as either side named it. null only if no place is named.
     - "client_full_name": the customer's first and last name, taken from a message or from the sender display name in the thread metadata. Take a name at face value: a name typed in a chat IS that person's name, and it does not have to be legal, formal or verified. null only when no first-and-last name is available at all, meaning a first name on its own, a handle, a single word, an emoji nickname or a business name.
-    - "partner_full_name": for a wedding, engagement, elopement or anniversary, the OTHER partner's first and last name, on exactly the same terms. null for any other session type, or when no such name appears.
+    - "partner_full_name": for a wedding or an engagement, the OTHER partner's first and last name, on exactly the same terms. Those are the only two contracts that name two people. null for every other session type, including one where the thread happens to mention a spouse, and null when no such name appears.
     - "client_email": an email address that reaches the customer. If the thread metadata gives the address the customer writes from, that IS their email address: use it, and never treat it as missing. Otherwise use an address typed in a message. A shared, work or partner's address counts. The only address to exclude is Vero's own (vero@vero.photography) and anything from her signature. null only when neither the metadata nor the thread contains a customer address.
     - "total_amount": the full price named for THIS shoot, digits only, no currency symbol and no words: "500", not "$500 for 3 hours". A figure Vero quoted counts, full stop: acceptance, confirmation, a deposit and a signature are all irrelevant to this key. If several totals for this shoot appear, use the MOST RECENT. Do NOT use: an hourly or per-item rate that was never multiplied out into a total, one option from a list of packages the customer has not chosen between, a retainer or deposit, a travel or add-on fee on its own, or a number the customer floated as a budget that Vero never quoted. null only when no total for this shoot appears anywhere in the thread.
     - "retainer_amount": the retainer or deposit for this shoot, digits only, on the same terms: a figure Vero named counts even if it is unpaid and the customer never answered. A retainer is NOT the same as the total: do not copy one into the other. null only when no retainer or deposit figure appears.
+    - "due_date": maternity sessions only. The customer's estimated due date, written and year-resolved exactly like "event_date". null for every other session type, and null when the thread never names one.
+    - "wedding_date": engagement sessions only. The day of the wedding this session leads up to, written exactly like "event_date", and only when the thread names a day that is already settled. null for every other session type, and null when no wedding day is named. Many engagement threads have no wedding date yet and null is the right answer there.
+    - "session_scope": "other" sessions only. A short phrase in the thread's own words saying what is being photographed, e.g. "branding session for a bakery" or "60th birthday party". null for every other session type, and null when nothing says what the shoot is.
     - "total_amount_quote": the sentence from the thread that names the total, copied word for word. Whenever "total_amount" is non-null this is the sentence it came from, so you must be able to produce it. null if "total_amount" is null.
     - "event_date_quote": the sentence that names the date, copied word for word, on the same terms. null if "event_date" is null.
   "gathered" and this object are the same facts read two ways, so they can never disagree. Every fact you put in "gathered" must appear in its matching key here, and every non-null key here must show up in "gathered". If you are about to write a detail into "gathered" while its key is still null, the key is what is wrong: go back and fill it.
@@ -559,16 +629,24 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
       if (['unknown', 'tbd', 'n/a', 'na', 'none', 'null'].includes(trimmed.toLowerCase())) continue;
       out[key] = trimmed;
     }
+    // One of six keys or null, never the model's own word for the shoot. An
+    // unrecognised type used to travel to the new-client form and match no
+    // template there, so the dropdown fell back to Wedding and the prefill
+    // panel showed a session type the form had silently ignored.
+    out.session_type = toSessionType(out.session_type);
     // Digits only, so the form can put these straight into number inputs.
     for (const key of ['total_amount', 'retainer_amount'] as const) {
       if (!out[key]) continue;
       const digits = out[key]!.replace(/[^0-9.]/g, '');
       out[key] = digits && Number.isFinite(Number(digits)) ? digits : null;
     }
-    // Shape, then reality: the regex alone accepts "2026-13-45".
-    if (out.event_date) {
-      const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(out.event_date);
-      const d = parts ? new Date(`${out.event_date}T00:00:00Z`) : null;
+    // Shape, then reality: the regex alone accepts "2026-13-45". All three
+    // dates land in <input type="date">, so all three get the same check.
+    for (const key of ['event_date', 'due_date', 'wedding_date'] as const) {
+      const value = out[key];
+      if (!value) continue;
+      const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+      const d = parts ? new Date(`${value}T00:00:00Z`) : null;
       const real =
         parts &&
         d &&
@@ -576,7 +654,20 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
         d.getUTCFullYear() === Number(parts[1]) &&
         d.getUTCMonth() + 1 === Number(parts[2]) &&
         d.getUTCDate() === Number(parts[3]);
-      if (!real) out.event_date = null;
+      if (!real) out[key] = null;
+    }
+    // Drop anything this contract has no field for. The prompt already says
+    // so, but a model that volunteers a partner's name on a family booking
+    // would otherwise hand it to a form that shows one name input, and the
+    // value would ride along invisibly into the portal.
+    //
+    // Only once the type is known: null means we have no information yet, not
+    // that the field does not apply.
+    const type = toSessionType(out.session_type);
+    if (type) {
+      for (const f of BOOKING_REQUIREMENTS) {
+        if (f.types && !f.types.includes(type)) out[f.key] = null;
+      }
     }
     // A quote with nothing to back up is noise.
     if (!out.total_amount) out.total_amount_quote = null;

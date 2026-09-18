@@ -40,6 +40,8 @@
 
 import OpenAI from 'openai';
 import { stripSubjectHeader } from './_subject-strip.js';
+import { applyHouseStyle, WRITING_RULES_CATEGORY } from './_house-style.js';
+import { paymentFactsForCustomerReplies } from '../src/data/payment-handles.js';
 import { getDb } from './_db.js';
 import { sendIgTextMessage } from './_ig-send.js';
 
@@ -1160,8 +1162,12 @@ async function generateReply(args: GenerateArgs): Promise<string> {
   // Feed conversation history as alternating user/assistant messages.
   // 'contact' = user, 'ai' = assistant, 'human' = assistant too
   // (Vero's own manual replies still count as our side).
+  // The prompt itself goes through house style before the model sees it. This
+  // file alone had dozens of em dashes in its own instructions, and a model
+  // copies the punctuation it is shown no matter what the text says. Cheaper
+  // and more reliable than policing every string literal by hand.
   const chatMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: applyHouseStyle(systemPrompt) },
   ];
   for (const m of args.history) {
     chatMessages.push({
@@ -1179,7 +1185,10 @@ async function generateReply(args: GenerateArgs): Promise<string> {
     temperature: 0.7,
   });
 
-  return response.choices[0]?.message?.content?.trim() ?? '';
+  // Enforced here, not asked for above: the rules are also in the prompt, but
+  // the prompt has been telling it "no long dashes" for months and one still
+  // reaches a customer every few drafts. See api/_house-style.ts.
+  return applyHouseStyle(response.choices[0]?.message?.content?.trim() ?? '');
 }
 
 // Exported for testing: it is a pure function of the knowledge base, and the
@@ -1232,9 +1241,24 @@ export function buildSystemPrompt(
     replyPersona === 'first person' ||
     (replyPersona === 'auto' && reviewedBeforeSending);
 
+  // Standing instructions Vero (or Alex) has given the assistant about HOW to
+  // write. They used to render as bullets under KNOWN FACTS, which is headed
+  // "only cite these" - so "never use long dashes" read as a fact about the
+  // business rather than an order, and the model cheerfully cited it while
+  // breaking it. They get their own block at the top now, above the safety
+  // rails, and api/_house-style.ts enforces the ones that can be enforced.
+  const writingRules = (byCategory.get(WRITING_RULES_CATEGORY) ?? [])
+    .map((r) => r.content.trim())
+    .filter(Boolean);
+
   const contextSections: string[] = [];
   for (const [cat, rows] of byCategory.entries()) {
-    if (cat === 'booking_bridge' || cat === 'escalation_wrap_up' || cat === 'identity') {
+    if (
+      cat === 'booking_bridge' ||
+      cat === 'escalation_wrap_up' ||
+      cat === 'identity' ||
+      cat === WRITING_RULES_CATEGORY
+    ) {
       // These are used elsewhere, not in the system prompt
       continue;
     }
@@ -1290,11 +1314,22 @@ Then, in the same message, briefly address whatever the customer actually asked.
 - Always refer to yourself as "I" and to Vero in the third person ("Vero will follow up", "Vero prefers...").
 - ${introGuidance}`;
 
+  // The dash rule is listed whether or not the database row survives, because
+  // it is the one Alex has repeated most and the one code enforces anyway.
+  const houseRulesBlock = [
+    '## HOUSE RULES (how Vero writes, learned from her corrections)',
+    '- Never use long dashes. No em dashes, no en dashes. Use a comma, a period, or the word "to" for a range.',
+    ...writingRules.map((r) => `- ${r}`),
+    'These are orders, not facts. They outrank style suggestions anywhere below.',
+  ].join('\n');
+
   return `${whoYouAre}
+
+${houseRulesBlock}
 
 ## HARD BEHAVIORAL RULES (these are safety rails — never break them)
 1. **NEVER confirm availability on a specific date.** If a customer names a date, acknowledge it as noted — never "great!", "that works!", "she's free" or anything implying it's held. Only Vero confirms dates.${dateWarning}
-2. **Pricing: give RANGES, never a firm quote.** You MAY share the figures in KNOWN FACTS below, always framed as a starting point or a range — "sessions typically start around X", "wedding coverage runs roughly X–Y". Then explain that the exact number depends on the specifics and ask for what's missing: number of people, location and travel distance, and how many hours of coverage. NEVER state a final total, and never invent a figure that isn't in KNOWN FACTS. If you have no relevant figure, say ${speakAsVero ? "you'll follow up with a quote" : 'Vero will follow up with a quote'}.
+2. **Pricing: give RANGES, never a firm quote.** You MAY share the figures in KNOWN FACTS below, always framed as a starting point or a range, for example "sessions typically start around X", "wedding coverage runs roughly X to Y". Then explain that the exact number depends on the specifics and ask for what's missing: number of people, location and travel distance, and how many hours of coverage. NEVER state a final total, and never invent a figure that isn't in KNOWN FACTS. If you have no relevant figure, say ${speakAsVero ? "you'll follow up with a quote" : 'Vero will follow up with a quote'}.
 3. **You SHOULD be helpful and ask good questions.** Answer what you can from KNOWN FACTS, and gather what Vero will need — session type, guest count, rough location and travel, timeframe, the kind of look they're after. Suggesting options that appear in KNOWN FACTS is fine and encouraged. What you must NOT do is invent creative direction, promise a specific artistic outcome, or claim details that aren't written below.
 4. **NEVER commit to deliverables or timing** beyond what's in KNOWN FACTS.
 5. When you genuinely don't know, say so — but only after answering what you DO know. ${
@@ -1305,6 +1340,9 @@ Then, in the same message, briefly address whatever the customer actually asked.
 
 ## KNOWN FACTS (only cite these — never invent details)
 ${contextSections.join('\n\n')}
+
+## PAYMENT
+${paymentFactsForCustomerReplies()}
 
 ## TONE
 - **Brief.** 1-2 sentences per reply, maximum. Never wall-of-text.

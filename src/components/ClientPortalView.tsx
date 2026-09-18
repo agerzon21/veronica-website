@@ -12,6 +12,7 @@ import type SignatureCanvasType from 'react-signature-canvas';
 import ClientGallery, { type DriveFile, type FolderSection } from './ClientGallery';
 import CTAButton from './ui/CTAButton';
 import type { ContractTemplate } from '../data/contract-template';
+import { PAYMENT_HANDLES } from '../data/payment-handles';
 
 // Full client portal payload — mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
@@ -31,6 +32,11 @@ export interface ClientPortalData {
   // storing them.
   event_date: string | null;
   session_type: string | null;
+  // Which of the six contracts this booking was written on. Free-text
+  // session_type cannot be trusted to decide wording (see bookingWording
+  // below); this can, and /api/portal/client defaults legacy rows to
+  // 'wedding'.
+  contract_template_key: string | null;
   event_title: string | null;
   event_location: string | null;
   delivery_timeframe: string | null;
@@ -118,6 +124,84 @@ const formatDate = (iso: string) => {
   });
 };
 
+/**
+ * The nouns the portal's copy hangs on, per booking type.
+ *
+ * The portal was built when a wedding was the only thing Vero sold, so the
+ * wording is wedding-shaped throughout: "Event Date", "to reserve the date",
+ * "on the day of the event". A family client reading that is reading somebody
+ * else's portal, so the nouns come from the booking instead of being
+ * hardcoded. Four nouns cover every line; anything more and this turns into
+ * the pile of ternaries it exists to avoid.
+ *
+ * The signal is `contract_template_key`, not `session_type`. session_type is
+ * a free-text label: the old picker let Vero type anything and lowercase-
+ * hyphenated it, so a real wedding can be filed as 'wedding-day' or a Russian
+ * word, and every portal created before the six-type expansion was filed
+ * under whatever she typed while being sold the WEDDING contract. Keying off
+ * it would tell those clients about "your session" while the contract they
+ * signed says "after the event date". The template key cannot drift: legacy
+ * rows default to 'wedding' at the column level
+ * (001-baseline-client-portals.sql), and it is the same key that chose the
+ * contract body.
+ */
+interface BookingWording {
+  /** Header label above event_date. */
+  dateLabel: string;
+  /** Object of "to reserve ...". */
+  reserveDate: string;
+  /** Bare noun, as in "the {dateNoun} isn't officially booked". */
+  dateNoun: string;
+  /** Object of "closer to ...", "after ...", "on the day of ...". */
+  occasion: string;
+}
+
+const EVENT_WORDING: BookingWording = {
+  dateLabel: 'Event Date',
+  reserveDate: 'the date',
+  dateNoun: 'event date',
+  occasion: 'the event',
+};
+
+const SESSION_WORDING: BookingWording = {
+  dateLabel: 'Session Date',
+  reserveDate: 'your session date',
+  dateNoun: 'session date',
+  occasion: 'your session',
+};
+
+/**
+ * The five template keys whose contract body is a session contract. Wedding is
+ * the only one that prints "due within X after the event date"; these five
+ * print "after the session date", and the Next Step panel restates that clause
+ * back to the client, so the two have to agree.
+ *
+ * Listed here rather than imported from contract-template.ts on purpose: that
+ * module is ~600 lines of contract prose, and the portal only ever needs the
+ * type-only `ContractTemplate` import it already has. Pulling in the value
+ * would ship every contract to every client.
+ */
+const SESSION_TEMPLATE_KEYS = new Set(['portrait', 'family', 'engagement', 'maternity', 'other']);
+
+/**
+ * Free-text session labels that describe a real event with a day-of. Only
+ * consulted when the payload carries no template key.
+ */
+const EVENT_BOOKING_TYPES = new Set(['wedding', 'elopement', 'event']);
+
+function bookingWording(templateKey: string | null, sessionType: string | null): BookingWording {
+  const key = (templateKey ?? '').trim().toLowerCase();
+  if (key === 'wedding') return EVENT_WORDING;
+  if (SESSION_TEMPLATE_KEYS.has(key)) return SESSION_WORDING;
+  // No key at all, or one this bundle predates: fall back to the free-text
+  // label. Empty falls back to event wording because everything that predates
+  // the six-type expansion is a wedding, and rewording a signed wedding
+  // portal is the one regression worth designing around.
+  const type = (sessionType ?? '').trim().toLowerCase();
+  if (!type) return EVENT_WORDING;
+  return EVENT_BOOKING_TYPES.has(type) ? EVENT_WORDING : SESSION_WORDING;
+}
+
 // Detect whether Vercel has deployed a new build since this page loaded.
 //
 // How: Vite writes the main JS bundle with a content-hashed filename
@@ -160,6 +244,9 @@ async function hasNewerDeploy(): Promise<boolean> {
 }
 
 const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }: ClientPortalViewProps) => {
+  // Every client-visible noun that used to assume a wedding reads out of here.
+  const wording = bookingWording(data.contract_template_key, data.session_type);
+
   const remaining =
     data.contract_total_amount !== null
       ? data.contract_total_amount - data.paid_to_date
@@ -549,9 +636,10 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         {/* Session summary — each row is a centered label-value pair
             (no fixed-width label column, so the whole block reads as
             centered content rather than left-aligned two-column). We
-            keep Email + Event Date + Location; Session and Delivery
+            keep Email + the date + Location; Session and Delivery
             got dropped as noisy — three feels right for the "at a
-            glance" role this block plays. */}
+            glance" role this block plays. The date's label follows the
+            booking type: a family client sees "Session Date". */}
         <VStack
           spacing={{ base: 2, md: 2.5 }}
           mt={5}
@@ -560,7 +648,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
         >
           <InfoRow label="Email" value={data.client_email} />
           {data.event_date && (
-            <InfoRow label="Event Date" value={formatDate(data.event_date)} />
+            <InfoRow label={wording.dateLabel} value={formatDate(data.event_date)} />
           )}
           {data.event_location && (
             <InfoRow label="Location" value={data.event_location} />
@@ -633,6 +721,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           total={data.contract_total_amount}
           retainer={data.contract_retainer_amount}
           paidToDate={data.paid_to_date}
+          wording={wording}
           // Once photos land, the "All Set / awaiting delivery" state
           // is no longer relevant — client isn't waiting anymore.
           // Panel returns null in that case (fully-paid + delivered).
@@ -1018,7 +1107,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
           ) : (
             <>
               <Text fontSize="sm" color="gray.600" fontWeight="300" textAlign="center" lineHeight="1.7">
-                Want to share these with family or friends? Anyone with the link below can view the gallery — no account needed.
+                Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.
               </Text>
 
               {/* HERO — one-click link with big Copy button */}
@@ -1040,7 +1129,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                   color="brand.accentText"
                   mb={4}
                 >
-                  Easiest — one-click link
+                  Easiest: one-click link
                 </Text>
                 <CTAButton
                   onClick={handleCopyShareLink}
@@ -1063,7 +1152,7 @@ const ClientPortalView = ({ data, credentials, onDataUpdate, onPasswordChanged }
                   {shareUrl}
                 </Text>
                 <Text mt={2} fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6">
-                  Paste anywhere — text, email, WhatsApp. Opens the gallery instantly, no password to type.
+                  Paste anywhere: text, email, WhatsApp. Opens the gallery instantly, no password to type.
                 </Text>
               </Box>
 
@@ -1345,30 +1434,31 @@ const BalanceStat = ({
  * step (retainer or balance) with payment-method links so the client
  * isn't left wondering what to do after they sign.
  *
- * Payment-method handles are hardcoded for now — once Vero wants to
- * update them or use different ones per booking, we'll move to env
- * vars (e.g. VERO_VENMO_HANDLE).
+ * The handles moved to src/data/payment-handles.ts. They used to be declared
+ * here, which meant they lived only in this bundle and the admin assistant
+ * could not answer "what is our Venmo?" about a number printed on every
+ * portal. Zelle is still bank-app initiated (no public URL, just the number
+ * with a Copy button); Venmo and Cash App have public /handle URLs that open
+ * the in-app payment screen on mobile.
  */
-// Zelle is bank-app initiated — no public URL, so we just surface the
-// phone number with a Copy button. Venmo + Cash App both have public
-// /handle URLs that open the in-app payment screen on mobile.
-const PAYMENT_HANDLES = {
-  zelle: '(570) 909-5707',
-  venmo: '@Alex-Gerzon',
-  cashapp: '$AlexGerzon',
-};
 
 function NextStepsPanel({
   contractStatus,
   total,
   retainer,
   paidToDate,
+  wording,
   photosDelivered,
 }: {
   contractStatus: 'none' | 'pending' | 'signed' | 'void';
   total: number | null;
   retainer: number | null;
   paidToDate: number;
+  // Event vs session nouns, resolved once by the parent from the booking's
+  // type. This panel is where the wedding assumptions were thickest: it
+  // talked about reserving "the date" and paying cash on the day of "the
+  // event", to family and maternity clients who have neither.
+  wording: BookingWording;
   // When true, the "All Set / awaiting delivery" state stops
   // rendering entirely — the client isn't awaiting anything, the
   // photos are already there. Retainer/balance states still show
@@ -1414,10 +1504,10 @@ function NextStepsPanel({
           <>
             <VStack spacing={3} textAlign="center">
               <Text fontSize="lg" color="gray.800" fontWeight="400">
-                Send your retainer of <strong>${retainerToSend.toFixed(0)}</strong> to reserve the date.
+                Send your retainer of <strong>${retainerToSend.toFixed(0)}</strong> to reserve {wording.reserveDate}.
               </Text>
               <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
-                Your contract is signed, but per the agreement the event date isn't officially booked until the retainer arrives. Send it through any of the methods below — note "retainer" in the comments so Veronika can match it up.
+                Your contract is signed, but per the agreement the {wording.dateNoun} isn't officially booked until the retainer arrives. Send it through any of the methods below, and note "retainer" in the comments so Veronika can match it up.
               </Text>
             </VStack>
 
@@ -1448,7 +1538,7 @@ function NextStepsPanel({
             >
               <Text fontSize="lg" role="img" aria-hidden>✅</Text>
               <Text fontSize="sm" color="green.700" fontWeight="500" lineHeight="1.5">
-                Retainer received — your date is reserved. The rest can wait until closer to the event.
+                Retainer received, your date is reserved. The rest can wait until closer to {wording.occasion}.
               </Text>
             </Flex>
 
@@ -1474,7 +1564,7 @@ function NextStepsPanel({
                 Per your contract
               </Text>
               <Text fontSize="sm" color="gray.700" lineHeight="1.7" fontStyle="italic">
-                The remaining balance is due within the payment window specified in your contract (after the event date). Full payment must be received before delivery of any images.
+                The remaining balance is due within the payment window specified in your contract (after the {wording.dateNoun}). Full payment must be received before delivery of any images.
               </Text>
             </Box>
 
@@ -1482,7 +1572,7 @@ function NextStepsPanel({
 
             <VStack spacing={2} maxW="440px" textAlign="center">
               <Text fontSize="xs" color="gray.600" fontWeight="400" lineHeight="1.7">
-                <Text as="span" fontWeight="500" color="gray.700">Cash</Text> is also accepted on the day of the event.
+                <Text as="span" fontWeight="500" color="gray.700">Cash</Text> is also accepted on the day of {wording.occasion}.
               </Text>
               <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.7">
                 If your contract's Additional Notes section specifies different payment terms for this booking, those take precedence over the standard schedule above.
@@ -1513,7 +1603,7 @@ function NextStepsPanel({
               <Text fontSize="xl" role="img" aria-hidden>🎉</Text>
               <VStack align="start" spacing={0.5}>
                 <Text fontSize="sm" color="green.700" fontWeight="600" lineHeight="1.4">
-                  You're fully paid up — thank you!
+                  You're fully paid up, thank you!
                 </Text>
                 <Text fontSize="xs" color="green.700" fontWeight="400" lineHeight="1.5">
                   Nothing else to do on your end.
@@ -1523,10 +1613,10 @@ function NextStepsPanel({
 
             <VStack spacing={3} textAlign="center" maxW="440px">
               <Text fontSize="sm" color="gray.700" fontWeight="400" lineHeight="1.7">
-                Your gallery will be delivered per your contract's timeline — typically within a few weeks after the event.
+                Your gallery will be delivered per your contract's timeline, typically within a few weeks after {wording.occasion}.
               </Text>
               <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
-                Keep an eye on your email — you'll get a note from Veronika the moment it's ready, and the Photos section below will fill in with your images.
+                Keep an eye on your email, you'll get a note from Veronika the moment it's ready, and the Photos section below will fill in with your images.
               </Text>
               <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" pt={2}>
                 Delivery already happened but photos aren't showing here yet? Tap <Text as="span" fontWeight="500" color="gray.700">"Refresh Portal"</Text> up top.

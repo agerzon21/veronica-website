@@ -1166,6 +1166,15 @@ const dict = {
     // the form's own labels, which carry "(optional)" and "(USD)" qualifiers
     // that read as noise in a dense two-column list.
     pfSessionType: { en: 'Session type', ru: 'Тип съёмки' },
+    // The three per-type rows. Each appears only for the type whose contract
+    // has a field for it, so a portrait booking is never shown a due date.
+    // due_date and session_scope are required by their types, which is why
+    // they belong here: without them the "still to fill" list under-reports
+    // what is blank on exactly the two types that have an extra required
+    // field, and that list exists to answer that one question.
+    pfSessionScope: { en: 'What we are shooting', ru: 'Что снимаем' },
+    pfDueDate: { en: 'Due date', ru: 'Дата родов' },
+    pfWeddingDate: { en: 'Wedding date', ru: 'Дата свадьбы' },
     pfEventDate: { en: 'Date', ru: 'Дата' },
     pfEventTime: { en: 'Time', ru: 'Время' },
     pfEventLocation: { en: 'Location', ru: 'Место' },
@@ -1217,7 +1226,18 @@ const dict = {
       ru: 'От шаблона зависит, какие пункты попадут в контракт. Выбери подходящий под эту съёмку.',
     },
 
-    // Partners
+    // Session label. Only the "Other / Custom" contract type asks for one:
+    // every other type files the portal under its own key, so there is no
+    // second list of shoot types to disagree with the contract.
+    sessionLabelLabel: { en: 'Session Label', ru: 'Название типа съёмки' },
+    sessionLabelHelp: {
+      en: 'Your own word for this kind of shoot, e.g. branding or newborn. It files the portal and builds the event title. It does not appear on the contract, which uses the description below.',
+      ru: 'Твоё слово для такого типа съёмки, например branding или newborn. По нему портал сохраняется в списке и собирается название события. В контракт оно не попадает: там используется описание ниже.',
+    },
+    sessionLabelPlaceholder: { en: 'e.g. branding', ru: 'например, branding' },
+
+    // Partners / client name. The second name field only exists on the two
+    // types that name two people; everything else asks once.
     partner1Label: { en: 'Partner 1 Full Name', ru: 'Партнёр 1 — полное имя' },
     partner1Help: {
       en: 'Their full legal name. First name is used in the portal greeting.',
@@ -1232,6 +1252,11 @@ const dict = {
     partner2Placeholder: {
       en: 'e.g. Rajiv Thomas (optional)',
       ru: 'например, Rajiv Thomas (по желанию)',
+    },
+    clientNameLabel: { en: 'Client Full Name', ru: 'Полное имя клиента' },
+    clientNameHelp: {
+      en: 'The full legal name that appears on the contract. The first name is used in the portal greeting.',
+      ru: 'Полное имя, как в документах: оно печатается в контракте. Первое имя используется в приветствии в портале.',
     },
 
     // Display name
@@ -1313,6 +1338,13 @@ const dict = {
       en: 'Specific Times for known hours. Half/Full Day for packages where the schedule will be locked in later.',
       ru: '«Точное время» — если часы уже известны. «Полдня» / «Целый день» — для пакетов, где расписание уточнится позже.',
     },
+    // Shown for the types that do not offer the half-day / full-day presets,
+    // which are wedding packages. Those two buttons are not on screen there,
+    // so the help text cannot go on describing them.
+    coverageHelpSession: {
+      en: 'Specific Times when the hours are known. Custom to describe it in words instead.',
+      ru: '«Точное время», если часы уже известны. «Своё», если проще описать словами.',
+    },
     coverageSpecific: { en: 'Specific Times', ru: 'Точное время' },
     coverageHalfDay: { en: 'Half Day', ru: 'Полдня' },
     coverageFullDay: { en: 'Full Day', ru: 'Целый день' },
@@ -1359,12 +1391,9 @@ const dict = {
       ru: 'например: Около 3 часов, точное время будет подтверждено',
     },
 
-    // Session type
-    sessionTypeLabel: { en: 'Session Type', ru: 'Тип съёмки' },
-    sessionTypeHelp: {
-      en: 'What kind of shoot this is. Click a standard type, or use Custom for anything else.',
-      ru: 'Что за съёмка. Выбери один из стандартных типов или «Custom» для всего остального.',
-    },
+    // The session-type picker that used to sit here is gone: the contract
+    // type answers the same question, and the two could disagree. Only the
+    // Other type still asks, via sessionLabel* above.
 
     // Pricing
     totalLabel: { en: 'Total (USD)', ru: 'Общая сумма (USD)' },
@@ -1400,21 +1429,82 @@ const dict = {
       en: 'Toggle these on only when they apply to this booking. Each adds a clearly-titled section to the contract.',
       ru: 'Включай эти пункты, только если они действительно нужны для этой съёмки. Каждый добавит в контракт отдельный раздел с чётким заголовком.',
     },
-    twoCameraLabel: {
-      en: 'Two-camera coverage (lead + second camera operator)',
-      ru: 'Съёмка на две камеры (основной фотограф + второй оператор)',
-    },
-    twoCameraHelp: {
-      en: "Adds a clause describing two-camera coverage for key moments, with the Second Camera Operator acting in an assistant capacity (not as an independent professional). Use this when you're working with an assistant covering supplemental angles.",
-      ru: 'Добавит пункт про съёмку на две камеры в ключевые моменты: второй оператор выступает как ассистент, а не как независимый специалист. Ставь галочку, если с тобой работает ассистент, снимающий дополнительные ракурсы.',
-    },
-    additionalRetouchingLabel: {
-      en: 'Option for additional retouching after delivery',
-      ru: 'Возможность дополнительной ретуши после сдачи',
-    },
-    additionalRetouchingHelp: {
-      en: 'Adds a clause noting that the Client can request additional retouching (skin smoothing, advanced color, object removal, etc.) beyond the standard edits, with scope and price negotiated separately.',
-      ru: 'Добавит пункт: клиент может заказать дополнительную ретушь (сглаживание кожи, продвинутая цветокоррекция, удаление объектов и т. п.) сверх стандартной обработки — объём и цену обсуждаете отдельно.',
+    /**
+     * One entry per optional clause flag, keyed by the variable the checkbox
+     * drives. Which of these a booking is offered comes from the contract
+     * type's own spec (CONTRACT_TEMPLATES[key].optionalClauses), so a clause
+     * added there without a translation here still renders: the form falls
+     * back to the English label in OPTIONAL_CLAUSES.
+     *
+     * two_camera_enabled and additional_retouching_enabled carry over the
+     * exact wording they had when they were the only two clauses in the form,
+     * except for one long dash in the Russian retouching text, now a comma.
+     */
+    clauses: {
+      two_camera_enabled: {
+        label: {
+          en: 'Two-camera coverage (lead + second camera operator)',
+          ru: 'Съёмка на две камеры (основной фотограф + второй оператор)',
+        },
+        help: {
+          en: "Adds a clause describing two-camera coverage for key moments, with the Second Camera Operator acting in an assistant capacity (not as an independent professional). Use this when you're working with an assistant covering supplemental angles.",
+          ru: 'Добавит пункт про съёмку на две камеры в ключевые моменты: второй оператор выступает как ассистент, а не как независимый специалист. Ставь галочку, если с тобой работает ассистент, снимающий дополнительные ракурсы.',
+        },
+      },
+      additional_retouching_enabled: {
+        label: {
+          en: 'Option for additional retouching after delivery',
+          ru: 'Возможность дополнительной ретуши после сдачи',
+        },
+        help: {
+          en: 'Adds a clause noting that the Client can request additional retouching (skin smoothing, advanced color, object removal, etc.) beyond the standard edits, with scope and price negotiated separately.',
+          ru: 'Добавит пункт: клиент может заказать дополнительную ретушь (сглаживание кожи, продвинутая цветокоррекция, удаление объектов и т. п.) сверх стандартной обработки, объём и цену обсуждаете отдельно.',
+        },
+      },
+      minors_clause_enabled: {
+        label: {
+          en: 'Photographing a minor',
+          ru: 'Съёмка ребёнка',
+        },
+        help: {
+          en: 'A parent or guardian signs on the child’s behalf, and images of children are not published anywhere without their separate written permission. On automatically for family bookings.',
+          ru: 'Родитель или опекун подписывает контракт за ребёнка, а фотографии детей нигде не публикуются без отдельного письменного разрешения. Для семейных съёмок включается автоматически.',
+        },
+      },
+      illness_clause_enabled: {
+        label: {
+          en: 'Illness',
+          ru: 'Болезнь',
+        },
+        help: {
+          en: 'Everyone should be fever-free for 24 hours beforehand, and the session is rescheduled at no cost if you are told in advance. On automatically for family bookings.',
+          ru: 'За 24 часа до съёмки ни у кого не должно быть температуры, а если предупредили заранее, съёмка переносится без потери денег. Для семейных съёмок включается автоматически.',
+        },
+      },
+      permits_clause_enabled: {
+        label: {
+          en: 'Permits and location access',
+          ru: 'Разрешения и доступ на локацию',
+        },
+        help: {
+          en: 'Entry fees and photography permits are the client’s to arrange, and time lost getting in counts toward the session. Useful for parks and private property. On automatically for engagement bookings.',
+          ru: 'Плату за вход и разрешение на съёмку берёт на себя клиент, а время, потраченное на проход, входит в оплаченное время съёмки. Пригодится для парков и частной территории. Для love story включается автоматически.',
+        },
+      },
+      // Never a checkbox on the create form: the maternity type forces it on
+      // and OPTIONAL_CLAUSES has no entry for it. It is still read from here
+      // by the client-detail screen, which lists a type's forced clauses
+      // read-only, and a raw variable name on screen is worse than English.
+      maternity_clauses_enabled: {
+        label: {
+          en: 'Maternity session guidelines',
+          ru: 'Правила съёмки беременности',
+        },
+        help: {
+          en: 'Prints the estimated due date, the 28 to 36 week window, and what happens if the baby arrives before the session. Always on for a maternity booking.',
+          ru: 'Печатает предполагаемую дату родов, срок с 28 по 36 неделю и что будет, если малыш родится раньше съёмки. Для съёмки беременности включается автоматически.',
+        },
+      },
     },
 
     // Additional notes
@@ -1436,9 +1526,10 @@ const dict = {
     // Russian doesn't capitalize mid-sentence nouns the way English
     // capitalizes label words).
     fieldLabelPartner1: { en: 'Partner 1 name', ru: 'имя партнёра 1' },
+    // Same input, named for what it is on a solo booking.
+    fieldLabelClientName: { en: 'Client name', ru: 'имя клиента' },
     fieldLabelClientEmail: { en: 'Client email', ru: 'email клиента' },
     fieldLabelEventDate: { en: 'Event date', ru: 'дата съёмки' },
-    fieldLabelSessionType: { en: 'Session type', ru: 'тип съёмки' },
     fieldLabelDisplayName: { en: 'Display name', ru: 'отображаемое имя' },
     fieldLabelGalleryPassword: { en: 'Gallery password', ru: 'пароль от галереи' },
     fieldLabelCustomCoverage: { en: 'Custom coverage description', ru: 'описание съёмки' },
@@ -1599,6 +1690,15 @@ const dict = {
     contractPending: { en: 'Pending signature', ru: 'Ожидает подписания' },
     contractVoid: { en: 'Void', ru: 'Аннулирован' },
     contractNA: { en: 'N/A', ru: 'Нет' },
+    // Shown when the filing label and the contract template disagree. Both
+    // values arrive already formatted: the stored label as it is written in
+    // the column, the template under its English name from the registry.
+    typeMismatchWarning: {
+      en: (sessionType: string, contractType: string) =>
+        `This client is filed under ${sessionType}, but the contract was written from the ${contractType} template. Pick the right one under Session Type in Client Details below and both are set together, which rewrites the contract to match.`,
+      ru: (sessionType: string, contractType: string) =>
+        `Клиент записан как ${sessionType}, но контракт собран по шаблону ${contractType}. Выбери нужный тип в поле «Тип съёмки» в разделе «Детали» ниже: оба значения меняются вместе, и контракт перепишется под выбранный.`,
+    },
     editContractUnknownTemplate: {
       en: "Couldn't determine which template this portal uses. To make changes, void it and create a new one — or edit the relevant DB columns directly.",
       ru: 'Не удалось понять, какой шаблон использует этот портал. Чтобы что-то изменить, аннулируй его и создай заново — или отредактируй нужные поля в базе напрямую.',
@@ -1614,6 +1714,26 @@ const dict = {
     contractUpdatedOk: {
       en: 'Contract updated. The client will see the changes on next load.',
       ru: 'Контракт обновлён. Клиент увидит изменения при следующей загрузке.',
+    },
+
+    // ─── Clause switches inside "Edit fields" ─────────
+    // The per-clause label and help text come from t.newClient.clauses, so
+    // both screens describe the same clause the same way. Only the wording
+    // around that list lives here.
+    contractClauses: { en: 'Contract clauses', ru: 'Пункты контракта' },
+    contractClausesHint: {
+      en: 'Each one adds a titled section to the contract. Saving rewrites the contract the client has not signed yet.',
+      ru: 'Каждый добавляет в контракт отдельный раздел с заголовком. Сохранение перепишет контракт, который клиент ещё не подписал.',
+    },
+    // The booking type is CONTRACT_TEMPLATES[key].name, English by design,
+    // so the Russian puts it in quotes rather than trying to decline it.
+    clauseAlwaysOn: {
+      en: (type: string) => `Always on for a ${type} booking.`,
+      ru: (type: string) => `Для типа «${type}» включается всегда.`,
+    },
+    clauseStranded: {
+      en: 'Left over from a type this booking used to be. Untick it to clear it out.',
+      ru: 'Остался от типа, которым эта съёмка была раньше. Сними галочку, чтобы его убрать.',
     },
 
     // ─── View signed PDF ──────────────────────────────
@@ -1665,6 +1785,39 @@ const dict = {
     },
     eventDateLabel: { en: 'Event Date', ru: 'Дата события' },
     sessionTypeLabel: { en: 'Session Type', ru: 'Тип съёмки' },
+    // Both the read-only value on a signed row and the blank option the
+    // select shows when the row has no type yet.
+    typeNotSet: { en: 'Not set', ru: 'Не указан' },
+    contractTypeLocked: {
+      en: 'The contract type is locked once the contract is signed.',
+      ru: 'После подписания контракта тип менять нельзя.',
+    },
+    // The free-text filing label beside the type. Same name the create form
+    // gives the same box (t.newClient.sessionLabelLabel).
+    sessionLabelLabel: { en: 'Session Label', ru: 'Название типа съёмки' },
+    sessionLabelHelp: {
+      en: 'Filing only. Shows on the Clients list, the calendar and the heading above.',
+      ru: 'Просто метка для учёта. Видна в списке клиентов, в календаре и в заголовке выше.',
+    },
+    // Same box on a signed booking, where the one thing worth saying is that
+    // renaming it does not reopen the document the client already signed.
+    sessionLabelHelpSigned: {
+      en: 'Filing only. Shows on the Clients list, the calendar and the heading above, and does not touch the signed contract.',
+      ru: 'Просто метка для учёта. Видна в списке клиентов, в календаре и в заголовке выше, на подписанный контракт не влияет.',
+    },
+    // Example values, not words to translate: the column stores a lowercase
+    // slug and both create screens write English ones.
+    sessionLabelPlaceholder: { en: 'newborn, boudoir...', ru: 'newborn, boudoir...' },
+    // Help under the type select. The first variant is for the one type that
+    // also shows the label box, the second for every other type.
+    sessionTypeHelpCustom: {
+      en: 'Sets the contract type as well. The box beside it is your own word for the shoot, used for filing only: the Clients list, the calendar and the heading above. The client never reads it, they read "What is being photographed" in the contract.',
+      ru: 'Заодно меняет тип контракта. Поле рядом, это твоё слово для съёмки, нужное только для учёта: список клиентов, календарь и заголовок выше. Клиент его не видит, он читает пункт «What is being photographed» в контракте.',
+    },
+    sessionTypeHelpStandard: {
+      en: 'Sets the contract type as well. The contract is rewritten into the type you pick, so the client signs the right wording. Not possible once they have signed.',
+      ru: 'Заодно меняет тип контракта. Контракт перепишется под выбранный тип, чтобы клиент подписал правильные формулировки. После подписания так сделать уже нельзя.',
+    },
     totalAmountLabel: { en: 'Total Amount (USD)', ru: 'Общая сумма (USD)' },
     totalAmountHelp: {
       en: 'What you charged. Editable until the contract is signed (for full-mode rows).',

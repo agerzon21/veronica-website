@@ -61,7 +61,7 @@ import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
-import { type ClientPrefill } from './clientPrefill';
+import { type ClientPrefill, type PrefillBooking } from './clientPrefill';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
 import { translationTargetFor } from './translationDirection';
 
@@ -90,8 +90,34 @@ function useTextTranslation(text: string, adminPassword: string, t: AdminT) {
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Drop a translation the moment the text under it changes.
+  //
+  // translate() returns early when a translation already exists, so once the
+  // assistant rewrote a draft the panel kept showing the translation of the
+  // PREVIOUS version, with no way to refresh it short of reloading. Vero would
+  // be reading one message and about to send a different one. The draft body is
+  // rewritten on most refine turns, so this was hit constantly.
+  const translatedFor = useRef<string | null>(null);
+  // The live value of `text`, readable from inside an in-flight request.
+  const textRef = useRef(text);
+  textRef.current = text;
+  useEffect(() => {
+    if (translatedFor.current !== null && translatedFor.current !== text) {
+      setTranslation(null);
+      setDetectedLang(null);
+      setError(null);
+      translatedFor.current = null;
+    }
+  }, [text]);
+
   const translate = async () => {
     if (translation || translating) return;
+    // Pinned here, not read back after the await. If the draft is rewritten
+    // while this request is in flight, stamping the CURRENT text on arrival
+    // would mark a stale translation as fresh, and since `text` never changes
+    // again the effect above would never clear it: Vero would be stuck reading
+    // one message while about to send another, with no way to refresh.
+    const requestedFor = text;
     setTranslating(true);
     setError(null);
     try {
@@ -108,8 +134,16 @@ function useTextTranslation(text: string, adminPassword: string, t: AdminT) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        if (requestedFor !== textRef.current) {
+          // The draft moved on while we were waiting. Throw the answer away
+          // rather than show a translation of something that is no longer there.
+          return;
+        }
         setTranslation(data.translated);
         setDetectedLang(data.detectedLang || null);
+        // Remember WHAT was translated, so the effect above can tell a stale
+        // translation from a fresh one.
+        translatedFor.current = requestedFor;
       } else {
         setError(data.error || t.messages.translationFailed);
       }
@@ -295,20 +329,15 @@ export interface AiSummary {
   missing?: string[];
   decide?: string[];
   nextStep?: string;
-  /** Language-neutral contract details. Absent on pre-v2 cached summaries. */
-  booking?: {
-    session_type: string | null;
-    event_date: string | null;
-    event_time: string | null;
-    event_location: string | null;
-    client_full_name: string | null;
-    partner_full_name: string | null;
-    client_email: string | null;
-    total_amount: string | null;
-    retainer_amount: string | null;
-    total_amount_quote: string | null;
-    event_date_quote: string | null;
-  };
+  /**
+   * Language-neutral contract details. Absent on pre-v2 cached summaries.
+   *
+   * The shape was spelled out here as well until the six contract types
+   * added three more fields to it, which would have meant editing the same
+   * list of keys in three files. It is the prefill's shape, so it lives with
+   * the prefill.
+   */
+  booking?: PrefillBooking;
 }
 
 type SummaryLang = 'ru' | 'en';
@@ -2422,6 +2451,12 @@ function ConversationView({
       client_email: b?.client_email ?? null,
       total_amount: b?.total_amount ?? null,
       retainer_amount: b?.retainer_amount ?? null,
+      // Per-type details. The summariser drops each of these unless the
+      // session type is the one whose contract has a field for it, so a
+      // family booking arrives here with all three already null.
+      due_date: b?.due_date ?? null,
+      wedding_date: b?.wedding_date ?? null,
+      session_scope: b?.session_scope ?? null,
       total_amount_quote: b?.total_amount_quote ?? null,
       event_date_quote: b?.event_date_quote ?? null,
     };

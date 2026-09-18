@@ -15,6 +15,10 @@ interface WelcomeSummary {
   partner_1_full_name: string | null;
   partner_2_full_name: string | null;
   session_type: string | null;
+  // Which of the six contracts this booking was written on. session_type is a
+  // free-text label and can say anything; this cannot, and /api/portal/welcome
+  // defaults legacy rows to 'wedding'.
+  contract_template_key: string | null;
   event_title: string | null;
   event_date: string | null;
   contract_total_amount: number | null;
@@ -29,6 +33,12 @@ const Welcome = () => {
   const [summary, setSummary] = useState<WelcomeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+
+  // partner_2 is NULL for every booking type except wedding and engagement, so
+  // a solo client must not be shown a plural "Names" row or an ampersand.
+  const bookedNames = [summary?.partner_1_full_name, summary?.partner_2_full_name].filter(
+    (n): n is string => Boolean(n && n.trim()),
+  );
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -193,15 +203,18 @@ const Welcome = () => {
                         Your Booking
                       </Text>
                       <VStack align="stretch" spacing={2}>
-                        {(summary.partner_1_full_name || summary.partner_2_full_name) && (
+                        {bookedNames.length > 0 && (
                           <SummaryLine
-                            label="Names"
-                            value={[summary.partner_1_full_name, summary.partner_2_full_name].filter(Boolean).join(' & ')}
+                            label={bookedNames.length > 1 ? 'Names' : 'Name'}
+                            value={bookedNames.join(' & ')}
                           />
                         )}
                         <SummaryLine label="Email" value={summary.client_email} />
                         {summary.event_title ? (
-                          <SummaryLine label="Event" value={summary.event_title} />
+                          <SummaryLine
+                            label={bookingLabel(summary.contract_template_key, summary.session_type)}
+                            value={summary.event_title}
+                          />
                         ) : summary.session_type ? (
                           <SummaryLine label="Type" value={capitalize(summary.session_type)} />
                         ) : null}
@@ -218,7 +231,7 @@ const Welcome = () => {
                         )}
                       </VStack>
                       <Text fontSize="xs" color="whiteAlpha.600" mt={4} fontWeight="300">
-                        Please double-check your names and the rest of the details — if anything's wrong, reach out to Veronika before continuing.
+                        Please double-check your {bookedNames.length > 1 ? 'names' : 'name'} and the rest of the details. If anything's wrong, reach out to Veronika before continuing.
                       </Text>
                     </Box>
 
@@ -330,6 +343,36 @@ const fmtDate = (iso: string): string => {
 };
 
 const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+
+/**
+ * A wedding has an event; a family or maternity booking has a session, and
+ * labelling its event_title "Event" is the same wedding-shaped assumption the
+ * portal carried.
+ *
+ * Keyed off the contract template, not session_type: session_type is a
+ * free-text label (the old picker lowercase-hyphenated whatever Vero typed),
+ * so a wedding filed as 'wedding-day' would read "Session". The template key
+ * is the one that chose the contract, and legacy rows default to 'wedding'.
+ *
+ * Welcome keeps its own copy of the list rather than importing the one in
+ * ClientPortalView: /portal and /portal/welcome are separate lazy chunks, and
+ * that import would drag the whole portal bundle (signature pad, gallery) into
+ * a page that is a password form.
+ */
+const SESSION_TEMPLATE_KEYS = new Set(['portrait', 'family', 'engagement', 'maternity', 'other']);
+const EVENT_BOOKING_TYPES = new Set(['wedding', 'elopement', 'event']);
+
+const bookingLabel = (templateKey: string | null, sessionType: string | null): string => {
+  const key = (templateKey ?? '').trim().toLowerCase();
+  if (key === 'wedding') return 'Event';
+  if (SESSION_TEMPLATE_KEYS.has(key)) return 'Session';
+  // No key, or one this bundle predates: fall back to the label, and to
+  // "Event" when there is nothing at all, because a portal created before we
+  // stored a type is a wedding.
+  const type = (sessionType ?? '').trim().toLowerCase();
+  if (!type) return 'Event';
+  return EVENT_BOOKING_TYPES.has(type) ? 'Event' : 'Session';
+};
 
 const SummaryLine = ({ label, value, note }: { label: string; value: string; note?: string }) => (
   <Box>

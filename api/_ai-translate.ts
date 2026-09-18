@@ -11,6 +11,7 @@
  */
 
 import OpenAI from 'openai';
+import { applyHouseStyle } from './_house-style.js';
 
 const MODEL = 'gpt-4o-mini';
 
@@ -71,7 +72,11 @@ export async function translateText(text: string, targetLang: string): Promise<s
       targetLang,
     });
   }
-  return choice?.message?.content?.trim() ?? text;
+  // House style applies to a translation too. This endpoint's output is either
+  // a draft Vero is about to send or a customer message rendered for her to
+  // read, and the Russian drafts were the worst offenders for long dashes
+  // (the model translates "and" into a dash and nobody proofreads Cyrillic).
+  return applyHouseStyle(choice?.message?.content?.trim() ?? text);
 }
 
 /**

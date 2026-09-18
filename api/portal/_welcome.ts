@@ -24,6 +24,12 @@ type Row = {
   partner_1_full_name: string | null;
   partner_2_full_name: string | null;
   session_type: string | null;
+  // The contract TYPE, distinct from session_type. session_type is a display
+  // label Vero can type freely (an "Other" booking might read "branding"), so
+  // it cannot be trusted to decide wording. This is the key into
+  // CONTRACT_TEMPLATES and is what tells the portal whether to say "Event
+  // Date" or "Session Date". Legacy rows default to 'wedding'.
+  contract_template_key: string | null;
   event_date: string | null;
   contract_variables: Record<string, string> | null;
   contract_total_amount: string | null;
@@ -47,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       select id, client_display_name, client_email,
              partner_1_full_name, partner_2_full_name,
-             session_type, event_date, contract_variables,
+             session_type, contract_template_key, event_date, contract_variables,
              contract_total_amount, contract_retainer_amount, setup_token_expires_at
       from client_portals
       where setup_token = ${token}
@@ -83,6 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       partner_1_full_name: row.partner_1_full_name,
       partner_2_full_name: row.partner_2_full_name,
       session_type: row.session_type,
+      contract_template_key: row.contract_template_key ?? 'wedding',
       event_title: eventTitle,
       event_date: row.event_date,
       contract_total_amount: row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,

@@ -1,16 +1,18 @@
 import { Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox, Button, Icon } from '@chakra-ui/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import FaComments from '../icons/fa/FaComments';
 import { useEmailDelivery } from '../hooks/useEmailDelivery';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
-import SessionTypePicker from './SessionTypePicker';
 import {
   CONTRACT_TEMPLATES,
+  CONTRACT_TYPE_ORDER,
+  OPTIONAL_CLAUSES,
+  isContractTemplateKey,
   type ContractTemplateField,
 } from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
-import { type ClientPrefill, parseCoverageWindow, isCoupleSession } from './clientPrefill';
+import { type ClientPrefill, parseCoverageWindow, isCoupleSession, toSessionType } from './clientPrefill';
 import { fmtAdminDate } from '../utils/adminDate';
 import ConversationPeek from './ConversationPeek';
 import ConfirmDialog from './ui/ConfirmDialog';
@@ -110,10 +112,99 @@ const defaultDisplayName = (p1First: string, p2First: string): string => {
 
 const defaultEventTitle = (p1First: string, p2First: string, sessionType: string): string => {
   const names = defaultDisplayName(p1First, p2First);
-  const type = cap(sessionType);
+  // Session labels are stored hyphenated ("birthday-party") so they round-trip
+  // through the DB, which is right for filing and wrong in a sentence: this
+  // title is the line the client reads at the top of their contract. All six
+  // template keys are single words, so the split only ever touches a custom
+  // label typed into the Session Label field.
+  const type = sessionType.split('-').filter(Boolean).map(cap).join(' ');
   if (!names || !type) return '';
-  return `${names}'s ${type}`;
+  // "Anna's Family" reads like an unfinished sentence on a document somebody
+  // signs, so the bare type names get the noun. Four things are left alone: a
+  // wedding, which is already a noun; the literal key "other", which is a
+  // filing word and not something to print at a client; a custom label of more
+  // than one word, which reads as a title on its own; and anything that
+  // already ends in its own noun, so "Newborn Shoot" does not become "Newborn
+  // Shoot Session".
+  const lower = type.toLowerCase();
+  if (lower === 'other') return `${names}'s Session`;
+  const needsNoun =
+    lower !== 'wedding' &&
+    !type.includes(' ') &&
+    !/(session|shoot|shooting|photos|photography|portraits)$/i.test(type);
+  return `${names}'s ${type}${needsNoun ? ' Session' : ''}`;
 };
+
+/**
+ * The suggested retainer for a given total.
+ *
+ * 15% of the total, but never below $100 and never above the total itself.
+ * A flat 15% put a $30 retainer on a small session, which is not enough to be
+ * worth holding a date for, and the floor still has to bend for a booking
+ * that costs less than the floor, hence the Math.min.
+ */
+const RETAINER_RATE = 0.15;
+const RETAINER_FLOOR = 100;
+const suggestedRetainer = (total: number): string => {
+  if (!Number.isFinite(total) || total <= 0) return '';
+  return String(Math.min(total, Math.max(RETAINER_FLOOR, Math.round(total * RETAINER_RATE))));
+};
+
+// Session labels are stored lowercase-hyphenated so they round-trip through
+// the DB without surprises. Same transform the custom chip in
+// SessionTypePicker applies, kept identical so the gallery-only flow and this
+// one file the same shoot under the same string.
+const sessionSlug = (raw: string): string => raw.toLowerCase().replace(/\s+/g, '-');
+
+// Hyphens the slug picked up at its edges are not part of the word. sessionSlug
+// runs on every keystroke, so typing "newborn" and then a space files the
+// booking as "newborn-" on the Clients list, on the calendar and in the DB. The
+// .trim() this replaced could never fire: by the time anything reads the value,
+// sessionSlug has already turned every space into a hyphen.
+const trimSlug = (slug: string): string => slug.replace(/^-+|-+$/g, '');
+
+// Words a scope phrase hangs its trailing detail off, in both languages the
+// inbox speaks. Hitting one ends the label.
+const SCOPE_CONNECTORS = new Set([
+  'for', 'at', 'with', 'in', 'on', 'of', 'and', 'to',
+  'для', 'на', 'с', 'в', 'и', 'по', 'от',
+]);
+
+/**
+ * The head of a scope phrase, as a filing label.
+ *
+ * session_scope arrives as a fragment in the customer's own words ("branding
+ * session for a bakery", "60th birthday party"), and the label it seeds is
+ * both what the portal is filed under and the word in the auto event title,
+ * where "Anna's Branding Session For A Bakery" reads like a bug. Cutting at
+ * the first connector keeps the part that names the shoot and drops the part
+ * that describes the client, with a four-word ceiling so a phrase carrying no
+ * connector cannot run away either. Vero types over it whenever it guesses
+ * badly, which is the whole reason the field is on screen.
+ */
+const sessionLabelFromScope = (raw: string): string => {
+  const words: string[] = [];
+  for (const word of raw.trim().split(/\s+/)) {
+    // Punctuation would otherwise survive into the slug ("branding-session,").
+    // A word that is nothing BUT punctuation cleans down to a bare hyphen, or
+    // to nothing at all, and "60th birthday - family style" would otherwise
+    // join back up as "60th-birthday---family".
+    const clean = word.replace(/[^\p{L}\p{N}-]/gu, '');
+    if (!/[\p{L}\p{N}]/u.test(clean)) continue;
+    // "a newborn shoot" files itself as "newborn-shoot". Skipped rather than
+    // treated as a connector, which would end the label before it started.
+    if (!words.length && ['a', 'an', 'the'].includes(clean.toLowerCase())) continue;
+    if (SCOPE_CONNECTORS.has(clean.toLowerCase())) break;
+    words.push(clean);
+    if (words.length === 4) break;
+  }
+  return sessionSlug(words.join(' '));
+};
+
+// Field-error ids for the template-driven variable rows. Namespaced so a
+// variable called e.g. `total_amount` could never collide with the 'total'
+// id used by the pricing input above.
+const varFieldId = (key: string): string => `var:${key}`;
 
 // Today as YYYY-MM-DD in the user's local time (so the date input picker
 // matches what they'd expect from "today").
@@ -129,22 +220,47 @@ const todayYmd = (): string => {
 
 const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly }: Props) => {
   const { t, lang } = useAdminLang();
-  const templateKeys = Object.keys(CONTRACT_TEMPLATES);
   // Seeded once, at mount. Every field below stays fully editable; the point
   // is to save retyping what the customer already said, not to decide anything.
-  const seededTemplate =
-    prefill?.session_type && templateKeys.includes(prefill.session_type)
-      ? prefill.session_type
-      : templateKeys[0];
+  //
+  // A session type the thread mentioned that is NOT one of the six templates
+  // ("newborn", "boudoir") lands on Other. Falling back to the first template
+  // instead would quietly write a WEDDING contract for a newborn shoot.
+  //
+  // The summariser now coerces that word to a template key before it ever gets
+  // here (readBooking, via toSessionType), so session_type arrives as one of
+  // the six or null and the unknown branch is a guard for a prefill built
+  // anywhere else. What the shoot actually was survives in session_scope,
+  // which is what seeds the session label further down.
+  //
+  // toSessionType rather than a bare isContractTemplateKey test, because that
+  // test is case-sensitive while the fallback here is Other: a prefill built
+  // outside the summariser carrying "Wedding" or " wedding" would have been
+  // read as an unlisted shoot and written a SESSION contract for a wedding.
+  // It is also the normalisation isCoupleSession and the panel rows below
+  // already apply, so one string cannot mean two types on one screen. Null,
+  // meaning the thread never said, is the only case that falls back to the
+  // first template.
+  const seededTemplate = toSessionType(prefill?.session_type) ?? CONTRACT_TYPE_ORDER[0];
   const seededTimes = parseCoverageWindow(prefill?.event_time ?? null);
   const [templateKey, setTemplateKey] = useState<string>(seededTemplate);
+  const spec = CONTRACT_TEMPLATES[templateKey];
+  // Template-driven variable fields (the static ones at the bottom).
+  const fields = spec?.fields ?? [];
+  // Wedding and engagement name two people. Every other type names one, and
+  // the partner_2 columns stay NULL. A family booking must not ask whose
+  // partner is coming.
+  const isCouple = Boolean(spec?.couple);
 
-  // Partner full names — first names are extracted automatically for
+  // Client full names. First names are extracted automatically for
   // derived fields (display name, gallery password, event title).
   const [partner1FullName, setPartner1FullName] = useState(prefill?.client_full_name ?? '');
   const [partner2FullName, setPartner2FullName] = useState(prefill?.partner_full_name ?? '');
   const p1First = firstWord(partner1FullName);
-  const p2First = firstWord(partner2FullName);
+  // Ignored outright on a solo type, so a partner typed before the template
+  // was switched cannot leak into the display name, the gallery password or
+  // the contract's client_names.
+  const p2First = isCouple ? firstWord(partner2FullName) : '';
 
   // Auto-derived: display name, event title, gallery password.
   // All overridable — once the user types something into the override
@@ -171,31 +287,55 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [coverage, setCoverage] = useState<Coverage>('specific');
   const [customCoverage, setCustomCoverage] = useState('');
 
-  // Session type defaults to the chosen template key. Override if needed
-  // (mostly relevant when we add additional templates).
-  const [sessionType, setSessionType] = useState<string>(prefill?.session_type ?? templateKeys[0]);
+  // 'other' only: Vero's own word for the shoot. It is what the portal is
+  // filed under (session_type) and what the auto event title is built from.
+  // Everything else sends the template key itself, so there is no second
+  // picker to keep in agreement with the contract on top of the form.
+  //
+  // Seeded from session_scope, NOT from session_type. Seeding off the type was
+  // dead code once the summariser started coercing it: an unlisted shoot
+  // arrives as the literal string 'other', so the booking filed itself under
+  // "other", the auto event title lost its session word, and the only record
+  // of what the customer actually booked was thrown away at mount.
+  const [customSessionLabel, setCustomSessionLabel] = useState<string>(() =>
+    CONTRACT_TEMPLATES[seededTemplate]?.allowsCustomLabel
+      ? sessionLabelFromScope(prefill?.session_scope ?? '')
+      : '',
+  );
+  // What the portal is filed under. Blank label on Other falls back to the
+  // template key, because the API rejects an empty session_type.
+  const sessionType = spec?.allowsCustomLabel
+    ? trimSlug(customSessionLabel) || templateKey
+    : templateKey;
+  // The auto title never uses the type's own name, because "Anna's Other /
+  // Custom" is not a title. With no label typed it says "Session" rather than
+  // nothing: the old form could not reach that state (the session-type field
+  // was required), and an empty event_title prints a bare "Title:" row on the
+  // contract and no heading at all on the welcome page. English on purpose,
+  // like every other string that ends up on the customer's contract.
+  const titleSessionType = spec?.allowsCustomLabel
+    ? trimSlug(customSessionLabel) || 'Session'
+    : templateKey;
 
   const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
   const [retainerAmount, setRetainerAmount] = useState(() => {
     if (prefill?.retainer_amount) return prefill.retainer_amount;
-    const n = parseFloat(prefill?.total_amount ?? '');
-    return Number.isFinite(n) && n > 0 ? String(Math.round(n * 0.15)) : '';
+    return suggestedRetainer(parseFloat(prefill?.total_amount ?? ''));
   });
   /**
-   * The retainer follows the total at 15% until it is typed in by hand, after
-   * which it stops moving. Same override pattern as the display name and the
-   * gallery password: derive a sensible default, never fight the operator.
+   * The retainer follows the total (see suggestedRetainer) until it is typed
+   * in by hand, after which it stops moving. Same override pattern as the
+   * display name and the gallery password: derive a sensible default, never
+   * fight the operator.
    *
    * A retainer the thread already established counts as deliberate, so a
    * prefilled one starts out overridden rather than being recalculated.
    */
-  const RETAINER_RATE = 0.15;
   const [retainerTouched, setRetainerTouched] = useState(Boolean(prefill?.retainer_amount));
   const applyTotal = (next: string) => {
     setTotalAmount(next);
     if (retainerTouched) return;
-    const n = parseFloat(next);
-    setRetainerAmount(Number.isFinite(n) && n > 0 ? String(Math.round(n * RETAINER_RATE)) : '');
+    setRetainerAmount(suggestedRetainer(parseFloat(next)));
   };
 
   const [additionalNotes, setAdditionalNotes] = useState('');
@@ -208,50 +348,128 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [responsiblePartyName, setResponsiblePartyName] = useState('');
   const [responsiblePartyRelationship, setResponsiblePartyRelationship] = useState('');
 
-  // Optional service clauses. Each is a checkbox that drives a single
-  // 'yes' / '' flag variable. Both sections in the template are marked
-  // optional with requireVariables, so flipping the checkbox off prunes
-  // them out of the rendered contract.
-  const [twoCameraEnabled, setTwoCameraEnabled] = useState(false);
-  const [additionalRetouchingEnabled, setAdditionalRetouchingEnabled] = useState(false);
+  // Optional service clauses. Each checkbox drives a single 'yes' / '' flag
+  // variable, and every one of those sections is marked optional with
+  // requireVariables, so an unticked box prunes its section out of the
+  // rendered contract. Which boxes appear comes from the chosen type's
+  // spec.optionalClauses, keyed here by flag so ticking one, wandering off to
+  // another type and coming back does not silently lose it.
+  const [clauseFlags, setClauseFlags] = useState<Record<string, boolean>>({});
+  const offeredClauses = spec?.optionalClauses ?? [];
 
-  // Template-driven variable fields (the static ones at the bottom).
-  const fields = CONTRACT_TEMPLATES[templateKey]?.fields ?? [];
   const [variables, setVariables] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ''])),
   );
 
   // Default the effective_date to today, and fold in anything the thread told
-  // us. This has to be an effect rather than part of the useState initializer:
-  // the templateKey useMemo below calls setVariables during the first render,
-  // which would wipe a seeded value. Effects run after that.
+  // us. An effect rather than part of the useState initializer so it lands
+  // after the first render regardless of what else seeds this map.
+  //
+  // The per-type details matter as much as the location: due_date and
+  // session_scope are REQUIRED by their types, so dropping them here would
+  // mean the summariser reads a due date out of the thread and Vero retypes
+  // it anyway to get past the submit check. Gated on the seeded type actually
+  // having the field so a stray key cannot ride into contract_variables for a
+  // contract that has nowhere to print it. Dates arrive as YYYY-MM-DD, which
+  // is what the date inputs want and what the ISO-to-friendly pass at submit
+  // looks for.
   useEffect(() => {
+    const seeded: Record<string, string> = {};
+    const seed = (key: string, value: string | null | undefined) => {
+      if (value && fields.some((f) => f.key === key)) seeded[key] = value;
+    };
+    seed('event_location', prefill?.event_location);
+    seed('due_date', prefill?.due_date);
+    seed('wedding_date', prefill?.wedding_date);
+    seed('session_scope', prefill?.session_scope);
     setVariables((prev) => ({
       ...prev,
       effective_date: prev.effective_date || todayYmd(),
-      ...(prefill?.event_location ? { event_location: prefill.event_location } : {}),
+      ...seeded,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When the template changes, reset variables to that template's defaults.
-  useMemo(() => {
-    const f = CONTRACT_TEMPLATES[templateKey]?.fields ?? [];
-    const next: Record<string, string> = Object.fromEntries(
-      f.map((field) => [field.key, field.defaultValue ?? '']),
-    );
-    if (!next.effective_date) next.effective_date = todayYmd();
-    setVariables(next);
-  }, [templateKey]);
+  /**
+   * Switching the contract type used to rebuild `variables` from scratch.
+   * With one template that was invisible; with six it throws away a typed
+   * address the moment somebody corrects Portrait to Family.
+   *
+   * So: a value the operator actually typed is carried across when the new
+   * type still has that key, and everything else takes the new type's
+   * default. "Actually typed" means it differs from the OLD type's default,
+   * which is the part that matters: carrying the wedding default of "Within
+   * 5 weeks after event" into a family contract that promises two weeks would
+   * be worse than discarding it.
+   */
+  const handleTemplateChange = (nextKey: string) => {
+    const prevDefaults = new Map(fields.map((f) => [f.key, f.defaultValue ?? '']));
+    const nextFields = CONTRACT_TEMPLATES[nextKey]?.fields ?? [];
+    setVariables((prev) => {
+      const next: Record<string, string> = {};
+      for (const field of nextFields) {
+        const current = prev[field.key];
+        const untouched = current === undefined || current === prevDefaults.get(field.key);
+        next[field.key] = untouched ? (field.defaultValue ?? '') : current;
+      }
+      if (!next.effective_date) next.effective_date = todayYmd();
+      return next;
+    });
+    // Half-day and full-day exist only where the presets are offered. Leaving
+    // a stale 'half-day' selected would put wedding-package wording on a
+    // portrait contract through a control that is no longer on screen.
+    if (!CONTRACT_TEMPLATES[nextKey]?.coveragePresets && (coverage === 'half-day' || coverage === 'full-day')) {
+      setCoverage('specific');
+    }
+    // Required-field highlighting belongs to the type that was on screen when
+    // she submitted; the new type has its own set.
+    setFieldErrors((prev) => {
+      const kept = [...prev].filter((id) => !id.startsWith('var:'));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+    setTemplateKey(nextKey);
+  };
 
   const eventYear = eventDateIso ? eventDateIso.slice(0, 4) : new Date().getFullYear().toString();
   const derivedDisplayName = defaultDisplayName(p1First, p2First);
   const derivedGalleryPassword = defaultGalleryPassword(p1First, p2First, eventYear);
-  const derivedEventTitle = defaultEventTitle(p1First, p2First, sessionType);
+  const derivedEventTitle = defaultEventTitle(p1First, p2First, titleSessionType);
 
   const clientDisplayName = displayNameOverride ?? derivedDisplayName;
   const galleryPassword = galleryPasswordOverride ?? derivedGalleryPassword;
   const eventTitle = eventTitleOverride ?? derivedEventTitle;
+
+  // Half-day and full-day are wedding packages, sold months out when the
+  // timeline is not settled. A portrait session is not sold that way, and
+  // offering the preset would put "the major moments of the Client's day"
+  // into a one-hour shoot's contract.
+  const coverageOptions = (
+    [
+      { key: 'specific', label: t.newClient.coverageSpecific },
+      { key: 'half-day', label: t.newClient.coverageHalfDay },
+      { key: 'full-day', label: t.newClient.coverageFullDay },
+      { key: 'custom', label: t.newClient.coverageCustom },
+    ] as const
+  ).filter((opt) => spec?.coveragePresets || (opt.key !== 'half-day' && opt.key !== 'full-day'));
+
+  /**
+   * Label and help text for one clause checkbox.
+   *
+   * The dictionary comes first so Vero reads these in Russian, and
+   * OPTIONAL_CLAUSES is the fallback for any clause added to a template
+   * before it has been translated: an untranslated checkbox in English beats
+   * a checkbox that silently disappears. Last of all comes the raw flag name,
+   * which is deliberately ugly: a blank label beside a checkbox that decides
+   * what the client signs is the one outcome worth ruling out.
+   */
+  const clauseCopy = (key: string): { label: string; help: string } => {
+    const translated = (t.newClient.clauses as Record<string, { label: string; help: string } | undefined>)[key];
+    const fallback = OPTIONAL_CLAUSES[key];
+    return {
+      label: translated?.label ?? fallback?.label ?? key,
+      help: translated?.help ?? fallback?.helpText ?? '',
+    };
+  };
 
   const [peekOpen, setPeekOpen] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
@@ -276,6 +494,30 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
 
   /**
+   * A row that only some session types have, present when the thread's own
+   * type has a field for it and required when that type marks it required.
+   *
+   * Read off the spec rather than listed here, the same way the submit check
+   * is. due_date belongs to maternity and session_scope to Other today, and a
+   * second copy of that pairing would drift the moment a field moves between
+   * types. The prefill's type decides, not the dropdown's, because this panel
+   * describes the conversation rather than the form.
+   */
+  const typeScopedRow = (key: string, label: string, value: string | null) => {
+    const type = toSessionType(prefill?.session_type);
+    const field = type ? CONTRACT_TEMPLATES[type]?.fields.find((f) => f.key === key) : undefined;
+    return field ? [{ label, value, required: Boolean(field.required) }] : [];
+  };
+
+  // The type reads the way the dropdown reads it. The bare key is what the API
+  // stores, and "other" sitting in this panel says nothing about a shoot the
+  // customer described in full one line below.
+  const prefillTypeName =
+    prefill?.session_type && isContractTemplateKey(prefill.session_type)
+      ? CONTRACT_TEMPLATES[prefill.session_type].name
+      : (prefill?.session_type ?? null);
+
+  /**
    * Every contract detail, whether the thread had it or not.
    *
    * The panel used to show only the two fields that happened to carry a source
@@ -283,11 +525,16 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * eight prefilled values. What is actually useful is the whole set at a
    * glance, and — more so — which required ones are still blank, since those
    * are the reason she cannot submit yet.
+   *
+   * Ordered the way the inbox's own "Still needed" list is ordered, so the two
+   * lists Vero reads about one booking name things in the same sequence.
    */
   const prefillRows = prefill
     ? ([
-        { label: t.newClient.pfSessionType, value: prefill.session_type, required: true },
+        { label: t.newClient.pfSessionType, value: prefillTypeName, required: true },
+        ...typeScopedRow('session_scope', t.newClient.pfSessionScope, prefill.session_scope),
         { label: t.newClient.pfEventDate, value: prefill.event_date ? fmtDate(prefill.event_date) : null, required: true, quote: prefill.event_date_quote },
+        ...typeScopedRow('due_date', t.newClient.pfDueDate, prefill.due_date ? fmtDate(prefill.due_date) : null),
         { label: t.newClient.pfEventTime, value: prefill.event_time, required: false },
         { label: t.newClient.pfEventLocation, value: prefill.event_location, required: false },
         { label: t.newClient.pfClientName, value: prefill.client_full_name, required: true },
@@ -295,6 +542,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           ? [{ label: t.newClient.pfPartnerName, value: prefill.partner_full_name, required: false }]
           : []),
         { label: t.newClient.pfClientEmail, value: prefill.client_email, required: true },
+        ...typeScopedRow('wedding_date', t.newClient.pfWeddingDate, prefill.wedding_date ? fmtDate(prefill.wedding_date) : null),
         { label: t.newClient.pfTotal, value: prefill.total_amount ? `$${prefill.total_amount}` : null, required: true, quote: prefill.total_amount_quote },
         { label: t.newClient.pfRetainer, value: prefill.retainer_amount ? `$${prefill.retainer_amount}` : null, required: true },
       ] as Array<{ label: string; value: string | null; required: boolean; quote?: string | null }>)
@@ -399,13 +647,14 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     // every missing piece one at a time.
     const missing: { id: string; label: string }[] = [];
     if (!partner1FullName.trim())
-      missing.push({ id: 'partner1', label: t.newClient.fieldLabelPartner1 });
+      missing.push({
+        id: 'partner1',
+        label: isCouple ? t.newClient.fieldLabelPartner1 : t.newClient.fieldLabelClientName,
+      });
     if (!clientEmail.trim())
       missing.push({ id: 'clientEmail', label: t.newClient.fieldLabelClientEmail });
     if (!eventDateIso)
       missing.push({ id: 'eventDate', label: t.newClient.fieldLabelEventDate });
-    if (!sessionType.trim())
-      missing.push({ id: 'sessionType', label: t.newClient.fieldLabelSessionType });
     if (!clientDisplayName.trim())
       missing.push({ id: 'displayName', label: t.newClient.fieldLabelDisplayName });
     if (!galleryPassword.trim())
@@ -418,6 +667,23 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       if (!responsiblePartyRelationship.trim())
         missing.push({ id: 'responsiblePartyRelationship', label: t.newClient.fieldLabelResponsiblePartyRelationship });
     }
+
+    // Whatever the chosen type declares as required, read off the spec rather
+    // than a list kept in this file. This is what stops a maternity contract
+    // going out with no due date: the clause would print "[due_date]" to the
+    // client, and nobody re-reads a field that already looks filled in.
+    fields.forEach((f) => {
+      if (f.required && !(variables[f.key] ?? '').trim()) {
+        // labelRu when there is one, because Vero's panel defaults to Russian
+        // and this is the error she actually hits: a Russian sentence naming
+        // an English field. The wedding fields carry no labelRu yet, so the
+        // English label stays the fallback rather than an empty name.
+        missing.push({
+          id: varFieldId(f.key),
+          label: (lang === 'ru' && f.labelRu) || f.label,
+        });
+      }
+    });
 
     // Amount validation is trickier because it's cross-field (retainer
     // vs total). Do that separately after the "missing fields" check.
@@ -455,8 +721,12 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     // Rajiv Thomas" not "Chrisann & Rajiv" — the legal binding is on
     // the full identities, not the shorthand we use in greetings.
     const remaining = total - retainer;
-    const legalClientNames = partner2FullName.trim()
-      ? `${partner1FullName.trim()} & ${partner2FullName.trim()}`
+    // Solo types have no second name to assemble, and the couple case already
+    // degrades to a single name when partner 2 is left blank (it stays
+    // optional even on a wedding: one person does sign for both).
+    const partner2Legal = isCouple ? partner2FullName.trim() : '';
+    const legalClientNames = partner2Legal
+      ? `${partner1FullName.trim()} & ${partner2Legal}`
       : partner1FullName.trim();
     const eventTimeString = (() => {
       if (coverage === 'half-day') {
@@ -494,6 +764,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     const mergedAdditionalNotes = [tbaClause, additionalNotes.trim()].filter(Boolean).join('\n\n');
 
     const finalVariables: Record<string, string> = {
+      // The type's own forced-on flags go UNDERNEATH everything else, so a
+      // family booking carries the minor and illness clauses whether or not
+      // anybody went near a checkbox, and an explicit choice still wins.
+      ...(spec?.defaultVariables ?? {}),
       ...variables,
       client_names: legalClientNames,
       event_title: eventTitle,
@@ -508,10 +782,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       // pruneEmptyOptionalSections to drop the section server-side.
       responsible_party_name: responsiblePartyEnabled ? responsiblePartyName.trim() : '',
       responsible_party_relationship: responsiblePartyEnabled ? responsiblePartyRelationship.trim() : '',
-      // Optional service-clause flags — 'yes' includes the section,
-      // empty string prunes it.
-      two_camera_enabled: twoCameraEnabled ? 'yes' : '',
-      additional_retouching_enabled: additionalRetouchingEnabled ? 'yes' : '',
+      // Optional service-clause flags: 'yes' includes the section, empty
+      // string prunes it. Only the clauses this type offers are sent, so a
+      // box ticked before the type was switched cannot ride along into a
+      // contract that never showed it.
+      ...Object.fromEntries(offeredClauses.map((k) => [k, clauseFlags[k] ? 'yes' : ''])),
     };
     // For date fields where the user typed an ISO date (e.g. effective_date
     // from the date picker), convert to friendly form for the contract.
@@ -533,7 +808,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           partner_1_first_name: p1First || null,
           partner_2_first_name: p2First || null,
           partner_1_full_name: partner1FullName.trim() || null,
-          partner_2_full_name: partner2FullName.trim() || null,
+          partner_2_full_name: partner2Legal || null,
           client_display_name: clientDisplayName.trim(),
           client_email: clientEmail.trim().toLowerCase(),
           event_date: eventDateIso,
@@ -713,15 +988,12 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           >
             <Select
               value={templateKey}
-              onChange={(e) => {
-                setTemplateKey(e.target.value);
-                setSessionType(e.target.value);
-              }}
+              onChange={(e) => handleTemplateChange(e.target.value)}
               size={{ base: 'md', md: 'sm' } as any}
               fontSize={{ base: 'md', md: 'sm' } as any}
               focusBorderColor="brand.accent"
             >
-              {templateKeys.map((k) => (
+              {CONTRACT_TYPE_ORDER.map((k) => (
                 <option key={k} value={k}>
                   {CONTRACT_TEMPLATES[k].name}
                 </option>
@@ -729,16 +1001,46 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
             </Select>
           </Field>
 
+          {/* The one type that describes itself. The label is internal filing
+              only. What the client reads is the "What is being photographed"
+              field further down, which this type marks required. */}
+          {spec?.allowsCustomLabel && (
+            <Field label={t.newClient.sessionLabelLabel} helpText={t.newClient.sessionLabelHelp}>
+              <FormInput
+                value={customSessionLabel}
+                onChange={(e) => setCustomSessionLabel(sessionSlug(e.target.value))}
+                placeholder={t.newClient.sessionLabelPlaceholder}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </Field>
+          )}
+
           {/* ─── Client ─── */}
           <SectionHeading>{t.newClient.sectionClient}</SectionHeading>
 
+          {/* Two names on a wedding or an engagement, one everywhere else.
+              A solo booking asking for "Partner 2" was the single loudest
+              thing wrong with running a family session through this form. */}
           <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
-            <Field label={t.newClient.partner1Label} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.partner1Help} hasError={fieldErrors.has('partner1')}>
+            <Field
+              label={isCouple ? t.newClient.partner1Label : t.newClient.clientNameLabel}
+              w={{ base: '100%', md: isCouple ? '50%' : '100%' }}
+              required
+              helpText={isCouple ? t.newClient.partner1Help : t.newClient.clientNameHelp}
+              hasError={fieldErrors.has('partner1')}
+            >
               <FormInput value={partner1FullName} onChange={(e) => { setPartner1FullName(e.target.value); clearFieldError('partner1'); }} placeholder={t.newClient.partner1Placeholder} />
             </Field>
-            <Field label={t.newClient.partner2Label} w={{ base: '100%', md: '50%' }} helpText={t.newClient.partner2Help}>
-              <FormInput value={partner2FullName} onChange={(e) => setPartner2FullName(e.target.value)} placeholder={t.newClient.partner2Placeholder} />
-            </Field>
+            {/* Still not required on a couple type: one person signing for
+                both is normal, and every derived value degrades to the one
+                name it has. */}
+            {isCouple && (
+              <Field label={t.newClient.partner2Label} w={{ base: '100%', md: '50%' }} helpText={t.newClient.partner2Help}>
+                <FormInput value={partner2FullName} onChange={(e) => setPartner2FullName(e.target.value)} placeholder={t.newClient.partner2Placeholder} />
+              </Field>
+            )}
           </Stack>
 
           <Field
@@ -846,17 +1148,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           <Field
             label={t.newClient.coverageLabel}
             required
-            helpText={t.newClient.coverageHelp}
+            helpText={spec?.coveragePresets ? t.newClient.coverageHelp : t.newClient.coverageHelpSession}
           >
-            <SimpleGrid columns={{ base: 2, md: 4 }} spacing={2}>
-              {(
-                [
-                  { key: 'specific', label: t.newClient.coverageSpecific },
-                  { key: 'half-day', label: t.newClient.coverageHalfDay },
-                  { key: 'full-day', label: t.newClient.coverageFullDay },
-                  { key: 'custom', label: t.newClient.coverageCustom },
-                ] as const
-              ).map((opt) => (
+            <SimpleGrid columns={{ base: 2, md: coverageOptions.length }} spacing={2}>
+              {coverageOptions.map((opt) => (
                 <Box
                   key={opt.key}
                   as="button"
@@ -956,9 +1251,12 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
             </Field>
           )}
 
-          <Field label={t.newClient.sessionTypeLabel} required helpText={t.newClient.sessionTypeHelp} hasError={fieldErrors.has('sessionType')}>
-            <SessionTypePicker value={sessionType} onChange={(v) => { setSessionType(v); clearFieldError('sessionType'); }} />
-          </Field>
+          {/* The session-type picker used to live here, a second list of
+              shoot types sitting under a contract-type dropdown that had just
+              asked the same question. They could disagree, and when they did
+              the portal was filed as one thing and the contract said another.
+              The contract type is now the answer; only Other asks for a word
+              of its own, next to the dropdown itself. */}
 
           {/* ─── Pricing ─── */}
           <SectionHeading>{t.newClient.sectionPricing}</SectionHeading>
@@ -1021,51 +1319,50 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               key={f.key}
               field={f}
               value={variables[f.key] ?? ''}
-              onChange={(v) => handleVarChange(f.key, v)}
+              hasError={fieldErrors.has(varFieldId(f.key))}
+              onChange={(v) => { handleVarChange(f.key, v); clearFieldError(varFieldId(f.key)); }}
             />
           ))}
 
-          {/* ─── Optional service clauses ─── */}
-          <SectionHeading>{t.newClient.sectionOptionalClauses}</SectionHeading>
-          <Text fontSize="xs" color="gray.500" mt={-3} mb={-1} fontWeight="300" lineHeight="1.5">
-            {t.newClient.optionalClausesIntro}
-          </Text>
+          {/* ─── Optional service clauses ───
+              Which boxes appear is the chosen type's business, not this
+              file's: the wedding pair is gone from here and lives in the
+              wedding spec, alongside the minor, illness and permit clauses
+              the session types offer. A type's forced-on clauses are not
+              listed here at all, because they are not a choice. */}
+          {offeredClauses.length > 0 && (
+            <>
+              <SectionHeading>{t.newClient.sectionOptionalClauses}</SectionHeading>
+              <Text fontSize="xs" color="gray.500" mt={-3} mb={-1} fontWeight="300" lineHeight="1.5">
+                {t.newClient.optionalClausesIntro}
+              </Text>
 
-          <Box pt={2}>
-            <Checkbox
-              isChecked={twoCameraEnabled}
-              onChange={(e) => setTwoCameraEnabled(e.target.checked)}
-              colorScheme="yellow"
-              alignItems="flex-start"
-            >
-              <Box>
-                <Text fontSize="sm" color="gray.700" fontWeight="500">
-                  {t.newClient.twoCameraLabel}
-                </Text>
-                <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
-                  {t.newClient.twoCameraHelp}
-                </Text>
-              </Box>
-            </Checkbox>
-          </Box>
-
-          <Box>
-            <Checkbox
-              isChecked={additionalRetouchingEnabled}
-              onChange={(e) => setAdditionalRetouchingEnabled(e.target.checked)}
-              colorScheme="yellow"
-              alignItems="flex-start"
-            >
-              <Box>
-                <Text fontSize="sm" color="gray.700" fontWeight="500">
-                  {t.newClient.additionalRetouchingLabel}
-                </Text>
-                <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
-                  {t.newClient.additionalRetouchingHelp}
-                </Text>
-              </Box>
-            </Checkbox>
-          </Box>
+              {offeredClauses.map((key, i) => {
+                const copy = clauseCopy(key);
+                return (
+                  <Box key={key} pt={i === 0 ? 2 : 0}>
+                    <Checkbox
+                      isChecked={Boolean(clauseFlags[key])}
+                      onChange={(e) =>
+                        setClauseFlags((prev) => ({ ...prev, [key]: e.target.checked }))
+                      }
+                      colorScheme="yellow"
+                      alignItems="flex-start"
+                    >
+                      <Box>
+                        <Text fontSize="sm" color="gray.700" fontWeight="500">
+                          {copy.label}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
+                          {copy.help}
+                        </Text>
+                      </Box>
+                    </Checkbox>
+                  </Box>
+                );
+              })}
+            </>
+          )}
 
           {/* ─── Additional notes ─── */}
           <SectionHeading>{t.newClient.sectionAdditionalNotes}</SectionHeading>
@@ -1240,14 +1537,19 @@ function FieldRow({
   field,
   value,
   onChange,
+  hasError,
 }: {
   field: ContractTemplateField;
   value: string;
   onChange: (v: string) => void;
+  // Set when this variable is required by the chosen type and came through
+  // blank on the last submit. Same red treatment as every other field, so a
+  // missing due date is found by looking rather than by reading.
+  hasError?: boolean;
 }) {
   const { lang } = useAdminLang();
   return (
-    <Field label={field.label} helpText={field.helpText} required={field.required}>
+    <Field label={field.label} helpText={field.helpText} required={field.required} hasError={hasError}>
       {field.type === 'textarea' ? (
         <Textarea
           value={value}

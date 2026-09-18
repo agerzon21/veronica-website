@@ -13,7 +13,7 @@
  *   partner_2_first_name?: string,
  *   event_date: string (YYYY-MM-DD),
  *   contract_template_key: string, // key from CONTRACT_TEMPLATES (e.g. 'wedding')
- *   variables: Record<string, string>, // wedding template variables
+ *   variables: Record<string, string>, // template variables for that key
  *   contract_total_amount: number,
  *   contract_retainer_amount: number,
  *
@@ -27,6 +27,8 @@
  * }
  *
  *   → 200 { success, portal_id, setup_token }  invite email is sent to client_email
+ *   → 400 on an unknown contract_template_key, or a required variable for
+ *         that type left blank (see requiredVariablesFor)
  *   → 401 on bad admin password
  *   → 409 if gallery_password collides
  */
@@ -39,12 +41,40 @@ import { sendEmail } from '../_auto-reply.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
+  isContractTemplateKey,
   pruneEmptyOptionalSections,
+  requiredVariablesFor,
+  stripForeignTypeVariables,
+  type ContractTemplateSpec,
 } from '../../src/data/contract-template.js';
 
 function generateToken(): string {
   // 32 bytes → 64 hex chars. Plenty of entropy for a single-use setup link.
   return randomBytes(32).toString('hex');
+}
+
+/**
+ * Merge the type's forced clause flags UNDER whatever the caller supplied.
+ *
+ * A blank counts as "not supplied" here. The admin form posts every clause
+ * checkbox it renders, unticked ones included, as an empty string, so a plain
+ * spread would let a stray '' from a copied or stale payload strip the minors
+ * and illness clauses off a family contract, which are exactly the clauses
+ * nobody notices are missing until they matter. A non-blank value still wins.
+ *
+ * Wedding declares no defaultVariables, so this is a pure copy for wedding
+ * portals: same keys, same order, same values, and therefore the same rendered
+ * body and the same contract_variables JSON as before this existed.
+ */
+function withTypeDefaults(
+  spec: ContractTemplateSpec,
+  supplied: Record<string, string>,
+): Record<string, string> {
+  const merged: Record<string, string> = { ...supplied };
+  for (const [key, value] of Object.entries(spec.defaultVariables ?? {})) {
+    if (!merged[key]?.trim()) merged[key] = value;
+  }
+  return merged;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -104,17 +134,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: 'client_email is not a valid email address.' });
     }
 
-    const spec = CONTRACT_TEMPLATES[templateKey];
-    if (!spec) {
+    // hasOwnProperty, not a truthy lookup. CONTRACT_TEMPLATES is a plain
+    // object literal, so 'constructor' and 'toString' both resolve to
+    // something truthy off Object.prototype and would sail past an
+    // `if (!spec)` guard, then throw inside fillTemplate as a 500 rather than
+    // telling the caller the key was wrong.
+    if (!isContractTemplateKey(templateKey)) {
       return res.status(400).json({ success: false, error: `Unknown contract template '${templateKey}'.` });
     }
+    const spec = CONTRACT_TEMPLATES[templateKey];
 
-    contractVariables =
-      body.variables && typeof body.variables === 'object'
+    const suppliedVariables =
+      body.variables && typeof body.variables === 'object' && !Array.isArray(body.variables)
         ? Object.fromEntries(
             Object.entries(body.variables as Record<string, unknown>).map(([k, v]) => [k, String(v ?? '')]),
           )
         : {};
+    // The admin form merges the type's forced clauses too. Doing it here as
+    // well means a portal created by POSTing straight at the API still carries
+    // them, so a family contract cannot end up without the minors wording just
+    // because the caller was not the form.
+    // Strip first: a caller (or a prefill carried across a type change in the
+    // form) can hand us a clause flag this type does not own, and the five
+    // session types share one template, so nothing downstream would notice a
+    // portrait contract printing the maternity guidelines.
+    contractVariables = withTypeDefaults(
+      spec,
+      stripForeignTypeVariables(spec.key, suppliedVariables),
+    );
+
+    // Per-type required variables, enforced here and not only in the form.
+    // The form is bypassable, and a maternity contract created without a due
+    // date renders the literal text "[due_date]" to the client, on a document
+    // they are being asked to sign.
+    const missingVariables = requiredVariablesFor(templateKey).filter(
+      (key) => !contractVariables[key]?.trim(),
+    );
+    if (missingVariables.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `The ${spec.name} contract needs these filled in: ${missingVariables.join(', ')}.`,
+      });
+    }
 
     totalAmount = Number(body.contract_total_amount);
     retainerAmount = Number(body.contract_retainer_amount);
@@ -129,6 +190,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // We also persist the variables JSON so the admin can edit them
     // later (while contract is still pending) and we can re-render
     // without losing context.
+    //
+    // The pruner runs for every type, not just wedding: it is what drops
+    // RELATED WEDDING BOOKING from an engagement contract whose wedding_date
+    // is blank, instead of printing the heading with nothing under it. It has
+    // to see the SAME merged variables the fill did, or a clause switched on
+    // by defaultVariables would render and then be pruned back out.
     const filled = pruneEmptyOptionalSections(
       fillTemplate(spec.template, contractVariables),
       contractVariables,

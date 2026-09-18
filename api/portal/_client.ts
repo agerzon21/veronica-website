@@ -43,6 +43,12 @@ type ClientPortalRow = {
   // portal.
   event_date: string | null;
   session_type: string | null;
+  // The contract TYPE, distinct from session_type. session_type is a display
+  // label Vero can type freely (an "Other" booking might read "branding"), so
+  // it cannot be trusted to decide wording. This is the key into
+  // CONTRACT_TEMPLATES and is what tells the portal whether to say "Event
+  // Date" or "Session Date". Legacy rows default to 'wedding'.
+  contract_template_key: string | null;
   contract_variables: Record<string, string> | null;
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
@@ -83,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const rows = (await sql`
       select id, client_display_name, client_email, drive_url,
-             event_date, session_type, contract_variables,
+             event_date, session_type, contract_template_key, contract_variables,
              contract_status, contract_signed_at, contract_body, contract_signed_pdf_url,
              contract_total_amount, contract_retainer_amount, paid_to_date, payment_plan_enabled,
              gallery_password, gallery_enabled,
@@ -210,6 +216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Session metadata — shown in the portal header
       event_date: row.event_date,
       session_type: row.session_type,
+      contract_template_key: row.contract_template_key ?? 'wedding',
       event_title: typeof vars.event_title === 'string' ? vars.event_title : null,
       event_location: typeof vars.event_location === 'string' ? vars.event_location : null,
       delivery_timeframe:
