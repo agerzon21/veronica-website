@@ -11,7 +11,9 @@ import { Helmet } from 'react-helmet-async';
 import { m, AnimatePresence } from 'framer-motion';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
+import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
 import CTAButton from '../components/ui/CTAButton';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import PortalHeader from '../components/PortalHeader';
@@ -72,10 +74,6 @@ function readStoredSession(): StoredSession | null {
   }
 }
 
-function hasStoredSession(): boolean {
-  return readStoredSession() !== null;
-}
-
 function clearStoredSession(): void {
   try {
     sessionStorage.removeItem(SESSION_KEY);
@@ -118,6 +116,48 @@ type GalleryData = {
 const tabFromPath = (pathname: string): Tab =>
   pathname === '/portal/pass' ? 'gallery' : 'client';
 const pathFromTab = (t: Tab): string => (t === 'gallery' ? '/portal/pass' : '/portal');
+
+/**
+ * The stored session this URL is allowed to reopen, if any.
+ *
+ * /portal and /portal/pass are two different doors, and the session above
+ * shipped without knowing the difference: it restored whatever was in tab
+ * storage on whichever of the two you arrived at. That turned a single gallery
+ * link into a trap. A guest who had opened a gallery once got that gallery
+ * back on /portal for the life of the tab, so the CLIENT ACCOUNT login was
+ * unreachable, and so was any other gallery. The logo is deliberately plain
+ * navigation, so going home and coming back is exactly the walk that hit it,
+ * and short of clearing site data there was no way out. Reported as "it
+ * automatically takes me to that last client gallery I was in".
+ *
+ * So a session only reopens the door it was created at: a gallery session on
+ * /portal/pass, a client session on /portal. What it must NOT do is clear
+ * itself on the way past the other door. Going home and coming back to
+ * /portal/pass has to land a guest back in their photos, because surviving a
+ * page load is the entire reason the session exists.
+ *
+ * A ?password= in the URL outranks a stored gallery password, and that is not
+ * a nicety either. The delivery link IS the client's way in and it survives a
+ * cache busting reload on purpose, so opening a SECOND gallery's link in a tab
+ * that already remembers the first has to land in the second. Without this,
+ * the stored password and the link's password both fetch on mount and
+ * whichever answered last decided which gallery you were looking at.
+ *
+ * This is deliberately read ONCE, on mount, and not again when the login form's
+ * tabs are switched. Someone standing at a login form and tapping "Gallery
+ * Pass" is asking for that form, very often because they want to type a
+ * DIFFERENT password. Reopening the remembered gallery under them there would
+ * rebuild the same trap one room over.
+ */
+function restorableSession(pathname: string, search: string): StoredSession | null {
+  const stored = readStoredSession();
+  if (!stored) return null;
+  const door = tabFromPath(pathname);
+  if (stored.kind === 'client') return door === 'client' ? stored : null;
+  if (door !== 'gallery') return null;
+  const linkPassword = new URLSearchParams(search).get('password') ?? '';
+  return linkPassword.trim() ? null : stored;
+}
 
 const Portal = () => {
   const location = useLocation();
@@ -195,7 +235,11 @@ const Portal = () => {
    * True while we are trying a stored session, so the login form does not
    * flash before we know whether the client is still signed in.
    */
-  const [restoring, setRestoring] = useState(() => hasStoredSession());
+  const [restoring, setRestoring] = useState(
+    () => restorableSession(location.pathname, location.search) !== null,
+  );
+  /** The gallery only route's Sign Out confirmation, see handleGalleryLogout. */
+  const [gallerySignOutOpen, setGallerySignOutOpen] = useState(false);
 
   /**
    * Sign out.
@@ -215,9 +259,13 @@ const Portal = () => {
    * Runs once on mount. A stored session that no longer authenticates is
    * dropped silently and the login form shows, which covers a rotated
    * password, a deleted portal, and a session copied between tabs.
+   *
+   * restorableSession, not readStoredSession: see its comment above for why a
+   * remembered gallery must stay out of /portal, and why a ?password= link
+   * outranks it on /portal/pass.
    */
   useEffect(() => {
-    const stored = readStoredSession();
+    const stored = restorableSession(location.pathname, location.search);
     if (!stored) return;
     let cancelled = false;
     (async () => {
@@ -264,9 +312,10 @@ const Portal = () => {
     return () => {
       cancelled = true;
     };
-    // Once, on mount. Deliberately not reactive to the state it sets: the
-    // effect reads the stored session and nothing from this render, so there
-    // is nothing for the dependency rule to complain about.
+    // Once, on mount. Deliberately not reactive: the URL it reads is the one
+    // this visit arrived at, and re-running on a tab switch is the very thing
+    // restorableSession's comment rules out.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLogout = () => {
@@ -281,6 +330,38 @@ const Portal = () => {
       // Same route, so the app's ScrollToTop will not fire.
       window.scrollTo({ top: 0 });
     }
+  };
+
+  /**
+   * Sign out of a shared gallery.
+   *
+   * The full portal has had a Sign Out since it had anything to sign out of.
+   * The gallery only route never got one, because for most of its life there
+   * was genuinely nothing to end: the password lived in React state and any
+   * reload dropped it. Persisting it fixed the reload and left a guest with no
+   * door out at all, which is the bug this pairs with restorableSession above.
+   *
+   * Lands on the gallery password form rather than the client login, because
+   * that is what somebody leaving a gallery is most likely to want next: the
+   * reported case is wanting to open a DIFFERENT gallery in the same tab.
+   *
+   * Two things come off in that one navigation. The password is dropped out of
+   * the address bar, where a delivery link leaves it, which matters on a
+   * borrowed phone whose history the next person can read. And it disarms the
+   * auto submit: a reload with ?password= still in the URL would hand the guest
+   * straight back into the gallery they just closed, and Sign Out would look
+   * broken rather than look like a link doing its job.
+   */
+  const handleGalleryLogout = () => {
+    clearStoredSession();
+    setGalleryData(null);
+    setGalleryPassword('');
+    setError('');
+    setTab('gallery');
+    navigate('/portal/pass', { replace: true });
+    // Only the query changed, so the app's ScrollToTop will not fire and the
+    // form would otherwise open somewhere down the old gallery's scroll.
+    window.scrollTo({ top: 0 });
   };
 
   const switchTab = (next: Tab) => {
@@ -495,7 +576,71 @@ const Portal = () => {
             expiresAt={galleryData.expiresAt}
             sectionNavInHeader
           />
+          {/* The way out.
+              Placed at the very end of the gallery, under the share section
+              and above the footer, for two reasons. There is nowhere else: the
+              header on this route is the logo plus the photo bar and carries no
+              burger, by construction, because a guest on a shared link has no
+              account to open a menu onto. And anywhere higher would put an exit
+              beside the photos, which is the one thing a gallery page should
+              not do. Someone scrolling to the end of their photos reaches it
+              without hunting, and nobody else ever has to look at it.
+
+              The treatment is the full portal's Refresh and Sign Out pair,
+              lifted whole: the same centred CTAButton row, the same outlined
+              danger variant (a hairline that only fills on hover, the quiet end
+              of the scale), and the same ConfirmDialog behind it. One button
+              rather than two, because a guest has nothing here to refresh.
+              The line above it is doing the work the full portal's dialog copy
+              does: saying what signing out costs before anyone taps it. */}
+          <Box
+            as="section"
+            px={{ base: 4, md: 8 }}
+            pt={{ base: 8, md: 10 }}
+            pb={{ base: 10, md: 12 }}
+            textAlign="center"
+            borderTop="1px solid"
+            borderColor="brand.accentBorder"
+          >
+            <Text
+              fontSize="sm"
+              color="gray.600"
+              fontWeight="300"
+              lineHeight="1.7"
+              maxW="460px"
+              mx="auto"
+            >
+              Finished looking? Signing out closes these photos on this phone or
+              computer. You will need the link or the password to open them again.
+            </Text>
+            <HStack mt={6} spacing={3} justify="center" flexWrap="wrap">
+              <CTAButton
+                onClick={() => setGallerySignOutOpen(true)}
+                icon={FaSignOutAlt}
+                variant="danger"
+                size="sm"
+              >
+                Sign Out
+              </CTAButton>
+            </HStack>
+          </Box>
         </Box>
+        {/* Asks first, exactly as the full portal's does. Nothing is lost by
+            signing out, but a guest who taps it by accident has to find the
+            link again, and on a phone that is a real errand. */}
+        <ConfirmDialog
+          isOpen={gallerySignOutOpen}
+          title="Sign out of this gallery?"
+          body="You will need the link or the password to open these photos again."
+          confirmLabel="Sign Out"
+          cancelLabel="Keep Looking"
+          danger
+          onConfirm={() => {
+            setGallerySignOutOpen(false);
+            handleGalleryLogout();
+          }}
+          onCancel={() => setGallerySignOutOpen(false)}
+        />
         <Footer />
       </>
     );
