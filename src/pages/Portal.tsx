@@ -22,6 +22,7 @@ import ClientGallery, {
   type FolderSection,
 } from '../components/ClientGallery';
 import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
+import { prefersReducedMotion } from '../utils/motion';
 
 /**
  * The portal session, kept for the length of the browser tab.
@@ -84,6 +85,15 @@ function clearStoredSession(): void {
 
 
 const MotionDiv = m.div;
+
+/**
+ * The login form's two entrance fades, in seconds, zeroed for a visitor who
+ * asked for reduced motion. Read at module scope rather than per render
+ * because both animations run once, on mount, and the preference cannot
+ * change between the read and the frame that uses it.
+ */
+const REVEAL_SEC = prefersReducedMotion() ? 0 : 0.6;
+const TAB_FADE_SEC = prefersReducedMotion() ? 0 : 0.25;
 
 type Tab = 'client' | 'gallery';
 
@@ -555,10 +565,20 @@ const Portal = () => {
         pb={{ base: 16, md: 12 }}
       >
         <Box w="100%" maxW="460px">
+          {/* Fades in, does not slide in.
+              This used to come up 20px over 600ms, and the tab panels below
+              used to do the same 8px. It looks nice and it is a trap: every
+              tap target on a sign-in form spends the first half second
+              travelling, so a finger already on its way to the password box
+              lands wherever that box WAS. A control that moves while you are
+              reaching for it is a bug even when nothing else goes wrong, and
+              here something else did go wrong (see MobileNav). Opacity alone
+              keeps the arrival without moving anything.
+              REVEAL_SEC is 0 for a visitor who asked for reduced motion. */}
           <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: REVEAL_SEC, ease: 'easeOut' }}
           >
             <VStack spacing={8}>
               {/* Heading */}
@@ -659,10 +679,10 @@ const Portal = () => {
                   {tab === 'client' ? (
                     <MotionDiv
                       key="client-form"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.25 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: TAB_FADE_SEC }}
                     >
                       <Box as="form" onSubmit={handleClientSubmit} w="100%">
                         <VStack spacing={4} w="100%">
@@ -741,10 +761,10 @@ const Portal = () => {
                   ) : (
                     <MotionDiv
                       key="gallery-form"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.25 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: TAB_FADE_SEC }}
                     >
                       <Box as="form" onSubmit={handleGallerySubmit} w="100%">
                         <VStack spacing={4} w="100%">

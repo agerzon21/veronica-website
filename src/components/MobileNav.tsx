@@ -1,9 +1,6 @@
 import { Box, VStack, Link } from '@chakra-ui/react';
-import { m } from 'framer-motion';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from './ui/CTAButton';
-
-const MotionBox = m(Box);
 
 interface MobileNavProps {
   isOpen: boolean;
@@ -24,7 +21,36 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
   ];
 
   return (
-    <MotionBox
+    /**
+     * A closed menu is not "an overlay at opacity 0". It has to be gone.
+     *
+     * This used to fade with framer-motion and switch itself off with
+     * `animate={{ pointerEvents: isOpen ? 'auto' : 'none' }}`, which has two
+     * problems. The small one: framer cannot tween a keyword, so it sets it
+     * through the animation pipeline, and the write lands on the next frame
+     * rather than in the same commit as the state change. That is a couple of
+     * frames on an idle desktop and longer on a phone mid route change, all of
+     * them frames where an invisible full-screen overlay is still taking taps.
+     *
+     * The large one: `pointer-events: none` is INHERITED, so any descendant
+     * that sets `auto` climbs straight back out of it. CTAButton did exactly
+     * that, which left the menu's Contact button live and invisible over the
+     * middle of every phone screen. On the gallery login it lands on the
+     * password box, because iOS lays a fixed overlay out against the visible
+     * viewport (~664px with Safari's chrome) while the page underneath is
+     * still centred against `100vh` (844px), which slides the menu's contents
+     * ~90px up relative to the form. That is the 100% repro: tap Gallery Pass,
+     * tap the password box, land on /contact.
+     *
+     * So: plain CSS, same idiom as PortalHeader's dropdown. `pointerEvents`
+     * lands synchronously with the state change, and `visibility`, which
+     * inherits and which nothing here overrides, takes the whole subtree out
+     * of hit testing, the tab order and the a11y tree once the fade is done.
+     * Transitioning visibility is what keeps the fade visible on the way out:
+     * a discrete property flips at the END of its transition when going to
+     * `hidden`, and at the START when coming back to `visible`.
+     */
+    <Box
       position="fixed"
       top="0"
       left="0"
@@ -36,12 +62,12 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
       flexDirection="column"
       alignItems="center"
       justifyContent="center"
-      initial={{ opacity: 0 }}
-      animate={{
-        opacity: isOpen ? 1 : 0,
-        pointerEvents: isOpen ? 'auto' : 'none',
-      }}
-      transition={{ duration: 0.3 }}
+      opacity={isOpen ? 1 : 0}
+      visibility={isOpen ? 'visible' : 'hidden'}
+      pointerEvents={isOpen ? 'auto' : 'none'}
+      aria-hidden={isOpen ? undefined : true}
+      transition="opacity 0.3s ease, visibility 0.3s ease"
+      sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
     >
       <VStack spacing={7}>
         {menuItems.map((item) =>
@@ -76,7 +102,7 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
           ),
         )}
       </VStack>
-    </MotionBox>
+    </Box>
   );
 };
 

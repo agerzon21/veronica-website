@@ -463,6 +463,26 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const headerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [-30, 0]);
   const footerOpacity = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [0, 1]);
   const footerY = useTransform(scrollYProgress, [TEXT_FADE_START, TEXT_FADE_END], [30, 0]);
+  // Anything the scroll fades in has to stop taking taps while it is faded
+  // OUT. The footer carries Book a Session, a 212x72 link to /contact, and at
+  // scroll 0 it sat invisible in the middle-bottom of a phone screen and
+  // happily swallowed taps. A real touch tap at (195, 702) on the home page
+  // went to /contact with nothing on screen to explain why. That is the home
+  // page half of "random pages, random actions take us to Contact"; the other
+  // half was the closed mobile menu (see MobileNav).
+  //
+  // 0.2 rather than 0: by then the surface is plainly there to look at, and
+  // because the fade and the 30px travel share one scroll range it is also
+  // within a couple of dozen pixels of where it will settle. Nothing here
+  // moves on a timer, only under the user's own scroll, so a control cannot
+  // walk out from under a finger that is holding still.
+  //
+  // The revealed branch is '' (unset), not 'auto'. `pointer-events` inherits,
+  // so a literal 'auto' would also punch back out of any ancestor that had
+  // switched itself off, which is the exact mistake this pass removed from
+  // CTAButton. Unsetting restores the default without claiming anything.
+  const headerTaps = useTransform(headerOpacity, (v) => (v < 0.2 ? 'none' : ''));
+  const footerTaps = useTransform(footerOpacity, (v) => (v < 0.2 ? 'none' : ''));
   const scrollHintOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0]);
 
   // Progress indicator visibility: fades in once the user has started
@@ -484,6 +504,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     [ANIMATIONS_SETTLED - 0.02, ANIMATIONS_SETTLED + 0.05],
     [0, 1],
   );
+  const nextCueTaps = useTransform(nextCueOpacity, (v) => (v < 0.2 ? 'none' : ''));
 
   // Tapping the cue is the point of it on a phone, where there is no hover to
   // suggest it does anything.
@@ -621,7 +642,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           px={{ base: 4, md: 8 }}
           zIndex={3}
         >
-          <MotionBox style={{ opacity: headerOpacity, y: headerY }}>
+          <MotionBox style={{ opacity: headerOpacity, y: headerY, pointerEvents: headerTaps }}>
             {/* The homepage h1. Was a hand-rolled 18/24/30px italic block with
                 its own eyebrow tracking and its own rule; it is now the shared
                 PageHeader so it matches every other page's header exactly.
@@ -694,7 +715,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             px={{ base: 4, md: 8 }}
             zIndex={3}
           >
-            <MotionBox style={{ opacity: footerOpacity, y: footerY }}>
+            <MotionBox style={{ opacity: footerOpacity, y: footerY, pointerEvents: footerTaps }}>
               {footerContent}
             </MotionBox>
           </Box>
@@ -804,7 +825,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             transition="border-color 0.3s ease, background 0.3s ease"
             _hover={{ borderColor: 'brand.accent', bg: 'rgba(201, 169, 110, 0.08)' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
-            style={{ opacity: nextCueOpacity, x: '-50%' }}
+            // Same rule as the header and footer above: it is a real button,
+            // so it must not be tappable during the stretch of the cinematic
+            // where it is not on screen yet.
+            style={{ opacity: nextCueOpacity, x: '-50%', pointerEvents: nextCueTaps }}
           >
             <m.svg
               width="12"

@@ -481,7 +481,18 @@ const CTAButton = ({
     transition: 'all 0.4s ease',
     cursor: isLoading ? 'wait' : isDisabled ? 'not-allowed' : 'pointer',
     opacity: isDisabled ? 0.5 : 1,
-    pointerEvents: (isDisabled ? 'none' : 'auto') as 'none' | 'auto',
+    // `none` when disabled, and otherwise NOTHING AT ALL. Spelling out the
+    // default `auto` looks like a no-op and is the exact opposite: because
+    // `pointer-events` inherits, an explicit `auto` here re-enables the button
+    // inside an ancestor that deliberately switched itself off with `none`.
+    // The closed mobile menu is a full-screen, fully transparent overlay that
+    // turns itself off that way, and this one word kept its Contact button
+    // alive inside it: an invisible 126x48 link parked in the middle of every
+    // phone screen, on every page, swallowing taps and going to /contact. That
+    // is the whole of "random pages, random actions take us to Contact".
+    // Anything that needs to stay clickable inside a `pointer-events: none`
+    // parent should say so at the call site, where it is visible.
+    ...(isDisabled ? { pointerEvents: 'none' as const } : {}),
     borderRadius: 0,
     lineHeight: 1,
     whiteSpace: (wrapText ? 'normal' : 'nowrap') as 'normal' | 'nowrap',
