@@ -80,6 +80,7 @@ This is *standardization*, not fabrication. Deriving keywords from an alt text V
 
 ### Style rules (non-negotiable)
 
+- **No long dashes.** Not em (`—` U+2014), not en (`–` U+2013), nor U+2012/2015/2212/2010/2011. Use a comma, a colon, parentheses, or two sentences. A plain ASCII hyphen in a slug or a compound word is fine. This is the owner's strongest standing rule and it applies to every field here, because `alt`/`title`/`description` render on the public site. 95 rows had accumulated one before anybody wrote it down. **Detect them by codepoint in JS, never with `grep`** — a bracket expression over multibyte characters matches byte by byte in the C locale and reports hits that are not there. And remember this file is **CRLF**: strip `\r` before comparing a line, put it back before writing, or every match silently misses by one invisible character.
 - **No location names** in alt/title/description — not "Punta Cana," not "Scranton," not "Almaty," nothing. Veronika's business should be portable.
 - **No generic praise words** — avoid "stunning," "beautiful," "captivating," "vibrant," "joyful," "magical," "enchanting."
 - **No people-name references in keywords** — "Monica Bellucci" can appear in a description if it's the photo's literal concept, but never as a keyword.

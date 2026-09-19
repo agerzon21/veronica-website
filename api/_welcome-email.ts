@@ -60,14 +60,14 @@ export function buildWelcomeHtml(data: WelcomePayload): string {
 export function buildWelcomeText(data: WelcomePayload): string {
   return `Hi there,
 
-Thanks for stopping by — that genuinely means a lot. I'm Veronika, the photographer behind everything you've been browsing.
+Thanks for stopping by, that genuinely means a lot. I'm Veronika, the photographer behind everything you've been browsing.
 
 Here's a small thank-you to keep me in mind for whenever you're ready:
 
   10% OFF YOUR NEXT SESSION
   Code: ${data.discountCode}
 
-Just mention this code when you book — wedding, portrait, family, maternity, anything. I'll take care of the rest.
+Just mention this code when you book: wedding, portrait, family, maternity, anything. I'll take care of the rest.
 
 Book a session: https://vero.photography/contact
 
@@ -81,7 +81,7 @@ Want to reach me directly?
   Instagram: ${INSTAGRAM_URL}
   WhatsApp: ${WHATSAPP_PHONE} (${WHATSAPP_URL})
 
-You received this because you signed up at vero.photography. This is a one-time welcome — no regular newsletter. If you didn't sign up, just delete and ignore.
+You received this because you signed up at vero.photography. This is a one-time welcome, not a regular newsletter. If you didn't sign up, just delete and ignore.
 `;
 }
 

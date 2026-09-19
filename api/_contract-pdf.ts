@@ -435,7 +435,7 @@ function buildContractDocument(input: ContractPdfInput) {
       h(Text, { style: styles.hmacLabel }, 'Tamper-Evident Signature (HMAC-SHA-256)'),
       h(Text, { style: styles.hmacValue }, input.audit.hmac),
     ),
-    renderFooter('Vero Photography — Audit Trail'),
+    renderFooter('Vero Photography: Audit Trail'),
   );
 
   return h(Document, null, contractPage, auditPage);
