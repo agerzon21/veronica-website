@@ -20,6 +20,7 @@ import { m } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useCopyNotification } from './CopyNotification';
 import CTAButton from './ui/CTAButton';
+import { prefersReducedMotion } from '../utils/motion';
 
 interface Rect {
   top: number;
@@ -123,6 +124,47 @@ const WIDTH_BUCKETS = [800, 1200, 1600, 2000] as const;
 /** The ceiling for a device we are being careful with. */
 const TIGHT_MAX_WIDTH = 1200;
 
+/**
+ * The LAYOUT viewport. Not the same thing as window.innerWidth.
+ *
+ * WHY THIS EXISTS, AND WHY EVERY SIZE IN THIS FILE COMES THROUGH IT
+ * On desktop Chrome the two agree, so this looks like pointless ceremony.
+ * On iOS Safari they do not: window.innerWidth and window.innerHeight report
+ * the VISUAL viewport, the rectangle you are actually looking at, which
+ * SHRINKS as you pinch in. document.documentElement.clientWidth/clientHeight
+ * report the LAYOUT viewport, the box that position:fixed is laid out
+ * against, which pinch zoom does not touch.
+ *
+ * Sizing a fixed overlay from the visual viewport produces one of the
+ * strangest bugs this project has had. A client pinching a photo in their
+ * gallery reported that the photo did not zoom at all while the little
+ * "6 / 943" counter ballooned to fill the frame, and that the whole thing
+ * lurched toward the top left. Both symptoms are the same arithmetic:
+ *
+ *   the photo box was 0.9 * window.innerWidth wide, and on iOS
+ *   window.innerWidth == layoutWidth / zoom, so the box became
+ *   0.9 * layoutWidth / zoom CSS px, which the browser then drew at
+ *   zoom times its size. 0.9 * layoutWidth on screen. Exactly what it was
+ *   before the pinch, every time, at every zoom level.
+ *
+ * The counter lives in an inset:0 overlay measured against the layout
+ * viewport, so it did not shrink and the zoom magnified it for real. Photo
+ * pinned, chrome enormous. And since top/left are the same fraction of the
+ * same shrinking number, the box also walked toward the origin as it went.
+ *
+ * So: anything that positions or sizes the fixed overlay reads from here.
+ */
+function layoutViewport(): { width: number; height: number } {
+  if (typeof document === 'undefined') {
+    return { width: 1024, height: 768 };
+  }
+  const el = document.documentElement;
+  return {
+    width: el.clientWidth || window.innerWidth,
+    height: el.clientHeight || window.innerHeight,
+  };
+}
+
 /** The smallest bucket that still covers this screen at its pixel density. */
 function deviceImageWidth(): number {
   if (typeof window === 'undefined') return 2000;
@@ -130,7 +172,12 @@ function deviceImageWidth(): number {
   // the decode cost keeps climbing with their square.
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   // Longest side, so a rotation does not trigger a refetch at a bigger size.
-  const longest = Math.max(window.innerWidth, window.innerHeight);
+  // Layout viewport, so a pinch does not either: on iOS the visual viewport
+  // halves as you zoom in, and asking for a SMALLER image the moment someone
+  // wants a closer look is precisely backwards. The numbers a real phone and
+  // a real desktop produce are unchanged from before this note.
+  const vp = layoutViewport();
+  const longest = Math.max(vp.width, vp.height);
   let needed = Math.ceil(longest * dpr);
   // Without this, the rotation allowance alone pushes a 390 by 844 phone to
   // 1688 and therefore into the 2000 bucket, which is the exact request that
@@ -145,8 +192,28 @@ function isTightMemory(): boolean {
   const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
   if (nav.connection?.saveData) return true;
   if (typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 4) return true;
-  return Math.min(window.innerWidth, window.innerHeight) < 768;
+  // Layout viewport for the same reason as deviceImageWidth above: a pinch
+  // must not change our answer to "what kind of device is this".
+  const vp = layoutViewport();
+  return Math.min(vp.width, vp.height) < 768;
 }
+
+/**
+ * Pinch to zoom, in numbers.
+ *
+ * MAX is 4 because the photo behind it is not infinite: a phone deliberately
+ * fetches at 1200px (see deviceImageWidth) and past roughly 4x that is mush,
+ * so letting someone keep going only buys disappointment. SETTLE is the slack
+ * we forgive at the end of a gesture, so a pinch that lands at 1.008 snaps
+ * back to fit rather than leaving the photo a hair off centre for good.
+ */
+const MAX_ZOOM = 4;
+const DOUBLE_TAP_ZOOM = 2.5;
+const ZOOM_SETTLE = 1.02;
+/** How far a one finger drag must travel before it counts as a swipe. */
+const SWIPE_PX = 50;
+/** Longest gap between two taps that still reads as one double tap. */
+const DOUBLE_TAP_MS = 320;
 
 /**
  * Rewrite a Drive thumbnail url to a different width.
@@ -548,8 +615,9 @@ const ImageModal = ({
     a.click();
     document.body.removeChild(a);
   }, [mobileSaveUrl, downloadFilename, photoBlob]);
-  const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
-  const [touchEnd, setTouchEnd] = useState({ x: 0, y: 0 });
+  // The swipe used to keep its two points in React state and write to them on
+  // every touchmove. It lives in gestureRef now: see the touch gesture block
+  // below for why a render per touchmove was the whole bug.
   const scrollYRef = useRef(0);
   const scrollLockedRef = useRef(false);
   // Ref to the actual displayed <img> element so we can measure its
@@ -582,11 +650,21 @@ const ImageModal = ({
   // are composited on the GPU and don't trigger layout on each frame;
   // animating the layout properties on a page with hundreds of grid
   // thumbnails behind us caused visible frame drops on close.
+  //
+  // The fractions are of the LAYOUT viewport, never window.innerWidth. See
+  // layoutViewport() at the top of this file for the full story; the short
+  // version is that this object is recomputed on every render, a touchmove
+  // used to cause a render, and on iOS window.innerWidth shrinks while you
+  // pinch. So a pinch was resizing and re-seating this box under the user's
+  // fingers, which is the "it pushes the photo into the top left corner"
+  // report, and the reason the photo never appeared to zoom while the
+  // counter over it grew huge.
+  const vp = layoutViewport();
   const openPos = {
-    top: window.innerHeight * 0.075,
-    left: window.innerWidth * 0.05,
-    width: window.innerWidth * 0.9,
-    height: window.innerHeight * 0.85,
+    top: vp.height * 0.075,
+    left: vp.width * 0.05,
+    width: vp.width * 0.9,
+    height: vp.height * 0.85,
   };
 
   // Convert a viewport-relative Rect to the transform values needed to
@@ -672,6 +750,12 @@ const ImageModal = ({
     // its rect and animate. No scroll juggling, no double-jump.
     // The scroll-lock cleanup runs when the modal unmounts and lands
     // the page cleanly on the last position we tracked.
+    // Drop any zoom BEFORE measuring. The landing math below wants the rect
+    // the photo occupies at fit; a zoomed rect would send it flying off to
+    // one side on the way back to its thumbnail. Written straight to the
+    // element, so the getBoundingClientRect on the next line already sees it.
+    resetZoom(false);
+
     const targetRect = getImageRect?.(currentIndex ?? 0);
     const imgRect = imgRef.current?.getBoundingClientRect();
 
@@ -815,12 +899,25 @@ const ImageModal = ({
   // arrows) follows the new viewport, looking visibly broken. Uses an instant
   // transition because the user is actively dragging the window edge and any
   // animation lag reads as jank.
+  //
+  // Guarded on the layout viewport actually having changed. iOS fires resize
+  // for a pinch as well as for a rotation, and reacting to a pinch here would
+  // cancel an in flight open animation and throw away the zoom the user is in
+  // the middle of setting, several times a second.
+  const lastLayoutRef = useRef(layoutViewport());
   useEffect(() => {
     if (!isOpen || isClosing) return;
+    lastLayoutRef.current = layoutViewport();
     const handleResize = () => {
+      const next = layoutViewport();
+      const prev = lastLayoutRef.current;
+      if (next.width === prev.width && next.height === prev.height) return;
+      lastLayoutRef.current = next;
       // Base position (openPos) is recomputed via re-render on resize;
       // just snap the transform back to identity so the image sits
-      // dead-center in the new viewport with no lag.
+      // dead-center in the new viewport with no lag. The zoom goes with it:
+      // its pan bounds were computed against the old frame.
+      resetZoom(false);
       setAnimTransition({ duration: 0, ease: [0, 0, 1, 1] });
       setAnimTarget(openTransform);
     };
@@ -845,37 +942,318 @@ const ImageModal = ({
     }
   };
 
+  /**
+   * ── Touch gestures ──────────────────────────────────────────────────────
+   *
+   * WHAT WAS HERE BEFORE, AND WHY IT HAD TO GO
+   * Three handlers that read e.touches[0], stored it in REACT STATE on every
+   * touchmove, and on touchend turned the horizontal difference into a photo
+   * change. Two separate faults, and a client hit both at once trying to
+   * pinch a photo on an iPhone:
+   *
+   *   1. It could not see a second finger. A pinch is two touches; reading
+   *      touches[0] reads one of them, and neither Chrome nor Safari promises
+   *      a stable TouchList order between events, so the "one" it read kept
+   *      swapping sides mid gesture. A pinch therefore ended as a swipe, in
+   *      whichever direction the list happened to be ordered at the end.
+   *   2. setState per touchmove meant a re-render per touchmove, and the
+   *      fixed image box was recomputed from window.innerWidth on each of
+   *      them. On iOS that number is the visual viewport and shrinks as you
+   *      pinch. See layoutViewport() at the top of this file.
+   *
+   * WHAT IT DOES NOW
+   * One gesture state machine in a ref, so nothing here re-renders anything.
+   * The zoom transform is written straight onto the <img> via imgRef, which
+   * is also why it cannot re-enter the bug above: no React state changes
+   * during a gesture, so nothing recomputes any layout.
+   *
+   *   two fingers  -> pinch, anchored on the midpoint between them
+   *   one finger while zoomed -> pan, clamped so the photo cannot be dragged
+   *                              away from the frame
+   *   one finger at fit -> the old swipe to change photo, unchanged
+   *   double tap on the photo -> toggle between fit and DOUBLE_TAP_ZOOM
+   *
+   * Pinch scale is computed from the STARTING finger distance rather than
+   * accumulated per event on purpose. A duplicate touchmove, which is exactly
+   * what you get when the two fingers are over different elements and both
+   * bubble here, then recomputes the same absolute number and changes
+   * nothing, instead of applying the same delta twice.
+   */
+  const zoomRef = useRef({ scale: 1, x: 0, y: 0 });
+  const gestureRef = useRef({
+    mode: 'none' as 'none' | 'swipe' | 'pan' | 'pinch',
+    /** True once any part of this gesture had two fingers down. */
+    multi: false,
+    /** True when the gesture began on the photo or the backdrop, rather than
+     *  on the top bar, the arrows or the Save button. */
+    onPhoto: false,
+    /** True when it began on the photo itself. Gates the double tap. */
+    onImage: false,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    startDist: 0,
+    startScale: 1,
+  });
+  const lastTapRef = useRef({ at: 0, x: 0, y: 0 });
+  const backdropRef = useRef<HTMLDivElement | null>(null);
+
+  /** Write the current zoom onto the image. No state, no render. */
+  const applyZoom = useCallback((animate: boolean) => {
+    const img = imgRef.current;
+    if (!img) return;
+    const { scale, x, y } = zoomRef.current;
+    img.style.transition =
+      animate && !prefersReducedMotion() ? 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)' : '';
+    img.style.transform =
+      scale === 1 && x === 0 && y === 0 ? '' : `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    img.style.willChange = scale === 1 ? '' : 'transform';
+  }, []);
+
+  /**
+   * Keep the zoom sane: never below fit, never past MAX_ZOOM, and never
+   * panned so far that the frame shows empty space beside the photo. The
+   * bound is against the CONTAINER, so an axis where the whole photo already
+   * fits does not pan at all, which is what stops a portrait photo sliding
+   * sideways out of view.
+   */
+  const clampZoom = useCallback(() => {
+    const z = zoomRef.current;
+    z.scale = Math.min(MAX_ZOOM, Math.max(1, z.scale));
+    const img = imgRef.current;
+    if (!img) return;
+    const maxX = Math.max(0, (img.offsetWidth * z.scale - openPos.width) / 2);
+    const maxY = Math.max(0, (img.offsetHeight * z.scale - openPos.height) / 2);
+    z.x = Math.min(maxX, Math.max(-maxX, z.x));
+    z.y = Math.min(maxY, Math.max(-maxY, z.y));
+  }, [openPos.width, openPos.height]);
+
+  const resetZoom = useCallback(
+    (animate: boolean) => {
+      zoomRef.current = { scale: 1, x: 0, y: 0 };
+      applyZoom(animate);
+    },
+    [applyZoom],
+  );
+
+  /** Scale about a screen point, leaving whatever is under it where it is. */
+  const zoomAbout = useCallback(
+    (nextScale: number, px: number, py: number) => {
+      const z = zoomRef.current;
+      const cx = openPos.left + openPos.width / 2;
+      const cy = openPos.top + openPos.height / 2;
+      // The image is flex-centred, so at rest its centre is the container's.
+      // A point sitting at (px, py) is at image-local ((px - cx - x) / scale);
+      // solving for the translate that keeps it there after the scale change
+      // gives this. Same identity both directions, so pinching back out
+      // unwinds exactly.
+      const ratio = nextScale / z.scale;
+      z.x = px - cx - (px - cx - z.x) * ratio;
+      z.y = py - cy - (py - cy - z.y) * ratio;
+      z.scale = nextScale;
+    },
+    [openPos.left, openPos.top, openPos.width, openPos.height],
+  );
+
+  const fingerGap = (a: React.Touch, b: React.Touch) =>
+    Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  const fingerMid = (a: React.Touch, b: React.Touch) => ({
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2,
+  });
+
+  const beginPinch = (e: React.TouchEvent) => {
+    const g = gestureRef.current;
+    g.mode = 'pinch';
+    g.multi = true;
+    g.startDist = fingerGap(e.touches[0], e.touches[1]) || 1;
+    g.startScale = zoomRef.current.scale;
+    const m = fingerMid(e.touches[0], e.touches[1]);
+    g.lastX = m.x;
+    g.lastY = m.y;
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.innerWidth >= 768) return;
-    const touch = e.touches[0];
-    setTouchStart({ x: touch.clientX, y: touch.clientY });
+    if (isClosing) return;
+    const img = imgRef.current;
+    // Any settle animation still running would fight the finger.
+    if (img) img.style.transition = '';
+    const g = gestureRef.current;
+
+    if (e.touches.length >= 2) {
+      beginPinch(e);
+      return;
+    }
+    // A finger going down while a pinch is still unwinding is the tail of
+    // that pinch, not the start of a swipe.
+    if (g.multi) return;
+
+    const t = e.touches[0];
+    if (!t) return;
+    const target = e.target as Node;
+    g.onImage = !!img && (img === target || img.contains(target));
+    g.onPhoto = g.onImage || backdropRef.current === target;
+    g.mode = zoomRef.current.scale > ZOOM_SETTLE ? 'pan' : 'swipe';
+    g.multi = false;
+    g.startX = t.clientX;
+    g.startY = t.clientY;
+    g.lastX = t.clientX;
+    g.lastY = t.clientY;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (window.innerWidth >= 768) return;
-    const touch = e.touches[0];
-    setTouchEnd({ x: touch.clientX, y: touch.clientY });
+    const g = gestureRef.current;
+
+    if (e.touches.length >= 2) {
+      // A second finger can arrive mid swipe without a fresh touchstart
+      // reaching us, so promote here rather than assuming touchstart saw it.
+      if (g.mode !== 'pinch') {
+        beginPinch(e);
+        return;
+      }
+      const gap = fingerGap(e.touches[0], e.touches[1]);
+      const m = fingerMid(e.touches[0], e.touches[1]);
+      const next = Math.min(MAX_ZOOM, Math.max(1, (g.startScale * gap) / g.startDist));
+      zoomAbout(next, m.x, m.y);
+      // Then follow the fingers as the pair travels across the screen, so a
+      // pinch that drifts takes the photo with it instead of fighting it.
+      zoomRef.current.x += m.x - g.lastX;
+      zoomRef.current.y += m.y - g.lastY;
+      g.lastX = m.x;
+      g.lastY = m.y;
+      clampZoom();
+      applyZoom(false);
+      return;
+    }
+
+    const t = e.touches[0];
+    if (!t) return;
+
+    if (g.mode === 'pan' && g.onPhoto) {
+      zoomRef.current.x += t.clientX - g.lastX;
+      zoomRef.current.y += t.clientY - g.lastY;
+      g.lastX = t.clientX;
+      g.lastY = t.clientY;
+      clampZoom();
+      applyZoom(false);
+      return;
+    }
+
+    if (g.mode === 'swipe') {
+      g.lastX = t.clientX;
+      g.lastY = t.clientY;
+    }
   };
 
-  const handleTouchEnd = () => {
-    if (window.innerWidth >= 768) return;
-    if (!touchStart.x || !touchEnd.x) return;
-    const distance = touchStart.x - touchEnd.x;
-    if (distance > 50 && onNext) onNext();
-    else if (distance < -50 && onPrevious) onPrevious();
-    setTouchStart({ x: 0, y: 0 });
-    setTouchEnd({ x: 0, y: 0 });
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const g = gestureRef.current;
+
+    // Fingers still down: a pinch that dropped to one finger becomes a pan,
+    // and that one finger must not be read as a swipe on the way up.
+    if (e.touches.length >= 1) {
+      if (g.mode === 'pinch') {
+        g.mode = zoomRef.current.scale > ZOOM_SETTLE ? 'pan' : 'none';
+        g.lastX = e.touches[0].clientX;
+        g.lastY = e.touches[0].clientY;
+      }
+      return;
+    }
+
+    const { mode, multi, onPhoto, onImage, startX, startY, lastX, lastY } = g;
+    g.mode = 'none';
+    g.multi = false;
+
+    if (mode === 'pinch' || multi) {
+      if (zoomRef.current.scale <= ZOOM_SETTLE) resetZoom(true);
+      else {
+        clampZoom();
+        applyZoom(true);
+      }
+      return;
+    }
+
+    const travelled = startX - lastX;
+
+    // A tap, not a drag. Tested BEFORE the pan branch on purpose: a finger
+    // going down while the photo is already zoomed opens in pan mode, so
+    // asking "was this a swipe that barely moved" would never see the taps
+    // of someone trying to double tap their way back out of a zoom, which is
+    // the single most likely moment for them to want it.
+    if (Math.hypot(travelled, startY - lastY) < 10) {
+      if (!onPhoto) return;
+      const now = Date.now();
+      const tap = lastTapRef.current;
+      const isSecond =
+        onImage && now - tap.at < DOUBLE_TAP_MS && Math.hypot(lastX - tap.x, lastY - tap.y) < 40;
+      if (isSecond) {
+        lastTapRef.current = { at: 0, x: 0, y: 0 };
+        if (zoomRef.current.scale > ZOOM_SETTLE) resetZoom(true);
+        else {
+          zoomAbout(DOUBLE_TAP_ZOOM, lastX, lastY);
+          clampZoom();
+          applyZoom(true);
+        }
+        return;
+      }
+      lastTapRef.current = { at: now, x: lastX, y: lastY };
+      return;
+    }
+
+    if (mode === 'pan') {
+      clampZoom();
+      applyZoom(true);
+      return;
+    }
+
+    if (mode !== 'swipe' || !onPhoto) return;
+
+    // Swipe to change photo. Phone widths only, as before, and never while
+    // zoomed in: there the same drag is a pan, and the gesture never got
+    // this far.
+    if (layoutViewport().width >= 768) return;
+    if (zoomRef.current.scale > ZOOM_SETTLE) return;
+    if (travelled > SWIPE_PX && onNext) onNext();
+    else if (travelled < -SWIPE_PX && onPrevious) onPrevious();
   };
+
+  // A new photo arrives in the SAME <img> element, so without this the
+  // previous photo's zoom transform would still be sitting on it.
+  useEffect(() => {
+    resetZoom(false);
+  }, [displayUrl, resetZoom]);
 
   if (!isOpen) return null;
 
   return (
-    <Box position="fixed" inset="0" zIndex={2100}>
+    <Box
+      position="fixed"
+      inset="0"
+      zIndex={2100}
+      // The gestures live on the OVERLAY, not on the image container. They
+      // used to sit on the container, which carries pointerEvents:none and so
+      // only ever saw touches that began on the photo itself. A pinch with one
+      // finger on the photo and the other on the black around it was therefore
+      // half visible to us and half not. Up here both fingers are in the same
+      // subtree whatever they land on. Duplicate touchmoves, which is what you
+      // get when the two fingers are over different children and each bubbles
+      // separately, are harmless: see the gesture block above.
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      // `none`, because from here down the pinch is ours to draw. React
+      // attaches touchmove passively at the root, so e.preventDefault() in
+      // the handlers above is a no-op and this declaration is the only thing
+      // that actually stops the browser doing its own thing underneath us.
+      sx={{ touchAction: 'none' }}
+    >
       {/* Dark backdrop. Fade-out matches the image close animation so
           the two motions land together — otherwise the backdrop finished
           fading first and the user could see the still-shrinking image
           floating over the underlying page, which read as ghostly. */}
       <m.div
+        ref={backdropRef}
         initial={{ opacity: 0 }}
         animate={{ opacity: backdropOpacity }}
         transition={{ duration: isClosing ? 0.55 : 0.3, ease: [0.16, 1, 0.3, 1] }}
@@ -1149,9 +1527,6 @@ const ImageModal = ({
         animate={animTarget}
         transition={animTransition}
         onAnimationComplete={handleAnimComplete}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
         style={{
           position: 'fixed',
           top: openPos.top,
@@ -1182,6 +1557,12 @@ const ImageModal = ({
             objectFit: 'contain',
             userSelect: 'none',
             pointerEvents: 'auto',
+            // The zoom writes `transform` on this element directly, from the
+            // gesture handlers, and is deliberately NOT listed here: a
+            // property React has never set through the style prop is a
+            // property React will not clear on re-render, so a render landing
+            // mid pinch cannot snap the photo back to fit.
+            transformOrigin: 'center center',
           }}
         />
         {/* Spinner overlay for the case where arrow-key nav landed on a

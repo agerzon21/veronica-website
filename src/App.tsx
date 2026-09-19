@@ -483,7 +483,32 @@ function AppShell() {
           so every route was an undifferentiated div soup to screen readers and
           to AI agents. Wrapping <Routes> gives exactly one <main> per page,
           outside <Suspense> so it exists even while a lazy chunk is loading. */}
-      <Box as="main" id="main">
+      {/* PINCH ZOOM IS OFF INSIDE THE PORTAL, AND ONLY INSIDE THE PORTAL.
+          A client pinching a gallery on a phone was not trying to magnify a
+          grid of square thumbnails; there is nothing in that grid worth a
+          closer look, so every pinch there was an accident, and an accidental
+          zoom leaves a sticky header and a fixed action bar sitting in places
+          they were never laid out for. The one thing a client DOES want to
+          magnify is an open photograph, and the lightbox now does that
+          itself (ImageModal, touch gestures) rather than leaning on the
+          browser.
+
+          `pan-x pan-y` and not `none`: the portal is a long scroll with
+          horizontal pill strips in it, and both still have to work. It
+          refuses the pinch and nothing else.
+
+          NOT done with user-scalable=no or maximum-scale in the viewport
+          meta, which was the obvious move and is wrong three times over. It
+          is page wide, so it would take zoom off the marketing site and the
+          admin panel too; it takes magnification away from people who need it
+          to read anything at all; and iOS Safari has largely ignored it since
+          iOS 10, so it would be an accessibility harm that does not even
+          work. Scoped here, the rest of the site keeps browser zoom intact.
+
+          The lightbox sets its own `touch-action: none` on top of this. Touch
+          behaviours intersect down the ancestor chain, so `none` wins there
+          and our own handlers get the gesture. */}
+      <Box as="main" id="main" sx={isPortal ? { touchAction: 'pan-x pan-y' } : undefined}>
       <Suspense
         fallback={
           <Box minH="100vh" display="flex" alignItems="center" justifyContent="center">
