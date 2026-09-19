@@ -395,8 +395,8 @@ const ClientPortalView = ({
   // a different question, see below.
   const galleryRendered = Boolean(data.drive_url) && (photosDelivered || Boolean(data.warning));
 
-  // Does the gallery draw its own sticky nav row? If it does, this portal's
-  // row has to stand down for it, because they pin to the same band.
+  // Are there gallery sections worth navigating at all? Whoever ends up
+  // drawing the control.
   //
   // The predicate is the gallery's own, imported rather than restated. The
   // handoff used to be guarded by photosDelivered, which is ALMOST the same
@@ -406,7 +406,7 @@ const ClientPortalView = ({
   // Both rows then pinned to the same 48px and painted over each other.
   // Favorites are on in the full portal by construction, since it always
   // passes onToggleFavorite below.
-  const galleryOwnsNavRow =
+  const galleryHasNav =
     galleryRendered &&
     galleryDrawsNavRow({
       rootFiles: data.rootFiles,
@@ -414,6 +414,23 @@ const ClientPortalView = ({
       favoritesEnabled: true,
       sectionNavInHeader: false,
     });
+
+  // Does the gallery draw its own sticky nav row? If it does, this portal's
+  // row has to stand down for it, because they pin to the same band.
+  //
+  // Once the booking is COMPLETE it does not: the header carries both navs
+  // itself at every width, as two bars that trade places, so a strip under it
+  // would be the gallery's sections listed twice. That is the same fact the
+  // `sectionNavInHeader` passed to ClientGallery below states, and it is
+  // stated once here so the row that stands down and the row that never
+  // mounts cannot disagree.
+  const galleryOwnsNavRow = galleryHasNav && !portalComplete;
+
+  // How many photos there are, for the pinned See photos row in the account
+  // menu. The same two lists photosDelivered is derived from, counted rather
+  // than tested.
+  const photoCount =
+    data.rootFiles.length + data.sections.reduce((n, s) => n + s.files.length, 0);
 
   // The portal's sections, in DOM order. Built once here rather than inside
   // the nav, because the header and the second row render the same list and
@@ -429,8 +446,12 @@ const ClientPortalView = ({
     navItems.push({ id: 'balance-section', label: 'Balance' });
   }
   navItems.push({ id: 'password-section', label: 'Password' });
-  navItems.push({ id: 'photos-section', label: 'Photos' });
-  navItems.push({ id: 'gallery-share-section', label: 'Share' });
+  // `role` rather than an id the header would have to recognise: the header
+  // pins Photos to the top of the account menu once there is a gallery behind
+  // it, and turns Share into a button in the desktop corner. Both of those are
+  // facts about what the section IS, and this is the one place that knows.
+  navItems.push({ id: 'photos-section', label: 'Photos', role: 'photos' });
+  navItems.push({ id: 'gallery-share-section', label: 'Share', role: 'share' });
 
   const [activeNavId, setActiveNavId] = useActiveSection(navItems, chrome);
 
@@ -522,19 +543,36 @@ const ClientPortalView = ({
   // is above the sticky nav bottom, its bottom is still below it).
   const photosSectionRef = useRef<HTMLDivElement | null>(null);
   const [isPhotosInView, setIsPhotosInView] = useState(false);
-  // Only meaningful when the gallery is drawing a strip of its own:
-  // otherwise there is nothing to swap in, and hiding this row would leave
-  // the client with no navigation at all. The guard is the gallery's own
-  // predicate rather than a second reading of the same data, so the row that
-  // stands down and the row that takes over are decided by one fact.
+  /**
+   * The HEADER's handoff: is the reader inside the photos?
+   *
+   * A different question from isPhotosInView above and measured against a
+   * different line, which is why both live here rather than one standing in
+   * for the other. That one asks whether the gallery's sticky STRIP is in the
+   * band two rows compete for; this one asks whether the READER is in the
+   * Photos section, which is what decides whether the header's account bar
+   * condenses and the photo bar grows into its place.
+   *
+   * The line is the chrome's own activation line, the very line the nav scan
+   * uses to decide which section is current. That is not a coincidence, it is
+   * the requirement: the bar that appears names the section the scan picked,
+   * so if the two were measured against different lines the header could
+   * hand over to a photo bar that still said "Password".
+   */
+  const [headerInPhotos, setHeaderInPhotos] = useState(false);
+  // One listener for both, because they are two readings of one rectangle.
+  // isPhotosInView is only meaningful when the gallery is drawing a strip of
+  // its own: otherwise there is nothing to swap in, and hiding the portal's
+  // row would leave the client with no desktop navigation at all. The guard is
+  // the gallery's own predicate rather than a second reading of the same data,
+  // so the row that stands down and the row that takes over are decided by one
+  // fact.
   useEffect(() => {
-    if (!galleryOwnsNavRow) {
-      // Nothing to swap to → make sure the portal nav stays visible.
+    if (!galleryRendered) {
       setIsPhotosInView(false);
+      setHeaderInPhotos(false);
       return;
     }
-    const el = photosSectionRef.current;
-    if (!el) return;
     // The band is PORTAL_HEADER_H to STICKY_BOTTOM: the 48px under the header
     // that both rows pin to. This asks whether the gallery's strip is in that
     // band AT ALL, which is not the same as whether the reader is inside the
@@ -551,8 +589,21 @@ const ClientPortalView = ({
     // nav cannot flicker on and off at this boundary instead of failing in a
     // way anyone would notice.
     const check = () => {
+      // Read per frame rather than closed over: the Photos section is mounted
+      // by a later commit than this effect on a portal whose gallery arrives
+      // with the data, and an effect that gave up on a null ref would never
+      // subscribe at all.
+      const el = photosSectionRef.current;
+      if (!el) return;
       const rect = el.getBoundingClientRect();
-      setIsPhotosInView(rect.top < STICKY_BOTTOM && rect.bottom > PORTAL_HEADER_H);
+      setIsPhotosInView(
+        galleryOwnsNavRow && rect.top < STICKY_BOTTOM && rect.bottom > PORTAL_HEADER_H,
+      );
+      // Asked for per frame for the same reason the nav scans ask: the line
+      // sits under whatever chrome the CURRENT width has, and this listener is
+      // already subscribed to resize.
+      const { activationLine } = chrome.metrics();
+      setHeaderInPhotos(rect.top <= activationLine && rect.bottom > activationLine);
     };
     check();
     window.addEventListener('scroll', check, { passive: true });
@@ -561,7 +612,7 @@ const ClientPortalView = ({
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [galleryOwnsNavRow]);
+  }, [galleryRendered, galleryOwnsNavRow, chrome]);
 
   // ─── Gallery Pass management state ───
   const toast = useToast();
@@ -822,21 +873,21 @@ const ClientPortalView = ({
       />
 
       {/* The portal's own header, in place of the public site navbar.
-          Logo, progress, balance. Once the booking is signed, paid and
-          delivered it carries the section nav instead of the progress,
-          as a segmented control, and the second row below stands down.
 
-          On a phone it carries everything: the same list below goes in as
-          `accountNav` and opens behind the burger, and the gallery's sections,
-          once there are any, take the middle slot as a section bar. Both are
-          the same data the desktop rows render, handed over rather than
-          rebuilt, so a phone and a desktop cannot disagree about where the
-          client is. */}
+          It carries BOTH navs, at every width: the booking's own sections as
+          the account bar, and the gallery's as the photo bar beside it. Which
+          of them owns the room is decided by where the reader is, and the
+          header is handed that as `inPhotos` rather than working it out
+          itself, so the bar that appears and the name written in it come off
+          one measurement. Until the booking is finished a desktop keeps its
+          progress track and its second row below instead; a phone hands the
+          slot over the moment there are photos.
+
+          Both lists are the same data the rows below render, handed over
+          rather than rebuilt, so a phone and a desktop cannot disagree about
+          where the client is. */}
       <PortalHeader
         progress={progress}
-        navItems={navItems}
-        activeNavId={activeNavId}
-        onNavSelect={handleNavSelect}
         sectionNav={
           gallerySectionNav
             ? {
@@ -848,15 +899,17 @@ const ClientPortalView = ({
         }
         // The items above arrive an effect late, because the gallery builds
         // them and the gallery is a sibling of the header. This is the same
-        // fact one render earlier: galleryOwnsNavRow is the gallery's own
+        // fact one render earlier: galleryHasNav is the gallery's own
         // predicate, called on the very data the gallery is about to be handed,
-        // so it answers "there will be a section bar" before there is one.
+        // so it answers "there will be a photo bar" before there is one.
         // Without it the header spends its first commit painting the 1-2-3
         // progress into a slot the sections are about to take, and the client
         // watches it vanish. One predicate for both, so the slot cannot be
         // reserved for a bar that never comes.
-        sectionNavExpected={galleryOwnsNavRow}
+        sectionNavExpected={galleryHasNav}
         accountNav={{ items: navItems, activeId: activeNavId, onSelect: handleNavSelect }}
+        inPhotos={headerInPhotos}
+        photoCount={photoCount}
       />
 
       {/* Second sticky row: the portal's section nav, for as long as the
@@ -1397,8 +1450,15 @@ const ClientPortalView = ({
                 // strip of its own. Desktop widths only; portalChrome knows a
                 // phone has no second row in any state.
                 portalNavRow={!portalComplete}
+                // Once the booking is complete the header carries the gallery's
+                // sections itself, as the photo bar, at every width. A strip
+                // under it would be the same list twice, and the one thing this
+                // page must never do is pin two nav rows to the same band. The
+                // gallery still BUILDS the nav and hands it up, which is what
+                // the bar renders: the flag only says who draws the control.
+                sectionNavInHeader={portalComplete}
                 // And the gallery hands its section nav back up, for the
-                // phone header's middle slot. See gallerySectionNav above.
+                // header's photo bar. See gallerySectionNav above.
                 onSectionNav={setGallerySectionNav}
               />
             );

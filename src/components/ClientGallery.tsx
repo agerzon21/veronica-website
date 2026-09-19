@@ -466,14 +466,26 @@ const ClientGallery = ({
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
 
-  // Whether this gallery draws its own sticky strip. The predicate is
-  // exported and the portal calls it too, see galleryDrawsNavRow.
-  const showSectionNav = galleryDrawsNavRow({
+  // Two different questions, and conflating them is what used to make
+  // "the header carries the nav" also mean "there is no nav".
+  //
+  // hasSectionNav: are there sections worth navigating AT ALL? That decides
+  // whether this component builds a nav and hands it up, and it does not care
+  // who draws the control.
+  // showSectionNav: does THIS component draw the sticky strip? That is the
+  // same question minus the surfaces whose header carries the sections itself:
+  // /portal/pass always, and a completed portal, where the header's photo bar
+  // is the control and a strip under it would list the same sections twice.
+  //
+  // The predicate is exported and the portal calls it too, see
+  // galleryDrawsNavRow.
+  const hasSectionNav = galleryDrawsNavRow({
     rootFiles,
     sections,
     favoritesEnabled,
-    sectionNavInHeader,
+    sectionNavInHeader: false,
   });
+  const showSectionNav = hasSectionNav && !sectionNavInHeader;
 
   // How tall the sticky chrome above this gallery's headings is. A nav row is
   // pinned under the header either because this gallery drew one or because
@@ -497,12 +509,20 @@ const ClientGallery = ({
     sectionsWithFavorites,
     filterActive,
     chrome,
-    // Nothing reads the active id when no strip is on screen, so skip
-    // this copy's scroll listeners entirely. `showSectionNav` is not a
-    // width question, which is the point: the strip is display:none on a
-    // phone rather than unmounted, so this stays enabled and the phone
-    // header's section bar has a live active id to show.
-    enabled: showSectionNav,
+    // Enabled when SOMEBODY is going to render this nav, which is either the
+    // strip below or a parent that asked for it. Not a width question, which
+    // is the point: the strip is display:none on a phone rather than
+    // unmounted, so this stays enabled and the header's photo bar has a live
+    // active id to show.
+    //
+    // The `onSectionNav` half is what keeps there being exactly ONE enabled
+    // useGalleryNav on the page. /portal/pass builds its own up in Portal.tsx
+    // and passes no reporter, so this copy stays dark; the full portal has no
+    // copy of its own and asks for this one. Two enabled copies would double
+    // every scroll listener in the gallery and give the strip and the bar
+    // separate opinions about which section is current, which drifts apart
+    // over a long scroll.
+    enabled: showSectionNav || (hasSectionNav && !!onSectionNav),
   });
 
   // Hand the nav up, see onSectionNav. A memo because the parent puts what it
@@ -510,14 +530,14 @@ const ClientGallery = ({
   // value every render, which is a render loop.
   const reportedNav = useMemo<GalleryNav | null>(
     () =>
-      showSectionNav
+      hasSectionNav
         ? {
             items: sectionNav.items,
             activeId: sectionNav.activeId,
             setActiveId: sectionNav.setActiveId,
           }
         : null,
-    [showSectionNav, sectionNav.items, sectionNav.activeId, sectionNav.setActiveId],
+    [hasSectionNav, sectionNav.items, sectionNav.activeId, sectionNav.setActiveId],
   );
   useEffect(() => {
     onSectionNav?.(reportedNav);

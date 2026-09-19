@@ -465,16 +465,14 @@ const Portal = () => {
             ClientPortalView (where the portal wrapper already handles the
             clearance) without doubling up. */}
         <PortalHeader
-          navItems={galleryNav.items}
-          activeNavId={galleryNav.activeId}
-          onNavSelect={onGallerySelect}
-          // The same list again, for the phone, where the header draws it as
-          // the photo section bar rather than as a segmented control. One
-          // useGalleryNav behind both, so the two renderings cannot disagree.
+          // The gallery's sections, which the header draws as the photo bar at
+          // every width. There is nothing to hand off to here, so the bar
+          // simply owns the slot: `inPhotos` is not passed because on this
+          // route the whole page IS the photos.
           //
           // No accountNav goes with it, and that is the whole reason a guest
-          // on a shared link gets no burger: there is no account here to open
-          // a menu onto.
+          // on a shared link gets no account bar and no burger: there is no
+          // account here to open a menu onto.
           sectionNav={{
             items: galleryNav.items,
             activeId: galleryNav.activeId,
