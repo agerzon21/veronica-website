@@ -51,6 +51,25 @@ type StaticLeaf = { en: string; ru: string };
 type FnLeaf<A extends any[]> = { en: (...args: A) => string; ru: (...args: A) => string };
 type Leaf = StaticLeaf | FnLeaf<any>;
 
+/**
+ * Russian plural of "поле" (a form field): 1 поле, 2-4 поля, 5+ полей, and the
+ * 11-14 band always taking полей regardless of its last digit.
+ *
+ * Shared rather than inlined because two strings on the client screen count
+ * the same contract fields (the unsaved-work warning and the rewrite
+ * confirmation), and they read as one screen only if they decline the word the
+ * same way. daysRemaining below inlines its own because it is the only user of
+ * that word.
+ */
+const ruFieldWord = (n: number): string => {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'полей';
+  if (mod10 === 1) return 'поле';
+  if (mod10 >= 2 && mod10 <= 4) return 'поля';
+  return 'полей';
+};
+
 const dict = {
   common: {
     save: { en: 'Save', ru: 'Сохранить' },
@@ -1953,6 +1972,62 @@ const dict = {
     passwordSetOk: {
       en: 'Password set. Share it with the client and ask them to change it on first login.',
       ru: 'Пароль установлен. Передай его клиенту и попроси сменить при первом входе.',
+    },
+
+    // ─── Unsaved-work guard ───────────────────────────
+    // Raised by Back when something on the screen has not been saved. The
+    // wording names the fields rather than saying "unsaved changes" on its
+    // own: the page is long, several sections collapse, and a warning she
+    // cannot act on is a warning she learns to click through.
+    unsavedHeading: { en: 'Unsaved changes', ru: 'Несохранённые изменения' },
+    // `fields` is a comma-joined list of the names below plus whatever field
+    // labels are dirty, already translated by the caller.
+    unsavedBody: {
+      en: (fields: string) =>
+        `Not saved yet: ${fields}. Going back now throws it away.`,
+      ru: (fields: string) =>
+        `Ещё не сохранено: ${fields}. Если сейчас выйти, это пропадёт.`,
+    },
+    unsavedStay: { en: 'Stay on this page', ru: 'Остаться на странице' },
+    unsavedLeave: { en: 'Discard and go back', ru: 'Выйти без сохранения' },
+    // Names for the unsaved things that are not a single labelled box, so the
+    // list reads as a sentence rather than as a set of internal field names.
+    unsavedPaymentDraft: {
+      en: 'the payment you were logging',
+      ru: 'оплата, которую ты записывала',
+    },
+    unsavedChargeDraft: {
+      en: 'the charge you were adding',
+      ru: 'доплата, которую ты добавляла',
+    },
+    unsavedClientPassword: {
+      en: 'the new client password',
+      ru: 'новый пароль клиента',
+    },
+    unsavedContractFields: {
+      en: (n: number) => `${n} contract field${n === 1 ? '' : 's'}`,
+      ru: (n: number) => `${n} ${ruFieldWord(n)} контракта`,
+    },
+
+    // ─── Rewriting a pending contract ─────────────────
+    // Second step on Save in the contract variable editor. The editor only
+    // exists while the contract is pending, so nobody has signed what is about
+    // to be replaced, but the client may well have read it, the save replaces
+    // every variable at once and the body is rebuilt from the template, so it
+    // is the one save on this screen with no way back.
+    contractSaveConfirmHeading: {
+      en: 'This rewrites the contract',
+      ru: 'Контракт будет переписан',
+    },
+    contractSaveConfirmBody: {
+      en: (n: number) =>
+        `Saving writes all ${n} fields back and rebuilds the contract from the template. The client has not signed yet, and will read the new wording the next time they open their portal. This cannot be undone.`,
+      ru: (n: number) =>
+        `Сохранение перезапишет все ${n} ${ruFieldWord(n)} и соберёт контракт заново по шаблону. Клиент ещё не подписал и прочитает новый текст, когда в следующий раз откроет портал. Отменить это нельзя.`,
+    },
+    contractSaveConfirmCta: {
+      en: 'Rewrite the contract',
+      ru: 'Переписать контракт',
     },
 
     // ─── Danger zone ──────────────────────────────────

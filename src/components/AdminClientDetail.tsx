@@ -1,6 +1,6 @@
 import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
 import { fmtAdminDateTime } from '../utils/adminDate';
-import { useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaTrash from '../icons/fa/FaTrash';
@@ -164,6 +164,52 @@ const ALL_CLAUSE_KEYS = new Set<string>([
   ),
 ]);
 
+/**
+ * Who on this screen is holding work that has not been written down yet.
+ *
+ * Every editable thing here keeps its own draft in its own component and only
+ * posts on an explicit Save: the Drive URL, the gallery password, the session
+ * type, the five Details boxes, the client password override, the payment
+ * composer, the charge composer and the two dozen contract variables. Back was
+ * a plain onBack(), so every one of those drafts went in the bin without a
+ * word. On the contract editor that is twenty minutes of typing, and the only
+ * signal anything had happened was that the boxes were empty again when she
+ * came back.
+ *
+ * A context rather than props because the alternative is threading a callback
+ * through ten call sites and two levels of nesting, which is the kind of change
+ * a redesign of this screen would have to unpick. A sub-form calls
+ * useDirtyFlag next to the state it is describing, and moving that sub-form
+ * somewhere else on the page moves its dirty reporting with it.
+ *
+ * The flag is DIRTY, not FOCUSED: every caller passes its own existing
+ * "differs from what is stored" test, the same one that already decides
+ * whether the Save button is on screen. A warning that fired merely because a
+ * box had been clicked into would be dismissed unread within a day, and then
+ * the real one would be too.
+ */
+type DirtyMark = (key: string, label: string | null) => void;
+const DirtyCtx = createContext<DirtyMark | null>(null);
+
+/**
+ * Report one sub-form's unsaved state, under a name Vero would recognise.
+ *
+ * The key is a useId, so an instance is identified by being itself rather than
+ * by a label that is translated and, in the case of the gallery password and
+ * the account password, very nearly duplicated. The cleanup clears the entry
+ * on unmount, which is what keeps a field that stops rendering (the contract
+ * editor disappearing the moment a contract is signed) from leaving a
+ * permanent warning behind.
+ */
+function useDirtyFlag(dirty: boolean, label: string) {
+  const mark = useContext(DirtyCtx);
+  const key = useId();
+  useEffect(() => {
+    mark?.(key, dirty ? label : null);
+    return () => mark?.(key, null);
+  }, [mark, key, dirty, label]);
+}
+
 const daysUntil = (iso: string | null): number | null => {
   if (!iso) return null;
   const t = new Date(iso).getTime();
@@ -184,6 +230,84 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   // modal component in here), so the warning stays on the page next to the
   // amounts it is talking about.
   const [unpaidConfirm, setUnpaidConfirm] = useState(false);
+
+  // Names of the things currently holding unsaved work, keyed by the reporting
+  // instance. Object.values comes back in insertion order, and effects run
+  // child-first in tree order, so the list reads roughly top to bottom down the
+  // page rather than in whatever order React felt like.
+  const [dirtyLabels, setDirtyLabels] = useState<Record<string, string>>({});
+  const markDirty = useCallback<DirtyMark>((key, label) => {
+    setDirtyLabels((prev) => {
+      if (label === null) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      // Bail on an unchanged label so a sub-form re-rendering on every
+      // keystroke does not re-render the whole screen with it.
+      if (prev[key] === label) return prev;
+      return { ...prev, [key]: label };
+    });
+  }, []);
+  const unsavedNames = Object.values(dirtyLabels);
+  const hasUnsaved = unsavedNames.length > 0;
+  // Two-step leave confirmation, same inline shape as the unpaid-delivery
+  // panel above and the delete confirmations below.
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+
+  // Saving the last dirty field while the leave panel is open takes the panel
+  // down with it. Without this the flag stayed true, and the NEXT character
+  // typed anywhere on the screen would have popped the warning open again on
+  // its own, with nobody having pressed Back. That is the false alarm this
+  // whole guard is supposed to avoid.
+  useEffect(() => {
+    if (!hasUnsaved) setLeaveConfirm(false);
+  }, [hasUnsaved]);
+
+  /**
+   * The same guard for the browser's own back gesture, a reload, and closing
+   * the tab.
+   *
+   * The admin panel holds its current screen in React state (Admin.tsx's
+   * `view`) and never touches history, so a swipe back or a Back press does
+   * not return to the Clients list: it leaves /admin altogether and throws the
+   * whole SPA away, drafts included. Nothing in the page can intercept that
+   * after the fact, and the only in-app way to try would be to push a
+   * synthetic history entry when this screen mounts, which changes how the
+   * entire admin shell navigates and would not survive the redesign this
+   * screen is queued for.
+   *
+   * beforeunload is the one mechanism that covers all three, it is the
+   * browser's own dialog rather than a modal component this file does not
+   * have, and it is registered ONLY while something is actually unsaved, so a
+   * clean visit never sees it.
+   *
+   * Known gap, same one recorded in AdminAssistantChat: iOS Safari does not
+   * reliably fire beforeunload on a pull to refresh. The answer there is a
+   * per-keystroke draft store, which on this screen would mean persisting
+   * every field on the page and is a redesign-sized change, so it is not
+   * attempted here.
+   */
+  useEffect(() => {
+    if (!hasUnsaved) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Chrome ignores preventDefault alone on some versions and wants a
+      // returnValue set; the string itself is never shown any more.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasUnsaved]);
+
+  const handleBack = () => {
+    if (hasUnsaved) {
+      setLeaveConfirm(true);
+      return;
+    }
+    onBack();
+  };
 
   const reload = async () => {
     setLoading(true);
@@ -314,8 +438,34 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
 
   return (
+    <DirtyCtx.Provider value={markDirty}>
     <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
-      <AdminBackButton onClick={onBack} label={t.common.back} />
+      <AdminBackButton onClick={handleBack} label={t.common.back} />
+
+      {/* Sits directly under Back, where the press that raised it happened,
+          and names what is at stake: "unsaved changes" on its own would send
+          her hunting down a page of collapsed sections for whichever box she
+          had been typing in. */}
+      {leaveConfirm && hasUnsaved && (
+        <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm" p={4} mt={2} mb={4}>
+          <Text fontSize="sm" fontWeight="500" color="orange.800" mb={1}>
+            {t.clientDetail.unsavedHeading}
+          </Text>
+          <Text fontSize="sm" color="orange.900" fontWeight="300" mb={4}>
+            {t.clientDetail.unsavedBody(unsavedNames.join(', '))}
+          </Text>
+          {/* column-reverse on mobile keeps the destructive action off the top
+              of the tap zone, same as the Danger Zone and the unpaid panel. */}
+          <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2}>
+            <CTAButton onClick={() => setLeaveConfirm(false)} variant="ghost" size="sm">
+              {t.clientDetail.unsavedStay}
+            </CTAButton>
+            <CTAButton onClick={onBack} variant="danger" size="sm">
+              {t.clientDetail.unsavedLeave}
+            </CTAButton>
+          </Stack>
+        </Box>
+      )}
 
       <VStack align="flex-start" spacing={2} mb={6}>
         <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
@@ -764,6 +914,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
         <DangerZone portalId={portalId} adminPassword={adminPassword} onDeleted={onBack} />
       )}
     </Box>
+    </DirtyCtx.Provider>
   );
 };
 
@@ -883,7 +1034,17 @@ function InlineField({
     setTouched(false);
   }, [value]);
 
-  const dirty = touched && draft !== value;
+  // Compare like against like. `draft` is re-normalized on every keystroke, so
+  // comparing it to the RAW stored value makes a legacy label permanently
+  // dirty: a stored `Newborn Shoot` against a draft the box re-slugs to
+  // `newborn-shoot` can never be typed back into agreement, which would leave
+  // the Back warning and the beforeunload veto armed forever with nothing
+  // actually unsaved. Normalize the seed for the COMPARISON only, never for
+  // what the box displays on arrival.
+  const dirty = touched && draft !== (normalize ? normalize(value) : value);
+  // The same test the Save button uses, so the leave warning and the visible
+  // Save button can never disagree about whether this box is holding anything.
+  useDirtyFlag(dirty, label);
 
   return (
     <Box>
@@ -1006,6 +1167,33 @@ function SessionTypeField({
     setLabelDraft(seedLabel);
   }, [seedLabel]);
 
+  // Only the type whose spec says so gets a second box. Everything else files
+  // itself under the template key, exactly as the create form does, so there is
+  // no second picker to keep in agreement with the contract.
+  const wantsCustomLabel = Boolean(templateSpecFor(draft)?.allowsCustomLabel);
+  // A blank label falls back to the template key rather than writing an empty
+  // string, the same way the create form does: a row with no label loses its
+  // badge on the Clients list and on the calendar entirely.
+  const nextLabel = wantsCustomLabel ? cleanSessionLabel(labelDraft) || draft : draft;
+  // Compare what WOULD be saved against what IS stored, each normalized the
+  // same way. Comparing the raw strings looks like it protects a legacy label
+  // such as "Newborn Shoot" from reading as dirty on arrival, but it does the
+  // opposite the moment she types: the box slugs live, so one keystroke plus
+  // Backspace leaves "newborn-shoot" against a stored "Newborn Shoot" and
+  // retyping the stored words cannot clear it, because they slug again. That
+  // was merely a stale Save button before; useDirtyFlag turns it into a leave
+  // warning and a beforeunload veto that cannot be dismissed. Arrival is still
+  // clean because both sides normalize to the same string.
+  //
+  // Computed up here, above the two early returns below, only because a hook
+  // reads it: the other two branches render an InlineField, which reports its
+  // own unsaved state, and neither of them can move this select's draft, so
+  // editsContractType keeps this instance from claiming their work as well.
+  const dirty =
+    draft !== current ||
+    (wantsCustomLabel && cleanSessionLabel(labelDraft) !== cleanSessionLabel(seedLabel));
+  useDirtyFlag(editsContractType && dirty, t.clientDetail.sessionTypeLabel);
+
   const label = (
     <Text
       fontSize={{ base: 'xs', md: '2xs' }}
@@ -1074,18 +1262,6 @@ function SessionTypeField({
 
   const knownTypes: readonly string[] = CONTRACT_TYPE_ORDER;
   const options = current && !knownTypes.includes(current) ? [current, ...knownTypes] : knownTypes;
-  // Only the type whose spec says so gets a second box. Everything else files
-  // itself under the template key, exactly as the create form does, so there is
-  // no second picker to keep in agreement with the contract.
-  const wantsCustomLabel = Boolean(templateSpecFor(draft)?.allowsCustomLabel);
-  // A blank label falls back to the template key rather than writing an empty
-  // string, the same way the create form does: a row with no label loses its
-  // badge on the Clients list and on the calendar entirely.
-  const nextLabel = wantsCustomLabel ? cleanSessionLabel(labelDraft) || draft : draft;
-  // Compared RAW, not slugged. A legacy label stored as "Newborn Shoot" would
-  // otherwise differ from its own slug the moment the page opened, and the Save
-  // button would be sitting there on a row nobody had touched.
-  const dirty = draft !== current || (wantsCustomLabel && labelDraft.trim() !== seedLabel);
 
   return (
     <Box>
@@ -1193,6 +1369,14 @@ function AddPaymentForm({
   const [paidAt, setPaidAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
+
+  // Anything typed into any of the four boxes counts. There is nothing stored
+  // to compare against here, so "not empty" IS the unsaved test: a composer
+  // with an amount in it is a payment that has not been logged.
+  useDirtyFlag(
+    amount.trim() !== '' || method.trim() !== '' || note.trim() !== '' || paidAt !== '',
+    t.clientDetail.unsavedPaymentDraft,
+  );
 
   const reset = () => {
     setAmount('');
@@ -1324,9 +1508,31 @@ function PaymentRow({
   const { t } = useAdminLang();
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
 
+  /**
+   * A refused delete used to say nothing at all.
+   *
+   * There was no else branch and no catch: a 500, a stale session or a dropped
+   * connection all ended in the same finally, which put the row back exactly
+   * as it was and closed the confirmation. The row is still there, the total
+   * has not moved and no message appeared, so the only available reading is
+   * that the press did not register, and the next thing anyone does is press
+   * it again. If the delete had in fact gone through and only the response was
+   * lost, the second press hits an entry that is already gone.
+   *
+   * So it reports like the sub-forms above rather than the page-level red box
+   * at the top: that box belongs to reload, patch and markDelivered, it lives
+   * a full screen away from these rows, and a failure there is about the whole
+   * portal rather than about one line of the payment log.
+   *
+   * The confirmation deliberately stays open on a failure, so the message and
+   * the button that produced it are on screen together and a retry is one
+   * press. It closes on success, along with the row itself.
+   */
   const del = async () => {
     setSubmitting(true);
+    setErr('');
     try {
       const res = await fetch('/api/admin/payment-log', {
         method: 'POST',
@@ -1339,43 +1545,70 @@ function PaymentRow({
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success) onDeleted();
+      if (res.ok && data.success) {
+        setConfirming(false);
+        onDeleted();
+      } else {
+        setErr(data.error || `${t.clientDetail.serverErrorStatus(res.status)}.`);
+      }
+    } catch {
+      setErr(t.common.couldNotReach);
     } finally {
       setSubmitting(false);
-      setConfirming(false);
     }
   };
 
   return (
-    <Flex
-      justify="space-between"
-      align="center"
+    <Box
       bg="white"
       border="1px solid"
       borderColor="gray.100"
       borderRadius="sm"
       px={3}
       py={2.5}
-      gap={3}
     >
-      <Box flex="1" minW={0}>
-        <HStack spacing={2}>
-          <Icon as={FaCheck} color="green.500" boxSize={2.5} />
-          <Text fontSize="sm" fontWeight="500" color="gray.800">
-            ${entry.amount.toFixed(0)}
-          </Text>
-          {entry.method && (
-            <Text fontSize="sm" color="gray.500">· {entry.method}</Text>
+      <Flex justify="space-between" align="center" gap={3} flexWrap="wrap">
+        <Box flex="1" minW={0}>
+          <HStack spacing={2}>
+            <Icon as={FaCheck} color="green.500" boxSize={2.5} />
+            <Text fontSize="sm" fontWeight="500" color="gray.800">
+              ${entry.amount.toFixed(0)}
+            </Text>
+            {entry.method && (
+              <Text fontSize="sm" color="gray.500">· {entry.method}</Text>
+            )}
+            <Text fontSize="sm" color="gray.400">· {formatDate(entry.paid_at)}</Text>
+          </HStack>
+          {entry.note && (
+            <Text fontSize="xs" color="gray.500" mt={0.5}>{entry.note}</Text>
           )}
-          <Text fontSize="sm" color="gray.400">· {formatDate(entry.paid_at)}</Text>
-        </HStack>
-        {entry.note && (
-          <Text fontSize="xs" color="gray.500" mt={0.5}>{entry.note}</Text>
-        )}
-      </Box>
+        </Box>
       {confirming ? (
-        <HStack spacing={2}>
-          <Box as="button" onClick={() => setConfirming(false)} fontSize="xs" color="gray.500" cursor="pointer" bg="transparent" border="none">
+        // Full width on a phone so it drops to its own line. The pair is
+        // nowrap and holds about 190px, which on a 320px screen left the text
+        // column beside it 18px wide: the note rendered one or two glyphs per
+        // line. Wrapping gives the amount, the note and the date the whole
+        // first line and costs nothing above md, where the row still reads as
+        // one line. Both controls carry a real 44px target on touch, matching
+        // the trash button they replace, because the destructive one is the
+        // last control on this screen that should be hard to hit accurately.
+        <HStack
+          spacing={2}
+          w={{ base: '100%', md: 'auto' }}
+          justify="flex-end"
+          flexShrink={0}
+        >
+          <Box
+            as="button"
+            onClick={() => { setErr(''); setConfirming(false); }}
+            fontSize="xs"
+            color="gray.500"
+            cursor="pointer"
+            bg="transparent"
+            border="none"
+            px={2}
+            minH={{ base: '44px', md: 'auto' }}
+          >
             {t.common.cancel}
           </Box>
           <Box
@@ -1386,13 +1619,15 @@ function PaymentRow({
             cursor="pointer"
             bg="transparent"
             border="none"
+            px={2}
+            minH={{ base: '44px', md: 'auto' }}
             disabled={submitting}
           >
             {submitting ? t.clientDetail.deleting : t.clientDetail.confirmDelete}
           </Box>
         </HStack>
       ) : (
-        // Delete icon needs a real 44×44 tap target on mobile — a bare 12px
+        // Delete icon needs a real 44x44 tap target on mobile. A bare 12px
         // icon inside a hair-thin Box was impossible to hit reliably.
         <IconButton
           aria-label={t.clientDetail.deletePaymentAria}
@@ -1407,7 +1642,16 @@ function PaymentRow({
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         />
       )}
-    </Flex>
+      </Flex>
+      {/* BELOW the flex row, at full row width, not inside the text column.
+          Sharing that column with the confirm pair squeezes it to ~18px on a
+          320px screen, and the Russian message (the admin's default language)
+          shreds into one Cyrillic character per line. This is the one sentence
+          the user has to be able to read, so it gets the whole row. */}
+      {err && (
+        <Text fontSize="xs" color="red.500" mt={1.5}>{err}</Text>
+      )}
+    </Box>
   );
 }
 
@@ -1437,6 +1681,14 @@ function AddChargeForm({
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
+
+  // The reason is deliberately not part of this: it arrives pre-picked at
+  // 'overtime', so counting it would make a glance at the dropdown look like
+  // typed work and raise the warning on a screen nobody had written on.
+  useDirtyFlag(
+    amount.trim() !== '' || note.trim() !== '',
+    t.clientDetail.unsavedChargeDraft,
+  );
 
   const submit = async () => {
     setErr('');
@@ -1564,6 +1816,7 @@ function ChargeRow({
   const { t } = useAdminLang();
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
 
   // A reason this bundle does not recognise falls through to the generic
   // label rather than rendering the raw storage value at Vero.
@@ -1574,8 +1827,13 @@ function ChargeRow({
         ? t.clientDetail.reasonExpense
         : t.clientDetail.reasonOther;
 
+  // Carried the identical silent-failure bug as PaymentRow above, for the
+  // identical reason: it was written by copying that handler. Same treatment,
+  // and the stakes are marginally higher here, because a charge is money the
+  // client is being asked for and every line is printed in their own portal.
   const del = async () => {
     setSubmitting(true);
+    setErr('');
     try {
       const res = await fetch('/api/admin/payment-log', {
         method: 'POST',
@@ -1588,40 +1846,61 @@ function ChargeRow({
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success) onDeleted();
+      if (res.ok && data.success) {
+        setConfirming(false);
+        onDeleted();
+      } else {
+        setErr(data.error || `${t.clientDetail.serverErrorStatus(res.status)}.`);
+      }
+    } catch {
+      setErr(t.common.couldNotReach);
     } finally {
       setSubmitting(false);
-      setConfirming(false);
     }
   };
 
   return (
-    <Flex
-      justify="space-between"
-      align="center"
+    <Box
       bg="white"
       border="1px solid"
       borderColor="gray.100"
       borderRadius="sm"
       px={3}
       py={2.5}
-      gap={3}
     >
-      <Box flex="1" minW={0}>
-        <HStack spacing={2} flexWrap="wrap">
-          <Text fontSize="sm" fontWeight="500" color="gray.800">
-            +${entry.amount.toFixed(0)}
-          </Text>
-          <Text fontSize="sm" color="gray.500">· {reasonLabel}</Text>
-          <Text fontSize="sm" color="gray.400">· {formatDate(entry.charged_at)}</Text>
-        </HStack>
-        {entry.note && (
-          <Text fontSize="xs" color="gray.500" mt={0.5}>{entry.note}</Text>
-        )}
-      </Box>
+      <Flex justify="space-between" align="center" gap={3} flexWrap="wrap">
+        <Box flex="1" minW={0}>
+          <HStack spacing={2} flexWrap="wrap">
+            <Text fontSize="sm" fontWeight="500" color="gray.800">
+              +${entry.amount.toFixed(0)}
+            </Text>
+            <Text fontSize="sm" color="gray.500">· {reasonLabel}</Text>
+            <Text fontSize="sm" color="gray.400">· {formatDate(entry.charged_at)}</Text>
+          </HStack>
+          {entry.note && (
+            <Text fontSize="xs" color="gray.500" mt={0.5}>{entry.note}</Text>
+          )}
+        </Box>
       {confirming ? (
-        <HStack spacing={2}>
-          <Box as="button" onClick={() => setConfirming(false)} fontSize="xs" color="gray.500" cursor="pointer" bg="transparent" border="none">
+        // Same wrap and the same 44px targets as the payment row above, and
+        // for the same measured reason.
+        <HStack
+          spacing={2}
+          w={{ base: '100%', md: 'auto' }}
+          justify="flex-end"
+          flexShrink={0}
+        >
+          <Box
+            as="button"
+            onClick={() => { setErr(''); setConfirming(false); }}
+            fontSize="xs"
+            color="gray.500"
+            cursor="pointer"
+            bg="transparent"
+            border="none"
+            px={2}
+            minH={{ base: '44px', md: 'auto' }}
+          >
             {t.common.cancel}
           </Box>
           <Box
@@ -1632,6 +1911,8 @@ function ChargeRow({
             cursor="pointer"
             bg="transparent"
             border="none"
+            px={2}
+            minH={{ base: '44px', md: 'auto' }}
             disabled={submitting}
           >
             {submitting ? t.clientDetail.deleting : t.clientDetail.confirmDelete}
@@ -1651,7 +1932,13 @@ function ChargeRow({
           sx={{ WebkitTapHighlightColor: 'transparent' }}
         />
       )}
-    </Flex>
+      </Flex>
+      {/* Same placement as the payment row: below the flex row at full width,
+          so the Russian message stays readable at 320px. */}
+      {err && (
+        <Text fontSize="xs" color="red.500" mt={1.5}>{err}</Text>
+      )}
+    </Box>
   );
 }
 
@@ -1679,6 +1966,11 @@ function AccountSection({
   const [overriding, setOverriding] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideMessage, setOverrideMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  // Closing the panel with Cancel leaves the typed password in state, and it
+  // is posted if she reopens and saves, so the panel being open is part of the
+  // test rather than the whole of it being a fresh box.
+  useDirtyFlag(overrideOpen && overridePassword !== '', t.clientDetail.unsavedClientPassword);
 
   const handleResend = async () => {
     setResending(true);
@@ -1941,11 +2233,32 @@ function EditContractVariables({
   const [vars, setVars] = useState<Record<string, string>>(portal.contract_variables ?? {});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // Second step of the save, see the panel at the bottom of this component.
+  const [confirmSave, setConfirmSave] = useState(false);
 
   // Resync local form state if a parent reload pulled in fresh variables.
   useEffect(() => {
     setVars(portal.contract_variables ?? {});
   }, [portal.contract_variables]);
+
+  /**
+   * Which variables differ from what is stored, compared by VALUE.
+   *
+   * Every reload hands this component a brand new contract_variables object,
+   * so an identity check would call the form dirty on arrival and the leave
+   * warning would fire on a screen she had only looked at. The union of both
+   * key sets covers a field the template added after this portal was created:
+   * it renders blank, is absent from `vars` until she types in it, and must
+   * not count until she does.
+   *
+   * Reported even while the panel is collapsed, because Hide does not throw
+   * the draft away: the typing is still sitting in state waiting for a Save.
+   */
+  const savedVars = portal.contract_variables ?? {};
+  const changedCount = Array.from(
+    new Set([...Object.keys(savedVars), ...Object.keys(vars)]),
+  ).filter((k) => (vars[k] ?? '') !== (savedVars[k] ?? '')).length;
+  useDirtyFlag(changedCount > 0, t.clientDetail.unsavedContractFields(changedCount));
 
   /**
    * Label and help text for one clause switch.
@@ -2059,6 +2372,7 @@ function EditContractVariables({
       const data = await res.json();
       if (res.ok && data.success) {
         setMessage({ kind: 'ok', text: t.clientDetail.contractUpdatedOk });
+        setConfirmSave(false);
         onSaved();
       } else {
         setMessage({ kind: 'err', text: data.error || `${t.clientDetail.serverErrorStatus(res.status)}.` });
@@ -2091,7 +2405,14 @@ function EditContractVariables({
         <Box
           as="button"
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => {
+            // Hide packs the confirmation away with the fields it belongs to.
+            // Left standing, it would be the first thing on screen the next
+            // time she opened the panel, asking her to agree to a rewrite she
+            // had not asked for yet.
+            setConfirmSave(false);
+            setOpen((o) => !o);
+          }}
           fontSize="xs"
           letterSpacing="0.15em"
           textTransform="uppercase"
@@ -2206,15 +2527,65 @@ function EditContractVariables({
               {message.text}
             </Text>
           )}
-          <CTAButton
-            onClick={handleSave}
-            variant="solid"
-            size="sm"
-            isLoading={saving}
-            loadingText={t.clientDetail.saving}
-          >
-            {t.clientDetail.saveContractChanges}
-          </CTAButton>
+
+          {/* One press used to write all two dozen fields back and rebuild the
+              contract body from the template, with nothing said first and no
+              way back afterwards.
+
+              The exposure is smaller than it looks, and the confirmation is
+              sized to match. This whole component renders only while
+              contract_status is 'pending' (see the call site in the Contract
+              section), and _portal-update.ts skips the re-render entirely on a
+              frozen row, so a SIGNED contract cannot be rewritten from here by
+              any route: there is no editor on screen, and the post would be
+              ignored if there were. Nobody has agreed to this document yet.
+
+              What is left is still worth stopping for. The client may well
+              have opened the contract already, the post REPLACES
+              contract_variables wholesale rather than merging, and the body is
+              re-rendered from the current template, so this is the screen's
+              only irreversible save. So: one extra press, and a line that says
+              how many fields are going and what happens to the client's copy.
+              Inline and two-step like every other confirmation in this file,
+              because there is no modal or toast anywhere in it. */}
+          {confirmSave ? (
+            <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm" p={4}>
+              <Text fontSize="sm" fontWeight="500" color="orange.800" mb={1}>
+                {t.clientDetail.contractSaveConfirmHeading}
+              </Text>
+              <Text fontSize="sm" color="orange.900" fontWeight="300" mb={4}>
+                {/* Every field on the form, not just the edited ones: all of
+                    them are posted, and the body is rebuilt from all of
+                    them. */}
+                {t.clientDetail.contractSaveConfirmBody(valueKeys.length + clauseRows.length)}
+              </Text>
+              <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2}>
+                <CTAButton onClick={() => setConfirmSave(false)} variant="ghost" size="sm">
+                  {t.common.cancel}
+                </CTAButton>
+                <CTAButton
+                  onClick={handleSave}
+                  variant="solid"
+                  size="sm"
+                  isLoading={saving}
+                  loadingText={t.clientDetail.saving}
+                >
+                  {t.clientDetail.contractSaveConfirmCta}
+                </CTAButton>
+              </Stack>
+            </Box>
+          ) : (
+            <CTAButton
+              onClick={() => {
+                setMessage(null);
+                setConfirmSave(true);
+              }}
+              variant="solid"
+              size="sm"
+            >
+              {t.clientDetail.saveContractChanges}
+            </CTAButton>
+          )}
         </VStack>
       )}
     </Box>
