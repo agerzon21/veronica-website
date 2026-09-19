@@ -328,6 +328,12 @@ const CHECKS = [
     ok: (r) => r.rows.length === 1,
     pass: 'the writing-rule dedupe index exists on ai_context',
     fail: 'ai_context_writing_rule_key is missing, so 034 never ran and restating a writing rule adds a duplicate row instead of updating one' },
+  // Nullable matters as much as present. A NOT NULL phone column would refuse
+  // every booking that does not have one, which is most of them.
+  { m: '037', q: `select data_type, is_nullable from information_schema.columns where table_name='client_portals' and column_name='client_phone'`,
+    ok: (r) => r.rows.length === 1 && r.rows[0].data_type === 'text' && r.rows[0].is_nullable === 'YES',
+    pass: 'client_portals.client_phone exists and is nullable text',
+    fail: 'client_phone is missing, or is not nullable text, which would block saving a booking without a number' },
   { m: '036', q: `select to_regclass('public.schema_migrations') t`,
     ok: (r) => r.rows[0]?.t !== null, pass: 'schema_migrations exists', fail: 'the ledger itself is missing' },
 ];
