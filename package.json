@@ -13,6 +13,10 @@
     "ig-fallbacks": "node scripts/build-ig-fallbacks.mjs",
     "ig-fallbacks:check": "node scripts/build-ig-fallbacks.mjs --check",
     "typecheck:api": "tsc -p tsconfig.api.json",
+    "db:status": "node scripts/migrate.mjs status",
+    "db:verify": "node scripts/migrate.mjs verify",
+    "db:adopt": "node scripts/migrate.mjs adopt",
+    "db:up": "node scripts/migrate.mjs up",
     "gallery-statics": "node scripts/build-gallery-statics.mjs",
     "gallery-statics:check": "node scripts/build-gallery-statics.mjs --check"
   },
