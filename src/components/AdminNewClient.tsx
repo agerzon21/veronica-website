@@ -27,11 +27,13 @@ import {
   TRAVEL_FREE_ROUND_TRIP_MILES,
   TRAVEL_SHARE_WARN_PCT,
   applyTravelDecision,
+  finalTravelFee,
   formatDriveTime,
   formatMiles,
   formatTravelFee,
   parseDriveTimeMinutes,
   parseMiles,
+  parseTravelOverride,
   quoteTravel,
   travelShareIsHigh,
   travelShareOfSessionPct,
@@ -416,6 +418,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [travelStatus, setTravelStatus] = useState<TravelStatus>('none');
   const [travelLinkBusy, setTravelLinkBusy] = useState(false);
   const [travelLinkNote, setTravelLinkNote] = useState('');
+  // The override, in three pieces so that opening the box, typing in it, and
+  // having actually agreed a number are three separate facts.
+  //
+  // travelCustomOpen alone is what keeps the common case one tap: the box is
+  // shut, the computed figure is the default, and nothing about this feature is
+  // on screen until she asks for it. travelOverride is null right up until she
+  // accepts a figure she typed, so a half typed "5" in the box can never reach
+  // the total, and abandoning the box leaves the computed figure standing.
+  const [travelCustomOpen, setTravelCustomOpen] = useState(false);
+  const [travelCustomInput, setTravelCustomInput] = useState('');
+  const [travelOverride, setTravelOverride] = useState<number | null>(null);
 
   const [additionalNotes, setAdditionalNotes] = useState('');
 
@@ -780,9 +793,19 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     parseMiles(travelMilesOneWay) ?? NaN,
     parseDriveTimeMinutes(travelMinutesOneWay),
   );
+  // The ONE number every surface reads: her figure when she agreed one, the
+  // computed figure otherwise. The total, the share warning, the line item and
+  // the contract clause all come off this, because the way an override goes
+  // wrong is one of those four keeping the old number.
+  const travelFee = finalTravelFee(travelQuote?.fee ?? 0, travelOverride);
   const travelDecision: TravelDecision =
     travelStatus === 'accepted' && travelQuote?.autofillable
-      ? { status: 'accepted', fee: travelQuote.fee, roundTripMiles: travelQuote.roundTripMiles }
+      ? {
+          status: 'accepted',
+          fee: travelFee,
+          roundTripMiles: travelQuote.roundTripMiles,
+          custom: travelOverride !== null,
+        }
       : { status: travelStatus === 'declined' ? 'declined' : 'none', fee: 0, roundTripMiles: 0 };
   const sessionTotalNumber = parseFloat(totalAmount);
   const travelApplication = applyTravelDecision(
@@ -795,10 +818,44 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * number, so the offer comes back rather than silently re-pricing itself.
    * A fee she accepted at 53 miles must not quietly become a different fee
    * because she corrected it to 73.
+   *
+   * The override goes with it. It was agreed against a distance, and the
+   * contract clause prints that distance as the reason for it, so carrying a
+   * typed figure over to a different journey would print a reason that was
+   * never the reason.
    */
   const applyTravelMiles = (next: string) => {
     setTravelMilesOneWay(next);
     setTravelStatus('none');
+    setTravelOverride(null);
+    setTravelCustomOpen(false);
+    setTravelCustomInput('');
+  };
+
+  /** Opens the money box on the computed figure, so agreeing to it is one tap. */
+  const openTravelCustom = () => {
+    const start = travelOverride ?? travelQuote?.fee ?? null;
+    setTravelCustomInput(start === null ? '' : String(start));
+    setTravelCustomOpen(true);
+    // Reopens the question, which is what lets the same link work from the
+    // accepted panel. A no-op when the offer is already the thing on screen.
+    setTravelStatus('none');
+  };
+
+  /** Shuts the box and forgets the typed figure. The computed one stands. */
+  const cancelTravelCustom = () => {
+    setTravelCustomOpen(false);
+    setTravelCustomInput('');
+    setTravelOverride(null);
+  };
+
+  /** Accepts the typed figure. Ignored outright when it is not a real amount. */
+  const acceptTravelCustom = () => {
+    const parsed = parseTravelOverride(travelCustomInput);
+    if (parsed === null) return;
+    setTravelOverride(parsed);
+    setTravelCustomOpen(false);
+    setTravelStatus('accepted');
   };
 
   /**
@@ -1587,11 +1644,18 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                   lookupNote={travelLinkNote}
                   quote={travelQuote}
                   status={travelStatus}
-                  onAccept={() => setTravelStatus('accepted')}
-                  onDecline={() => setTravelStatus('declined')}
-                  onReopen={() => setTravelStatus('none')}
+                  onAccept={() => { cancelTravelCustom(); setTravelStatus('accepted'); }}
+                  onDecline={() => { cancelTravelCustom(); setTravelStatus('declined'); }}
+                  onReopen={() => { cancelTravelCustom(); setTravelStatus('none'); }}
                   sessionTotal={totalAmount}
                   application={travelApplication}
+                  fee={travelFee}
+                  customOpen={travelCustomOpen}
+                  customInput={travelCustomInput}
+                  onCustomOpen={openTravelCustom}
+                  onCustomInput={setTravelCustomInput}
+                  onCustomAccept={acceptTravelCustom}
+                  onCustomCancel={cancelTravelCustom}
                 />
               )}
             </Box>
@@ -1846,6 +1910,13 @@ function TravelBlock({
   onReopen,
   sessionTotal,
   application,
+  fee,
+  customOpen,
+  customInput,
+  onCustomOpen,
+  onCustomInput,
+  onCustomAccept,
+  onCustomCancel,
 }: {
   copy: TravelCopy;
   address: string;
@@ -1864,11 +1935,25 @@ function TravelBlock({
   /** The raw total input, so the share can be computed against the session. */
   sessionTotal: string;
   application: TravelApplication;
+  /** The FINAL amount: her figure when she agreed one, the computed one otherwise. */
+  fee: number;
+  customOpen: boolean;
+  customInput: string;
+  onCustomOpen: () => void;
+  onCustomInput: (v: string) => void;
+  onCustomAccept: () => void;
+  onCustomCancel: () => void;
 }) {
   const minutes = parseDriveTimeMinutes(oneWayMinutes);
   const sessionTotalNumber = parseFloat(sessionTotal);
-  const sharePct = quote ? travelShareOfSessionPct(quote.fee, sessionTotalNumber) : null;
-  const shareIsHigh = quote ? travelShareIsHigh(quote.fee, sessionTotalNumber) : false;
+  // The share is judged on whatever is actually going on the contract. While
+  // the money box is open that is the figure being typed, so the warning moves
+  // as she types and an override that pushes past a quarter of the session says
+  // so before she accepts it rather than after.
+  const typed = parseTravelOverride(customInput);
+  const pendingFee = customOpen ? finalTravelFee(quote?.fee ?? 0, typed) : fee;
+  const sharePct = quote ? travelShareOfSessionPct(pendingFee, sessionTotalNumber) : null;
+  const shareIsHigh = quote ? travelShareIsHigh(pendingFee, sessionTotalNumber) : false;
   const included = formatMiles(TRAVEL_FREE_ROUND_TRIP_MILES);
   // Two decimals on purpose. This is the only place the unrounded figure is
   // shown, and seeing $60.20 become $65 is what makes the rounding a policy
@@ -1876,7 +1961,10 @@ function TravelBlock({
   // $0.70 a mile than it did at $1.00, because the raw figure is almost never
   // a round number now.
   const rawFeeText = quote ? `$${quote.rawFee.toFixed(2)}` : '';
-  const feeText = quote ? formatTravelFee(quote.fee) : '';
+  /** What the miles produce. Still shown when she is overriding it, never as a nag. */
+  const computedFeeText = quote ? formatTravelFee(quote.fee) : '';
+  /** What goes on the contract. The accept button and the share both read this. */
+  const feeText = quote ? formatTravelFee(pendingFee) : '';
 
   return (
     <Box
@@ -2000,13 +2088,17 @@ function TravelBlock({
           <Text fontSize="sm" fontWeight="500" color="gray.800" mb={1}>
             {copy.offerHeading}
           </Text>
+          {/* The arithmetic always describes the COMPUTED figure, even while
+              she is typing over it. It is the explanation of that number, and
+              rewriting its last word to whatever is in the box would turn a
+              true sentence into a false one. */}
           <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.6">
             {copy.offerMath(
               formatMiles(quote.roundTripMiles),
               formatMiles(quote.billableMiles),
               included,
               rawFeeText,
-              feeText,
+              computedFeeText,
             )}
           </Text>
           <Text fontSize="sm" color="gray.800" fontWeight="500" mt={2}>
@@ -2021,16 +2113,69 @@ function TravelBlock({
               {copy.shareWarn(feeText, String(sharePct), String(TRAVEL_SHARE_WARN_PCT))}
             </Text>
           )}
-          {/* column-reverse on mobile keeps the money action off the top of
-              the tap zone, the same way the delivery confirmations do. */}
-          <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} mt={3}>
-            <CTAButton onClick={onDecline} variant="ghost" size="sm">
-              {copy.decline}
-            </CTAButton>
-            <CTAButton onClick={onAccept} variant="solid" size="sm" wrapText>
-              {copy.accept(feeText)}
-            </CTAButton>
-          </Stack>
+          {/* THE OVERRIDE, and the reason it is a link rather than a third
+              button. The computed figure is right almost every time, so the
+              common case has to stay one tap on a solid button; a third button
+              beside the other two would turn a settled question into a choice
+              of three. Shut, this costs one line of small text. Open, it is a
+              money box already holding the computed figure, so agreeing with
+              the arithmetic after looking at it is still one tap. */}
+          {!customOpen && (
+            <>
+              {/* column-reverse on mobile keeps the money action off the top of
+                  the tap zone, the same way the delivery confirmations do. */}
+              <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} mt={3}>
+                <CTAButton onClick={onDecline} variant="ghost" size="sm">
+                  {copy.decline}
+                </CTAButton>
+                <CTAButton onClick={onAccept} variant="solid" size="sm" wrapText>
+                  {copy.accept(feeText)}
+                </CTAButton>
+              </Stack>
+              <TravelCustomLink label={copy.useCustom} onClick={onCustomOpen} />
+            </>
+          )}
+
+          {customOpen && (
+            <Box mt={3}>
+              <Field label={copy.customLabel} helpText={copy.customHelp}>
+                <FormInput
+                  type="number"
+                  inputMode="numeric"
+                  step="1"
+                  min="1"
+                  value={customInput}
+                  onChange={(e) => onCustomInput(e.target.value)}
+                  placeholder={computedFeeText.replace('$', '')}
+                />
+              </Field>
+              {/* Which figure she is replacing, stated once and flatly. It is
+                  not a warning and it is not repeated anywhere she has not
+                  opened this box herself. */}
+              <Text fontSize="xs" color="gray.500" fontWeight="300" mt={2}>
+                {copy.customComputedWas(computedFeeText)}
+              </Text>
+              {typed === null && customInput.trim() !== '' && (
+                <Text fontSize="xs" color="orange.800" fontWeight="400" mt={2} lineHeight="1.6">
+                  {copy.customInvalid}
+                </Text>
+              )}
+              <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} mt={3}>
+                <CTAButton onClick={onCustomCancel} variant="ghost" size="sm" wrapText>
+                  {copy.useComputedInstead(computedFeeText)}
+                </CTAButton>
+                <CTAButton
+                  onClick={onCustomAccept}
+                  variant="solid"
+                  size="sm"
+                  wrapText
+                  isDisabled={typed === null}
+                >
+                  {copy.accept(feeText)}
+                </CTAButton>
+              </Stack>
+            </Box>
+          )}
         </Box>
       )}
 
@@ -2041,9 +2186,27 @@ function TravelBlock({
               <Text fontSize="sm" fontWeight="500" color="green.800">
                 {copy.acceptedHeading}
               </Text>
+              {/* WHICH CLAUSE IS IN FORCE, said out loud. The two contracts
+                  read differently, so the screen that produced them has to say
+                  which one this booking is getting rather than leaving it to be
+                  discovered in the PDF. */}
               <Text fontSize="xs" color="green.900" fontWeight="300" mt={1} lineHeight="1.6">
-                {copy.acceptedLine(application.lineItem.amount, application.lineItem.roundTripMiles)}
+                {application.lineItem.custom
+                  ? copy.acceptedCustomLine(application.lineItem.amount, application.lineItem.roundTripMiles)
+                  : copy.acceptedLine(application.lineItem.amount, application.lineItem.roundTripMiles)}
               </Text>
+              {/* What she gave up, or took on top. One muted line, stated once,
+                  with no colour and no verb telling her to reconsider. */}
+              {application.lineItem.custom && (
+                <Text fontSize="xs" color="gray.600" fontWeight="300" mt={1}>
+                  {copy.acceptedCustomComputed(computedFeeText)}
+                </Text>
+              )}
+              {shareIsHigh && sharePct !== null && (
+                <Text fontSize="xs" color="orange.800" fontWeight="400" mt={2} lineHeight="1.6">
+                  {copy.shareWarn(feeText, String(sharePct), String(TRAVEL_SHARE_WARN_PCT))}
+                </Text>
+              )}
               {Number.isFinite(sessionTotalNumber) && (
                 <Text fontSize="xs" color="green.900" fontWeight="400" mt={2}>
                   {copy.totals(
@@ -2054,9 +2217,15 @@ function TravelBlock({
                 </Text>
               )}
             </Box>
-            <CTAButton onClick={onDecline} variant="ghost" size="sm">
-              {copy.remove}
-            </CTAButton>
+            {/* Remove, and beside it the way back into the amount. Editing a
+                figure she typed thirty seconds ago should not cost her three
+                taps through a decline and a re-offer. */}
+            <Stack direction="column" align="flex-end" spacing={1}>
+              <CTAButton onClick={onDecline} variant="ghost" size="sm">
+                {copy.remove}
+              </CTAButton>
+              <TravelCustomLink label={copy.useCustom} onClick={onCustomOpen} mt={0} />
+            </Stack>
           </Flex>
         </Box>
       )}
@@ -2084,6 +2253,42 @@ function TravelBlock({
           </Box>
         </Flex>
       )}
+    </Box>
+  );
+}
+
+/**
+ * The override affordance: one underlined line of small text, never a button.
+ *
+ * It is the same treatment the "offer it again" link already uses, and it is
+ * deliberately quieter than the two CTAButtons above it. A third solid button
+ * would turn a settled question with an obvious answer into a choice of three.
+ */
+function TravelCustomLink({
+  label,
+  onClick,
+  mt = 3,
+}: {
+  label: string;
+  onClick: () => void;
+  /** On-scale only. Chakra turns an off-scale number into literal pixels. */
+  mt?: number;
+}) {
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      mt={mt}
+      fontSize="xs"
+      color="brand.accent"
+      bg="transparent"
+      border="none"
+      p={0}
+      textDecoration="underline"
+      cursor="pointer"
+    >
+      {label}
     </Box>
   );
 }

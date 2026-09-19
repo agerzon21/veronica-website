@@ -90,6 +90,21 @@ export interface WeddingContractVariables {
    */
   travel_fee_amount: string;
   travel_round_trip_miles: string;
+  /**
+   * The same allowance when Veronika typed the figure instead of taking the
+   * computed one. MUTUALLY EXCLUSIVE with travel_fee_amount: exactly one of the
+   * two is ever non-blank, which is what picks one of the two TRAVEL sections
+   * below and makes it impossible for both to print.
+   *
+   * It is a separate key rather than a flag beside the amount because the
+   * pruner can only ask whether a variable is filled in. Two keys turn "which
+   * clause" into the same blank-or-not question every other optional section
+   * already answers, with no change to pruneEmptyOptionalSections.
+   *
+   * The custom clause shows no rate and no multiplication. See the WHY THERE IS
+   * A MANUAL OVERRIDE block at the top of src/data/travel-fee.ts.
+   */
+  travel_custom_amount: string;
 }
 
 export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
@@ -286,6 +301,45 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         {
           kind: 'text',
           text: 'The allowance covers fuel, vehicle costs and the Photographer’s time on the road together. Driving time is never billed separately, at any rate, however long the journey takes on the day.',
+        },
+        {
+          kind: 'text',
+          emphasis: 'italic',
+          text: 'This figure is fixed by this agreement. It is not a charge that appears afterwards, and no further travel cost will be added for the journey to and from this booking.',
+        },
+      ],
+    },
+    // The SAME clause for the case where Veronika typed the figure instead of
+    // taking the one the miles produced. Gated on travel_custom_amount, which
+    // applyTravelDecision writes only on that path and blanks on the other, so
+    // exactly one of the two TRAVEL sections can ever print. A booking that
+    // never had a travel question carries neither key and prunes both, which is
+    // what leaves every wedding contract already signed byte for byte as it was.
+    //
+    // NO RATE AND NO MULTIPLICATION ANYWHERE IN IT, on purpose and not by
+    // accident. The version above shows its working because its working is what
+    // produced the number; this one did not come from a multiplication, and
+    // printing one beside it would invite a client to argue with arithmetic that
+    // was never applied, or to read the figure as a discount off a list price
+    // and ask why it is not a larger one. The round trip distance appears once,
+    // in prose, as the REASON for the allowance, and never in a table beside the
+    // amount, because two numbers in a table are an implied rate.
+    {
+      title: 'TRAVEL',
+      optional: true,
+      requireVariables: ['travel_custom_amount', 'travel_round_trip_miles'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'The journey to the event location and back is {{travel_round_trip_miles}} miles, which is further than the travel included in the Total Payment at no charge. The Client therefore agrees to a travel allowance of {{travel_custom_amount}} for the Photographer’s travel to and from the event, settled in advance and already included in the Total Payment shown below.',
+        },
+        {
+          kind: 'fields',
+          items: [{ label: 'Travel Allowance', value: '{{travel_custom_amount}}' }],
+        },
+        {
+          kind: 'text',
+          text: 'The allowance covers fuel, vehicle costs and the Photographer’s time on the road together. It is a single sum agreed for this booking, and driving time is never billed separately, however long the journey takes on the day.',
         },
         {
           kind: 'text',
@@ -874,6 +928,41 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       {
         kind: 'text',
         text: 'The allowance covers fuel, vehicle costs and the Photographer’s time on the road together. Driving time is never billed separately, at any rate, however long the journey takes on the day.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'This figure is fixed by this agreement. It is not a charge that appears afterwards, and no further travel cost will be added for the journey to and from this session.',
+      },
+    ],
+  },
+  // The custom form of the clause, for the case where Veronika typed the figure
+  // instead of taking the one the miles produced. The wedding copy of this
+  // section carries the full reasoning, and the duplication is deliberate for
+  // the reason set out at the top of this block. In short: no rate and no
+  // multiplication appear anywhere in it, because neither produced the number,
+  // and the round trip distance appears once in prose as the REASON rather than
+  // in a table beside the amount, where two numbers would imply a rate.
+  //
+  // Gated on travel_custom_amount, which applyTravelDecision writes only on the
+  // custom path and blanks on the computed one, so exactly one of the two
+  // TRAVEL sections can ever print and a booking with neither key prunes both.
+  {
+    title: 'TRAVEL',
+    optional: true,
+    requireVariables: ['travel_custom_amount', 'travel_round_trip_miles'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'The journey to the session location and back is {{travel_round_trip_miles}} miles, which is further than the travel included in the Total Payment at no charge. The Client therefore agrees to a travel allowance of {{travel_custom_amount}} for the Photographer’s travel to and from the session, settled in advance and already included in the Total Payment shown below.',
+      },
+      {
+        kind: 'fields',
+        items: [{ label: 'Travel Allowance', value: '{{travel_custom_amount}}' }],
+      },
+      {
+        kind: 'text',
+        text: 'The allowance covers fuel, vehicle costs and the Photographer’s time on the road together. It is a single sum agreed for this booking, and driving time is never billed separately, however long the journey takes on the day.',
       },
       {
         kind: 'text',

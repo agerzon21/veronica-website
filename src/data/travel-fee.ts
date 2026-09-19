@@ -72,6 +72,31 @@
  *   speed outside 25 to 80 mph. It exists to catch 103 fat fingered as 1030,
  *   and it must never catch a real booking.
  *
+ * WHY THERE IS A MANUAL OVERRIDE, AND WHY IT CHANGES THE CLAUSE
+ * The computed figure is a starting point she is allowed to disagree with. A
+ * $90 quote she would rather take $50 on is a favour she is doing somebody, and
+ * a form that cannot express it is a form she works around. So the amount is
+ * editable, the computed figure stays the default, and accepting it is still
+ * one tap.
+ *
+ * What the override also changes is the WORDING of the contract, which is the
+ * real content of this feature. The computed clause prints the round trip
+ * distance, the included allowance and the rate, so the number can be
+ * reproduced from the document. A typed number cannot be reproduced that way,
+ * and printing the arithmetic beside it would be printing arithmetic that did
+ * not produce it: an invitation to argue with the multiplication, or to read
+ * the difference as a discount off a list price and ask why it is not larger.
+ * The custom clause therefore states the agreed sum and gives the distance as
+ * the REASON, with no rate and no multiplication anywhere in it. Which of the
+ * two prints is decided by which variable carries the money, in
+ * applyTravelDecision below.
+ *
+ * The override is not capped in either direction beyond being a positive whole
+ * number of dollars. Above the computed figure is a real case and she may have
+ * a reason the miles do not know about. The share-of-session warning reads the
+ * FINAL amount, so an override is judged by the same rule the computed figure
+ * is.
+ *
  * WHY DRIVE TIME STILL NEVER TOUCHES THE ARITHMETIC
  * The minutes argument on both quote functions is OPTIONAL and sets longHaul
  * and implausible and nothing else. The fee is a function of the miles alone,
@@ -461,6 +486,14 @@ export interface TravelDecision {
   fee: number;
   /** Only meaningful when accepted. Round trip, which is what the rate bills. */
   roundTripMiles: number;
+  /**
+   * True when `fee` is a figure Veronika typed rather than the one the miles
+   * produced. It changes WHICH CLAUSE the contract prints and nothing else.
+   *
+   * Optional on purpose, so every existing caller that builds a decision out of
+   * a quote keeps meaning exactly what it meant before: computed.
+   */
+  custom?: boolean;
 }
 
 export const NO_TRAVEL_DECISION: TravelDecision = {
@@ -476,6 +509,8 @@ export interface TravelLineItem {
   amount: string;
   /** The raw number, for whoever has to add it up. */
   fee: number;
+  /** She typed this figure. The screen says so, and the contract reads differently. */
+  custom: boolean;
 }
 
 export interface TravelApplication {
@@ -487,10 +522,58 @@ export interface TravelApplication {
    * The contract variables to merge in. Empty on every path but acceptance,
    * which is what makes declining leave the rendered contract byte for byte
    * identical to a booking that never had a travel question at all: the TRAVEL
-   * section is gated on these two keys and prunes itself away when they are
+   * sections are gated on these keys and prune themselves away when they are
    * absent or blank.
+   *
+   * THE TWO MONEY KEYS ARE MUTUALLY EXCLUSIVE, and that exclusivity is a
+   * property of this function rather than of whoever calls it. Exactly one of
+   * travel_fee_amount and travel_custom_amount is ever non-blank, and the other
+   * is written as an empty string rather than omitted, so merging this over a
+   * previously saved set positively CLEARS the clause that is no longer in
+   * force. Omitting it would leave a stale key behind and print both clauses.
    */
   variables: Record<string, string>;
+}
+
+/**
+ * Read a travel amount Veronika typed over the computed one.
+ *
+ * WHOLE DOLLARS, always. formatTravelFee prints whole dollars, so $50.40 would
+ * reach the contract as "$50" while the Total Payment carried the 40 cents, and
+ * the client would be signing a document whose own two numbers disagree. The
+ * computed path gets whole dollars free from the $5 rounding step; the typed
+ * path has to be given them here.
+ *
+ * A "$" and thousands separators are tolerated because she will paste or type
+ * them without thinking. Null for blank, zero, negative, or anything that is
+ * not a number, which leaves the computed figure standing rather than putting a
+ * hole in the clause. Zero is deliberately NOT an override: charging nothing is
+ * what the decline button already does, and it says so in one tap.
+ */
+export function parseTravelOverride(raw: string): number | null {
+  const trimmed = (raw ?? '').trim().replace(/^\$/, '').replace(/,/g, '').trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const whole = Math.round(n);
+  return whole > 0 ? whole : null;
+}
+
+/**
+ * The amount that actually lands on the contract.
+ *
+ * Her figure when she typed one, the computed figure otherwise. It is a
+ * function rather than a `??` at the call site so that the share warning, the
+ * total, the line item and the clause are all reading the SAME number: the
+ * thing that goes wrong with an override is one surface keeping the old figure,
+ * and there is now exactly one place for that to be got right.
+ *
+ * Deliberately NOT capped at the computed figure. An override above it is a
+ * real case, and she may have a reason the arithmetic does not know about.
+ */
+export function finalTravelFee(computedFee: number, override: number | null): number {
+  if (override === null || !Number.isFinite(override) || override <= 0) return computedFee;
+  return Math.round(override);
 }
 
 /**
@@ -511,16 +594,27 @@ export function applyTravelDecision(
   if (decision.status !== 'accepted' || decision.fee <= 0) {
     return { contractTotal: base, lineItem: null, variables: {} };
   }
+  const custom = decision.custom === true;
+  const amount = formatTravelFee(decision.fee);
+  const miles = formatMiles(decision.roundTripMiles);
   return {
     contractTotal: base + decision.fee,
     lineItem: {
-      roundTripMiles: formatMiles(decision.roundTripMiles),
-      amount: formatTravelFee(decision.fee),
+      roundTripMiles: miles,
+      amount,
       fee: decision.fee,
+      custom,
     },
+    // Which key carries the money is what chooses the clause. The computed
+    // clause shows the arithmetic, so the number on it can be reproduced from
+    // the page; the custom clause states the agreed sum and the distance that
+    // is the reason for it, and shows no arithmetic at all, because a contract
+    // that shows arithmetic invites arguing with the arithmetic and the
+    // arithmetic is not what produced this number.
     variables: {
-      travel_fee_amount: formatTravelFee(decision.fee),
-      travel_round_trip_miles: formatMiles(decision.roundTripMiles),
+      travel_fee_amount: custom ? '' : amount,
+      travel_custom_amount: custom ? amount : '',
+      travel_round_trip_miles: miles,
     },
   };
 }

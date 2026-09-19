@@ -53,9 +53,27 @@ export interface TravelCopy {
   accept: (fee: string) => string;
   decline: string;
 
+  // ── The override: a quiet third path, never the default ──
+  //
+  // The computed figure stays the one-tap answer. This is a link under the two
+  // buttons that opens a money box prefilled with that figure, so taking the
+  // computed number costs nothing and disagreeing with it costs one tap.
+  useCustom: string;
+  customLabel: string;
+  customHelp: string;
+  /** Blank, zero, negative or not a number. Says what to do, does not scold. */
+  customInvalid: string;
+  /** Shown while she types, so she can see the figure she is replacing. */
+  customComputedWas: (computedFee: string) => string;
+  useComputedInstead: (computedFee: string) => string;
+
   // ── After she has decided ──
   acceptedHeading: string;
   acceptedLine: (fee: string, roundTripMiles: string) => string;
+  /** The same line for a typed figure. It says the contract reads differently. */
+  acceptedCustomLine: (fee: string, roundTripMiles: string) => string;
+  /** What she chose not to charge, or chose to charge above. Stated once, flat. */
+  acceptedCustomComputed: (computedFee: string) => string;
   remove: string;
   declinedLine: string;
   offerAgain: string;
@@ -110,8 +128,19 @@ const EN: TravelCopy = {
   accept: (fee) => `Add ${fee} to the total`,
   decline: 'No travel fee',
 
+  useCustom: 'Use a different amount',
+  customLabel: 'Travel amount',
+  customHelp:
+    'Whole dollars. Charge less, or more, than the figure above. The contract then states the amount you agreed and gives the distance as the reason, without showing how the other number was worked out.',
+  customInvalid: 'Type a whole number of dollars above zero. To charge nothing, choose no travel fee.',
+  customComputedWas: (computed) => `The mileage works out at ${computed}.`,
+  useComputedInstead: (computed) => `Go back to ${computed}`,
+
   acceptedHeading: 'Travel fee added',
   acceptedLine: (fee, miles) => `${fee} for ${miles} miles round trip. It is printed in the contract.`,
+  acceptedCustomLine: (fee, miles) =>
+    `${fee}, your own figure, for ${miles} miles round trip. The contract states that amount and the distance behind it, and shows no mileage arithmetic.`,
+  acceptedCustomComputed: (computed) => `The mileage would have come to ${computed}.`,
   remove: 'Remove',
   declinedLine: 'No travel fee on this booking.',
   offerAgain: 'Offer it again',
@@ -166,8 +195,19 @@ const RU: TravelCopy = {
   accept: (fee) => `Добавить ${fee} к сумме`,
   decline: 'Без доплаты',
 
+  useCustom: 'Указать свою сумму',
+  customLabel: 'Сумма за дорогу',
+  customHelp:
+    'Целые доллары. Можно взять меньше или больше, чем указано выше. Тогда в договоре будет ваша сумма и расстояние как причина, без расчёта по милям.',
+  customInvalid: 'Введите целую сумму больше нуля. Чтобы не брать ничего, выберите «Без доплаты».',
+  customComputedWas: (computed) => `По милям выходит ${computed}.`,
+  useComputedInstead: (computed) => `Вернуть ${computed}`,
+
   acceptedHeading: 'Доплата за дорогу добавлена',
   acceptedLine: (fee, miles) => `${fee} за ${miles} миль туда и обратно. Это напечатано в договоре.`,
+  acceptedCustomLine: (fee, miles) =>
+    `${fee}, ваша сумма, за ${miles} миль туда и обратно. В договоре стоит эта сумма и расстояние как причина, расчёта по милям там нет.`,
+  acceptedCustomComputed: (computed) => `По милям вышло бы ${computed}.`,
   remove: 'Убрать',
   declinedLine: 'Доплаты за дорогу по этой съёмке нет.',
   offerAgain: 'Предложить снова',
