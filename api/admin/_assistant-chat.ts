@@ -68,6 +68,7 @@ import {
 import {
   applyHouseStyle,
   findCustomerNameIn,
+  legacyRuleKey,
   looksLikeSendApproval,
   looksLikeStandingRule,
   ruleKey,
@@ -598,20 +599,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // AFTER a deploy, so for the window between the two there is no such
           // index: every turn would have inserted another copy, and those
           // copies would then make migration 034 unrunnable.
-          const [existingRule] = (await sql`
-            SELECT id FROM ai_context
-            WHERE category = ${WRITING_RULES_CATEGORY} AND label = ${key}
-            ORDER BY created_at ASC
-            LIMIT 1
-          `) as Array<{ id: string }>;
+          //
+          // Matched by KEY rather than by label, which is not the same thing
+          // once a rule can be sitting under an older form of its own key. See
+          // findWritingRule: it looks for today's key, then for a row whose own
+          // content keys to the same rule today, then for the old form of this
+          // rule's key, and that middle pass is the relabel migration this
+          // change ships instead of a migration file.
+          //
+          // It excludes source='system' rows, which matters more here than it
+          // looks. This path had no source check at all, so a rule Vero typed
+          // could overwrite a piece of Alex's documentation outright if their
+          // labels happened to meet, and a lookup that reaches further makes
+          // that likelier rather than less likely.
+          const existingRule = await findWritingRule(sql, userMessage);
           const content = applyHouseStyle(userMessage);
-          if (existingRule) {
-            await sql`
-              UPDATE ai_context
-              SET content = ${content}, active = TRUE, updated_at = NOW()
-              WHERE id = ${existingRule.id}
-            `;
-          } else {
+          // SET label is the self-migration. A row found under an older key
+          // comes back carrying the current one, so it is found the ordinary
+          // way from then on and the old form dies out as rules get restated.
+          const relabelled = existingRule
+            ? ((await sql`
+                UPDATE ai_context
+                SET label = ${key}, content = ${content}, active = TRUE, updated_at = NOW()
+                WHERE id = ${existingRule.id} AND source <> 'system'
+                RETURNING id
+              `) as Array<{ id: string }>)
+            : [];
+          if (relabelled.length === 0) {
+            // Either there was no row, or the one we found went away between
+            // the two statements. Insert rather than report a save that did not
+            // happen: Vero has been told "saved" over a write that failed
+            // before, and that is the bug this backstop exists to end.
             await sql`
               INSERT INTO ai_context (category, label, content, source, active)
               VALUES (${WRITING_RULES_CATEGORY}, ${key}, ${content}, 'chatbot', TRUE)
@@ -619,7 +637,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           capturedRule = content;
           dbWrites.push({
-            type: existingRule ? 'updated' : 'created',
+            type: relabelled.length > 0 ? 'updated' : 'created',
             category: WRITING_RULES_CATEGORY,
             label: key,
             content_summary: language === 'ru' ? 'Правило сохранено' : 'Rule saved',
@@ -1045,6 +1063,76 @@ async function languageMismatch(
   );
 }
 
+/**
+ * The stored writing rule that `source` is a restatement of, if there is one.
+ *
+ * This is the whole of why there is no migration file for the ruleKey fix, so
+ * it is worth being explicit about what it replaces.
+ *
+ * ruleKey used to sort a rule's words and THEN take eight, so a rule was
+ * labelled with whichever eight words fell earliest in the alphabet rather than
+ * the eight that carry the meaning. Fixing that changes the label of every rule
+ * written from then on, and rows carrying the old label would stop matching
+ * their own restatements: each one would duplicate exactly once, and two rows
+ * saying the same thing dilute each other in the prompt. That is the failure
+ * migration 034 exists to end, so shipping the fix on its own would have
+ * re-opened it.
+ *
+ * The usual answer is a migration that relabels the rows in the same deploy.
+ * SQL cannot do it. The key is computed in JavaScript from the rule's own
+ * words, with a stopword list and a Unicode-aware split, so Postgres has no way
+ * to recompute one; the only version that works is a bespoke script Alex runs
+ * against production by hand, on the same day, with the deploy half applied.
+ *
+ * So the LOOKUP absorbs it instead, in three passes, most specific first:
+ *
+ *   1. a row already labelled with the current key, which is the ordinary case
+ *      and the one that must win, because it is the row the UPDATE would
+ *      collide with under migration 034's unique index;
+ *   2. a row whose OWN CONTENT keys to the same thing today. This is the
+ *      relabel migration, done one row at a time and only when something
+ *      touches it: it is what finds a rule Alex wrote months ago from a
+ *      restatement he types now;
+ *   3. a row labelled with the old form of THIS rule's key, which catches rows
+ *      whose content has since been edited so that pass 2 no longer recognises
+ *      them.
+ *
+ * Callers write the CURRENT key back onto whatever they find, so a row
+ * migrates itself the first time it is touched and the old form dies out on
+ * its own. Nothing duplicates, nothing has to be run by hand, and there is no
+ * day on which the code and the stored labels have to change over together.
+ *
+ * source='system' rows are excluded rather than returned and rejected. They are
+ * Alex's documentation, they are not restatements of anything Vero said, and no
+ * caller here has any business writing to one.
+ *
+ * Scanning the category is deliberate and cheap: writing_rules is rendered
+ * whole into the HOUSE RULES block of every prompt this file builds, so it is
+ * small by construction, and this handler already reads the entire ai_context
+ * table once per turn.
+ */
+async function findWritingRule(
+  sql: ReturnType<typeof getDb>,
+  source: string,
+): Promise<{ id: string; label: string } | null> {
+  const key = ruleKey(source).slice(0, 120);
+  if (!key) return null;
+  const legacy = legacyRuleKey(source).slice(0, 120);
+  const rows = (await sql`
+    SELECT id, label, content FROM ai_context
+    WHERE category = ${WRITING_RULES_CATEGORY} AND source <> 'system'
+    ORDER BY created_at ASC
+  `) as Array<{ id: string; label: string; content: string }>;
+  const labelled = (row: { label: string }, want: string) =>
+    row.label.toLowerCase() === want.toLowerCase();
+  return (
+    rows.find((r) => labelled(r, key)) ??
+    rows.find((r) => ruleKey(r.content).slice(0, 120) === key) ??
+    rows.find((r) => labelled(r, legacy)) ??
+    null
+  );
+}
+
 async function executeToolCall(
   sql: ReturnType<typeof getDb>,
   toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
@@ -1183,10 +1271,13 @@ async function executeToolCall(
     // label could violate it. executeToolCall is called unguarded, so the
     // throw escaped to the handler's catch and Vero got a 500 for the whole
     // turn.
-    const effectiveLabel =
-      category.toLowerCase() === WRITING_RULES_CATEGORY
-        ? ruleKey(content).slice(0, 120) || label
-        : label;
+    // Empty when this is not a writing rule, and also when the rule's own words
+    // are all stopwords and produce no key at all. Both cases fall back to the
+    // model's label and to the plain (category, label) match below, because a
+    // key that does not exist cannot be searched for.
+    const ruleKeyLabel =
+      category.toLowerCase() === WRITING_RULES_CATEGORY ? ruleKey(content).slice(0, 120) : '';
+    const effectiveLabel = ruleKeyLabel || label;
 
     let targetId: string | null = null;
     if (providedId) {
@@ -1215,6 +1306,12 @@ async function executeToolCall(
       }
     }
 
+    // The stored row this rule already lives in, found by its key in either
+    // form or by recomputing today's key from the content of the rows
+    // themselves. See findWritingRule: it is the relabel migration, done lazily
+    // and one row at a time, and it is why this change ships without one.
+    const ruleOwner = ruleKeyLabel ? await findWritingRule(sql, content) : null;
+
     if (!targetId) {
       // Match on (category, label). Those are the model's own identifiers for
       // a fact, so re-teaching the same fact updates it. A genuinely new fact
@@ -1234,15 +1331,25 @@ async function executeToolCall(
       // path, so the two changes are not separable: without this line the
       // fall-through would weaken the system-row protection instead of leaving
       // it alone. delete_knowledge already gets this right.
-      const existing = (await sql`
-        SELECT id FROM ai_context
-        WHERE LOWER(category) = LOWER(${category})
-          AND LOWER(label) = LOWER(${effectiveLabel})
-          AND source <> 'system'
-        ORDER BY created_at ASC
-        LIMIT 1
-      `) as Array<{ id: string }>;
-      targetId = existing[0]?.id ?? null;
+      //
+      // A writing rule is matched by its KEY rather than by this query, because
+      // the same rule can be sitting under an older form of that key. Every
+      // other category is still a plain (category, label) match: those labels
+      // are the model's own words for a fact, not a derived key, and there is
+      // nothing to migrate.
+      if (ruleKeyLabel) {
+        targetId = ruleOwner?.id ?? null;
+      } else {
+        const existing = (await sql`
+          SELECT id FROM ai_context
+          WHERE LOWER(category) = LOWER(${category})
+            AND LOWER(label) = LOWER(${effectiveLabel})
+            AND source <> 'system'
+          ORDER BY created_at ASC
+          LIMIT 1
+        `) as Array<{ id: string }>;
+        targetId = existing[0]?.id ?? null;
+      }
     }
 
     // Migration 034 puts a unique index on (category, label) for writing
@@ -1252,17 +1359,13 @@ async function executeToolCall(
     // throw here escapes to the handler's catch and returns a 500 for the
     // whole turn. The key wins: it is derived from the rule itself, the id was
     // a guess.
-    if (targetId && category.toLowerCase() === WRITING_RULES_CATEGORY) {
-      const [byKey] = (await sql`
-        SELECT id FROM ai_context
-        WHERE LOWER(category) = LOWER(${category})
-          AND LOWER(label) = LOWER(${effectiveLabel})
-          AND source <> 'system'
-        ORDER BY created_at ASC
-        LIMIT 1
-      `) as Array<{ id: string }>;
-      if (byKey?.id && byKey.id !== targetId) targetId = byKey.id;
-    }
+    //
+    // findWritingRule returns a row already labelled with the current key
+    // before it returns anything else, precisely so that the row which WOULD
+    // collide is the one retargeted to. A row it found by the older form of the
+    // key, or by recomputing the key from its content, owns no label anyone
+    // else wants and is safe to relabel on the way past.
+    if (targetId && ruleOwner && ruleOwner.id !== targetId) targetId = ruleOwner.id;
 
     if (targetId) {
       // active = TRUE matters. The id path used to set category, label,

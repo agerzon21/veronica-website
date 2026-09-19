@@ -72,12 +72,6 @@ export const ACCEPT_LOOSE_AFFIRMATIVES = true;
 // reaches the loose branch, and NO_SEND refuses it regardless.
 
 /**
- * BONUS, and NOT one of the two decisions above: see ruleKey at the bottom of
- * this file. Left FALSE so this change set cannot alter a single stored label.
- */
-export const RULE_KEY_MEANING_ORDER = false;
-
-/**
  * Replace em and en dashes with punctuation Alex actually uses.
  *
  *   "John and Macy — that makes it easier"  ->  "John and Macy, that makes it easier"
@@ -469,34 +463,74 @@ export function findCustomerNameIn(text: string, contactNames: string[]): string
  *
  * Unicode-aware, because the chat defaults to Russian. An ASCII-only version
  * returned an empty string for every Cyrillic rule, which silently turned the
- * whole backstop off for the person it was built for.
+ * whole backstop off for the person it was built for. Nothing in here or in
+ * ruleWords may use \b or [a-z]: see the WORD_CHAR block above for what that
+ * costs and how quietly it costs it.
  *
- * KNOWN DEFECT, left in place on purpose, behind RULE_KEY_MEANING_ORDER.
- * The current order is sort, then slice: the key is built from whichever eight
- * words sort first alphabetically, not from the eight that carry the meaning.
- * Alex's "never send an email until you literally have me say so" keys as
- * "add-adjustment-anyways-asked-did-email-fine-forwards", containing neither
- * "never" nor "send" nor "permission", so a restatement of the same rule will
- * not collide with it and both rows survive to dilute each other. That is the
- * exact failure migration 034 was written to end.
+ * DEDUPE IN READING ORDER, SLICE, THEN SORT. The order of those three steps is
+ * the entire point of this function. It used to sort first and slice second,
+ * so the key was built from whichever eight words fall earliest in the
+ * alphabet rather than the eight that carry the meaning. Alex's own "never
+ * send an email until you literally have me say so, did I ask for that
+ * adjustment? anyways its fine but add this as a hard rule moving forwards"
+ * keyed as "add-adjustment-anyways-ask-did-email-fine-forwards": no "never",
+ * no "send", eight words that between them say nothing about what he asked
+ * for, and "email" in there only by alphabetical luck. Restating the rule
+ * in different words picked a
+ * different eight, so it did not collide, both rows survived, and the two of
+ * them diluted each other in the prompt. That is the exact failure migration
+ * 034 was written to end, and it is a direct cause of the complaint that the
+ * assistant does not learn from being corrected.
  *
- * Flipping the constant to true dedupes in reading order, slices, THEN sorts,
- * which is the correct algorithm. It is off because it changes the key of
- * every rule written from then on: existing rows keyed the old way stop
- * matching their own restatements, so each one duplicates once. That is a
- * small, prunable cost, but it is the owner's to accept, and it wants a
- * migration that relabels category='writing_rules' in the same deploy.
+ * The sort at the END stays. It is what makes "never use long dashes" and
+ * "long dashes, never use them" land on one key. Only the CHOICE of words is
+ * order sensitive; the key they are assembled into must not be.
  */
 export function ruleKey(content: string): string {
-  const words = content
+  return Array.from(new Set(ruleWords(content))).slice(0, 8).sort().join('-');
+}
+
+/**
+ * The key the old sort-first version of ruleKey produced. READ ONLY.
+ *
+ * Nothing writes this form any more, and there is deliberately no migration
+ * that relabels the rows already carrying it, because a SQL file cannot do it:
+ * the key is computed in JavaScript from the rule's own words, so Postgres has
+ * no way to recompute one, and the alternative was a bespoke script Alex would
+ * have to run against production by hand on the same day the code shipped.
+ *
+ * The LOOKUP is tolerant instead. findWritingRule in
+ * api/admin/_assistant-chat.ts looks for the current key, then for a row whose
+ * own content keys to the same rule today, then for this form, and writes the
+ * current key back onto whatever it finds. So a restatement of an old rule
+ * finds its old row and that row migrates itself the first time it is touched;
+ * a restatement of a new rule finds it by the new key; nothing duplicates; and
+ * there is no deploy where the code and the stored labels change over together.
+ *
+ * This pass is the last of the three and the narrowest: it is what still finds
+ * a row whose content has since been edited by hand, so that recomputing the
+ * key from it no longer recognises the rule. Delete this function, and the
+ * findWritingRule pass that calls it, once no writing_rules row carries an
+ * old-form label any more.
+ */
+export function legacyRuleKey(content: string): string {
+  return Array.from(new Set(ruleWords(content).sort())).slice(0, 8).join('-');
+}
+
+/**
+ * The words a key is built from, in the order they were written.
+ *
+ * Shared by both keys on purpose. They must never disagree about what counts
+ * as a word, because the whole scheme rests on them being two orderings of one
+ * list; a stopword added to one and not the other would quietly stop old rows
+ * being findable at all.
+ */
+function ruleWords(content: string): string[] {
+  return content
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter((w) => w.length > 2 && !STOPWORDS.has(w));
-  if (RULE_KEY_MEANING_ORDER) {
-    return Array.from(new Set(words)).slice(0, 8).sort().join('-');
-  }
-  return Array.from(new Set(words.sort())).slice(0, 8).join('-');
 }
 
 const STOPWORDS = new Set([
