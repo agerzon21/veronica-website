@@ -28,20 +28,6 @@ export const KEY_FOLDER = 'weddings_page_drive_folder';
 export const KEY_FEATURED = 'weddings_featured_posts';
 export const KEY_SELECTED = 'weddings_selected_work';
 
-/** Parse a system_state JSON-array value defensively. */
-function parseStringArray(raw: string | null | undefined, cap: number): string[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-      .slice(0, cap);
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Focus values land verbatim in style attributes, so they are strictly
  * validated: either a legacy CSS keyword (the first iteration used

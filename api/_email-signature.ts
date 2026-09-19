@@ -81,21 +81,85 @@ const normalizeText = (s: string): string =>
     .replace(/\s+$/, '');
 
 /**
- * Remove any trailing copy of the signature from a body — the AI writing
- * its own sign-off, or a draft that round-tripped through the composer
- * already signed. Loops because both can stack ("body -- sig" drafted,
- * then signed again). Mid-text occurrences (quoted earlier mail) are
- * deliberately left alone; only the tail is touched.
+ * Openers of a sign-off block, on a line of their own.
+ *
+ * Written as whole-line matches so "Thanks for sending those over" in the
+ * middle of a sentence is untouched; only a line that is nothing but the word
+ * counts.
+ */
+const SIGN_OFF_OPENER =
+  /^(best|best regards|kind regards|warm regards|warmly|thanks|thanks so much|thank you|thx|sincerely|regards|cheers|talk soon|speak soon|с уважением|спасибо|всего доброго|до связи|обнимаю)[,!.]?$/i;
+
+/**
+ * Strip a sign-off the MODEL wrote, as opposed to the canonical one.
+ *
+ * stripTrailingSignature only ever removed an exact copy of Vero's stored
+ * signature. That is not what turns up. On 2026-09-18 the model wrote
+ * "Best,\nVeronika\nVero Photography\nvero@vero.photography", which is not the
+ * canonical "Warmly,\nVeronika\nVero Photography", so nothing was stripped and
+ * the real signature was appended underneath it. The customer received a mail
+ * signed twice, with Vero's address written into the body of a message that
+ * came FROM that address.
+ *
+ * The prompt now says not to write one, and that is worth having, but a
+ * defect in a delivered email is not a style preference and should not rest on
+ * the model complying.
+ *
+ * Narrow on purpose. It wants an opener on its own line, at the very end, with
+ * 1 to 3 short lines under it that look like a name, a business and a contact
+ * detail: no full stops, nothing long, nothing that reads as a sentence. It
+ * never touches the middle of a message, and it never eats the whole thing, so
+ * a reply that is only "Thanks," survives intact.
+ */
+function stripGenericSignOff(text: string): string {
+  const lines = text.split('\n');
+  let end = lines.length;
+  while (end > 0 && lines[end - 1].trim() === '') end--;
+  // The opener plus at most three lines under it: anything further back is
+  // body text that happens to sit near the end.
+  for (let i = end - 1; i >= 0 && i >= end - 4; i--) {
+    const line = lines[i].trim();
+    if (line === '') continue;
+    if (!SIGN_OFF_OPENER.test(line)) continue;
+    const tail = lines
+      .slice(i + 1, end)
+      .map((l) => l.trim())
+      .filter((l) => l !== '');
+    if (tail.length > 3) continue;
+    // A name or a handle, not a sentence. Final punctuation or any real length
+    // means this is prose that happened to follow the word "Thanks".
+    if (!tail.every((l) => l.length <= 60 && !/[.!?]$/.test(l))) continue;
+    const head = lines.slice(0, i).join('\n').replace(/\s+$/, '');
+    // Never return an empty body. A one-line "Thanks," IS the message.
+    if (!head) continue;
+    return head;
+  }
+  return text;
+}
+
+/**
+ * Remove any trailing signature from a body: the canonical one (a draft that
+ * round-tripped through the composer already signed) or one the AI wrote for
+ * itself. Loops because both can stack ("body -- sig" drafted, then signed
+ * again). Mid-text occurrences (quoted earlier mail) are deliberately left
+ * alone; only the tail is touched.
  */
 export function stripTrailingSignature(body: string, signature: string): string {
   let out = normalizeText(body);
   const sig = normalizeText(signature);
-  if (!sig) return out;
-  for (let guard = 0; guard < 4 && out.endsWith(sig); guard++) {
-    out = out.slice(0, out.length - sig.length).replace(/\s+$/, '');
-    // Swallow the sig delimiter a previous append (or the model) left
-    // behind: "--", "-", or a lone em/en dash on its own line.
-    out = out.replace(/(?:^|\n)[-–—]{1,2}$/, '').replace(/\s+$/, '');
+  for (let guard = 0; guard < 4; guard++) {
+    const before = out;
+    if (sig && out.endsWith(sig)) {
+      out = out.slice(0, out.length - sig.length).replace(/\s+$/, '');
+      // Swallow the sig delimiter a previous append (or the model) left
+      // behind: "--", "-", or a lone em/en dash on its own line.
+      out = out.replace(/(?:^|\n)[-–—]{1,2}$/, '').replace(/\s+$/, '');
+    }
+    out = stripGenericSignOff(out).replace(/\s+$/, '');
+    // Also runs when the signature is empty, which is Vero deliberately
+    // choosing not to sign. Her choosing that does not make a sign-off the
+    // model invented for her hers.
+    if (out === before) break;
   }
   return out;
 }

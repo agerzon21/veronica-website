@@ -39,18 +39,6 @@ const MAX_PINNED = 5;
 const MAX_FEATURED = 6;
 const MAX_SELECTED = 8;
 
-function cleanStringArray(input: unknown, cap: number, maxLen: number): string[] | null {
-  if (!Array.isArray(input)) return null;
-  const out: string[] = [];
-  for (const item of input) {
-    if (typeof item !== 'string') return null;
-    const s = item.trim();
-    if (s.length > maxLen) return null;
-    if (s) out.push(s);
-  }
-  return out.slice(0, cap);
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -71,14 +59,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         WHERE key IN (${KEY_HEROES}, ${KEY_FOLDER}, ${KEY_FEATURED}, ${KEY_SELECTED})
       `) as Array<{ key: string; value: string | null }>;
       const state = new Map(rows.map((r) => [r.key, r.value]));
-      const parse = (raw: string | null | undefined): string[] => {
-        try {
-          const arr = JSON.parse(raw ?? '[]');
-          return Array.isArray(arr) ? arr.filter((s) => typeof s === 'string') : [];
-        } catch {
-          return [];
-        }
-      };
       return res.status(200).json({
         success: true,
         pinned: parsePinned(state.get(KEY_HEROES), MAX_PINNED),

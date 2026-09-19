@@ -677,6 +677,18 @@ const dict = {
     // ("RU"/"EN") stay untranslated — they name the chat language, not
     // the admin UI language.
     chatLanguageAria: { en: 'Chat language', ru: 'Язык чата' },
+    // The conversation picker on the Chat sub-tab. Without it this chat
+    // has no customer at all: the assistant only ever receives a
+    // conversation_id from the Messages side panel, so on this tab it had
+    // no name, no thread and no portal state, and drafted to
+    // "[Client's Name]".
+    conversationLabel: { en: 'Working on', ru: 'Работаем над' },
+    conversationNone: { en: 'Nothing in particular', ru: 'Ничего конкретного' },
+    conversationLoading: { en: 'Loading conversations…', ru: 'Загружаю переписки…' },
+    conversationHint: {
+      en: 'Pick a conversation and the assistant can read the thread, the portal status and the customer\'s name.',
+      ru: 'Выбери переписку, и ассистент увидит всю ветку, статус портала и имя клиента.',
+    },
   },
 
   assistantData: {

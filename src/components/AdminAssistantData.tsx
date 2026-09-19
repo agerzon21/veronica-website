@@ -43,7 +43,15 @@ interface ContextEntry {
   label: string;
   content: string;
   active: boolean;
-  source: 'manual' | 'chatbot';
+  /**
+   * 'system' is in this union because the API really does return those rows:
+   * api/admin/_context-list.ts selects ai_context with no source filter. They
+   * are Alex's admin-panel documentation (migration 018) and the write paths
+   * refuse to touch them, so this tab currently offers an Edit that the server
+   * will reject. Fixing that affordance is a separate change; the type at
+   * least stops claiming the rows cannot appear.
+   */
+  source: 'manual' | 'chatbot' | 'system';
   sort_order: number;
   created_at: string;
   updated_at: string;

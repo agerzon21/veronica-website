@@ -37,11 +37,14 @@
  *      ai_context.
  *   2. DRAFTS AND SENDS REPLIES on her behalf. This replaces her actual
  *      habit of screenshotting a message into ChatGPT and copying the
- *      answer back. Sending goes through api/_reply-delivery.ts — the
- *      same path as the Messages panel's Send button — so threading,
- *      signature and idempotency are identical. Requires explicit
- *      approval: the model must pass confirmed=true, and is told never
- *      to do that in the same turn it proposes a draft.
+ *      answer back. Sending goes through api/_reply-delivery.ts, the
+ *      same path as the Messages panel's Send button, so threading,
+ *      signature and idempotency are identical. Approval is ENFORCED IN
+ *      CODE: looksLikeSendApproval (api/_house-style.ts) reads Vero's
+ *      own words for this turn, and nothing else can authorise a send.
+ *      The model's confirmed=true flag is now advisory only. It used to
+ *      be the entire gate, and on 2026-09-18 the model read an edit
+ *      request as approval and mailed a paying customer.
  *   3. ANSWERS "HOW DO I…" QUESTIONS about the admin panel itself, from
  *      ai_context rows with source='system'. Those are written by Alex,
  *      are excluded from the customer-facing prompt (migration 018), and
@@ -64,6 +67,8 @@ import {
 } from '../../src/data/contract-template.js';
 import {
   applyHouseStyle,
+  findCustomerNameIn,
+  looksLikeSendApproval,
   looksLikeStandingRule,
   ruleKey,
   WRITING_RULES_CATEGORY,
@@ -95,6 +100,30 @@ function isDisplayableTurn(m: { role: string; content?: unknown }): boolean {
   // its own role check.
   if (m.role !== 'user' && m.role !== 'assistant') return false;
   return typeof m.content === 'string' && m.content.length > 0;
+}
+
+/**
+ * The last thing the assistant actually said out loud, before this turn.
+ *
+ * The send gate needs it: a bare "yes" or "да" means send only when the
+ * question on the table was "shall I send this". Tool-call turns carry no
+ * prose and are skipped, so what comes back is the text Vero was looking at
+ * when she typed her answer.
+ */
+function lastAssistantTextOf(messages: StoredMessage[]): string {
+  const said: string[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    // Stop at the previous user turn: anything older answered a different
+    // question and cannot be what she is saying yes to.
+    if (m.role === 'user') break;
+    if (m.role === 'assistant' && typeof m.content === 'string' && m.content.trim()) {
+      // One reply can span several assistant turns (the rewrite, then a short
+      // follow-up), and the offer to send can be in either.
+      said.unshift(m.content);
+    }
+  }
+  return said.join('\n');
 }
 
 const GENERAL_SLOT = 'general';
@@ -333,12 +362,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (slot !== GENERAL_SLOT) {
       const convId = slot.slice('conv:'.length);
       const [row] = (await sql`
-        SELECT id, contact_name FROM conversations WHERE id = ${convId} LIMIT 1
-      `) as Array<{ id: string; contact_name: string | null }>;
+        SELECT id, contact_name, contact_handle, external_user_id
+        FROM conversations WHERE id = ${convId} LIMIT 1
+      `) as Array<{
+        id: string;
+        contact_name: string | null;
+        contact_handle: string | null;
+        external_user_id: string | null;
+      }>;
       if (row) {
         openConversation = {
           id: row.id,
-          name: row.contact_name || 'this customer',
+          // Falls through the same chain list_conversations and read_thread
+          // already use. An email thread whose contact_name was never filled
+          // in still has an address, and an address is a far better answer
+          // than the words "this customer": the model handed Vero a draft
+          // addressed to "[Client's Name]" while the name was in the thread
+          // it was holding.
+          name: row.contact_name || row.contact_handle || row.external_user_id || 'this customer',
           // Stated in the prompt as a fact, so the model knows the target
           // language BEFORE writing rather than by being bounced by the
           // tool guard after.
@@ -374,8 +415,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const newlyPersistedMessages: StoredMessage[] = [
       { role: 'user', content: userMessage },
     ];
-    const knowledgeWriteFailures: string[] = [];
+    /**
+     * Tool errors that Vero has to be shown regardless of what the model says
+     * about them. Tagged by tool so the chat line can name the right failure:
+     * a note that was not saved and an email that was not sent are very
+     * different pieces of news.
+     */
+    const toolFailures: Array<{ tool: string; error: string }> = [];
     const dbWrites: DbWrite[] = [];
+    /**
+     * Sends completed during THIS request, shared with executeToolCall.
+     *
+     * One approval authorises one send. The tool loop below runs up to
+     * MAX_TOOL_ROUNDS times on a single message from Vero, so without a cap
+     * "send it" would license eight sends, and a model that decides the first
+     * one failed is entirely capable of trying again.
+     */
+    const sendsThisRequest = { n: 0 };
 
     // Write the thread once here, holding nothing but Vero's message, before
     // any model call happens.
@@ -438,22 +494,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Execute each tool call and record the response.
       for (const toolCall of msg.tool_calls) {
-        const toolResult = await executeToolCall(sql, toolCall, dbWrites, contactNames);
+        const toolResult = await executeToolCall(sql, toolCall, dbWrites, contactNames, {
+          userMessage,
+          lastAssistantText: lastAssistantTextOf(priorMessages),
+          sends: sendsThisRequest,
+          // The draft she was offered last turn, plus anything written this
+          // turn before the tool ran. That is the whole of what she can
+          // possibly have read.
+          shownText: [
+            lastAssistantTextOf(priorMessages),
+            ...newlyPersistedMessages
+              .filter((m) => m.role === 'assistant' && typeof m.content === 'string')
+              .map((m) => m.content as string),
+          ].join('\n'),
+        });
         // A knowledge write that failed must be VISIBLE. The model gets the
         // error back and is told to relay it, but a model that just claimed
         // "saved!" is also capable of glossing over the failure — and did:
         // Vero was told a note was saved when nothing was written. This
         // surfaces the failure as its own chat line no matter what the model
         // says about it.
+        //
+        // send_reply is on this list for the same reason, and it is the more
+        // important of the two. A blocked send must not be narratable: the
+        // model that talked itself into calling the tool is the last thing
+        // that should get to decide how the refusal is described, or whether
+        // Vero hears about it at all. This warning mechanism is the only
+        // reason the failed note save was ever noticed; the send path is
+        // exactly what lacked it.
         if (
           toolCall.type === 'function' &&
           (toolCall.function.name === 'upsert_knowledge' ||
-            toolCall.function.name === 'delete_knowledge') &&
+            toolCall.function.name === 'delete_knowledge' ||
+            toolCall.function.name === 'send_reply') &&
           toolResult &&
           typeof toolResult === 'object' &&
           'error' in toolResult
         ) {
-          knowledgeWriteFailures.push(String((toolResult as { error: unknown }).error));
+          toolFailures.push({
+            tool: toolCall.function.name,
+            error: String((toolResult as { error: unknown }).error),
+          });
         }
         const toolResponseText = JSON.stringify(toolResult);
         newlyPersistedMessages.push({
@@ -470,17 +551,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           tool_call_id: toolCall.id,
         });
       }
-    }
-
-    // Only when nothing useful happened. Ending a turn silently right after a
-    // successful tool call is now the REQUESTED behaviour — the panel shows the
-    // result and a toast announces it — so treating that as a failure would put
-    // a spurious error in the chat.
-    if (knowledgeWriteFailures.length > 0) {
-      const warn =
-        (language === 'ru' ? '⚠️ Заметка НЕ сохранена: ' : '⚠️ Note NOT saved: ') +
-        knowledgeWriteFailures[0];
-      newlyPersistedMessages.push({ role: 'assistant', content: warn });
     }
 
     // Backstop: Vero gave a standing instruction and the model did not save it.
@@ -507,11 +577,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // short" would put Anna's name in front of everyone else. This is the
       // same guard executeToolCall applies to model-chosen labels, using the
       // same list of names currently in the inbox.
-      const lower = userMessage.toLowerCase();
-      const namesInPlay = contactNames
-        .map((n) => n.toLowerCase())
-        .filter((n) => n.length > 2);
-      const namesACustomer = namesInPlay.some((n) => lower.includes(n));
+      //
+      // The veto used to be a bare substring match, so a client called Sue
+      // silently vetoed any rule containing "issue". It is a word-boundary
+      // match now, and when it does fire it says so in the log: a rule that
+      // vanishes with no chat line and no trace is indistinguishable from the
+      // save bug Alex reported, and that ambiguity cost a day.
+      const namesACustomer = findCustomerNameIn(userMessage, contactNames);
+      if (namesACustomer) {
+        console.warn(
+          `[assistant-chat] standing rule not captured: it names a customer (${namesACustomer}). ` +
+            `Message: ${userMessage.slice(0, 160)}`,
+        );
+      }
 
       if (key && !namesACustomer) {
         try {
@@ -589,6 +667,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         content:
           (language === 'ru' ? '📌 Правило сохранено: ' : '📌 Saved rule: ') +
           capturedRule,
+      });
+    }
+
+    // Tool failures Vero has to see, printed LAST and after the backstop above
+    // has had its say.
+    //
+    // This block used to run before the backstop, so a turn where the model's
+    // save failed and the backstop then rescued the rule printed "⚠️ Note NOT
+    // saved" and "📌 Saved rule" one after the other, which reads as broken
+    // whichever of the two she believes. A knowledge-write failure is
+    // therefore suppressed when the rule was rescued: nothing was lost, and
+    // there is nothing for her to do.
+    //
+    // A blocked SEND is never suppressed. It is not a bookkeeping failure, it
+    // is the assistant having tried to mail a customer without being told to,
+    // and Vero needs to know it happened even on a turn that otherwise went
+    // fine. Every failure is rendered, not just the first: two failures used
+    // to show as one.
+    const sendBlocks = toolFailures.filter((f) => f.tool === 'send_reply');
+    const writeBlocks = capturedRule ? [] : toolFailures.filter((f) => f.tool !== 'send_reply');
+    for (const f of sendBlocks) {
+      newlyPersistedMessages.push({
+        role: 'assistant',
+        content:
+          (language === 'ru' ? '⚠️ Письмо НЕ отправлено: ' : '⚠️ Email NOT sent: ') + f.error,
+      });
+    }
+    for (const f of writeBlocks) {
+      newlyPersistedMessages.push({
+        role: 'assistant',
+        content:
+          (language === 'ru' ? '⚠️ Заметка НЕ сохранена: ' : '⚠️ Note NOT saved: ') + f.error,
       });
     }
 
@@ -783,7 +893,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'send_reply',
       description:
-        "Send a reply to a customer on whichever channel the conversation uses (Instagram or email — handled automatically). ONLY call this after showing Vero the draft and getting her explicit approval in the chat. Never call it in the same turn you first propose a draft. The message is sent as Vero herself, not as the AI.",
+        "Send a reply to a customer on whichever channel the conversation uses (Instagram or email, handled automatically). ONLY call this after showing Vero the draft and getting her explicit approval in the chat. Never call it in the same turn you first propose a draft. The message is sent as Vero herself, not as the AI. Approval is checked in code against Vero's own most recent message: if she did not say to send it, this tool refuses and nothing is sent, whatever you pass in `confirmed`. An edit request, a question, or a complaint is not approval. Once per instruction from her, too: a second call in the same turn is refused.",
       parameters: {
         type: 'object',
         properties: {
@@ -796,7 +906,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           confirmed: {
             type: 'boolean',
             description:
-              'Must be true. Set this only after Vero has seen this exact text and explicitly approved sending it.',
+              'Must be true. Set this only after Vero has seen this exact text and explicitly approved sending it. Setting it does not authorise anything on its own: the server checks her actual words. Treat it as your statement that you believe she approved, not as the approval.',
           },
           content_summary: {
             type: 'string',
@@ -941,6 +1051,23 @@ async function executeToolCall(
   dbWrites: DbWrite[],
   /** Contact names in the inbox, used to reject per-customer knowledge rows. */
   knownContactNames: string[] = [],
+  /**
+   * Everything the send gate needs that is NOT under the model's control.
+   *
+   * This function used to receive only the model's own arguments, which is
+   * why no code on this path could tell an approval from an edit request: the
+   * one piece of ground truth, Vero's actual message, was in scope at the call
+   * site and was never passed down. Optional only so the signature stays
+   * compatible; send_reply refuses outright when it is missing, because a send
+   * with no user turn to check against is not a send anyone asked for.
+   */
+  sendCtx?: {
+    userMessage: string;
+    lastAssistantText: string;
+    sends: { n: number };
+    /** Everything the assistant has shown Vero, this turn and the one before. */
+    shownText: string;
+  },
 ): Promise<unknown> {
   // The SDK's ChatCompletionMessageToolCall is a union: function calls and
   // custom tool calls. Only function calls carry `.function`. We never register
@@ -1011,9 +1138,12 @@ async function executeToolCall(
     // could see it had already written a similar row. Per-conversation threads
     // start blind, so each one would mint another. The guard has to exist
     // before the scoping does.
-    const namesInPlay = knownContactNames.map((n) => n.toLowerCase()).filter((n) => n.length > 2);
-    const labelLower = label.toLowerCase();
-    const offendingName = namesInPlay.find((n) => labelLower.includes(n));
+    //
+    // Word-boundary matched, not substring matched. As a raw `includes` this
+    // rejected any label containing a contact's name as a fragment: a client
+    // called Sue made "Common issues" unsavable, with an error message about
+    // naming a specific person that would have made no sense to anyone.
+    const offendingName = findCustomerNameIn(label, knownContactNames);
     if (offendingName) {
       return {
         error:
@@ -1023,6 +1153,42 @@ async function executeToolCall(
       };
     }
 
+    // ONE write path, whether or not the model supplied an id.
+    //
+    // It used to be two, and the id branch dead-ended: an id that matched no
+    // row returned "No entry with id <uuid>" and threw the whole write away,
+    // with category, label and content all present and all required. That is
+    // the reported bug. Alex gave the assistant a hard rule, it tried to save
+    // it, it passed a UUID it had invented, and the rule was lost while the
+    // model told him it had been written down.
+    //
+    // The invented UUID is a design fault, not just a hallucination:
+    // buildSystemPrompt prints [uuid] on every ordinary knowledge row but
+    // renders the HOUSE RULES block content-only, and then instructs the model
+    // to save new rules into exactly that category, with a tool whose schema
+    // says "if updating, pass id". The prompt asks for an id it never gives.
+    // Fixed at both ends: ids are rendered there now, and a stale one here is
+    // a hint rather than a dead end.
+    //
+    // Except for writing rules, where the label is replaced outright by a key
+    // derived from the rule's own words. A model asked to save "no long dashes"
+    // twice invents two different labels, and both rows survive the (category,
+    // label) check below; the reply engine then carries the same order three
+    // times over and still breaks it. ruleKey makes restatements collide on
+    // purpose.
+    //
+    // Computed ABOVE the id branch, not inside the no-id one. Migration 034
+    // puts a unique index on (category, label) where category='writing_rules',
+    // so an id-path write into that category carrying the model's free-text
+    // label could violate it. executeToolCall is called unguarded, so the
+    // throw escaped to the handler's catch and Vero got a 500 for the whole
+    // turn.
+    const effectiveLabel =
+      category.toLowerCase() === WRITING_RULES_CATEGORY
+        ? ruleKey(content).slice(0, 120) || label
+        : label;
+
+    let targetId: string | null = null;
     if (providedId) {
       // source='system' rows document how the admin panel works
       // (migration 018). The assistant must not be able to rewrite its
@@ -1030,67 +1196,99 @@ async function executeToolCall(
       // something like "that's wrong, fix it", and the damage would only
       // surface later as confidently wrong answers.
       const [owner] = (await sql`
-        SELECT source FROM ai_context WHERE id = ${providedId}
-      `) as Array<{ source: string }>;
+        SELECT id, source FROM ai_context WHERE id = ${providedId}
+      `) as Array<{ id: string; source: string }>;
       if (owner?.source === 'system') {
         return {
           error:
             'That entry documents how the admin panel works and is maintained by Alex. Tell Vero it can\'t be edited here, and to message Alex if it looks wrong.',
         };
       }
-      const updated = (await sql`
-        UPDATE ai_context
-        SET category = ${category}, label = ${label}, content = ${content},
-            source = 'chatbot', updated_at = NOW()
-        WHERE id = ${providedId}
-        RETURNING id, category, label, content
-      `) as Array<{ id: string; category: string; label: string; content: string }>;
-      if (updated.length === 0) return { error: `No entry with id ${providedId}` };
-      dbWrites.push({ type: 'updated', category, label, content_summary: contentSummary });
-      return { success: true, action: 'updated', entry: updated[0] };
+      // No row: treat the id as the guess it is and fall through to matching
+      // on (category, label), which is what a no-id call would have done.
+      targetId = owner?.id ?? null;
+      if (!targetId) {
+        console.log(
+          `[assistant-chat] upsert_knowledge: id ${providedId} matches no row, ` +
+            `falling through to (category, label) upsert for ${category}/${effectiveLabel}`,
+        );
+      }
     }
 
-    // No id supplied — this is the path the model actually takes most of
-    // the time, because it rarely bothers to search first.
-    //
-    // It used to INSERT unconditionally, which meant every time Vero
-    // re-explained something ("make the replies more tailored") the
-    // assistant created ANOTHER row instead of revising the existing
-    // one. That is the literal mechanism behind "I've told it this
-    // several times and nothing changes": her corrections piled up as
-    // duplicates, the model saw the same instruction repeated, and the
-    // prompt grew without the behavior changing. It left 6 duplicated
-    // entries and ~5k wasted characters in every reply's context.
-    //
-    // Match on (category, label) first. Those are the model's own
-    // identifiers for a fact, so re-teaching the same fact now updates
-    // it. A genuinely new fact gets a new label and still inserts.
-    //
-    // Except for writing rules, where the label is replaced outright by a key
-    // derived from the rule's own words. A model asked to save "no long dashes"
-    // twice invents two different labels, and both rows survive the check
-    // below; the reply engine then carries the same order three times over and
-    // still breaks it. ruleKey makes restatements collide on purpose.
-    const effectiveLabel =
-      category.toLowerCase() === WRITING_RULES_CATEGORY
-        ? ruleKey(content).slice(0, 120) || label
-        : label;
-    const existing = (await sql`
-      SELECT id FROM ai_context
-      WHERE LOWER(category) = LOWER(${category}) AND LOWER(label) = LOWER(${effectiveLabel})
-      ORDER BY created_at ASC
-      LIMIT 1
-    `) as Array<{ id: string }>;
+    if (!targetId) {
+      // Match on (category, label). Those are the model's own identifiers for
+      // a fact, so re-teaching the same fact updates it. A genuinely new fact
+      // gets a new label and still inserts. Without this it INSERTed
+      // unconditionally, so every time Vero re-explained something ("make the
+      // replies more tailored") the assistant created ANOTHER row. That is the
+      // literal mechanism behind "I've told it this several times and nothing
+      // changes": her corrections piled up as duplicates, the model saw the
+      // same instruction repeated, and the prompt grew without the behavior
+      // changing.
+      //
+      // source <> 'system' is NOT belt and braces here, it is a hole that was
+      // open. The id path checked source and this one did not, so a no-id call
+      // whose (category, label) happened to collide with one of Alex's
+      // documentation rows silently overwrote it and relabelled it
+      // source='chatbot'. The fall-through above routes more traffic into this
+      // path, so the two changes are not separable: without this line the
+      // fall-through would weaken the system-row protection instead of leaving
+      // it alone. delete_knowledge already gets this right.
+      const existing = (await sql`
+        SELECT id FROM ai_context
+        WHERE LOWER(category) = LOWER(${category})
+          AND LOWER(label) = LOWER(${effectiveLabel})
+          AND source <> 'system'
+        ORDER BY created_at ASC
+        LIMIT 1
+      `) as Array<{ id: string }>;
+      targetId = existing[0]?.id ?? null;
+    }
 
-    if (existing.length > 0) {
+    // Migration 034 puts a unique index on (category, label) for writing
+    // rules, so two rows there cannot share a key. If the id the model handed
+    // us points at one row while the rule's own key already belongs to
+    // another, updating the first would violate the index, and an unguarded
+    // throw here escapes to the handler's catch and returns a 500 for the
+    // whole turn. The key wins: it is derived from the rule itself, the id was
+    // a guess.
+    if (targetId && category.toLowerCase() === WRITING_RULES_CATEGORY) {
+      const [byKey] = (await sql`
+        SELECT id FROM ai_context
+        WHERE LOWER(category) = LOWER(${category})
+          AND LOWER(label) = LOWER(${effectiveLabel})
+          AND source <> 'system'
+        ORDER BY created_at ASC
+        LIMIT 1
+      `) as Array<{ id: string }>;
+      if (byKey?.id && byKey.id !== targetId) targetId = byKey.id;
+    }
+
+    if (targetId) {
+      // active = TRUE matters. The id path used to set category, label,
+      // content, source and updated_at, and nothing else, so updating a
+      // deactivated row returned success, fired the toast, told Vero it was
+      // saved, and left a rule that buildSystemPrompt skips. Silently, with no
+      // warning, forever.
       const updated = (await sql`
         UPDATE ai_context
-        SET content = ${content}, source = 'chatbot', active = TRUE, updated_at = NOW()
-        WHERE id = ${existing[0].id}
+        SET category = ${category}, label = ${effectiveLabel}, content = ${content},
+            source = 'chatbot', active = TRUE, updated_at = NOW()
+        WHERE id = ${targetId} AND source <> 'system'
         RETURNING id, category, label, content
       `) as Array<{ id: string; category: string; label: string; content: string }>;
-      dbWrites.push({ type: 'updated', category, label, content_summary: contentSummary });
-      return { success: true, action: 'updated', entry: updated[0] };
+      if (updated.length > 0) {
+        dbWrites.push({
+          type: 'updated',
+          category,
+          label: effectiveLabel,
+          content_summary: contentSummary,
+        });
+        return { success: true, action: 'updated', entry: updated[0] };
+      }
+      // The row went away, or turned out to be a system row, between the two
+      // statements. Insert rather than report a failure for a write that is
+      // still perfectly valid.
     }
 
     const created = (await sql`
@@ -1277,6 +1475,91 @@ async function executeToolCall(
     if (!conversationId || !text) {
       return { error: 'conversation_id and text are required' };
     }
+    // THE APPROVAL GATE. Read Vero's own words. Do not ask the model.
+    //
+    // FIRST, ahead of the language check, deliberately. A send nobody
+    // authorised is refused for that reason and not for a detail of how it was
+    // written, the refusal Vero reads says the right thing, and a blocked send
+    // costs no database round trip.
+    //
+    // What used to be here was `if (args.confirmed !== true) return ...`, and
+    // its comment called it "a structural speed bump... which makes an
+    // accidental send take a deliberate step rather than a plausible next
+    // token". It was neither. `confirmed` is a tool parameter the model
+    // writes, the schema marks it required and says "must be true", so a well
+    // formed call always carries it. It encoded "I am calling this tool", not
+    // "Vero approved". On 2026-09-18 the model read "stop messing with the
+    // signature, we dont need to include our email" as approval, wrote
+    // confirmed: true, this line waved it through because true === true, and a
+    // paying customer got an email nobody had authorised.
+    //
+    // `confirmed` is kept below as one more thing that has to line up, but it
+    // is advisory now. The load-bearing check is looksLikeSendApproval, which
+    // the model cannot write to, exactly as languageMismatch re-derives the
+    // customer's language from the database rather than believing the model
+    // about it.
+    if (!sendCtx) {
+      return {
+        error:
+          'NOT SENT. No user turn is in scope, so there is no way to verify that Vero approved this. Nothing went to the customer.',
+      };
+    }
+    if (sendCtx.sends.n >= 1) {
+      return {
+        error:
+          'NOT SENT. One send per instruction from Vero. Something has already been sent this turn. ' +
+          'Ask her again before sending anything else.',
+      };
+    }
+    const approval = looksLikeSendApproval(sendCtx.userMessage, sendCtx.lastAssistantText);
+    if (!approval.ok) {
+      // Logged with the reason and the message, because this log is how the
+      // accept list gets widened later from what Vero really types, rather
+      // than from guesses about what she might.
+      console.log(
+        `[assistant-chat] send BLOCKED (${approval.why}) convo=${conversationId}: ` +
+          `${sendCtx.userMessage.slice(0, 160)}`,
+      );
+      return {
+        error:
+          'NOT SENT. Vero has not told you to send it in this turn, so nothing went to the customer. ' +
+          'Show her the text and wait for her to say "send it" or "отправь". ' +
+          'Do not claim anything was sent, and do not call this tool again until she does.',
+      };
+    }
+
+    // A second layer, LOG ONLY for now, on purpose.
+    //
+    // Approval means "send THAT text", and nothing yet checks that the text
+    // being sent is the text Vero read. The two pipelines are close but not
+    // identical: the send text goes through applyHouseStyle, the displayed
+    // text through applyHouseStyle(scrubSubjectLines(...)), so an exact
+    // containment test would occasionally miss on a send that is perfectly
+    // legitimate. A false block would be a terrible first impression of a new
+    // gate, and this one is new. So it watches and says nothing to Vero.
+    //
+    // Promote it to a hard refusal once a week of these logs is clean. If the
+    // log is noisy, the normalisation below is what needs fixing, not the
+    // idea.
+    const flatten = (s: string) => s.toLowerCase().replace(/\s+/gu, ' ').trim();
+    if (!flatten(sendCtx.shownText).includes(flatten(text))) {
+      console.log(
+        `[assistant-chat] send text was NOT shown to Vero first convo=${conversationId}: ` +
+          `${text.slice(0, 160)}`,
+      );
+    }
+
+    // Advisory, and kept. It is no longer what authorises a send, so it costs
+    // nothing, but it is one more thing that has to line up: a call that omits
+    // it is a malformed call, and refusing those keeps the tool schema honest.
+    if (args.confirmed !== true) {
+      return {
+        error:
+          'Not sent. Vero approved this, but the call did not set confirmed=true. ' +
+          'Call again with the exact same text and confirmed=true.',
+      };
+    }
+
     const sendMismatch = await languageMismatch(
       sql,
       conversationId,
@@ -1284,16 +1567,6 @@ async function executeToolCall(
       args.language_mismatch_confirmed === true,
     );
     if (sendMismatch) return { error: sendMismatch };
-
-    // Structural speed bump on top of the prompt instruction. The model
-    // has to affirmatively assert approval, which makes an accidental
-    // send take a deliberate step rather than a plausible next token.
-    if (args.confirmed !== true) {
-      return {
-        error:
-          'Not sent. Show Vero the draft and get her explicit approval first, then call again with confirmed=true.',
-      };
-    }
 
     // Goes through the SAME path as the Messages panel's Send button —
     // threading headers, signature, persist-before-send ordering and
@@ -1308,8 +1581,12 @@ async function executeToolCall(
       }
       return { error: result.error ?? 'Send failed' };
     }
+    // Counted only on a real delivery, and counted before anything can call
+    // this tool again in the same request.
+    sendCtx.sends.n += 1;
     console.log(
-      `[assistant-chat] sent reply via co-pilot to conversation=${conversationId}`,
+      `[assistant-chat] sent reply via co-pilot to conversation=${conversationId} ` +
+        `(approval: ${approval.why})`,
     );
     dbWrites.push({
       type: 'created',
@@ -1411,9 +1688,18 @@ function buildSystemPrompt(
   // is hard-coded into the list as well as stored, because it is the one that
   // has been repeated most and the one api/_house-style.ts enforces in code
   // regardless of what this prompt achieves.
+  //
+  // Each stored rule is rendered WITH its id, exactly like every other
+  // knowledge row below. It used to be content only, while the tool schema
+  // told the model to pass an id when updating, so when it was told to save a
+  // new rule into this category it invented a UUID, the write matched no row,
+  // and the rule was thrown away. Roughly four tokens a rule against a prompt
+  // already near 17.5k, to remove the cause rather than the symptom.
   const houseRules = [
     'Never use long dashes. No em dashes, no en dashes, ever. Use a comma, a period, a colon, or the word "to" for a range. This applies to what you write to Vero in this chat AND to every draft or reply you write for a customer.',
-    ...ruleRows.map((r) => r.content.trim()).filter(Boolean),
+    ...ruleRows
+      .filter((r) => r.content.trim())
+      .map((r) => `[${r.id}] ${r.content.trim()}`),
   ];
   const houseRulesBlock = `## HOUSE RULES, learned from Vero's corrections (these outrank everything below)
 ${houseRules.map((r) => `- ${r}`).join('\n')}
@@ -1421,7 +1707,9 @@ ${houseRules.map((r) => `- ${r}`).join('\n')}
 These are standing orders, not facts to cite. They were added because Vero
 corrected the same thing more than once. If she gives you another one, save it
 with upsert_knowledge under the category "${WRITING_RULES_CATEGORY}" so it
-appears in this list next time. That is the ONLY way it survives this chat.`;
+appears in this list next time. That is the ONLY way it survives this chat.
+To REPLACE one of the rules above, pass its [id]. To add a new one, pass no id
+at all. Never invent an id: if you do not have one in front of you, omit it.`;
 
   const systemKnowledge =
     systemRows.length === 0
@@ -1593,6 +1881,40 @@ She can ask to reply to someone: "help me answer Sarah", "draft a reply to that 
 5. Then ASK: would you like me to send this, or do you want to change something? Do NOT call send_reply in the same turn you first show a draft, ever.
 6. Only after she approves ("yes", "send it", "да, отправь") call send_reply with confirmed=true and the exact approved text.
 If she asks for changes, revise and show it again.
+
+## HOW A DRAFT TO A CUSTOMER IS WRITTEN
+These apply the moment you START writing a draft, which is while you are typing
+it into the chat, before any tool is involved. They are not tool rules.
+- **Brief.** 1 to 2 sentences. Never a wall of text. She is a photographer
+  answering a message, not a company issuing a statement.
+- **No sign-off, ever.** Do not end with "Warmly,", "Best,", "Thanks," followed
+  by a name, or "Vero Photography". Email replies get Vero's real signature
+  appended automatically at send time, so one you write arrives twice. Instagram
+  DMs are unsigned on purpose. This has reached a real client.
+- **Never write Vero's own email address into a draft.** The mail is FROM that
+  address. Putting it in the body is like signing a letter with the envelope.
+- **No boilerplate opener.** Not "I hope this message finds you well", not "I
+  hope you are doing well", not "I wanted to reach out". Start with the thing
+  you are actually saying.
+- **No placeholders.** Never write "[Client's Name]", "[date]" or any other
+  bracketed blank. If you do not know the name, look at THE CONVERSATION
+  CURRENTLY OPEN above, or at read_thread, or write the sentence without it.
+  Handing Vero a draft with a blank in it means she has to do the one part you
+  were asked to do.
+
+## SENDING IS GATED IN CODE, NOT BY YOUR JUDGEMENT
+send_reply checks Vero's most recent message before it sends anything. If she
+did not tell you to send it, the tool refuses and the customer receives
+nothing, whatever you passed in confirmed. This exists because on
+2026-09-18 an edit request was read as approval and a paying customer was
+mailed without permission.
+- An edit request is not approval. A question is not approval. A complaint is
+  not approval. Silence is not approval.
+- If the tool comes back refused, say so plainly in the chat and show her the
+  text again. Never describe a refused send as sent, and never "try again" with
+  different wording to get it through.
+- One approval sends one message. If you have already sent this turn, ask her
+  again before sending anything else.
 
 **Whenever you write a complete, ready-to-send rewrite of a draft she is already refining, also call update_draft with that exact text.** That replaces the pending draft behind the Reply tab so it shows your latest version rather than the original, which matters when she does not send straight away and comes back to it later. It sends nothing. Call it only when the text could go out as-is: not while you are offering options, asking a question, or thinking out loud. Do it in the same turn you show her the rewrite, and do not ask permission for it — updating an unsent draft is not sending, and she can still edit or discard it.
 

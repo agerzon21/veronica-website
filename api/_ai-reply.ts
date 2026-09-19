@@ -744,7 +744,7 @@ export async function portalContextBlock(
     const rows = (await sql`
       SELECT p.mode, p.client_email, p.contract_status,
              (p.client_password_hash IS NOT NULL) AS account_active,
-             p.invite_sent_at
+             p.invite_sent_at, p.client_display_name, p.session_type, p.event_date
       FROM conversations c
       JOIN client_portals p ON p.id = c.linked_client_portal_id
       WHERE c.id = ${conversationId}
@@ -755,6 +755,9 @@ export async function portalContextBlock(
       contract_status: string;
       account_active: boolean;
       invite_sent_at: string | null;
+      client_display_name: string | null;
+      session_type: string | null;
+      event_date: string | null;
     }>;
     if (rows.length === 0) return null;
     const p = rows[0];
@@ -762,6 +765,24 @@ export async function portalContextBlock(
       'PORTAL STATUS (from the system, not the thread — the customer may not have mentioned any of this):',
       `- This customer has a client portal (${p.mode} mode).`,
     ];
+    // Who they are and what they booked. The thread often does not say: a
+    // portal is created from the admin panel, so the booking type and the date
+    // exist in the system and were never typed into the conversation. Without
+    // these the assistant had the portal state but not the shoot it belonged
+    // to, and asked Vero questions she had already answered in the form.
+    if (p.client_display_name) lines.push(`- Client name on the booking: ${p.client_display_name}.`);
+    if (p.session_type) lines.push(`- Booking type: ${p.session_type}.`);
+    if (p.event_date) {
+      // A DATE column comes back as a string from some drivers and as a Date
+      // at LOCAL midnight from others, and toISOString on the latter can roll
+      // the day backwards under a positive UTC offset. Trust the string when
+      // there is one.
+      const day =
+        typeof p.event_date === 'string'
+          ? p.event_date.slice(0, 10)
+          : new Date(p.event_date).toISOString().slice(0, 10);
+      lines.push(`- Event date: ${day}.`);
+    }
     if (p.mode === 'full') {
       lines.push(
         p.client_email
