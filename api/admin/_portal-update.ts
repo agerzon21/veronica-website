@@ -301,6 +301,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (typeof patch.gallery_enabled === 'boolean') {
       await sql`update client_portals set gallery_enabled = ${patch.gallery_enabled}, updated_at = now() where id = ${id}`;
     }
+    // Extending a gallery that is about to expire.
+    //
+    // The countdown turned orange under seven days and then the gallery simply
+    // went dark, because nothing in the entire system could move this date.
+    // The capability existed on the server (the deliver handler has no
+    // already-delivered guard and would happily re-stamp it) but the only
+    // button that called it was gated on NOT being delivered yet, so it was
+    // unreachable exactly when it was needed. A warning colour with no route
+    // to the fix is decoration, not a warning.
+    //
+    // Deliberately separate from delivery: re-running delivery would re-send
+    // the photos-are-ready email to a client who got it months ago, and would
+    // move gallery_delivered_at, which is the release switch and the date on
+    // the client's own portal.
+    if (typeof patch.gallery_expires_at === 'string') {
+      const when = new Date(patch.gallery_expires_at);
+      if (Number.isNaN(when.getTime())) {
+        return res.status(400).json({ success: false, error: 'gallery_expires_at is not a valid date.' });
+      }
+      // Only ever forward. Moving an expiry INTO the past would black out a
+      // live gallery with no warning and no undo, and there is no reason to
+      // want that which is not better served by disabling the gallery.
+      const currentRow = (await sql`
+        select gallery_expires_at, gallery_delivered_at from client_portals where id = ${id} limit 1
+      `) as Array<{ gallery_expires_at: string | null; gallery_delivered_at: string | null }>;
+      const current = currentRow[0]?.gallery_expires_at;
+      if (!currentRow[0]?.gallery_delivered_at) {
+        return res.status(409).json({
+          success: false,
+          error: 'This gallery has not been delivered yet, so it has no expiry to extend.',
+        });
+      }
+      if (when.getTime() <= Date.now()) {
+        return res.status(400).json({ success: false, error: 'Pick a date in the future.' });
+      }
+      if (current && when.getTime() < new Date(current).getTime()) {
+        return res.status(400).json({
+          success: false,
+          error: 'That is earlier than the current expiry. Extending only moves it later.',
+        });
+      }
+      await sql`update client_portals set gallery_expires_at = ${when.toISOString()}, updated_at = now() where id = ${id}`;
+    }
     if (typeof patch.contract_total_amount === 'number' && !contractFrozen) {
       await sql`update client_portals set contract_total_amount = ${patch.contract_total_amount}, updated_at = now() where id = ${id}`;
     }

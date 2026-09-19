@@ -587,6 +587,17 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                   {t.clientDetail.notDelivered}
                 </Badge>
               )}
+              {/* The only route to a live gallery's expiry. Without it the
+                  countdown turned orange and then the gallery went dark with
+                  nothing anyone could do about it. */}
+              {portal.gallery_delivered_at && portal.gallery_expires_at && (
+                <ExtendGallery
+                  expiresAt={portal.gallery_expires_at}
+                  daysLeft={galleryDaysLeft}
+                  saving={savingField === 'gallery_expires_at'}
+                  onExtend={(iso) => patch({ gallery_expires_at: iso }, 'gallery_expires_at')}
+                />
+              )}
             </Box>
             {!portal.gallery_delivered_at && portal.drive_url && !unpaidConfirm && (
               <Box w={{ base: '100%', md: 'auto' }}>
@@ -1250,6 +1261,115 @@ function ShootSummary({
           </Stack>
         </Box>
       )}
+    </Box>
+  );
+}
+
+/**
+ * Push a delivered gallery's expiry further out.
+ *
+ * Offers whole months rather than a date picker on purpose: the question she
+ * is answering is "give them a bit longer", not "pick the exact day". Three
+ * taps total, and a date field on a phone is the slowest control there is.
+ *
+ * Extends from the CURRENT expiry, not from today, so pressing "+1 month"
+ * twice gives two months rather than quietly collapsing to one. That also
+ * matches what the words say.
+ */
+function ExtendGallery({
+  expiresAt,
+  daysLeft,
+  saving,
+  onExtend,
+}: {
+  expiresAt: string;
+  daysLeft: number | null;
+  saving: boolean;
+  onExtend: (iso: string) => Promise<boolean>;
+}) {
+  const { t } = useAdminLang();
+  const [open, setOpen] = useState(false);
+
+  // Same clamping rule as the server: 31 January plus a month is 28 February,
+  // not 3 March. Two implementations of one rule is a smell, but this one is
+  // only ever a preview of the date the server will compute, and the server is
+  // the one that decides.
+  const plusMonths = (from: Date, months: number): Date => {
+    const d = new Date(from.getTime());
+    const day = d.getUTCDate();
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() + months);
+    const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(day, last));
+    return d;
+  };
+
+  // From the later of now and the current expiry. An already-expired gallery
+  // extended by "+1 month" should be live for a month, not for whatever is
+  // left of a month that already ended.
+  const base = new Date(Math.max(Date.now(), new Date(expiresAt).getTime()));
+  const urgent = daysLeft !== null && daysLeft < 7;
+
+  if (!open) {
+    return (
+      <Box mt={2}>
+        <Box
+          as="button"
+          type="button"
+          onClick={() => setOpen(true)}
+          fontSize="xs"
+          color={urgent ? 'orange.700' : 'gray.500'}
+          fontWeight={urgent ? '500' : '400'}
+          textDecoration="underline"
+          bg="transparent"
+          border="none"
+          px={0}
+          minH="44px"
+          cursor="pointer"
+        >
+          {t.clientDetail.extendGallery}
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box mt={2} p={3} bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="sm">
+      <Text fontSize="xs" color="gray.600" mb={2}>
+        {t.clientDetail.extendGalleryHelp(formatDate(expiresAt))}
+      </Text>
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+        {[1, 3, 6].map((m) => (
+          <CTAButton
+            key={m}
+            onClick={async () => {
+              const ok = await onExtend(plusMonths(base, m).toISOString());
+              if (ok) setOpen(false);
+            }}
+            variant="outline"
+            size="sm"
+            isDisabled={saving}
+            fullWidth={{ base: true, md: false }}
+          >
+            {t.clientDetail.extendByMonths(m)}
+          </CTAButton>
+        ))}
+      </Stack>
+      <Box
+        as="button"
+        type="button"
+        onClick={() => setOpen(false)}
+        mt={2}
+        fontSize="xs"
+        color="gray.500"
+        bg="transparent"
+        border="none"
+        px={0}
+        minH="44px"
+        cursor="pointer"
+      >
+        {t.common.cancel}
+      </Box>
     </Box>
   );
 }

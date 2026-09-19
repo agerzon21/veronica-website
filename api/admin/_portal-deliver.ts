@@ -29,6 +29,31 @@ import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { sendEmail } from '../_auto-reply.js';
 
+/**
+ * Add calendar months, the way a person counting months on a calendar does.
+ *
+ * The previous arithmetic was `months * 30 * 24 * 60 * 60 * 1000`, so "3
+ * months" was 90 days and landed two to three days early depending on which
+ * months it crossed. The contract says months and the client reads months, so
+ * a gallery that dies before the date on the contract is a promise broken by a
+ * rounding decision nobody made on purpose.
+ *
+ * Month-end is the trap: 31 January plus one month has no 31st to land on, and
+ * `setMonth` silently rolls forward into March. Clamp to the last day of the
+ * target month instead, which is what every calendar app does and what a
+ * person means.
+ */
+export function addCalendarMonths(from: Date, months: number): Date {
+  const d = new Date(from.getTime());
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  // Day 0 of the following month is the last day of this one.
+  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay));
+  return d;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -42,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!id) return res.status(400).json({ success: false, error: 'id required' });
 
   const reqRetention = Number(req.body?.retention_months);
-  const retentionMonths = Number.isFinite(reqRetention) && reqRetention > 0 ? reqRetention : 3;
+  const explicitRetention = Number.isFinite(reqRetention) && reqRetention > 0 ? reqRetention : null;
   // Explicit opt-in, sent by the admin UI only after Vero has been shown the
   // outstanding amount and chosen to deliver anyway. Strict === true so a
   // stray 'false' string or a 1 from some future caller cannot wave the
@@ -53,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const rows = (await sql`
       select id, mode, client_display_name, client_email, drive_url, gallery_password, gallery_delivered_at,
-             contract_status, contract_total_amount, paid_to_date
+             contract_status, contract_total_amount, paid_to_date, contract_variables
       from client_portals
       where id = ${id}
       limit 1
@@ -66,6 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       gallery_password: string;
       gallery_delivered_at: string | null;
       contract_status: 'none' | 'pending' | 'signed' | 'void';
+      // The contract's own promise about how long the gallery stays up. It is
+      // a contract VARIABLE, not a column, which is why the lookup this
+      // handler's docstring has always described was never actually here.
+      contract_variables: Record<string, string> | null;
       // Postgres numerics arrive as strings, so both need parseFloat before
       // any comparison. '250' < '90' is true as strings.
       contract_total_amount: string | null;
@@ -130,8 +159,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // The contract says how long the gallery stays up, so the contract decides.
+    // An explicit request still wins, for the case where Vero is deliberately
+    // giving someone longer. Falling back to 3 only when neither exists.
+    //
+    // This is the lookup the docstring has always promised and the code never
+    // performed: a wedding contract promising six months was delivering three,
+    // and nothing anywhere said so.
+    const contractRetention = Number(portal.contract_variables?.retention_months);
+    const retentionMonths =
+      explicitRetention ??
+      (Number.isFinite(contractRetention) && contractRetention > 0 ? contractRetention : 3);
+
     const deliveredAt = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + retentionMonths * 30 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = addCalendarMonths(new Date(deliveredAt), retentionMonths).toISOString();
 
     await sql`
       update client_portals

@@ -1689,6 +1689,30 @@ const dict = {
     // circles, so each one has to survive noOfLines={1} at roughly 78px on a
     // 320px screen. Russian is the longer language and set the budget: every
     // label here is one short word in both.
+    // Extending a delivered gallery's expiry.
+    extendGallery: { en: 'Extend the gallery', ru: 'Продлить галерею' },
+    extendGalleryHelp: {
+      en: (until: string) => `Currently online until ${until}. Extending adds to that date, so the client keeps the time they already have.`,
+      ru: (until: string) => `Сейчас доступна до ${until}. Продление добавляется к этой дате, так что клиент не теряет уже имеющееся время.`,
+      dynamic: true,
+    },
+    extendByMonths: {
+      // Russian needs the noun to agree with the numeral: 1 месяц, 2-4 месяца,
+      // 5+ месяцев. Only 1, 3 and 6 are offered, but the helper covers the
+      // range so a fourth option later cannot quietly print "6 месяц".
+      en: (n: number) => `+${n} ${n === 1 ? 'month' : 'months'}`,
+      ru: (n: number) => {
+        const m100 = n % 100;
+        const m10 = n % 10;
+        let w = 'месяцев';
+        if (m100 < 11 || m100 > 14) {
+          if (m10 === 1) w = 'месяц';
+          else if (m10 >= 2 && m10 <= 4) w = 'месяца';
+        }
+        return `+${n} ${w}`;
+      },
+      dynamic: true,
+    },
     summaryDirections: { en: 'Directions', ru: 'Маршрут' },
     summaryCall: { en: 'Call', ru: 'Позвонить' },
     summaryEmail: { en: 'Email', ru: 'Почта' },
