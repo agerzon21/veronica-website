@@ -18,40 +18,91 @@
  * an origin the CALLER supplies, which is what lets the server build the one
  * link that needs it without this module ever knowing the value.
  *
- * THE POLICY, settled by Alex on 2026-09-19 after the research in
- * QUEUED-session-location.md. These five numbers are the whole feature:
+ * THE POLICY, revised by Alex on 2026-09-19 after a second research pass threw
+ * out the first one. These four numbers are the whole fee:
  *
- *   FREE RADIUS   30 miles one way, so 60 miles round trip.
- *   RATE          $1.00 per mile beyond that, on the ROUND TRIP distance.
+ *   FREE RADIUS   60 miles one way, so 120 miles round trip.
+ *   RATE          $0.70 per mile beyond that, on the ROUND TRIP distance.
  *   TRAVEL TIME   folded into the per mile rate. Never billed separately.
  *   ROUNDING      always UP, always to the nearest $5.
- *   CEILING       above $100 computed, stop autofilling and quote by hand.
  *
- * Worked example, his real booking: 53.2 miles each way is 106.4 round trip,
- * minus the 60 included is 46.4 billable, times $1.00 is $46.40, rounded up to
- * $50. That $50 is below pure IRS cost recovery for the same trip ($80.86 at 76
- * cents a mile), so she is still absorbing vehicle cost and all of the driving
- * time. That is the sentence that ends any argument about the number.
+ * Worked example, the routine two hour wedding that forced the revision: 103
+ * miles each way is 206 round trip, minus the 120 included is 86 billable,
+ * times $0.70 is $60.20, rounded up to $65. Pure IRS cost recovery on those
+ * same 206 miles is $156.56 at 76 cents, so she is absorbing about $92 of
+ * vehicle cost and all four hours of driving on top. That is the sentence that
+ * ends any argument about the number.
  *
- * WHY DISTANCE IS THE ONLY TRIGGER
- * The original request said "over 1 hour OR over 50 miles". The time half is
- * deliberately dropped. The fee is per mile, so mileage is measured anyway; the
- * OR could only fire uniquely on a short, slow trip where the formula returns
- * about $10, which creates the awkward conversation rather than preventing it;
- * and drive time is not deterministic, so a contract line item computed from it
- * would move depending on when somebody looked it up. Drive time is still
- * COLLECTED and DISPLAYED, because it is exactly what Veronika needs to decide
- * whether to take the booking at all. It just never touches the arithmetic.
+ * WHAT THE FIRST VERSION GOT WRONG, so that none of it comes back.
+ * The ROUND TRIP BASIS was never the bug and it stays: 64% of event pros who
+ * charge per mile bill the round trip, and the clearest published policies
+ * state the allowance one way and then apply it to the round trip, which is
+ * exactly what the constants below do. Two other things were wrong and they
+ * compounded. A 30 mile free radius is a METRO number, borrowed from studios
+ * measuring out of Denver and Portland; every rural comparable includes 60 one
+ * way. And $1.00 per round trip mile was above every photographer comparable
+ * found (0.50, 0.57, 0.66, 0.70), so a two hour job billed $150 when the field
+ * charges $50 to $105 for it. The wider radius is doing most of the repair:
+ * the same trip bills 86 miles instead of 146 before the rate is even touched.
+ *
+ * There is no taper and there are no tiers, because no published tapering table
+ * exists in this industry. The wider radius does the work a taper would do,
+ * with one number instead of a table.
+ *
+ * WHY THE DOLLAR CEILING IS GONE AND IS NOT COMING BACK
+ * v1 stopped autofilling above $100 computed and told her to quote it by hand.
+ * A dollar figure describes the RATE, not the job: at $1.00 a mile, $100
+ * arrived at 80 miles one way, about 85 minutes of driving, which is a routine
+ * booking. Change the rate and the very same $100 lands on a completely
+ * different job without anybody deciding anything, which is the tell that the
+ * unit was wrong. No published policy anywhere in this industry triggers on
+ * dollars; every one triggers on distance or on hours, because the only real
+ * discontinuity in the cost of a trip is a hotel bed, and a bed is a step
+ * function of HOURS. So the ceiling is replaced by the two separate things that
+ * were tangled up inside it:
+ *
+ *   LONG HAUL, at 3 hours one way, or 180 miles one way when the drive time
+ *   box is empty. ADVISORY, and it still autofills. The mileage is presented as
+ *   a floor with a checklist beside it: a hotel night, a second night if the
+ *   day ends late, meals, a second shooter's travel. Nothing in this file
+ *   refuses a booking on policy grounds any more.
+ *
+ *   IMPLAUSIBLE, which IS a refusal and is only ever about typing. Over 300
+ *   miles or over 6 hours one way, or a pair of numbers implying an average
+ *   speed outside 25 to 80 mph. It exists to catch 103 fat fingered as 1030,
+ *   and it must never catch a real booking.
+ *
+ * WHY DRIVE TIME STILL NEVER TOUCHES THE ARITHMETIC
+ * The minutes argument on both quote functions is OPTIONAL and sets longHaul
+ * and implausible and nothing else. The fee is a function of the miles alone,
+ * so the figure on a signed contract can be reproduced from the contract, and
+ * cannot move because somebody looked the route up on a different day, in
+ * traffic, or at all. Drive time is COLLECTED and DISPLAYED because it is what
+ * Veronika actually needs in order to decide whether to take the booking, and
+ * it now also decides which advice she is shown. It is still never money.
  */
 
-/** One way, in miles. Round trip is twice this. */
-export const TRAVEL_FREE_RADIUS_MILES = 30;
+/**
+ * One way, in miles. Round trip is twice this.
+ *
+ * 60 rather than 30 because 30 is a metro number. It is stated one way because
+ * that is what she reads off Maps, and applied to the round trip because that
+ * is what the rate bills, which is the drafting pattern the published
+ * comparables use: "60 miles (120 miles roundtrip)".
+ */
+export const TRAVEL_FREE_RADIUS_MILES = 60;
 
 /** The distance that is included in every booking at no charge. */
 export const TRAVEL_FREE_ROUND_TRIP_MILES = TRAVEL_FREE_RADIUS_MILES * 2;
 
-/** Dollars per mile beyond the included distance, applied to the round trip. */
-export const TRAVEL_RATE_PER_MILE = 1;
+/**
+ * Dollars per mile beyond the included distance, applied to the round trip.
+ *
+ * IRS anchored and under the live 76 cent business rate, which is the point:
+ * every comparable photographer charges below full cost recovery at this
+ * distance, and so does she. $1.00 was above all of them.
+ */
+export const TRAVEL_RATE_PER_MILE = 0.7;
 
 /**
  * The fee is always rounded UP to a multiple of this.
@@ -63,24 +114,73 @@ export const TRAVEL_RATE_PER_MILE = 1;
 export const TRAVEL_ROUNDING_STEP = 5;
 
 /**
- * Above this the form stops filling anything in and tells her to quote it.
+ * Three hours one way, in minutes. The hotel conversation, not a refusal.
  *
- * Mirrors what the rest of the industry does past roughly 60 miles: the
- * standard mileage formula stops being the right tool and the job becomes a
- * custom quote. It is also the guardrail against a typo, because a stray digit
- * in the miles field is the one input error that would otherwise land on a
- * contract as a real number.
+ * This is where the published policies converge: one studio calls three hours
+ * "the most amount of time we'd be fine to be driving in a car one way before
+ * wanting to stay the night", and the two that escalate to a SECOND hotel night
+ * both do it past three hours. Two hours each way sits inside every one of
+ * their local tiers, which is exactly the instinct this revision is defending.
  */
-export const TRAVEL_MANUAL_QUOTE_CEILING = 100;
+export const TRAVEL_LONG_HAUL_MINUTES_ONE_WAY = 180;
+
+/**
+ * The same line in miles, used only when the drive time box is empty.
+ *
+ * Minutes are the better signal, because a hotel is bought with hours and not
+ * with distance, so miles are the FALLBACK rather than a second trigger. 180
+ * one way is roughly three hours at highway speed.
+ */
+export const TRAVEL_LONG_HAUL_MILES_ONE_WAY = 180;
+
+/**
+ * Past here it is a typo, not a booking, and the offer is withheld.
+ *
+ * This is the ONLY refusal left in the file and it is about typing, never about
+ * policy. 300 miles one way is beyond anything she would drive to and back in a
+ * day, so a number above it is a stray digit: 103 entered as 1030.
+ */
+export const TRAVEL_IMPLAUSIBLE_MILES_ONE_WAY = 300;
+
+/** Six hours one way, the same typo guard in the drive time box. */
+export const TRAVEL_IMPLAUSIBLE_MINUTES_ONE_WAY = 360;
+
+/**
+ * The slowest and fastest averages a real car journey can produce.
+ *
+ * The cross check that catches a fat finger in EITHER box while the other one
+ * stays right. 1030 miles in 122 minutes is 506 mph; 103 miles in 1220 minutes
+ * is 5 mph. Both are impossible and both mean one of the two numbers is wrong.
+ * The band is deliberately wide: 25 mph allows a crawl on back roads and 80
+ * allows an empty interstate, so no booking she would actually take lands
+ * outside it.
+ */
+export const TRAVEL_IMPLAUSIBLE_MIN_MPH = 25;
+export const TRAVEL_IMPLAUSIBLE_MAX_MPH = 80;
+
+/**
+ * The fee is shouted about once it passes this share of the session price.
+ *
+ * ONE formula for every job type, which is the whole point of doing it this
+ * way. $200 is two thirds of a $300 portrait session and eight percent of a
+ * $2,500 wedding, so the share already knows the difference between those two
+ * jobs and a second rate card would only be a second thing to maintain and a
+ * second number to defend on a contract.
+ */
+export const TRAVEL_SHARE_WARN_PCT = 25;
 
 /**
  * Floating point slack for the rounding step.
  *
- * 65 miles round trip bills 5 miles, which is $5.00, which is ALREADY a
- * multiple of 5 and must stay $5 rather than becoming $10. Without the epsilon
- * that depends on whether the division lands at 1.0000000000000002 or exactly
- * 1, which depends on the decimals she typed. Small enough that the genuinely
- * tiny fee at 60.1 round trip miles ($0.10) still rounds up to $5.
+ * 125 miles round trip bills 5 miles, which at $0.70 is $3.50 and rounds to $5.
+ * The case the epsilon exists for is a billable amount that is ALREADY a
+ * multiple of 5, such as the $25.00 at 155.714 round trip miles, which must
+ * stay $25 rather than becoming $30. Without the epsilon that depends on
+ * whether the division lands at 5.000000000000001 or exactly 5, which depends
+ * on the decimals she typed. $0.70 produces non integer raw fees far more often
+ * than $1.00 did, so this matters more now than it did before. Small enough
+ * that the genuinely tiny fee at 120.1 round trip miles ($0.07) still rounds up
+ * to $5.
  */
 const ROUNDING_EPSILON = 1e-9;
 
@@ -89,7 +189,7 @@ export interface TravelQuote {
   oneWayMiles: number;
   /** What the rate is actually applied to. */
   roundTripMiles: number;
-  /** Round trip distance beyond the included 60. Zero when inside it. */
+  /** Round trip distance beyond the included 120. Zero when inside it. */
   billableMiles: number;
   /** Before rounding. Shown nowhere; kept so a test can prove the rounding. */
   rawFee: number;
@@ -97,8 +197,17 @@ export interface TravelQuote {
   fee: number;
   /** Round trip distance is beyond the included radius. */
   triggered: boolean;
-  /** Computed above the ceiling, so nothing is offered and nothing autofills. */
-  needsManualQuote: boolean;
+  /**
+   * Three hours or more one way. ADVISORY ONLY, and it still autofills.
+   *
+   * This replaced needsManualQuote, which refused. The fee stays on offer and
+   * becomes a FLOOR: the screen adds the hotel and meal checklist beside it so
+   * she can raise the figure before she sends it. Reading this flag as a reason
+   * to withhold a number is the bug that was just removed.
+   */
+  longHaul: boolean;
+  /** One of the two numbers is a typo, so nothing is offered. */
+  implausible: boolean;
   /** The only state in which an amount is offered for one click acceptance. */
   autofillable: boolean;
 }
@@ -110,30 +219,82 @@ export function roundUpToStep(amount: number): number {
 }
 
 /**
+ * Three hours or more one way, from whichever number is available.
+ *
+ * Minutes win outright when they are there, and miles are consulted only when
+ * the box is empty. That is on purpose rather than an OR: what a long haul
+ * actually costs is a hotel bed, a bed is bought with hours, and 200 miles of
+ * empty interstate in two and a half hours is not a hotel job however far it
+ * looks on paper.
+ */
+function isLongHaul(oneWayMiles: number, oneWayMinutes: number | null | undefined): boolean {
+  if (typeof oneWayMinutes === 'number' && Number.isFinite(oneWayMinutes) && oneWayMinutes > 0) {
+    return oneWayMinutes >= TRAVEL_LONG_HAUL_MINUTES_ONE_WAY;
+  }
+  return oneWayMiles >= TRAVEL_LONG_HAUL_MILES_ONE_WAY;
+}
+
+/**
+ * One of the two numbers cannot be right, so no amount is offered.
+ *
+ * The only refusal in the file, and it is about typing rather than about
+ * policy. Each box is checked against an outer limit on its own, and then the
+ * two are checked against each other, because the cross check is what catches a
+ * stray digit in one box while the other stays correct.
+ *
+ * The speed check needs BOTH numbers to be real and positive. A blank drive
+ * time is the normal case and must never imply a speed, and zero miles is a
+ * booking with no journey rather than a car that did not move.
+ */
+function isImplausible(oneWayMiles: number, oneWayMinutes: number | null | undefined): boolean {
+  if (oneWayMiles > TRAVEL_IMPLAUSIBLE_MILES_ONE_WAY) return true;
+  const minutes = typeof oneWayMinutes === 'number' && Number.isFinite(oneWayMinutes)
+    ? oneWayMinutes
+    : null;
+  if (minutes === null) return false;
+  if (minutes > TRAVEL_IMPLAUSIBLE_MINUTES_ONE_WAY) return true;
+  if (minutes <= 0 || oneWayMiles <= 0) return false;
+  const mph = oneWayMiles / (minutes / 60);
+  return mph < TRAVEL_IMPLAUSIBLE_MIN_MPH || mph > TRAVEL_IMPLAUSIBLE_MAX_MPH;
+}
+
+/**
  * The quote, from the ROUND TRIP distance.
  *
  * Null rather than a zero quote for anything that is not a usable number, so a
  * half typed "5." in the miles box cannot render an offer for $0.
+ *
+ * THE MINUTES ARGUMENT IS NOT PART OF THE ARITHMETIC. It is read after the fee
+ * is already computed, and it sets longHaul and implausible and nothing else.
+ * The fee above it is a function of roundTripMiles alone, which is what makes
+ * the figure on a signed contract reproducible from the contract.
  */
-export function quoteTravelRoundTrip(roundTripMiles: number): TravelQuote | null {
+export function quoteTravelRoundTrip(
+  roundTripMiles: number,
+  oneWayMinutes?: number | null,
+): TravelQuote | null {
   if (!Number.isFinite(roundTripMiles) || roundTripMiles < 0) return null;
   const billableMiles = Math.max(0, roundTripMiles - TRAVEL_FREE_ROUND_TRIP_MILES);
   const rawFee = billableMiles * TRAVEL_RATE_PER_MILE;
   const fee = roundUpToStep(rawFee);
-  // Strictly greater than. 60 miles round trip is the last free booking; 60.1
+  // Strictly greater than. 120 miles round trip is the last free booking; 120.1
   // is the first billable one. A boundary that fires AT the radius would bill
-  // the routine local job the 30 miles was chosen to protect.
+  // the routine local job the 60 miles was chosen to protect.
   const triggered = roundTripMiles > TRAVEL_FREE_ROUND_TRIP_MILES;
-  const needsManualQuote = triggered && fee > TRAVEL_MANUAL_QUOTE_CEILING;
+  const oneWayMiles = roundTripMiles / 2;
+  const implausible = isImplausible(oneWayMiles, oneWayMinutes);
   return {
-    oneWayMiles: roundTripMiles / 2,
+    oneWayMiles,
     roundTripMiles,
     billableMiles,
     rawFee,
     fee,
     triggered,
-    needsManualQuote,
-    autofillable: triggered && !needsManualQuote,
+    longHaul: isLongHaul(oneWayMiles, oneWayMinutes),
+    implausible,
+    // A long haul is NOT in this condition, which is the entire repair. The
+    // only thing that withholds a number now is a number that cannot be true.
+    autofillable: triggered && !implausible,
   };
 }
 
@@ -144,10 +305,13 @@ export function quoteTravelRoundTrip(roundTripMiles: number): TravelQuote | null
  * when you ask it for directions. Doubling here rather than asking her to
  * double it herself is the difference between a field she can fill from the
  * screen in front of her and a field she has to do arithmetic for.
+ *
+ * The optional minutes are ALSO one way, for the same reason: it is what the
+ * screen in front of her says. They reach the advisory flags only.
  */
-export function quoteTravel(oneWayMiles: number): TravelQuote | null {
+export function quoteTravel(oneWayMiles: number, oneWayMinutes?: number | null): TravelQuote | null {
   if (!Number.isFinite(oneWayMiles) || oneWayMiles < 0) return null;
-  return quoteTravelRoundTrip(oneWayMiles * 2);
+  return quoteTravelRoundTrip(oneWayMiles * 2, oneWayMinutes);
 }
 
 /** Parses a text input, returning null for blank or nonsense rather than NaN. */
@@ -162,9 +326,9 @@ export function parseMiles(raw: string): number | null {
 /**
  * The fee as a percentage of the session price, rounded to a whole number.
  *
- * This is the guardrail that makes an absurd result obvious. "$50" alone says
- * nothing; "$50, 17% of this session" is a figure she can judge in one glance,
- * and "$95, 63% of this session" stops her before she sends it.
+ * This is the guardrail that makes an absurd result obvious. "$65" alone says
+ * nothing; "$65, 22% of this session" is a figure she can judge in one glance,
+ * and "$200, 67% of this session" stops her before she sends it.
  *
  * Null when there is no session price to compare against, because a percentage
  * of nothing is not zero, it is meaningless.
@@ -172,6 +336,25 @@ export function parseMiles(raw: string): number | null {
 export function travelShareOfSessionPct(fee: number, sessionTotal: number): number | null {
   if (!Number.isFinite(fee) || !Number.isFinite(sessionTotal) || sessionTotal <= 0) return null;
   return Math.round((fee / sessionTotal) * 100);
+}
+
+/**
+ * The same percentage, promoted from a label into a warning.
+ *
+ * ONE rule for every job type, rather than a wedding rate card and a session
+ * rate card. The share is already the thing that knows the difference: $200 is
+ * two thirds of a $300 portrait session and shouts, and the identical $200 on a
+ * $2,500 wedding is eight percent and says nothing. Splitting the formula by
+ * job type would mean two numbers to maintain and two to defend, for a
+ * distinction this one line already draws correctly.
+ *
+ * Deliberately computed from the ROUNDED percentage, so the warning and the
+ * figure printed beside it can never disagree. Strictly greater than, so a fee
+ * that lands exactly on a quarter of the session is the last quiet one.
+ */
+export function travelShareIsHigh(fee: number, sessionTotal: number): boolean {
+  const pct = travelShareOfSessionPct(fee, sessionTotal);
+  return pct !== null && pct > TRAVEL_SHARE_WARN_PCT;
 }
 
 /** "106.4", "120". One decimal, without a pointless trailing zero. */
@@ -187,20 +370,79 @@ export function formatTravelFee(fee: number): string {
 }
 
 /**
- * "1 h 45 m". Display only, and deliberately so.
+ * "1 hr 45 min", the way Maps prints it back.
  *
  * Drive time is shown beside the miles because it is what tells her whether a
- * booking is worth taking. It is never an input to the fee, so nothing here
- * feeds quoteTravel and nothing here reaches the contract.
+ * booking is worth taking, and it is what decides whether she is shown the long
+ * haul checklist. It is still never an input to the FEE, so nothing formatted
+ * here reaches the contract.
  */
 export function formatDriveTime(minutes: number): string {
   if (!Number.isFinite(minutes) || minutes < 0) return '';
   const whole = Math.round(minutes);
   const h = Math.floor(whole / 60);
   const m = whole % 60;
-  if (h === 0) return `${m} m`;
-  if (m === 0) return `${h} h`;
-  return `${h} h ${m} m`;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} hr`;
+  return `${h} hr ${m} min`;
+}
+
+/**
+ * Read a drive time the way Google Maps prints it.
+ *
+ * She reads the number off the Maps screen, where it says "2 hr 2 min", and
+ * types it straight in. Asking her to convert that to 122 in her head is a
+ * pointless bit of arithmetic and a chance to fat finger a number.
+ *
+ * Accepts, in either language: a bare number of minutes ("122"), Google's own
+ * wording ("2 hr 2 min", "2 hours 2 minutes", "45 min", "1 hr"), the compact
+ * forms ("2h 2m", "2h"), and a clock ("2:02"). Returns whole minutes, or null
+ * when it cannot tell, which leaves the field empty rather than guessing.
+ *
+ * NOTHING HERE CHANGES THE FEE. What comes out of this feeds the long haul
+ * advice and the typo guard, and the money is worked out from the miles alone,
+ * so a misread here costs a wrong line of help text and never a wrong number on
+ * a contract. That is the only reason this is allowed to be lenient: the same
+ * leniency on the MILES field would be a bad idea.
+ */
+export function parseDriveTimeMinutes(raw: string): number | null {
+  const s = (raw ?? '').trim().toLowerCase();
+  if (!s) return null;
+
+  // "2:02" and "2:02:30". The last part is seconds and is dropped, not rounded
+  // up, because a drive time is already an estimate.
+  const clock = s.match(/^(\d{1,2}):([0-5]?\d)(?::[0-5]?\d)?$/);
+  if (clock) {
+    const mins = Number(clock[1]) * 60 + Number(clock[2]);
+    return inDriveRange(mins) ? mins : null;
+  }
+
+  // A bare number is minutes, which is what the field used to demand.
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const mins = Math.round(Number(s));
+    return inDriveRange(mins) ? mins : null;
+  }
+
+  // Unicode aware on purpose: \b does not match Cyrillic, so an ASCII only
+  // boundary would silently refuse every Russian spelling.
+  const HOURS = /(\d+(?:[.,]\d+)?)\s*(?:hrs?|hours?|h|ч|часа?|часов)(?![\p{L}])/u;
+  const MINUTES = /(\d+(?:[.,]\d+)?)\s*(?:mins?|minutes?|m|м|мин|минут[аы]?)(?![\p{L}])/u;
+
+  const num = (m: RegExpMatchArray | null) => (m ? Number(m[1].replace(',', '.')) : 0);
+  const h = s.match(HOURS);
+  const m = s.match(MINUTES);
+  if (!h && !m) return null;
+
+  const mins = Math.round(num(h) * 60 + num(m));
+  return inDriveRange(mins) ? mins : null;
+}
+
+/**
+ * A sane drive time. Zero is not a journey and anything past a full day is a
+ * typo, most likely a phone number or a date pasted into the wrong box.
+ */
+function inDriveRange(mins: number): boolean {
+  return Number.isFinite(mins) && mins > 0 && mins <= 24 * 60;
 }
 
 // ── The decision, as data ────────────────────────────────────────────────

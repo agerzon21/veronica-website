@@ -25,13 +25,15 @@ import ConversationPeek from './ConversationPeek';
 import ConfirmDialog from './ui/ConfirmDialog';
 import {
   TRAVEL_FREE_ROUND_TRIP_MILES,
-  TRAVEL_MANUAL_QUOTE_CEILING,
+  TRAVEL_SHARE_WARN_PCT,
   applyTravelDecision,
   formatDriveTime,
   formatMiles,
   formatTravelFee,
+  parseDriveTimeMinutes,
   parseMiles,
   quoteTravel,
+  travelShareIsHigh,
   travelShareOfSessionPct,
   type TravelApplication,
   type TravelDecision,
@@ -768,7 +770,16 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   // input, which is what makes "declining changes nothing" true by
   // construction: there is no amount to take back out when she corrects the
   // mileage, and no way for a stale fee to survive a change of mind.
-  const travelQuote = quoteTravel(parseMiles(travelMilesOneWay) ?? NaN);
+  // The drive time is handed in as a SECOND argument and reaches the advisory
+  // flags only. It cannot move the fee: quoteTravel works the money out from
+  // the miles alone, which is what keeps the figure on a signed contract
+  // reproducible from the contract. What the minutes buy is the long haul
+  // checklist and the typo guard, both of which need to know how long she is
+  // actually going to be in the car.
+  const travelQuote = quoteTravel(
+    parseMiles(travelMilesOneWay) ?? NaN,
+    parseDriveTimeMinutes(travelMinutesOneWay),
+  );
   const travelDecision: TravelDecision =
     travelStatus === 'accepted' && travelQuote?.autofillable
       ? { status: 'accepted', fee: travelQuote.fee, roundTripMiles: travelQuote.roundTripMiles }
@@ -1804,10 +1815,19 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
  * philosophy as the overtime clause: it exists to protect her from a bad actor,
  * never to force a charge onto somebody she likes.
  *
- * The percentage beside the dollar figure is the guardrail. "$50" alone says
- * nothing about whether it is reasonable; "$50, 17% of this session" is a
- * number she can judge without doing arithmetic, and it is what makes a typo in
- * the miles field obvious before it reaches a contract.
+ * The percentage beside the dollar figure is the guardrail, and it is now a
+ * real one rather than a label. "$65" alone says nothing about whether it is
+ * reasonable; "$65, 22% of this session" is a number she can judge without
+ * doing arithmetic, and past a quarter of the session it says so out loud. One
+ * rule for every job type, because the share already knows the difference
+ * between a $300 portrait session and a $2,500 wedding.
+ *
+ * NOTHING HERE REFUSES A BOOKING ANY MORE. A long haul is ADVICE that sits
+ * ABOVE the offer while the offer renders as normal underneath it; the only
+ * thing that withholds a number is a pair of figures that cannot both be true,
+ * which is a typo and not a policy. The previous version refused to fill
+ * anything in above $100 computed and told her to quote a routine two hour
+ * wedding by hand, which is the bug this replaced.
  */
 function TravelBlock({
   copy,
@@ -1845,13 +1865,16 @@ function TravelBlock({
   sessionTotal: string;
   application: TravelApplication;
 }) {
-  const minutes = parseMiles(oneWayMinutes);
+  const minutes = parseDriveTimeMinutes(oneWayMinutes);
   const sessionTotalNumber = parseFloat(sessionTotal);
   const sharePct = quote ? travelShareOfSessionPct(quote.fee, sessionTotalNumber) : null;
+  const shareIsHigh = quote ? travelShareIsHigh(quote.fee, sessionTotalNumber) : false;
   const included = formatMiles(TRAVEL_FREE_ROUND_TRIP_MILES);
   // Two decimals on purpose. This is the only place the unrounded figure is
-  // shown, and seeing $46.40 become $50 is what makes the rounding a policy
-  // she is applying rather than a number the form invented.
+  // shown, and seeing $60.20 become $65 is what makes the rounding a policy
+  // she is applying rather than a number the form invented. It matters more at
+  // $0.70 a mile than it did at $1.00, because the raw figure is almost never
+  // a round number now.
   const rawFeeText = quote ? `$${quote.rawFee.toFixed(2)}` : '';
   const feeText = quote ? formatTravelFee(quote.fee) : '';
 
@@ -1907,11 +1930,14 @@ function TravelBlock({
           />
         </Field>
         <Field label={copy.minutesLabel} helpText={copy.minutesHelp} w={{ base: '100%', md: '50%' }}>
+          {/* TEXT, not number: Maps prints "2 hr 2 min" and she should be able
+              to type exactly that rather than converting it to 122 in her head.
+              parseDriveTimeMinutes reads Google's wording, the compact forms,
+              a clock, or a bare number of minutes. Safe to be lenient here
+              because drive time never touches the fee. */}
           <FormInput
-            type="number"
-            inputMode="numeric"
-            step="1"
-            min="0"
+            type="text"
+            inputMode="text"
             value={oneWayMinutes}
             onChange={(e) => onMinutesChange(e.target.value)}
             placeholder={copy.minutesPlaceholder}
@@ -1937,19 +1963,34 @@ function TravelBlock({
         </Box>
       )}
 
-      {/* Over the ceiling. No amount, no accept button, nothing prefilled.
-          Past roughly this distance the standard mileage formula stops being
-          the right tool and the job becomes a custom quote, and this is also
-          the guardrail against a stray digit in the miles field, which is the
-          one input error that would otherwise land on a contract as a real
-          number. */}
-      {quote?.needsManualQuote && (
+      {/* The only refusal left, and it is about typing rather than policy.
+          The two numbers she read off the same screen contradict each other,
+          or one of them is past anything anybody drives in a day, so no amount
+          is offered: a stray digit in the miles field is the one input error
+          that would otherwise land on a contract as a real number. */}
+      {quote?.implausible && (
+        <Box mt={3} p={3} bg="red.50" border="1px solid" borderColor="red.200" borderRadius="sm">
+          <Text fontSize="sm" fontWeight="500" color="red.800" mb={1}>
+            {copy.implausibleHeading}
+          </Text>
+          <Text fontSize="xs" color="red.900" fontWeight="300" lineHeight="1.6">
+            {copy.implausibleBody}
+          </Text>
+        </Box>
+      )}
+
+      {/* Three hours each way. ADVICE, sitting ABOVE the offer, which renders
+          underneath exactly as it always does. The mileage is real and it is
+          hers to accept; what it does not cover is the hotel bed, and a bed is
+          the one genuine discontinuity in the cost of a long trip. Refusing to
+          fill anything in here was the old behaviour and it was wrong. */}
+      {quote?.autofillable && quote.longHaul && status !== 'declined' && (
         <Box mt={3} p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
           <Text fontSize="sm" fontWeight="500" color="yellow.800" mb={1}>
-            {copy.manualHeading}
+            {copy.longHaulHeading}
           </Text>
           <Text fontSize="xs" color="yellow.900" fontWeight="300" lineHeight="1.6">
-            {copy.manualBody(feeText, formatTravelFee(TRAVEL_MANUAL_QUOTE_CEILING))}
+            {copy.longHaulBody(feeText)}
           </Text>
         </Box>
       )}
@@ -1971,6 +2012,15 @@ function TravelBlock({
           <Text fontSize="sm" color="gray.800" fontWeight="500" mt={2}>
             {sharePct !== null ? copy.offerShare(feeText, String(sharePct)) : copy.offerShareNoTotal(feeText)}
           </Text>
+          {/* The percentage, promoted from a label into a guardrail. One rule
+              for every job type: the share is already what knows that $200 is
+              two thirds of a portrait session and eight percent of a wedding,
+              so there is no second rate card to maintain. */}
+          {shareIsHigh && sharePct !== null && (
+            <Text fontSize="xs" color="orange.800" fontWeight="400" mt={2} lineHeight="1.6">
+              {copy.shareWarn(feeText, String(sharePct), String(TRAVEL_SHARE_WARN_PCT))}
+            </Text>
+          )}
           {/* column-reverse on mobile keeps the money action off the top of
               the tap zone, the same way the delivery confirmations do. */}
           <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} mt={3}>

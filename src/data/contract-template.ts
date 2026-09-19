@@ -272,14 +272,14 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       paragraphs: [
         {
           kind: 'text',
-          text: 'Travel within 30 miles of the Photographer’s base, meaning 60 miles of driving in total, is included in the Total Payment at no charge. This booking is further out than that, so a travel allowance has been agreed in advance and is already part of the Total Payment shown below.',
+          text: 'Travel within 60 miles of the Photographer’s base, meaning 120 miles of driving in total, is included in the Total Payment at no charge. This booking is further out than that, so a travel allowance has been agreed in advance and is already part of the Total Payment shown below.',
         },
         {
           kind: 'fields',
           items: [
             { label: 'Round Trip Distance', value: '{{travel_round_trip_miles}} miles' },
-            { label: 'Included At No Charge', value: '60 miles round trip' },
-            { label: 'Rate Beyond That', value: '$1.00 per mile of round trip distance' },
+            { label: 'Included At No Charge', value: '120 miles round trip' },
+            { label: 'Rate Beyond That', value: '$0.70 per mile of round trip distance' },
             { label: 'Travel Allowance', value: '{{travel_fee_amount}}, rounded up to the nearest $5' },
           ],
         },
@@ -860,14 +860,14 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
     paragraphs: [
       {
         kind: 'text',
-        text: 'Travel within 30 miles of the Photographer’s base, meaning 60 miles of driving in total, is included in the Total Payment at no charge. This session is further out than that, so a travel allowance has been agreed in advance and is already part of the Total Payment shown below.',
+        text: 'Travel within 60 miles of the Photographer’s base, meaning 120 miles of driving in total, is included in the Total Payment at no charge. This session is further out than that, so a travel allowance has been agreed in advance and is already part of the Total Payment shown below.',
       },
       {
         kind: 'fields',
         items: [
           { label: 'Round Trip Distance', value: '{{travel_round_trip_miles}} miles' },
-          { label: 'Included At No Charge', value: '60 miles round trip' },
-          { label: 'Rate Beyond That', value: '$1.00 per mile of round trip distance' },
+          { label: 'Included At No Charge', value: '120 miles round trip' },
+          { label: 'Rate Beyond That', value: '$0.70 per mile of round trip distance' },
           { label: 'Travel Allowance', value: '{{travel_fee_amount}}, rounded up to the nearest $5' },
         ],
       },
