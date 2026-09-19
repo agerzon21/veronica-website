@@ -217,7 +217,12 @@ async function cmdAdopt(db, conn) {
 
   const files = onDisk();
   const rows = await applied(db);
-  const todo = files.filter((f) => !rows.has(f.filename) && f.filename !== LEDGER);
+  // The ledger file itself is adopted along with everything else. It was run
+  // by hand exactly like the other 37, and the table we are writing into
+  // existing is proof that it ran. Skipping it would leave it reading PENDING
+  // forever, and a status report with a permanent false entry is one nobody
+  // reads.
+  const todo = files.filter((f) => !rows.has(f.filename));
 
   console.log(`\n${C.b}Baseline${C.r}  ${C.d}${describe(conn.url)}${C.r}\n`);
   if (!todo.length) { console.log(`  Nothing to adopt. Every file is already recorded.\n`); return 0; }
