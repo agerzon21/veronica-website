@@ -49,6 +49,42 @@ export interface PrefillBooking {
   /** Verbatim sentences behind the two values that cost money to get wrong. */
   total_amount_quote: string | null;
   event_date_quote: string | null;
+  /**
+   * Everything either side said about how long the session runs. Empty when
+   * the thread never says, which is a real answer and not a failure: see
+   * DurationStatement for why this is a list and not one agreed number.
+   */
+  session_durations: DurationStatement[];
+}
+
+/**
+ * Something one side of the thread said about how long the session runs.
+ *
+ * A list rather than a single agreed number, because real threads do not
+ * produce one. In the thread this was built for, Vero wrote that 1.5 hours
+ * would be the maximum duration for the session and the customer answered
+ * that he was sure an hour would be more than enough. Both sentences are
+ * true statements about the same booking, and neither is a correction of the
+ * other, so an extractor asked for "the duration" has to pick a winner while
+ * it is still reading prose, with no way to explain itself afterwards.
+ *
+ * So the summariser reports what it found with the speaker attached, and
+ * pickCoverageDuration below decides. The rule it applies is the owner's:
+ * the contract carries what the PHOTOGRAPHER committed to, not the shorter
+ * guess the customer floated, because the end time on the contract is the
+ * line the overtime clause bills from. That clause exists to protect her
+ * from a client who will not leave, is never automatic, and staying longer
+ * is always her own decision. None of that survives being compressed into a
+ * prompt instruction the model may or may not have followed on any given
+ * run, so it lives here, in code, next to the tests that pin it.
+ */
+export interface DurationStatement {
+  /** 'photographer' covers both Vero and the AI assistant replying as her. */
+  speaker: 'photographer' | 'client';
+  /** The length in the words it was said in, e.g. "1.5 hours", "полтора часа". */
+  text: string;
+  /** The sentence it was said in, word for word, so the form can show its source. */
+  quote: string;
 }
 
 export interface ClientPrefill extends PrefillBooking {
@@ -56,6 +92,45 @@ export interface ClientPrefill extends PrefillBooking {
   /** Platform display name, used only as a last-resort label. */
   displayName: string;
 }
+
+/** One clock reading found in a sentence, before anything is decided about it. */
+interface ClockReading {
+  h: number;
+  m: number;
+  /** 'a', 'p', or null when nothing marked it. */
+  mer: string | null;
+  /** True for "11:30" and false for a bare "11". Decides how far we trust it. */
+  hadColon: boolean;
+}
+
+/**
+ * Every clock reading in a string, in the order they appear.
+ *
+ * Shared by the window parser and the start-time parser so one string cannot
+ * be read two different ways by two functions on the same screen.
+ */
+function readClockTimes(raw: string): ClockReading[] {
+  const text = raw.toLowerCase();
+  const re = /(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/g;
+  const hits: ClockReading[] = [];
+  for (const m of text.matchAll(re)) {
+    const h = Number(m[1]);
+    const min = m[2] ? Number(m[2]) : 0;
+    if (!Number.isFinite(h) || h > 23 || min > 59) continue;
+    hits.push({ h, m: min, mer: m[3] ? m[3][0] : null, hadColon: Boolean(m[2]) });
+  }
+  return hits;
+}
+
+const to24 = (h: number, mer: string | null): number | null => {
+  if (!mer) return h <= 23 ? h : null;
+  if (h < 1 || h > 12) return null;
+  if (mer === 'p') return h === 12 ? 12 : h + 12;
+  return h === 12 ? 0 : h;
+};
+
+const fmtHhmm = (h: number, m: number) =>
+  `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 
 /**
  * Pull start and end out of however the coverage window was worded.
@@ -72,17 +147,7 @@ export function parseCoverageWindow(
   raw: string | null,
 ): { start: string | null; end: string | null } {
   if (!raw) return { start: null, end: null };
-  const text = raw.toLowerCase();
-
-  // Each clock reading, with whatever am/pm marker trails it.
-  const re = /(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/g;
-  const hits: Array<{ h: number; m: number; mer: string | null }> = [];
-  for (const m of text.matchAll(re)) {
-    const h = Number(m[1]);
-    const min = m[2] ? Number(m[2]) : 0;
-    if (!Number.isFinite(h) || h > 23 || min > 59) continue;
-    hits.push({ h, m: min, mer: m[3] ? m[3][0] : null });
-  }
+  const hits = readClockTimes(raw);
   if (hits.length < 2) return { start: null, end: null };
 
   const [a, b] = hits;
@@ -90,24 +155,376 @@ export function parseCoverageWindow(
   const merA = a.mer ?? b.mer;
   const merB = b.mer ?? a.mer;
 
-  const to24 = (h: number, mer: string | null): number | null => {
-    if (!mer) return h <= 23 ? h : null;
-    if (h < 1 || h > 12) return null;
-    if (mer === 'p') return h === 12 ? 12 : h + 12;
-    return h === 12 ? 0 : h;
-  };
   const hA = to24(a.h, merA);
   const hB = to24(b.h, merB);
   if (hA === null || hB === null) return { start: null, end: null };
 
-  const fmt = (h: number, m: number) =>
-    `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-  const start = fmt(hA, a.m);
-  const end = fmt(hB, b.m);
+  const start = fmtHhmm(hA, a.m);
+  const end = fmtHhmm(hB, b.m);
   // An end before the start means we misread it. Don't guess.
   if (end <= start) return { start: null, end: null };
   return { start, end };
 }
+
+/**
+ * The start time out of a string that names one time rather than a window.
+ *
+ * Threads say "11:30 AM" far more often than they say "11:30 AM to 1:00 PM",
+ * and until this existed that value was extracted, shown to Vero on the
+ * prefill card, and then thrown away: the form fell back to its own 5 PM
+ * default while the card above it said 11:30 AM.
+ *
+ * One reading is trusted less than two, because a window brings its own
+ * corroboration and a lone number does not. A bare hour with neither a
+ * meridiem nor a colon ("at 3") is refused outright: that is the coin flip
+ * that puts a morning session on a contract at three in the afternoon, and
+ * the whole point of this module is that an empty field beats a wrong one.
+ * "3pm", "15:00" and "11:30" all carry enough to read.
+ */
+export function parseStartTime(raw: string | null): string | null {
+  if (!raw) return null;
+  const hits = readClockTimes(raw);
+  const first = hits[0];
+  if (!first) return null;
+  if (!first.mer && !first.hadColon) return null;
+  const h = to24(first.h, first.mer);
+  if (h === null) return null;
+  return fmtHhmm(h, first.m);
+}
+
+/** Counts, spelled out, in both languages the inbox speaks. ё is folded to е. */
+const NUMBER_WORDS: Record<string, number> = {
+  a: 1,
+  an: 1,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  // "полтора часа" is the single most common way a Russian speaker says 1.5
+  // hours, and it never contains a digit, so it has to be a word here or the
+  // scan below finds no count at all.
+  полтора: 1.5,
+  полутора: 1.5,
+  один: 1,
+  одного: 1,
+  одна: 1,
+  два: 2,
+  две: 2,
+  двух: 2,
+  три: 3,
+  трех: 3,
+  четыре: 4,
+  четырех: 4,
+  пять: 5,
+  пяти: 5,
+  шесть: 6,
+  шести: 6,
+  семь: 7,
+  семи: 7,
+  восемь: 8,
+  восьми: 8,
+  девять: 9,
+  девяти: 9,
+  десять: 10,
+  десяти: 10,
+  одиннадцать: 11,
+  двенадцать: 12,
+};
+
+const countOf = (token: string | undefined): number | null => {
+  if (!token) return null;
+  if (/^\d+(?:\.\d+)?$/.test(token)) return Number(token);
+  const word = NUMBER_WORDS[token];
+  return word === undefined ? null : word;
+};
+
+/**
+ * READ THIS BEFORE TOUCHING ANY PATTERN BELOW. \b is defined over
+ * [A-Za-z0-9_]. Against Cyrillic it does not error and does not warn, it
+ * simply never sits where you think it does, so an ASCII-only pattern
+ * becomes a rule that is quietly off for exactly one language. The first
+ * draft of this parser used \b and read every English phrasing perfectly
+ * while returning null for "полтора часа", "два часа" and "90 минут", which
+ * is Vero's own language and the half of the inbox this was written for.
+ * api/_house-style.ts carries the same warning for the same reason.
+ */
+const WORD_CHAR = '\\p{L}\\p{N}';
+const NOT_BEFORE = `(?<![${WORD_CHAR}])`;
+const NOT_AFTER = `(?![${WORD_CHAR}])`;
+/** "1", "1.5", or a word like "two" or "полтора". */
+const COUNT = `(?:\\d+(?:\\.\\d+)?|\\p{L}+)`;
+const HOUR_UNIT = `(?:hours?|hrs?|час(?:а|ов|у)?)`;
+const MINUTE_UNIT = `(?:minutes?|mins?|минут(?:а|ы|у)?|мин)`;
+const AND_A_HALF = `(?:and\\s+a\\s+half|с\\s+половиной)`;
+
+/**
+ * Rewrite the handful of phrasings that name a length without naming a
+ * number the scan below could read, so there is one scan and not six.
+ *
+ * Every rule here is a shape seen in this inbox or the obvious neighbour of
+ * one. They run in a fixed order because "half an hour" has to be spent
+ * before the "and a half" rules go looking for a half to fold into a count.
+ */
+const normalizeDurationText = (raw: string): string => {
+  let s = raw.toLowerCase().replace(/ё/g, 'е');
+  // A Russian keyboard writes 1.5 as "1,5".
+  s = s.replace(/(\d),(\d)/g, '$1.$2');
+  const swap = (pattern: string, replacement: string) => {
+    s = s.replace(new RegExp(pattern, 'gu'), replacement);
+  };
+  swap(`${NOT_BEFORE}half\\s+an?\\s+hour${NOT_AFTER}`, '30 minutes');
+  swap(`${NOT_BEFORE}a\\s+half\\s+hour${NOT_AFTER}`, '30 minutes');
+  swap(`${NOT_BEFORE}полчаса${NOT_AFTER}`, '30 minutes');
+  swap(`${NOT_BEFORE}(?:a\\s+)?couple\\s+(?:of\\s+)?hours${NOT_AFTER}`, '2 hours');
+  swap(`${NOT_BEFORE}пар[ауы]\\s+часов${NOT_AFTER}`, '2 hours');
+  // "an hour and a half": the count sits in FRONT of the unit, so the half
+  // has to be folded back into it before the scan can see one number. With
+  // no count at all ("hour and a half") the hour itself is the one.
+  s = s.replace(
+    new RegExp(
+      `${NOT_BEFORE}(${COUNT})?\\s*${NOT_BEFORE}${HOUR_UNIT}\\s+${AND_A_HALF}${NOT_AFTER}`,
+      'gu',
+    ),
+    (_whole, count?: string) => {
+      const n = count === undefined ? 1 : countOf(count);
+      // A word we do not recognise in front of the unit is not a count, so
+      // "the hour and a half" is still 1.5 hours and the stray word is put
+      // back rather than swallowed.
+      if (n === null) return `${count} 1.5 hours`;
+      return `${n + 0.5} hours`;
+    },
+  );
+  // "two and a half hours": the count is in front of the half, the unit behind.
+  s = s.replace(
+    new RegExp(`${NOT_BEFORE}(${COUNT})\\s+${AND_A_HALF}${NOT_AFTER}`, 'gu'),
+    (whole, count: string) => {
+      const n = countOf(count);
+      return n === null ? whole : String(n + 0.5);
+    },
+  );
+  return s;
+};
+
+/**
+ * How many minutes a duration phrase describes, or null if it says nothing
+ * we can read. No opinion about whether the number is sane: that is
+ * pickCoverageDuration's job, and keeping them apart is what lets a test
+ * assert "we read 14 hours correctly AND refused to use it".
+ *
+ * Reads "1.5 hours", "1.5 hrs", "an hour and a half", "90 minutes",
+ * "2 hours", "up to two hours", "1 hour 30 minutes", "полтора часа",
+ * "1,5 часа", "90 минут", "до двух часов" and "полчаса".
+ *
+ * BE HONEST ABOUT WHAT THIS IS. It is a regex over a phrase a language model
+ * copied out of a sentence, and it will meet phrasings nobody listed. Two
+ * decisions keep that from becoming a wrong contract. Anything it cannot
+ * read returns null, which leaves the end time EMPTY rather than guessed.
+ * And a range ("2-3 hours", "от 2 до 3 часов") resolves to its TOP end,
+ * because the number that matters is the outer edge of what was promised,
+ * the same reading the owner gave when he chose the 1.5 hour maximum over
+ * the hour the client guessed at.
+ */
+export function parseDurationMinutes(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const text = normalizeDurationText(raw);
+  // A count, then a unit. The count is optional so that a bare "an hour" or
+  // "час" still reads as one, and a number with no unit behind it is simply
+  // skipped, which is what makes "2-3 hours" resolve to three.
+  const re = new RegExp(
+    `(?:${NOT_BEFORE}(\\d+(?:\\.\\d+)?)|${NOT_BEFORE}(\\p{L}+))?\\s*${NOT_BEFORE}(${HOUR_UNIT}|${MINUTE_UNIT})${NOT_AFTER}`,
+    'gu',
+  );
+  // Per unit, the LARGEST count seen. Two readings of the same unit are a
+  // range; two different units are one length spelled out in both
+  // ("1 hour 30 minutes"), so hours and minutes add and repeats do not.
+  let hours: number | null = null;
+  let minutes: number | null = null;
+  for (const m of text.matchAll(re)) {
+    const count = countOf(m[1] ?? m[2]) ?? 1;
+    if (!Number.isFinite(count) || count < 0) continue;
+    const isHours = /^(?:h|ч)/.test(m[3]);
+    if (isHours) hours = Math.max(hours ?? 0, count);
+    else minutes = Math.max(minutes ?? 0, count);
+  }
+  if (hours === null && minutes === null) return null;
+  const total = Math.round((hours ?? 0) * 60 + (minutes ?? 0));
+  return total > 0 ? total : null;
+}
+
+/**
+ * The shortest session worth writing a contract window for, and the longest
+ * one this may prefill.
+ *
+ * The floor catches a misread ("5 minutes late" is not a session length).
+ * The ceiling is where a stated length stops describing a session at all:
+ * twelve hours is a full day, the coverage presets on the form exist for
+ * exactly that case and carry their own contract wording, and a twelve hour
+ * window prefilled from one sentence in a chat moves the line the overtime
+ * clause bills from by half a day. Out of range means the end time stays
+ * empty and Vero types what she meant, which is the same answer this module
+ * gives to everything else it cannot read confidently.
+ */
+export const MIN_COVERAGE_MINUTES = 15;
+export const MAX_COVERAGE_MINUTES = 12 * 60;
+
+/**
+ * Which stated duration the contract should carry.
+ *
+ * The photographer's, whenever she stated one. Not the shortest, not the
+ * most recent thing said in the thread, and never the customer's guess
+ * sitting next to hers: the contract window is the outer edge of what SHE
+ * committed to. Her own later word replaces her earlier one, so the most
+ * recent of her statements wins among themselves.
+ *
+ * When she never named a length and the customer did, that single statement
+ * is used, and the form shows the sentence it came from so its source is
+ * visible rather than implied. What never happens is the customer's number
+ * standing in for hers: if the most recent thing SHE said cannot be read as
+ * a sane length, this returns null and the end time stays empty. Falling
+ * through to his number there would quietly put his shorter session on the
+ * contract under her name.
+ */
+export function pickCoverageDuration(
+  statements: readonly DurationStatement[] | null | undefined,
+): { minutes: number; statement: DurationStatement } | null {
+  if (!statements || statements.length === 0) return null;
+  const fromHer = statements.filter((s) => s.speaker === 'photographer');
+  const pool = fromHer.length > 0 ? fromHer : statements.filter((s) => s.speaker === 'client');
+  // Newest first. The first one that carries a number at all decides, even
+  // if that number then fails the sanity check: an absurd length is a reason
+  // to stop, not a reason to reach further back into the thread.
+  for (let i = pool.length - 1; i >= 0; i--) {
+    const statement = pool[i];
+    const minutes = parseDurationMinutes(statement.text);
+    if (minutes === null) continue;
+    if (minutes < MIN_COVERAGE_MINUTES || minutes >= MAX_COVERAGE_MINUTES) return null;
+    return { minutes, statement };
+  }
+  return null;
+}
+
+/** What the thread knows about the coverage window, as the form's own values. */
+export interface CoverageSuggestion {
+  /** HH:MM for <input type="time">, or null when the thread never said. */
+  start: string | null;
+  /** HH:MM, or null. Null is a real answer: see below. */
+  end: string | null;
+  /**
+   * The statement the end time was computed from, so the form can show the
+   * sentence rather than a number that appeared from nowhere. Null when the
+   * thread stated the window outright, and null when there is no end time.
+   */
+  endSource: DurationStatement | null;
+}
+
+/**
+ * The coverage window a thread established, as the two values the form puts
+ * in its time inputs.
+ *
+ * A stated window wins outright, because two clock readings need no
+ * arithmetic. Otherwise the start time is whatever was named and the end
+ * time is that start plus the duration the photographer promised.
+ *
+ * AN EMPTY END TIME IS A RESULT, NOT A FAILURE. When the thread names a
+ * start and no readable length, this returns the start with end null, and
+ * the form leaves End Time blank instead of falling back to its old 6 PM.
+ * The end time on the contract is the line the overtime clause bills from,
+ * so a guessed one silently moves when a session becomes billable, and that
+ * is worse than a blank field the form already refuses to submit without.
+ * A window that would run past midnight is refused for the same reason: the
+ * contract names one date, so the arithmetic has stopped describing it.
+ */
+export function resolveCoverage(
+  eventTime: string | null,
+  statements: readonly DurationStatement[] | null | undefined,
+): CoverageSuggestion {
+  const stated = parseCoverageWindow(eventTime);
+  if (stated.start && stated.end) {
+    return { start: stated.start, end: stated.end, endSource: null };
+  }
+  const start = parseStartTime(eventTime);
+  if (!start) return { start: null, end: null, endSource: null };
+
+  const picked = pickCoverageDuration(statements);
+  if (!picked) return { start, end: null, endSource: null };
+
+  const [h, m] = start.split(':').map(Number);
+  const endMinutes = h * 60 + m + picked.minutes;
+  if (endMinutes >= 24 * 60) return { start, end: null, endSource: null };
+  return {
+    start,
+    end: fmtHhmm(Math.floor(endMinutes / 60), endMinutes % 60),
+    endSource: picked.statement,
+  };
+}
+
+/**
+ * What the form's two time inputs open on when the thread says nothing.
+ *
+ * Most sessions start in the late afternoon, and seeding whole hours means
+ * Vero adjusts an hour rather than zeroing out :37 every time she opens the
+ * picker. They are a convenience for a form opened from the Clients tab with
+ * no conversation behind it, and nothing more than that.
+ */
+export const FALLBACK_START = '17:00';
+export const FALLBACK_END = '18:00';
+
+/**
+ * The values the Start Time and End Time inputs actually open on.
+ *
+ * The whole point of this function is that the two defaults above are all or
+ * nothing. A thread that named a start time gets that start time and an END
+ * TIME THAT MAY WELL BE EMPTY, never a real 11:30 AM sitting next to a
+ * made-up 6:00 PM: the end time is the line the overtime clause bills from,
+ * and 6:00 PM would be a number nobody in the conversation ever said. A
+ * thread that named no time at all is a different situation entirely and
+ * keeps both defaults, because there is nothing there to contradict.
+ *
+ * It lives here rather than inline in the form because it is a rule about
+ * what a contract may claim, not a piece of layout, and because it is the
+ * exact line that was wrong: the form used to fall back per field, so a
+ * known start and an unknown length produced 11:30 AM to 6:00 PM.
+ */
+export function coverageFieldValues(suggestion: CoverageSuggestion): {
+  start: string;
+  end: string;
+} {
+  if (!suggestion.start) return { start: FALLBACK_START, end: FALLBACK_END };
+  return { start: suggestion.start, end: suggestion.end ?? '' };
+}
+
+/**
+ * The two lines that sit under a prefilled End Time.
+ *
+ * Wording is the entire mechanism here, so it lives next to the code that
+ * produces the suggestion rather than a screen away from it. A prefilled end
+ * time has to read as a suggestion, and the field it sits in has to read as
+ * hers to change, because the contract's end time is where the overtime
+ * clause starts counting and that clause is protection she chooses to use,
+ * never something the system applies on her behalf. Nothing here may imply
+ * that going past this time charges anyone anything.
+ *
+ * Shaped like the entries in the admin dictionary ({ en, ru }, picked by
+ * lang) so it reads the same at the call site as every other admin string.
+ */
+export const COVERAGE_NOTES = {
+  suggestedEnd: {
+    en: 'Suggested from the conversation. This is the time the contract will name, so set it to whatever you are willing to commit to.',
+    ru: 'Подставлено из переписки. Это время попадёт в контракт, поэтому поставь то, на что готова согласиться.',
+  },
+  noDuration: {
+    en: 'The conversation gives a start time but never says how long the session runs, so the end time is yours to set.',
+    ru: 'В переписке есть время начала, но нет длительности, поэтому время окончания нужно поставить самой.',
+  },
+} as const;
 
 /** The six contracts that exist. Anything else a thread names becomes 'other'. */
 export type SessionType = (typeof CONTRACT_TYPE_ORDER)[number];

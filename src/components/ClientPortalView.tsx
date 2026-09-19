@@ -33,6 +33,7 @@ import {
   portalChrome,
   type PortalChrome,
 } from './portalLayout';
+import ReadingProgress from './ReadingProgress';
 import { scrollBehavior } from '../utils/motion';
 import type { ContractTemplate } from '../data/contract-template';
 import { PAYMENT_HANDLES } from '../data/payment-handles';
@@ -376,7 +377,7 @@ const ClientPortalView = ({
   //
   // What comes back is RESPONSIVE, and the argument is about desktop widths
   // only. Below `md` the second row does not render in any state, so the
-  // chrome is the 60px header alone whatever this says, and portalChrome is
+  // chrome is the header alone whatever this says, and portalChrome is
   // what knows that. A phone taking the two-row margin would drop every
   // heading a nav row below chrome that is not there, and its scan would call
   // a section current 48px before the reader reached it: neither looks broken,
@@ -871,6 +872,24 @@ const ClientPortalView = ({
           `,
         }}
       />
+
+      {/* The VP coin, the same one a journal post carries, travelling the
+          right edge as the client reads.
+
+          Three differences from the journal's, and all three are because this
+          is a portal rather than an article. The rail shows at EVERY width,
+          because there is no reading column to clear and because the right
+          edge is where the reader is already looking: the owner mistook the
+          native macOS overlay scrollbar for this and asked where it had gone.
+          It FADES when the page stands still, so a portal being read rather
+          than scrolled has nothing hovering beside it. And it can be dragged,
+          which is what a gallery thousands of pixels long actually wants.
+
+          It does not touch the native scrollbar and must not be made to.
+          Styling one to clear a lane for this would turn the macOS overlay
+          into a permanent, space-taking bar on every page of the site, and
+          only in WebKit. The two sit side by side. */}
+      <ReadingProgress rail="always" bottomBar={false} autoHide scrub />
 
       {/* The portal's own header, in place of the public site navbar.
 
@@ -3148,8 +3167,8 @@ function PortalTopNav({ items, activeId, onSelect, isPhotosInView }: PortalTopNa
       // the gallery's own row pins to the same offset and takes the band over.
       visibility={isPhotosInView ? 'hidden' : 'visible'}
       pointerEvents={isPhotosInView ? 'none' : 'auto'}
-      // Desktop only. A phone's whole chrome is the 60px header, which carries
-      // this list behind its burger, and portalChrome answers 60px there in
+      // Desktop only. A phone's whole chrome is the header alone, which carries
+      // this list behind its burger, and portalChrome answers that there in
       // every state because of this line.
       display={{ base: 'none', md: 'block' }}
       position="sticky"

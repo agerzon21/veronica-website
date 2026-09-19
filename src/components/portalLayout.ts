@@ -14,9 +14,20 @@
  * off at the Photos boundary, or the wrong pill lights up. Deriving them from
  * one another makes that impossible.
  */
+import { SITE_HEADER_H } from './siteHeader';
 
-/** The fixed header's height. The public navbar was 72; the portal's own is shorter. */
-export const PORTAL_HEADER_H = 60;
+/**
+ * The fixed header's height, and it is the PUBLIC navbar's, not a number of the
+ * portal's own.
+ *
+ * It was 60 against the site's 72, so a client moving between the two watched
+ * the page jolt up 12px on the way into their portal and back down on the way
+ * out. The two headers are now the same object as far as the eye is concerned,
+ * which is why this is imported rather than typed: see siteHeader.ts for what
+ * decides the number and for the two clamp floors where the public navbar
+ * dips a few px below it.
+ */
+export const PORTAL_HEADER_H = SITE_HEADER_H;
 
 /** The sticky section nav that sits directly under the header. */
 export const PORTAL_NAV_H = 48;

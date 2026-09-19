@@ -5,6 +5,7 @@ import { useState } from 'react';
 import BurgerMenu from './BurgerMenu';
 import MobileNav from './MobileNav';
 import CTAButton from './ui/CTAButton';
+import { SITE_LOGO_H, SITE_LOGO_H_MOBILE } from './siteHeader';
 
 // One nav-link treatment, shared by the main links and the Client Portal
 // utility link — and the same `ctaLabel` token MobileNav uses, so the menu
@@ -26,28 +27,17 @@ const navLinkProps: LinkProps = {
 };
 
 // --- Fluid desktop nav sizing -------------------------------------------
-// The full nav is 541px of links + a 137px Contact button. Together with the
-// wordmark and the 32px page gutters that needs ~1011px to sit still, so the
-// desktop layout only switches on at `lg` (992px) and has to run at its
-// tightest there. Rather than step between two fixed sizes, the wordmark and
-// the link gaps interpolate from their floor at 992px to their full size at
-// 1200px (where `contentWide` caps the container and extra width stops
-// mattering). Measured with the real Jost metrics, not estimated.
+// The wordmark's two clamps now live in siteHeader.ts, unchanged, because the
+// client portal's header wears the same logo at the same size and the two
+// headers have to be the same height. The reasoning behind the numbers moved
+// with them; the link gap below is the public nav's alone and stays here.
 //
 // Floor at 992px:  34px logo (223px wide) + 16px gaps  -> 52px breathing
 // Ceiling at 1200px: 40px logo (263px wide) + 24px gaps
-// Below `lg` the burger takes over and the wordmark returns to a full 40px,
-// so this floor never reaches phones.
-const LOGO_HEIGHT = 'clamp(2.125rem, 5.385px + 2.885vw, 2.5rem)';
+const LOGO_HEIGHT = SITE_LOGO_H;
 const NAV_GAP = 'clamp(1rem, -22.154px + 3.846vw, 1.5rem)';
 
-// Mobile has its own squeeze, and it is much tighter: 16px gutters + the
-// 48px burger leave `vw - 80` for the wordmark. A 40px logo is 263px wide,
-// which fits every common phone (375px and up) with room to spare but runs
-// 23px past a 320px screen and pushes the burger clean off the edge. So the
-// wordmark eases from 34px at 320px to its full 40px by 375px and stays
-// there. Every mainstream handset keeps the full-size logo.
-const LOGO_HEIGHT_MOBILE = 'clamp(2.125rem, -0.909px + 10.909vw, 2.5rem)';
+const LOGO_HEIGHT_MOBILE = SITE_LOGO_H_MOBILE;
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);

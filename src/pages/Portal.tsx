@@ -16,6 +16,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import PortalHeader from '../components/PortalHeader';
 import { HEADER_CLEARANCE, portalChrome } from '../components/portalLayout';
+import ReadingProgress from '../components/ReadingProgress';
 import ClientGallery, {
   useGalleryNav,
   type DriveFile,
@@ -464,6 +465,10 @@ const Portal = () => {
             for it itself, so the same component can be embedded inside
             ClientPortalView (where the portal wrapper already handles the
             clearance) without doubling up. */}
+        {/* The same travelling coin the full portal and a journal post carry.
+            A shared gallery is the longest scroll on the site, so if anywhere
+            wants a way to jump half way down it by hand, it is here. */}
+        <ReadingProgress rail="always" bottomBar={false} autoHide scrub />
         <PortalHeader
           // The gallery's sections, which the header draws as the photo bar at
           // every width. There is nothing to hand off to here, so the bar

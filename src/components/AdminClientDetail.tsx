@@ -16,6 +16,8 @@ import {
   type ContractTemplateSpec,
 } from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
+import { appleMapsLink, googleDirectionsLink, wazeLink } from '../data/travel-fee';
+import { travelCopy } from './travelCopy';
 
 interface Props {
   portalId: string;
@@ -588,6 +590,12 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                   </Text>
                 </Box>
               )}
+
+            {/* Where the shoot is, and one tap to navigate there. Sits in the
+                Contract section because that is where the address lives, and
+                it shows for a SIGNED contract too: the day she actually needs
+                to drive there is long after signing. */}
+            <SessionLocationLinks address={portal.contract_variables?.event_location ?? ''} />
 
             {/* While the contract is pending, expose the same variable
                 fields that were used at creation. Saving re-renders the
@@ -1862,6 +1870,63 @@ function AccountSection({
  * Field keys must match the variable names used in the contract
  * template — they round-trip into and out of contract_variables.
  */
+/**
+ * The session address, and one tap into whichever map app she prefers.
+ *
+ * ALL THREE LINKS ARE BUILT IN THE BROWSER, AND THAT IS SAFE, because all
+ * three carry a DESTINATION ONLY. Waze and Apple Maps take nothing else, and
+ * the Google link here is deliberately the no-origin form, which makes Maps
+ * route from wherever she is standing. That is the right behaviour for this
+ * screen: the question on the day is "get me there from here", not "how far is
+ * this from base".
+ *
+ * The one link that does carry an origin is the look it up button on the new
+ * client form, and that one is built server side in api/admin/_travel-link.ts
+ * because the origin is a home address and this bundle is public. Nothing on
+ * this screen ever passes a second argument to googleDirectionsLink.
+ *
+ * Renders nothing at all when there is no address, rather than three dead
+ * buttons that open a map of nowhere.
+ */
+function SessionLocationLinks({ address }: { address: string }) {
+  const { lang } = useAdminLang();
+  const tv = travelCopy(lang);
+  const trimmed = address.trim();
+  if (!trimmed) return null;
+
+  const targets: Array<{ label: string; href: string }> = [
+    { label: tv.waze, href: wazeLink(trimmed) },
+    { label: tv.googleMaps, href: googleDirectionsLink(trimmed) },
+    { label: tv.appleMaps, href: appleMapsLink(trimmed) },
+  ];
+
+  return (
+    <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.100">
+      <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+        {tv.navHeading}
+      </Text>
+      <Text fontSize="sm" color="gray.700" fontWeight="300" mb={3}>
+        {trimmed}
+      </Text>
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+        {targets.map((target) => (
+          <CTAButton
+            key={target.label}
+            href={target.href}
+            newTab
+            variant="outline"
+            size="sm"
+            icon={FaExternalLinkAlt}
+            fullWidth={{ base: true, md: false }}
+          >
+            {target.label}
+          </CTAButton>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
 function EditContractVariables({
   portal,
   adminPassword,

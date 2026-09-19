@@ -493,9 +493,9 @@ const ClientGallery = ({
   // offset, so a heading only has to know whether one is there.
   //
   // Both are also hidden below `md`, where the phone header carries the nav
-  // instead, so what comes back is responsive: 60px of chrome on a phone in
-  // every one of these states, and 60 or 108 on a desktop depending on this
-  // answer. The heading margins take the responsive value straight into `sx`;
+  // instead, so what comes back is responsive: the header alone on a phone in
+  // every one of these states, and either the header alone or the header plus
+  // a nav row on a desktop depending on this answer. The heading margins take the responsive value straight into `sx`;
   // the scan thresholds ask for the live one inside their handlers.
   const chrome = portalChrome(showSectionNav || portalNavRow);
 
@@ -1947,9 +1947,9 @@ function TopSectionNav({ items, activeId, setActiveId }: TopSectionNavProps) {
       top={HEADER_CLEARANCE}
       h={`${PORTAL_NAV_H}px`}
       // Desktop only. On a phone this row is gone, the header's section bar
-      // has its job, and portalChrome answers 60px accordingly. display:none
-      // rather than unmounting, so the hook feeding both stays enabled and
-      // there is only ever one scan.
+      // has its job, and portalChrome answers with the header alone
+      // accordingly. display:none rather than unmounting, so the hook feeding
+      // both stays enabled and there is only ever one scan.
       display={{ base: 'none', md: 'flex' }}
       alignItems="center"
       zIndex={10}

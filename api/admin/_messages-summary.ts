@@ -54,6 +54,7 @@ import { FROM_ADDRESS } from '../_auto-reply.js';
 import {
   COUPLE_SESSION_TYPES,
   toSessionType,
+  type DurationStatement,
   type SessionType,
 } from '../../src/components/clientPrefill.js';
 
@@ -72,8 +73,14 @@ const MODEL = 'gpt-4o-mini';
  * "Still needed" list, and three new keys. A version 3 row carries the old
  * field set and, worse, the old gap list, which asks every client for a
  * partner's full name the moment it decides the shoot is a couple one.
+ *
+ * 4 to 5: session_durations. A version 4 row has no record of how long
+ * anybody said the session runs, so the new-client form it prefills leaves
+ * the end time blank on a thread that states one plainly. Nothing arrives to
+ * invalidate that row either, since these are settled threads by the time
+ * Vero converts them, which is the case this number exists for.
  */
-const SUMMARY_VERSION = 4;
+const SUMMARY_VERSION = 5;
 
 let cachedClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -188,7 +195,19 @@ export interface BookingFields {
    */
   total_amount_quote: string | null;
   event_date_quote: string | null;
+  /**
+   * Every statement in the thread about how long the session runs, each one
+   * tagged with who made it. The only key here that is not a lone value,
+   * and deliberately so: DurationStatement in clientPrefill.ts explains why
+   * the choice between a maximum the photographer offered and a shorter
+   * length the customer guessed at is made in code rather than by this
+   * prompt. The model's job is to find the sentences, not to pick one.
+   */
+  session_durations: DurationStatement[];
 }
+
+/** Every key above except the list, which is the one that is not a string. */
+type BookingStringKey = Exclude<keyof BookingFields, 'session_durations'>;
 
 export const EMPTY_BOOKING: BookingFields = {
   session_type: null,
@@ -205,7 +224,46 @@ export const EMPTY_BOOKING: BookingFields = {
   session_scope: null,
   total_amount_quote: null,
   event_date_quote: null,
+  session_durations: [],
 };
+
+/**
+ * The string-valued keys, as something the readers below can walk.
+ *
+ * They used to walk Object.keys(EMPTY_BOOKING) and coerce every value with
+ * one rule, which only worked while every value was a string. Filtering the
+ * list once, here, keeps that single loop honest instead of teaching it to
+ * skip a key by name in the middle of its own body.
+ */
+const BOOKING_STRING_KEYS = (Object.keys(EMPTY_BOOKING) as Array<keyof BookingFields>).filter(
+  (k): k is BookingStringKey => k !== 'session_durations',
+);
+
+/**
+ * The duration statements, taking only what the shape promises.
+ *
+ * A statement with no speaker is unusable: the whole reason this is a list
+ * is that the choice between two lengths turns on who said which, so a row
+ * that cannot answer that is dropped rather than guessed at. A missing quote
+ * falls back to the length itself, because the quote is there to be shown to
+ * Vero and a short line is better than an empty one. The cap is there so a
+ * model looping on one sentence cannot write an unbounded array into the
+ * summary cache.
+ */
+function readDurations(src: unknown): DurationStatement[] {
+  if (!Array.isArray(src)) return [];
+  const out: DurationStatement[] = [];
+  for (const row of src.slice(0, 8)) {
+    if (!row || typeof row !== 'object') continue;
+    const speaker = (row as any).speaker;
+    if (speaker !== 'photographer' && speaker !== 'client') continue;
+    const text = typeof (row as any).text === 'string' ? (row as any).text.trim() : '';
+    if (!text) continue;
+    const quote = typeof (row as any).quote === 'string' ? (row as any).quote.trim() : '';
+    out.push({ speaker, text, quote: quote || text });
+  }
+  return out;
+}
 
 /**
  * What a contract needs, in the order it renders. Labels live here in both
@@ -226,7 +284,7 @@ export const EMPTY_BOOKING: BookingFields = {
  * field belongs to all six.
  */
 const BOOKING_REQUIREMENTS: Array<{
-  key: keyof BookingFields;
+  key: BookingStringKey;
   en: string;
   ru: string;
   source: 'client' | 'vero';
@@ -544,10 +602,11 @@ Fill "booking" BEFORE writing "gathered" — decide the facts first, then descri
   1. FILL IT IF IT WAS SAID. A value is established the moment anyone states it anywhere in the thread. It does not matter which side said it: a date the customer named, a price Vero quoted, a location either of them mentioned all count equally. It does not matter whether the other side replied, agreed, accepted, confirmed, booked, paid or signed anything, and it does not matter that the plan could still change. A price Vero quoted IS the price even if the customer never accepted it, never answered, or answered only "ok". Never hold a value back on the grounds that it is not yet agreed, not settled, not final, not confirmed, not official, not legal, not verified, or not the person's own. None of those tests apply to any key here. If the fact is in the thread, it goes in the key.
   2. NEVER INVENT ONE. If nobody stated it, the key is null. Do not guess it, do not infer it from what is typical for this kind of shoot, do not carry it in from your own knowledge. A null is correct and useful; a made-up value ends up on a contract.
   Thread metadata at the top of the conversation (the channel, the address the customer writes from, their display name) is supplied by the platform rather than typed by anyone. It is a valid source of facts under rule 1, and nothing it contains may ever be reported as something still to ask the customer for.
-  If the same key is given more than one value over the thread, use the MOST RECENT.
+  If the same key is given more than one value over the thread, use the MOST RECENT. The one exception is "session_durations", which is a list and keeps every statement it finds, oldest first.
     - "session_type": EXACTLY one of "wedding", "portrait", "family", "engagement", "maternity", "other". Those six are the only contracts that exist, so choose the closest one rather than inventing a word for the shoot. The tests below OVERLAP, so work down them in order and take the FIRST that fits: a wedding with children in it is still a wedding, and a pregnancy shoot of one adult is still maternity. (1) "wedding": a wedding, an elopement or a vow renewal, however many family members are in it. (2) "engagement": a proposal, a save-the-date or an engagement shoot. (3) "maternity": a bump or pregnancy shoot. (4) "other": a newborn, a birthday, an anniversary, or a branding, product or event shoot. (5) "family": children, or more than one generation, where none of the above was named. (6) "portrait": one adult on their own, including headshots, boudoir and graduation. (7) "other" again for anything that fits none of them. null only if the thread never says what kind of shoot this is.
     - "event_date": the day of the shoot as YYYY-MM-DD, four-digit year, two-digit month, two-digit day. A day counts as soon as either side names it, including a day the customer proposed while asking whether Vero is free when Vero has not answered yet. Every transcript line is prefixed with the date that message was sent; when a day is named without a year ("October 7", "Nov 8", "7 октября"), take the year from that prefix, choosing the first such day falling on or after the date of the message that names it. The month and the day themselves must come from the thread's own words: never supply those yourself. null only when no single day is named at all: "sometime in October", "next summer", "a weekend in the spring", or two or more candidate days with no choice made between them.
-    - "event_time": coverage hours or start time, worded as in the thread, e.g. "3:00 PM to 6:00 PM". null only if no time or duration is named.
+    - "event_time": the clock time the shoot starts, or the whole window if the thread gives both ends, worded as in the thread, e.g. "3:00 PM to 6:00 PM" or "11:30 AM". A start time on its own IS the value: do not hold it back for want of an end, and do not work one out yourself by adding a length to it. How long the session runs belongs in "session_durations" and never inside this string. null only if no clock time is named.
+    - "session_durations": every statement anyone makes about HOW LONG the session runs, in the order they were said, as an array of objects with EXACTLY these three keys: "speaker", either "photographer" (Vero, or the AI assistant answering in her place) or "client" (the customer); "text", the length alone in the words it was said in, e.g. "1.5 hours", "an hour", "90 minutes", "полтора часа"; and "quote", the sentence it was said in copied word for word. Include a length that was offered as a maximum, floated, proposed, asked for or merely guessed at, and include BOTH sides when they say different lengths, in the order they said them. Which one reaches the contract is decided outside this summary, and a statement you leave out cannot be weighed there. A clock time is not a duration: "we'll start at 11:30" says nothing about length. An empty array when nobody says how long the session runs, which is common and is the right answer there.
     - "event_location": the venue, address or place as either side named it. null only if no place is named.
     - "client_full_name": the customer's first and last name, taken from a message or from the sender display name in the thread metadata. Take a name at face value: a name typed in a chat IS that person's name, and it does not have to be legal, formal or verified. null only when no first-and-last name is available at all, meaning a first name on its own, a handle, a single word, an emoji nickname or a business name.
     - "partner_full_name": for a wedding or an engagement, the OTHER partner's first and last name, on exactly the same terms. Those are the only two contracts that name two people. null for every other session type, including one where the thread happens to mention a spouse, and null when no such name appears.
@@ -559,7 +618,7 @@ Fill "booking" BEFORE writing "gathered" — decide the facts first, then descri
     - "session_scope": "other" sessions only. A short phrase in the thread's own words saying what is being photographed, e.g. "branding session for a bakery" or "60th birthday party". null for every other session type, and null when nothing says what the shoot is.
     - "total_amount_quote": the sentence from the thread that names the total, copied word for word. Whenever "total_amount" is non-null this is the sentence it came from, so you must be able to produce it. null if "total_amount" is null.
     - "event_date_quote": the sentence that names the date, copied word for word, on the same terms. null if "event_date" is null.
-  "gathered" and this object are the same facts read two ways, so they can never disagree. Every fact you put in "gathered" must appear in its matching key here, and every non-null key here must show up in "gathered". If you are about to write a detail into "gathered" while its key is still null, the key is what is wrong: go back and fill it.
+  "gathered" and this object are the same facts read two ways, so they can never disagree. Every fact you put in "gathered" must appear in its matching key here, and every key here that carries a value, including a "session_durations" list with anything in it, must show up in "gathered". If you are about to write a detail into "gathered" while its key is still null, the key is what is wrong: go back and fill it.
 
 - "en": an object with:
     - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
@@ -578,9 +637,11 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
       { role: 'user', content: userContent },
     ],
     // 400 → 700 for the Russian copy when summaries went bilingual, then
-    // → 1000 for the `booking` object and its verbatim source quotes. A
-    // truncated response is unparseable JSON, so this has headroom.
-    max_tokens: 1200,
+    // → 1000 for the `booking` object and its verbatim source quotes, then
+    // → 1500 once session_durations started carrying a sentence per speaker
+    // on top of that. A truncated response is unparseable JSON, so this has
+    // headroom.
+    max_tokens: 1500,
     temperature: 0.2,
     response_format: { type: 'json_object' },
   });
@@ -621,7 +682,8 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
   const readBooking = (src: any): BookingFields => {
     const out = { ...EMPTY_BOOKING };
     if (!src || typeof src !== 'object') return out;
-    for (const key of Object.keys(EMPTY_BOOKING) as Array<keyof BookingFields>) {
+    out.session_durations = readDurations(src.session_durations);
+    for (const key of BOOKING_STRING_KEYS) {
       const v = src[key];
       if (typeof v !== 'string') continue;
       const trimmed = v.trim();

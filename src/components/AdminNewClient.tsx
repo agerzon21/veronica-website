@@ -12,10 +12,33 @@ import {
   type ContractTemplateField,
 } from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
-import { type ClientPrefill, parseCoverageWindow, isCoupleSession, toSessionType } from './clientPrefill';
+import {
+  type ClientPrefill,
+  COVERAGE_NOTES,
+  coverageFieldValues,
+  resolveCoverage,
+  isCoupleSession,
+  toSessionType,
+} from './clientPrefill';
 import { fmtAdminDate } from '../utils/adminDate';
 import ConversationPeek from './ConversationPeek';
 import ConfirmDialog from './ui/ConfirmDialog';
+import {
+  TRAVEL_FREE_ROUND_TRIP_MILES,
+  TRAVEL_MANUAL_QUOTE_CEILING,
+  applyTravelDecision,
+  formatDriveTime,
+  formatMiles,
+  formatTravelFee,
+  parseMiles,
+  quoteTravel,
+  travelShareOfSessionPct,
+  type TravelApplication,
+  type TravelDecision,
+  type TravelQuote,
+  type TravelStatus,
+} from '../data/travel-fee';
+import { travelCopy, type TravelCopy } from './travelCopy';
 
 interface Props {
   adminPassword: string;
@@ -220,6 +243,11 @@ const todayYmd = (): string => {
 
 const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly }: Props) => {
   const { t, lang } = useAdminLang();
+  // Travel copy lives in its own module rather than in the admin dictionary,
+  // because the arithmetic beside it is imported by an api/ handler and the
+  // dictionary would drag React and Chakra into a serverless function. See the
+  // header of travelCopy.ts.
+  const tv = travelCopy(lang);
   // Seeded once, at mount. Every field below stays fully editable; the point
   // is to save retyping what the customer already said, not to decide anything.
   //
@@ -242,7 +270,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   // meaning the thread never said, is the only case that falls back to the
   // first template.
   const seededTemplate = toSessionType(prefill?.session_type) ?? CONTRACT_TYPE_ORDER[0];
-  const seededTimes = parseCoverageWindow(prefill?.event_time ?? null);
+  // Start, end, and the sentence the end came from. resolveCoverage owns
+  // every judgement in there: which of two stated lengths counts, whether a
+  // lone clock reading is safe to trust, and when the honest answer is no end
+  // time at all. This file only decides what to render.
+  const seededTimes = resolveCoverage(prefill?.event_time ?? null, prefill?.session_durations);
   const [templateKey, setTemplateKey] = useState<string>(seededTemplate);
   const spec = CONTRACT_TEMPLATES[templateKey];
   // Template-driven variable fields (the static ones at the bottom).
@@ -272,12 +304,32 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
   const [clientEmail, setClientEmail] = useState(prefill?.client_email ?? '');
   const [eventDateIso, setEventDateIso] = useState(prefill?.event_date ?? '');
-  // Defaults: 5:00 PM – 6:00 PM. Most shoots/weddings start in the late
-  // afternoon, and seeding zero-minute values means Vero just adjusts
-  // the hour instead of zeroing out :37 every time she opens the
-  // picker.
-  const [eventStartTime, setEventStartTime] = useState(seededTimes.start ?? '17:00');
-  const [eventEndTime, setEventEndTime] = useState(seededTimes.end ?? '18:00');
+  /**
+   * The coverage window.
+   *
+   * With nothing from a thread it opens on 5:00 PM to 6:00 PM. Most sessions
+   * start in the late afternoon, and seeding zero-minute values means Vero
+   * adjusts an hour instead of zeroing out :37 every time she opens the
+   * picker.
+   *
+   * Once the thread DOES name a start time, that default stops being a
+   * convenience and starts being wrong, so it is not used at all. It used to
+   * win anyway: the panel at the top of this form displayed the 11:30 AM the
+   * summariser had read out of the conversation while the fields underneath
+   * it sat on 5 PM to 6 PM, and 5 PM is what went onto the contract.
+   *
+   * The end time is filled only when the thread established a length. Blank
+   * is the honest answer otherwise, and a far better one than a guess: the
+   * end time on the contract is the line the overtime clause bills from, so
+   * a number nobody agreed to silently moves when a session becomes
+   * billable. The submit check below refuses to send a blank one out.
+   *
+   * Which of those cases applies is coverageFieldValues' decision, not this
+   * file's, so the rule can be tested without a browser.
+   */
+  const seededFields = coverageFieldValues(seededTimes);
+  const [eventStartTime, setEventStartTime] = useState(seededFields.start);
+  const [eventEndTime, setEventEndTime] = useState(seededFields.end);
 
   // Coverage type covers the case where the booking is sold as a
   // package (half-day, full-day) and exact times aren't known yet —
@@ -337,6 +389,31 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     if (retainerTouched) return;
     setRetainerAmount(suggestedRetainer(parseFloat(next)));
   };
+
+  // ─── Travel ───
+  //
+  // Miles and minutes are typed in by hand, read off the Google Maps tab the
+  // Look it up button opens. Manual, not automated, and not because an API
+  // would cost anything: the repo is at exactly 12 of the 12 top level api
+  // handlers the Vercel free tier allows, so an automated lookup would have to
+  // become another action inside api/admin.ts with a key to rotate and a quota
+  // to watch, for something that happens a few times a month. Manual entry also
+  // sidesteps the storage licence problem, which is the sharp edge nobody
+  // expects: Google allows caching coordinates for 30 days and then requires
+  // deletion, and Mapbox forbids storing geocoding results at all. Miles and
+  // dollars are derived business values and are ours to keep forever.
+  //
+  // ONE WAY, because one way is what Maps prints. travel-fee.ts doubles it.
+  const [travelMilesOneWay, setTravelMilesOneWay] = useState('');
+  // Displayed, never computed with. See the note at the top of travel-fee.ts.
+  const [travelMinutesOneWay, setTravelMinutesOneWay] = useState('');
+  // 'none' is "she has not answered yet", 'declined' is a real answer. The
+  // difference is the whole reason the offer does not nag: once declined, the
+  // panel collapses to one muted line and stays there until she asks for it
+  // back or changes the mileage.
+  const [travelStatus, setTravelStatus] = useState<TravelStatus>('none');
+  const [travelLinkBusy, setTravelLinkBusy] = useState(false);
+  const [travelLinkNote, setTravelLinkNote] = useState('');
 
   const [additionalNotes, setAdditionalNotes] = useState('');
 
@@ -509,6 +586,53 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     return field ? [{ label, value, required: Boolean(field.required) }] : [];
   };
 
+  /**
+   * The time row on the panel, which is the one place the window can be
+   * checked against the conversation before anything is created.
+   *
+   * It shows the window the form is actually seeded with rather than the
+   * fragment the thread happened to contain, because "11:30 AM" sitting on
+   * the panel above two time fields reading 11:30 AM and 1:00 PM invites
+   * exactly one question, and the panel should answer it. Where that end
+   * time came from is the quote underneath, the same way the date and the
+   * total already carry the sentence they were read out of. On a thread
+   * where both parties named a length, that sentence is hers, which is the
+   * only visible sign that the choice was made at all.
+   */
+  const coverageRow = (() => {
+    if (!prefill) return null;
+    const { start, end } = seededTimes;
+    return {
+      label: t.newClient.pfEventTime,
+      value: start && end ? `${fmtTime12h(start)} to ${fmtTime12h(end)}` : prefill.event_time,
+      required: false,
+      quote: seededTimes.endSource?.quote ?? null,
+    };
+  })();
+
+  /**
+   * The line under the End Time field, or nothing.
+   *
+   * There are two things worth saying and they are different things. A
+   * prefilled end time needs to read as a suggestion, because it was
+   * computed from a length somebody typed in a chat and it is the time the
+   * contract will name. A blank one needs to say why it is blank, or it
+   * reads as the form having failed to fill a field in.
+   *
+   * Both disappear the moment Vero types her own time, since a note
+   * explaining a value that is no longer on screen is just noise. Neither
+   * mentions money: the overtime clause bills from this line only if she
+   * decides to invoke it, and copy on this form implying otherwise would
+   * misrepresent her own contract back to her.
+   */
+  const endTimeNote = ((): string | null => {
+    if (!prefill || !seededTimes.start) return null;
+    if (seededTimes.end) {
+      return eventEndTime === seededTimes.end ? COVERAGE_NOTES.suggestedEnd[lang] : null;
+    }
+    return eventEndTime ? null : COVERAGE_NOTES.noDuration[lang];
+  })();
+
   // The type reads the way the dropdown reads it. The bare key is what the API
   // stores, and "other" sitting in this panel says nothing about a shoot the
   // customer described in full one line below.
@@ -535,7 +659,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
         ...typeScopedRow('session_scope', t.newClient.pfSessionScope, prefill.session_scope),
         { label: t.newClient.pfEventDate, value: prefill.event_date ? fmtDate(prefill.event_date) : null, required: true, quote: prefill.event_date_quote },
         ...typeScopedRow('due_date', t.newClient.pfDueDate, prefill.due_date ? fmtDate(prefill.due_date) : null),
-        { label: t.newClient.pfEventTime, value: prefill.event_time, required: false },
+        ...(coverageRow ? [coverageRow] : []),
         { label: t.newClient.pfEventLocation, value: prefill.event_location, required: false },
         { label: t.newClient.pfClientName, value: prefill.client_full_name, required: true },
         ...(isCoupleSession(prefill.session_type)
@@ -636,6 +760,75 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     setVariables((prev) => ({ ...prev, [key]: value }));
   };
 
+  // ─── Travel, derived ───
+  //
+  // The session price and the travel fee are held apart right up to submit.
+  // totalAmount is what the SHOOT costs; the fee is added on top to produce the
+  // figure the client signs for. Accepting therefore never edits the total
+  // input, which is what makes "declining changes nothing" true by
+  // construction: there is no amount to take back out when she corrects the
+  // mileage, and no way for a stale fee to survive a change of mind.
+  const travelQuote = quoteTravel(parseMiles(travelMilesOneWay) ?? NaN);
+  const travelDecision: TravelDecision =
+    travelStatus === 'accepted' && travelQuote?.autofillable
+      ? { status: 'accepted', fee: travelQuote.fee, roundTripMiles: travelQuote.roundTripMiles }
+      : { status: travelStatus === 'declined' ? 'declined' : 'none', fee: 0, roundTripMiles: 0 };
+  const sessionTotalNumber = parseFloat(totalAmount);
+  const travelApplication = applyTravelDecision(
+    Number.isFinite(sessionTotalNumber) ? sessionTotalNumber : 0,
+    travelDecision,
+  );
+
+  /**
+   * Any edit to the mileage invalidates a decision made about a different
+   * number, so the offer comes back rather than silently re-pricing itself.
+   * A fee she accepted at 53 miles must not quietly become a different fee
+   * because she corrected it to 73.
+   */
+  const applyTravelMiles = (next: string) => {
+    setTravelMilesOneWay(next);
+    setTravelStatus('none');
+  };
+
+  /**
+   * Opens Google Maps directions from her base to the typed address.
+   *
+   * The URL is built SERVER SIDE, in api/admin/_travel-link.ts, because it is
+   * the one link that carries an origin and her origin is a home address. The
+   * client bundle is public and statically built, so the value can never live
+   * in this file. See that handler for exactly what does and does not reach the
+   * browser as a result.
+   */
+  const openTravelLookup = async () => {
+    const destination = (variables.event_location ?? '').trim();
+    if (!destination) {
+      setTravelLinkNote(tv.noAddressYet);
+      return;
+    }
+    setTravelLinkBusy(true);
+    setTravelLinkNote('');
+    try {
+      const res = await fetch('/api/admin/travel-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, destination }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && typeof data.url === 'string') {
+        // noopener so the opened Maps tab cannot reach back into the admin
+        // panel through window.opener.
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+        setTravelLinkNote(data.origin_configured ? '' : tv.originMissing);
+      } else {
+        setTravelLinkNote(tv.linkFailed);
+      }
+    } catch {
+      setTravelLinkNote(tv.linkFailed);
+    } finally {
+      setTravelLinkBusy(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
@@ -661,6 +854,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       missing.push({ id: 'galleryPassword', label: t.newClient.fieldLabelGalleryPassword });
     if (coverage === 'custom' && !customCoverage.trim())
       missing.push({ id: 'customCoverage', label: t.newClient.fieldLabelCustomCoverage });
+    // The two time fields could not be empty while they were seeded with a
+    // hardcoded 5 PM to 6 PM, so nothing here ever checked them. A thread
+    // that names a start time and no length now leaves End Time blank on
+    // purpose, and a blank one that got past this point would print an empty
+    // Time row on a contract somebody signs. Only 'specific' is checked
+    // because the presets and the custom wording describe the window in
+    // their own words and these inputs are not on screen.
+    if (coverage === 'specific') {
+      if (!eventStartTime) missing.push({ id: 'startTime', label: t.newClient.startTimeLabel });
+      if (!eventEndTime) missing.push({ id: 'endTime', label: t.newClient.endTimeLabel });
+    }
     if (responsiblePartyEnabled) {
       if (!responsiblePartyName.trim())
         missing.push({ id: 'responsiblePartyName', label: t.newClient.fieldLabelResponsiblePartyName });
@@ -711,6 +915,19 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       return;
     }
 
+    // The travel allowance, if she accepted one, goes into the CONTRACT TOTAL
+    // rather than into portal_charges. That is a deliberate choice and it is
+    // the whole argument for this feature: travel is known at booking time,
+    // unlike overtime, which is discovered afterwards. A client who signs for
+    // $300 and is charged $50 later has a reasonable complaint. One who signs
+    // for $350 does not.
+    //
+    // Recomputed here from the submitted session total rather than read off
+    // the render, so the number posted and the number printed in the TRAVEL
+    // clause come from one call.
+    const travelAtSubmit = applyTravelDecision(total, travelDecision);
+    const contractTotal = travelAtSubmit.contractTotal;
+
     // Build the variables object the contract template expects. Most
     // keys come from the dynamic `variables` map; we override the ones
     // we've collected explicitly above so the rendered contract sees
@@ -720,7 +937,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     // For a wedding contract this needs to read like "Chrisann Bryan &
     // Rajiv Thomas" not "Chrisann & Rajiv" — the legal binding is on
     // the full identities, not the shorthand we use in greetings.
-    const remaining = total - retainer;
+    const remaining = contractTotal - retainer;
     // Solo types have no second name to assemble, and the couple case already
     // degrades to a single name when partner 2 is left blank (it stays
     // optional even on a wedding: one person does sign for both).
@@ -773,10 +990,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       event_title: eventTitle,
       event_date: fmtDate(eventDateIso),
       event_time: eventTimeString,
-      total_amount: fmtCurrency(total),
+      // The travel allowance is inside this figure, which is the point of
+      // putting it in the total rather than charging it later.
+      total_amount: fmtCurrency(contractTotal),
       retainer_amount: fmtCurrency(retainer),
       remaining_balance: fmtCurrency(remaining),
       additional_notes: mergedAdditionalNotes,
+      // Empty on every path but acceptance. The TRAVEL section is gated on
+      // both of these keys, so declining, or never being asked, prunes the
+      // whole clause away and the contract renders exactly as it would have
+      // before this feature existed.
+      ...travelAtSubmit.variables,
       // Responsible party — sent always so the substitute step has a
       // value to swap in. Blank when the toggle is off, which causes
       // pruneEmptyOptionalSections to drop the section server-side.
@@ -814,7 +1038,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           event_date: eventDateIso,
           contract_template_key: templateKey,
           variables: finalVariables,
-          contract_total_amount: total,
+          // Session price plus any accepted travel allowance. This is the
+          // number every balance on the client screen is derived from, so it
+          // has to match total_amount in the rendered contract exactly.
+          contract_total_amount: contractTotal,
           contract_retainer_amount: retainer,
           gallery_password: galleryPassword.trim(),
           // Links portal ↔ conversation so the inbox shows the CLIENT badge
@@ -1181,11 +1408,20 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           {coverage === 'specific' && (
             <>
               <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
-                <Field label={t.newClient.startTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.startTimeHelp}>
-                  <FormInput type="time" value={eventStartTime} onChange={(e) => setEventStartTime(e.target.value)} />
+                <Field label={t.newClient.startTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.startTimeHelp} hasError={fieldErrors.has('startTime')}>
+                  <FormInput type="time" value={eventStartTime} onChange={(e) => { setEventStartTime(e.target.value); clearFieldError('startTime'); }} />
                 </Field>
-                <Field label={t.newClient.endTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.endTimeHelp}>
-                  <FormInput type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
+                <Field label={t.newClient.endTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.endTimeHelp} hasError={fieldErrors.has('endTime')}>
+                  <FormInput type="time" value={eventEndTime} onChange={(e) => { setEventEndTime(e.target.value); clearFieldError('endTime'); }} />
+                  {/* Why this time is on screen, whenever the thread is the
+                      reason it is. Sits under the input rather than in the
+                      help text above it, which describes the field itself and
+                      says the same thing on every booking. */}
+                  {endTimeNote && (
+                    <Text fontSize="2xs" color="gray.500" mt={1} lineHeight="1.5">
+                      {endTimeNote}
+                    </Text>
+                  )}
                 </Field>
               </Stack>
 
@@ -1315,13 +1551,39 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           </Text>
 
           {fields.map((f) => (
-            <FieldRow
-              key={f.key}
-              field={f}
-              value={variables[f.key] ?? ''}
-              hasError={fieldErrors.has(varFieldId(f.key))}
-              onChange={(v) => { handleVarChange(f.key, v); clearFieldError(varFieldId(f.key)); }}
-            />
+            // The travel block rides directly under the location field rather
+            // than living in its own section, because the three inputs are one
+            // question: where is it, how far is that, and how long does it
+            // take. Splitting them across the form is how you get an address
+            // typed once and a distance nobody ever looked up.
+            <Box key={f.key} w="100%">
+              <FieldRow
+                field={f}
+                value={variables[f.key] ?? ''}
+                hasError={fieldErrors.has(varFieldId(f.key))}
+                onChange={(v) => { handleVarChange(f.key, v); clearFieldError(varFieldId(f.key)); }}
+              />
+              {f.key === 'event_location' && (
+                <TravelBlock
+                  copy={tv}
+                  address={variables.event_location ?? ''}
+                  oneWayMiles={travelMilesOneWay}
+                  oneWayMinutes={travelMinutesOneWay}
+                  onMilesChange={applyTravelMiles}
+                  onMinutesChange={setTravelMinutesOneWay}
+                  onLookup={openTravelLookup}
+                  lookupBusy={travelLinkBusy}
+                  lookupNote={travelLinkNote}
+                  quote={travelQuote}
+                  status={travelStatus}
+                  onAccept={() => setTravelStatus('accepted')}
+                  onDecline={() => setTravelStatus('declined')}
+                  onReopen={() => setTravelStatus('none')}
+                  sessionTotal={totalAmount}
+                  application={travelApplication}
+                />
+              )}
+            </Box>
           ))}
 
           {/* ─── Optional service clauses ───
@@ -1532,6 +1794,249 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     </Box>
   );
 };
+
+/**
+ * The travel panel: look it up, type what you read, decide about the fee.
+ *
+ * PSEUDO OPTIONAL, ALWAYS. Nothing here applies itself. The offer appears, she
+ * accepts it or declines it, and declining collapses the panel to a single
+ * muted line rather than leaving a question sitting on screen. That is the same
+ * philosophy as the overtime clause: it exists to protect her from a bad actor,
+ * never to force a charge onto somebody she likes.
+ *
+ * The percentage beside the dollar figure is the guardrail. "$50" alone says
+ * nothing about whether it is reasonable; "$50, 17% of this session" is a
+ * number she can judge without doing arithmetic, and it is what makes a typo in
+ * the miles field obvious before it reaches a contract.
+ */
+function TravelBlock({
+  copy,
+  address,
+  oneWayMiles,
+  oneWayMinutes,
+  onMilesChange,
+  onMinutesChange,
+  onLookup,
+  lookupBusy,
+  lookupNote,
+  quote,
+  status,
+  onAccept,
+  onDecline,
+  onReopen,
+  sessionTotal,
+  application,
+}: {
+  copy: TravelCopy;
+  address: string;
+  oneWayMiles: string;
+  oneWayMinutes: string;
+  onMilesChange: (v: string) => void;
+  onMinutesChange: (v: string) => void;
+  onLookup: () => void;
+  lookupBusy: boolean;
+  lookupNote: string;
+  quote: TravelQuote | null;
+  status: TravelStatus;
+  onAccept: () => void;
+  onDecline: () => void;
+  onReopen: () => void;
+  /** The raw total input, so the share can be computed against the session. */
+  sessionTotal: string;
+  application: TravelApplication;
+}) {
+  const minutes = parseMiles(oneWayMinutes);
+  const sessionTotalNumber = parseFloat(sessionTotal);
+  const sharePct = quote ? travelShareOfSessionPct(quote.fee, sessionTotalNumber) : null;
+  const included = formatMiles(TRAVEL_FREE_ROUND_TRIP_MILES);
+  // Two decimals on purpose. This is the only place the unrounded figure is
+  // shown, and seeing $46.40 become $50 is what makes the rounding a policy
+  // she is applying rather than a number the form invented.
+  const rawFeeText = quote ? `$${quote.rawFee.toFixed(2)}` : '';
+  const feeText = quote ? formatTravelFee(quote.fee) : '';
+
+  return (
+    <Box
+      mt={4}
+      p={4}
+      bg="brand.surface"
+      border="1px solid"
+      borderColor="brand.accentBorder"
+      borderRadius="sm"
+    >
+      <Flex justify="space-between" align="center" gap={3} wrap="wrap" mb={2}>
+        <Text
+          fontSize={{ base: 'xs', md: '2xs' }}
+          fontWeight="500"
+          color="brand.accent"
+          letterSpacing={{ base: '0.15em', md: '0.2em' }}
+          textTransform="uppercase"
+        >
+          {copy.heading}
+        </Text>
+        <CTAButton
+          onClick={onLookup}
+          variant="outline"
+          size="sm"
+          isLoading={lookupBusy}
+          isDisabled={!address.trim()}
+        >
+          {copy.lookItUp}
+        </CTAButton>
+      </Flex>
+
+      <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+        {copy.lookItUpHelp}
+      </Text>
+      {lookupNote && (
+        <Text fontSize="xs" color="orange.700" mt={2} fontWeight="400" lineHeight="1.5">
+          {lookupNote}
+        </Text>
+      )}
+
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start" mt={4}>
+        <Field label={copy.milesLabel} helpText={copy.milesHelp} w={{ base: '100%', md: '50%' }}>
+          <FormInput
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            value={oneWayMiles}
+            onChange={(e) => onMilesChange(e.target.value)}
+            placeholder={copy.milesPlaceholder}
+          />
+        </Field>
+        <Field label={copy.minutesLabel} helpText={copy.minutesHelp} w={{ base: '100%', md: '50%' }}>
+          <FormInput
+            type="number"
+            inputMode="numeric"
+            step="1"
+            min="0"
+            value={oneWayMinutes}
+            onChange={(e) => onMinutesChange(e.target.value)}
+            placeholder={copy.minutesPlaceholder}
+          />
+        </Field>
+      </Stack>
+
+      {quote && (
+        <Box mt={3}>
+          <Text fontSize="sm" color="gray.700" fontWeight="400">
+            {copy.roundTrip(formatMiles(quote.roundTripMiles))}
+          </Text>
+          {minutes !== null && (
+            <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1}>
+              {copy.driveTime(formatDriveTime(minutes), formatDriveTime(minutes * 2))}
+            </Text>
+          )}
+          {!quote.triggered && (
+            <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1}>
+              {copy.withinRadius(included)}
+            </Text>
+          )}
+        </Box>
+      )}
+
+      {/* Over the ceiling. No amount, no accept button, nothing prefilled.
+          Past roughly this distance the standard mileage formula stops being
+          the right tool and the job becomes a custom quote, and this is also
+          the guardrail against a stray digit in the miles field, which is the
+          one input error that would otherwise land on a contract as a real
+          number. */}
+      {quote?.needsManualQuote && (
+        <Box mt={3} p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
+          <Text fontSize="sm" fontWeight="500" color="yellow.800" mb={1}>
+            {copy.manualHeading}
+          </Text>
+          <Text fontSize="xs" color="yellow.900" fontWeight="300" lineHeight="1.6">
+            {copy.manualBody(feeText, formatTravelFee(TRAVEL_MANUAL_QUOTE_CEILING))}
+          </Text>
+        </Box>
+      )}
+
+      {quote?.autofillable && status === 'none' && (
+        <Box mt={3} p={3} bg="white" border="1px solid" borderColor="gray.200" borderRadius="sm">
+          <Text fontSize="sm" fontWeight="500" color="gray.800" mb={1}>
+            {copy.offerHeading}
+          </Text>
+          <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.6">
+            {copy.offerMath(
+              formatMiles(quote.roundTripMiles),
+              formatMiles(quote.billableMiles),
+              included,
+              rawFeeText,
+              feeText,
+            )}
+          </Text>
+          <Text fontSize="sm" color="gray.800" fontWeight="500" mt={2}>
+            {sharePct !== null ? copy.offerShare(feeText, String(sharePct)) : copy.offerShareNoTotal(feeText)}
+          </Text>
+          {/* column-reverse on mobile keeps the money action off the top of
+              the tap zone, the same way the delivery confirmations do. */}
+          <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2} mt={3}>
+            <CTAButton onClick={onDecline} variant="ghost" size="sm">
+              {copy.decline}
+            </CTAButton>
+            <CTAButton onClick={onAccept} variant="solid" size="sm" wrapText>
+              {copy.accept(feeText)}
+            </CTAButton>
+          </Stack>
+        </Box>
+      )}
+
+      {quote?.autofillable && status === 'accepted' && application.lineItem && (
+        <Box mt={3} p={3} bg="green.50" border="1px solid" borderColor="green.200" borderRadius="sm">
+          <Flex justify="space-between" align="flex-start" gap={3} wrap="wrap">
+            <Box flex="1 1 auto" minW="0">
+              <Text fontSize="sm" fontWeight="500" color="green.800">
+                {copy.acceptedHeading}
+              </Text>
+              <Text fontSize="xs" color="green.900" fontWeight="300" mt={1} lineHeight="1.6">
+                {copy.acceptedLine(application.lineItem.amount, application.lineItem.roundTripMiles)}
+              </Text>
+              {Number.isFinite(sessionTotalNumber) && (
+                <Text fontSize="xs" color="green.900" fontWeight="400" mt={2}>
+                  {copy.totals(
+                    fmtCurrency(sessionTotalNumber),
+                    application.lineItem.amount,
+                    fmtCurrency(application.contractTotal),
+                  )}
+                </Text>
+              )}
+            </Box>
+            <CTAButton onClick={onDecline} variant="ghost" size="sm">
+              {copy.remove}
+            </CTAButton>
+          </Flex>
+        </Box>
+      )}
+
+      {/* Declined is a real answer, not "not yet". One muted line and a way
+          back, so the form never asks the same question twice. */}
+      {quote?.autofillable && status === 'declined' && (
+        <Flex mt={3} align="center" gap={3} wrap="wrap">
+          <Text fontSize="xs" color="gray.500" fontWeight="300">
+            {copy.declinedLine}
+          </Text>
+          <Box
+            as="button"
+            type="button"
+            onClick={onReopen}
+            fontSize="xs"
+            color="brand.accent"
+            bg="transparent"
+            border="none"
+            p={0}
+            textDecoration="underline"
+            cursor="pointer"
+          >
+            {copy.offerAgain}
+          </Box>
+        </Flex>
+      )}
+    </Box>
+  );
+}
 
 function FieldRow({
   field,

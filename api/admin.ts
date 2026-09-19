@@ -76,6 +76,7 @@ import cronsHistoryHandler from './admin/_crons-history.js';
 import configHealthHandler from './admin/_config-health.js';
 import rebuildHandler from './admin/_rebuild.js';
 import rebuildStatusHandler from './admin/_rebuild-status.js';
+import travelLinkHandler from './admin/_travel-link.js';
 
 const HANDLERS: Record<
   string,
@@ -145,6 +146,12 @@ const HANDLERS: Record<
   'config-health': configHealthHandler,
   rebuild: rebuildHandler,
   'rebuild-status': rebuildStatusHandler,
+  // Builds the Google Maps directions link from Veronika's base to a session
+  // address. An action rather than a file of its own because the repo sits at
+  // exactly 12 of the 12 top level handlers the Vercel free tier allows, and
+  // because the origin it reads is a home address that must never leave the
+  // server except in the link itself. See admin/_travel-link.ts.
+  'travel-link': travelLinkHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

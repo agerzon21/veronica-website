@@ -22,6 +22,7 @@ import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaShareAlt from '../icons/fa/FaShareAlt';
 import BurgerMenu from './BurgerMenu';
 import { HEADER_CLEARANCE } from './portalLayout';
+import { SITE_LOGO_H, SITE_LOGO_H_MOBILE } from './siteHeader';
 import { scrollBehavior } from '../utils/motion';
 
 /**
@@ -43,7 +44,7 @@ import { scrollBehavior } from '../utils/motion';
  *   outside the photos -> one wide "Your account" bar, naming the section they
  *                         are in, and the photo bar takes no width at all,
  *   inside the photos  -> the photo bar grows into the slot and the account bar
- *                         condenses, to a 40px burger on a phone and to a
+ *                         condenses, to a square burger on a phone and to a
  *                         labelled 168px control on a desktop.
  *
  * It is driven by SCROLL POSITION, not by tapping: reaching the photos any way
@@ -204,8 +205,14 @@ interface PortalHeaderProps {
  * Written once because the two bars sit side by side in one header and have to
  * read as a matched pair; two sets of literals would drift by a pixel and look
  * like a mistake rather than a style.
+ *
+ * They are proportions of the header rather than absolutes. The bars were 40
+ * and 44 in a 60px header, which left 10px and 8px of breathing room above and
+ * below; the header is now the public navbar's 72 and these keep the same
+ * shape at 12px and 10px. Both are well past the 44px a thumb is owed, which
+ * the 40px one only just cleared.
  */
-const CONTROL_H = { base: '40px', md: '44px' };
+const CONTROL_H = { base: '48px', md: '52px' };
 const CONTROL_RADIUS = { base: '9px', md: '10px' };
 /**
  * What the account bar condenses TO.
@@ -215,8 +222,12 @@ const CONTROL_RADIUS = { base: '9px', md: '10px' };
  * header hides a menu for no reason, and at 168px the bar still says where the
  * reader is and is still one click from every destination. It NEVER goes to
  * zero at either width, which is the point of a condense rather than a hide.
+ *
+ * The phone value is CONTROL_H's, not a second copy of it: the condensed bar is
+ * a SQUARE burger, so its width is its height and typing 48 here would be a
+ * promise to remember two places the next time the header's proportions move.
  */
-const ACCOUNT_MINI_W = { base: '40px', md: '168px' };
+const ACCOUNT_MINI_W = { base: CONTROL_H.base, md: '168px' };
 /** The gap between the two bars, and the negative margin that cancels it. */
 const SLOT_GAP = '8px';
 const SLOT_GAP_NEG = '-8px';
@@ -321,8 +332,9 @@ const BARS_OUT =
  * the shared duration and curve like everything else, so the track fills at the
  * rate the bar grows, which is what "follows the bar" was meant to mean.
  *
- * Leaving is quick, like every other leaving part: the bar is about to be 40px
- * wide and a track still wiping out inside it is a detail nobody can read.
+ * Leaving is quick, like every other leaving part: the bar is about to be one
+ * control wide and a track still wiping out inside it is a detail nobody can
+ * read.
  */
 const TICKS_IN = `clip-path ${NAV_DUR} ${NAV_EASE} 0s`;
 const TICKS_OUT = `clip-path 0.3s ${NAV_EASE} 0s`;
@@ -519,6 +531,30 @@ function buildAccountRows(
   return rows;
 }
 
+/**
+ * "Which of these am I on, out of how many", for one menu's rows.
+ *
+ * It counts the rows that menu ACTUALLY renders, which is why it is a function
+ * of rows rather than of the nav: the desktop account menu has no Share row and
+ * the phone's has, so the same bar owes the two widths different answers. A
+ * counter built from the raw item list once promised "5 / 6" over a four row
+ * menu, and this is what stops that coming back.
+ *
+ * An empty string when the reader is in a section this menu does not list. That
+ * happens for real: crossing into the photos drops Photos from the account
+ * menu, and on a desktop Share lives in the corner rather than in the list.
+ * "1 / 5" beside the word Photos would be a made up number, so the bar shows no
+ * number at all instead. See accountBarLabel for the other half of the rule.
+ *
+ * The jump row is excluded because it is not part of the sequence: it is an
+ * action pinned above the list and it carries no number in the menu either.
+ */
+const barCounterFor = (rows: MenuRow[]): string => {
+  const list = rows.filter((r) => !r.jump);
+  const i = list.findIndex((r) => r.active);
+  return i < 0 ? '' : `${i + 1} / ${list.length}`;
+};
+
 /** The gallery's sections. Numbered, in order, nothing removed. */
 function buildSectionRows(nav: PortalMenuNav): MenuRow[] {
   return nav.items.map((item, i) => ({
@@ -589,6 +625,17 @@ const PortalHeader = ({
   const showBalance = remaining !== null && remaining > 0;
 
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  /**
+   * Where the reader's pointer was when they opened the menu, in viewport x, or
+   * null when there was no pointer.
+   *
+   * A wide bar is most of the header, and a panel that always hangs off its left
+   * edge can open a long way from the hand that asked for it. So on a DESKTOP a
+   * click puts the panel under the click. Null is the honest answer for a
+   * keyboard, and for the condensed bar, which is small enough that its own edge
+   * IS where the reader was pointing. See DesktopMenuPanel.
+   */
+  const [openAtX, setOpenAtX] = useState<number | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const accountTriggerRef = useRef<HTMLElement | null>(null);
   const sectionTriggerRef = useRef<HTMLElement | null>(null);
@@ -634,7 +681,7 @@ const PortalHeader = ({
   /**
    * The handoff closes whatever is open.
    *
-   * A menu anchored to a bar that is in the middle of shrinking to 40px is a
+   * A menu anchored to a bar that is in the middle of shrinking to a burger is a
    * panel hanging off nothing, and its rows are about to change underneath the
    * reader's thumb anyway: crossing into the photos is what drops Photos from
    * the account list.
@@ -643,8 +690,9 @@ const PortalHeader = ({
     setOpenMenu(null);
   }, [handoff]);
 
-  const toggleMenu = useCallback((which: Exclude<OpenMenu, null>) => {
+  const toggleMenu = useCallback((which: Exclude<OpenMenu, null>, pointerX: number | null = null) => {
     setOpenMenu((open) => (open === which ? null : which));
+    setOpenAtX(pointerX);
   }, []);
 
   const pickFrom = useCallback((nav: PortalMenuNav | undefined, id: string) => {
@@ -684,26 +732,35 @@ const PortalHeader = ({
       )
     : 0;
   /**
-   * The bar's own label and counter come from the SAME rows the menu renders,
-   * never from the raw item list.
+   * THE LABEL SAYS WHERE YOU ARE. THE COUNTER SAYS WHAT YOU CAN PICK.
    *
-   * Reading the raw list broke both of them once the gallery was delivered. The
-   * menu drops Photos in that state, and desktop drops Share too, so a bar built
-   * from `accountNav.items` promised "5 / 6" over a menu holding four rows, and
-   * worse, it could sit there reading "Photos" while the photo bar right beside
-   * it said the same thing. Removing that duplication was the whole point of
-   * dropping the row.
+   * They are two different questions and they used to be answered by one lookup,
+   * which is why the bar read "Top" to a client standing in the middle of their
+   * photos. Both readings were defensible and only one of them was the bar's
+   * job: naming the current section is what the eyebrow "Your account" promises,
+   * and Photos is a section whether or not it is still a row you can choose.
    *
-   * The jump row is excluded because it is not part of the sequence: it is an
-   * action pinned above the list, and it carries no number in the menu either.
+   * So the label comes from the NAV, which knows every section including the
+   * ones the menu has stopped listing, and the counter comes from the ROWS,
+   * which is the list being offered. They are allowed to disagree, and when
+   * they do the counter stands down rather than inventing a position: see
+   * barCounterFor.
+   *
+   * The counter is per width because the two menus are. A phone lists Share and
+   * a desktop does not, so one string would be wrong at one of them, and it was
+   * wrong at the desktop, where the bar counted five rows over a menu of four.
    */
-  const accountRowsForBar = accountRowsMobile.filter((r) => !r.jump);
-  const accountBarIndex = Math.max(
-    0,
-    accountRowsForBar.findIndex((r) => r.active),
-  );
-  const accountBarLabel = accountRowsForBar[accountBarIndex]?.label ?? '';
-  const accountBarCounter = `${accountBarIndex + 1} / ${accountRowsForBar.length}`;
+  const accountBarLabel =
+    accountNav?.items.find((i) => i.id === accountNav.activeId)?.label ??
+    // Nothing active at all: name the first place they could go rather than
+    // leaving the bar blank. The full portal's scan always has an answer, so
+    // this is for a caller that has not scanned yet.
+    accountRowsMobile.find((r) => !r.jump)?.label ??
+    '';
+  const accountBarCounter = {
+    base: barCounterFor(accountRowsMobile),
+    md: barCounterFor(accountRowsDesktop),
+  };
 
   return (
     <Box
@@ -728,7 +785,7 @@ const PortalHeader = ({
           flexShrink={0}
           display="flex"
           alignItems="center"
-          h="44px"
+          h={CONTROL_H}
           px={1}
           _hover={{ opacity: 0.8, textDecoration: 'none' }}
           transition="opacity 0.2s"
@@ -736,14 +793,27 @@ const PortalHeader = ({
           aria-label="Vero Photography, back to the main site"
         >
           {/* The monogram on phones, where a 263px wordmark would take the
-              whole row and leave no space for the nav. */}
+              whole row and leave no space for the nav.
+
+              WHICH mark is a portal decision; HOW BIG is the site's, and both
+              of these take the public navbar's own clamps rather than a size of
+              their own. That is what makes the two headers the same height: the
+              navbar is padding around a logo of exactly this size, so a portal
+              logo 10px shorter would have been a portal header 10px shorter, or
+              a fixed 72px box with the mark rattling around inside it.
+
+              The breakpoint on the clamps is `lg`, like the navbar's, and not
+              the `md` that decides which mark shows. Between the two the
+              wordmark wears the mobile clamp, which is already at its 2.5rem
+              ceiling by 375px and therefore the same 40px. Matching the
+              navbar's structure exactly is worth more here than tidiness. */}
           <Image
             src="/assets/images/logo-mark.svg"
             alt="Vero Photography"
             htmlWidth={60}
             htmlHeight={60}
-            h="34px"
-            w="34px"
+            h={{ base: SITE_LOGO_H_MOBILE, lg: SITE_LOGO_H }}
+            w={{ base: SITE_LOGO_H_MOBILE, lg: SITE_LOGO_H }}
             display={{ base: 'block', md: 'none' }}
           />
           <Image
@@ -752,7 +822,7 @@ const PortalHeader = ({
             htmlWidth={460}
             htmlHeight={70}
             width="auto"
-            h="30px"
+            h={{ base: SITE_LOGO_H_MOBILE, lg: SITE_LOGO_H }}
             display={{ base: 'none', md: 'block' }}
           />
         </Box>
@@ -785,7 +855,7 @@ const PortalHeader = ({
               label={sectionNav!.items[sectionIndex].label}
               counter={`${sectionIndex + 1} / ${sectionNav!.items.length}`}
               open={openMenu === 'sections'}
-              onToggle={() => toggleMenu('sections')}
+              onToggle={(x) => toggleMenu('sections', x)}
               panelId={sectionPanelId}
               ticks={{ total: sectionNav!.items.length, index: sectionIndex }}
             />
@@ -801,7 +871,7 @@ const PortalHeader = ({
               counter={accountBarCounter}
               ready={photosReady}
               open={openMenu === 'account'}
-              onToggle={() => toggleMenu('account')}
+              onToggle={(x) => toggleMenu('account', x)}
               panelId={accountPanelId}
             />
           )}
@@ -945,6 +1015,9 @@ const PortalHeader = ({
             open={openMenu === 'sections'}
             anchorRef={sectionTriggerRef}
             headerRef={headerRef}
+            // The photo bar is only ever wide, so a click on it is always a
+            // click somewhere along a bar most of the header across.
+            pointerX={openAtX}
             onPick={(id) => pickFrom(sectionNav, id)}
           />
         </>
@@ -965,6 +1038,11 @@ const PortalHeader = ({
             open={openMenu === 'account'}
             anchorRef={accountTriggerRef}
             headerRef={headerRef}
+            // Only while the bar is WIDE. Condensed it is a 168px control in the
+            // corner, small enough that its own left edge is already where the
+            // reader pointed, and moving its panel a few px sideways would read
+            // as the menu wobbling rather than as it following the hand.
+            pointerX={accountMini ? null : openAtX}
             onPick={(id) => pickFrom(accountNav, id)}
           />
         </>
@@ -977,6 +1055,18 @@ const PortalHeader = ({
  * THE TWO BARS
  * ────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The bar's counter, and it may differ per width because the two menus do: a
+ * phone's account menu lists Share and a desktop's does not. An empty string at
+ * a width means there is no honest number to show there, and nothing is
+ * rendered at that width rather than an empty span the row's gap still pays
+ * for. See barCounterFor.
+ */
+type BarCounter = string | { base: string; md: string };
+
+/** Plain responsive `display`, which is how this header splits every width. */
+type NavBarDisplay = 'block' | { base: 'block' | 'none'; md: 'block' | 'none' };
+
 interface NavBarProps {
   kind: 'photo' | 'account';
   triggerRef: MutableRefObject<HTMLElement | null>;
@@ -986,20 +1076,38 @@ interface NavBarProps {
   mini?: boolean;
   eyebrow: string;
   label: string;
-  counter: string;
+  counter: BarCounter;
   /** The account bar's green cue. Delivered AND paid, or nothing. */
   ready?: boolean;
   open: boolean;
-  onToggle: () => void;
+  /**
+   * @param pointerX viewport x of the click, or null when it came from the
+   * keyboard. The desktop panel opens under the pointer; see DesktopMenuPanel.
+   */
+  onToggle: (pointerX: number | null) => void;
   panelId: string;
   /** The photo bar's progress row: one tick per section. */
   ticks?: { total: number; index: number };
 }
 
 /**
+ * Where the pointer was when a button was clicked, or null when there was no
+ * pointer.
+ *
+ * Enter and Space on a focused button fire a click too, with `detail` 0 and a
+ * clientX of 0. Zero is the window's left edge, not a place the reader chose,
+ * so treating it as a position would fling every keyboard user's menu into the
+ * corner. `detail` is the standard way to tell the two apart and it is the one
+ * thing standing between this feature and breaking keyboard navigation.
+ */
+const pointerXOf = (e: { detail: number; clientX: number }): number | null =>
+  e.detail > 0 ? e.clientX : null;
+
+/**
  * One of the header's two bars.
  *
- * Four things in 40px, and the order is the order they are wanted in. The
+ * Four things in one control's height, and the order is the order they are
+ * wanted in. The
  * eyebrow says what kind of thing the name underneath is, since "Ceremony"
  * alone in a header could be anything. The counter answers "how much more is
  * there", which is the question a long list actually provokes. The chevron says
@@ -1046,7 +1154,7 @@ function NavBar({
   /**
    * How the contents behave while the box is condensed.
    *
-   * On a PHONE the account bar becomes a 40px burger, so its words have to
+   * On a PHONE the account bar becomes a square burger, so its words have to
    * clear out. On a DESKTOP it becomes a 168px labelled control, so they stay:
    * a burger on a wide header hides a menu for no reason, and the whole value
    * of the condensed state there is that it still names where the reader is.
@@ -1066,12 +1174,48 @@ function NavBar({
   const contentTransition = contentHidden ? contentOut : contentIn;
   const contentSx = { ...STILL };
 
+  /**
+   * The counter, as the spans that will render it.
+   *
+   * ONE span when both widths say the same thing, which is every case but the
+   * account bar's. Two responsive ones when they differ, because a single text
+   * node cannot say two things. NONE when a width has nothing to count: an
+   * empty span still costs the row's gap, and a 390px header has spent that gap
+   * on the section name.
+   */
+  const counterWidths = typeof counter === 'string' ? { base: counter, md: counter } : counter;
+  const counterParts: Array<{ key: string; text: string; display: NavBarDisplay }> =
+    counterWidths.base === counterWidths.md
+      ? counterWidths.base
+        ? [{ key: 'both', text: counterWidths.base, display: 'block' }]
+        : []
+      : [
+          ...(counterWidths.base
+            ? [
+                {
+                  key: 'base',
+                  text: counterWidths.base,
+                  display: { base: 'block', md: 'none' } as NavBarDisplay,
+                },
+              ]
+            : []),
+          ...(counterWidths.md
+            ? [
+                {
+                  key: 'md',
+                  text: counterWidths.md,
+                  display: { base: 'none', md: 'block' } as NavBarDisplay,
+                },
+              ]
+            : []),
+        ];
+
   return (
     <Flex
       as="button"
       type="button"
       ref={triggerRef as MutableRefObject<never>}
-      onClick={onToggle}
+      onClick={(e) => onToggle(pointerXOf(e))}
       data-portal-photo-bar={isPhoto ? 'true' : undefined}
       data-portal-account-bar={isPhoto ? undefined : 'true'}
       aria-haspopup="menu"
@@ -1176,7 +1320,7 @@ function NavBar({
 
       {/* The readiness cue. Only ever on the account bar, only ever when the
           gallery is delivered AND the balance is settled, and gone again the
-          moment the bar condenses: 40px has no room for it and 168px is
+          moment the bar condenses: a burger has no room for it and 168px is
           already carrying a label and a counter. */}
       {ready && (
         <Flex
@@ -1208,20 +1352,25 @@ function NavBar({
         </Flex>
       )}
 
-      <Text
-        as="span"
-        fontSize="2xs"
-        color="gray.500"
-        flexShrink={0}
-        opacity={contentOpacity}
-        transform={contentShift}
-        transition={contentTransition}
-        // Tabular figures, or the counter jiggles sideways as the reader
-        // scrolls past a 1 and the column is 40px from an ellipsis.
-        sx={{ fontVariantNumeric: 'tabular-nums', ...contentSx }}
-      >
-        {counter}
-      </Text>
+      {counterParts.map((part) => (
+        <Text
+          key={part.key}
+          as="span"
+          data-portal-bar-counter="true"
+          display={part.display}
+          fontSize="2xs"
+          color="gray.500"
+          flexShrink={0}
+          opacity={contentOpacity}
+          transform={contentShift}
+          transition={contentTransition}
+          // Tabular figures, or the counter jiggles sideways as the reader
+          // scrolls past a 1 and the column is a few px from an ellipsis.
+          sx={{ fontVariantNumeric: 'tabular-nums', ...contentSx }}
+        >
+          {part.text}
+        </Text>
+      ))}
       <Box
         as="span"
         display="block"
@@ -1672,9 +1821,19 @@ function PhoneMenuPanel({
  * phone cannot do, and shows EVERY item at once, in columns, with no scrolling
  * and no counting cue needed.
  *
- * The panel is anchored to its own bar and then clamped inside the header, so a
- * bar sitting near the right edge does not hang its menu off the side of the
- * window.
+ * WHERE IT OPENS. A wide bar is most of the header across, so hanging its panel
+ * off the bar's LEFT edge could put the list a long way from the hand that
+ * asked for it: click the right hand end of a 900px bar and the menu appears
+ * beside the logo. So a pointer click opens the panel under the pointer, and
+ * only its x moves. It still hangs from the bottom of the header, it keeps its
+ * size, and it is clamped inside the window exactly as before, so a click near
+ * either edge still gets a panel that is fully on screen.
+ *
+ * `pointerX` is null for the two cases that must keep the old anchoring: a
+ * keyboard press, which has no position to follow, and the condensed account
+ * bar, which is small enough that its own edge is where the reader pointed.
+ * The panel then falls back to the anchor, which is the same clamp with a
+ * different starting x rather than a second placement rule.
  */
 function DesktopMenuPanel({
   heading,
@@ -1683,6 +1842,7 @@ function DesktopMenuPanel({
   open,
   anchorRef,
   headerRef,
+  pointerX,
   onPick,
 }: {
   heading: string;
@@ -1691,6 +1851,8 @@ function DesktopMenuPanel({
   open: boolean;
   anchorRef: MutableRefObject<HTMLElement | null>;
   headerRef: MutableRefObject<HTMLDivElement | null>;
+  /** Viewport x of the click that opened this, or null. See above. */
+  pointerX: number | null;
   onPick: (id: string) => void;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -1712,9 +1874,13 @@ function DesktopMenuPanel({
     const a = anchor.getBoundingClientRect();
     const h = header.getBoundingClientRect();
     const pad = 12;
+    // The header spans the window, so clamping to it IS clamping to the
+    // viewport: `left` is relative to the header's own box, and the panel is
+    // positioned inside it.
     const max = Math.max(pad, h.width - panel.offsetWidth - pad);
-    setLeft(Math.max(pad, Math.min(a.left - h.left, max)));
-  }, [open, rows.length, anchorRef, headerRef]);
+    const from = pointerX === null ? a.left : pointerX;
+    setLeft(Math.max(pad, Math.min(from - h.left, max)));
+  }, [open, rows.length, pointerX, anchorRef, headerRef]);
 
   return (
     <Box
@@ -1909,7 +2075,7 @@ export interface NavSelectionLock {
  * A tapped scroll travels over the same document whoever started it, so every
  * nav watching that document has to stand still for it, not just the one whose
  * item was tapped. It used to be per hook, and the two navs on a delivered
- * portal sit about 8px apart in the same 60px header: the account bar and the
+ * portal sit about 8px apart in the same one header: the account bar and the
  * photo bar. Tapping Password in the account menu from the foot of the gallery
  * held the portal's own scan and left the gallery's running, so the bar beside
  * it rattled through every section name on the way up. The guard was there. It

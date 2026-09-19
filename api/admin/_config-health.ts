@@ -244,6 +244,18 @@ const CHECKS: Check[] = [
     ifMissing: 'Notification emails link to the site root instead of the relevant screen.',
     fallback: 'Links point at the site root.',
   },
+  {
+    key: 'SESSION_ORIGIN_ADDRESS',
+    severity: 'optional',
+    // Deliberately described without naming the address. This screen is behind
+    // super-admin auth, but the purpose string has no reason to carry it.
+    purpose: "The starting point the contract form's travel lookup measures from",
+    ifMissing:
+      'The "look it up" button still opens Google Maps directions, but with no starting point, so Maps measures from whatever device is being used. The form warns when this happens. The travel fee itself is unaffected: it is worked out from the miles typed in by hand.',
+    // It lives here and only here BECAUSE it is a home address. Never move it
+    // into a constant in src/, because the client bundle is public.
+    fallback: "Google Maps falls back to the viewer's current location.",
+  },
 ];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -79,6 +79,17 @@ export interface WeddingContractVariables {
   // pruneEmptyOptionalSections via requireVariables.
   two_camera_enabled: string;
   additional_retouching_enabled: string;
+  /**
+   * The travel allowance, formatted ("$50"), and the distance it was worked
+   * out from ("106.4"). Both blank on every booking inside the included
+   * radius, which prunes the TRAVEL section away entirely.
+   *
+   * They are written together or not at all. See src/data/travel-fee.ts, which
+   * owns the policy, and the TRAVEL section below, which is gated on both so a
+   * half filled pair can never print a clause with a hole in it.
+   */
+  travel_fee_amount: string;
+  travel_round_trip_miles: string;
 }
 
 export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
@@ -233,6 +244,53 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
           kind: 'text',
           emphasis: 'italic',
           text: 'This does not apply where the session runs long for reasons within the Photographer\u2019s control.',
+        },
+      ],
+    },
+    // Optional, unnumbered, and gated on BOTH travel variables, so a booking
+    // inside the included radius prunes it away and every wedding contract
+    // already signed re-renders byte for byte as it always has. That is the
+    // same mechanism ADDITIONAL TIME AND EXPENSES uses, and it is the only
+    // safe way to add wording to this template: _portal-update.ts re-renders
+    // contract_body from the LIVE template whenever variables are edited.
+    //
+    // Gated on both keys rather than on the amount alone because the clause
+    // prints the distance. Half a pair would render "Round Trip Distance:
+    // miles", which is worse than no clause at all. The admin form writes the
+    // two together or writes neither.
+    //
+    // This is deliberately the SAME IDEA as ADDITIONAL TIME AND EXPENSES above
+    // and not a second, unrelated concept. SERVICES already says travel is
+    // included and that additional travel may be billed when discussed in
+    // advance. This is that conversation, settled before anybody signs, which
+    // is the whole point: a client who signs for $300 and is charged $50 later
+    // has a reasonable complaint, and one who signs for $350 does not.
+    {
+      title: 'TRAVEL',
+      optional: true,
+      requireVariables: ['travel_fee_amount', 'travel_round_trip_miles'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'Travel within 30 miles of the Photographer’s base, meaning 60 miles of driving in total, is included in the Total Payment at no charge. This booking is further out than that, so a travel allowance has been agreed in advance and is already part of the Total Payment shown below.',
+        },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Round Trip Distance', value: '{{travel_round_trip_miles}} miles' },
+            { label: 'Included At No Charge', value: '60 miles round trip' },
+            { label: 'Rate Beyond That', value: '$1.00 per mile of round trip distance' },
+            { label: 'Travel Allowance', value: '{{travel_fee_amount}}, rounded up to the nearest $5' },
+          ],
+        },
+        {
+          kind: 'text',
+          text: 'The allowance covers fuel, vehicle costs and the Photographer’s time on the road together. Driving time is never billed separately, at any rate, however long the journey takes on the day.',
+        },
+        {
+          kind: 'text',
+          emphasis: 'italic',
+          text: 'This figure is fixed by this agreement. It is not a charge that appears afterwards, and no further travel cost will be added for the journey to and from this booking.',
         },
       ],
     },
@@ -434,6 +492,15 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     // addresses a month — and hard-validating would block the real case where
     // all we have is a venue name. So the check is Vero's, and this tells her
     // exactly what to check.
+    //
+    // NOT updated to name the Look it up button, although the button now sits
+    // directly under this field on every type including wedding. The wedding
+    // spec's fields are pinned by scratchpad/test-contract-types.mjs, which
+    // compares each one against git HEAD whole. That check is stricter than the
+    // rule it protects (only defaultValue can reach a rendered contract, via
+    // withFieldDefaults on a type change), but wedding is the template where
+    // stricter than necessary is the right setting, so the wording stays. The
+    // session copy below says it instead.
     helpText:
       'Full address, not just the venue name. Look it up in Google Maps or Waze first — confirm the street, city and state are right, and check the drive time so there are no surprises on the day.',
     required: true,
@@ -779,6 +846,42 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       },
     ],
   },
+  // Optional, unnumbered, gated on BOTH travel variables. A booking inside the
+  // included radius prunes it away, so every session contract already out
+  // there re-renders exactly as it did. The wedding copy of this section
+  // carries the full reasoning; the duplication is deliberate, for the reason
+  // set out at the top of this block: the five session types and the wedding
+  // point at different arrays, and a clause that appears in both has to be
+  // changed in both on purpose.
+  {
+    title: 'TRAVEL',
+    optional: true,
+    requireVariables: ['travel_fee_amount', 'travel_round_trip_miles'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'Travel within 30 miles of the Photographer’s base, meaning 60 miles of driving in total, is included in the Total Payment at no charge. This session is further out than that, so a travel allowance has been agreed in advance and is already part of the Total Payment shown below.',
+      },
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Round Trip Distance', value: '{{travel_round_trip_miles}} miles' },
+          { label: 'Included At No Charge', value: '60 miles round trip' },
+          { label: 'Rate Beyond That', value: '$1.00 per mile of round trip distance' },
+          { label: 'Travel Allowance', value: '{{travel_fee_amount}}, rounded up to the nearest $5' },
+        ],
+      },
+      {
+        kind: 'text',
+        text: 'The allowance covers fuel, vehicle costs and the Photographer’s time on the road together. Driving time is never billed separately, at any rate, however long the journey takes on the day.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'italic',
+        text: 'This figure is fixed by this agreement. It is not a charge that appears afterwards, and no further travel cost will be added for the journey to and from this session.',
+      },
+    ],
+  },
   // Same payment model as the wedding contract, on purpose: the balance falls
   // due after the session, and nothing is delivered until it is paid. The
   // gallery is the leverage, so there is no reason to demand money up front.
@@ -936,9 +1039,9 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
     key: 'event_location',
     label: 'Session Location',
     labelRu: 'Место съёмки',
-    placeholder: 'Place name and full address',
+    placeholder: 'Place name, street, city, state, ZIP',
     helpText:
-      'Full address, not just the place name. Look it up in Google Maps or Waze first, confirm the street, city and state are right, and check the drive time so there are no surprises on the day.',
+      'A full street address, not just the place name. A name that resolves on one map app often resolves nowhere else. Use Look it up below to check it, and to read off the distance and drive time.',
     required: true,
   },
   {

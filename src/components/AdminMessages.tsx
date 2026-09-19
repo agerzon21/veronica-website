@@ -2688,6 +2688,11 @@ function ConversationView({
       session_scope: b?.session_scope ?? null,
       total_amount_quote: b?.total_amount_quote ?? null,
       event_date_quote: b?.event_date_quote ?? null,
+      // Absent on every summary cached before this key existed, which is why
+      // it defaults to an empty list rather than being read as "nobody said":
+      // an old cached row and a thread that never mentions a length look the
+      // same here, and both mean the form leaves its end time blank.
+      session_durations: b?.session_durations ?? [],
     };
   };
 
