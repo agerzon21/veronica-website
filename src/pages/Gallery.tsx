@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
-import { m } from 'framer-motion';
 import GalleryCategories from '../components/GalleryCategories';
+import Reveal from '../components/ui/Reveal';
 import GalleryGrid from '../components/GalleryGrid';
 import NotFound from './NotFound';
 import { useSmartBack } from '../components/ui/useSmartBack';
@@ -30,8 +30,6 @@ interface PublicPhoto {
   width: number | null;
   height: number | null;
 }
-
-const MotionDiv = m.div;
 
 const GALLERY_HERO_IMAGE = '/assets/photos/portraits/sunset-sunflower-field-joy.webp';
 
@@ -131,11 +129,12 @@ const Gallery = () => {
             align="center"
             justify="center"
           >
-            <MotionDiv
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
+            {/* `immediate`: this is the page hero, so it fades in on arrival
+                rather than on scroll, which is what the bare `animate` here
+                always meant. It takes the gate for the same reason everything
+                else does, since a mount fade is just as invisible and just as
+                tappable while it runs. */}
+            <Reveal immediate from={{ opacity: 0, y: 20 }} duration={0.8}>
               <Box px={6}>
                 <PageHeader
                   onDark
@@ -143,7 +142,7 @@ const Gallery = () => {
                   title="A collection of my recent work"
                 />
               </Box>
-            </MotionDiv>
+            </Reveal>
           </Flex>
         </Box>
 
@@ -185,15 +184,12 @@ const Gallery = () => {
           align="center"
           justify="center"
         >
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          >
+          {/* Category hero, same mount fade as the index hero above. */}
+          <Reveal immediate from={{ opacity: 0, y: 20 }} duration={0.8}>
             <Box px={6}>
               <PageHeader onDark eyebrow="Gallery" title={categoryInfo.title} />
             </Box>
-          </MotionDiv>
+          </Reveal>
         </Flex>
 
         {/* Back Button */}

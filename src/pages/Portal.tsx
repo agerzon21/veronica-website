@@ -25,6 +25,7 @@ import ClientGallery, {
   type FolderSection,
 } from '../components/ClientGallery';
 import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
+import Reveal from '../components/ui/Reveal';
 import { prefersReducedMotion } from '../utils/motion';
 
 /**
@@ -86,12 +87,15 @@ function clearStoredSession(): void {
 const MotionDiv = m.div;
 
 /**
- * The login form's two entrance fades, in seconds, zeroed for a visitor who
- * asked for reduced motion. Read at module scope rather than per render
- * because both animations run once, on mount, and the preference cannot
- * change between the read and the frame that uses it.
+ * The tab panel cross-fade, in seconds, zeroed for a visitor who asked for
+ * reduced motion. Read at module scope rather than per render because it runs
+ * on a tab switch and the preference cannot change between the read and the
+ * frame that uses it.
+ *
+ * The card's own entrance fade used to sit beside this as REVEAL_SEC. It now
+ * comes from <Reveal>, which answers the same query per instance and also
+ * gates taps on the card's live opacity.
  */
-const REVEAL_SEC = prefersReducedMotion() ? 0 : 0.6;
 const TAB_FADE_SEC = prefersReducedMotion() ? 0 : 0.25;
 
 type Tab = 'client' | 'gallery';
@@ -721,13 +725,14 @@ const Portal = () => {
               lands wherever that box WAS. A control that moves while you are
               reaching for it is a bug even when nothing else goes wrong, and
               here something else did go wrong (see MobileNav). Opacity alone
-              keeps the arrival without moving anything.
-              REVEAL_SEC is 0 for a visitor who asked for reduced motion. */}
-          <MotionDiv
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: REVEAL_SEC, ease: 'easeOut' }}
-          >
+              keeps the arrival without moving anything, which is why `from`
+              names opacity and nothing else.
+              Reveal answers the reduced-motion query itself, so the local
+              REVEAL_SEC this used to take its duration from is gone. It also
+              gates taps on the live opacity: every control in this card, the
+              password box included, used to be hit-testable while the card
+              was still invisible. */}
+          <Reveal immediate from={{ opacity: 0 }} duration={0.6}>
             <VStack spacing={8}>
               {/* Heading */}
               <VStack spacing={4}>
@@ -970,7 +975,7 @@ const Portal = () => {
                 </Text>
               </VStack>
             </VStack>
-          </MotionDiv>
+          </Reveal>
         </Box>
       </Flex>
     </Box>

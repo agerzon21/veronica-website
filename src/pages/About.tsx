@@ -7,6 +7,7 @@ import { m, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
+import Reveal, { useReveal } from '../components/ui/Reveal';
 
 const MotionDiv = m.div;
 
@@ -33,7 +34,12 @@ const MotionDiv = m.div;
  * only its buttons and the fourth photograph changed.
  */
 
-const FADE_IN = { duration: 0.75, ease: 'easeOut' } as const;
+/**
+ * The one duration every section reveal on this page shares. It used to be a
+ * whole transition object; the easing in it was 'easeOut', which is Reveal's
+ * default, so only the number is left.
+ */
+const FADE_IN_SEC = 0.75;
 
 /**
  * The three facts, as one line under the hero title (Alex picked S3).
@@ -292,10 +298,10 @@ const TuckedEyebrow = ({ children }: { children: React.ReactNode }) => (
 const About = () => {
   // amount 'some', not a fraction: these wrap whole sections, and a fraction
   // of a tall section can exceed a short screen, leaving the text invisible.
-  const approachRef = useRef<HTMLDivElement>(null);
-  const isApproachInView = useInView(approachRef, { once: true, amount: 'some' });
-  const angleRef = useRef<HTMLDivElement>(null);
-  const isAngleInView = useInView(angleRef, { once: true, amount: 'some' });
+  // One observer per section, each still on the Box it has always measured, so
+  // the two halves of a section arrive together rather than separately.
+  const { ref: approachRef, shown: approachShown } = useReveal({ amount: 'some' });
+  const { ref: angleRef, shown: angleShown } = useReveal({ amount: 'some' });
 
   return (
     <Box minH="100vh" overflowX="clip">
@@ -401,11 +407,7 @@ const About = () => {
               borderColor="brand.accent"
               boxShadow={{ base: '0 -18px 30px -22px rgba(10, 8, 5, 0.55)', lg: 'none' }}
             >
-              <MotionDiv
-                initial={{ opacity: 0, y: 24 }}
-                animate={isApproachInView ? { opacity: 1, y: 0 } : {}}
-                transition={FADE_IN}
-              >
+              <Reveal shown={approachShown} from={{ opacity: 0, y: 24 }} duration={FADE_IN_SEC}>
                 <VStack align="flex-start" spacing={5}>
                   <Text textStyle="eyebrow">My Approach</Text>
                   <Box w="35px" h="1px" bg="brand.accent" />
@@ -435,7 +437,7 @@ const About = () => {
                     </CTAButton>
                   </Box>
                 </VStack>
-              </MotionDiv>
+              </Reveal>
             </GridItem>
 
             {/* The pair. Second in the source as well as on screen, so a screen
@@ -473,11 +475,7 @@ const About = () => {
               pl={{ lg: 16 }}
               mt={{ base: 5, lg: 5 }}
             >
-              <MotionDiv
-                initial={{ opacity: 0, y: 24 }}
-                animate={isApproachInView ? { opacity: 1, y: 0 } : {}}
-                transition={FADE_IN}
-              >
+              <Reveal shown={approachShown} from={{ opacity: 0, y: 24 }} duration={FADE_IN_SEC}>
                 <VStack align="flex-start" spacing={5}>
                   <Box
                     display={{ base: 'none', lg: 'block' }}
@@ -512,7 +510,7 @@ const About = () => {
                     </CTAButton>
                   </Box>
                 </VStack>
-              </MotionDiv>
+              </Reveal>
             </GridItem>
           </Grid>
         </Box>
@@ -541,11 +539,7 @@ const About = () => {
           >
             {/* The angle story. */}
             <GridItem gridColumn={{ lg: 2 }} gridRow={{ base: 1, lg: 2 }}>
-              <MotionDiv
-                initial={{ opacity: 0, y: 24 }}
-                animate={isAngleInView ? { opacity: 1, y: 0 } : {}}
-                transition={FADE_IN}
-              >
+              <Reveal shown={angleShown} from={{ opacity: 0, y: 24 }} duration={FADE_IN_SEC}>
                 <VStack align="flex-start" spacing={5}>
                   <Text textStyle="eyebrow">Whatever the Angle Asks For</Text>
                   <Box w="35px" h="1px" bg="brand.accent" />
@@ -572,7 +566,7 @@ const About = () => {
                     </CTAButton>
                   </Box>
                 </VStack>
-              </MotionDiv>
+              </Reveal>
             </GridItem>
 
             {/* The pair. Between the two thoughts on phones, the left column
@@ -609,11 +603,7 @@ const About = () => {
                 so here it only shows from lg up, after the same hairline the
                 section above uses to turn one column into two thoughts. */}
             <GridItem gridColumn={{ lg: 2 }} gridRow={{ base: 3, lg: 3 }} mt={5}>
-              <MotionDiv
-                initial={{ opacity: 0, y: 24 }}
-                animate={isAngleInView ? { opacity: 1, y: 0 } : {}}
-                transition={FADE_IN}
-              >
+              <Reveal shown={angleShown} from={{ opacity: 0, y: 24 }} duration={FADE_IN_SEC}>
                 <VStack align="flex-start" spacing={5}>
                   <Box
                     display={{ base: 'none', lg: 'block' }}
@@ -643,7 +633,7 @@ const About = () => {
                     </CTAButton>
                   </Box>
                 </VStack>
-              </MotionDiv>
+              </Reveal>
             </GridItem>
           </Grid>
         </Box>

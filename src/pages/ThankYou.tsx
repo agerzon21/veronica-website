@@ -6,14 +6,12 @@ import { Helmet } from 'react-helmet-async';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
 import ContactRail, { SectionHead } from '../components/ContactRail';
-import { m, useInView } from 'framer-motion';
+import Reveal from '../components/ui/Reveal';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ReactGA from 'react-ga4';
 import { ensureAnalytics, trackAdsLeadConversion, trackContactSubmission } from '../utils/analytics';
 import { scrollBehavior } from '../utils/motion';
-
-const MotionDiv = m.div;
 
 // idle      → direct visit / back-navigation; nothing was submitted here
 // sending   → waiting on Resend to confirm the recipient accepted it
@@ -40,12 +38,11 @@ const LEAD_FAILED = <>Your message is in. I'll personally reply within 24 hours.
 const LEAD_IDLE = <>If you have already sent a message, I'll personally reply within 24 hours.</>;
 
 const ThankYou = () => {
-  const contentRef = useRef<HTMLDivElement>(null);
   // 'some', not a fraction: the target is the whole page body, and
   // IntersectionObserver measures the visible slice against the TARGET'S own
   // height, so a fraction of a tall page can exceed anything the viewport can
   // show and the content never reveals. See the note on the contact page.
-  const isInView = useInView(contentRef, { once: true, amount: 'some' });
+  // Reveal observes itself here, which is the same element the ref was on.
 
   const location = useLocation();
 
@@ -223,12 +220,7 @@ const ThankYou = () => {
       </Box>
 
       <Box maxW="1120px" mx="auto" px={{ base: 5, md: 10 }} pt={{ base: 12, md: 16 }} pb={{ base: 16, md: '88px' }}>
-        <MotionDiv
-          ref={contentRef}
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-        >
+        <Reveal amount="some" from={{ opacity: 0, y: 20 }} duration={0.8}>
           <Grid
             templateColumns={{ base: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 320px' }}
             // 72px explicitly: 18 is not a Chakra spacing token and passes
@@ -294,7 +286,7 @@ const ThankYou = () => {
 
             <ContactRail onChannelClick={trackContactSubmission} />
           </Grid>
-        </MotionDiv>
+        </Reveal>
       </Box>
     </Box>
   );

@@ -1,7 +1,6 @@
 import { Box, VStack, Text, Flex } from '@chakra-ui/react';
-import { m, useInView } from 'framer-motion';
-import { useRef } from 'react';
 import PageHeader from './ui/PageHeader';
+import Reveal, { useReveal } from './ui/Reveal';
 
 /**
  * Shared page shell for legal / policy pages (/privacy, /terms, and any
@@ -17,8 +16,6 @@ import PageHeader from './ui/PageHeader';
  *     </PolicySection>
  *   </PolicyLayout>
  */
-
-const MotionDiv = m.div;
 
 interface PolicyLayoutProps {
   title: string;
@@ -44,8 +41,8 @@ const formatDate = (iso: string): string => {
 };
 
 const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyLayoutProps) => {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(heroRef, { once: true, amount: 0.2 });
+  // The observer stays on the Box below, the element it has always measured.
+  const { ref: heroRef, shown } = useReveal({ amount: 0.2 });
 
   return (
     <Box minH="100vh" bg="white" layerStyle="pageTop" pb={{ base: 20, md: 28 }} px={4}>
@@ -54,15 +51,11 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
             effective date rides along as its child so it inherits the same
             vertical rhythm instead of carrying its own margins. */}
         <Box ref={heroRef} mb={{ base: 10, md: 14 }}>
-          <MotionDiv
-            initial={{ opacity: 0, y: 12 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-          >
+          <Reveal shown={shown} from={{ opacity: 0, y: 12 }} duration={0.6}>
             <PageHeader eyebrow={kicker} title={title} size="content">
               <Text textStyle="metaCaption">Effective {formatDate(effectiveDate)}</Text>
             </PageHeader>
-          </MotionDiv>
+          </Reveal>
         </Box>
 
         {/* Optional lead paragraph */}

@@ -1,17 +1,13 @@
 import { Box, Text, Flex, VStack } from '@chakra-ui/react';
-import { m } from 'framer-motion';
-
-const MotionDiv = m.div;
+import Reveal from './ui/Reveal';
 
 const StatsSection = () => {
   return (
     <Box bg="white" layerStyle="section" px={6}>
-      <MotionDiv
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-      >
+      {/* amount 'some' is what `viewport={{ once: true }}` already meant:
+          framer defaults the viewport amount to 'some', so the trigger point
+          is unchanged. */}
+      <Reveal amount="some" from={{ opacity: 0, y: 20 }} duration={0.8}>
         <VStack spacing={6} mb={{ base: 10, md: 14 }}>
           <Text textStyle="eyebrow">Veronika Gerzon</Text>
           {/* 40px, not 35 — the one rule width PageHeader uses everywhere. */}
@@ -36,7 +32,7 @@ const StatsSection = () => {
             </VStack>
           ))}
         </Flex>
-      </MotionDiv>
+      </Reveal>
     </Box>
   );
 };

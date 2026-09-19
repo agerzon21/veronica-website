@@ -1,12 +1,9 @@
 import { Box, VStack, Text, Flex, Icon } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import { m, useInView } from 'framer-motion';
-import { useRef } from 'react';
 import { useCopyNotification } from '../components/CopyNotification';
 import CTAButton from '../components/ui/CTAButton';
+import Reveal, { useReveal } from '../components/ui/Reveal';
 import FaHeart from '../icons/fa/FaHeart';
-
-const MotionDiv = m.div;
 
 const ZELLE_PHONE = '(570) 909-5707';
 
@@ -27,11 +24,11 @@ const ZelleLogo = ({ width = 120 }: { width?: number }) => (
 );
 
 const Pay = () => {
-  const contentRef = useRef<HTMLDivElement>(null);
   // 'some', not a fraction. A fraction of a tall page body can exceed anything
   // the viewport shows at once, leaving the page blank until a scroll fires the
-  // observer. See the note on the contact page.
-  const isInView = useInView(contentRef, { once: true, amount: 'some' });
+  // observer. See the note on the contact page. The observer stays on the Box
+  // below, which is the element it has always measured.
+  const { ref: contentRef, shown } = useReveal({ amount: 'some' });
   const { show: showCopied, Notification: CopyNotification } = useCopyNotification('Number Copied');
 
   const handleCopy = () => {
@@ -53,11 +50,7 @@ const Pay = () => {
         pb={10}
       >
         <Box ref={contentRef} w="100%" maxW="measure">
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          >
+          <Reveal shown={shown} from={{ opacity: 0, y: 20 }} duration={0.8}>
             <VStack spacing={0}>
               {/* Top section */}
               <Box
@@ -143,7 +136,7 @@ const Pay = () => {
                 </VStack>
               </Box>
             </VStack>
-          </MotionDiv>
+          </Reveal>
         </Box>
       </Flex>
     </Box>

@@ -1,16 +1,14 @@
 import { Box, Flex, Grid, GridItem, Image, Input, Text, Textarea } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
-import { m, useInView } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
 import { prefetchChunk } from '../components/ChunkErrorBoundary';
 import ContactRail, { SectionHead } from '../components/ContactRail';
+import Reveal from '../components/ui/Reveal';
 import weddingData from '../data/wedding-page.json';
 import { scrollBehavior } from '../utils/motion';
-
-const MotionDiv = m.div;
 
 /**
  * The three wedding packages, by name. The weddings page links each card to
@@ -181,23 +179,16 @@ const SECTION_OF: Record<string, string> = {
 };
 
 const Contact = () => {
-  const contentRef = useRef<HTMLDivElement>(null);
-  // 'some', NOT a fraction. IntersectionObserver measures the visible slice
-  // against the TARGET'S OWN height, and this target is the whole page body.
-  // On a tall phone layout 15% of it is more than the viewport can show at
-  // once, so the observer never reports it visible, the content stays at
-  // opacity 0, and the page renders blank until a scroll nudges it. That is
-  // the empty contact page in Chrome on iOS: Safari has less browser chrome,
-  // so it sat just the right side of the threshold.
-  const isInView = useInView(contentRef, { once: true, amount: 'some' });
-  // Belt and braces. A page that can render blank is the worst failure mode
-  // there is, so reveal it regardless if the observer has not fired shortly
-  // after mount.
-  const [revealFallback, setRevealFallback] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setRevealFallback(true), 700);
-    return () => window.clearTimeout(t);
-  }, []);
+  // The reveal that wraps this whole page lives in <Reveal> now, down at the
+  // content block. Both halves of what used to be written out here went with
+  // it: the amount 'some' (NOT a fraction, because IntersectionObserver
+  // measures the visible slice against the TARGET'S OWN height, and this
+  // target is the whole page body, so on a tall phone layout 15% of it is more
+  // than the viewport can show at once and the observer never reports it
+  // visible at all), and the timed fallback that showed the content anyway if
+  // the observer had not fired. This page is where both were learned: the
+  // empty contact page in Chrome on iOS, where Safari's smaller browser chrome
+  // had left it just the right side of the threshold.
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -592,12 +583,7 @@ const Contact = () => {
       </Box>
 
       <Box maxW="1120px" mx="auto" px={{ base: 5, md: 10 }} pt={{ base: 12, md: 16 }} pb={{ base: 16, md: '88px' }}>
-        <MotionDiv
-          ref={contentRef}
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView || revealFallback ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-        >
+        <Reveal amount="some" from={{ opacity: 0, y: 20 }} duration={0.8}>
           <Grid
             templateColumns={{ base: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 320px' }}
             // 72px explicitly, NOT a scale number. 18 is not a Chakra spacing
@@ -1174,7 +1160,7 @@ const Contact = () => {
                 eventually gets changed in only one of them. */}
             <ContactRail />
           </Grid>
-        </MotionDiv>
+        </Reveal>
       </Box>
     </Box>
   );

@@ -3,6 +3,7 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon, Image, Portal } from '@chakra-ui/react';
 import { AnimatePresence, m, useInView, useMotionValue, useScroll, useTransform } from 'framer-motion';
+import Reveal from './ui/Reveal';
 import FaGoogle from '../icons/fa/FaGoogle';
 import CTAButton from './ui/CTAButton';
 import ReviewsCarousel, { QUOTE_HEIGHT, Stars } from './ReviewsCarousel';
@@ -300,12 +301,12 @@ const GoogleReviewsSection = () => {
         bg={{ base: 'rgba(10, 16, 32, 0.62)', md: 'transparent' }}
         zIndex={-1}
       />
-      <MotionDiv
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.8, ease: 'easeOut' }}
-      >
+      {/* amount 'some' is what `viewport={{ once: true }}` already meant:
+          framer defaults the viewport amount to 'some', so nothing about when
+          this fires has changed. The gate matters here because this block
+          holds the Google profile link, one of the two reveals caught live at
+          opacity 0 in the sweep that followed the CTAButton outage. */}
+      <Reveal amount="some" from={{ opacity: 0, y: 20 }} duration={0.8}>
         {/* Header */}
         <VStack spacing={6} mb={{ base: 10, md: 14 }} maxW="measureWide" mx="auto">
           <Text textStyle="eyebrowOnDark">Kind Words</Text>
@@ -433,7 +434,7 @@ const GoogleReviewsSection = () => {
             </CTAButton>
           </Box>
         </VStack>
-      </MotionDiv>
+      </Reveal>
 
       {/* Portalled to <body>. This section is `isolation: isolate`, which
           would otherwise trap the popup's z-index under the fixed navbar. */}

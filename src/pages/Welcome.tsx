@@ -2,12 +2,10 @@ import { Box, Flex, VStack, Text, Input, InputGroup, InputRightElement, Icon } f
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { m } from 'framer-motion';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
-
-const MotionDiv = m.div;
+import Reveal from '../components/ui/Reveal';
 
 interface WelcomeSummary {
   client_display_name: string | null;
@@ -141,11 +139,10 @@ const Welcome = () => {
         pb={{ base: 16, md: 12 }}
       >
         <Box w="100%" maxW="500px">
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-          >
+          {/* `immediate`: an arrival fade, which is what the bare `animate`
+              always meant. The gate matters because this card holds the
+              password fields a new client types into. */}
+          <Reveal immediate from={{ opacity: 0, y: 20 }} duration={0.6}>
             <VStack spacing={8}>
               <VStack spacing={4}>
                 <Text textStyle="eyebrowOnDark">
@@ -322,7 +319,7 @@ const Welcome = () => {
                 </Box>
               )}
             </VStack>
-          </MotionDiv>
+          </Reveal>
         </Box>
       </Flex>
     </Box>

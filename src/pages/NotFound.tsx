@@ -2,15 +2,12 @@ import { Box, VStack, Text, Flex } from '@chakra-ui/react';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
 import { Helmet } from 'react-helmet-async';
-import { m, useInView } from 'framer-motion';
-import { useRef } from 'react';
-
-const MotionDiv = m.div;
+import Reveal, { useReveal } from '../components/ui/Reveal';
 
 const NotFound = () => {
-  const contentRef = useRef<HTMLDivElement>(null);
-  // 'some', not a fraction. See the note on the contact page.
-  const isInView = useInView(contentRef, { once: true, amount: 'some' });
+  // 'some', not a fraction. See the note on the contact page. The observer
+  // stays on the Box below, the element it has always measured.
+  const { ref: contentRef, shown } = useReveal({ amount: 'some' });
 
   return (
     <Box minH="100vh" bg="white">
@@ -26,11 +23,7 @@ const NotFound = () => {
         px={6}
       >
         <Box ref={contentRef} w="100%" maxW="measure">
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          >
+          <Reveal shown={shown} from={{ opacity: 0, y: 20 }} duration={0.8}>
             <VStack spacing={8}>
               {/* The numeral is decoration, not the heading — aria-hidden so a
                   screen reader gets "Page not found", not "four hundred four". */}
@@ -51,7 +44,7 @@ const NotFound = () => {
                 <CTAButton to="/gallery">View Gallery</CTAButton>
               </Flex>
             </VStack>
-          </MotionDiv>
+          </Reveal>
         </Box>
       </Flex>
     </Box>

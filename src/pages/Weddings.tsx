@@ -4,11 +4,11 @@ import {
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaArrowRight from '../icons/fa/FaArrowRight';
 import { Helmet } from 'react-helmet-async';
-import { m, useInView } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
+import Reveal, { useReveal } from '../components/ui/Reveal';
 import weddingData from '../data/wedding-page.json';
 
 /**
@@ -41,8 +41,6 @@ import weddingData from '../data/wedding-page.json';
  * pages. The build guards FEATURED against renames
  * (scripts/prerender-photos.mjs).
  */
-
-const MotionDiv = m.div;
 
 const FEATURED: Array<{ id: string; alt: string }> = [
   { id: 'ocean-vows-ceremony', alt: 'Wedding couple exchanging vows by the ocean.' },
@@ -180,10 +178,11 @@ function JournalLabel({ label }: { label: 'Advice' | 'Real Wedding' }) {
 }
 
 const Weddings = () => {
-  const introRef = useRef<HTMLDivElement>(null);
-  const isIntroInView = useInView(introRef, { once: true, amount: 0.15 });
-  const ctaRef = useRef<HTMLDivElement>(null);
-  const isCtaInView = useInView(ctaRef, { once: true, amount: 0.3 });
+  // Both observers stay on the Flex rows they have always measured, so the
+  // fractional amounts still refer to the same elements. The CTA below was one
+  // of the two reveals the CTAButton sweep caught live at opacity 0.
+  const { ref: introRef, shown: introShown } = useReveal({ amount: 0.15 });
+  const { ref: ctaRef, shown: ctaShown } = useReveal({ amount: 0.3 });
 
   // POSITIONAL pinned slots: 0-2 package cards, 3 FAQ, 4 quote background.
   const [pinned, setPinned] = useState<Array<PinnedPhoto | null>>([]);
@@ -337,11 +336,9 @@ const Weddings = () => {
         />
         <Box position="absolute" inset={0} bg="rgba(0,0,0,0.42)" />
         <Flex position="absolute" inset={0} align="center" justify="center" pt={{ base: "64px", md: "72px" }}>
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-          >
+          {/* `immediate`: the page hero fades in on arrival, which is what
+              the bare `animate` always meant. */}
+          <Reveal immediate from={{ opacity: 0, y: 20 }} duration={0.8}>
             <Box px={6} maxW="720px">
               <PageHeader
                 onDark
@@ -355,7 +352,7 @@ const Weddings = () => {
                 }
               />
             </Box>
-          </MotionDiv>
+          </Reveal>
         </Flex>
       </Box>
 
@@ -363,11 +360,7 @@ const Weddings = () => {
       <Box bg="white" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
         <DecorPrints items={tapestry.approach} />
         <Flex justify="center" ref={introRef}>
-          <MotionDiv
-            initial={{ opacity: 0, y: 24 }}
-            animate={isIntroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.7, ease: 'easeOut' }}
-          >
+          <Reveal shown={introShown} from={{ opacity: 0, y: 24 }} duration={0.7}>
             <VStack spacing={7} maxW="720px" textAlign="center">
               <Text textStyle="eyebrow">My Approach</Text>
               <Box w="35px" h="1px" bg="brand.accent" />
@@ -399,7 +392,7 @@ const Weddings = () => {
                 of them bends to fit your day.
               </Text>
             </VStack>
-          </MotionDiv>
+          </Reveal>
         </Flex>
 
       </Box>
@@ -1200,11 +1193,7 @@ const Weddings = () => {
           <Box position="absolute" inset={0} bg="brand.surfaceSunken" />
         )}
         <Flex justify="center" ref={ctaRef} position="relative">
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={isCtaInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.7, ease: 'easeOut' }}
-          >
+          <Reveal shown={ctaShown} from={{ opacity: 0, y: 20 }} duration={0.7}>
             <VStack spacing={6} textAlign="center" maxW="560px">
               <Text as="h2" textStyle="sectionTitle" color={ctaPin ? 'white' : undefined}>
                 Tell me about your day
@@ -1219,7 +1208,7 @@ const Weddings = () => {
                 </CTAButton>
               </HStack>
             </VStack>
-          </MotionDiv>
+          </Reveal>
         </Flex>
       </Box>
     </Box>

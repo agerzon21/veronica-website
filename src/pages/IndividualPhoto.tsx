@@ -17,6 +17,7 @@ import FaShareAlt from '../icons/fa/FaShareAlt';
 import { useCopyNotification } from '../components/CopyNotification';
 import LoadingImage from '../components/ui/LoadingImage';
 import PageHeader from '../components/ui/PageHeader';
+import Reveal from '../components/ui/Reveal';
 import CTAButton from '../components/ui/CTAButton';
 import { useParams, Link } from 'react-router-dom';
 import { useSmartBack } from '../components/ui/useSmartBack';
@@ -40,8 +41,6 @@ interface Photo {
   width: number | null;
   height: number | null;
 }
-
-const MotionDiv = m.div;
 
 const IndividualPhoto: React.FC = () => {
   const { category, photoId } = useParams<{ category: string; photoId: string }>();
@@ -389,11 +388,11 @@ const IndividualPhoto: React.FC = () => {
         {/* Content */}
         <Container maxW="contentNarrow" layerStyle="sectionTight" px={6}>
           <Box>
-            <MotionDiv
-              initial={{ opacity: 0, y: 25 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
+            {/* `immediate`: the bare `animate` here always meant "play on
+                arrival", not "play on scroll". The gate comes with it because
+                this block carries the related-photo links and the back link,
+                and a mount fade is invisible and tappable while it runs. */}
+            <Reveal immediate from={{ opacity: 0, y: 25 }} duration={0.8}>
               <VStack spacing={{ base: 6, md: 8 }} align="center" textAlign="center">
                 {/* Eyebrow → rule → h1 → lead. One block, one component. */}
                 <PageHeader
@@ -468,7 +467,7 @@ const IndividualPhoto: React.FC = () => {
                   ← {back.label}
                 </CTAButton>
               </VStack>
-            </MotionDiv>
+            </Reveal>
           </Box>
         </Container>
 

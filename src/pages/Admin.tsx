@@ -28,6 +28,7 @@ import FaHeart from '../icons/fa/FaHeart';
 import FaUsers from '../icons/fa/FaUsers';
 import FaUsersCog from '../icons/fa/FaUsersCog';
 import CTAButton from '../components/ui/CTAButton';
+import Reveal from '../components/ui/Reveal';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
@@ -48,8 +49,6 @@ import AdminAssistant from '../components/AdminAssistant';
 import AdminCrons from '../components/AdminCrons';
 import AdminUsers from '../components/AdminUsers';
 import { AdminI18nProvider, useAdminLang, readAdminLang, adminDict, type AdminLang } from '../i18n/admin';
-
-const MotionDiv = m.div;
 
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
@@ -636,11 +635,11 @@ const Admin = () => {
         pb={{ base: 16, md: 12 }}
       >
         <Box w="100%" maxW="420px">
-          <MotionDiv
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-          >
+          {/* `immediate`: an arrival fade, which is what the bare `animate`
+              always meant. The gate matters because this card holds the
+              password box: before it, every control here was hit-testable
+              while the card was still invisible. */}
+          <Reveal immediate from={{ opacity: 0, y: 20 }} duration={0.6}>
             <VStack spacing={8}>
               <VStack spacing={4}>
                 <Text
@@ -834,7 +833,7 @@ const Admin = () => {
                 </VStack>
               </Box>
             </VStack>
-          </MotionDiv>
+          </Reveal>
         </Box>
         </Flex>
       </Box>

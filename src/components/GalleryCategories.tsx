@@ -1,9 +1,6 @@
 import { Box, Text, Link as ChakraLink, VStack, Flex } from '@chakra-ui/react';
 import { Link } from 'react-router-dom';
-import { m, useInView } from 'framer-motion';
-import { useRef } from 'react';
-
-const MotionDiv = m.div;
+import Reveal, { useReveal } from './ui/Reveal';
 
 const categories = [
   {
@@ -37,16 +34,15 @@ const categories = [
 ];
 
 const GalleryCategories = () => {
-  const ref = useRef<HTMLDivElement>(null);
-  const isInView = useInView(ref, { once: true, amount: 0.1 });
+  // One observer for all five reveals, on the same Box it has always watched.
+  // The four cards have to arrive as one staggered run; giving each its own
+  // observer would start them separately as they scrolled past and turn the
+  // stagger into five unrelated fades.
+  const { ref, shown } = useReveal({ amount: 0.1 });
 
   return (
     <Box ref={ref} layerStyle="sectionTight" px={{ base: 4, md: 8, lg: 12 }}>
-      <MotionDiv
-        initial={{ opacity: 0, y: 25 }}
-        animate={isInView ? { opacity: 1, y: 0 } : {}}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-      >
+      <Reveal shown={shown} from={{ opacity: 0, y: 25 }} duration={0.8}>
         <Flex
           direction={{ base: 'column', md: 'row' }}
           // Near-flush, deliberately. The reference the owner keeps citing
@@ -64,10 +60,11 @@ const GalleryCategories = () => {
               _hover={{ textDecoration: 'none' }}
               flex="1"
             >
-              <MotionDiv
-                initial={{ opacity: 0, y: 20 }}
-                animate={isInView ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.6, ease: "easeOut", delay: index * 0.1 }}
+              <Reveal
+                shown={shown}
+                from={{ opacity: 0, y: 20 }}
+                duration={0.6}
+                delay={index * 0.1}
                 style={{ height: '100%' }}
               >
                 <Box
@@ -146,11 +143,11 @@ const GalleryCategories = () => {
                     </Text>
                   </VStack>
                 </Box>
-              </MotionDiv>
+              </Reveal>
             </ChakraLink>
           ))}
         </Flex>
-      </MotionDiv>
+      </Reveal>
     </Box>
   );
 };
