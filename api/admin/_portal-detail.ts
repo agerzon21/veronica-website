@@ -23,6 +23,7 @@ type PortalRow = {
   partner_2_full_name: string | null;
   client_display_name: string | null;
   client_email: string | null;
+  client_phone: string | null;
   client_password_hash: string | null;
   event_date: string | null;
   gallery_password: string;
@@ -92,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       select id, mode, session_type,
              partner_1_first_name, partner_2_first_name,
              partner_1_full_name, partner_2_full_name,
-             client_display_name, client_email, client_password_hash, event_date,
+             client_display_name, client_email, client_phone, client_password_hash, event_date,
              gallery_password, gallery_enabled, drive_url,
              gallery_delivered_at, gallery_expires_at,
              contract_status, contract_template_key, contract_body, contract_variables,

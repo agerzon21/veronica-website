@@ -4,6 +4,16 @@ import { createContext, useCallback, useContext, useEffect, useId, useState } fr
 import FaCheck from '../icons/fa/FaCheck';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaTrash from '../icons/fa/FaTrash';
+import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
+import FaMobileAlt from '../icons/fa/FaMobileAlt';
+import FaEnvelope from '../icons/fa/FaEnvelope';
+import FaImages from '../icons/fa/FaImages';
+import FaClock from '../icons/fa/FaClock';
+import FaKey from '../icons/fa/FaKey';
+import FaFileSignature from '../icons/fa/FaFileSignature';
+import FaClipboardList from '../icons/fa/FaClipboardList';
+import FaUser from '../icons/fa/FaUser';
+import FaCog from '../icons/fa/FaCog';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import {
@@ -34,6 +44,7 @@ interface PortalDetail {
   partner_2_full_name: string | null;
   client_display_name: string | null;
   client_email: string | null;
+  client_phone: string | null;
   event_date: string | null;
   gallery_password: string;
   /**
@@ -495,8 +506,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
         </Box>
       )}
 
+      {/* balanceRemaining is passed down rather than recomputed. Eight places
+          on this system derive a balance and the one that gets it wrong reads
+          total minus paid, which silently drops every charge. One arithmetic,
+          one source. */}
+      <ShootSummary portal={portal} balanceRemaining={balanceRemaining} />
+
       {/* ─── Gallery section ─── */}
-      <Section title={t.clientDetail.sectionPhotoGallery}>
+      <Section title={t.clientDetail.sectionPhotoGallery} icon={FaImages} hue="purple">
         <VStack align="stretch" spacing={4}>
           <InlineField
             label={t.clientDetail.driveUrlLabel}
@@ -525,6 +542,11 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 }
                 variant="outline"
                 size="sm"
+                // The Russian label is 273px of nowrap text, which ran 24px
+                // past a 320px screen. Full width on a phone rather than a
+                // shorter label: the label is doing real work, and the row it
+                // sits in has nothing else competing for the space.
+                fullWidth={{ base: true, md: false }}
               >
                 <Icon as={FaExternalLinkAlt} boxSize={3} mr={2} />
                 {t.clientDetail.previewClientGallery}
@@ -626,7 +648,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       </Section>
 
       {/* ─── Gallery Pass section ─── */}
-      <Section title={t.clientDetail.sectionGalleryPass}>
+      <Section title={t.clientDetail.sectionGalleryPass} icon={FaKey} hue="teal">
         <VStack align="stretch" spacing={4}>
           <InlineField
             label={t.clientDetail.passwordLabel}
@@ -679,7 +701,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
 
       {/* ─── Contract section (full-mode only) ─── */}
       {portal.mode === 'full' && (
-        <Section title={t.clientDetail.sectionContract}>
+        <Section title={t.clientDetail.sectionContract} icon={FaFileSignature} hue="orange">
           <VStack align="stretch" spacing={3}>
             {/* Status label + signed-PDF CTA — same stacking pattern so
                 the "View Signed Copy" button doesn't orphan below. */}
@@ -767,7 +789,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             books — full-mode portals always have one; simple-mode rows
             have one only when Vero entered totals at creation. ─── */}
       {portal.contract_total_amount !== null && (
-        <Section title={t.clientDetail.sectionPayments}>
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
           <VStack align="stretch" spacing={5}>
             {/* 3-up stat row, 4-up once something has been charged. On mobile
                 the columns stay side-by-side but spacing shrinks so the
@@ -835,7 +857,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       )}
 
       {/* ─── Editable details (admin can correct typos etc.) ─── */}
-      <Section title={t.clientDetail.sectionDetails}>
+      <Section title={t.clientDetail.sectionDetails} icon={FaUser} hue="blue">
         <VStack align="stretch" spacing={4}>
           <InlineField
             label={t.clientDetail.displayNameLabel}
@@ -921,14 +943,345 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
 // ─── Sub-components ─────────────────────────────────────────────────────
 // (BackLink removed — replaced by shared <AdminBackButton /> at call sites.)
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * A titled card.
+ *
+ * `hue` tints only the icon chip, never the card. Six cards all carrying a
+ * coloured background reads as six warnings; the point of the colour is to let
+ * her find the section she wants while scrolling, not to say anything about
+ * its state. State still speaks through badges, which are the only things on
+ * this screen allowed to be loud.
+ */
+function Section({
+  title,
+  icon,
+  hue = 'gray',
+  children,
+}: {
+  title: string;
+  icon?: React.ElementType;
+  hue?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" px={{ base: 5, md: 7 }} py={{ base: 5, md: 6 }} mb={5}>
-      <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={4}>
-        {title}
-      </Text>
+      <HStack spacing={2.5} mb={4}>
+        {icon && (
+          <Flex
+            align="center"
+            justify="center"
+            boxSize="26px"
+            borderRadius="md"
+            bg={`${hue}.50`}
+            flexShrink={0}
+          >
+            <Icon as={icon} boxSize={3} color={`${hue}.500`} />
+          </Flex>
+        )}
+        <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500">
+          {title}
+        </Text>
+      </HStack>
       {children}
     </Box>
+  );
+}
+
+/**
+ * One of the four round actions under the client's name.
+ *
+ * Renders disabled rather than hidden when there is nothing behind it. A row
+ * that changes arity depending on the booking makes her aim at a different
+ * place every time, and "No number on file" is information: it tells her to
+ * go and add one. Hiding the button just says nothing.
+ */
+function SummaryAction({
+  icon,
+  label,
+  href,
+  hint,
+  onClick,
+}: {
+  icon: React.ElementType;
+  label: string;
+  href?: string;
+  hint?: string;
+  onClick?: () => void;
+}) {
+  const live = Boolean(href || onClick);
+  const body = (
+    <VStack spacing={1.5} flex="1" minW={0}>
+      <Flex
+        align="center"
+        justify="center"
+        boxSize="48px"
+        borderRadius="full"
+        bg={live ? 'brand.accent' : 'gray.100'}
+        color={live ? 'white' : 'gray.400'}
+        opacity={live ? 1 : 0.7}
+      >
+        <Icon as={icon} boxSize={4} />
+      </Flex>
+      <Text
+        fontSize="2xs"
+        color={live ? 'gray.700' : 'gray.400'}
+        textAlign="center"
+        noOfLines={1}
+        w="100%"
+      >
+        {label}
+      </Text>
+    </VStack>
+  );
+
+  // The whole column is the target, not just the circle. 48px of circle is
+  // already over Apple's 44pt floor, but this is the control used one handed
+  // while walking to a car, so it gets the label's height as well.
+  const shared = {
+    flex: '1',
+    minW: 0,
+    display: 'flex',
+    minH: '76px',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    borderRadius: 'md',
+    sx: { WebkitTapHighlightColor: 'transparent' },
+  } as const;
+
+  if (!live) {
+    return (
+      <Box {...shared} aria-disabled="true" title={hint} cursor="not-allowed">
+        {body}
+      </Box>
+    );
+  }
+  if (href) {
+    return (
+      <Box
+        {...shared}
+        as="a"
+        href={href}
+        // tel: and mailto: hand off to another app and never navigate, so a
+        // new tab there just leaves an orphan blank one behind on iOS.
+        // Everything else, including the relative gallery preview, opens in a
+        // new tab: she is mid-task on this record and should still be on it
+        // when she comes back.
+        target={/^(tel|mailto):/.test(href) ? undefined : '_blank'}
+        rel={/^(tel|mailto):/.test(href) ? undefined : 'noopener noreferrer'}
+        _hover={{ textDecoration: 'none', bg: 'gray.50' }}
+      >
+        {body}
+      </Box>
+    );
+  }
+  return (
+    <Box {...shared} as="button" type="button" onClick={onClick} bg="transparent" border="none" _hover={{ bg: 'gray.50' }}>
+      {body}
+    </Box>
+  );
+}
+
+/**
+ * Everything she needs before she has scrolled.
+ *
+ * The scenario this exists for: she is leaving for a shoot, late, one handed,
+ * and needs the address in the navigator. Before this, the address was in
+ * section five of seven and the agreed start time did not render AT ALL once
+ * the contract was signed, which is to say it disappeared exactly when the
+ * shoot was about to happen. Both were the highest scoring facts on the whole
+ * screen.
+ *
+ * Nothing here is new data and nothing below was removed. This is the same
+ * record, read in the order the day actually needs it.
+ */
+function ShootSummary({
+  portal,
+  balanceRemaining,
+}: {
+  portal: PortalDetail;
+  balanceRemaining: number | null;
+}) {
+  const { t, lang } = useAdminLang();
+  const tv = travelCopy(lang);
+
+  const address = (portal.contract_variables?.event_location ?? '').trim();
+  // The stored string is composed at creation as "2:00 PM to 10:00 PM
+  // (approximately 8 hours)", which is right for a contract and wrong for a
+  // glance: the duration is derivable from the two times she is already
+  // reading, and on a 320px screen that parenthetical turned one line into
+  // four. The contract keeps the full wording; only this summary trims it.
+  const time = (portal.contract_variables?.event_time ?? '').trim().replace(/\s*\([^)]*\)\s*$/, '');
+  const phone = (portal.client_phone ?? '').trim();
+  const email = (portal.client_email ?? '').trim();
+
+  // Destination only, never an origin, so the map routes from wherever she is
+  // standing rather than from an address baked in at booking time.
+  const mapHref = address ? googleDirectionsLink(address) : undefined;
+
+  return (
+    <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" mb={5} overflow="hidden">
+      <VStack align="stretch" spacing={0} px={{ base: 4, md: 6 }} pt={{ base: 4, md: 5 }} pb={2}>
+        <HStack spacing={2} px={1}>
+          <SummaryAction
+            icon={FaMapMarkerAlt}
+            label={t.clientDetail.summaryDirections}
+            href={mapHref}
+            hint={address ? undefined : t.clientDetail.summaryNoAddress}
+          />
+          <SummaryAction
+            icon={FaMobileAlt}
+            label={t.clientDetail.summaryCall}
+            href={phone ? `tel:${phone.replace(/[^\d+]/g, '')}` : undefined}
+            hint={phone ? undefined : t.clientDetail.summaryNoPhone}
+          />
+          <SummaryAction
+            icon={FaEnvelope}
+            label={t.clientDetail.summaryEmail}
+            href={email ? `mailto:${email}` : undefined}
+            hint={email ? undefined : t.clientDetail.summaryNoEmail}
+          />
+          {/* Same URL the Preview button below builds, including the preview
+              token: without it an undelivered gallery shows her the withheld
+              notice instead of the photos she is about to release. Dead until
+              there is a folder to look at. */}
+          <SummaryAction
+            icon={FaImages}
+            label={t.clientDetail.summaryGallery}
+            href={
+              portal.drive_url
+                ? `/portal/pass?password=${encodeURIComponent(portal.gallery_password)}` +
+                  (portal.gallery_preview_token
+                    ? `&preview=${encodeURIComponent(portal.gallery_preview_token)}`
+                    : '')
+                : undefined
+            }
+            hint={portal.drive_url ? undefined : t.clientDetail.summaryNoGallery}
+          />
+        </HStack>
+      </VStack>
+
+      {/* The address row is ITSELF the map target. Three adjacent link buttons
+          was the wrong geometry for the one action used while moving, so the
+          row is the glance target and the three explicit apps stay below for
+          when she wants a specific one. */}
+      {address ? (
+        <Box
+          as="a"
+          href={mapHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          display="block"
+          mx={{ base: 4, md: 6 }}
+          mb={3}
+          px={3}
+          py={3}
+          minH="56px"
+          bg="blue.50"
+          borderRadius="md"
+          _hover={{ bg: 'blue.100', textDecoration: 'none' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <HStack spacing={3} align="center">
+            <Icon as={FaMapMarkerAlt} boxSize={4} color="blue.600" flexShrink={0} />
+            <Text fontSize="sm" color="blue.800" fontWeight="500" flex="1" minW={0}>
+              {address}
+            </Text>
+            <Icon as={FaExternalLinkAlt} boxSize={2.5} color="blue.400" flexShrink={0} />
+          </HStack>
+        </Box>
+      ) : (
+        <Box mx={{ base: 4, md: 6 }} mb={3} px={3} py={3} bg="gray.50" borderRadius="md">
+          <Text fontSize="xs" color="gray.500">{t.clientDetail.summaryNoAddress}</Text>
+        </Box>
+      )}
+
+      {/* Date, time and balance. The time is read straight from
+          contract_variables rather than from the contract editor, which is why
+          it survives signing: the editor is gated on contract_status ===
+          'pending' and takes the start time with it when it goes. */}
+      <SimpleGrid columns={{ base: 2, md: 3 }} spacing={0} borderTop="1px solid" borderColor="gray.100">
+        <SummaryFact
+          icon={FaClock}
+          label={t.clientDetail.summaryWhen}
+          value={
+            [portal.event_date ? formatDate(portal.event_date) : '', time].filter(Boolean).join(' · ') ||
+            t.clientDetail.summaryNotSet
+          }
+        />
+        <SummaryFact
+          icon={FaClipboardList}
+          label={t.clientDetail.summaryBalance}
+          value={balanceRemaining === null ? t.clientDetail.summaryNoTotal : formatMoney(balanceRemaining)}
+          emphasize={balanceRemaining !== null && balanceRemaining > 0}
+        />
+        <SummaryFact
+          icon={FaImages}
+          label={t.clientDetail.summaryGalleryState}
+          value={
+            portal.gallery_delivered_at
+              ? t.clientDetail.summaryDelivered
+              : t.clientDetail.summaryNotDelivered
+          }
+        />
+      </SimpleGrid>
+
+      {/* Keeps the explicit choice of navigator that already existed. Removing
+          it to make room would be losing a capability, not simplifying. */}
+      {address && (
+        <Box px={{ base: 4, md: 6 }} py={3} borderTop="1px solid" borderColor="gray.100">
+          <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+            {[
+              { label: tv.waze, href: wazeLink(address) },
+              { label: tv.googleMaps, href: googleDirectionsLink(address) },
+              { label: tv.appleMaps, href: appleMapsLink(address) },
+            ].map((target) => (
+              <CTAButton
+                key={target.label}
+                href={target.href}
+                newTab
+                variant="outline"
+                size="sm"
+                icon={FaExternalLinkAlt}
+                fullWidth={{ base: true, md: false }}
+              >
+                {target.label}
+              </CTAButton>
+            ))}
+          </Stack>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function SummaryFact({
+  icon,
+  label,
+  value,
+  emphasize,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <VStack align="flex-start" spacing={0.5} px={{ base: 4, md: 6 }} py={3} minW={0}>
+      <HStack spacing={1.5}>
+        <Icon as={icon} boxSize={2.5} color="gray.400" />
+        <Text fontSize="2xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em">
+          {label}
+        </Text>
+      </HStack>
+      <Text
+        fontSize="sm"
+        fontWeight={emphasize ? '600' : '400'}
+        color={emphasize ? 'orange.600' : 'gray.700'}
+        w="100%"
+      >
+        {value}
+      </Text>
+    </VStack>
   );
 }
 
@@ -2033,7 +2386,7 @@ function AccountSection({
   };
 
   return (
-    <Section title={t.clientDetail.sectionAccount}>
+    <Section title={t.clientDetail.sectionAccount} icon={FaCog} hue="gray">
       <VStack align="stretch" spacing={4}>
         {/* Account status + Resend Invite — stacks on mobile so the CTA
             spans full width and doesn't orphan under the badge. */}

@@ -276,6 +276,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (typeof patch.client_email === 'string') {
       await sql`update client_portals set client_email = ${setStr(patch.client_email)?.toLowerCase() ?? null}, updated_at = now() where id = ${id}`;
     }
+    // Stored as typed, not as parsed. A number she half-remembers is worth
+    // more than a refusal: this field exists so she can reach a client from
+    // the shoot, and rejecting "570 555 1234 (mom)" to insist on E.164 would
+    // lose the note and the number. Normalization for channel matching belongs
+    // where the matching happens, not in the box she is typing into.
+    if (typeof patch.client_phone === 'string') {
+      await sql`update client_portals set client_phone = ${setStr(patch.client_phone)}, updated_at = now() where id = ${id}`;
+    }
     if (typeof patch.event_date === 'string') {
       const v = patch.event_date.trim() || null;
       await sql`update client_portals set event_date = ${v}, updated_at = now() where id = ${id}`;

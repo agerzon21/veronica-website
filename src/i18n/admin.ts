@@ -1685,6 +1685,27 @@ const dict = {
     },
 
     // ─── Section titles ───────────────────────────────
+    // The summary block at the top of a client record. Labels sit under 48px
+    // circles, so each one has to survive noOfLines={1} at roughly 78px on a
+    // 320px screen. Russian is the longer language and set the budget: every
+    // label here is one short word in both.
+    summaryDirections: { en: 'Directions', ru: 'Маршрут' },
+    summaryCall: { en: 'Call', ru: 'Позвонить' },
+    summaryEmail: { en: 'Email', ru: 'Почта' },
+    summaryGallery: { en: 'Gallery', ru: 'Галерея' },
+    // Shown as a title on the disabled control, and in place of the address
+    // row. Says what to do about it rather than only that it is absent.
+    summaryNoAddress: { en: 'No address on this booking yet', ru: 'Адрес для этой съёмки пока не указан' },
+    summaryNoPhone: { en: 'No number on file', ru: 'Телефон не указан' },
+    summaryNoEmail: { en: 'No email on file', ru: 'Почта не указана' },
+    summaryNoGallery: { en: 'No gallery folder yet', ru: 'Папка с галереей пока не добавлена' },
+    summaryWhen: { en: 'When', ru: 'Когда' },
+    summaryBalance: { en: 'Balance', ru: 'Остаток' },
+    summaryGalleryState: { en: 'Gallery', ru: 'Галерея' },
+    summaryNotSet: { en: 'Not set', ru: 'Не указано' },
+    summaryNoTotal: { en: 'No total yet', ru: 'Сумма не указана' },
+    summaryDelivered: { en: 'Delivered', ru: 'Отправлена' },
+    summaryNotDelivered: { en: 'Not delivered', ru: 'Не отправлена' },
     sectionPhotoGallery: { en: 'Photo Gallery', ru: 'Фотогалерея' },
     sectionGalleryPass: { en: 'Gallery Pass', ru: 'Пароль галереи' },
     sectionAccount: { en: 'Account', ru: 'Аккаунт' },
