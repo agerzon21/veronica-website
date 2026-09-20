@@ -14,6 +14,7 @@ import FaFileSignature from '../icons/fa/FaFileSignature';
 import FaClipboardList from '../icons/fa/FaClipboardList';
 import FaUser from '../icons/fa/FaUser';
 import FaCog from '../icons/fa/FaCog';
+import FaCopy from '../icons/fa/FaCopy';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import {
@@ -28,6 +29,7 @@ import {
 import { useAdminLang } from '../i18n/admin';
 import { appleMapsLink, googleDirectionsLink, wazeLink } from '../data/travel-fee';
 import { travelCopy } from './travelCopy';
+import { buildShareMessage, galleryDirectUrl } from './galleryShare';
 
 interface Props {
   portalId: string;
@@ -691,11 +693,35 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       {/* ─── Gallery Pass section ─── */}
       <Section title={t.clientDetail.sectionGalleryPass} icon={FaKey} hue="teal">
         <VStack align="stretch" spacing={4}>
+          {/* Handing the gallery out again. This did not exist: the share
+              message lived only on a creation success screen that cannot be
+              reached once the record is saved, and there was no clipboard call
+              anywhere on this screen. Full-mode clients can re-share from
+              their own portal; gallery-only clients cannot, so they are
+              precisely the ones who text her asking for the link again. */}
+          <ShareGallery
+            galleryPassword={portal.gallery_password}
+            firstName={(portal.client_display_name ?? '').trim().split(/\s+/)[0] ?? ''}
+            expiresIso={portal.gallery_expires_at}
+          />
           <InlineField
             label={t.clientDetail.passwordLabel}
             value={portal.gallery_password}
             helpText={t.clientDetail.passwordHelp}
             saving={savingField === 'gallery_password'}
+            // This password IS the identity for /portal/pass, so changing it
+            // invalidates the one-click link inside every delivery email
+            // already sent and every link a client forwarded on. It used to be
+            // a plain box visually identical to the display-name field, with
+            // help text describing what the password does and nothing about
+            // what changing it destroys. Note the inversion it sat in: the
+            // REVERSIBLE control below it (enable/disable) was a labelled
+            // button, and the irreversible one was a bare text input.
+            dangerConfirm={{
+              title: t.clientDetail.passwordChangeTitle,
+              body: t.clientDetail.passwordChangeBody,
+              confirmLabel: t.clientDetail.passwordChangeConfirm,
+            }}
             onSave={(v) => patch({ gallery_password: v }, 'gallery_password')}
           />
           {/* Access label + toggle — stacks on mobile so the toggle CTA
@@ -1296,6 +1322,87 @@ function ShootSummary({
 }
 
 /**
+ * Hand the gallery out again: the link, the password, or the whole message.
+ *
+ * Three separate targets because she wants different things at different
+ * moments. Pasting the link into an existing thread is the common case; the
+ * bare password is for reading down a phone; the full message is for a client
+ * she has not written to yet.
+ *
+ * The clipboard can reject on an insecure origin and can be absent entirely,
+ * so every call is guarded and every value is also visible as selectable text.
+ * A copy button that silently does nothing is worse than no copy button.
+ */
+function ShareGallery({
+  galleryPassword,
+  firstName,
+  expiresIso,
+}: {
+  galleryPassword: string;
+  firstName: string;
+  expiresIso: string | null;
+}) {
+  const { t } = useAdminLang();
+  const [copied, setCopied] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const url = galleryDirectUrl(galleryPassword);
+  const message = buildShareMessage(firstName, expiresIso, galleryPassword);
+
+  const copy = async (what: string, text: string) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(text);
+      setFailed(false);
+      setCopied(what);
+      setTimeout(() => setCopied((c) => (c === what ? null : c)), 2000);
+    } catch {
+      // Say so rather than appearing to have worked. The text below is
+      // selectable, which is the fallback.
+      setFailed(true);
+    }
+  };
+
+  const targets = [
+    { key: 'link', label: t.clientDetail.shareCopyLink, value: url },
+    { key: 'password', label: t.clientDetail.shareCopyPassword, value: galleryPassword },
+    { key: 'message', label: t.clientDetail.shareCopyMessage, value: message },
+  ];
+
+  return (
+    <Box>
+      <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" color="brand.accent" letterSpacing={{ base: '0.15em', md: '0.2em' }} textTransform="uppercase" mb={2}>
+        {t.clientDetail.shareHeading}
+      </Text>
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+        {targets.map((target) => (
+          <CTAButton
+            key={target.key}
+            onClick={() => copy(target.key, target.value)}
+            variant="outline"
+            size="sm"
+            icon={copied === target.key ? FaCheck : FaCopy}
+            fullWidth={{ base: true, md: false }}
+          >
+            {copied === target.key ? t.clientDetail.shareCopied : target.label}
+          </CTAButton>
+        ))}
+      </Stack>
+      {failed && (
+        <Text fontSize="xs" color="red.500" mt={1.5}>
+          {t.clientDetail.shareCopyFailed}
+        </Text>
+      )}
+      {/* Selectable, so the link is recoverable by hand when the clipboard is
+          unavailable, and so she can see exactly what she is about to send. */}
+      <Text fontSize="xs" color="gray.500" mt={1.5} wordBreak="break-all" userSelect="all">
+        {url}
+      </Text>
+    </Box>
+  );
+}
+
+/**
  * Push a delivered gallery's expiry further out.
  *
  * Offers whole months rather than a date picker on purpose: the question she
@@ -1512,6 +1619,7 @@ function InlineField({
   placeholder,
   normalize,
   validate,
+  dangerConfirm,
   saving,
   onSave,
 }: {
@@ -1529,6 +1637,10 @@ function InlineField({
   // Checked BEFORE the post, because the alternative this replaces was the
   // server quietly declining to act and returning success anyway.
   validate?: (v: string) => string | null;
+  // When present, Save arms a two-step confirmation that NAMES THE
+  // CONSEQUENCE before the post. For fields whose blast radius reaches things
+  // already sent to a client and cannot be pulled back.
+  dangerConfirm?: { title: string; body: string; confirmLabel: string };
   saving?: boolean;
   onSave: (v: string) => Promise<boolean | void>;
 }) {
@@ -1536,12 +1648,14 @@ function InlineField({
   const [draft, setDraft] = useState(value);
   const [touched, setTouched] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
+  const [armed, setArmed] = useState(false);
 
   // Resync local draft when the canonical value changes (e.g. after a reload).
   useEffect(() => {
     setDraft(value);
     setTouched(false);
     setInvalid(null);
+    setArmed(false);
   }, [value]);
 
   // Compare like against like. `draft` is re-normalized on every keystroke, so
@@ -1572,6 +1686,10 @@ function InlineField({
             // her the value is wrong while she is halfway through typing it is
             // how a field learns to be ignored.
             setInvalid(null);
+            // Editing after arming disarms it. The confirmation describes the
+            // value she was looking at when she pressed Save, and a changed
+            // draft is a different consequence.
+            setArmed(false);
           }}
           placeholder={placeholder}
           h="44px"
@@ -1596,8 +1714,15 @@ function InlineField({
                 return;
               }
               setInvalid(null);
+              if (dangerConfirm && !armed) {
+                setArmed(true);
+                return;
+              }
               const ok = await onSave(draft);
-              if (ok !== false) setTouched(false);
+              if (ok !== false) {
+                setTouched(false);
+                setArmed(false);
+              }
             }}
             variant="solid"
             size="sm"
@@ -1608,6 +1733,46 @@ function InlineField({
           </CTAButton>
         )}
       </Flex>
+
+      {/* Inline, not a modal, matching every other confirmation on this
+          screen. States what breaks, in the sentence, rather than asking
+          "are you sure" about an unnamed consequence. */}
+      {dangerConfirm && armed && (
+        <Box mt={2} p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
+          <Text fontSize="sm" fontWeight="500" color="orange.900" mb={1}>
+            {dangerConfirm.title}
+          </Text>
+          <Text fontSize="xs" color="orange.800" mb={3}>
+            {dangerConfirm.body}
+          </Text>
+          <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+            <CTAButton
+              onClick={async () => {
+                const ok = await onSave(draft);
+                if (ok !== false) {
+                  setTouched(false);
+                  setArmed(false);
+                }
+              }}
+              variant="solid"
+              size="sm"
+              isLoading={saving}
+              loadingText={t.clientDetail.saving}
+              fullWidth={{ base: true, md: false }}
+            >
+              {dangerConfirm.confirmLabel}
+            </CTAButton>
+            <CTAButton
+              onClick={() => setArmed(false)}
+              variant="ghost"
+              size="sm"
+              fullWidth={{ base: true, md: false }}
+            >
+              {t.common.cancel}
+            </CTAButton>
+          </Stack>
+        </Box>
+      )}
       {/* Beneath the field, not in the page-level error box, which on this
           2700 line screen sits three screenfuls above the box she pressed. */}
       {invalid && (

@@ -1751,9 +1751,13 @@ const dict = {
       en: 'https://drive.google.com/drive/folders/...',
       ru: 'https://drive.google.com/drive/folders/...',
     },
+    // Named an "Open Folder" button that exists nowhere in the repository.
+    // The only outbound link in this section is Preview Client Gallery, which
+    // opens /portal/pass, not Drive. Point at the control that is actually
+    // there. (The create-form copy above is a different, correct string.)
     driveUrlHelp: {
-      en: 'Paste the share URL of the gallery folder. After saving, click Open Folder below to verify the link works.',
-      ru: 'Вставь ссылку на общий доступ к папке с галереей. После сохранения открой папку ниже — проверь, что ссылка работает.',
+      en: 'Paste the share URL of the gallery folder. After saving, use Preview Client Gallery to check what the client sees.',
+      ru: 'Вставь ссылку на общий доступ к папке с галереей. После сохранения нажми «Посмотреть глазами клиента», чтобы проверить, что видит клиент.',
     },
     previewClientGallery: { en: 'Preview Client Gallery', ru: 'Посмотреть глазами клиента' },
     previewClientGalleryHint: {
@@ -1804,8 +1808,34 @@ const dict = {
     // ─── Gallery Pass section ─────────────────────────
     passwordLabel: { en: 'Password', ru: 'Пароль' },
     passwordHelp: {
-      en: 'The password guests use at /portal/pass to view photos.',
-      ru: 'Пароль, который гости вводят на /portal/pass, чтобы посмотреть фото.',
+      en: 'The password guests use at /portal/pass to view photos. It is also the one-click link, so changing it breaks links already sent.',
+      ru: 'Пароль, который гости вводят на /portal/pass, чтобы посмотреть фото. Он же встроен в ссылку, поэтому смена пароля ломает уже отправленные ссылки.',
+    },
+    // The two-step confirmation on the password box. Says what breaks, not
+    // "are you sure": the password IS the /portal/pass identity, so saving a
+    // new one invalidates the one-click link in every delivery email already
+    // sent and every link a client forwarded on.
+    passwordChangeTitle: {
+      en: 'This breaks every link already sent',
+      ru: 'Это сломает все уже отправленные ссылки',
+    },
+    passwordChangeBody: {
+      en: 'The password is built into the one-click gallery link, so changing it turns off the link in the delivery email this client already has, and any link they forwarded to family. They will need the new one. This cannot be undone except by typing the old password back.',
+      ru: 'Пароль встроен в ссылку на галерею, поэтому после смены перестанет работать ссылка из уже отправленного письма и все ссылки, которые клиент переслал близким. Им понадобится новая. Отменить это можно только вернув старый пароль.',
+    },
+    passwordChangeConfirm: {
+      en: 'Change it anyway',
+      ru: 'Всё равно сменить',
+    },
+    // Handing the gallery out again from the client record.
+    shareHeading: { en: 'Share this gallery', ru: 'Поделиться галереей' },
+    shareCopyLink: { en: 'Copy link', ru: 'Копировать ссылку' },
+    shareCopyPassword: { en: 'Copy password', ru: 'Копировать пароль' },
+    shareCopyMessage: { en: 'Copy message', ru: 'Копировать сообщение' },
+    shareCopied: { en: 'Copied', ru: 'Скопировано' },
+    shareCopyFailed: {
+      en: 'Could not reach the clipboard. Select the link below and copy it by hand.',
+      ru: 'Не удалось получить доступ к буферу обмена. Выдели ссылку ниже и скопируй вручную.',
     },
     access: { en: 'Access', ru: 'Доступ' },
     enabled: { en: 'Enabled', ru: 'Включён' },

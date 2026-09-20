@@ -8,6 +8,7 @@ import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import SessionTypePicker from './SessionTypePicker';
 import { useAdminLang } from '../i18n/admin';
+import { buildShareMessage, galleryDirectUrl } from './galleryShare';
 
 interface Props {
   adminPassword: string;
@@ -47,47 +48,8 @@ const buildDisplayName = (sessionType: string, clientName: string, year: string)
   return [s, c, year].filter(Boolean).join(' ');
 };
 
-// "2026-09-25" → "September 25, 2026"
-// Kept English-only on purpose: this string lands in the share message
-// that Vero sends to clients (who are almost always English-speaking).
-// Not part of the admin UI language.
-const fmtDate = (iso: string): string => {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
-};
-
-// The full share message stays English on purpose — it's copy that Vero
-// sends to her (English-speaking) clients, not admin UI. Do not wrap in
-// the i18n dict.
-const buildShareMessage = (
-  firstName: string,
-  expiresIso: string | null,
-  galleryPassword: string,
-): string => {
-  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
-  const expLine = expiresIso
-    ? `\nThe gallery will stay online until ${fmtDate(expiresIso)}. Please download and back up your favourites before then.\n`
-    : '';
-  const directUrl = `https://vero.photography/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
-  return `${greeting}
-
-Your photos are ready ✨
-
-Open your gallery (one-click access):
-${directUrl}
-
-If that link doesn't work, you can also go to https://vero.photography/portal/pass and enter the password manually:
-
-Password: ${galleryPassword}
-${expLine}
-If you have any questions or want to order prints, just reply to this message.
-
-Warmly,
-Veronika`;
-};
+// The date formatter moved into ./galleryShare alongside the message that was
+// its only caller, so the wording and its dates cannot drift apart.
 
 // ─── Component ─────────────────────────────────────────────────────────
 
@@ -424,7 +386,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
 function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => void }) {
   const { t } = useAdminLang();
   const message = buildShareMessage(state.firstName, state.expiresIso, state.galleryPassword);
-  const directUrl = `https://vero.photography/portal/pass?password=${encodeURIComponent(state.galleryPassword)}`;
+  const directUrl = galleryDirectUrl(state.galleryPassword);
   const [copied, setCopied] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
 
