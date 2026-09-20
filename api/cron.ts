@@ -29,6 +29,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import instagramCheckHandler from './cron/_instagram-check.js';
 import gallerySyncHandler from './cron/_gallery-sync.js';
 import igAvatarRefreshHandler, { CRON_META as IG_AVATAR_META } from './cron/_ig-avatar-refresh.js';
+import stripeFeeBackfillHandler, { CRON_META as STRIPE_FEE_META } from './cron/_stripe-fee-backfill.js';
 
 // Exported so the admin "Run now" endpoint (api/admin/_crons-run-now.ts)
 // can look a handler up by name and invoke it in-process, instead of
@@ -45,6 +46,9 @@ export const HANDLERS: Record<
   // Graph API) and is invocable from the admin "Run now" button, which goes
   // through this same HANDLERS map.
   'ig-avatar-refresh': igAvatarRefreshHandler,
+  // Also no vercel.json entry, for the same reason: both Hobby slots are
+  // taken. Chained from gallery-sync, which already runs daily.
+  'stripe-fee-backfill': stripeFeeBackfillHandler,
 };
 
 /**

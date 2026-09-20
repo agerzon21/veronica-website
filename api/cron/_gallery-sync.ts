@@ -47,6 +47,7 @@ import {
 } from '../_drive.js';
 import { describePhoto, type VisionResult } from '../_ai-vision.js';
 import { runGuarded, type CronTrigger } from './_guard.js';
+import { backfillStripeFees } from './_stripe-fee-backfill.js';
 
 // Cron metadata registered into cron_jobs on the first run. Kept as a
 // const so a grep for "gallery-sync" lands on the truth (schedule
@@ -131,6 +132,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
  * Returns a payload the handler splats into JSON.
  */
 async function doGallerySync() {
+  // Fill in any Stripe fee that was not readable when its payment landed. The
+  // fee lives on a balance transaction that does not exist until the charge
+  // settles, which is after the webhook fires. Its own try/catch so a Stripe
+  // hiccup can never suppress the gallery sync, which is this job's actual
+  // purpose, and because a missing fee is a number in a report while a missed
+  // sync is photos a client cannot see.
+  try {
+    const fees = await backfillStripeFees();
+    console.log(
+      `[cron/gallery-sync] stripe fee backfill: considered=${fees.considered} filled=${fees.filled}`,
+    );
+  } catch (err) {
+    console.error(
+      '[cron/gallery-sync] stripe fee backfill failed (continuing):',
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   // Folder id is admin-editable — stored in system_state so a
   // non-technical operator can set it from the Gallery tab without
   // touching Vercel env vars. Env var still respected as a fallback
