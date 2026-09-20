@@ -18,7 +18,8 @@
     "db:adopt": "node scripts/migrate.mjs adopt",
     "db:up": "node scripts/migrate.mjs up",
     "gallery-statics": "node scripts/build-gallery-statics.mjs",
-    "gallery-statics:check": "node scripts/build-gallery-statics.mjs --check"
+    "gallery-statics:check": "node scripts/build-gallery-statics.mjs --check",
+    "check:stripe": "node scripts/check-stripe-signature.mjs"
   },
   "dependencies": {
     "@chakra-ui/icons": "^2.2.4",
