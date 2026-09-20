@@ -2206,7 +2206,14 @@ function PayByCardButton({
       const res = await fetch('/api/portal/pay-start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: credentials.email, password: credentials.password, kind }),
+        body: JSON.stringify({
+          email: credentials.email,
+          password: credentials.password,
+          kind,
+          // Ask for the opt-in to be echoed into the return URL, so coming back
+          // from Stripe during preview does not land on a portal with no button.
+          preview: CARD_PAYMENTS_MODE === 'preview',
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success && data.url) {

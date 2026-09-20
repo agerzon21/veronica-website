@@ -32,7 +32,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import getRawBody from 'raw-body';
 import { waitUntil } from '@vercel/functions';
 import { getDb } from '../_db.js';
-import { verifyStripeEvent, feeForCharge, type StripeEvent } from '../_stripe.js';
+import { verifyStripeEvent, feeForPaymentIntent, type StripeEvent } from '../_stripe.js';
 import { recordPayment } from '../_payments.js';
 
 /** Inert here (Vercel reads it from api/inbox.ts), kept as documentation. */
@@ -141,7 +141,7 @@ export async function processEvent(event: StripeEvent): Promise<void> {
 
   const kind = session.metadata?.kind === 'retainer' ? 'retainer' : 'balance';
   // Best effort. A missing fee is bookkeeping and must never cost a payment.
-  const fee = await feeForCharge(paymentIntentId, event.account ?? null);
+  const fee = await feeForPaymentIntent(paymentIntentId, event.account ?? null);
 
   const sql = getDb();
   const result = await recordPayment(sql, {

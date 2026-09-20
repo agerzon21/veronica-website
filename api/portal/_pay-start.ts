@@ -123,6 +123,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       process.env.SITE_ORIGIN ||
       (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
 
+    // Echoed back only when the caller had it, so this can never be used to
+    // turn the button on for someone who was not given the opt-in.
+    const preview = req.body?.preview === true ? '&cards=1' : '';
+
     const who = row.client_display_name || 'your session';
     const label =
       kind === 'retainer'
@@ -138,8 +142,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // The portal reads its own state on load, so returning to it is enough
       // for the client to see the payment reflected. The query flag only
       // decides which message they land on.
-      successUrl: `${origin}/portal?paid=1`,
-      cancelUrl: `${origin}/portal?paid=0`,
+      // The preview opt-in has to survive the round trip. Without it the
+      // client returns from Stripe to a portal with no card button, which
+      // during testing looks exactly like the payment breaking something.
+      // Harmless once the mode is 'on', where the flag is ignored anyway.
+      successUrl: `${origin}/portal?paid=1${preview}`,
+      cancelUrl: `${origin}/portal?paid=0${preview}`,
     });
 
     return res.status(200).json({ success: true, url: session.url, amount });

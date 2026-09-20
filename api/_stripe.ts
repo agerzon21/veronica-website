@@ -300,29 +300,42 @@ function safeEqualHex(a: string, b: string): boolean {
 
 /* --------------------------------------------------------------- reads ---- */
 
-export type StripeCharge = {
-  id: string;
-  amount: number;
-  payment_method_details?: { card?: { brand?: string; last4?: string } };
-  balance_transaction?: string;
-};
+type BalanceTransaction = { fee?: number };
+type Charge = { balance_transaction?: string | BalanceTransaction };
+type PaymentIntentWithCharge = { latest_charge?: string | Charge };
 
-/** The fee Stripe kept, in dollars, or null when it cannot be determined. */
-export async function feeForCharge(
-  chargeId: string,
+/**
+ * What Stripe kept on a payment, in dollars, or null when it cannot be read.
+ *
+ * Takes a PAYMENT INTENT id (pi_...), which is what the webhook has. The first
+ * version of this took a charge id and was handed a PaymentIntent, so every
+ * lookup 404d, the catch swallowed it exactly as designed, and every payment
+ * recorded a null fee while looking completely healthy. The bug was invisible
+ * because the fee is bookkeeping: it never blocks a payment, so nothing
+ * complains.
+ *
+ * The fee does not live on the PaymentIntent or on the Charge. It lives on the
+ * BALANCE TRANSACTION, two hops away, which is why this expands through
+ * latest_charge to reach it rather than making three round trips.
+ */
+export async function feeForPaymentIntent(
+  paymentIntentId: string,
   stripeAccount?: string | null,
 ): Promise<number | null> {
   try {
-    const charge = await stripeRequest<StripeCharge>(
-      `/charges/${encodeURIComponent(chargeId)}?expand[]=balance_transaction`,
+    const intent = await stripeRequest<PaymentIntentWithCharge>(
+      `/payment_intents/${encodeURIComponent(paymentIntentId)}?expand[]=latest_charge.balance_transaction`,
       { method: 'GET', stripeAccount },
     );
-    const bt = charge.balance_transaction as unknown as { fee?: number } | string | undefined;
-    if (bt && typeof bt === 'object' && typeof bt.fee === 'number') return bt.fee / 100;
-    return null;
+    const charge = intent.latest_charge;
+    if (!charge || typeof charge === 'string') return null;
+    const bt = charge.balance_transaction;
+    if (!bt || typeof bt === 'string') return null;
+    // Stripe reports fees in the smallest currency unit, so cents to dollars.
+    return typeof bt.fee === 'number' ? bt.fee / 100 : null;
   } catch (err) {
     // A missing fee is bookkeeping, not money. Never fail a payment over it.
-    console.error('[stripe] could not read the fee for a charge:', err);
+    console.error('[stripe] could not read the fee for', paymentIntentId, err);
     return null;
   }
 }
