@@ -30,9 +30,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import getRawBody from 'raw-body';
-import { waitUntil } from '@vercel/functions';
 import { getDb } from '../_db.js';
-import { verifyStripeEvent, feeForPaymentIntent, type StripeEvent } from '../_stripe.js';
+import { verifyStripeEvent, type StripeEvent } from '../_stripe.js';
 import { recordPayment } from '../_payments.js';
 
 /** Inert here (Vercel reads it from api/inbox.ts), kept as documentation. */
@@ -59,24 +58,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const event = verified.event;
 
   /**
-   * Acknowledge first, work after.
+   * RECORD FIRST, ACKNOWLEDGE AFTER. This order is the whole point.
    *
-   * Stripe gives about 20 seconds and treats a timeout as a failure worth
-   * retrying. Reading a fee costs a second round trip, so the 200 goes out
-   * first and the ledger write happens in waitUntil, which keeps the function
-   * alive without holding Stripe's connection open. Same shape as the IG
-   * webhook next door.
+   * It used to be the other way round: 200 immediately, ledger write in
+   * waitUntil. The comment justifying that said the retry would finish the
+   * job, and that was simply false. Stripe retries a delivery only when the
+   * response is NOT 2xx, so once the 200 had gone out the event was settled
+   * forever. A cold database, a connection limit, one bad minute at Neon, and
+   * a real client's payment was lost with nothing but a log line: Stripe shows
+   * delivered, the ledger shows nothing, and the client is asked to pay again
+   * for money they already sent.
    *
-   * Safe precisely because recordPayment is idempotent: if this process dies
-   * mid-work, Stripe eventually retries and the retry finishes the job.
+   * Returning 500 hands the problem back to Stripe, which retries with backoff
+   * for about three days. That is only safe because recordPayment is
+   * idempotent on the PaymentIntent (a partial unique index plus ON CONFLICT
+   * DO NOTHING, and a full re-sum rather than an increment), so a retry after
+   * a partial failure cannot double-count. That property was already there;
+   * nothing was using it.
+   *
+   * Fast enough to do inline: two database round trips. It is now FASTER than
+   * the old path, which made a Stripe API call for the fee before writing
+   * anything (see processEvent).
+   *
+   * Only genuine infrastructure failures throw. Every "nothing to do" case
+   * below returns normally and still answers 200, because retrying an unpaid
+   * session or an event type we ignore would achieve nothing and eventually
+   * get the endpoint disabled.
    */
-  waitUntil(
-    processEvent(event).catch((err) => {
-      console.error(`[inbox/stripe-webhook] ${event.type} (${event.id}) failed:`, err);
-    }),
-  );
+  try {
+    await processEvent(event);
+  } catch (err) {
+    if (isPermanentFailure(err)) {
+      // Retrying cannot fix this one, so a 500 would just mean three days of
+      // retries and then a disabled endpoint. Loud, because it means money is
+      // sitting in Stripe with no booking to credit and a person has to go
+      // and attach it by hand.
+      console.error(
+        `[inbox/stripe-webhook] ${event.type} (${event.id}) cannot be recorded and RETRYING WILL NOT HELP. ` +
+          `Money is in Stripe with nothing to credit it to. Record it by hand:`,
+        err,
+      );
+      return res.status(200).json({ received: true, recorded: false });
+    }
+    console.error(
+      `[inbox/stripe-webhook] ${event.type} (${event.id}) FAILED, asking Stripe to retry:`,
+      err,
+    );
+    return res.status(500).json({ success: false, error: 'Could not record the payment' });
+  }
 
   return res.status(200).json({ received: true });
+}
+
+/**
+ * Is this a failure that retrying can never fix?
+ *
+ * The 500 above exists so Stripe retries a transient problem: a cold
+ * database, a connection limit, one bad minute. Some failures are not
+ * transient. payment_entries.client_portal_id is a foreign key, so a session
+ * whose metadata names a portal that has been deleted raises 23503 on every
+ * attempt, and a malformed id raises 22P02 on every attempt. Answering 500 to
+ * those buys three days of retries and an endpoint Stripe eventually disables,
+ * which would then drop the payments that WOULD have succeeded.
+ *
+ * Matched on SQLSTATE rather than message text, because the message is
+ * wording and the code is a contract.
+ */
+function isPermanentFailure(err: unknown): boolean {
+  const code = (err as { code?: unknown })?.code;
+  return code === '23503' || code === '22P02';
 }
 
 /**
@@ -140,9 +190,23 @@ export async function processEvent(event: StripeEvent): Promise<void> {
   }
 
   const kind = session.metadata?.kind === 'retainer' ? 'retainer' : 'balance';
-  // Best effort. A missing fee is bookkeeping and must never cost a payment.
-  const fee = await feeForPaymentIntent(paymentIntentId, event.account ?? null);
 
+  /**
+   * The fee is NOT read here, and is left to api/cron/_stripe-fee-backfill.ts.
+   *
+   * It used to be fetched first, before anything was written. That was a
+   * Stripe API round trip, with no timeout, sitting in front of the only write
+   * that matters, on a path Stripe expects to answer in about twenty seconds.
+   *
+   * And it never worked. Payments are created with capture_method
+   * automatic_async, so the fee lives on a balance transaction that does not
+   * exist until the charge settles, which is after this event fires. Both real
+   * test payments came back null, every time. So the cost was a slower, more
+   * fragile critical path in exchange for a value that is always null.
+   *
+   * fee_amount is bookkeeping and never affects what anyone owes, so arriving
+   * within a day via the backfill is exactly as good.
+   */
   const sql = getDb();
   const result = await recordPayment(sql, {
     portalId,
@@ -153,7 +217,7 @@ export async function processEvent(event: StripeEvent): Promise<void> {
     status: 'succeeded',
     processorPaymentId: paymentIntentId,
     processorAccountId: event.account ?? null,
-    feeAmount: fee,
+    feeAmount: null,
   });
 
   console.log(
