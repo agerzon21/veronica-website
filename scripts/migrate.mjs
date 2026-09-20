@@ -345,6 +345,10 @@ const CHECKS = [
     ok: (r) => r.rows.length === 4,
     pass: 'payment_entries carries the card-payment columns',
     fail: 'payment_entries is missing card-payment columns, so a card payment cannot be recorded' },
+  { m: '042', q: `select column_name from information_schema.columns where table_name='messages' and column_name='sent_via'`,
+    ok: (r) => r.rows.length === 1,
+    pass: 'messages.sent_via exists, so an assistant send is distinguishable from a composer send',
+    fail: 'messages.sent_via is missing, so every panel send looks identical and an unauthorised send by the assistant cannot be identified after the fact' },
   { m: '036', q: `select to_regclass('public.schema_migrations') t`,
     ok: (r) => r.rows[0]?.t !== null, pass: 'schema_migrations exists', fail: 'the ledger itself is missing' },
 ];

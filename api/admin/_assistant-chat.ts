@@ -1674,7 +1674,10 @@ async function executeToolCall(
     // Goes through the SAME path as the Messages panel's Send button —
     // threading headers, signature, persist-before-send ordering and
     // channel dispatch all included. See api/_reply-delivery.ts.
-    const result = await deliverReply(sql, conversationId, text);
+    // 'assistant', so this send is identifiable afterwards. Every guard above
+    // this line is about preventing an unapproved send; this is the one that
+    // makes an unapproved send investigable if one ever gets through again.
+    const result = await deliverReply(sql, conversationId, text, { via: 'assistant' });
     if (!result.ok) {
       if (result.status === 409) {
         return {

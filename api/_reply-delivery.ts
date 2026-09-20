@@ -69,11 +69,29 @@ function normalizeForCompare(text: string): string {
   return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+/**
+ * How an outbound message came to be sent. Recorded on the row.
+ *
+ * Both values below write sender = 'human', because both are sends Vero is
+ * accountable for, and until now that made them identical in the database.
+ * They are not the same thing: one is her hands on the keyboard and the other
+ * is the assistant acting on an approval. See db/migrations/042.
+ */
+export type SentVia = 'composer' | 'assistant';
+
 export async function deliverReply(
   sql: ReturnType<typeof getDb>,
   conversationId: string,
   text: string,
-  options: { allowDuplicate?: boolean } = {},
+  /**
+   * `via` is REQUIRED, and that is the point.
+   *
+   * A default would mean a future call site silently lands in whichever
+   * bucket was convenient to type, which is exactly the ambiguity this
+   * records. Making it required costs one word per caller and makes an
+   * unlabelled send impossible to write.
+   */
+  options: { via: SentVia; allowDuplicate?: boolean },
 ): Promise<DeliveryResult> {
   // A subject line in a reply body is never correct — email threading sets
   // "Re:" itself and Instagram has no subjects. See _subject-strip.ts.
@@ -136,9 +154,9 @@ export async function deliverReply(
 
   const result =
     convo.platform === 'instagram'
-      ? await sendInstagram(sql, conversationId, convo.external_user_id, text)
+      ? await sendInstagram(sql, conversationId, convo.external_user_id, text, options.via)
       : convo.platform === 'email'
-        ? await sendEmail(sql, conversationId, convo.external_user_id, text)
+        ? await sendEmail(sql, conversationId, convo.external_user_id, text, options.via)
         : null;
 
   if (result) {
@@ -177,6 +195,7 @@ async function sendInstagram(
   conversationId: string,
   recipientIgsid: string,
   text: string,
+  via: SentVia,
 ): Promise<DeliveryResult> {
   const sendResult = await sendIgTextMessage({ recipientIgsid, text });
   if (!sendResult.ok) {
@@ -190,11 +209,11 @@ async function sendInstagram(
   const inserted = (await sql`
     INSERT INTO messages (
       conversation_id, direction, sender, channel, body,
-      external_message_id, sent_at
+      external_message_id, sent_at, sent_via
     )
     VALUES (
       ${conversationId}, 'outbound', 'human', 'instagram', ${text},
-      ${sendResult.externalMessageId ?? null}, NOW()
+      ${sendResult.externalMessageId ?? null}, NOW(), ${via}
     )
     ON CONFLICT (external_message_id) DO NOTHING
     RETURNING id, sent_at, external_message_id
@@ -224,6 +243,7 @@ async function sendEmail(
   conversationId: string,
   recipientEmail: string,
   text: string,
+  via: SentVia,
 ): Promise<DeliveryResult> {
   // Pull the conversation's history for RFC 5322 threading, oldest
   // first so References is built in the correct order.
@@ -343,11 +363,11 @@ async function sendEmail(
   const inserted = (await sql`
     INSERT INTO messages (
       conversation_id, direction, sender, channel, body,
-      external_message_id, from_address, sent_at, subject, in_reply_to
+      external_message_id, from_address, sent_at, subject, in_reply_to, sent_via
     )
     VALUES (
       ${conversationId}, 'outbound', 'human', 'email', ${signedText},
-      ${preMessageId}, ${EMAIL_FROM_ADDRESS}, NOW(), ${subject}, ${inReplyTo}
+      ${preMessageId}, ${EMAIL_FROM_ADDRESS}, NOW(), ${subject}, ${inReplyTo}, ${via}
     )
     ON CONFLICT (external_message_id) DO NOTHING
     RETURNING id, sent_at, external_message_id

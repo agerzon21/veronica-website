@@ -53,7 +53,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // allowDuplicate is set by the client only after Vero has confirmed
     // she means to repeat herself, and by the bounce-retry path where the
     // repeat is the entire point.
+    // 'composer': this endpoint is the Send button in the Messages panel, and
+    // the only thing on the other end of it is Vero typing. The assistant has
+    // its own path through send_reply and records itself separately.
     const result = await deliverReply(getDb(), conversationId, text, {
+      via: 'composer',
       allowDuplicate: req.body?.allowDuplicate === true,
     });
     if (!result.ok) {
