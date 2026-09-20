@@ -414,6 +414,15 @@ interface ProgressStep {
   tone: StepTone;
   /** The step they are on. Keeps its label on a phone; the others lose theirs. */
   current: boolean;
+  /**
+   * Where this step actually stands, in a few words. Desktop only.
+   *
+   * "SIGN, PAY, PHOTOS" in three small circles told a client the order of
+   * events, which they already knew, and nothing about their own booking. The
+   * header had most of a screen of empty space next to it while the answer to
+   * "what is happening with my photos" sat further down the page.
+   */
+  detail?: string;
 }
 
 /**
@@ -480,9 +489,28 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
     return signed && paid ? 'waiting' : 'progress';
   };
 
+  // Said in the client's terms, and never a number they would have to
+  // reconcile against the Balance section further down: this line says WHERE
+  // things stand, the section says what is owed.
+  const owed = p.amountOwed;
+  const outstanding = owed !== null ? Math.max(moneyCents(owed) - moneyCents(p.paidToDate), 0) / 100 : 0;
+  const details: Array<string | undefined> = [
+    signed ? 'Signed' : p.contractStatus === 'pending' ? 'Waiting for you' : 'Not sent yet',
+    owed === null
+      ? undefined
+      : paid
+        ? 'Paid in full'
+        : p.overdue
+          ? `${formatMoney(outstanding)} overdue`
+          : retainerOutstanding
+            ? `Retainer ${formatMoney(Math.max(moneyCents(p.retainerAmount ?? 0) - moneyCents(p.paidToDate), 0) / 100)} due`
+            : `${formatMoney(outstanding)} left`,
+    p.photosDelivered ? 'Ready to view' : signed && paid ? 'Veronika is editing' : 'After the shoot',
+  ];
+
   return STEP_LABELS.map((label, i) => {
     const tone: StepTone = done[i] ? 'done' : i === currentIndex ? toneForCurrent(i) : 'upcoming';
-    return { n: i + 1, label, tone, current: i === currentIndex };
+    return { n: i + 1, label, tone, current: i === currentIndex, detail: details[i] };
   });
 }
 
@@ -897,6 +925,35 @@ const PortalHeader = ({
           />
         </Box>
 
+        {/* ORDER MATTERS on a desktop, where the track and the account
+            control are both visible: the track comes first so the account
+            control sits at the RIGHT of the header, away from the logo,
+            and the track gets the width that used to sit empty between
+            them. On a phone only ever one of the two is displayed, so the
+            order changes nothing there. */}
+        {/* The progress track, at whichever widths the two-bar nav has not
+            taken the slot. Not rendered at all when that is neither of them: a
+            display:none track in the markup is dead weight in the one place on
+            the page where every byte is in front of the client's face. The
+            guard is two plain booleans, not a measured width, so it is the same
+            answer in the prerendered HTML and in the client's first paint. */}
+        {hasContract(progress) && !(navOwnsMobileSlot && isPortalComplete(progress)) && (
+          <Box
+            flex="1"
+            minW={0}
+            display={{
+              base: navOwnsMobileSlot ? 'none' : 'block',
+              // Shown alongside the account control now rather than instead of
+              // it, and gone only when the booking is finished, because a
+              // track whose every step is done is a receipt rather than a
+              // direction.
+              md: isPortalComplete(progress) ? 'none' : 'block',
+            }}
+          >
+            <ProgressTrack steps={buildSteps(progress!)} />
+          </Box>
+        )}
+
         {/* The slot. It holds the two-bar nav, or the 1-2-3 progress, and the
             choice is made separately per width by plain `display`, never by a
             measured breakpoint. A phone hands the slot over the moment there
@@ -954,29 +1011,6 @@ const PortalHeader = ({
           )}
         </Flex>
 
-        {/* The progress track, at whichever widths the two-bar nav has not
-            taken the slot. Not rendered at all when that is neither of them: a
-            display:none track in the markup is dead weight in the one place on
-            the page where every byte is in front of the client's face. The
-            guard is two plain booleans, not a measured width, so it is the same
-            answer in the prerendered HTML and in the client's first paint. */}
-        {hasContract(progress) && !(navOwnsMobileSlot && isPortalComplete(progress)) && (
-          <Box
-            flex="1"
-            minW={0}
-            display={{
-              base: navOwnsMobileSlot ? 'none' : 'block',
-              // Shown alongside the account control now rather than instead of
-              // it, and gone only when the booking is finished, because a
-              // track whose every step is done is a receipt rather than a
-              // direction.
-              md: isPortalComplete(progress) ? 'none' : 'block',
-            }}
-          >
-            <ProgressTrack steps={buildSteps(progress!)} />
-          </Box>
-        )}
-
         {showBalance && (
           <Flex direction="column" align="flex-end" flexShrink={0} lineHeight="1.15">
             <Text
@@ -1024,7 +1058,12 @@ const PortalHeader = ({
 
             The phone keeps Share in its menu instead, because a phone has no
             corner to spare. */}
-        {shareItem && !showBalance && navOwnsDesktopSlot && (
+        {/* Only once the photos are actually delivered. It used to appear the
+            moment the account menu had a share row, which is before the
+            gallery exists: the client was offered a Share button on a booking
+            with nothing behind it, next to a step 3 that plainly said the
+            photos had not arrived. */}
+        {shareItem && progress?.photosDelivered && !showBalance && navOwnsDesktopSlot && (
           <Flex
             as="button"
             type="button"
@@ -2055,8 +2094,8 @@ function ProgressTrack({ steps }: { steps: ProgressStep[] }) {
   return (
     <Flex
       align="center"
-      justify="center"
-      gap={{ base: 1, md: 2 }}
+      justify={{ base: 'center', md: 'flex-start' }}
+      gap={{ base: 1, md: 2.5 }}
       role="group"
       aria-label="Your booking progress"
     >
@@ -2069,8 +2108,11 @@ function ProgressTrack({ steps }: { steps: ProgressStep[] }) {
                 // `flex` rather than a width, because it has to carry the
                 // shrink rule too: one shorthand, so nothing can set the two
                 // halves of this in an order CSS resolves the wrong way round.
-                flex={{ base: '1 1 10px', md: '0 0 20px' }}
-                minW={{ base: '10px', md: '20px' }}
+                // Desktop: grows into the space the header used to waste, so
+                // the track spans the row instead of huddling in the middle.
+                flex={{ base: '1 1 10px', md: '1 1 24px' }}
+                minW={{ base: '10px', md: '24px' }}
+                maxW={{ base: 'none', md: '120px' }}
                 h="1px"
                 bg={s.tone === 'done' ? 'brand.success' : 'gray.200'}
               />
@@ -2091,32 +2133,55 @@ function ProgressTrack({ steps }: { steps: ProgressStep[] }) {
               <Flex
                 align="center"
                 justify="center"
-                w="22px"
-                h="22px"
+                w={{ base: '22px', md: '30px' }}
+                h={{ base: '22px', md: '30px' }}
                 borderRadius="full"
                 bg={tone.bg}
                 border="1px solid"
                 borderColor={tone.border}
                 color={tone.fg}
-                fontSize="2xs"
+                fontSize={{ base: '2xs', md: 'xs' }}
                 fontWeight="600"
                 flexShrink={0}
                 aria-hidden="true"
               >
-                {s.tone === 'done' ? <Icon as={FaCheck} boxSize={2.5} /> : s.n}
+                {s.tone === 'done' ? <Icon as={FaCheck} boxSize={{ base: 2.5, md: 3 }} /> : s.n}
               </Flex>
-              <Text
-                fontSize="2xs"
-                fontWeight="500"
-                textTransform="uppercase"
-                letterSpacing="0.16em"
-                color={tone.label}
-                whiteSpace="nowrap"
+              {/* The label, and under it on a desktop where this step actually
+                  stands. The second line is the reason the track is worth the
+                  width: the word PAY is the same on every booking, "$750 left"
+                  is not. */}
+              <Flex
+                direction="column"
+                lineHeight="1.15"
+                minW={0}
                 aria-hidden="true"
-                display={{ base: s.current ? 'block' : 'none', md: 'block' }}
+                display={{ base: s.current ? 'flex' : 'none', md: 'flex' }}
               >
-                {s.label}
-              </Text>
+                <Text
+                  fontSize="2xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.16em"
+                  color={tone.label}
+                  whiteSpace="nowrap"
+                >
+                  {s.label}
+                </Text>
+                {s.detail && (
+                  <Text
+                    display={{ base: 'none', md: 'block' }}
+                    fontSize="2xs"
+                    fontWeight="400"
+                    letterSpacing="0.02em"
+                    color={s.tone === 'overdue' ? 'red.600' : 'gray.500'}
+                    whiteSpace="nowrap"
+                    mt="2px"
+                  >
+                    {s.detail}
+                  </Text>
+                )}
+              </Flex>
             </Flex>
           </Fragment>
         );
