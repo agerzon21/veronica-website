@@ -36,7 +36,7 @@ import {
 import ReadingProgress from './ReadingProgress';
 import { scrollBehavior } from '../utils/motion';
 import type { ContractTemplate } from '../data/contract-template';
-import { PAYMENT_HANDLES } from '../data/payment-handles';
+import { PAYMENT_HANDLES, CARD_PAYMENTS_ENABLED } from '../data/payment-handles';
 
 // Full client portal payload — mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
@@ -1118,6 +1118,7 @@ const ClientPortalView = ({
           // is no longer relevant — client isn't waiting anymore.
           // Panel returns null in that case (fully-paid + delivered).
           photosDelivered={photosDelivered}
+          credentials={credentials}
         />
       </Box>
 
@@ -1962,6 +1963,7 @@ function NextStepsPanel({
   chargesTotal,
   wording,
   photosDelivered,
+  credentials,
 }: {
   contractStatus: 'none' | 'pending' | 'signed' | 'void';
   total: number | null;
@@ -1971,6 +1973,10 @@ function NextStepsPanel({
   // The retainer is untouched by these: it reserves the date and is agreed up
   // front, while charges land after the shoot, so they fall on the balance.
   chargesTotal: number;
+  // Needed to start a card payment: the portal re-proves ownership on every
+  // request rather than holding a session, so the pay endpoint is exactly as
+  // protected as the one that showed this balance.
+  credentials: { email: string; password: string };
   // Event vs session nouns, resolved once by the parent from the booking's
   // type. This panel is where the wedding assumptions were thickest: it
   // talked about reserving "the date" and paying cash on the day of "the
@@ -2029,6 +2035,7 @@ function NextStepsPanel({
               </Text>
             </VStack>
 
+            <PayByCardButton kind="retainer" amount={retainerToSend} credentials={credentials} />
             <PaymentMethodsStack />
 
             <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
@@ -2095,6 +2102,7 @@ function NextStepsPanel({
               </Text>
             </Box>
 
+            <PayByCardButton kind="balance" amount={balanceToSend} credentials={credentials} />
             <PaymentMethodsStack />
 
             <VStack spacing={2} maxW="440px" textAlign="center">
@@ -2160,6 +2168,81 @@ function NextStepsPanel({
 // retainer and balance flows, and were duplicated inline. Extracted
 // so future tweaks (adding a method, changing handles, etc) live in
 // one place instead of two.
+/**
+ * Pay by card, from the portal.
+ *
+ * Renders nothing unless CARD_PAYMENTS_ENABLED, so this ships dark and turns
+ * on with one constant once a live Stripe account exists. Until then the
+ * client sees exactly what they see today.
+ *
+ * The button NEVER sends an amount. It says which payment this is and the
+ * server works out what that costs, because a number that travels through a
+ * browser is a number a client can edit.
+ *
+ * The label carries the amount anyway, because the client is on a phone and
+ * should not have to reconcile "Pay now" against a figure further up the page.
+ */
+function PayByCardButton({
+  kind,
+  amount,
+  credentials,
+}: {
+  kind: 'retainer' | 'balance';
+  amount: number;
+  credentials: { email: string; password: string };
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!CARD_PAYMENTS_ENABLED || amount <= 0) return null;
+
+  const start = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch('/api/portal/pay-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: credentials.email, password: credentials.password, kind }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.url) {
+        // Same tab, deliberately. A payment that opens in a new tab leaves the
+        // client wondering which one is real, and the return URL brings them
+        // straight back to this page anyway.
+        window.location.href = data.url;
+        return;
+      }
+      setError(data.error || 'Could not start the payment. Please try again.');
+    } catch {
+      setError('Could not reach the payment page. Please check your connection.');
+    } finally {
+      // Left spinning on success on purpose: the redirect is in flight and
+      // re-enabling the button invites a second click that opens a second
+      // checkout session.
+      setBusy(false);
+    }
+  };
+
+  return (
+    <VStack spacing={2} w="100%" maxW="380px" mb={2}>
+      <CTAButton onClick={start} variant="solid" isLoading={busy} loadingText="Opening" fullWidth>
+        {kind === 'retainer'
+          ? `Pay $${amount.toFixed(0)} retainer by card`
+          : `Pay $${amount.toFixed(0)} balance by card`}
+      </CTAButton>
+      {error && (
+        <Text fontSize="xs" color="red.600" textAlign="center">
+          {error}
+        </Text>
+      )}
+      <Text fontSize="2xs" color="gray.500" textAlign="center">
+        Secure payment by Stripe. Or send it directly below, which costs us nothing.
+      </Text>
+    </VStack>
+  );
+}
+
 function PaymentMethodsStack() {
   return (
     <VStack spacing={2} w="100%" maxW="380px">
