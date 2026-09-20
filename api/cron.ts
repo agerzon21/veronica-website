@@ -64,7 +64,7 @@ export const HANDLERS: Record<
  * _crons-list.ts seeds from this so any such job shows up immediately, with its
  * real enable toggle, Run-now button and run history.
  */
-export const UNSCHEDULED_CRON_META = [IG_AVATAR_META] as const;
+export const UNSCHEDULED_CRON_META = [IG_AVATAR_META, STRIPE_FEE_META] as const;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expected = process.env.CRON_SECRET;
