@@ -111,6 +111,22 @@ const CHECKS: Check[] = [
     fallback: null,
   },
   {
+    key: 'STRIPE_SECRET_KEY',
+    severity: 'feature',
+    purpose: 'Taking card payments from the client portal',
+    ifMissing:
+      'The Pay by card button refuses with "not available yet". Nothing else is affected: Venmo, Zelle and Cash App are unchanged, and no balance is wrong.',
+    fallback: null,
+  },
+  {
+    key: 'STRIPE_WEBHOOK_SECRET',
+    severity: 'feature',
+    purpose: 'Proving a payment notification really came from Stripe',
+    ifMissing:
+      'Card payments cannot be accepted at all, because every webhook fails verification. This is the DANGEROUS one to get wrong rather than missing: the live and test secrets are DIFFERENT values, so pasting the wrong one, or one with a stray newline, leaves the button working while every payment goes unrecorded and the client is asked to pay again.',
+    fallback: null,
+  },
+  {
     key: 'GOOGLE_SERVICE_ACCOUNT_JSON',
     severity: 'feature',
     purpose: 'Google Drive access',

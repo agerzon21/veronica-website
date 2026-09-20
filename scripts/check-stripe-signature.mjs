@@ -92,6 +92,24 @@ rej('a truncated signature',                    body, sign(body, SECRET).slice(0
   void reparsed;
 }
 
+{
+  /**
+   * The secret is pasted into Vercel by hand, so it arrives with whatever
+   * whitespace came with it. An untrimmed trailing newline makes every HMAC
+   * wrong, so every webhook 400s and every card payment is silently never
+   * recorded, with nothing in the app to say why.
+   */
+  check('a secret with a trailing newline still verifies',
+    verifyStripeEvent(body, sign(body, SECRET), SECRET + '\n').ok, true);
+  check('a secret with surrounding spaces still verifies',
+    verifyStripeEvent(body, sign(body, SECRET), '  ' + SECRET + '  ').ok, true);
+  // Trimming must not turn a WRONG secret into a right one.
+  check('a genuinely different secret is still refused',
+    verifyStripeEvent(body, sign(body, SECRET), SECRET + 'x').ok, false);
+  check('a whitespace-only secret counts as unset',
+    verifyStripeEvent(body, sign(body, SECRET), '   ').ok, false);
+}
+
 console.log('\nwhy each rejection happened:');
 for (const [k,v] of Object.entries(reasons)) console.log(`  ${k.padEnd(48)} ${v}`);
 console.log(`\n${pass} passed, ${fail} failed`);

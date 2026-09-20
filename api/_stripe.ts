@@ -272,7 +272,18 @@ export function verifyStripeEvent(
   signatureHeader: string | null,
   secret = process.env.STRIPE_WEBHOOK_SECRET,
 ): { ok: true; event: StripeEvent } | { ok: false; reason: string } {
-  if (!secret) return { ok: false, reason: 'STRIPE_WEBHOOK_SECRET is not set' };
+  /**
+   * Trimmed, because a secret is COPIED AND PASTED into Vercel by hand.
+   *
+   * Every value parsed out of the signature header below is trimmed already;
+   * the secret, which arrives the same way and is likelier to pick up a stray
+   * newline, was not. A single trailing space makes every HMAC in this
+   * function wrong, so every webhook fails signature verification, so every
+   * card payment is silently never recorded while Stripe's dashboard shows
+   * nothing but 400s. That is an expensive way to find a whitespace character.
+   */
+  const signingSecret = secret?.trim();
+  if (!signingSecret) return { ok: false, reason: 'STRIPE_WEBHOOK_SECRET is not set' };
   if (!signatureHeader) return { ok: false, reason: 'Missing Stripe-Signature header' };
 
   let timestamp = '';
@@ -292,7 +303,7 @@ export function verifyStripeEvent(
     return { ok: false, reason: `Signature timestamp is ${age}s away, outside tolerance` };
   }
 
-  const expected = createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
+  const expected = createHmac('sha256', signingSecret).update(`${timestamp}.${rawBody}`).digest('hex');
   const matched = signatures.some((candidate) => safeEqualHex(candidate, expected));
   if (!matched) return { ok: false, reason: 'Signature did not match' };
 

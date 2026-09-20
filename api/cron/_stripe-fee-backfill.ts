@@ -104,12 +104,18 @@ export async function backfillStripeFees(): Promise<{
     // Re-checks `fee_amount is null` in the WHERE rather than trusting the
     // read above: the webhook may have won the race while this was working,
     // and the first answer is as good as the second.
-    await sql`
+    // RETURNING, so `filled` counts rows that actually changed. The guard on
+    // `fee_amount is null` exists precisely because the webhook may have won
+    // the race, and in that case this UPDATE matches nothing. Incrementing
+    // regardless made the run report work it had not done, in the one number
+    // anybody reads to decide whether the job is healthy.
+    const written = (await sql`
       update payment_entries
       set fee_amount = ${fee}
       where id = ${row.id} and fee_amount is null
-    `;
-    filled += 1;
+      returning id
+    `) as Array<{ id: string }>;
+    if (written.length > 0) filled += 1;
   }
 
   return {
