@@ -509,7 +509,8 @@ let journalRows = [];
 try {
   journalRows = await sql`
     SELECT slug, title, excerpt, body_markdown, cover_image_url, cover_image_alt,
-           session_type, tags, published_at, updated_at
+           session_type, tags, published_at, updated_at,
+           series_slug, series_part, series_label
     FROM journal_posts
     WHERE status = 'published' AND published_at IS NOT NULL
     ORDER BY published_at DESC
@@ -521,6 +522,34 @@ try {
 }
 
 const posts = journalRows.filter((r) => r.slug && r.title);
+
+/**
+ * Multi-part stories, grouped from the posts we already have.
+ *
+ * Built from `posts` rather than a second query on purpose: `posts` is
+ * already filtered to published, which is exactly the rule the live page
+ * uses for siblings. Querying again would be a second place for that
+ * predicate to live, and the one that drifts publishes a draft.
+ *
+ * This matters for crawlers specifically. A reader with JavaScript sees the
+ * two halves linked by the app; a crawler reads this file, and without it
+ * the two entries of one wedding look like two unrelated posts.
+ */
+const seriesMembers = new Map();
+for (const p of posts) {
+  if (!p.series_slug) continue;
+  if (!seriesMembers.has(p.series_slug)) seriesMembers.set(p.series_slug, []);
+  seriesMembers.get(p.series_slug).push(p);
+}
+for (const list of seriesMembers.values()) {
+  // Part order, then date for anything without a part number, matching
+  // `ORDER BY series_part ASC NULLS LAST, published_at ASC` in api/journal.ts.
+  list.sort(
+    (a, b) =>
+      (a.series_part ?? Number.MAX_SAFE_INTEGER) - (b.series_part ?? Number.MAX_SAFE_INTEGER) ||
+      new Date(a.published_at) - new Date(b.published_at),
+  );
+}
 
 /**
  * Deliberately tiny Markdown subset: "## heading" and blank-line-separated
@@ -566,7 +595,18 @@ for (const post of posts) {
   const ogImage = post.cover_image_url || DEFAULT_OG;
   const published = new Date(post.published_at).toISOString();
   const tags = Array.isArray(post.tags) ? post.tags : [];
-  const others = posts.filter((o) => o.slug !== post.slug).slice(0, 6);
+  // The other parts of this story, if it has any. A series of one is not a
+  // series: a post whose sibling is still a draft reads as standalone here,
+  // exactly as it does on the live page.
+  const siblings = post.series_slug ? seriesMembers.get(post.series_slug) ?? [] : [];
+  const inSeries = siblings.length > 1;
+
+  // Siblings are listed under their own heading, so keep them out of the
+  // generic list to avoid linking the same post twice on one page.
+  const others = posts
+    .filter((o) => o.slug !== post.slug)
+    .filter((o) => !inSeries || o.series_slug !== post.series_slug)
+    .slice(0, 6);
 
   let html = photoTemplate;
   html = html.replace(/[ \t]*<title>[\s\S]*?<\/title>\n?/, '');
@@ -603,7 +643,7 @@ for (const post of posts) {
       "datePublished": "${published}",
       "image": ${JSON.stringify(ogImage)},
       "keywords": ${JSON.stringify(tags.join(', '))},
-      "author": { "@type": "Person", "name": "Veronika Gerzon" },
+${inSeries ? `      "isPartOf": { "@type": "CreativeWorkSeries", "name": ${JSON.stringify(post.series_label || 'A story in parts')} },\n` : ''}${inSeries && post.series_part != null ? `      "position": ${post.series_part},\n` : ''}      "author": { "@type": "Person", "name": "Veronika Gerzon" },
       "publisher": { "@type": "Organization", "name": "Vero Photography", "url": "${SITE}" },
       "mainEntityOfPage": { "@type": "WebPage", "@id": "${canonical}" }
     }
@@ -617,6 +657,16 @@ for (const post of posts) {
         <p><time datetime="${published}">${new Date(post.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</time></p>
         <p><em>${esc(desc)}</em></p>
 ${markdownToBlocks(post.body_markdown)}
+${inSeries ? `        <h2>${esc(post.series_label || 'This story, in parts')}</h2>
+        <ol>
+${siblings
+  .map((s) =>
+    s.slug === post.slug
+      ? `          <li><strong>${esc(s.title)}</strong> (this entry)</li>`
+      : `          <li><a href="/journal/${s.slug}">${esc(s.title)}</a></li>`,
+  )
+  .join('\n')}
+        </ol>` : ''}
         <p><a href="/journal">All journal entries</a></p>
 ${others.length ? `        <h2>More from the journal</h2>
         <ul>
