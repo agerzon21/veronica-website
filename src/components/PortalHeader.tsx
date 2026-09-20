@@ -1,4 +1,4 @@
-import { Box, Flex, Icon, Image, Text } from '@chakra-ui/react';
+import { Box, Flex, Icon, Image, Text, VStack } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Fragment,
@@ -353,7 +353,7 @@ const TICKS_OUT = `clip-path 0.3s ${NAV_EASE} 0s`;
 const STILL = { '@media (prefers-reduced-motion: reduce)': { transition: 'none' } };
 
 /** Which anchored menu is open. Never both: the header holds one answer. */
-type OpenMenu = 'sections' | 'account' | null;
+type OpenMenu = 'sections' | 'account' | 'progress' | null;
 
 const formatMoney = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -842,6 +842,7 @@ const PortalHeader = ({
   const uid = useId();
   const sectionPanelId = `${uid}-sections`;
   const accountPanelId = `${uid}-account`;
+  const progressPanelId = `${uid}-progress`;
 
   /**
    * Escape, and a press anywhere outside the header, close whichever menu is
@@ -1049,7 +1050,13 @@ const PortalHeader = ({
               md: isPortalComplete(progress) ? 'none' : 'block',
             }}
           >
-            <ProgressTrack steps={buildSteps(progress!)} suppressMoneyDetail={showBalance} />
+            <ProgressTrack
+              steps={buildSteps(progress!)}
+              suppressMoneyDetail={showBalance}
+              open={openMenu === 'progress'}
+              onToggle={() => toggleMenu('progress')}
+              panelId={progressPanelId}
+            />
           </Box>
         )}
 
@@ -1215,10 +1222,12 @@ const PortalHeader = ({
               w: CONTROL_H.base,
               h: CONTROL_H.base,
               p: 0,
-              bg: 'white',
-              border: '1px solid',
-              borderColor: 'gray.200',
-              borderRadius: CONTROL_RADIUS.base,
+              // No box. The site's own mobile burger is three bare bars on the
+              // page, and a bordered white tile around them read as a separate
+              // widget stuck onto the header.
+              bg: 'transparent',
+              border: 'none',
+              borderRadius: 0,
               'aria-label':
                 openMenu === 'account' ? 'Close your booking menu' : 'Open your booking menu',
               'aria-haspopup': 'menu',
@@ -1237,6 +1246,16 @@ const PortalHeader = ({
           is left below it, a desktop spends its width showing every item at
           once in columns and never scrolls at all. The ROWS are built once and
           shared, so the two cannot disagree about what is in the list. */}
+      {/* Every step, under the phone header, when the current step is tapped.
+          Desktop never opens this: the whole track is already on screen. */}
+      {hasContract(progress) && !(navOwnsMobileSlot && isPortalComplete(progress)) && (
+        <ProgressPanel
+          id={progressPanelId}
+          steps={buildSteps(progress!)}
+          open={openMenu === 'progress'}
+        />
+      )}
+
       {hasSectionBar && (
         <>
           <PhoneMenuPanel
@@ -2192,10 +2211,17 @@ function DesktopMenuPanel({
 function ProgressTrack({
   steps,
   suppressMoneyDetail = false,
+  open = false,
+  onToggle,
+  panelId,
 }: {
   steps: ProgressStep[];
   /** The balance corner already shows the number, so the phone should not. */
   suppressMoneyDetail?: boolean;
+  /** Phone only: whether the full list is showing underneath. */
+  open?: boolean;
+  onToggle?: () => void;
+  panelId?: string;
 }) {
   const current = steps.find((s) => s.current) ?? steps[steps.length - 1];
   /**
@@ -2211,20 +2237,40 @@ function ProgressTrack({
   return (
     <>
       {/*
-        THE PHONE: one step, the one they are on, said in words.
+        THE PHONE: the step they are on, centred, and pressable for the rest.
 
-        It used to render every badge, which on a booking two steps in meant
-        two green ticks and a number taking most of the row to say nothing a
-        client could act on. A phone has room for one fact, so it gets the
-        useful one: where you are, what it means, and how far through you are.
+        It showed every badge, which two steps in meant two green ticks and a
+        number taking most of the row to say nothing anyone could act on. Then
+        it showed one step and a "3/5", which is a progress bar written as
+        arithmetic: a client does not think of their wedding as five of
+        anything. So the count is gone and the chevron is the honest signal
+        that there is more, in the one place a phone has room for it: behind a
+        tap.
       */}
       <Flex
+        as="button"
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`Step ${current.n} of ${steps.length}, ${current.label}${
+          current.detail ? `, ${current.detail}` : ''
+        }. Show every step.`}
         display={{ base: 'flex', md: 'none' }}
         align="center"
+        justify="center"
         gap={2}
+        w="100%"
         minW={0}
-        role="group"
-        aria-label="Your booking progress"
+        h={CONTROL_H.base}
+        px={2}
+        borderRadius={CONTROL_RADIUS.base}
+        cursor="pointer"
+        bg="transparent"
+        transition="background 0.2s ease"
+        _hover={{ bg: 'brand.surface' }}
+        _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
+        sx={{ WebkitTapHighlightColor: 'transparent', ...STILL }}
       >
         <Flex
           align="center"
@@ -2243,7 +2289,7 @@ function ProgressTrack({
         >
           {current.tone === 'done' ? <Icon as={FaCheck} boxSize={2.5} /> : current.n}
         </Flex>
-        <Flex direction="column" lineHeight="1.15" minW={0}>
+        <Flex direction="column" lineHeight="1.15" minW={0} align="flex-start" aria-hidden="true">
           <Text
             fontSize="2xs"
             fontWeight="500"
@@ -2251,7 +2297,6 @@ function ProgressTrack({
             letterSpacing="0.16em"
             color={STEP_TONES[current.tone].label}
             whiteSpace="nowrap"
-            aria-hidden="true"
           >
             {current.label}
           </Text>
@@ -2263,30 +2308,22 @@ function ProgressTrack({
               whiteSpace="nowrap"
               overflow="hidden"
               textOverflow="ellipsis"
+              maxW="100%"
               mt="1px"
-              aria-hidden="true"
             >
               {current.detail}
             </Text>
           )}
         </Flex>
-        {/* Progress, without spending a badge per step to show it. */}
-        {current.total && current.total > 1 && (
-          <Text
-            fontSize="2xs"
-            color="gray.400"
-            whiteSpace="nowrap"
-            flexShrink={0}
-            aria-hidden="true"
-          >
-            {current.n}/{current.total}
-          </Text>
-        )}
-        <Box as="span" srOnly>
-          {`Step ${current.n} of ${current.total ?? steps.length}, ${current.label}${
-            current.detail ? `, ${current.detail}` : ''
-          }`}
-        </Box>
+        <Icon
+          as={FaChevronDown}
+          boxSize={2.5}
+          color="gray.400"
+          flexShrink={0}
+          aria-hidden="true"
+          transform={open ? 'rotate(180deg)' : 'none'}
+          transition="transform 0.25s ease"
+        />
       </Flex>
 
       {/* THE DESKTOP: the whole track, centred in the space it was given. */}
@@ -2374,6 +2411,120 @@ function ProgressTrack({
         })}
       </Flex>
     </>
+  );
+}
+
+/**
+ * Every step, listed, under the phone header.
+ *
+ * The same shell as the two menu panels next door so it reads as the same kind
+ * of thing opening, but its rows are STATUS and not navigation: nothing here is
+ * pickable, because none of it is somewhere to go.
+ */
+function ProgressPanel({
+  id,
+  steps,
+  open,
+}: {
+  id: string;
+  steps: ProgressStep[];
+  open: boolean;
+}) {
+  return (
+    <Box
+      id={id}
+      display={{ base: 'block', md: 'none' }}
+      position="absolute"
+      top="100%"
+      left={MENU_INSET}
+      right={MENU_INSET}
+      mt={MENU_INSET}
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderRadius={MENU_RADIUS}
+      boxShadow="0 12px 32px rgba(0, 0, 0, 0.12)"
+      overflow="hidden"
+      opacity={open ? 1 : 0}
+      visibility={open ? 'visible' : 'hidden'}
+      pointerEvents={open ? 'auto' : 'none'}
+      transition={`opacity ${MENU_FADE} ease, visibility ${MENU_FADE} ease`}
+      sx={STILL}
+      aria-hidden={!open}
+    >
+      <Text
+        fontSize="2xs"
+        fontWeight="500"
+        textTransform="uppercase"
+        letterSpacing="0.18em"
+        color="gray.500"
+        px={4}
+        pt={3}
+        pb={2}
+      >
+        Your booking
+      </Text>
+      <VStack align="stretch" spacing={0} pb={2}>
+        {steps.map((s) => {
+          const tone = STEP_TONES[s.tone];
+          return (
+            <Flex key={s.label} align="center" gap={3} px={4} py={2.5}>
+              <Flex
+                align="center"
+                justify="center"
+                w="26px"
+                h="26px"
+                flexShrink={0}
+                borderRadius="full"
+                bg={tone.bg}
+                border="1px solid"
+                borderColor={tone.border}
+                color={tone.fg}
+                fontSize="2xs"
+                fontWeight="600"
+                aria-hidden="true"
+              >
+                {s.tone === 'done' ? <Icon as={FaCheck} boxSize={2.5} /> : s.n}
+              </Flex>
+              <Flex direction="column" lineHeight="1.2" minW={0}>
+                <Text
+                  fontSize="2xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.16em"
+                  color={tone.label}
+                >
+                  {s.label}
+                </Text>
+                {s.detail && (
+                  <Text
+                    fontSize="xs"
+                    fontWeight="300"
+                    color={s.tone === 'overdue' ? 'red.600' : 'gray.600'}
+                    mt="2px"
+                  >
+                    {s.detail}
+                  </Text>
+                )}
+              </Flex>
+              {s.current && (
+                <Text
+                  ml="auto"
+                  fontSize="2xs"
+                  fontWeight="500"
+                  textTransform="uppercase"
+                  letterSpacing="0.14em"
+                  color="brand.accentText"
+                  flexShrink={0}
+                >
+                  You are here
+                </Text>
+              )}
+            </Flex>
+          );
+        })}
+      </VStack>
+    </Box>
   );
 }
 
