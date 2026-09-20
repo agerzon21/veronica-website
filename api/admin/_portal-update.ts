@@ -331,6 +331,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (typeof patch.client_phone === 'string') {
       await sql`update client_portals set client_phone = ${setStr(patch.client_phone)}, updated_at = now() where id = ${id}`;
     }
+    // Operational, and deliberately NOT the contract's event_location. A
+    // signed contract's terms are frozen; where she drives to is not a term,
+    // and she must be able to correct it the morning of the shoot.
+    if (typeof patch.session_location === 'string') {
+      await sql`update client_portals set session_location = ${setStr(patch.session_location)}, updated_at = now() where id = ${id}`;
+    }
     if (typeof patch.event_date === 'string') {
       const v = patch.event_date.trim() || null;
       await sql`update client_portals set event_date = ${v}, updated_at = now() where id = ${id}`;

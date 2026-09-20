@@ -47,6 +47,7 @@ interface PortalDetail {
   client_display_name: string | null;
   client_email: string | null;
   client_phone: string | null;
+  session_location: string | null;
   event_date: string | null;
   gallery_password: string;
   /**
@@ -1044,6 +1045,44 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
       {/* ─── Payments section. Surfaces whenever a total is on the
             books — full-mode portals always have one; simple-mode rows
             have one only when Vero entered totals at creation. ─── */}
+      {/* The whole Payments section is gated on a total existing, and the box
+          that sets one lives in the LAST section of the screen. So logging a
+          Zelle on a booking with no total meant scrolling to the bottom,
+          typing a total, saving, waiting for a full reload, and scrolling back
+          up to a section that had only just appeared. Ten of eighteen real
+          bookings are gallery-only and four of those carry no total at all, so
+          this is the common case, not an edge one. Set it from here instead. */}
+      {portal.contract_total_amount === null && (
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
+          <VStack align="stretch" spacing={3}>
+            <Text fontSize="sm" color="gray.600">
+              {t.clientDetail.noTotalYetHelp}
+            </Text>
+            <InlineField
+              label={t.clientDetail.totalAmountLabel}
+              type="text"
+              value=""
+              placeholder="0"
+              helpText={t.clientDetail.totalAmountHelp}
+              saving={savingField === 'contract_total_amount'}
+              validate={(v) => {
+                const parsed = parseMoneyInput(v);
+                if (parsed === 'invalid') return t.clientDetail.amountInvalid;
+                // Clearing an already-empty field is not an edit. Without this
+                // the Save button offers to do nothing.
+                if (parsed === null) return t.clientDetail.amountInvalid;
+                return null;
+              }}
+              onSave={(v) => {
+                const amount = parseMoneyInput(v);
+                if (amount === 'invalid' || amount === null) return Promise.resolve(false);
+                return patch({ contract_total_amount: amount }, 'contract_total_amount');
+              }}
+            />
+          </VStack>
+        </Section>
+      )}
+
       {portal.contract_total_amount !== null && (
         <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
           <VStack align="stretch" spacing={5}>
@@ -1121,6 +1160,29 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             helpText={t.clientDetail.displayNameHelp}
             saving={savingField === 'client_display_name'}
             onSave={(v) => patch({ client_display_name: v }, 'client_display_name')}
+          />
+          {/* The phone the whole top-of-screen Call button depends on. There
+              was no phone number anywhere in this system until now. */}
+          <InlineField
+            label={t.clientDetail.clientPhoneLabel}
+            value={portal.client_phone ?? ''}
+            helpText={t.clientDetail.clientPhoneHelp}
+            saving={savingField === 'client_phone'}
+            onSave={(v) => patch({ client_phone: v }, 'client_phone')}
+          />
+          {/* Where the shoot is. On its own column rather than in
+              contract_variables, because every gallery-only booking carries a
+              default wedding template key, so patching variables there would
+              render a wedding contract onto a booking that has no contract.
+              Ten of eighteen real bookings are gallery-only and none of them
+              had an address at all, which made the Directions button at the
+              top of this screen dead for the majority of records. */}
+          <InlineField
+            label={t.clientDetail.sessionLocationLabel}
+            value={portal.session_location ?? portal.contract_variables?.event_location ?? ''}
+            helpText={t.clientDetail.sessionLocationHelp}
+            saving={savingField === 'session_location'}
+            onSave={(v) => patch({ session_location: v }, 'session_location')}
           />
           <InlineField
             label={t.clientDetail.clientEmailLabel}
@@ -1382,7 +1444,11 @@ function ShootSummary({
   const { t, lang } = useAdminLang();
   const tv = travelCopy(lang);
 
-  const address = (portal.contract_variables?.event_location ?? '').trim();
+  // The column first, the contract second. session_location is where she
+  // actually drives; the contract variable is what the client agreed to, and
+  // on a signed booking those can legitimately differ. Gallery-only bookings
+  // have no contract at all, so without the column they had no address.
+  const address = (portal.session_location ?? portal.contract_variables?.event_location ?? '').trim();
   // The stored string is composed at creation as "2:00 PM to 10:00 PM
   // (approximately 8 hours)", which is right for a contract and wrong for a
   // glance: the duration is derivable from the two times she is already

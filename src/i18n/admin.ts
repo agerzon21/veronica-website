@@ -1696,6 +1696,24 @@ const dict = {
       en: 'Enter an amount like 1200 or 1,200.',
       ru: 'Введи сумму, например 1200 или 1,200.',
     },
+    // Shown in the Payments section on a booking with no total, where the only
+    // way to set one used to be a field in the last section of the screen.
+    noTotalYetHelp: {
+      en: 'No total on this booking yet. Set one here and payments start tracking against it.',
+      ru: 'У этой съёмки ещё нет суммы. Укажи её здесь, и платежи начнут считаться от неё.',
+    },
+    // Where the shoot is. Separate from the contract's own event_location,
+    // which is a term the client agreed to and is frozen once signed.
+    sessionLocationLabel: { en: 'Session Address', ru: 'Адрес съёмки' },
+    sessionLocationHelp: {
+      en: 'Where she drives to. Used by the Directions button at the top. Editing this does not change a signed contract.',
+      ru: 'Куда ехать. Используется кнопкой «Маршрут» наверху. Изменение не затрагивает подписанный контракт.',
+    },
+    clientPhoneLabel: { en: 'Phone', ru: 'Телефон' },
+    clientPhoneHelp: {
+      en: 'Optional. Tap to call from the top of this screen. Type it however you like.',
+      ru: 'Необязательно. Позволяет позвонить одним нажатием сверху. Формат любой.',
+    },
     // The booking was rescheduled after the contract was signed, so the signed
     // document still names the old date. Both dates are quoted, because "these
     // disagree" without saying which is which leaves her to guess.
