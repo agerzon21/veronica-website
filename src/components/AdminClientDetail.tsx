@@ -221,6 +221,36 @@ function useDirtyFlag(dirty: boolean, label: string) {
   }, [mark, key, dirty, label]);
 }
 
+/**
+ * Read a money amount the way a person types one.
+ *
+ * The bug this replaces: the save handler did `Number(v)`, and `Number('1,200')`
+ * is NaN. `JSON.stringify` turns NaN into `null`, the server guards the write
+ * on `typeof === 'number'`, so the update was skipped, `{ success: true }` came
+ * back, and the reload showed the old number. A comma in a price is the
+ * likeliest typo there is, and it silently did nothing while reporting that it
+ * had worked. The balance, the Clients list, the client's own portal and the
+ * delivery guard rail all kept the wrong figure.
+ *
+ * Accepts "1200", "1,200", "$1,200.00", " 1200 ". Rejects "1,20" and "12,34,56",
+ * because a comma in the wrong place means she typed something she did not mean
+ * and guessing which number she intended is worse than asking.
+ *
+ * Returns a number, null for a deliberately emptied field, or 'invalid'.
+ */
+const MONEY_SHAPE = /^\$?\s*(\d{1,3}(,\d{3})*|\d+)(\.\d{1,2})?$/;
+
+const parseMoneyInput = (raw: string): number | null | 'invalid' => {
+  const s = raw.trim();
+  if (s === '') return null;
+  if (!MONEY_SHAPE.test(s)) return 'invalid';
+  const n = Number(s.replace(/[$,\s]/g, ''));
+  // Belt and braces. The shape test already excludes these, but a money value
+  // reaching the database as NaN or Infinity is the exact class of bug above.
+  if (!Number.isFinite(n) || n < 0) return 'invalid';
+  return n;
+};
+
 const daysUntil = (iso: string | null): number | null => {
   if (!iso) return null;
   const t = new Date(iso).getTime();
@@ -918,12 +948,12 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             placeholder="0"
             helpText={t.clientDetail.totalAmountHelp}
             saving={savingField === 'contract_total_amount'}
-            onSave={(v) =>
-              patch(
-                { contract_total_amount: v.trim() === '' ? null : Number(v) },
-                'contract_total_amount',
-              )
-            }
+            validate={(v) => (parseMoneyInput(v) === 'invalid' ? t.clientDetail.amountInvalid : null)}
+            onSave={(v) => {
+              const amount = parseMoneyInput(v);
+              if (amount === 'invalid') return Promise.resolve(false);
+              return patch({ contract_total_amount: amount }, 'contract_total_amount');
+            }}
           />
           <InlineField
             label={t.clientDetail.retainerLabel}
@@ -932,12 +962,12 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             placeholder="0"
             helpText={t.clientDetail.retainerHelp}
             saving={savingField === 'contract_retainer_amount'}
-            onSave={(v) =>
-              patch(
-                { contract_retainer_amount: v.trim() === '' ? null : Number(v) },
-                'contract_retainer_amount',
-              )
-            }
+            validate={(v) => (parseMoneyInput(v) === 'invalid' ? t.clientDetail.amountInvalid : null)}
+            onSave={(v) => {
+              const amount = parseMoneyInput(v);
+              if (amount === 'invalid') return Promise.resolve(false);
+              return patch({ contract_retainer_amount: amount }, 'contract_retainer_amount');
+            }}
           />
         </VStack>
       </Section>
@@ -1481,6 +1511,7 @@ function InlineField({
   type = 'text',
   placeholder,
   normalize,
+  validate,
   saving,
   onSave,
 }: {
@@ -1494,17 +1525,23 @@ function InlineField({
   // one typed on either create screen. Normalising on save instead would leave
   // the box showing text the database does not hold.
   normalize?: (v: string) => string;
+  // Returns a message when the draft cannot be saved, or null when it can.
+  // Checked BEFORE the post, because the alternative this replaces was the
+  // server quietly declining to act and returning success anyway.
+  validate?: (v: string) => string | null;
   saving?: boolean;
   onSave: (v: string) => Promise<boolean | void>;
 }) {
   const { t } = useAdminLang();
   const [draft, setDraft] = useState(value);
   const [touched, setTouched] = useState(false);
+  const [invalid, setInvalid] = useState<string | null>(null);
 
   // Resync local draft when the canonical value changes (e.g. after a reload).
   useEffect(() => {
     setDraft(value);
     setTouched(false);
+    setInvalid(null);
   }, [value]);
 
   // Compare like against like. `draft` is re-normalized on every keystroke, so
@@ -1531,12 +1568,17 @@ function InlineField({
           onChange={(e) => {
             setDraft(normalize ? normalize(e.target.value) : e.target.value);
             setTouched(true);
+            // Clear on edit rather than re-validating per keystroke: telling
+            // her the value is wrong while she is halfway through typing it is
+            // how a field learns to be ignored.
+            setInvalid(null);
           }}
           placeholder={placeholder}
           h="44px"
           bg="white"
           border="1px solid"
-          borderColor={dirty ? 'brand.accent' : 'gray.300'}
+          aria-invalid={invalid ? true : undefined}
+          borderColor={invalid ? 'red.400' : dirty ? 'brand.accent' : 'gray.300'}
           color="gray.800"
           // iOS Safari zooms on focus for any input <16px. Bump to md
           // (16px) on mobile, keep sm (14px) desktop-side.
@@ -1548,6 +1590,12 @@ function InlineField({
         {dirty && (
           <CTAButton
             onClick={async () => {
+              const problem = validate ? validate(draft) : null;
+              if (problem) {
+                setInvalid(problem);
+                return;
+              }
+              setInvalid(null);
               const ok = await onSave(draft);
               if (ok !== false) setTouched(false);
             }}
@@ -1560,7 +1608,14 @@ function InlineField({
           </CTAButton>
         )}
       </Flex>
-      {helpText && (
+      {/* Beneath the field, not in the page-level error box, which on this
+          2700 line screen sits three screenfuls above the box she pressed. */}
+      {invalid && (
+        <Text fontSize="xs" color="red.500" mt={1.5}>
+          {invalid}
+        </Text>
+      )}
+      {helpText && !invalid && (
         <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
           {helpText}
         </Text>

@@ -344,11 +344,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       await sql`update client_portals set gallery_expires_at = ${when.toISOString()}, updated_at = now() where id = ${id}`;
     }
-    if (typeof patch.contract_total_amount === 'number' && !contractFrozen) {
-      await sql`update client_portals set contract_total_amount = ${patch.contract_total_amount}, updated_at = now() where id = ${id}`;
+    // Money: act on it, or say why not. Never both skip it and report success.
+    //
+    // These two guarded on `typeof === 'number'`, and `Number('1,200')` is NaN,
+    // which JSON.stringify sends as null. So the likeliest typo in a price fell
+    // straight through, the handler returned { success: true }, and the reload
+    // showed the old figure. The frozen check 200 lines above uses
+    // `!== undefined` for these same two fields, so the handler simultaneously
+    // agreed the request WAS a financial edit and declined to perform it.
+    //
+    // null is now a real instruction meaning "clear this", which also fixes a
+    // second bug: a total could never be removed once set, so the Payments
+    // section, once summoned, could never be dismissed.
+    // Written out twice rather than looped over a column name: a dynamic
+    // identifier cannot be a bound parameter, and building one by hand is how
+    // an injection gets in. Two explicit statements are worth the repetition.
+    const badAmount = (name: string) =>
+      res.status(400).json({
+        success: false,
+        error: `${name} must be a number of dollars, or null to clear it.`,
+      });
+
+    if ('contract_total_amount' in patch) {
+      const v = patch.contract_total_amount;
+      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+        return badAmount('contract_total_amount');
+      }
+      if (!contractFrozen) {
+        await sql`update client_portals set contract_total_amount = ${v}, updated_at = now() where id = ${id}`;
+      }
     }
-    if (typeof patch.contract_retainer_amount === 'number' && !contractFrozen) {
-      await sql`update client_portals set contract_retainer_amount = ${patch.contract_retainer_amount}, updated_at = now() where id = ${id}`;
+    if ('contract_retainer_amount' in patch) {
+      const v = patch.contract_retainer_amount;
+      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+        return badAmount('contract_retainer_amount');
+      }
+      if (!contractFrozen) {
+        await sql`update client_portals set contract_retainer_amount = ${v}, updated_at = now() where id = ${id}`;
+      }
     }
     if (typeof patch.partner_1_full_name === 'string') {
       const v = patch.partner_1_full_name.trim() || null;

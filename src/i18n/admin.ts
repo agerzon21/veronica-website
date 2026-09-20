@@ -1689,6 +1689,13 @@ const dict = {
     // circles, so each one has to survive noOfLines={1} at roughly 78px on a
     // 320px screen. Russian is the longer language and set the budget: every
     // label here is one short word in both.
+    // Shown under the Total and Retainer boxes when what she typed is not a
+    // number. Names an example rather than describing a format, because "1,200"
+    // is the thing that used to fail and the thing she will type again.
+    amountInvalid: {
+      en: 'Enter an amount like 1200 or 1,200.',
+      ru: 'Введи сумму, например 1200 или 1,200.',
+    },
     // Extending a delivered gallery's expiry.
     extendGallery: { en: 'Extend the gallery', ru: 'Продлить галерею' },
     extendGalleryHelp: {
