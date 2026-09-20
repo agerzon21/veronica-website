@@ -1,5 +1,6 @@
 import {
-  Box, HStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, Grid, GridItem, useToast,
+  Box, HStack,
+  VStack, Text, Icon, Flex, Spinner, Image, SimpleGrid, Grid, GridItem, useToast,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -58,6 +59,10 @@ interface PostFull {
   cover_photo: Photo | null;
   photos: Photo[];               // gallery (does NOT include cover)
   session_type: string | null;
+  series_slug?: string | null;
+  series_part?: number | null;
+  series_label?: string | null;
+  series?: Array<{ slug: string; title: string; excerpt: string; part: number | null; cover: string | null }>;
   tags: string[];
   published_at: string;
   updated_at: string;
@@ -384,6 +389,17 @@ const JournalPost = ({ slug }: { slug: string }) => {
                     <Text textStyle="metaCaption">{post.session_type}</Text>
                   </>
                 )}
+                {/* The chapter marker. Sits AFTER the type rather than
+                    replacing it, because "wedding" is still what this is and a
+                    reader filtering by type should not find it renamed. */}
+                {post.series_part != null && (post.series?.length ?? 0) > 1 && (
+                  <>
+                    <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" />
+                    <Text textStyle="metaCaption" color="brand.accent">
+                      {`Part ${romanOrNumber(post.series_part)} of ${romanOrNumber(post.series!.length)}`}
+                    </Text>
+                  </>
+                )}
               </HStack>
               <PageHeader
                 title={post.title}
@@ -468,6 +484,19 @@ const JournalPost = ({ slug }: { slug: string }) => {
                 Share this post
               </CTAButton>
             </Flex>
+
+            {/* The other half of the story.
+                ABOVE the chronological nav on purpose: those two are
+                "whatever I published either side of this", which is a weaker
+                relationship than "this is the same wedding". Putting the
+                stronger link second would bury it. */}
+            {(post.series?.length ?? 0) > 1 && (
+              <SeriesCompanion
+                label={post.series_label}
+                parts={post.series!}
+                currentSlug={post.slug}
+              />
+            )}
 
             {/* Chronological navigation — prev (newer) + next (older) posts.
                 Hidden entirely if neither exists. */}
@@ -799,6 +828,120 @@ const DEFAULT_BACK = { to: '/journal', label: 'Back to the journal' };
  * (prev/next cards deliberately do NOT pass state) fall back to the
  * journal. Used twice — header and the not-found screen.
  */
+/** 1 becomes One, so a chapter marker reads like a chapter and not like a row id. */
+function romanOrNumber(n: number): string {
+  return ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'][n] ?? String(n);
+}
+
+/**
+ * The other half of the story.
+ *
+ * Built because the Boston courthouse post already promised it in its own
+ * excerpt, "the first half of a two-part wedding story", and nothing in the
+ * site could keep that promise. A reader finished part one and the story
+ * stopped.
+ *
+ * Every part is listed, not just the next one. With two entries that is the
+ * same thing, but a wedding that becomes three (engagement, courthouse, the
+ * whole day) should not need this rewritten, and a reader who lands on part
+ * two deserves the way back as much as the way on.
+ *
+ * The current entry is shown too, marked and not a link. A list of chapters
+ * with one silently missing makes a reader count them to work out which one
+ * they are on.
+ */
+function SeriesCompanion({
+  label,
+  parts,
+  currentSlug,
+}: {
+  label?: string | null;
+  parts: Array<{ slug: string; title: string; excerpt: string; part: number | null; cover: string | null }>;
+  currentSlug: string;
+}) {
+  return (
+    <Box mt={{ base: 10, md: 16 }} pt={{ base: 8, md: 10 }} borderTop="1px solid" borderColor="brand.accent">
+      <VStack spacing={1} mb={{ base: 6, md: 8 }} textAlign="center">
+        <Text textStyle="metaCaption" color="brand.accent">
+          {label || 'One story, in two parts'}
+        </Text>
+        <Text fontSize={{ base: 'xs', md: 'sm' }} color="gray.500" fontWeight="300">
+          Read them in either order.
+        </Text>
+      </VStack>
+
+      <SimpleGrid columns={{ base: 1, md: parts.length > 1 ? 2 : 1 }} spacing={{ base: 4, md: 6 }}>
+        {parts.map((p) => {
+          const here = p.slug === currentSlug;
+          const body = (
+            <Box
+              h="100%"
+              borderRadius="sm"
+              overflow="hidden"
+              border="1px solid"
+              borderColor={here ? 'brand.accent' : 'gray.200'}
+              bg={here ? 'brand.accentTint' : 'white'}
+              transition="border-color 0.2s ease, transform 0.2s ease"
+              _hover={here ? undefined : { borderColor: 'brand.accent', transform: 'translateY(-2px)' }}
+            >
+              {p.cover && (
+                <Box
+                  as="img"
+                  src={p.cover}
+                  alt=""
+                  w="100%"
+                  h={{ base: '160px', md: '200px' }}
+                  objectFit="cover"
+                  display="block"
+                  // Decorative: the title underneath already names the post, so
+                  // a screen reader announcing the cover as well would read the
+                  // same entry twice.
+                  aria-hidden="true"
+                  loading="lazy"
+                />
+              )}
+              <Box p={{ base: 4, md: 5 }}>
+                <Text textStyle="metaCaption" color={here ? 'brand.accent' : 'gray.400'} mb={1}>
+                  {p.part != null ? `Part ${romanOrNumber(p.part)}` : 'Also'}
+                  {here ? ' · You are here' : ''}
+                </Text>
+                <Text
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  fontWeight="400"
+                  color="gray.800"
+                  lineHeight="1.3"
+                  mb={2}
+                >
+                  {p.title}
+                </Text>
+                <Text fontSize="xs" color="gray.600" fontWeight="300" noOfLines={2} lineHeight="1.6">
+                  {p.excerpt}
+                </Text>
+              </Box>
+            </Box>
+          );
+
+          // The current entry is not a link to itself. A card that looks
+          // clickable and reloads the page you are on is a small betrayal.
+          return here ? (
+            <Box key={p.slug}>{body}</Box>
+          ) : (
+            <Box
+              key={p.slug}
+              as={RouterLink}
+              to={`/journal/${p.slug}`}
+              _hover={{ textDecoration: 'none' }}
+              display="block"
+            >
+              {body}
+            </Box>
+          );
+        })}
+      </SimpleGrid>
+    </Box>
+  );
+}
+
 function BackToJournalLink({ back = DEFAULT_BACK }: { back?: { to: string; label: string } }) {
   // Pushing `back.to` as a NEW entry landed the visitor at the top of the page
   // they came from and left the old entry stranded in history. A real back

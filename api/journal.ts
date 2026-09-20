@@ -59,6 +59,12 @@ type PostFull = Omit<PostSummary, 'photos'> & {
   cover_photo: PhotoOut | null;     // first photo, rendered as hero
   photos: PhotoOut[];               // gallery (everything AFTER the cover)
   updated_at: string;
+  /** Set only when this entry belongs to a multi-part story. */
+  series_slug: string | null;
+  series_part: number | null;
+  series_label: string | null;
+  /** Every published entry in that story, this one included, in order. */
+  series: Array<{ slug: string; title: string; excerpt: string; part: number | null; cover: string | null }>;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -145,7 +151,8 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       SELECT
         slug, title, excerpt, body_markdown,
         cover_image_alt, drive_folder_url,
-        session_type, tags, published_at, updated_at
+        session_type, tags, published_at, updated_at,
+        series_slug, series_part, series_label
       FROM journal_posts
       WHERE slug = ${slug} AND status = 'published' AND published_at IS NOT NULL
       LIMIT 1
@@ -160,6 +167,9 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       tags: string[];
       published_at: string;
       updated_at: string;
+      series_slug: string | null;
+      series_part: number | null;
+      series_label: string | null;
     }>;
 
     const row = rows[0];
@@ -179,6 +189,46 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     // if we included it in the grid too it'd render twice.
     const galleryPhotos = allPhotos.slice(1);
 
+    /**
+     * The other entries in this story, if it is part of one.
+     *
+     * Published only, because an unpublished part two must not be announced at
+     * the bottom of part one before it exists. Ordered by part number, which
+     * is the whole reason series_part is a column rather than a tag.
+     *
+     * Allowed to fail: a companion link is a nicety, and a post that 500s
+     * because its sibling lookup threw would be a far worse outcome than a
+     * post with no link at the bottom.
+     */
+    let series: Array<{ slug: string; title: string; excerpt: string; part: number | null; cover: string | null }> = [];
+    if (row.series_slug) {
+      try {
+        const sibs = (await sql`
+          SELECT slug, title, excerpt, series_part, drive_folder_url
+          FROM journal_posts
+          WHERE series_slug = ${row.series_slug}
+            AND status = 'published' AND published_at IS NOT NULL
+          ORDER BY series_part ASC NULLS LAST, published_at ASC
+        `) as Array<{ slug: string; title: string; excerpt: string; series_part: number | null; drive_folder_url: string | null }>;
+        // The cover is the first photo in each sibling's Drive folder, the
+        // same rule this endpoint already uses for the post's own cover.
+        series = await Promise.all(
+          sibs.map(async (sib) => ({
+            slug: sib.slug,
+            title: sib.title,
+            excerpt: sib.excerpt,
+            part: sib.series_part,
+            cover:
+              sib.slug === row.slug
+                ? coverPhoto?.url ?? null
+                : (await listAllPhotos(sib.drive_folder_url, sib.title))[0]?.url ?? null,
+          })),
+        );
+      } catch (err) {
+        console.error('[journal] series lookup failed (continuing):', err);
+      }
+    }
+
     const post: PostFull = {
       slug: row.slug,
       title: row.title,
@@ -192,6 +242,10 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       tags: row.tags,
       published_at: row.published_at,
       updated_at: row.updated_at,
+      series_slug: row.series_slug,
+      series_part: row.series_part,
+      series_label: row.series_label,
+      series,
     };
 
     // Shorter cache for individual posts than the list — Vero may
