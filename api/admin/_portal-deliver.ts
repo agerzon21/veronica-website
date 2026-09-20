@@ -5,9 +5,22 @@
  * publishes the gallery. It also starts the retention countdown and (for
  * portals with an email on file) sends the "your photos are ready" email.
  *
- * POST { password, id, retention_months? (defaults to template's retention_months, then 3), confirmUnpaid? }
- *   → 200 { success, gallery_delivered_at, gallery_expires_at }
+ * POST { password, id, retention_months?, confirmUnpaid?, resend_email? }
+ *   → 200 { success, gallery_delivered_at, gallery_expires_at, email }
+ *     `email` is { sent, id?, error? }. Delivery still succeeds when the email
+ *     fails, because the gallery IS released and un-releasing it over a bounce
+ *     would be worse, but the caller is now TOLD, which it never used to be.
  *   → 400 if portal has no drive_url yet
+ *
+ * With resend_email: true it sends the photos-are-ready email again and
+ * touches nothing else. It does NOT re-stamp gallery_delivered_at or the
+ * expiry, which is what calling this endpoint twice used to do, and it is
+ * refused with 409 on a gallery that was never delivered. Returns 502 when the
+ * send itself fails, since sending was the entire point of the request.
+ *
+ * retention_months defaults to the contract's own retention_months variable,
+ * then to 3. That lookup is real now; the previous version of this comment
+ * described it while the code never performed it.
  *   → 401 on bad admin password
  *   → 404 if portal not found
  *   → 409 { unpaid_balance, paid_to_date, contract_total_amount, charges_total }
@@ -54,6 +67,68 @@ export function addCalendarMonths(from: Date, months: number): Date {
   return d;
 }
 
+type DeliverPortal = {
+  id: string;
+  mode: 'simple' | 'full';
+  client_display_name: string | null;
+  client_email: string | null;
+  gallery_password: string;
+};
+
+type EmailOutcome = { sent: boolean; id?: string; error?: string };
+
+/**
+ * Send the photos-are-ready email and record that it happened.
+ *
+ * Shared by the first delivery and by a resend, so the two cannot drift into
+ * sending different wording, and so both record the same evidence. Never
+ * throws: the caller decides what a failure means, and for delivery it means
+ * "the gallery is still released, but say so".
+ */
+async function sendDeliveryEmail(
+  sql: ReturnType<typeof getDb>,
+  portal: DeliverPortal,
+  expiresAt: string,
+  siteOrigin: string,
+): Promise<EmailOutcome> {
+  if (!portal.client_email) {
+    return { sent: false, error: 'No email address on this booking.' };
+  }
+  try {
+    const sent = await sendEmail({
+      to: portal.client_email,
+      subject: 'Your photos are ready, from Vero Photography',
+      text:
+        portal.mode === 'full'
+          ? buildFullDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
+          : buildSimpleDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
+      html:
+        portal.mode === 'full'
+          ? buildFullDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
+          : buildSimpleDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
+    });
+    // Recorded separately from the delivery stamp so a resend can update it
+    // without touching gallery_delivered_at, which is the release switch and
+    // the date the client reads on their own portal.
+    await sql`
+      update client_portals
+      set delivery_email_id = ${sent.id},
+          delivery_email_sent_at = now(),
+          updated_at = now()
+      where id = ${portal.id}
+    `;
+    return { sent: true, id: sent.id };
+  } catch (err) {
+    console.error('[admin/portal-deliver] photos-ready email failed:', err);
+    return {
+      sent: false,
+      // The message, not the stack. This reaches a person deciding whether to
+      // retype the address or press send again.
+      error: err instanceof Error ? err.message : 'The email could not be sent.',
+    };
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -78,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const rows = (await sql`
       select id, mode, client_display_name, client_email, drive_url, gallery_password, gallery_delivered_at,
-             contract_status, contract_total_amount, paid_to_date, contract_variables
+             gallery_expires_at, contract_status, contract_total_amount, paid_to_date, contract_variables
       from client_portals
       where id = ${id}
       limit 1
@@ -90,6 +165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       drive_url: string | null;
       gallery_password: string;
       gallery_delivered_at: string | null;
+      gallery_expires_at: string | null;
       contract_status: 'none' | 'pending' | 'signed' | 'void';
       // The contract's own promise about how long the gallery stays up. It is
       // a contract VARIABLE, not a column, which is why the lookup this
@@ -105,6 +181,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const portal = rows[0];
     if (!portal.drive_url) {
       return res.status(400).json({ success: false, error: 'Cannot deliver: paste a Drive folder URL first.' });
+    }
+
+    const siteOrigin =
+      process.env.SITE_ORIGIN ||
+      (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
+
+    // Sending the photos-are-ready email AGAIN, without re-delivering.
+    //
+    // Handled before the money guard on purpose: the photos are already
+    // released, so refusing to re-send the notification over an unpaid balance
+    // would withhold only the client's knowledge of something they can already
+    // see. It also must not re-stamp gallery_delivered_at or the expiry, which
+    // is exactly what calling this endpoint twice used to do, since it has no
+    // already-delivered guard.
+    if (req.body?.resend_email === true) {
+      if (!portal.gallery_delivered_at) {
+        return res.status(409).json({
+          success: false,
+          error: 'This gallery has not been delivered yet, so there is nothing to re-send.',
+        });
+      }
+      const outcome = await sendDeliveryEmail(sql, portal, portal.gallery_expires_at ?? '', siteOrigin);
+      return res.status(outcome.sent ? 200 : 502).json({
+        success: outcome.sent,
+        error: outcome.sent ? undefined : outcome.error,
+        email: outcome,
+        gallery_delivered_at: portal.gallery_delivered_at,
+        gallery_expires_at: portal.gallery_expires_at,
+      });
     }
 
     // Money guard rail. The contract says images are delivered after full
@@ -185,36 +290,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Email the client if we have an address. Full-mode clients go to
     // /portal (email + password login they set up at welcome time);
-    // simple-mode clients go to /portal/pass (password-only), so we
-    // also surface the password in their email. We don't fail the
-    // request if the email send fails: the gallery IS delivered in
-    // the DB, the email is the notification on top.
-    if (portal.client_email) {
-      try {
-        const siteOrigin =
-          process.env.SITE_ORIGIN ||
-          (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
-        await sendEmail({
-          to: portal.client_email,
-          subject: 'Your photos are ready, from Vero Photography',
-          text:
-            portal.mode === 'full'
-              ? buildFullDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
-              : buildSimpleDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
-          html:
-            portal.mode === 'full'
-              ? buildFullDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
-              : buildSimpleDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
-        });
-      } catch (err) {
-        console.error('[admin/portal-deliver] photos-ready email failed:', err);
-      }
-    }
+    // simple-mode clients go to /portal/pass (password-only), so their email
+    // also surfaces the password.
+    //
+    // A send failure still does not fail the request, and that part was always
+    // right: the gallery IS delivered in the database, and un-delivering it
+    // because an email bounced would be worse. What was wrong is that the
+    // failure was written to console.error and then reported as success, on
+    // the one email in this system with no stored id, no status lookup and no
+    // way to send it again, behind a button that hides itself once pressed.
+    //
+    // So the outcome is now part of the response, and a success is recorded
+    // so the client record can look it up the way it already does the invite.
+    const emailOutcome = await sendDeliveryEmail(sql, portal, expiresAt, siteOrigin);
 
     return res.status(200).json({
       success: true,
       gallery_delivered_at: deliveredAt,
       gallery_expires_at: expiresAt,
+      email: emailOutcome,
     });
   } catch (err) {
     console.error('[admin/portal-deliver] handler failed:', err);

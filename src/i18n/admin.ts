@@ -1696,6 +1696,22 @@ const dict = {
       en: 'Enter an amount like 1200 or 1,200.',
       ru: 'Введи сумму, например 1200 или 1,200.',
     },
+    // Evidence that the photos-are-ready email actually went out.
+    // "No record" rather than "not sent": a gallery delivered before this
+    // column existed has no id either, and claiming those failed would be a
+    // lie in the other direction.
+    deliveryEmailNoRecord: {
+      en: 'No record that the photos-are-ready email went out.',
+      ru: 'Нет записи о том, что письмо «фото готовы» было отправлено.',
+    },
+    deliveryEmailNoAddress: {
+      en: 'No email address on this booking, so nothing was sent.',
+      ru: 'В этой съёмке нет адреса почты, поэтому письмо не отправлялось.',
+    },
+    deliveryEmailResend: {
+      en: 'Send the photos-are-ready email again',
+      ru: 'Отправить письмо «фото готовы» ещё раз',
+    },
     // Extending a delivered gallery's expiry.
     extendGallery: { en: 'Extend the gallery', ru: 'Продлить галерею' },
     extendGalleryHelp: {

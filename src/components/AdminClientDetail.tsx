@@ -75,6 +75,8 @@ interface PortalDetail {
   charges_total: number;
   setup_token: string | null;
   invite_email_id: string | null;
+  delivery_email_id: string | null;
+  delivery_email_sent_at: string | null;
   invite_sent_at: string | null;
   client_has_password: boolean;
 }
@@ -405,6 +407,40 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
     }
   };
 
+  const [resendingDelivery, setResendingDelivery] = useState(false);
+
+  /**
+   * Send the photos-are-ready email again, without re-delivering.
+   *
+   * Deliberately NOT markDelivered(): that endpoint has no already-delivered
+   * guard, so calling it twice re-stamps gallery_delivered_at and recomputes
+   * the expiry, silently giving the client a different retention window than
+   * the one they were told. resend_email touches only the email.
+   */
+  const resendDeliveryEmail = async () => {
+    setResendingDelivery(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/portal-deliver', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, id: portalId, resend_email: true }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await reload();
+      } else {
+        // Named, not swallowed. This whole change exists because a failed send
+        // used to be a console.error and a success response.
+        setError(data.error || data.email?.error || t.clientDetail.serverErrorStatus(res.status));
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setResendingDelivery(false);
+    }
+  };
+
   const markDelivered = async (confirmUnpaid = false) => {
     // Soft guard rail: stop and show the outstanding balance first. We don't
     // block delivery because there are legitimate edge cases (cash
@@ -618,6 +654,21 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 <Badge colorScheme="gray" variant="subtle" fontSize="xs">
                   {t.clientDetail.notDelivered}
                 </Badge>
+              )}
+              {/* Whether the client was actually TOLD. The send used to be
+                  caught, logged to console and reported as success, on the one
+                  email in this system with no stored id, no status lookup and
+                  no resend, behind a button that hides itself once pressed.
+                  So the gallery went out, the client was never told, and the
+                  screen showed a clean delivery. */}
+              {portal.gallery_delivered_at && (
+                <DeliveryEmail
+                  emailId={portal.delivery_email_id ?? null}
+                  sentAt={portal.delivery_email_sent_at ?? null}
+                  hasEmail={Boolean(portal.client_email)}
+                  resending={resendingDelivery}
+                  onResend={resendDeliveryEmail}
+                />
               )}
               {/* The only route to a live gallery's expiry. Without it the
                   countdown turned orange and then the gallery went dark with
@@ -1591,6 +1642,71 @@ function InviteDelivery({ emailId, sentAt }: { emailId: string; sentAt: string |
       {t.clientDetail.inviteEmailState(state)}
       {sentAt ? ` · ${fmtAdminDateTime(sentAt, lang)}` : ''}
     </Text>
+  );
+}
+
+/**
+ * Did the client actually get told their photos are ready?
+ *
+ * Three honest states, because "we have no record" and "it failed" are
+ * different facts and conflating them is how the original bug read as fine:
+ *   - an id exists, so ask Resend what became of it
+ *   - no id but the gallery is delivered: either it failed, or this gallery
+ *     predates the column. Say that, and offer to send it now.
+ *   - no email address at all: nothing to send, and no amount of pressing
+ *     will change that.
+ */
+function DeliveryEmail({
+  emailId,
+  sentAt,
+  hasEmail,
+  resending,
+  onResend,
+}: {
+  emailId: string | null;
+  sentAt: string | null;
+  hasEmail: boolean;
+  resending: boolean;
+  onResend: () => void;
+}) {
+  const { t } = useAdminLang();
+
+  if (!hasEmail) {
+    return (
+      <Text fontSize="2xs" color="gray.500" mt={1}>
+        {t.clientDetail.deliveryEmailNoAddress}
+      </Text>
+    );
+  }
+
+  return (
+    <Box mt={1}>
+      {emailId ? (
+        <InviteDelivery emailId={emailId} sentAt={sentAt} />
+      ) : (
+        <Text fontSize="2xs" color="orange.700" mt={1}>
+          {t.clientDetail.deliveryEmailNoRecord}
+        </Text>
+      )}
+      <Box mt={1}>
+        <Box
+          as="button"
+          type="button"
+          onClick={onResend}
+          fontSize="xs"
+          color="gray.500"
+          textDecoration="underline"
+          bg="transparent"
+          border="none"
+          px={0}
+          minH="44px"
+          cursor={resending ? 'wait' : 'pointer'}
+          disabled={resending}
+        >
+          {resending ? t.clientDetail.saving : t.clientDetail.deliveryEmailResend}
+        </Box>
+      </Box>
+    </Box>
   );
 }
 

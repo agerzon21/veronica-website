@@ -43,6 +43,8 @@ type PortalRow = {
   payment_plan_enabled: boolean;
   setup_token: string | null;
   invite_email_id: string | null;
+  delivery_email_id: string | null;
+  delivery_email_sent_at: string | null;
   invite_sent_at: string | null;
   setup_token_expires_at: string | null;
   created_at: string;
@@ -106,13 +108,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       where id = ${id}
       limit 1
     `) as PortalRow[];
-    let invite: { invite_email_id: string | null; invite_sent_at: string | null } = {
+    let invite: {
+      invite_email_id: string | null;
+      invite_sent_at: string | null;
+      delivery_email_id?: string | null;
+      delivery_email_sent_at?: string | null;
+    } = {
       invite_email_id: null,
       invite_sent_at: null,
     };
     try {
       const inviteRows = (await sql`
-        select invite_email_id, invite_sent_at from client_portals where id = ${id} limit 1
+        select invite_email_id, invite_sent_at, delivery_email_id, delivery_email_sent_at
+        from client_portals where id = ${id} limit 1
       `) as Array<typeof invite>;
       if (inviteRows.length > 0) invite = inviteRows[0];
     } catch {
