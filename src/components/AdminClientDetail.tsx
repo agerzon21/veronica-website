@@ -140,8 +140,32 @@ const formatDate = (iso: string | null): string => {
   });
 };
 
+/**
+ * The address she should actually drive to.
+ *
+ * The COLUMN first, the contract second. session_location is operational and
+ * she can correct it the morning of a shoot; contract_variables.event_location
+ * is what the client agreed to and is frozen once signed. On a signed booking
+ * those legitimately differ. Gallery-only bookings have no contract at all, so
+ * without the column they had no address.
+ *
+ * Trim then ||, never ??. A cleared field used to reach here as an empty
+ * string, which is not nullish, so the fallback did not fire and the top of
+ * the screen said there was no address while the contract section below still
+ * showed one. The server now stores null for a cleared field, and this side no
+ * longer depends on it doing so.
+ */
+function effectiveAddress(p: {
+  session_location?: string | null;
+  contract_variables?: Record<string, string> | null;
+}): string {
+  return (p.session_location ?? '').trim() || (p.contract_variables?.event_location ?? '').trim();
+}
+
 const formatMoney = (amount: number | null): string => {
-  if (amount === null || amount === undefined) return '—';
+  // Matches formatDate above: nothing, not a dash. Every call site here is
+  // guarded today, but the same helper on the Clients list was not.
+  if (amount === null || amount === undefined) return '';
   return `$${amount.toFixed(0)}`;
 };
 
@@ -1207,7 +1231,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
               top of this screen dead for the majority of records. */}
           <InlineField
             label={t.clientDetail.sessionLocationLabel}
-            value={portal.session_location ?? portal.contract_variables?.event_location ?? ''}
+            value={effectiveAddress(portal)}
             helpText={t.clientDetail.sessionLocationHelp}
             saving={savingField === 'session_location'}
             onSave={(v) => patch({ session_location: v }, 'session_location')}
@@ -1476,7 +1500,7 @@ function ShootSummary({
   // actually drives; the contract variable is what the client agreed to, and
   // on a signed booking those can legitimately differ. Gallery-only bookings
   // have no contract at all, so without the column they had no address.
-  const address = (portal.session_location ?? portal.contract_variables?.event_location ?? '').trim();
+  const address = effectiveAddress(portal);
   // The stored string is composed at creation as "2:00 PM to 10:00 PM
   // (approximately 8 hours)", which is right for a contract and wrong for a
   // glance: the duration is derivable from the two times she is already

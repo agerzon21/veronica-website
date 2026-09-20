@@ -753,7 +753,7 @@ function relativeAgo(iso: string, lang: 'ru' | 'en'): string {
 }
 
 function formatDuration(ms: number | null): string {
-  if (ms === null || ms < 0) return '—';
+  if (ms === null || ms < 0) return '';
   if (ms < 1000) return `${ms}ms`;
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;

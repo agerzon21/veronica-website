@@ -479,7 +479,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Apply each field individually with parameterized SQL. Using
     // multiple short statements keeps the dynamic-SQL footprint
     // minimal — much easier to keep safe than a query builder.
-    const setStr = (val: unknown) => (typeof val === 'string' ? val.trim() : null);
+    /**
+     * A cleared field means NULL, not an empty string.
+     *
+     * It used to return '' for a blank input, and the screens that read these
+     * columns fall back with ??, which does not fall through an empty string.
+     * So blanking Session Address left the top of the client screen saying
+     * "No address on this booking yet" while the contract section below it
+     * still showed one, with working map buttons. Every column this guards is
+     * nullable and every reader already handles null, which is what "cleared"
+     * has always meant everywhere else.
+     */
+    const setStr = (val: unknown) => {
+      if (typeof val !== 'string') return null;
+      const trimmed = val.trim();
+      return trimmed === '' ? null : trimmed;
+    };
 
     if (typeof patch.client_display_name === 'string') {
       await sql`update client_portals set client_display_name = ${setStr(patch.client_display_name)}, updated_at = now() where id = ${id}`;

@@ -45,7 +45,9 @@ interface Props {
 }
 
 const formatDate = (iso: string | null): string => {
-  if (!iso) return '—';
+  // No long dashes, anywhere. An empty cell reads as empty on its own, and this
+  // one renders straight onto the Clients list for any booking with no date.
+  if (!iso) return '';
   // event_date is a DATE column — comes back as 'YYYY-MM-DD' or a full
   // ISO timestamp at midnight UTC. Parsing with `new Date(...)` then
   // formatting without timeZone='UTC' converts to the viewer's local
@@ -65,7 +67,7 @@ const formatDate = (iso: string | null): string => {
 };
 
 const formatMoney = (amount: number | null): string => {
-  if (amount === null || amount === undefined) return '—';
+  if (amount === null || amount === undefined) return '';
   return `$${amount.toFixed(0)}`;
 };
 
