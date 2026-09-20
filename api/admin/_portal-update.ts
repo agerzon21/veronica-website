@@ -33,6 +33,7 @@ import {
   pruneEmptyOptionalSections,
   requiredVariablesFor,
   stripForeignTypeVariables,
+  formatContractMoney,
   type ContractTemplateSpec,
 } from '../../src/data/contract-template.js';
 
@@ -82,6 +83,48 @@ function withTypeDefaults(
  * This never runs on a wedding portal that stays a wedding, so a pending
  * wedding body still re-renders byte for byte.
  */
+/**
+ * Fold values DERIVED from columns into the contract's variables.
+ *
+ * THE BUG THIS EXISTS TO END, which was in all three callers at once:
+ *
+ *     patchedVariables = { client_names: composed, ...(patchedVariables ?? existingVars) };
+ *
+ * When the caller did not also patch contract_variables, `patchedVariables` is
+ * null, so that spread is `existingVars` — which already contains the key being
+ * set, and it lands AFTER the derived value and overwrites it. The whole block
+ * became a no-op in the exact case it was written for: correcting one field on
+ * its own. Verified against the real handler before fixing: moving the event
+ * date of a pending booking left the contract still reading the old date, so a
+ * client would have signed a wedding contract dated eighteen months wrong.
+ *
+ * The intent of that spread was "an explicit patch of contract_variables wins
+ * over a value derived from a column", which is right and is kept: a key the
+ * caller named is skipped here. The mistake was expressing it as a spread that
+ * cannot tell an explicit patch from the row's existing value.
+ *
+ * @param callerVars  contract_variables the CALLER patched, or null. Not the
+ *                    stored ones: the difference is the whole point.
+ * @param existingVars the row's current variables, used as the base.
+ * @param derived     values computed from the columns being patched.
+ */
+function foldDerivedVariables(
+  // `unknown` values, not `string`: contract_variables from the request body is
+  // caller-supplied JSON and is only coerced later, where it always was. This
+  // helper must not narrow a type the rest of the handler deliberately keeps
+  // wide, or it would be validating by accident and in the wrong place.
+  callerVars: Record<string, unknown> | null,
+  existingVars: Record<string, unknown>,
+  derived: Record<string, string>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...(callerVars ?? existingVars) };
+  for (const [key, value] of Object.entries(derived)) {
+    if (callerVars && key in callerVars) continue;
+    merged[key] = value;
+  }
+  return merged;
+}
+
 function withFieldDefaults(
   spec: ContractTemplateSpec,
   supplied: Record<string, string>,
@@ -112,13 +155,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const existing = (await sql`
-      select id, contract_status, contract_template_key, contract_variables
+      select id, contract_status, contract_template_key, contract_variables,
+             contract_total_amount, contract_retainer_amount
       from client_portals where id = ${id} limit 1
     `) as Array<{
       id: string;
       contract_status: string;
       contract_template_key: string;
       contract_variables: Record<string, string> | null;
+      // Needed when only ONE of the two amounts is patched: the other half of
+      // the Payment Terms table still has to be re-rendered from something.
+      contract_total_amount: string | null;
+      contract_retainer_amount: string | null;
     }>;
     if (existing.length === 0) return res.status(404).json({ success: false, error: 'Portal not found' });
 
@@ -268,10 +316,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // fields were cleared, and a contract naming nobody is worse than one
         // naming an old spelling.
         if (composed) {
-          patchedVariables = {
+          patchedVariables = foldDerivedVariables(patchedVariables, existingVars, {
             client_names: composed,
-            ...(patchedVariables ?? existingVars),
-          };
+          });
         }
       }
     }
@@ -293,13 +340,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 timeZone: 'UTC',
               })
             : '';
-        patchedVariables = {
-          // The caller's own variables win: an explicit patch of
-          // contract_variables.event_date is a deliberate act and must not be
-          // overwritten by a date derived from the column.
+        // The caller's own variables still win: foldDerivedVariables skips
+        // any key the caller named explicitly.
+        patchedVariables = foldDerivedVariables(patchedVariables, existingVars, {
           event_date: pretty,
-          ...(patchedVariables ?? existingVars),
+        });
+      }
+    }
+
+    /**
+     * Keep the contract's money in step with the columns.
+     *
+     * The Payment Terms table in both templates renders {{total_amount}},
+     * {{retainer_amount}} and {{remaining_balance}} (contract-template.ts:358
+     * and :984), written once at creation from the new-client form. Correcting
+     * a price in the Details panel only wrote the COLUMN, so the contract body
+     * kept the old figures. The client then read the new total on the welcome
+     * page, which prints the column, and signed a contract whose payment table
+     * said something else. At signing both freeze, so the divergence was
+     * permanent and pointed the wrong way: every balance, the card checkout
+     * amount and the delivery gate would demand the new figure while the PDF in
+     * the client's hand said the old one.
+     *
+     * This mirrors the event_date block directly above, which exists for the
+     * identical reason. It sits HERE rather than next to the column writes
+     * because contractRender is decided on the next line; folding the amounts
+     * in after that point would set a variable nothing goes on to render.
+     *
+     * Nothing is recomputed for a frozen contract, and nothing is invented for
+     * a booking that never had these variables: a gallery-only row has no
+     * total_amount key and must not gain one.
+     */
+    if (
+      !contractFrozen &&
+      ('contract_total_amount' in patch || 'contract_retainer_amount' in patch)
+    ) {
+      const existingVars = existing[0].contract_variables ?? {};
+      if ('total_amount' in existingVars) {
+        // A patched value counts only when it is a usable amount. Anything
+        // else is rejected with a 400 by the validation further down, before
+        // any contract row is written, so skipping the fold here cannot leave
+        // a half-applied edit behind.
+        const patched = (key: 'contract_total_amount' | 'contract_retainer_amount') => {
+          const v = patch[key];
+          return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
         };
+        const stored = (v: string | null) => {
+          if (v === null) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        };
+
+        const total =
+          'contract_total_amount' in patch
+            ? patched('contract_total_amount')
+            : stored(existing[0].contract_total_amount);
+        const retainer =
+          'contract_retainer_amount' in patch
+            ? patched('contract_retainer_amount')
+            : stored(existing[0].contract_retainer_amount);
+
+        // Both are needed: remaining_balance is a stored string, not something
+        // the template derives, so it cannot be left to drift on its own.
+        if (total !== null && retainer !== null) {
+          patchedVariables = foldDerivedVariables(patchedVariables, existingVars, {
+            total_amount: formatContractMoney(total),
+            retainer_amount: formatContractMoney(retainer),
+            // Floored, so a retainer larger than the total renders "$0"
+            // rather than a negative balance in a signed document.
+            remaining_balance: formatContractMoney(Math.max(total - retainer, 0)),
+          });
+        }
       }
     }
 

@@ -9,6 +9,7 @@ import {
   CONTRACT_TYPE_ORDER,
   OPTIONAL_CLAUSES,
   isContractTemplateKey,
+  formatContractMoney,
   type ContractTemplateField,
 } from '../data/contract-template';
 import { useAdminLang } from '../i18n/admin';
@@ -79,8 +80,10 @@ const cap = (s: string): string => {
 
 const firstWord = (fullName: string): string => fullName.trim().split(/\s+/)[0] ?? '';
 
-const fmtCurrency = (n: number): string =>
-  `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+// Money in a contract is formatted in exactly one place, because
+// api/admin/_portal-update.ts now writes these same figures when Vero corrects
+// a price before signing. See formatContractMoney.
+const fmtCurrency = formatContractMoney;
 
 // "2026-08-09" → "August 9, 2026"
 const fmtDate = (iso: string): string => {

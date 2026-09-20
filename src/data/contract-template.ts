@@ -49,6 +49,31 @@ export interface ContractTemplate {
 
 // Variables accepted by the wedding template. Used for type-safety on the
 // admin side and for sensible defaults in PDF generation.
+/**
+ * The one way money is written into a contract.
+ *
+ * Whole dollars with thousands separators: "$1,200". That is how every
+ * contract already rendered, because the new-client form formatted the
+ * figures this way before storing them, so matching it exactly is the point.
+ * A second formatter that rounded or grouped differently would make an edited
+ * contract disagree with the one created beside it.
+ *
+ * Shared rather than duplicated because two places now write these figures:
+ * the new-client form at creation, and api/admin/_portal-update.ts when Vero
+ * corrects a price before the client signs. Those must agree forever, and the
+ * failure if they drift is a signed contract whose Payment Terms table does
+ * not match what the client is being asked to pay.
+ *
+ * Deliberately NOT toLocaleString. This runs in a serverless function as well
+ * as the browser, and a Node build without full ICU silently drops the
+ * thousands separator instead of throwing, which would put "$1200" in one
+ * contract and "$1,200" in the next.
+ */
+export function formatContractMoney(amount: number): string {
+  const whole = Math.round(Number.isFinite(amount) ? amount : 0);
+  return `$${whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+}
+
 export interface WeddingContractVariables {
   effective_date: string;          // e.g. "June 24, 2026"
   photographer_name: string;       // e.g. "Veronika Polbina"
