@@ -36,7 +36,7 @@ import {
 import ReadingProgress from './ReadingProgress';
 import { scrollBehavior } from '../utils/motion';
 import type { ContractTemplate } from '../data/contract-template';
-import { PAYMENT_HANDLES, CARD_PAYMENTS_ENABLED } from '../data/payment-handles';
+import { PAYMENT_HANDLES, CARD_PAYMENTS_MODE, cardPaymentsVisible } from '../data/payment-handles';
 
 // Full client portal payload — mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
@@ -2194,7 +2194,10 @@ function PayByCardButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  if (!CARD_PAYMENTS_ENABLED || amount <= 0) return null;
+  // Reads the live query string rather than a captured prop, so opening the
+  // portal with ?cards=1 during preview shows the button without a reload.
+  if (!cardPaymentsVisible(typeof window === 'undefined' ? '' : window.location.search)) return null;
+  if (amount <= 0) return null;
 
   const start = async () => {
     setBusy(true);
@@ -2234,6 +2237,14 @@ function PayByCardButton({
       {error && (
         <Text fontSize="xs" color="red.600" textAlign="center">
           {error}
+        </Text>
+      )}
+      {/* Unmissable while the keys are test keys. A real card is DECLINED in
+          test mode, so anyone who reaches this button before go-live needs to
+          know that before they try. */}
+      {CARD_PAYMENTS_MODE === 'preview' && (
+        <Text fontSize="2xs" color="orange.700" textAlign="center" fontWeight="600">
+          TEST MODE. No real money moves and a real card will be declined.
         </Text>
       )}
       <Text fontSize="2xs" color="gray.500" textAlign="center">
