@@ -34,6 +34,7 @@ import changePasswordHandler from './portal/_change-password.js';
 import favoriteHandler from './portal/_favorite.js';
 import requestResetHandler from './portal/_request-reset.js';
 import resetPasswordHandler from './portal/_reset-password.js';
+import payStartHandler from './portal/_pay-start.js';
 
 const HANDLERS: Record<
   string,
@@ -51,6 +52,10 @@ const HANDLERS: Record<
   favorite: favoriteHandler,
   'request-reset': requestResetHandler,
   'reset-password': resetPasswordHandler,
+  // Starting a card payment. The AMOUNT is computed server side from the
+  // booking, never read from the request, so a client cannot settle a wedding
+  // for a dollar.
+  'pay-start': payStartHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
