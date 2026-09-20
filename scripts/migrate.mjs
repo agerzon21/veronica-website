@@ -334,6 +334,17 @@ const CHECKS = [
     ok: (r) => r.rows.length === 1 && r.rows[0].data_type === 'text' && r.rows[0].is_nullable === 'YES',
     pass: 'client_portals.client_phone exists and is nullable text',
     fail: 'client_phone is missing, or is not nullable text, which would block saving a booking without a number' },
+  // The idempotency guarantee for card payments. Asserted as PARTIAL, because
+  // a plain unique index here would break every manual cash row, and a missing
+  // one would let a retried webhook insert a second payment for one charge.
+  { m: '040', q: `select indexdef from pg_indexes where indexname='payment_entries_processor_payment_id_key'`,
+    ok: (r) => r.rows.length === 1 && /WHERE \(processor_payment_id IS NOT NULL\)/i.test(r.rows[0].indexdef),
+    pass: 'the card-payment idempotency index exists and is partial',
+    fail: 'payment_entries_processor_payment_id_key is missing or is not partial, so a retried webhook could double-charge the ledger' },
+  { m: '040', q: `select column_name from information_schema.columns where table_name='payment_entries' and column_name in ('source','status','processor_payment_id','fee_amount')`,
+    ok: (r) => r.rows.length === 4,
+    pass: 'payment_entries carries the card-payment columns',
+    fail: 'payment_entries is missing card-payment columns, so a card payment cannot be recorded' },
   { m: '036', q: `select to_regclass('public.schema_migrations') t`,
     ok: (r) => r.rows[0]?.t !== null, pass: 'schema_migrations exists', fail: 'the ledger itself is missing' },
 ];

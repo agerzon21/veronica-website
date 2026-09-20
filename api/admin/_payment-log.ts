@@ -88,6 +88,12 @@ async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: strin
           select coalesce(sum(amount), 0)
           from payment_entries
           where client_portal_id = ${portalId}
+            -- CLEARED money only. Every row is 'succeeded' today, so this
+            -- changes nothing now, and it is what stops a bank debit that has
+            -- not settled from opening the delivery gate once ACH exists.
+            -- Retrofitting this later would be an edit that silently releases
+            -- photos against money still in flight.
+            and status = 'succeeded'
         ),
         updated_at = now()
     where id = ${portalId}
