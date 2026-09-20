@@ -1696,6 +1696,14 @@ const dict = {
       en: 'Enter an amount like 1200 or 1,200.',
       ru: 'Введи сумму, например 1200 или 1,200.',
     },
+    // Another booking shares this date. Phrased as information, not a
+    // warning: she books two on a day deliberately, and colouring it red
+    // would train her to ignore it.
+    alsoBookedThisDay: {
+      en: (names: string) => `Also on this day: ${names}.`,
+      ru: (names: string) => `В этот же день: ${names}.`,
+      dynamic: true,
+    },
     // Shown in the Payments section on a booking with no total, where the only
     // way to set one used to be a field in the last section of the screen.
     noTotalYetHelp: {

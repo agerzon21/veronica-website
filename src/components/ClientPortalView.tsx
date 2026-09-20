@@ -327,7 +327,25 @@ const ClientPortalView = ({
   const chargesTotal = data.charges_total ?? 0;
   const amountOwed =
     data.contract_total_amount !== null ? data.contract_total_amount + chargesTotal : null;
-  const remaining = amountOwed !== null ? amountOwed - data.paid_to_date : null;
+  /**
+   * Floored, like every other consumer of this number.
+   *
+   * This one was not, and it renders straight to the CLIENT, so an overpaid
+   * booking showed them "-$50.00" as an amount outstanding. Every other place
+   * in the system floors at zero.
+   *
+   * Overpayment used to be rare enough to ignore because money only arrived
+   * when Vero typed it in. It stops being rare the moment a client can pay
+   * from their phone: they settle a balance by card while she has already
+   * logged the cash they handed her at the shoot, and now the record is 50
+   * dollars over.
+   */
+  const rawRemaining = amountOwed !== null ? amountOwed - data.paid_to_date : null;
+  const remaining = rawRemaining !== null ? Math.max(rawRemaining, 0) : null;
+  // Kept separately so the client is TOLD they are owed money rather than
+  // being shown a silent zero. A quiet zero on an overpayment looks like the
+  // money was absorbed.
+  const creditBalance = rawRemaining !== null && rawRemaining < 0 ? -rawRemaining : 0;
 
   // Whether the NextStepsPanel will render anything — same conditions
   // it uses internally, mirrored here so PortalTopNav can decide
@@ -1191,11 +1209,23 @@ const ClientPortalView = ({
                 />
               )}
               <BalanceStat label="Paid" value={formatMoney(data.paid_to_date)} />
-              <BalanceStat
-                label="Remaining"
-                value={formatMoney(remaining)}
-                emphasize={remaining > 0}
-              />
+              {/* An overpayment is money owed BACK, so it gets its own label
+                  rather than being flattened into a zero balance. Saying
+                  "Remaining $0.00" to someone who is fifty dollars up reads
+                  as the money having been quietly absorbed. */}
+              {creditBalance > 0 ? (
+                <BalanceStat
+                  label="Credit"
+                  value={formatMoney(creditBalance)}
+                  note="Overpaid, we owe you this"
+                />
+              ) : (
+                <BalanceStat
+                  label="Remaining"
+                  value={formatMoney(remaining)}
+                  emphasize={remaining > 0}
+                />
+              )}
             </SimpleGrid>
 
             {/* Itemized charges: extra time, and costs paid on the day.

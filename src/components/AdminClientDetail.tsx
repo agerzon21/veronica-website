@@ -48,6 +48,7 @@ interface PortalDetail {
   client_email: string | null;
   client_phone: string | null;
   session_location: string | null;
+  same_date_bookings?: Array<{ id: string; client_display_name: string | null; session_type: string | null }>;
   event_date: string | null;
   gallery_password: string;
   /**
@@ -1595,6 +1596,21 @@ function ShootSummary({
           }
         />
       </SimpleGrid>
+
+      {/* Another booking on the same day. A note, not a warning: she takes
+          two on a day on purpose, and three dates in the real data already
+          do. It exists so she finds out here rather than on the day. */}
+      {(portal.same_date_bookings?.length ?? 0) > 0 && (
+        <Box px={{ base: 4, md: 6 }} py={2} borderTop="1px solid" borderColor="gray.100">
+          <Text fontSize="xs" color="gray.500">
+            {t.clientDetail.alsoBookedThisDay(
+              (portal.same_date_bookings ?? [])
+                .map((b) => b.client_display_name || t.clientDetail.unnamed)
+                .join(', '),
+            )}
+          </Text>
+        </Box>
+      )}
 
       {/* Keeps the explicit choice of navigator that already existed. Removing
           it to make room would be losing a capability, not simplifying. */}

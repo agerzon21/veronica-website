@@ -134,6 +134,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const r = { ...rows[0], ...invite };
 
+    /**
+     * Other bookings on the same day.
+     *
+     * NOT a conflict check and deliberately not a block. Three dates in the
+     * real data already carry two bookings each, including two weddings on one
+     * August Saturday, so she plainly takes more than one booking a day on
+     * purpose. A hard rule would refuse work she has already accepted.
+     *
+     * It matters more once clients can pay by card, because the contracts say
+     * a date is not held until the retainer arrives. A client paying at 2am
+     * for a day another client is already on should not be refused, since she
+     * may well want both, but she should not have to find out by accident
+     * either.
+     *
+     * Allowed to fail for the same reason the invite lookup is: a query that
+     * adds a nicety must never take the client screen down with it.
+     */
+    let sameDate: Array<{ id: string; client_display_name: string | null; session_type: string | null }> = [];
+    try {
+      if (rows[0]?.event_date) {
+        sameDate = (await sql`
+          select id, client_display_name, session_type
+          from client_portals
+          where event_date = ${rows[0].event_date} and id <> ${id}
+          order by created_at asc
+          limit 5
+        `) as typeof sameDate;
+      }
+    } catch {
+      /* never worth failing the page over */
+    }
+
     const payments = (await sql`
       select id, amount, method, note, paid_at, created_at
       from payment_entries
@@ -174,6 +206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // already behind requireAdmin, and short lived, so a link pasted
         // somewhere by accident stops working on its own.
         gallery_preview_token: makeGalleryPreviewToken(r.id),
+        same_date_bookings: sameDate,
         contract_total_amount: r.contract_total_amount ? parseFloat(r.contract_total_amount) : null,
         contract_retainer_amount: r.contract_retainer_amount ? parseFloat(r.contract_retainer_amount) : null,
         paid_to_date: parseFloat(r.paid_to_date),

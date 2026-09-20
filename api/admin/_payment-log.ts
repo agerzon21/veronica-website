@@ -65,13 +65,35 @@ function parseWhen(raw: unknown): string {
 }
 
 async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: string, res: VercelResponse) {
-  const sumRows = (await sql`
-    select coalesce(sum(amount), 0) as total
-    from payment_entries
-    where client_portal_id = ${portalId}
-  `) as Array<{ total: string }>;
-  const newTotal = parseFloat(sumRows[0]?.total ?? '0');
-  await sql`update client_portals set paid_to_date = ${newTotal}, updated_at = now() where id = ${portalId}`;
+  /**
+   * One statement, so the sum and the write cannot be separated.
+   *
+   * This was a SELECT sum followed by a separate UPDATE, outside any
+   * transaction and with no row lock. Two writers interleaving between the two
+   * statements both read the same total and both write it, so one payment
+   * silently vanishes from paid_to_date while its row sits in the table.
+   *
+   * Today that is nearly theoretical, because the only writer is Vero pressing
+   * a button. It stops being theoretical the moment a card webhook can write
+   * at the same time as she does, which is exactly the shape of a client
+   * paying from their phone while she logs the cash they handed her.
+   *
+   * Still a full re-sum rather than an increment. Re-summing is self-healing:
+   * delete a bad row and the next recompute is correct. An increment carries
+   * its error forever.
+   */
+  const updated = (await sql`
+    update client_portals
+    set paid_to_date = (
+          select coalesce(sum(amount), 0)
+          from payment_entries
+          where client_portal_id = ${portalId}
+        ),
+        updated_at = now()
+    where id = ${portalId}
+    returning paid_to_date
+  `) as Array<{ paid_to_date: string }>;
+  const newTotal = parseFloat(updated[0]?.paid_to_date ?? '0');
 
   const payments = (await sql`
     select id, amount, method, note, paid_at, created_at
@@ -107,13 +129,20 @@ async function recomputeChargesAndReturn(
   portalId: string,
   res: VercelResponse,
 ) {
-  const sumRows = (await sql`
-    select coalesce(sum(amount), 0) as total
-    from portal_charges
-    where client_portal_id = ${portalId}
-  `) as Array<{ total: string }>;
-  const newTotal = parseFloat(sumRows[0]?.total ?? '0');
-  await sql`update client_portals set charges_total = ${newTotal}, updated_at = now() where id = ${portalId}`;
+  // Same single-statement re-sum as recomputeAndReturn above, and for the same
+  // reason: a charge added while a payment lands must not lose either one.
+  const updated = (await sql`
+    update client_portals
+    set charges_total = (
+          select coalesce(sum(amount), 0)
+          from portal_charges
+          where client_portal_id = ${portalId}
+        ),
+        updated_at = now()
+    where id = ${portalId}
+    returning charges_total
+  `) as Array<{ charges_total: string }>;
+  const newTotal = parseFloat(updated[0]?.charges_total ?? '0');
 
   const charges = (await sql`
     select id, amount, reason, note, charged_at, created_at
