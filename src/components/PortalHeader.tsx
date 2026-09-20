@@ -380,7 +380,7 @@ export const isPortalComplete = (p: PortalProgressData | undefined): boolean =>
 const hasContract = (p: PortalProgressData | undefined): boolean =>
   !!p && (p.contractStatus === 'pending' || p.contractStatus === 'signed');
 
-type StepTone = 'done' | 'action' | 'progress' | 'overdue' | 'upcoming';
+type StepTone = 'done' | 'action' | 'progress' | 'overdue' | 'upcoming' | 'waiting';
 
 interface ProgressStep {
   n: number;
@@ -408,6 +408,19 @@ const STEP_TONES: Record<StepTone, { bg: string; border: string; fg: string; lab
   },
   overdue: { bg: 'red.600', border: 'red.600', fg: 'white', label: 'red.600' },
   upcoming: { bg: 'transparent', border: 'gray.300', fg: 'gray.600', label: 'gray.600' },
+  /**
+   * Their part is finished and the next move is not theirs.
+   *
+   * Deliberately NOT 'done' and deliberately not a tick. A green check on
+   * Photos would say the gallery is delivered, and a client who reads that
+   * goes looking for pictures that are not there yet. Deliberately not
+   * 'action' either, which is what it used to be: amber reads as a demand,
+   * and there is nothing for them to do but wait for Veronika.
+   *
+   * Green, hollow, so it belongs to the finished half of the track without
+   * claiming to be finished itself.
+   */
+  waiting: { bg: 'transparent', border: 'brand.success', fg: 'brand.success', label: 'brand.success' },
 };
 
 const STEP_LABELS = ['Sign', 'Pay', 'Photos'];
@@ -437,9 +450,11 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
       if (p.overdue) return 'overdue';
       return retainerOutstanding ? 'action' : 'progress';
     }
-    // Photos: they are on this step, but there is nothing for them to do
-    // except wait, so it reads as in progress rather than as a demand.
-    return 'progress';
+    // Photos. Nothing is being asked of them here, ever: the gallery arrives
+    // when Veronika delivers it. Once they have signed and paid, the whole
+    // track is their side of the work finished, so it says waiting rather
+    // than shouting for an action that does not exist.
+    return signed && paid ? 'waiting' : 'progress';
   };
 
   return STEP_LABELS.map((label, i) => {
@@ -630,6 +645,29 @@ const PortalHeader = ({
   // Never "$0". Nothing owed means nothing to say here, and the corner is
   // worth more as a door than as a receipt: Share takes it instead.
   const showBalance = remaining !== null && remaining > 0;
+
+  /**
+   * Which money state the corner is reporting, because they are three
+   * different messages and a single "Balance" label said one thing for all of
+   * them.
+   *
+   *   retainer  nothing is reserved yet. The date can still go to someone
+   *             else, which is the only genuinely urgent money on this screen,
+   *             so it is the only one that gets to be red.
+   *   balance   the date is held and the rest is owed later. Two numbers, not
+   *             one: what has landed, and what is left. A lone "$750" hides
+   *             the fact that they have already paid most of it.
+   *
+   * A contract with no named retainer treats any payment at all as the
+   * retainer being in, which is the same rule buildSteps uses so the track and
+   * the corner cannot disagree.
+   */
+  const retainerAmt = progress?.retainerAmount ?? null;
+  const paidSoFar = progress?.paidToDate ?? 0;
+  const retainerOutstanding =
+    retainerAmt !== null && retainerAmt > 0 ? paidSoFar < retainerAmt : paidSoFar <= 0;
+  const retainerDue =
+    retainerAmt !== null && retainerAmt > 0 ? Math.max(retainerAmt - paidSoFar, 0) : remaining ?? 0;
 
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   /**
@@ -921,17 +959,36 @@ const PortalHeader = ({
               fontWeight="500"
               textTransform="uppercase"
               letterSpacing="0.18em"
-              color={progress?.overdue ? 'red.600' : 'brand.accentText'}
+              color={retainerOutstanding || progress?.overdue ? 'red.600' : 'brand.accentText'}
             >
-              Balance
+              {retainerOutstanding ? 'Retainer' : 'Balance'}
             </Text>
-            <Text
-              fontSize={{ base: 'sm', md: 'md' }}
-              fontWeight="400"
-              color={progress?.overdue ? 'red.600' : 'gray.800'}
-            >
-              {formatMoney(remaining!)}
-            </Text>
+            {retainerOutstanding ? (
+              // One number, red. Until this lands the date is not held, so it
+              // is the one piece of money on this page that is genuinely
+              // time-sensitive rather than merely outstanding.
+              <Text fontSize={{ base: 'sm', md: 'md' }} fontWeight="500" color="red.600">
+                {formatMoney(retainerDue)}
+              </Text>
+            ) : (
+              // Paid over remaining, stacked and rule-separated, so it reads
+              // as the fraction it is. The green number is what they have
+              // already handed over, which a lone remaining figure throws
+              // away.
+              <Flex direction="column" align="flex-end" lineHeight="1.05">
+                <Text fontSize={{ base: '2xs', md: 'xs' }} fontWeight="600" color="brand.success">
+                  {formatMoney(paidSoFar)}
+                </Text>
+                <Box w="100%" h="1px" bg="gray.300" my="2px" />
+                <Text
+                  fontSize={{ base: 'xs', md: 'sm' }}
+                  fontWeight="500"
+                  color={progress?.overdue ? 'red.600' : 'gray.800'}
+                >
+                  {formatMoney(remaining!)}
+                </Text>
+              </Flex>
+            )}
           </Flex>
         )}
 
