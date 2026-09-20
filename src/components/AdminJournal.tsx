@@ -42,6 +42,8 @@ export interface JournalPostSummary {
   cover_image_url: string | null;
   session_type: string | null;
   tags: string[];
+  series_slug?: string | null;
+  series_part?: number | null;
   status: 'draft' | 'published';
   published_at: string | null;
   updated_at: string;
@@ -280,6 +282,28 @@ function PostRow({
             >
               {/* session_type is user-authored / DB data — not translated */}
               {post.session_type}
+            </Badge>
+          )}
+          {/* Part of a story. Gold rather than grey because this is the one
+              badge here that says something about ANOTHER post, and after
+              linking two entries it is the confirmation that it took. */}
+          {post.series_slug && (
+            <Badge
+              bg="brand.surface"
+              color="brand.accent"
+              border="1px solid"
+              borderColor="brand.accentBorder"
+              fontSize={{ base: 'xs', md: '2xs' }}
+              fontWeight="500"
+              letterSpacing={{ base: '0.15em', md: '0.1em' }}
+              textTransform="uppercase"
+              px={2}
+              py={0.5}
+              borderRadius="sm"
+            >
+              {post.series_part != null
+                ? t.journal.seriesPartBadge(post.series_part)
+                : t.journal.seriesBadge}
             </Badge>
           )}
         </HStack>

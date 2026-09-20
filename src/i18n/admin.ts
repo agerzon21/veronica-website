@@ -2631,6 +2631,15 @@ const dict = {
       ru: (n: number) => `${n} ${n === 1 ? 'запись' : n < 5 ? 'записи' : 'записей'}`,
     },
     subtitleEmpty: { en: 'Weekly recap posts.', ru: 'Еженедельные записи-обзоры.' },
+    // Badge on a list row that belongs to a multi-part story. Digits, not
+    // words: this is a list you scan, where "2" reads faster than "Two".
+    // The post page spells it out instead, because there it is being read.
+    seriesPartBadge: {
+      en: (n: number) => `Part ${n}`,
+      ru: (n: number) => `Часть ${n}`,
+    },
+    // A post in a series whose order is not set yet.
+    seriesBadge: { en: 'In a series', ru: 'В серии' },
     newPost: { en: 'New Post', ru: 'Новая запись' },
     newPostShort: { en: 'New', ru: 'Новая' },
     editorNewTitle: { en: 'New post', ru: 'Новая запись' },

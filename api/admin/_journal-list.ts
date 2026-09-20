@@ -33,6 +33,8 @@ type Row = {
   updated_at: string;
   created_at: string;
   drive_folder_url: string | null;
+  series_slug: string | null;
+  series_part: number | null;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -50,7 +52,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SELECT
         id, slug, title, excerpt,
         session_type, tags, status, published_at,
-        updated_at, created_at, drive_folder_url
+        updated_at, created_at, drive_folder_url,
+        -- So a post that belongs to a story can say so in the list. The
+        -- point is confirmation: after linking two entries, the badges are
+        -- how you see it took without opening either one.
+        series_slug, series_part
       FROM journal_posts
       ORDER BY
         COALESCE(published_at, updated_at) DESC,
