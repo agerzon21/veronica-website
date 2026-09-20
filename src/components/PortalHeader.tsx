@@ -355,9 +355,35 @@ const formatMoney = (n: number) =>
  */
 export { formatMoney };
 
+/**
+ * Money compared in whole cents, because these are NUMERIC(10,2) amounts that
+ * became JS numbers. On a booking settled exactly to the cent, total + charges
+ * - paid lands on 4.5e-13 rather than 0, which is enough to leave a fully paid
+ * client showing an outstanding balance and stuck on the Pay step forever.
+ */
+export const moneyCents = (n: number): number => Math.round(n * 100);
+
 /** Nothing owed: either the portal carries no money, or it is all in. */
 const isFullyPaid = (p: PortalProgressData): boolean =>
-  p.amountOwed === null || p.paidToDate >= p.amountOwed;
+  p.amountOwed === null || moneyCents(p.paidToDate) >= moneyCents(p.amountOwed);
+
+/**
+ * Is there a RETAINER still to pay?
+ *
+ * One definition, exported, because there were two. The Next Steps panel asked
+ * `retainer !== null && retainer > 0 && paid < retainer`, while the header and
+ * the step track fell back to `paid <= 0` when no retainer was named. On a
+ * signed booking with no retainer and nothing paid, the corner demanded a red
+ * "Retainer" for the WHOLE balance while the panel directly below it said the
+ * retainer was received and the date was reserved.
+ *
+ * The panel's rule is the correct one: a contract that names no retainer has
+ * no retainer step to be on.
+ */
+export const retainerStillDue = (p: PortalProgressData): boolean =>
+  p.retainerAmount !== null &&
+  p.retainerAmount > 0 &&
+  moneyCents(p.paidToDate) < moneyCents(p.retainerAmount);
 
 /**
  * Signed, paid and delivered. The state where the progress indicator has
@@ -439,10 +465,7 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
   // Amber while the retainer is outstanding, gold once it is in and only the
   // balance remains. A contract with no named retainer treats any payment at
   // all as the retainer being in.
-  const retainerOutstanding =
-    p.retainerAmount !== null && p.retainerAmount > 0
-      ? p.paidToDate < p.retainerAmount
-      : p.paidToDate <= 0;
+  const retainerOutstanding = retainerStillDue(p);
 
   const toneForCurrent = (i: number): StepTone => {
     if (i === 0) return 'action';
@@ -664,10 +687,12 @@ const PortalHeader = ({
    */
   const retainerAmt = progress?.retainerAmount ?? null;
   const paidSoFar = progress?.paidToDate ?? 0;
-  const retainerOutstanding =
-    retainerAmt !== null && retainerAmt > 0 ? paidSoFar < retainerAmt : paidSoFar <= 0;
+  const retainerOutstanding = progress ? retainerStillDue(progress) : false;
+  // Only ever the retainer itself. It used to fall through to the whole
+  // remaining balance when no retainer was named, which is what put the word
+  // "Retainer" in red above the full amount of the booking.
   const retainerDue =
-    retainerAmt !== null && retainerAmt > 0 ? Math.max(retainerAmt - paidSoFar, 0) : remaining ?? 0;
+    retainerAmt !== null && retainerAmt > 0 ? Math.max(retainerAmt - paidSoFar, 0) : 0;
 
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   /**

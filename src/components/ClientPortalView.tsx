@@ -18,6 +18,7 @@ import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import PortalHeader, {
   formatMoney,
+  moneyCents,
   isPortalComplete,
   useNavSelectionLock,
   type PortalNavItem,
@@ -336,12 +337,31 @@ const ClientPortalView = ({
    * logged the cash they handed her at the shoot, and now the record is 50
    * dollars over.
    */
-  const rawRemaining = amountOwed !== null ? amountOwed - data.paid_to_date : null;
-  const remaining = rawRemaining !== null ? Math.max(rawRemaining, 0) : null;
+  /**
+   * Settled to the CENT, not to the float.
+   *
+   * These are dollars-and-cents amounts that arrived as NUMERIC(10,2) and
+   * became JS numbers, so `total + charges - paid` does not reach exactly zero
+   * on a booking that is exactly settled: 2500 + 256.22 - 2756.22 is
+   * 4.5e-13, not 0. Roughly 3% of cent-valued charge amounts land on a
+   * non-zero residue, and the sign decides which way it goes wrong. A positive
+   * residue leaves a fully paid client reading an outstanding balance and
+   * stuck on the Pay step forever; a negative one tells them "Overpaid, we owe
+   * you this" for $0.00. Flooring at zero only fixes the first.
+   *
+   * Comparing in whole cents removes the question. Money is only ever divided
+   * back into dollars for display.
+   */
+  const toCents = (n: number) => Math.round(n * 100);
+  const remainingCents =
+    amountOwed !== null ? toCents(amountOwed) - toCents(data.paid_to_date) : null;
+  const remaining = remainingCents !== null ? Math.max(remainingCents, 0) / 100 : null;
   // Kept separately so the client is TOLD they are owed money rather than
   // being shown a silent zero. A quiet zero on an overpayment looks like the
   // money was absorbed.
-  const creditBalance = rawRemaining !== null && rawRemaining < 0 ? -rawRemaining : 0;
+  // At least one whole cent, so a rounding residue is never announced as a
+  // credit the photographer owes.
+  const creditBalance = remainingCents !== null && remainingCents < 0 ? -remainingCents / 100 : 0;
 
   // Whether the NextStepsPanel will render anything — same conditions
   // it uses internally, mirrored here so PortalTopNav can decide
@@ -1989,11 +2009,15 @@ function NextStepsPanel({
   // dedicated section for it.
   if (contractStatus !== 'signed' || total === null) return null;
 
-  const owed = total + chargesTotal;
-  const retainerOutstanding = retainer !== null && retainer > 0 && paidToDate < retainer;
-  const retainerToSend = retainerOutstanding ? retainer - paidToDate : 0;
-  const balanceOutstanding = !retainerOutstanding && paidToDate < owed;
-  const balanceToSend = balanceOutstanding ? owed - paidToDate : 0;
+  // Whole cents, the same basis the header uses, so the corner and this panel
+  // can never disagree about whether a booking is settled.
+  const owedCents = moneyCents(total) + moneyCents(chargesTotal);
+  const paidCents = moneyCents(paidToDate);
+  const retainerOutstanding =
+    retainer !== null && retainer > 0 && paidCents < moneyCents(retainer);
+  const retainerToSend = retainerOutstanding ? (moneyCents(retainer!) - paidCents) / 100 : 0;
+  const balanceOutstanding = !retainerOutstanding && paidCents < owedCents;
+  const balanceToSend = balanceOutstanding ? (owedCents - paidCents) / 100 : 0;
   const fullyPaid = !retainerOutstanding && !balanceOutstanding;
 
   // Fully paid AND photos delivered → nothing to say. The Photos
@@ -2023,7 +2047,7 @@ function NextStepsPanel({
           <>
             <VStack spacing={3} textAlign="center">
               <Text fontSize="lg" color="gray.800" fontWeight="400">
-                Send your retainer of <strong>${retainerToSend.toFixed(0)}</strong> to reserve {wording.reserveDate}.
+                Send your retainer of <strong>{formatMoney(retainerToSend)}</strong> to reserve {wording.reserveDate}.
               </Text>
               <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
                 Your contract is signed, but per the agreement the {wording.dateNoun} isn't officially booked until the retainer arrives. Send it through any of the methods below, and note "retainer" in the comments so Veronika can match it up.
@@ -2064,14 +2088,14 @@ function NextStepsPanel({
 
             <VStack spacing={2} textAlign="center">
               <Text fontSize="lg" color="gray.800" fontWeight="400">
-                Remaining balance: <strong>${balanceToSend.toFixed(0)}</strong>
+                Remaining balance: <strong>{formatMoney(balanceToSend)}</strong>
               </Text>
               {/* The number moved because something was added to it, so say
                   so here and point at the lines that explain it. Stated, not
                   justified: the Balance section carries the detail. */}
               {chargesTotal > 0 && (
                 <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
-                  This includes ${chargesTotal.toFixed(0)} added after {wording.occasion}, listed
+                  This includes {formatMoney(chargesTotal)} added after {wording.occasion}, listed
                   line by line under Balance below.
                 </Text>
               )}
@@ -2233,8 +2257,8 @@ function PayByCardButton({
     <VStack spacing={2} w="100%" maxW="380px" mb={2}>
       <CTAButton onClick={start} variant="solid" isLoading={busy} loadingText="Opening" fullWidth>
         {kind === 'retainer'
-          ? `Pay $${amount.toFixed(0)} retainer by card`
-          : `Pay $${amount.toFixed(0)} balance by card`}
+          ? `Pay ${formatMoney(amount)} retainer by card`
+          : `Pay ${formatMoney(amount)} balance by card`}
       </CTAButton>
       {error && (
         <Text fontSize="xs" color="red.600" textAlign="center">
