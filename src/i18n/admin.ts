@@ -1696,6 +1696,16 @@ const dict = {
       en: 'Enter an amount like 1200 or 1,200.',
       ru: 'Введи сумму, например 1200 или 1,200.',
     },
+    // The booking was rescheduled after the contract was signed, so the signed
+    // document still names the old date. Both dates are quoted, because "these
+    // disagree" without saying which is which leaves her to guess.
+    contractDateDrift: {
+      en: (contractDate: string, bookingDate: string) =>
+        `The signed contract says ${contractDate}, but this booking is now ${bookingDate}. A signed contract cannot be rewritten, so send the client a note confirming the new date, or void this contract and issue a new one.`,
+      ru: (contractDate: string, bookingDate: string) =>
+        `В подписанном контракте указано ${contractDate}, а съёмка теперь ${bookingDate}. Подписанный контракт переписать нельзя: напиши клиенту и подтверди новую дату или аннулируй этот контракт и выпусти новый.`,
+      dynamic: true,
+    },
     // Shown in place of the Total and Retainer inputs once the contract is
     // signed. Says why, and says what to do instead, because "you cannot" with
     // no route forward just sends her looking for another way in.

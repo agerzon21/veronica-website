@@ -196,12 +196,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // The field updates below run as a series of separate statements, so a 400
     // raised after them would leave half the patch applied with no way to tell
     // which half.
-    const patchedVariables =
+    let patchedVariables =
       patch.contract_variables &&
       typeof patch.contract_variables === 'object' &&
       !Array.isArray(patch.contract_variables)
         ? (patch.contract_variables as Record<string, unknown>)
         : null;
+
+    /**
+     * Rescheduling has to reach the contract, not just the calendar.
+     *
+     * event_date is a COLUMN and {{event_date}} is a contract VARIABLE, and
+     * they were written together at creation and never again. Patching the
+     * column moved the header, the Clients list and the calendar while the
+     * contract carried on printing the original date, with no warning
+     * anywhere. The editor that could have fixed the variable disappears once
+     * the contract is signed, so on a signed booking there was no route to it
+     * at all.
+     *
+     * Folding the reformatted date into the variables makes the existing
+     * re-render fire. The format matches what the create form writes
+     * (AdminNewClient's fmtDate): en-US long month, read as UTC so a date
+     * cannot slip a day across a timezone.
+     *
+     * Only while the contract is unsigned. A signed contract is frozen and
+     * must stay byte-identical to what the client agreed to, so there the
+     * column and the contract genuinely diverge and the UI says so instead.
+     */
+    if (typeof patch.event_date === 'string' && !contractFrozen) {
+      const iso = patch.event_date.trim();
+      const existingVars = existing[0].contract_variables ?? {};
+      // Only when the contract already carries the variable. A booking with no
+      // contract has nothing to keep in step, and inventing the key would add
+      // a field the template never asked for.
+      if ('event_date' in existingVars) {
+        const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+        const pretty =
+          y && m && d
+            ? new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'UTC',
+              })
+            : '';
+        patchedVariables = {
+          // The caller's own variables win: an explicit patch of
+          // contract_variables.event_date is a deliberate act and must not be
+          // overwritten by a date derived from the column.
+          event_date: pretty,
+          ...(patchedVariables ?? existingVars),
+        };
+      }
+    }
 
     let contractRender: { spec: ContractTemplateSpec; vars: Record<string, string> } | null = null;
     if ((patchedVariables || templateKeyChanged) && !contractFrozen) {

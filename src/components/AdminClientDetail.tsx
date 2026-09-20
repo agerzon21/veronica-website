@@ -102,8 +102,29 @@ interface ChargeEntry {
   charged_at: string;
 }
 
+/**
+ * The date string a CONTRACT carries, byte for byte.
+ *
+ * Deliberately not formatDate: that one uses a short month for the screen
+ * ("Oct 11, 2026"), while the create form writes a long one into
+ * {{event_date}} ("October 11, 2026"). Comparing the two formats would report
+ * every booking as out of step with its own contract.
+ */
+const contractDateString = (iso: string | null): string => {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+};
+
 const formatDate = (iso: string | null): string => {
-  if (!iso) return '—';
+  // No long dashes, anywhere. An empty cell reads as empty on its own.
+  if (!iso) return '';
   // Treat the date part as UTC so a 'YYYY-MM-DD' (or midnight-UTC ISO)
   // doesn't slide back a day in the viewer's local timezone.
   const datePart = iso.split('T')[0];
@@ -970,6 +991,29 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                     {t.clientDetail.typeMismatchWarning(
                       portal.session_type,
                       typeLabel(portal.contract_template_key),
+                    )}
+                  </Text>
+                </Box>
+              )}
+
+            {/* The column moved and the contract did not.
+                Rescheduling patches the event_date COLUMN, which moves the
+                header, the Clients list and the calendar. The contract prints
+                {{event_date}}, a variable, and a signed contract is frozen, so
+                the two genuinely disagree and no editor on this screen can
+                reconcile them. Saying so beats letting her believe a
+                reschedule reached the paperwork. Unsigned bookings never get
+                here: the server now keeps the variable in step on every
+                event_date patch. */}
+            {portal.contract_status === 'signed' &&
+              portal.contract_variables?.event_date &&
+              portal.event_date &&
+              contractDateString(portal.event_date) !== portal.contract_variables.event_date && (
+                <Box p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
+                  <Text fontSize="xs" color="orange.800">
+                    {t.clientDetail.contractDateDrift(
+                      portal.contract_variables.event_date,
+                      formatDate(portal.event_date),
                     )}
                   </Text>
                 </Box>
