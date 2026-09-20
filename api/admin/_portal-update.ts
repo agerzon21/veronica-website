@@ -223,6 +223,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * must stay byte-identical to what the client agreed to, so there the
      * column and the contract genuinely diverge and the UI says so instead.
      */
+    /**
+     * Correcting a name has to reach the contract too.
+     *
+     * Same shape as the date below: partner_1_full_name and
+     * partner_2_full_name are COLUMNS, and {{client_names}} is the contract
+     * variable composed from them at creation. They were written together once
+     * and never again, so fixing a misspelled surname moved the welcome page
+     * the client reads and left the contract naming the wrong person.
+     *
+     * The composition is AdminNewClient's, byte for byte: "A & B", or "A"
+     * alone when there is no second name. A solo booking degrades to one name
+     * exactly as the create form does.
+     */
+    const patchesAPartnerName =
+      typeof patch.partner_1_full_name === 'string' || typeof patch.partner_2_full_name === 'string';
+    if (patchesAPartnerName && !contractFrozen) {
+      const existingVars = existing[0].contract_variables ?? {};
+      if ('client_names' in existingVars) {
+        const current = (await sql`
+          select partner_1_full_name, partner_2_full_name from client_portals where id = ${id} limit 1
+        `) as Array<{ partner_1_full_name: string | null; partner_2_full_name: string | null }>;
+        // The patched value where one was sent, the stored value otherwise, so
+        // changing one name does not erase the other.
+        const p1 = (
+          typeof patch.partner_1_full_name === 'string'
+            ? patch.partner_1_full_name
+            : current[0]?.partner_1_full_name ?? ''
+        ).trim();
+        const p2 = (
+          typeof patch.partner_2_full_name === 'string'
+            ? patch.partner_2_full_name
+            : current[0]?.partner_2_full_name ?? ''
+        ).trim();
+        // Solo session types drop the second name, exactly as the create form
+        // does via `spec.couple`. Without this, a pending wedding retyped as a
+        // portrait would keep printing both names on a contract for one
+        // person, because partner_2_full_name stays in the column after the
+        // type changes. No booking is in that state today, but the type IS
+        // patchable while pending, so the path exists.
+        const isCouple = Boolean(CONTRACT_TEMPLATES[templateKey]?.couple);
+        const composed = isCouple && p2 ? `${p1} & ${p2}` : p1;
+        // Never blank the contract's names. An empty composition means both
+        // fields were cleared, and a contract naming nobody is worse than one
+        // naming an old spelling.
+        if (composed) {
+          patchedVariables = {
+            client_names: composed,
+            ...(patchedVariables ?? existingVars),
+          };
+        }
+      }
+    }
+
     if (typeof patch.event_date === 'string' && !contractFrozen) {
       const iso = patch.event_date.trim();
       const existingVars = existing[0].contract_variables ?? {};

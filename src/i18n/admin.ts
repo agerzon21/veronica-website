@@ -1709,6 +1709,19 @@ const dict = {
       en: 'Where she drives to. Used by the Directions button at the top. Editing this does not change a signed contract.',
       ru: 'Куда ехать. Используется кнопкой «Маршрут» наверху. Изменение не затрагивает подписанный контракт.',
     },
+    // Full legal names. Not a greeting: these are what the contract binds and
+    // what the client's welcome page shows them, so the help text says where
+    // they surface rather than describing the field.
+    partner1Label: { en: 'Full Legal Name', ru: 'Полное имя по документам' },
+    partner2Label: { en: 'Partner Full Legal Name', ru: 'Полное имя партнёра' },
+    partnerNameHelp: {
+      en: 'Shown on the client welcome page and used in the contract. While the contract is unsigned, saving updates it.',
+      ru: 'Показывается на странице приветствия клиента и используется в контракте. Пока контракт не подписан, сохранение обновит и его.',
+    },
+    partner2Help: {
+      en: 'Leave empty for a solo booking. One person can sign for both.',
+      ru: 'Оставь пустым, если клиент один. Подписать может один человек за обоих.',
+    },
     clientPhoneLabel: { en: 'Phone', ru: 'Телефон' },
     clientPhoneHelp: {
       en: 'Optional. Tap to call from the top of this screen. Type it however you like.',

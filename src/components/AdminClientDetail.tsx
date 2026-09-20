@@ -1170,6 +1170,33 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             saving={savingField === 'client_phone'}
             onSave={(v) => patch({ client_phone: v }, 'client_phone')}
           />
+          {/* Full legal names. Patchable by the server and returned by the
+              detail endpoint since they were added, and rendered nowhere, so
+              correcting a misspelled surname was impossible from this screen
+              although every layer around it supported it. Eight of eighteen
+              real bookings carry a partner name that differs from the display
+              name. They are not cosmetic: the client's own welcome page greets
+              them by these, and the contract's {{client_names}} is composed
+              from them. Full mode only, since a gallery-only booking has
+              neither a welcome page nor a contract. */}
+          {portal.mode === 'full' && (
+            <>
+              <InlineField
+                label={t.clientDetail.partner1Label}
+                value={portal.partner_1_full_name ?? ''}
+                helpText={t.clientDetail.partnerNameHelp}
+                saving={savingField === 'partner_1_full_name'}
+                onSave={(v) => patch({ partner_1_full_name: v }, 'partner_1_full_name')}
+              />
+              <InlineField
+                label={t.clientDetail.partner2Label}
+                value={portal.partner_2_full_name ?? ''}
+                helpText={t.clientDetail.partner2Help}
+                saving={savingField === 'partner_2_full_name'}
+                onSave={(v) => patch({ partner_2_full_name: v }, 'partner_2_full_name')}
+              />
+            </>
+          )}
           {/* Where the shoot is. On its own column rather than in
               contract_variables, because every gallery-only booking carries a
               default wedding template key, so patching variables there would
