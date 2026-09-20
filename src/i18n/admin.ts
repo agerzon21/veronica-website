@@ -2353,6 +2353,55 @@ const dict = {
       ru: 'outdoor, sunset, north-shore',
     },
 
+    // Series. Almost every post is standalone, so this whole block stays
+    // collapsed to a single "no" until someone says otherwise.
+    seriesLabel: { en: 'Part of a series', ru: 'Часть серии' },
+    seriesHelp: {
+      en: 'Use this when one story runs across two or more entries, like a courthouse ceremony and the wedding day that follows it. Readers get a link between the parts at the bottom of each one.',
+      ru: 'Для случаев, когда одна история рассказана в двух или более записях: например, роспись и сама свадьба. Внизу каждой записи читатель увидит ссылку на остальные части.',
+    },
+    seriesNone: { en: 'No, this is a standalone post', ru: 'Нет, это отдельная запись' },
+    seriesNew: { en: 'Start a new series...', ru: 'Создать новую серию...' },
+    seriesNameLabel: { en: 'Series name', ru: 'Название серии' },
+    seriesNameHelp: {
+      en: 'Shown above the links, so write it the way a reader should see it. Keep the same wording on every part.',
+      ru: 'Показывается над ссылками, поэтому пиши так, как это увидит читатель. На всех частях используй одну и ту же формулировку.',
+    },
+    seriesNamePlaceholder: {
+      en: 'Nicole and Tucker, in two parts',
+      ru: 'Николь и Такер, в двух частях',
+    },
+    seriesPartLabel: { en: 'Part number', ru: 'Номер части' },
+    seriesPartHelp: {
+      en: 'Which entry this is in the story. Leave blank if the order does not matter yet.',
+      ru: 'Какая это часть истории. Оставь пустым, если порядок пока не важен.',
+    },
+    // Live preview of the marker that appears beside the date on the
+    // post itself, so the wording is confirmed before saving.
+    seriesPreviewPrefix: { en: 'Readers will see', ru: 'Читатель увидит' },
+    // The trap this prevents: the link only renders once two parts are
+    // PUBLISHED, so setting a series while the other half is still a
+    // draft looks exactly like the setting failing to save.
+    seriesNotYetVisible: {
+      en: 'Nothing appears on the site yet. The link between the parts shows up once a second part is published.',
+      ru: 'На сайте пока ничего не появится. Ссылка между частями возникнет, когда будет опубликована вторая часть.',
+    },
+    seriesMembers: { en: 'Already in this series', ru: 'Уже в этой серии' },
+    seriesThisPost: { en: 'this post', ru: 'эта запись' },
+    seriesDraftNote: { en: 'draft', ru: 'черновик' },
+    seriesNoPart: { en: 'no part number', ru: 'без номера' },
+    // Caught in the form rather than on save: the database rejects a
+    // duplicate part, and a 409 after writing a whole post is a bad way
+    // to find out.
+    seriesPartTaken: {
+      en: (title: string) => `Part number already used by "${title}". Pick another.`,
+      ru: (title: string) => `Этот номер уже занят записью «${title}». Выбери другой.`,
+    },
+    seriesNeedsName: {
+      en: 'Give the series a name, or set this back to a standalone post.',
+      ru: 'Дай серии название или верни запись в состояние отдельной.',
+    },
+
     // Danger zone (superadmin-only delete)
     dangerZone: { en: 'Danger zone', ru: 'Опасная зона' },
     dangerZoneBody: {

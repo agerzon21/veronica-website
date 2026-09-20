@@ -8,6 +8,7 @@ import FaTrash from '../icons/fa/FaTrash';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import { useAdminLang } from '../i18n/admin';
+import { partWord } from '../utils/seriesWords';
 
 /**
  * Journal post editor — create + edit share this one form. When
@@ -51,6 +52,28 @@ interface PostForm {
   // consistent across timezones. Empty string means "use publish
   // default" — NOW on first publish, preserve on subsequent saves.
   published_at: string;
+  // The story this entry belongs to. In 'new' mode series_slug stays
+  // empty and the NAME is sent as the slug, because the server
+  // slugifies whatever it receives — so the two can never drift apart
+  // the way a second client-side slugify would let them.
+  series_slug: string;
+  series_part: string;
+  series_label: string;
+}
+
+/** Sentinel option value. Not a slug, so it can never collide with one. */
+const NEW_SERIES = '__new__';
+
+interface SeriesSummary {
+  slug: string;
+  label: string | null;
+  members: Array<{
+    id: string;
+    postSlug: string;
+    title: string;
+    status: 'draft' | 'published';
+    part: number | null;
+  }>;
 }
 
 const EMPTY_FORM: PostForm = {
@@ -64,6 +87,9 @@ const EMPTY_FORM: PostForm = {
   tags: '',
   status: 'draft',
   published_at: '',
+  series_slug: '',
+  series_part: '',
+  series_label: '',
 };
 
 const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSaved }: Props) => {
@@ -85,45 +111,67 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existingSlug, setExistingSlug] = useState<string | null>(null);
+  const [seriesList, setSeriesList] = useState<SeriesSummary[]>([]);
+  const [seriesMode, setSeriesMode] = useState<'none' | 'existing' | 'new'>('none');
   const toast = useToast();
 
-  // In edit mode, load the post's current fields on mount so the
-  // form pre-populates with what Vero last saved.
+  /**
+   * Load on mount. This runs in BOTH modes, not just edit.
+   *
+   * A new post is the most likely thing ever to join an existing series
+   * (writing part two is the whole reason series exist), so the new-post
+   * form needs the list of stories already in progress just as much as
+   * the edit form does. Only the post half of the response is optional.
+   *
+   * `loading` still gates on postId alone, so the new-post form renders
+   * instantly and the series dropdown fills in when the answer lands
+   * rather than holding up a blank page.
+   */
   useEffect(() => {
-    if (postId === null) {
-      setLoading(false);
-      return;
-    }
     (async () => {
       try {
         const res = await fetch('/api/admin/journal-detail', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: adminPassword, id: postId }),
+          body: JSON.stringify({
+            password: adminPassword,
+            ...(postId ? { id: postId } : {}),
+          }),
         });
         const data = await res.json();
-        if (res.ok && data.success && data.post) {
+        if (res.ok && data.success) {
+          if (Array.isArray(data.series)) setSeriesList(data.series);
           const p = data.post;
-          setForm({
-            slug: p.slug ?? '',
-            title: p.title ?? '',
-            excerpt: p.excerpt ?? '',
-            body_markdown: p.body_markdown ?? '',
-            cover_image_alt: p.cover_image_alt ?? '',
-            drive_folder_url: p.drive_folder_url ?? '',
-            session_type: p.session_type ?? '',
-            tags: Array.isArray(p.tags) ? p.tags.join(', ') : '',
-            status: p.status === 'published' ? 'published' : 'draft',
-            // Convert stored ISO timestamp back to YYYY-MM-DD for the
-            // date input. Null / empty means no explicit date yet.
-            published_at: p.published_at ? isoToDateInput(p.published_at) : '',
-          });
-          setExistingSlug(p.slug ?? null);
-        } else {
+          if (p) {
+            setForm({
+              slug: p.slug ?? '',
+              title: p.title ?? '',
+              excerpt: p.excerpt ?? '',
+              body_markdown: p.body_markdown ?? '',
+              cover_image_alt: p.cover_image_alt ?? '',
+              drive_folder_url: p.drive_folder_url ?? '',
+              session_type: p.session_type ?? '',
+              tags: Array.isArray(p.tags) ? p.tags.join(', ') : '',
+              status: p.status === 'published' ? 'published' : 'draft',
+              // Convert stored ISO timestamp back to YYYY-MM-DD for the
+              // date input. Null / empty means no explicit date yet.
+              published_at: p.published_at ? isoToDateInput(p.published_at) : '',
+              series_slug: p.series_slug ?? '',
+              series_part: p.series_part != null ? String(p.series_part) : '',
+              series_label: p.series_label ?? '',
+            });
+            setSeriesMode(p.series_slug ? 'existing' : 'none');
+            setExistingSlug(p.slug ?? null);
+          }
+        } else if (postId) {
           setError(data.error || t.journalEditor.couldNotLoadPost);
         }
       } catch {
-        setError(t.common.couldNotReach);
+        // Only an edit is actually broken by this. On a new post the
+        // series dropdown simply offers nothing but "standalone" and
+        // "start a new series", which is a working form, so putting a
+        // red error above an untouched page would be a lie.
+        if (postId) setError(t.common.couldNotReach);
       } finally {
         setLoading(false);
       }
@@ -134,7 +182,82 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
   const update = <K extends keyof PostForm>(key: K, value: PostForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // ── Series, derived ────────────────────────────────────────────────
+  const activeSeries =
+    seriesMode === 'existing'
+      ? seriesList.find((s) => s.slug === form.series_slug) ?? null
+      : null;
+
+  const partNum = form.series_part.trim() ? Number(form.series_part.trim()) : null;
+
+  /**
+   * Another post already holding this part number.
+   *
+   * Caught here rather than left to the database, which enforces it with
+   * a unique index and answers with a 409. Finding out a part number was
+   * taken only after writing a whole post is a bad way to find out, and
+   * the answer is one dropdown away.
+   */
+  const partClash =
+    activeSeries && partNum !== null && Number.isInteger(partNum)
+      ? activeSeries.members.find((m) => m.part === partNum && m.id !== postId) ?? null
+      : null;
+
+  /**
+   * How many parts a READER will see, which is not how many exist.
+   *
+   * The public page counts published entries only, so a series whose
+   * second half is still a draft shows no link at all. Counting drafts
+   * here would preview "Part One of Two" on a page that renders nothing,
+   * which is exactly the confusion this preview exists to prevent.
+   */
+  const publishedSiblings = activeSeries
+    ? activeSeries.members.filter((m) => m.id !== postId && m.status === 'published').length
+    : 0;
+  const visibleParts = publishedSiblings + 1;
+  const seriesMarker =
+    partNum !== null && Number.isInteger(partNum) && visibleParts > 1
+      ? `Part ${partWord(partNum)} of ${partWord(visibleParts)}`
+      : null;
+
+  const handleSeriesChange = (value: string) => {
+    if (value === '') {
+      setSeriesMode('none');
+      setForm((f) => ({ ...f, series_slug: '', series_part: '', series_label: '' }));
+      return;
+    }
+    if (value === NEW_SERIES) {
+      setSeriesMode('new');
+      setForm((f) => ({ ...f, series_slug: '', series_part: '1', series_label: '' }));
+      return;
+    }
+    const chosen = seriesList.find((s) => s.slug === value) ?? null;
+    setSeriesMode('existing');
+    setForm((f) => ({
+      ...f,
+      series_slug: value,
+      // Prefilled from the series so every part carries the same wording
+      // without anyone having to retype it. The label is stored per post
+      // on purpose, so editing it here changes only this one.
+      series_label: chosen?.label ?? '',
+      series_part: String(nextFreePart(chosen, postId)),
+    }));
+  };
+
   const handleSave = async (statusOverride?: 'draft' | 'published') => {
+    // Two things the form knows are wrong before the network does.
+    // A series with no name would be silently dropped by the server
+    // (an empty slug normalizes to null), so the post would save as
+    // standalone and look like the setting just did not take.
+    if (seriesMode === 'new' && !form.series_label.trim()) {
+      setError(t.journalEditor.seriesNeedsName);
+      return;
+    }
+    if (partClash) {
+      setError(t.journalEditor.seriesPartTaken(partClash.title));
+      return;
+    }
+
     setSaving(true);
     setError(null);
     const payload = {
@@ -153,6 +276,17 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
         .filter((t) => t.length > 0),
       status: statusOverride ?? form.status,
       published_at: form.published_at || null,
+      // In 'new' mode the NAME is sent as the slug and the server
+      // slugifies it, so the key and the wording can never disagree.
+      // 'none' sends null, which clears all three columns server-side.
+      series_slug:
+        seriesMode === 'none'
+          ? null
+          : seriesMode === 'new'
+          ? form.series_label.trim() || null
+          : form.series_slug || null,
+      series_part: form.series_part.trim() || null,
+      series_label: form.series_label.trim() || null,
     };
     try {
       const endpoint = postId ? '/api/admin/journal-update' : '/api/admin/journal-create';
@@ -399,6 +533,144 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           </Field>
         </Stack>
 
+        {/* Series. Boxed rather than left inline with the other fields
+            because it is the one control here that reaches OUTSIDE this
+            post: it puts this entry into a story that other entries are
+            also in. Plain and quiet while the answer is "no", which it
+            is on almost every post. */}
+        <Box
+          border="1px solid"
+          borderColor={seriesMode === 'none' ? 'gray.200' : 'brand.accent'}
+          bg={seriesMode === 'none' ? 'transparent' : 'rgba(201, 169, 110, 0.05)'}
+          borderRadius="sm"
+          p={{ base: 4, md: 5 }}
+        >
+          <Field
+            label={t.journalEditor.seriesLabel}
+            help={seriesMode === 'none' ? t.journalEditor.seriesHelp : undefined}
+          >
+            <Select
+              value={seriesMode === 'new' ? NEW_SERIES : form.series_slug}
+              onChange={(e) => handleSeriesChange(e.target.value)}
+              {...inputStyles}
+            >
+              <option value="">{t.journalEditor.seriesNone}</option>
+              {seriesList.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.label || s.slug}
+                </option>
+              ))}
+              <option value={NEW_SERIES}>{t.journalEditor.seriesNew}</option>
+            </Select>
+          </Field>
+
+          {seriesMode !== 'none' && (
+            <VStack align="stretch" spacing={4} mt={4}>
+              <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
+                <Field
+                  label={t.journalEditor.seriesNameLabel}
+                  help={t.journalEditor.seriesNameHelp}
+                  flex={3}
+                >
+                  <Input
+                    value={form.series_label}
+                    onChange={(e) => update('series_label', e.target.value)}
+                    placeholder={t.journalEditor.seriesNamePlaceholder}
+                    {...inputStyles}
+                  />
+                </Field>
+
+                <Field
+                  label={t.journalEditor.seriesPartLabel}
+                  help={t.journalEditor.seriesPartHelp}
+                  flex={1}
+                >
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={form.series_part}
+                    onChange={(e) => update('series_part', e.target.value)}
+                    maxW="140px"
+                    {...inputStyles}
+                  />
+                </Field>
+              </Stack>
+
+              {/* What this actually produces, in the order it matters:
+                  a blocking conflict, then the real rendered marker,
+                  then the reason there is no marker yet. */}
+              {partClash ? (
+                <Text fontSize="xs" color="red.600" fontWeight="400">
+                  {t.journalEditor.seriesPartTaken(partClash.title)}
+                </Text>
+              ) : seriesMarker ? (
+                <HStack spacing={2} align="baseline" flexWrap="wrap">
+                  <Text fontSize="xs" color="gray.500" fontWeight="300">
+                    {t.journalEditor.seriesPreviewPrefix}
+                  </Text>
+                  <Text
+                    fontSize={{ base: 'xs', md: '2xs' }}
+                    textTransform="uppercase"
+                    letterSpacing="0.22em"
+                    color="brand.accent"
+                    fontWeight="500"
+                  >
+                    {seriesMarker}
+                  </Text>
+                </HStack>
+              ) : (
+                <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+                  {t.journalEditor.seriesNotYetVisible}
+                </Text>
+              )}
+
+              {activeSeries && activeSeries.members.length > 0 && (
+                <Box>
+                  <Text
+                    fontSize={{ base: 'xs', md: '2xs' }}
+                    fontWeight="500"
+                    textTransform="uppercase"
+                    letterSpacing={{ base: '0.15em', md: '0.22em' }}
+                    color="gray.500"
+                    mb={2}
+                  >
+                    {t.journalEditor.seriesMembers}
+                  </Text>
+                  <VStack align="stretch" spacing={1.5}>
+                    {activeSeries.members.map((m) => (
+                      <HStack key={m.id} spacing={2} align="baseline" flexWrap="wrap">
+                        <Text
+                          fontSize="xs"
+                          color="brand.accent"
+                          fontWeight="500"
+                          minW="16px"
+                          flexShrink={0}
+                        >
+                          {m.part != null ? m.part : '·'}
+                        </Text>
+                        <Text fontSize="xs" color="gray.700" fontWeight="300">
+                          {m.title}
+                        </Text>
+                        {m.id === postId && (
+                          <Text fontSize="xs" color="gray.500" fontWeight="300">
+                            ({t.journalEditor.seriesThisPost})
+                          </Text>
+                        )}
+                        {m.status !== 'published' && (
+                          <Text fontSize="xs" color="orange.600" fontWeight="300">
+                            ({t.journalEditor.seriesDraftNote})
+                          </Text>
+                        )}
+                      </HStack>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+            </VStack>
+          )}
+        </Box>
+
         {/* Danger zone — superadmin-only, mirrors client detail page */}
         {postId && adminLevel === 'super' && (
           <Box
@@ -493,6 +765,30 @@ function Field({
       )}
     </Box>
   );
+}
+
+/**
+ * The lowest part number nobody in this series is using.
+ *
+ * Excludes the post being edited, so re-selecting the series a post is
+ * already in suggests the number it already has rather than pushing it
+ * to the end of its own story.
+ *
+ * Counts from 1 and skips over what is taken, so a series with parts 1
+ * and 3 suggests 2. Filling the gap is nearly always what is meant, and
+ * the alternative (max + 1) quietly leaves a hole in the sequence.
+ */
+function nextFreePart(series: SeriesSummary | null, excludeId: string | null): number {
+  if (!series) return 1;
+  const used = new Set(
+    series.members
+      .filter((m) => m.id !== excludeId)
+      .map((m) => m.part)
+      .filter((p): p is number => p != null),
+  );
+  let n = 1;
+  while (used.has(n)) n += 1;
+  return n;
 }
 
 /**

@@ -11,7 +11,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
-import { validateJournalInput } from './_journal-shared.js';
+import { validateJournalInput, uniqueViolationMessage } from './_journal-shared.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -44,12 +44,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       INSERT INTO journal_posts (
         slug, title, excerpt, body_markdown,
         cover_image_alt, drive_folder_url,
-        session_type, tags, status, published_at
+        session_type, tags, status, published_at,
+        series_slug, series_part, series_label
       )
       VALUES (
         ${v.slug}, ${v.title}, ${v.excerpt}, ${v.body_markdown},
         ${v.cover_image_alt}, ${v.drive_folder_url},
-        ${v.session_type}, ${v.tags}, ${v.status}, ${publishedAt}
+        ${v.session_type}, ${v.tags}, ${v.status}, ${publishedAt},
+        ${v.series_slug}, ${v.series_part}, ${v.series_label}
       )
       RETURNING id, slug, status, created_at, updated_at, published_at
     `) as Array<{
@@ -63,12 +65,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ success: true, post: rows[0] });
   } catch (err) {
-    // Postgres unique-violation on the slug is by far the most common
-    // failure — surface it as 409 with a friendly message so the UI
-    // can nudge the user to change the slug.
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('duplicate key') && msg.includes('journal_posts')) {
-      return res.status(409).json({ success: false, error: `A post with slug "${v.slug}" already exists.` });
+    // A unique violation is by far the most common failure here —
+    // surface it as 409 naming the field that actually collided, so the
+    // UI can nudge the user at the right control.
+    const conflict = uniqueViolationMessage(err, v);
+    if (conflict) {
+      return res.status(409).json({ success: false, error: conflict });
     }
     console.error('[admin/journal-create] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

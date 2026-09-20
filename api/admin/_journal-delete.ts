@@ -35,8 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      DELETE FROM journal_posts WHERE id = ${id} RETURNING id
-    `) as Array<{ id: string }>;
+      DELETE FROM journal_posts WHERE id = ${id}
+      RETURNING id, status, published_at
+    `) as Array<{ id: string; status: string; published_at: string | null }>;
 
     if (rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Post not found' });
@@ -49,7 +50,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // is the only remaining copy. Deleting must therefore also rebuild.
     // Never allowed to fail the delete: an unset or unreachable hook must not
     // leave the caller thinking the post survived.
-    await triggerDeployHookQuietly('journal-delete');
+    //
+    // ONLY IF IT WAS ACTUALLY PUBLIC, which is the same test journal-update
+    // uses. A draft was never prerendered, so there is no file to clear and
+    // nothing on the site changes. This used to rebuild unconditionally, and
+    // because Vercel's storage quota is driven by BUILD COUNT rather than what
+    // the builds contain, throwing away a few draft experiments quietly spent
+    // the same quota as publishing. Found by deleting two test drafts and
+    // watching two production rebuilds start.
+    const wasPublic = rows[0].status === 'published' && rows[0].published_at !== null;
+    if (wasPublic) {
+      await triggerDeployHookQuietly('journal-delete');
+    }
 
     return res.status(200).json({ success: true });
   } catch (err) {

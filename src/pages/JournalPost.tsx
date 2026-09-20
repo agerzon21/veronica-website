@@ -20,6 +20,7 @@ import { useSmartBack } from '../components/ui/useSmartBack';
 // client portal is every bit as long a read and shows the same one; the
 // defaults there are exactly this page's old behaviour.
 import ReadingProgress from '../components/ReadingProgress';
+import { partWord } from '../utils/seriesWords';
 
 /**
  * Individual journal post page — rendered when the URL is
@@ -396,7 +397,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
                   <>
                     <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" />
                     <Text textStyle="metaCaption" color="brand.accent">
-                      {`Part ${romanOrNumber(post.series_part)} of ${romanOrNumber(post.series!.length)}`}
+                      {`Part ${partWord(post.series_part)} of ${partWord(post.series!.length)}`}
                     </Text>
                   </>
                 )}
@@ -828,11 +829,6 @@ const DEFAULT_BACK = { to: '/journal', label: 'Back to the journal' };
  * (prev/next cards deliberately do NOT pass state) fall back to the
  * journal. Used twice — header and the not-found screen.
  */
-/** 1 becomes One, so a chapter marker reads like a chapter and not like a row id. */
-function romanOrNumber(n: number): string {
-  return ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'][n] ?? String(n);
-}
-
 /**
  * The other half of the story.
  *
@@ -902,7 +898,7 @@ function SeriesCompanion({
               )}
               <Box p={{ base: 4, md: 5 }}>
                 <Text textStyle="metaCaption" color={here ? 'brand.accent' : 'gray.400'} mb={1}>
-                  {p.part != null ? `Part ${romanOrNumber(p.part)}` : 'Also'}
+                  {p.part != null ? `Part ${partWord(p.part)}` : 'Also'}
                   {here ? ' · You are here' : ''}
                 </Text>
                 <Text

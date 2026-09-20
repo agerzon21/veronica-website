@@ -34,6 +34,12 @@ export interface JournalInput {
   // Null means "use publish default" — auto NOW on first publish,
   // preserve existing on subsequent saves.
   published_at: string | null;
+  // The multi-part story this entry belongs to, if any. Null on almost
+  // every post and always will be. See db/migrations/041-journal-series.sql
+  // for why this is three columns rather than a tag.
+  series_slug: string | null;
+  series_part: number | null;
+  series_label: string | null;
 }
 
 export interface ValidationError {
@@ -111,6 +117,22 @@ export function validateJournalInput(body: unknown): ValidateResult {
 
   const published_at = normalizeEventDate(b.published_at);
 
+  /**
+   * The series fields move as one unit.
+   *
+   * A part number or a label with no series slug to belong to is
+   * invisible on the site and would quietly survive "remove from
+   * series", so the post would look standalone while still carrying
+   * half a series on its row. Clearing the slug clears all three.
+   */
+  const seriesRaw = typeof b.series_slug === 'string' ? b.series_slug.trim() : '';
+  const series_slug = seriesRaw ? slugify(seriesRaw) || null : null;
+  const series_part = series_slug ? normalizeSeriesPart(b.series_part) : null;
+  const series_label =
+    series_slug && typeof b.series_label === 'string' && b.series_label.trim()
+      ? b.series_label.trim().slice(0, 120)
+      : null;
+
   return {
     ok: true,
     value: {
@@ -124,8 +146,57 @@ export function validateJournalInput(body: unknown): ValidateResult {
       tags,
       status,
       published_at,
+      series_slug,
+      series_part,
+      series_label,
     },
   };
+}
+
+/**
+ * A part number: a whole number from 1 to 50, or null.
+ *
+ * Null is a legitimate answer, not a failure. The post page renders a
+ * member with no part as "Also" rather than "Part Three", so a series
+ * whose order is not settled yet still works. Anything out of range is
+ * a bug in the caller rather than something a person typed (the form
+ * uses a bounded number input), so it lands on null instead of
+ * rejecting an otherwise valid save.
+ */
+function normalizeSeriesPart(v: unknown): number | null {
+  const n =
+    typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v.trim()) : NaN;
+  if (!Number.isInteger(n) || n < 1 || n > 50) return null;
+  return n;
+}
+
+/**
+ * Turn a Postgres unique-violation into a message that names the right
+ * problem, or null if this error is not one.
+ *
+ * WHY THIS IS NOT JUST A STRING MATCH ON "duplicate key": journal_posts
+ * now carries TWO unique indexes, the slug and (series_slug,
+ * series_part). Both raise the same SQLSTATE and both mention
+ * journal_posts, so the old check reported "a post with that slug
+ * already exists" when the actual collision was two posts claiming to
+ * be part two of the same story. That sends whoever hit it hunting
+ * through slugs for a conflict that is not there.
+ *
+ * Postgres puts the index name in the message, which is the only thing
+ * in the error that distinguishes them.
+ */
+export function uniqueViolationMessage(err: unknown, v: JournalInput): string | null {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (!msg.includes('duplicate key')) return null;
+
+  if (msg.includes('journal_posts_series_part_key')) {
+    const part = v.series_part ?? '?';
+    return `Another post is already part ${part} of that series. Give this one a different part number, or change the other post first.`;
+  }
+  if (msg.includes('journal_posts')) {
+    return `A post with slug "${v.slug}" already exists.`;
+  }
+  return null;
 }
 
 /**

@@ -19,7 +19,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { triggerDeployHookQuietly } from '../_deploy-hook.js';
 import { requireAdmin } from '../_admin-auth.js';
-import { validateJournalInput } from './_journal-shared.js';
+import { validateJournalInput, uniqueViolationMessage } from './_journal-shared.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -74,6 +74,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         tags = ${v.tags},
         status = ${v.status},
         published_at = ${publishedAt},
+        series_slug = ${v.series_slug},
+        series_part = ${v.series_part},
+        series_label = ${v.series_label},
         cover_image_url = NULL
       WHERE id = ${id}
       RETURNING id, slug, status, updated_at, published_at
@@ -99,9 +102,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ success: true, post: rows[0] });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('duplicate key') && msg.includes('journal_posts')) {
-      return res.status(409).json({ success: false, error: `Another post already uses slug "${v.slug}".` });
+    const conflict = uniqueViolationMessage(err, v);
+    if (conflict) {
+      return res.status(409).json({ success: false, error: conflict });
     }
     console.error('[admin/journal-update] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });
