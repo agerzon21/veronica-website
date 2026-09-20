@@ -179,6 +179,22 @@ const JournalPost = ({ slug }: { slug: string }) => {
     [chunks.length, post?.photos.length],
   );
 
+  /**
+   * Take the reader to the list of parts at the foot of the page.
+   *
+   * Not an href="#series-parts": this is a single-page app and a hash
+   * navigation pushes an entry onto history, so Back would return the reader
+   * to the top of the same article instead of where they came from.
+   */
+  const scrollToSeries = useCallback(() => {
+    const el = document.getElementById(SERIES_ANCHOR_ID);
+    if (!el) return;
+    const reduce =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  }, []);
+
   const photoCount = post?.photos.length ?? 0;
   const navLightbox = useCallback(
     (dir: -1 | 1) => {
@@ -396,7 +412,32 @@ const JournalPost = ({ slug }: { slug: string }) => {
                 {post.series_part != null && (post.series?.length ?? 0) > 1 && (
                   <>
                     <Box w="4px" h="4px" borderRadius="full" bg="brand.accent" />
-                    <Text textStyle="metaCaption" color="brand.accent">
+                    {/* Clickable: it names a story that has other parts, and
+                        the list of them is at the foot of the page. The dotted
+                        rule is there so it reads as something you can press
+                        before anyone hovers it, since an interactive line that
+                        looks exactly like the static one beside it never gets
+                        pressed. */}
+                    <Text
+                      as="button"
+                      type="button"
+                      onClick={scrollToSeries}
+                      textStyle="metaCaption"
+                      color="brand.accent"
+                      cursor="pointer"
+                      borderBottom="1px dotted"
+                      borderColor="brand.accentBorder"
+                      pb="1px"
+                      transition="border-color 0.15s"
+                      _hover={{ borderBottomStyle: 'solid', borderColor: 'brand.accent' }}
+                      _focusVisible={{
+                        outline: '2px solid',
+                        outlineColor: 'brand.accent',
+                        outlineOffset: '3px',
+                        borderColor: 'transparent',
+                      }}
+                      aria-label={`Part ${partWord(post.series_part)} of ${partWord(post.series!.length)}. See every part of this story.`}
+                    >
                       {`Part ${partWord(post.series_part)} of ${partWord(post.series!.length)}`}
                     </Text>
                   </>
@@ -846,6 +887,9 @@ const DEFAULT_BACK = { to: '/journal', label: 'Back to the journal' };
  * with one silently missing makes a reader count them to work out which one
  * they are on.
  */
+/** The id the chapter marker scrolls to. One constant, two call sites. */
+const SERIES_ANCHOR_ID = 'series-parts';
+
 function SeriesCompanion({
   label,
   parts,
@@ -856,7 +900,16 @@ function SeriesCompanion({
   currentSlug: string;
 }) {
   return (
-    <Box mt={{ base: 10, md: 16 }} pt={{ base: 8, md: 10 }} borderTop="1px solid" borderColor="brand.accent">
+    <Box
+      id={SERIES_ANCHOR_ID}
+      // So the chapter marker at the top can land it below any sticky chrome
+      // rather than under it.
+      scrollMarginTop={{ base: '72px', md: '96px' }}
+      mt={{ base: 10, md: 16 }}
+      pt={{ base: 8, md: 10 }}
+      borderTop="1px solid"
+      borderColor="brand.accent"
+    >
       <VStack spacing={1} mb={{ base: 6, md: 8 }} textAlign="center">
         <Text textStyle="metaCaption" color="brand.accent">
           {label || 'One story, in two parts'}
