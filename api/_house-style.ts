@@ -42,7 +42,13 @@ export const WRITING_RULES_CATEGORY = 'writing_rules';
  * always sees the text before it leaves. She would have to type a second
  * message ("send it") every time.
  *
- * Covered by scratchpad/test-send-approval.mjs, which asserts both branches.
+ * Covered by scripts/check-send-gate.mjs, which runs in `npm run build`. It
+ * reads this constant and asserts whichever behaviour it is currently set to,
+ * so flipping the line below changes the expectation with it. (An earlier
+ * version of this comment named a file that was never in the repo and claimed
+ * it asserted both branches. A compile-time constant only has one branch at a
+ * time, and a comment promising coverage that does not exist is worse than
+ * none: it tells whoever edits these regexes next that they are protected.)
  */
 export const ALLOW_DRAFT_AND_SEND_IN_ONE_MESSAGE = true;
 

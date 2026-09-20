@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs && node scripts/build-gallery-statics.mjs --check",
+    "build": "node scripts/check-send-gate.mjs && rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs && node scripts/build-gallery-statics.mjs --check",
     "lint": "eslint . --report-unused-disable-directives",
     "preview": "vite preview",
     "hero-variants": "node scripts/build-hero-variants.mjs",
@@ -19,7 +19,8 @@
     "db:up": "node scripts/migrate.mjs up",
     "gallery-statics": "node scripts/build-gallery-statics.mjs",
     "gallery-statics:check": "node scripts/build-gallery-statics.mjs --check",
-    "check:stripe": "node scripts/check-stripe-signature.mjs"
+    "check:stripe": "node scripts/check-stripe-signature.mjs",
+    "check:send-gate": "node scripts/check-send-gate.mjs"
   },
   "dependencies": {
     "@chakra-ui/icons": "^2.2.4",
