@@ -32,6 +32,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import igWebhookHandler from './inbox/_ig-webhook.js';
 import emailWebhookHandler from './inbox/_email-webhook.js';
+import stripeWebhookHandler from './inbox/_stripe-webhook.js';
 
 const HANDLERS: Record<
   string,
@@ -39,6 +40,9 @@ const HANDLERS: Record<
 > = {
   'ig-webhook': igWebhookHandler,
   'email-webhook': emailWebhookHandler,
+  // Money arriving. Here rather than under /api/admin because Stripe signs the
+  // RAW bytes and this dispatcher is the one that turns the body parser off.
+  'stripe-webhook': stripeWebhookHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
