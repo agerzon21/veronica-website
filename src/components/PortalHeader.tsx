@@ -591,13 +591,20 @@ const PortalHeader = ({
   const navOwnsMobileSlot = hasSectionBar || sectionNavExpected;
 
   /**
-   * And on a desktop. The two-bar nav takes the slot once the booking has
-   * nothing left to report, and on the gallery-only route, which has no
-   * booking behind it at all. Until then the middle belongs to the progress
-   * track and the booking's own sections have a sticky row of their own under
-   * the header, which is unchanged.
+   * And on a desktop, ALWAYS, once there is an account menu to put there.
+   *
+   * This used to wait until the booking was finished, and until then the
+   * booking's sections lived in a second sticky row of pills below the header.
+   * That row cost roughly fifty pixels of the first screenful and made an
+   * unfinished booking look like a different product from a finished one, for
+   * no reason other than the order the two states were built in. The same list
+   * is behind the same control in both states now.
+   *
+   * The progress track keeps its place alongside rather than being displaced:
+   * they are different facts. The track says where the booking is, the control
+   * says where the page is.
    */
-  const navOwnsDesktopSlot = isPortalComplete(progress) || !hasContract(progress);
+  const navOwnsDesktopSlot = hasAccountBar || !hasContract(progress);
 
   /**
    * The handoff itself.
@@ -838,6 +845,13 @@ const PortalHeader = ({
           minW={0}
           align="center"
           gap={SLOT_GAP}
+          // Capped on a WIDE screen while the progress track is still beside
+          // it. Left to flex freely the account control stretched to nearly
+          // seven hundred pixels, which reads as a search field rather than a
+          // menu: a control that wide looks like somewhere to type. Uncapped
+          // again once the booking is finished, because then it shares the row
+          // with the photo bar and the two split the width between them.
+          maxW={{ base: 'none', md: isPortalComplete(progress) ? 'none' : '300px' }}
           display={{
             base: navOwnsMobileSlot ? 'flex' : 'none',
             md: navOwnsDesktopSlot ? 'flex' : 'none',
@@ -883,13 +897,17 @@ const PortalHeader = ({
             the page where every byte is in front of the client's face. The
             guard is two plain booleans, not a measured width, so it is the same
             answer in the prerendered HTML and in the client's first paint. */}
-        {hasContract(progress) && !(navOwnsMobileSlot && navOwnsDesktopSlot) && (
+        {hasContract(progress) && !(navOwnsMobileSlot && isPortalComplete(progress)) && (
           <Box
             flex="1"
             minW={0}
             display={{
               base: navOwnsMobileSlot ? 'none' : 'block',
-              md: navOwnsDesktopSlot ? 'none' : 'block',
+              // Shown alongside the account control now rather than instead of
+              // it, and gone only when the booking is finished, because a
+              // track whose every step is done is a receipt rather than a
+              // direction.
+              md: isPortalComplete(progress) ? 'none' : 'block',
             }}
           >
             <ProgressTrack steps={buildSteps(progress!)} />

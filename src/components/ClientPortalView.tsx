@@ -17,7 +17,6 @@ import ClientGallery, {
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import PortalHeader, {
-  ScrollStrip,
   formatMoney,
   isPortalComplete,
   useNavSelectionLock,
@@ -27,9 +26,6 @@ import PortalHeader, {
 import {
   AT_BOTTOM_THRESHOLD,
   HEADER_CLEARANCE,
-  PORTAL_HEADER_H,
-  PORTAL_NAV_H,
-  STICKY_BOTTOM,
   portalChrome,
   type PortalChrome,
 } from './portalLayout';
@@ -400,7 +396,6 @@ const ClientPortalView = ({
   // heading a nav row below chrome that is not there, and its scan would call
   // a section current 48px before the reader reached it: neither looks broken,
   // they just look like a badly built page.
-  const chrome = portalChrome(!portalComplete);
 
   // Whether the Photos section renders the gallery at all. Three states, kept
   // mutually exclusive down in the section itself; this is the test for the
@@ -444,6 +439,22 @@ const ClientPortalView = ({
   // stated once here so the row that stands down and the row that never
   // mounts cannot disagree.
   const galleryOwnsNavRow = galleryHasNav && !portalComplete;
+
+  // Computed AFTER galleryOwnsNavRow, because it now depends on it.
+  //
+  // The portal used to draw its own sticky second row of section pills on
+  // desktop, so any unfinished booking had two rows of chrome. That row is
+  // gone: the header carries the same list behind its "Your account" control
+  // at every width, which is what the delivered state has always done, so the
+  // two states stop looking like two different products and the booking gets
+  // back roughly fifty pixels of the first screenful.
+  //
+  // So the ONLY thing that can still pin a second row under the header is the
+  // gallery's own section strip. Getting this wrong is not subtle: a portal
+  // claiming a row that is not there drops every heading 48px below the chrome
+  // and makes the scroll scan call a section current before the reader reaches
+  // it. See portalLayout.
+  const chrome = portalChrome(galleryOwnsNavRow);
 
   // How many photos there are, for the pinned See photos row in the account
   // menu. The same two lists photosDelivered is derived from, counted rather
@@ -561,7 +572,6 @@ const ClientPortalView = ({
   // is definitively "user has scrolled INTO the section" (its top
   // is above the sticky nav bottom, its bottom is still below it).
   const photosSectionRef = useRef<HTMLDivElement | null>(null);
-  const [isPhotosInView, setIsPhotosInView] = useState(false);
   /**
    * The HEADER's handoff: is the reader inside the photos?
    *
@@ -579,16 +589,12 @@ const ClientPortalView = ({
    * hand over to a photo bar that still said "Password".
    */
   const [headerInPhotos, setHeaderInPhotos] = useState(false);
-  // One listener for both, because they are two readings of one rectangle.
-  // isPhotosInView is only meaningful when the gallery is drawing a strip of
-  // its own: otherwise there is nothing to swap in, and hiding the portal's
-  // row would leave the client with no desktop navigation at all. The guard is
-  // the gallery's own predicate rather than a second reading of the same data,
-  // so the row that stands down and the row that takes over are decided by one
-  // fact.
+  // This used to read one rectangle for two answers: whether the gallery's
+  // strip had reached the sticky band (to hide the portal's own second row)
+  // and whether the reader was inside Photos (for the header handoff). The
+  // second row is gone, so only the second question is left.
   useEffect(() => {
     if (!galleryRendered) {
-      setIsPhotosInView(false);
       setHeaderInPhotos(false);
       return;
     }
@@ -615,9 +621,6 @@ const ClientPortalView = ({
       const el = photosSectionRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      setIsPhotosInView(
-        galleryOwnsNavRow && rect.top < STICKY_BOTTOM && rect.bottom > PORTAL_HEADER_H,
-      );
       // Asked for per frame for the same reason the nav scans ask: the line
       // sits under whatever chrome the CURRENT width has, and this listener is
       // already subscribed to resize.
@@ -959,14 +962,6 @@ const ClientPortalView = ({
           client scrolls into the photos section, where the gallery's own
           sticky section nav takes over that slot so the two do not stack. It
           keeps its height while hidden, see the note on the component. */}
-      {!portalComplete && (
-        <PortalTopNav
-          items={navItems}
-          activeId={activeNavId}
-          onSelect={handleNavSelect}
-          isPhotosInView={isPhotosInView}
-        />
-      )}
 
       {/* ─── Welcome block ───
           id="portal-top-section" is the scroll target for the Top
@@ -3254,122 +3249,5 @@ function useActiveSection(
  * against the left edge. Centring is only safe inside a horizontal scroller
  * because the row is minW="max-content": see the note in ScrollStrip.
  */
-interface PortalTopNavProps {
-  items: PortalNavItem[];
-  activeId: string | null;
-  onSelect: (id: string) => void;
-  isPhotosInView: boolean;
-}
-
-function PortalTopNav({ items, activeId, onSelect, isPhotosInView }: PortalTopNavProps) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const pillRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
-
-  // Keep the active pill inside the visible part of the strip.
-  //
-  // Scrolls the container directly rather than calling pill.scrollIntoView():
-  // the latter reads block:'nearest' as "scroll the PAGE until this is
-  // reachable" whenever the whole sticky row is off screen, which is what
-  // produced the "tap an item, the page springs to the bottom and back" bounce
-  // on long portals.
-  useEffect(() => {
-    if (!activeId) return;
-    const pill = pillRefs.current[activeId];
-    const container = scrollRef.current;
-    if (!pill || !container) return;
-    container.scrollTo({
-      left: pill.offsetLeft - container.clientWidth / 2 + pill.offsetWidth / 2,
-      behavior: scrollBehavior(),
-    });
-  }, [activeId]);
-
-  // Fewer than two items is not navigation, it is a label.
-  if (items.length < 2) return null;
-
-  return (
-    <Box
-      // Hidden, NOT unmounted, and not display:none either. This row is
-      // sticky, so it still takes its PORTAL_NAV_H out of the normal flow
-      // above the Photos section. Taking that height away on the way in and
-      // handing it back on the way out moves every following section by
-      // PORTAL_NAV_H, which moves the very rectangle the handoff measures, and
-      // the two chase each other for the width of the boundary. That is the
-      // flicker. Keeping the height reserved makes the handoff a clean swap:
-      // the gallery's own row pins to the same offset and takes the band over.
-      visibility={isPhotosInView ? 'hidden' : 'visible'}
-      pointerEvents={isPhotosInView ? 'none' : 'auto'}
-      // Desktop only. A phone's whole chrome is the header alone, which carries
-      // this list behind its burger, and portalChrome answers that there in
-      // every state because of this line.
-      display={{ base: 'none', md: 'block' }}
-      position="sticky"
-      top={HEADER_CLEARANCE}
-      zIndex={10}
-      h={`${PORTAL_NAV_H}px`}
-      bg="rgba(255, 255, 255, 0.94)"
-      backdropFilter="blur(10px)"
-    >
-      <Flex h="100%" align="center">
-        <Box flex="1" minW={0}>
-          <ScrollStrip scrollRef={scrollRef}>
-            {items.map((item) => {
-              const active = activeId === item.id;
-              return (
-                <Box
-                  key={item.id}
-                  ref={(el: HTMLDivElement | null) => {
-                    pillRefs.current[item.id] = el;
-                  }}
-                  as="button"
-                  type="button"
-                  onClick={() => onSelect(item.id)}
-                  aria-current={active ? 'true' : undefined}
-                  flexShrink={0}
-                  display="inline-flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  gap={2}
-                  px={{ base: 4, md: 5 }}
-                  // 44px on a phone is the minimum a thumb gets. It very
-                  // nearly fills PORTAL_NAV_H, which is the point: the row is
-                  // as short as it can be while still being tappable.
-                  h={{ base: '44px', md: '32px' }}
-                  fontSize="2xs"
-                  fontWeight="500"
-                  letterSpacing="0.2em"
-                  textTransform="uppercase"
-                  whiteSpace="nowrap"
-                  color={active ? 'white' : 'gray.700'}
-                  bg={active ? 'brand.accent' : 'transparent'}
-                  border="1px solid"
-                  borderColor={active ? 'brand.accent' : 'gray.200'}
-                  borderRadius="full"
-                  transition="all 0.25s ease"
-                  cursor="pointer"
-                  _hover={
-                    active
-                      ? { bg: 'brand.accentStrong', borderColor: 'brand.accentStrong' }
-                      : {
-                          borderColor: 'brand.accent',
-                          color: 'brand.accentText',
-                          bg: 'rgba(201, 169, 110, 0.06)',
-                        }
-                  }
-                  sx={{
-                    WebkitTapHighlightColor: 'transparent',
-                    '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
-                  }}
-                >
-                  {item.icon && <Icon as={item.icon} boxSize={2.5} />}
-                  {item.label}
-                </Box>
-              );
-            })}
-          </ScrollStrip>
-        </Box>
-      </Flex>
-    </Box>
-  );
-}
 
 export default ClientPortalView;
