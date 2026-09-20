@@ -50,7 +50,7 @@ export const PAYMENT_HANDLES = {
  */
 export type CardPaymentsMode = 'off' | 'preview' | 'on';
 
-export const CARD_PAYMENTS_MODE: CardPaymentsMode = 'off';
+export const CARD_PAYMENTS_MODE: CardPaymentsMode = 'preview';
 
 /** True when cards are real for ordinary clients. */
 export const CARD_PAYMENTS_ENABLED = (CARD_PAYMENTS_MODE as CardPaymentsMode) === 'on';
