@@ -1696,6 +1696,28 @@ const dict = {
       en: 'Enter an amount like 1200 or 1,200.',
       ru: 'Введи сумму, например 1200 или 1,200.',
     },
+    // Taking a delivery back, after delivering to the wrong client.
+    undeliverLink: { en: 'Undo this delivery', ru: 'Отменить отправку' },
+    undeliverTitle: {
+      en: 'Take this delivery back?',
+      ru: 'Отменить отправку галереи?',
+    },
+    undeliverBodyFull: {
+      en: 'The photos stop being served immediately and the expiry countdown is cleared. Nothing is deleted, and the folder link, the password, the payments and the contract all stay exactly as they are.',
+      ru: 'Фото сразу перестанут отдаваться, отсчёт срока хранения обнулится. Ничего не удаляется: ссылка на папку, пароль, платежи и контракт останутся как есть.',
+    },
+    // Gallery-only portals are not gated on the delivery stamp at all, so
+    // saying "the photos are hidden" here would be false. Name the control
+    // that actually hides them instead.
+    undeliverBodySimple: {
+      en: 'This clears the delivered date and the expiry. On a gallery-only booking the photos are NOT gated on that date, so they stay reachable: use Disable above to actually hide them.',
+      ru: 'Это очистит дату отправки и срок хранения. В режиме «только галерея» фото не зависят от этой даты и останутся доступными: чтобы их действительно скрыть, нажми «Отключить» выше.',
+    },
+    undeliverEmailCaveat: {
+      en: 'The photos-are-ready email cannot be recalled. If it already went out, the client has the link and may already have opened it.',
+      ru: 'Письмо «фото готовы» отозвать нельзя. Если оно уже ушло, ссылка у клиента и он мог уже её открыть.',
+    },
+    undeliverConfirm: { en: 'Take it back', ru: 'Отменить отправку' },
     // Evidence that the photos-are-ready email actually went out.
     // "No record" rather than "not sent": a gallery delivered before this
     // column existed has no id either, and claiming those failed would be a

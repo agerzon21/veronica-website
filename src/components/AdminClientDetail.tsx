@@ -408,6 +408,39 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   };
 
   const [resendingDelivery, setResendingDelivery] = useState(false);
+  const [undeliverArmed, setUndeliverArmed] = useState(false);
+  const [undelivering, setUndelivering] = useState(false);
+
+  /**
+   * Take a delivery back.
+   *
+   * Exists because delivering to the wrong client was unrecoverable: the
+   * release switch was in no patch list, so the only route back was the Danger
+   * Zone delete, which cascades to payments and charges. Recovering from a
+   * mis-click meant destroying the booking's financial history.
+   */
+  const undeliverGallery = async () => {
+    setUndelivering(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/portal-deliver', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, id: portalId, undeliver: true }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUndeliverArmed(false);
+        await reload();
+      } else {
+        setError(data.error || t.clientDetail.serverErrorStatus(res.status));
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setUndelivering(false);
+    }
+  };
 
   /**
    * Send the photos-are-ready email again, without re-delivering.
@@ -669,6 +702,67 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                   resending={resendingDelivery}
                   onResend={resendDeliveryEmail}
                 />
+              )}
+              {/* Recovery for delivering to the wrong client. Before this the
+                  only undo was the Danger Zone delete, which cascades to
+                  payments and charges. */}
+              {portal.gallery_delivered_at && !undeliverArmed && (
+                <Box mt={1}>
+                  <Box
+                    as="button"
+                    type="button"
+                    onClick={() => setUndeliverArmed(true)}
+                    fontSize="xs"
+                    color="gray.500"
+                    textDecoration="underline"
+                    bg="transparent"
+                    border="none"
+                    px={0}
+                    minH="44px"
+                    cursor="pointer"
+                  >
+                    {t.clientDetail.undeliverLink}
+                  </Box>
+                </Box>
+              )}
+              {portal.gallery_delivered_at && undeliverArmed && (
+                <Box mt={2} p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
+                  <Text fontSize="sm" fontWeight="500" color="orange.900" mb={1}>
+                    {t.clientDetail.undeliverTitle}
+                  </Text>
+                  {/* Two separate sentences on purpose. What it does, then
+                      what it cannot do. The second is the one she needs: an
+                      email already sent cannot be recalled, and on a
+                      gallery-only booking the photos do not even re-hide. */}
+                  <Text fontSize="xs" color="orange.800" mb={1}>
+                    {portal.mode === 'full'
+                      ? t.clientDetail.undeliverBodyFull
+                      : t.clientDetail.undeliverBodySimple}
+                  </Text>
+                  <Text fontSize="xs" color="orange.800" mb={3}>
+                    {t.clientDetail.undeliverEmailCaveat}
+                  </Text>
+                  <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+                    <CTAButton
+                      onClick={undeliverGallery}
+                      variant="danger"
+                      size="sm"
+                      isLoading={undelivering}
+                      loadingText={t.clientDetail.saving}
+                      fullWidth={{ base: true, md: false }}
+                    >
+                      {t.clientDetail.undeliverConfirm}
+                    </CTAButton>
+                    <CTAButton
+                      onClick={() => setUndeliverArmed(false)}
+                      variant="ghost"
+                      size="sm"
+                      fullWidth={{ base: true, md: false }}
+                    >
+                      {t.common.cancel}
+                    </CTAButton>
+                  </Stack>
+                </Box>
               )}
               {/* The only route to a live gallery's expiry. Without it the
                   countdown turned orange and then the gallery went dark with

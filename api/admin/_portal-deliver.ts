@@ -187,6 +187,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       process.env.SITE_ORIGIN ||
       (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
 
+    // Taking a delivery back.
+    //
+    // Delivering to the wrong client used to be unrecoverable. gallery_
+    // delivered_at was in no patch list anywhere, so the only route back was
+    // the super-admin Danger Zone delete, which cascades to payment_entries
+    // and portal_charges. The recovery for a mis-click destroyed the booking's
+    // entire financial history.
+    //
+    // This clears the release switch and the expiry and touches NOTHING else.
+    // It does not delete, it does not disable the gallery, and it emphatically
+    // does not un-send the email, which is why the UI has to say so: the
+    // client may already have the photos open in another tab. Re-hiding is
+    // damage control, not a time machine.
+    if (req.body?.undeliver === true) {
+      if (!portal.gallery_delivered_at) {
+        return res.status(409).json({
+          success: false,
+          error: 'This gallery has not been delivered, so there is nothing to take back.',
+        });
+      }
+      await sql`
+        update client_portals
+        set gallery_delivered_at = null,
+            gallery_expires_at = null,
+            updated_at = now()
+        where id = ${id}
+      `;
+      return res.status(200).json({
+        success: true,
+        gallery_delivered_at: null,
+        gallery_expires_at: null,
+        // Said plainly rather than implied by a success. For a simple portal
+        // the gate does not consult this column at all (api/portal/_gallery-
+        // gate.ts returns true for anything that is not full mode), so the
+        // photos stay reachable and gallery_enabled is the switch that hides
+        // them. Reporting "done" without that would be a lie of omission.
+        photos_hidden: portal.mode === 'full',
+      });
+    }
+
     // Sending the photos-are-ready email AGAIN, without re-delivering.
     //
     // Handled before the money guard on purpose: the photos are already
