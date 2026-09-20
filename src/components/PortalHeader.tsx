@@ -142,6 +142,16 @@ export interface PortalProgressData {
   photosDelivered: boolean;
   /** True only when a dated installment has actually come and gone unpaid. */
   overdue?: boolean;
+  /**
+   * The shoot itself, as YYYY-MM-DD. The track's middle step.
+   *
+   * It belongs in the sequence because the CONTRACT puts it there: the
+   * retainer is due at signing and the balance is due a set window AFTER the
+   * event date. A track that collapsed both into one "Pay" step told a client
+   * who had signed and paid a retainer that the next thing in their life was
+   * "Photos", months before the day they were actually waiting for.
+   */
+  eventDate?: string | null;
 }
 
 interface PortalHeaderProps {
@@ -414,8 +424,12 @@ interface ProgressStep {
   tone: StepTone;
   /** The step they are on. Keeps its label on a phone; the others lose theirs. */
   current: boolean;
+  /** How many steps there are in total, for the phone's "3 of 5". */
+  total?: number;
+  /** A money step. The phone drops its detail when the balance corner has it. */
+  money?: boolean;
   /**
-   * Where this step actually stands, in a few words. Desktop only.
+   * Where this step actually stands, in a few words.
    *
    * "SIGN, PAY, PHOTOS" in three small circles told a client the order of
    * events, which they already knew, and nothing about their own booking. The
@@ -458,60 +472,145 @@ const STEP_TONES: Record<StepTone, { bg: string; border: string; fg: string; lab
   waiting: { bg: 'transparent', border: 'brand.success', fg: 'brand.success', label: 'brand.success' },
 };
 
-const STEP_LABELS = ['Sign', 'Pay', 'Photos'];
+/**
+ * Read a YYYY-MM-DD column without letting a timezone move it.
+ *
+ * new Date('2026-12-31') is midnight UTC, which is the 30th across the
+ * Americas. The whole system reads these dates by their parts for this
+ * reason; see the contract renderer, which composes noon UTC for the same
+ * fact.
+ */
+function eventParts(iso: string | null | undefined): { y: number; m: number; d: number } | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  if (!m) return null;
+  return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+}
 
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** "December 31", and the year too when it is not the one we are in. */
+function prettyEventDate(iso: string | null | undefined): string | null {
+  const p = eventParts(iso);
+  if (!p) return null;
+  const thisYear = new Date().getFullYear();
+  return `${MONTHS[p.m - 1]} ${p.d}${p.y === thisYear ? '' : `, ${p.y}`}`;
+}
+
+/** Has the day itself been and gone? Compared by calendar date, not by clock. */
+function eventHasPassed(iso: string | null | undefined): boolean {
+  const p = eventParts(iso);
+  if (!p) return false;
+  const now = new Date();
+  const today = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  return p.y * 10000 + p.m * 100 + p.d < today;
+}
+
+/**
+ * The booking as the CLIENT experiences it, in order.
+ *
+ * Contract, retainer, the day itself, whatever is left to pay, then the
+ * photographs. It used to be three fixed steps, Sign / Pay / Photos, which got
+ * two things wrong. It merged the retainer and the balance, although the
+ * contract makes them due at opposite ends of the booking. And it left a green
+ * "Photos" sitting as the next thing for a client whose wedding had not
+ * happened yet, which answers a question nobody asked.
+ *
+ * Steps that do not apply are not rendered as done, they are not rendered at
+ * all: a booking with no named retainer has no retainer step, and one whose
+ * whole price is the retainer has no balance step. A step the client can never
+ * act on is noise in a header.
+ */
 function buildSteps(p: PortalProgressData): ProgressStep[] {
   const signed = p.contractStatus === 'signed';
-  const paid = isFullyPaid(p);
-  // Step 2 is done ONLY when the whole thing is paid. A retainer in the bank
-  // is progress, not completion.
-  const done = [signed, signed && paid, p.photosDelivered];
-
-  // The step they are on is the first unfinished one. Everything past it is
-  // grey whatever its own state would otherwise suggest.
-  const currentIndex = done.findIndex((d) => !d);
-
-  // Amber while the retainer is outstanding, gold once it is in and only the
-  // balance remains. A contract with no named retainer treats any payment at
-  // all as the retainer being in.
-  const retainerOutstanding = retainerStillDue(p);
-
-  const toneForCurrent = (i: number): StepTone => {
-    if (i === 0) return 'action';
-    if (i === 1) {
-      if (p.overdue) return 'overdue';
-      return retainerOutstanding ? 'action' : 'progress';
-    }
-    // Photos. Nothing is being asked of them here, ever: the gallery arrives
-    // when Veronika delivers it. Once they have signed and paid, the whole
-    // track is their side of the work finished, so it says waiting rather
-    // than shouting for an action that does not exist.
-    return signed && paid ? 'waiting' : 'progress';
-  };
-
-  // Said in the client's terms, and never a number they would have to
-  // reconcile against the Balance section further down: this line says WHERE
-  // things stand, the section says what is owed.
+  const paidCents = moneyCents(p.paidToDate);
+  const retainer = p.retainerAmount;
+  const hasRetainer = retainer !== null && retainer > 0;
+  const retainerCents = hasRetainer ? moneyCents(retainer) : 0;
+  const retainerIn = !hasRetainer || paidCents >= retainerCents;
   const owed = p.amountOwed;
-  const outstanding = owed !== null ? Math.max(moneyCents(owed) - moneyCents(p.paidToDate), 0) / 100 : 0;
-  const details: Array<string | undefined> = [
-    signed ? 'Signed' : p.contractStatus === 'pending' ? 'Waiting for you' : 'Not sent yet',
-    owed === null
-      ? undefined
-      : paid
+  const owedCents = owed !== null ? moneyCents(owed) : null;
+  const paidInFull = isFullyPaid(p);
+  const leftOver = owedCents !== null ? Math.max(owedCents - paidCents, 0) / 100 : 0;
+  // Only when there is genuinely something beyond the retainer to settle.
+  const hasBalance = owedCents !== null && owedCents > retainerCents;
+  const eventPassed = eventHasPassed(p.eventDate);
+  const eventLabel = prettyEventDate(p.eventDate);
+
+  const raw: Array<{ label: string; done: boolean; detail?: string; tone: StepTone; money?: boolean }> = [];
+
+  raw.push({
+    label: 'Contract',
+    done: signed,
+    detail: signed ? 'Signed' : 'Waiting for you',
+    tone: 'action',
+  });
+
+  if (hasRetainer) {
+    raw.push({
+      label: 'Retainer',
+      done: retainerIn,
+      detail: retainerIn
+        ? 'Received'
+        : `${formatMoney(Math.max(retainerCents - paidCents, 0) / 100)} due`,
+      tone: 'action',
+      money: true,
+    });
+  }
+
+  if (eventLabel) {
+    raw.push({
+      label: 'Event',
+      done: eventPassed,
+      // The date either way. Before the day it is what they are waiting for;
+      // after it, it is still the fact that anchors everything below.
+      detail: eventLabel,
+      // Nothing is being asked of them. The day arrives on its own.
+      tone: 'waiting',
+    });
+  }
+
+  if (hasBalance) {
+    raw.push({
+      label: 'Balance',
+      done: paidInFull,
+      detail: paidInFull
         ? 'Paid in full'
         : p.overdue
-          ? `${formatMoney(outstanding)} overdue`
-          : retainerOutstanding
-            ? `Retainer ${formatMoney(Math.max(moneyCents(p.retainerAmount ?? 0) - moneyCents(p.paidToDate), 0) / 100)} due`
-            : `${formatMoney(outstanding)} left`,
-    p.photosDelivered ? 'Ready to view' : signed && paid ? 'Veronika is editing' : 'After the shoot',
-  ];
+          ? `${formatMoney(leftOver)} overdue`
+          : `${formatMoney(leftOver)} left`,
+      tone: p.overdue ? 'overdue' : 'action',
+      money: true,
+    });
+  }
 
-  return STEP_LABELS.map((label, i) => {
-    const tone: StepTone = done[i] ? 'done' : i === currentIndex ? toneForCurrent(i) : 'upcoming';
-    return { n: i + 1, label, tone, current: i === currentIndex, detail: details[i] };
+  raw.push({
+    label: 'Photos',
+    done: p.photosDelivered,
+    detail: p.photosDelivered
+      ? 'Ready to view'
+      : eventPassed
+        ? 'Veronika is editing'
+        : 'After the event',
+    tone: 'waiting',
   });
+
+  // The step they are on is the first unfinished one; everything past it is
+  // grey whatever its own state would otherwise suggest.
+  const currentIndex = raw.findIndex((r) => !r.done);
+
+  return raw.map((r, i) => ({
+    n: i + 1,
+    label: r.label,
+    tone: r.done ? 'done' : i === currentIndex ? r.tone : 'upcoming',
+    current: i === currentIndex,
+    detail: r.detail,
+    money: r.money,
+    total: raw.length,
+  }));
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -950,7 +1049,7 @@ const PortalHeader = ({
               md: isPortalComplete(progress) ? 'none' : 'block',
             }}
           >
-            <ProgressTrack steps={buildSteps(progress!)} />
+            <ProgressTrack steps={buildSteps(progress!)} suppressMoneyDetail={showBalance} />
           </Box>
         )}
 
@@ -2090,103 +2189,191 @@ function DesktopMenuPanel({
  * A desktop header has plenty else in it and does not want the track pulled
  * across the full width, so it keeps its measured 20px.
  */
-function ProgressTrack({ steps }: { steps: ProgressStep[] }) {
+function ProgressTrack({
+  steps,
+  suppressMoneyDetail = false,
+}: {
+  steps: ProgressStep[];
+  /** The balance corner already shows the number, so the phone should not. */
+  suppressMoneyDetail?: boolean;
+}) {
+  const current = steps.find((s) => s.current) ?? steps[steps.length - 1];
+  /**
+   * How far the line is filled. Up to the step they are ON, and no further.
+   *
+   * Not "is either end done": a client who pays in full before the wedding has
+   * a finished Balance step sitting AFTER an unfinished Event step, which is
+   * true and worth showing, but colouring the run to it green made the track
+   * read green, grey, green and look like it had lost its place.
+   */
+  const currentIdx = steps.findIndex((s) => s.current);
+
   return (
-    <Flex
-      align="center"
-      justify={{ base: 'center', md: 'flex-start' }}
-      gap={{ base: 1, md: 2.5 }}
-      role="group"
-      aria-label="Your booking progress"
-    >
-      {steps.map((s, i) => {
-        const tone = STEP_TONES[s.tone];
-        return (
-          <Fragment key={s.label}>
-            {i > 0 && (
-              <Box
-                // `flex` rather than a width, because it has to carry the
-                // shrink rule too: one shorthand, so nothing can set the two
-                // halves of this in an order CSS resolves the wrong way round.
-                // Desktop: grows into the space the header used to waste, so
-                // the track spans the row instead of huddling in the middle.
-                flex={{ base: '1 1 10px', md: '1 1 24px' }}
-                minW={{ base: '10px', md: '24px' }}
-                maxW={{ base: 'none', md: '120px' }}
-                h="1px"
-                bg={s.tone === 'done' ? 'brand.success' : 'gray.200'}
-              />
-            )}
-            <Flex
-              align="center"
-              gap={{ base: 1.5, md: 2 }}
-              flexShrink={0}
-              // role="img" plus a label is what makes a badge and a word read
-              // as one thing to a screen reader. Without it the number and the
-              // label are announced as loose text and the state, which is
-              // carried entirely in colour, is lost.
-              role="img"
-              aria-label={`Step ${s.n}, ${s.label}, ${
-                s.tone === 'done' ? 'done' : s.current ? 'in progress' : 'not started'
-              }`}
+    <>
+      {/*
+        THE PHONE: one step, the one they are on, said in words.
+
+        It used to render every badge, which on a booking two steps in meant
+        two green ticks and a number taking most of the row to say nothing a
+        client could act on. A phone has room for one fact, so it gets the
+        useful one: where you are, what it means, and how far through you are.
+      */}
+      <Flex
+        display={{ base: 'flex', md: 'none' }}
+        align="center"
+        gap={2}
+        minW={0}
+        role="group"
+        aria-label="Your booking progress"
+      >
+        <Flex
+          align="center"
+          justify="center"
+          w="24px"
+          h="24px"
+          flexShrink={0}
+          borderRadius="full"
+          bg={STEP_TONES[current.tone].bg}
+          border="1px solid"
+          borderColor={STEP_TONES[current.tone].border}
+          color={STEP_TONES[current.tone].fg}
+          fontSize="2xs"
+          fontWeight="600"
+          aria-hidden="true"
+        >
+          {current.tone === 'done' ? <Icon as={FaCheck} boxSize={2.5} /> : current.n}
+        </Flex>
+        <Flex direction="column" lineHeight="1.15" minW={0}>
+          <Text
+            fontSize="2xs"
+            fontWeight="500"
+            textTransform="uppercase"
+            letterSpacing="0.16em"
+            color={STEP_TONES[current.tone].label}
+            whiteSpace="nowrap"
+            aria-hidden="true"
+          >
+            {current.label}
+          </Text>
+          {current.detail && !(current.money && suppressMoneyDetail) && (
+            <Text
+              fontSize="2xs"
+              fontWeight="400"
+              color={current.tone === 'overdue' ? 'red.600' : 'gray.500'}
+              whiteSpace="nowrap"
+              overflow="hidden"
+              textOverflow="ellipsis"
+              mt="1px"
+              aria-hidden="true"
             >
+              {current.detail}
+            </Text>
+          )}
+        </Flex>
+        {/* Progress, without spending a badge per step to show it. */}
+        {current.total && current.total > 1 && (
+          <Text
+            fontSize="2xs"
+            color="gray.400"
+            whiteSpace="nowrap"
+            flexShrink={0}
+            aria-hidden="true"
+          >
+            {current.n}/{current.total}
+          </Text>
+        )}
+        <Box as="span" srOnly>
+          {`Step ${current.n} of ${current.total ?? steps.length}, ${current.label}${
+            current.detail ? `, ${current.detail}` : ''
+          }`}
+        </Box>
+      </Flex>
+
+      {/* THE DESKTOP: the whole track, centred in the space it was given. */}
+      <Flex
+        display={{ base: 'none', md: 'flex' }}
+        align="center"
+        justify="center"
+        gap={2.5}
+        role="group"
+        aria-label="Your booking progress"
+      >
+        {steps.map((s, i) => {
+          const tone = STEP_TONES[s.tone];
+          return (
+            <Fragment key={s.label}>
+              {i > 0 && (
+                <Box
+                  // Grows into the room the header used to waste, but capped so
+                  // a three-step booking does not stretch into a dashed line
+                  // with two dots on it.
+                  flex="1 1 20px"
+                  minW="16px"
+                  maxW="72px"
+                  h="1px"
+                  bg={currentIdx === -1 || i <= currentIdx ? 'brand.success' : 'gray.200'}
+                />
+              )}
               <Flex
                 align="center"
-                justify="center"
-                w={{ base: '22px', md: '30px' }}
-                h={{ base: '22px', md: '30px' }}
-                borderRadius="full"
-                bg={tone.bg}
-                border="1px solid"
-                borderColor={tone.border}
-                color={tone.fg}
-                fontSize={{ base: '2xs', md: 'xs' }}
-                fontWeight="600"
+                gap={2}
                 flexShrink={0}
-                aria-hidden="true"
+                // role="img" plus a label is what makes a badge and a word read
+                // as one thing to a screen reader. Without it the number and
+                // the label are announced as loose text and the state, which is
+                // carried entirely in colour, is lost.
+                role="img"
+                aria-label={`Step ${s.n}, ${s.label}${s.detail ? `, ${s.detail}` : ''}, ${
+                  s.tone === 'done' ? 'done' : s.current ? 'in progress' : 'not started'
+                }`}
               >
-                {s.tone === 'done' ? <Icon as={FaCheck} boxSize={{ base: 2.5, md: 3 }} /> : s.n}
-              </Flex>
-              {/* The label, and under it on a desktop where this step actually
-                  stands. The second line is the reason the track is worth the
-                  width: the word PAY is the same on every booking, "$750 left"
-                  is not. */}
-              <Flex
-                direction="column"
-                lineHeight="1.15"
-                minW={0}
-                aria-hidden="true"
-                display={{ base: s.current ? 'flex' : 'none', md: 'flex' }}
-              >
-                <Text
-                  fontSize="2xs"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.16em"
-                  color={tone.label}
-                  whiteSpace="nowrap"
+                <Flex
+                  align="center"
+                  justify="center"
+                  w="30px"
+                  h="30px"
+                  borderRadius="full"
+                  bg={tone.bg}
+                  border="1px solid"
+                  borderColor={tone.border}
+                  color={tone.fg}
+                  fontSize="xs"
+                  fontWeight="600"
+                  flexShrink={0}
+                  aria-hidden="true"
                 >
-                  {s.label}
-                </Text>
-                {s.detail && (
+                  {s.tone === 'done' ? <Icon as={FaCheck} boxSize={3} /> : s.n}
+                </Flex>
+                <Flex direction="column" lineHeight="1.15" minW={0} aria-hidden="true">
                   <Text
-                    display={{ base: 'none', md: 'block' }}
                     fontSize="2xs"
-                    fontWeight="400"
-                    letterSpacing="0.02em"
-                    color={s.tone === 'overdue' ? 'red.600' : 'gray.500'}
+                    fontWeight="500"
+                    textTransform="uppercase"
+                    letterSpacing="0.16em"
+                    color={tone.label}
                     whiteSpace="nowrap"
-                    mt="2px"
                   >
-                    {s.detail}
+                    {s.label}
                   </Text>
-                )}
+                  {s.detail && (
+                    <Text
+                      fontSize="2xs"
+                      fontWeight="400"
+                      letterSpacing="0.02em"
+                      color={s.tone === 'overdue' ? 'red.600' : 'gray.500'}
+                      whiteSpace="nowrap"
+                      mt="2px"
+                    >
+                      {s.detail}
+                    </Text>
+                  )}
+                </Flex>
               </Flex>
-            </Flex>
-          </Fragment>
-        );
-      })}
-    </Flex>
+            </Fragment>
+          );
+        })}
+      </Flex>
+    </>
   );
 }
 

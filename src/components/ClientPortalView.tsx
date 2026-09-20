@@ -393,6 +393,10 @@ const ClientPortalView = ({
     paidToDate: data.paid_to_date,
     photosDelivered,
     overdue: balanceOverdue,
+    // The shoot itself is a step in the header track, between the retainer and
+    // whatever is left to pay, because that is the order the contract puts
+    // them in.
+    eventDate: data.event_date,
   };
 
   // Signed, paid and delivered. The section nav moves up into the header as a
