@@ -1118,6 +1118,17 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             value={portal.contract_total_amount?.toString() ?? ''}
             placeholder="0"
             helpText={t.clientDetail.totalAmountHelp}
+            // Matches the server's own test exactly. _portal-update refuses
+            // both amounts once contract_status is 'signed', and it used to do
+            // that silently from the caller's point of view: the Save button
+            // stayed, and the refusal rendered in the page-level error box
+            // directly under the header, which on this screen is three
+            // screenfuls above the Details section she pressed it in.
+            readOnly={
+              portal.contract_status === 'signed'
+                ? { reason: t.clientDetail.frozenBySignedContract }
+                : undefined
+            }
             saving={savingField === 'contract_total_amount'}
             validate={(v) => (parseMoneyInput(v) === 'invalid' ? t.clientDetail.amountInvalid : null)}
             onSave={(v) => {
@@ -1132,6 +1143,17 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
             value={portal.contract_retainer_amount?.toString() ?? ''}
             placeholder="0"
             helpText={t.clientDetail.retainerHelp}
+            // Matches the server's own test exactly. _portal-update refuses
+            // both amounts once contract_status is 'signed', and it used to do
+            // that silently from the caller's point of view: the Save button
+            // stayed, and the refusal rendered in the page-level error box
+            // directly under the header, which on this screen is three
+            // screenfuls above the Details section she pressed it in.
+            readOnly={
+              portal.contract_status === 'signed'
+                ? { reason: t.clientDetail.frozenBySignedContract }
+                : undefined
+            }
             saving={savingField === 'contract_retainer_amount'}
             validate={(v) => (parseMoneyInput(v) === 'invalid' ? t.clientDetail.amountInvalid : null)}
             onSave={(v) => {
@@ -1830,6 +1852,7 @@ function InlineField({
   normalize,
   validate,
   dangerConfirm,
+  readOnly,
   saving,
   onSave,
 }: {
@@ -1851,6 +1874,11 @@ function InlineField({
   // CONSEQUENCE before the post. For fields whose blast radius reaches things
   // already sent to a client and cannot be pulled back.
   dangerConfirm?: { title: string; body: string; confirmLabel: string };
+  // Renders the value and the reason instead of an editable box. For fields
+  // the SERVER will refuse: offering an input and a Save button for something
+  // that cannot be saved is a promise the screen cannot keep, and the refusal
+  // arrived in a page-level box three screenfuls above the button she pressed.
+  readOnly?: { reason: string };
   saving?: boolean;
   onSave: (v: string) => Promise<boolean | void>;
 }) {
@@ -1878,7 +1906,25 @@ function InlineField({
   const dirty = touched && draft !== (normalize ? normalize(value) : value);
   // The same test the Save button uses, so the leave warning and the visible
   // Save button can never disagree about whether this box is holding anything.
-  useDirtyFlag(dirty, label);
+  // A read-only field can never be dirty, so it must never report as such:
+  // otherwise a screen she cannot edit warns her about losing work.
+  useDirtyFlag(!readOnly && dirty, label);
+
+  if (readOnly) {
+    return (
+      <Box>
+        <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" color="gray.400" letterSpacing={{ base: '0.15em', md: '0.2em' }} textTransform="uppercase" mb={2}>
+          {label}
+        </Text>
+        <Text fontSize="sm" color={value ? 'gray.700' : 'gray.400'} minH="24px">
+          {value || t.clientDetail.summaryNotSet}
+        </Text>
+        <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+          {readOnly.reason}
+        </Text>
+      </Box>
+    );
+  }
 
   return (
     <Box>

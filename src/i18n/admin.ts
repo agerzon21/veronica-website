@@ -1696,6 +1696,13 @@ const dict = {
       en: 'Enter an amount like 1200 or 1,200.',
       ru: 'Введи сумму, например 1200 или 1,200.',
     },
+    // Shown in place of the Total and Retainer inputs once the contract is
+    // signed. Says why, and says what to do instead, because "you cannot" with
+    // no route forward just sends her looking for another way in.
+    frozenBySignedContract: {
+      en: 'Locked because the contract is signed. To change what is owed, add a charge in Payments above.',
+      ru: 'Заблокировано, потому что контракт подписан. Чтобы изменить сумму к оплате, добавь начисление в разделе «Оплаты» выше.',
+    },
     // Taking a delivery back, after delivering to the wrong client.
     undeliverLink: { en: 'Undo this delivery', ru: 'Отменить отправку' },
     undeliverTitle: {
