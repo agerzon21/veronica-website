@@ -197,7 +197,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'delete') {
       const entryId = typeof req.body?.entry_id === 'string' ? req.body.entry_id.trim() : '';
       if (!entryId) return res.status(400).json({ success: false, error: 'entry_id required' });
-      await sql`delete from payment_entries where id = ${entryId} and client_portal_id = ${id}`;
+      /**
+       * A card payment is not a note, and cannot be deleted here.
+       *
+       * Every other row in this table is something Vero typed to record money
+       * she was handed, so deleting a mistyped one is the correct repair. A
+       * source='stripe' row is different in kind: it is the record of money
+       * that actually moved through a card network, keyed to a PaymentIntent.
+       *
+       * Deleting one does not undo the charge. It drops paid_to_date, so the
+       * client is asked to pay again for money they have already sent, and it
+       * is PERMANENT: recordPayment de-duplicates on processor_payment_id, so
+       * if Stripe ever redelivers that event the insert is skipped and the row
+       * never comes back.
+       *
+       * The repair for a card payment is a refund in Stripe, which is a real
+       * movement of money in the other direction, not the quiet removal of the
+       * evidence that the first one happened.
+       */
+      const removed = (await sql`
+        delete from payment_entries
+        where id = ${entryId}
+          and client_portal_id = ${id}
+          and coalesce(source, 'manual') <> 'stripe'
+        returning id
+      `) as Array<{ id: string }>;
+
+      if (removed.length === 0) {
+        // Either it was a card payment, or it was already gone. Say which,
+        // because "nothing happened" with no reason reads as a broken button.
+        const still = (await sql`
+          select coalesce(source, 'manual') as source
+          from payment_entries
+          where id = ${entryId} and client_portal_id = ${id}
+          limit 1
+        `) as Array<{ source: string }>;
+        if (still.length > 0) {
+          return res.status(409).json({
+            success: false,
+            error:
+              'This is a card payment, so it cannot be deleted here. It records money that really ' +
+              'moved. To give it back, refund it in Stripe and the refund will be recorded on its own.',
+          });
+        }
+      }
       return recomputeAndReturn(sql, id, res);
     }
 

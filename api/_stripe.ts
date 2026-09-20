@@ -155,6 +155,12 @@ export type CreateCheckoutInput = {
   successUrl: string;
   cancelUrl: string;
   stripeAccount?: string | null;
+  /**
+   * What the booking has already been paid, in dollars. Used ONLY to build the
+   * idempotency key, so a later payment of the same amount cannot replay an
+   * earlier completed session. Never sent to Stripe.
+   */
+  paidToDate?: number;
 };
 
 export type CheckoutSession = { id: string; url: string };
@@ -173,8 +179,9 @@ export type CheckoutSession = { id: string; url: string };
 export async function createCheckoutSession(input: CreateCheckoutInput): Promise<CheckoutSession> {
   const {
     portalId, kind, amount, clientEmail, description,
-    successUrl, cancelUrl, stripeAccount = null,
+    successUrl, cancelUrl, stripeAccount = null, paidToDate = 0,
   } = input;
+  const paidToDateCents = Math.round(paidToDate * 100);
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('createCheckoutSession: amount must be a positive number of dollars');
@@ -215,8 +222,23 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
       },
     },
     stripeAccount,
-    // Two clicks on a slow phone must not open two sessions for one payment.
-    idempotencyKey: `checkout:${portalId}:${kind}:${unitAmount}`,
+    /**
+     * Two clicks on a slow phone must not open two sessions for one payment,
+     * but a SECOND payment must never replay the first.
+     *
+     * Stripe honours an idempotency key for 24 hours and replays the original
+     * response, so a key of portal + kind + amount meant that paying $500,
+     * having another $500 charge added, and paying again the same day handed
+     * the client back the ALREADY COMPLETED session instead of a new one. The
+     * second payment silently never happened.
+     *
+     * paidToDateCents is what makes the two different. It is constant across
+     * a double-click, because nothing has settled yet, and it changes the
+     * instant money lands, which is exactly when replaying stops being
+     * correct. An attempt that was never completed keeps its key and resumes
+     * the same session, which is the behaviour you want.
+     */
+    idempotencyKey: `checkout:${portalId}:${kind}:${unitAmount}:${paidToDateCents}`,
   });
 }
 

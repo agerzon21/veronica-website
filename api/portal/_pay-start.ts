@@ -21,7 +21,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { checkPortalPassword } from './_password.js';
-import { createCheckoutSession, isStripeConfigured } from '../_stripe.js';
+import { createCheckoutSession, isStripeConfigured, isStripeTestMode } from '../_stripe.js';
+import { CARD_PAYMENTS_MODE } from '../../src/data/payment-handles.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +47,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!isStripeConfigured()) {
     // 503, not 500: nothing is broken, the feature is simply not switched on.
+    return res.status(503).json({
+      success: false,
+      error: 'Card payments are not available yet.',
+    });
+  }
+
+  /**
+   * The kill switch, enforced HERE and not only in the browser.
+   *
+   * CARD_PAYMENTS_MODE was read by the portal UI alone, so 'off' hid the
+   * button without closing the endpoint: a POST with a valid email and
+   * password still opened a real Stripe Checkout session. A switch that only
+   * removes the button is not a switch, it is a suggestion, and the one moment
+   * it matters is the moment something has gone wrong and it gets set to 'off'.
+   */
+  if (CARD_PAYMENTS_MODE === 'off') {
+    return res.status(503).json({
+      success: false,
+      error: 'Card payments are not available yet.',
+    });
+  }
+
+  /**
+   * The combination that sends a real client to a test checkout.
+   *
+   * 'on' means every client sees the button. Test keys mean the checkout that
+   * opens cannot take their money: a real card is declined on a test session,
+   * which reads to the client as their card being refused by this business.
+   * That is exactly the failure 'preview' exists to prevent, and it is the
+   * state the system lands in if the flag is flipped before the live keys are
+   * swapped in, which is the likelier order because the flag is in the repo
+   * and the keys are in Vercel.
+   *
+   * Refused rather than logged. There is no version of this where letting the
+   * charge proceed is better than an honest "not available yet".
+   */
+  if (CARD_PAYMENTS_MODE === 'on' && isStripeTestMode()) {
+    console.error(
+      '[portal/pay-start] CARD_PAYMENTS_MODE is "on" but STRIPE_SECRET_KEY is a TEST key. ' +
+        'Refusing to send a client to a checkout that cannot take their money. ' +
+        'Swap the live keys in Vercel, or set the mode back to preview.',
+    );
     return res.status(503).json({
       success: false,
       error: 'Card payments are not available yet.',
@@ -137,6 +180,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       portalId: row.id,
       kind,
       amount,
+      // Part of the idempotency key: once money lands, a later payment of the
+      // same amount must open a NEW session rather than replay this one.
+      paidToDate: paid,
       clientEmail: row.client_email,
       description: label,
       // The portal reads its own state on load, so returning to it is enough
