@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         -- column name so every consumer is unchanged.
         COALESCE(c.contact_avatar_url, c.contact_profile_pic_url) AS contact_profile_pic_url,
         c.ai_enabled, c.is_promotional, c.is_personal,
-        c.is_personal, c.linked_client_portal_id, c.notes,
+        c.linked_client_portal_id, c.notes,
         c.last_message_at, c.unread_count, c.created_at,
         cp.client_display_name AS linked_client_display_name
       FROM conversations c
