@@ -2021,6 +2021,15 @@ const dict = {
     // A tip is money in that settles nothing, so it gets its own stat rather
     // than joining Paid. Shown only when there is one.
     statTips: { en: 'Tips', ru: 'Чаевые' },
+    // The strip's chips. Short on purpose: they wrap to a second line rather
+    // than truncate, and Russian runs about 2.4x longer than English.
+    chipOwing: { en: (v: string) => `${v} left`, ru: (v: string) => `Осталось ${v}` },
+    chipOverpaid: { en: (v: string) => `${v} overpaid`, ru: (v: string) => `Переплата ${v}` },
+    chipSettled: { en: 'Paid up', ru: 'Оплачено' },
+    chipContractSigned: { en: 'Contract signed', ru: 'Договор подписан' },
+    chipContractUnsigned: { en: 'Contract unsigned', ru: 'Договор не подписан' },
+    chipGalleryDelivered: { en: 'Gallery sent', ru: 'Галерея отправлена' },
+    chipGalleryNotSent: { en: 'Gallery not sent', ru: 'Галерея не отправлена' },
     tipBadge: { en: 'Tip', ru: 'Чаевые' },
     tipNotInBalance: {
       en: 'Tips are not counted toward what this booking owes.',

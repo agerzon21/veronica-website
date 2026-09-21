@@ -18,9 +18,15 @@ interface Props {
   // Optional aria-label override for icon-only usage (rare — most back
   // buttons want the visible text).
   'aria-label'?: string;
+  /**
+   * Sitting on the dark strip at the top of the client screen rather than on
+   * the page ground. gray.500 on #2c2925 is about 2.6:1 and unreadable, so
+   * the one thing that changes is the colour pair.
+   */
+  onDark?: boolean;
 }
 
-const AdminBackButton = ({ onClick, label = 'Back', 'aria-label': ariaLabel }: Props) => {
+const AdminBackButton = ({ onClick, label = 'Back', 'aria-label': ariaLabel, onDark = false }: Props) => {
   return (
     <Box
       as="button"
@@ -38,13 +44,17 @@ const AdminBackButton = ({ onClick, label = 'Back', 'aria-label': ariaLabel }: P
       py={2}
       minH="44px"
       bg="transparent"
-      color="gray.500"
+      color={onDark ? '#d5cec4' : 'gray.500'}
       border="1px solid transparent"
       borderRadius="sm"
       cursor="pointer"
       transition="all 0.15s"
-      _hover={{ color: 'brand.accent', bg: 'rgba(201, 169, 110, 0.06)' }}
-      _active={{ bg: 'rgba(201, 169, 110, 0.12)' }}
+      _hover={
+        onDark
+          ? { color: 'white', bg: 'whiteAlpha.200' }
+          : { color: 'brand.accent', bg: 'rgba(201, 169, 110, 0.06)' }
+      }
+      _active={onDark ? { bg: 'whiteAlpha.300' } : { bg: 'rgba(201, 169, 110, 0.12)' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       <Icon as={FaChevronLeft} boxSize={{ base: 3.5, md: 3 }} />

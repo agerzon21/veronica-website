@@ -635,6 +635,18 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   const balanceRemaining =
     amountOwed !== null ? Math.max(amountOwed - portal.paid_to_date, 0) : null;
   /**
+   * Money owed BACK, which no screen on this system has ever shown.
+   *
+   * balanceRemaining floors at zero, so an overpaid booking has always read
+   * exactly like a settled one. Two are overpaid right now, by $70 and by $30.
+   * Whole cents, because a float comparison here reports a booking settled to
+   * the cent as owing a fraction of one.
+   */
+  const overpaidBy =
+    amountOwed !== null
+      ? Math.max(Math.round(portal.paid_to_date * 100) - Math.round(amountOwed * 100), 0) / 100
+      : 0;
+  /**
    * Summed from the rows, not from paid_to_date, because paid_to_date is
    * exactly the number a tip is kept out of (migration 043). This is the only
    * place on this screen tips are totalled, and it never feeds the balance.
@@ -651,76 +663,126 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           Back used to sit alone in its own row above a VStack with no
           background, so the first painted surface on the screen was the
           summary card far below and the two read as unrelated panels. */}
-      <Flex align="flex-start" gap={{ base: 2, md: 3 }} mb={6} pt={1}>
-        {/* AdminBackButton pulls itself 8px left to optically align its
-            chevron; the band supplies the padding for that to cancel
-            against, which is what its own docstring asks for. */}
-        <Box pl={2} flexShrink={0}>
-          <AdminBackButton onClick={handleBack} label={t.common.back} />
-        </Box>
+      {/* THE STRIP. Everything that is always true about this booking, on one
+          dark band: who, where in the list, and the four states that decide
+          what happens next.
 
-        <Box flex="1" minW={0}>
-          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
-            {/* Session type comes from user input via a fixed enum; the
-                value itself is UI-visible copy that stays English on the
-                wire, so only the fallback needs translating. */}
-            {portal.session_type ?? t.clientDetail.kickerFallback}
-          </Text>
-          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mt={0.5}>
+          It replaces a stack that spent four separate rows on the same facts,
+          a kicker, an h1, a meta line and a badge row, and it carries no
+          decorative top padding: the shell above already supplies the safe
+          area, and the owner asked specifically for the dead space over the
+          name to go.
+
+          Nothing in the chip row is fixed width, which is what survives
+          Russian. "Галерея не отправлена" simply takes another line. */}
+      <Box bg="#2c2925" mx={{ base: -4, md: -6 }} px={{ base: 4, md: 6 }} pt={3} pb={3.5} mb={5}>
+        <Flex align="center" gap={2}>
+          <Box ml={-2} flexShrink={0}>
+            <AdminBackButton onClick={handleBack} label={t.common.back} onDark />
+          </Box>
+          <Text
+            as="h1"
+            flex="1"
+            minW={0}
+            m={0}
+            fontSize={{ base: 'lg', md: 'xl' }}
+            fontWeight="400"
+            color="#f4f2ee"
+            whiteSpace="nowrap"
+            overflow="hidden"
+            textOverflow="ellipsis"
+          >
             {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
           </Text>
-          {/* Joined, not concatenated with a hardcoded separator. The date
-              used to carry its own leading middot, so a booking with no email
-              rendered "· December 31"; and the email was printed here AND as
-              the heading above whenever there was no display name, so it
-              appeared twice. */}
-          {(() => {
-            const showEmail = Boolean(portal.client_display_name) && Boolean(portal.client_email);
-            const meta = [
-              showEmail ? portal.client_email : null,
-              portal.event_date ? formatDate(portal.event_date) : null,
-            ].filter(Boolean);
-            return meta.length ? (
-              <Text fontSize="sm" color="gray.500" mt={1}>
-                {meta.join(' \u00b7 ')}
-              </Text>
-            ) : null;
-          })()}
-          <HStack spacing={2} flexWrap="wrap" mt={1.5}>
-            {portal.mode === 'simple' && (
-              <Badge fontSize="2xs" colorScheme="gray" variant="subtle">{t.clientDetail.badgeGalleryOnly}</Badge>
-            )}
-            {portal.setup_token && (
-              <Badge fontSize="2xs" colorScheme="orange" variant="subtle">{t.clientDetail.badgeInvitePending}</Badge>
-            )}
-          </HStack>
-        </Box>
+          {(onPrev || onNext) && (
+            <HStack spacing={0} flexShrink={0}>
+              <IconButton
+                aria-label={t.clientDetail.prevClient}
+                title={t.clientDetail.prevClient}
+                icon={<Icon as={FaChevronLeft} boxSize={3} />}
+                onClick={() => onPrev?.()}
+                isDisabled={!onPrev}
+                size="sm"
+                variant="ghost"
+                color="#d5cec4"
+                _hover={{ bg: 'whiteAlpha.200', color: 'white' }}
+                _disabled={{ opacity: 0.35, cursor: 'default' }}
+              />
+              <IconButton
+                aria-label={t.clientDetail.nextClient}
+                title={t.clientDetail.nextClient}
+                icon={<Icon as={FaChevronRight} boxSize={3} />}
+                onClick={() => onNext?.()}
+                isDisabled={!onNext}
+                size="sm"
+                variant="ghost"
+                color="#d5cec4"
+                _hover={{ bg: 'whiteAlpha.200', color: 'white' }}
+                _disabled={{ opacity: 0.35, cursor: 'default' }}
+              />
+            </HStack>
+          )}
+        </Flex>
 
-        {(onPrev || onNext) && (
-          <HStack spacing={1} flexShrink={0} pt={1}>
-            <IconButton
-              aria-label={t.clientDetail.prevClient}
-              title={t.clientDetail.prevClient}
-              icon={<Icon as={FaChevronLeft} boxSize={3} />}
-              onClick={() => onPrev?.()}
-              isDisabled={!onPrev}
-              size="sm"
-              variant="ghost"
-              color="gray.600"
-            />
-            <IconButton
-              aria-label={t.clientDetail.nextClient}
-              title={t.clientDetail.nextClient}
-              icon={<Icon as={FaChevronRight} boxSize={3} />}
-              onClick={() => onNext?.()}
-              isDisabled={!onNext}
-              size="sm"
-              variant="ghost"
-              color="gray.600"
-            />
-          </HStack>
+        {/* The email, which the old header carried and this must not drop.
+            Shown only when the name above is a NAME: when there is no display
+            name the heading already IS the email, and printing it twice is the
+            bug the previous header was fixed for. */}
+        {portal.client_display_name && portal.client_email && (
+          <Text
+            fontSize="xs"
+            color="#948b80"
+            mt={0.5}
+            ml={7}
+            whiteSpace="nowrap"
+            overflow="hidden"
+            textOverflow="ellipsis"
+          >
+            {portal.client_email}
+          </Text>
         )}
-      </Flex>
+
+        <Flex flexWrap="wrap" gap={1.5} mt={2}>
+          <StripChip>
+            {[
+              portal.session_type ?? t.clientDetail.kickerFallback,
+              portal.event_date ? formatDate(portal.event_date) : null,
+            ]
+              .filter(Boolean)
+              .join(' \u00b7 ')}
+          </StripChip>
+
+          {/* Money, in the one arithmetic this system allows: total plus
+              charges minus paid. It can be negative, and when it is, the chip
+              says so rather than rounding a real overpayment away to nothing. */}
+          {balanceRemaining !== null && amountOwed !== null && (
+            <StripChip tone={overpaidBy > 0 ? 'info' : balanceRemaining > 0 ? 'warn' : 'good'}>
+              {overpaidBy > 0
+                ? t.clientDetail.chipOverpaid(formatMoney(overpaidBy))
+                : balanceRemaining > 0
+                  ? t.clientDetail.chipOwing(formatMoney(balanceRemaining))
+                  : t.clientDetail.chipSettled}
+            </StripChip>
+          )}
+
+          {portal.mode === 'full' && (
+            <StripChip tone={portal.contract_status === 'signed' ? 'good' : 'warn'}>
+              {portal.contract_status === 'signed'
+                ? t.clientDetail.chipContractSigned
+                : t.clientDetail.chipContractUnsigned}
+            </StripChip>
+          )}
+
+          <StripChip tone={portal.gallery_delivered_at ? 'good' : undefined}>
+            {portal.gallery_delivered_at
+              ? t.clientDetail.chipGalleryDelivered
+              : t.clientDetail.chipGalleryNotSent}
+          </StripChip>
+
+          {portal.mode === 'simple' && <StripChip>{t.clientDetail.badgeGalleryOnly}</StripChip>}
+          {portal.setup_token && <StripChip tone="warn">{t.clientDetail.badgeInvitePending}</StripChip>}
+        </Flex>
+      </Box>
 
       {leaveConfirm && hasUnsaved && (
         <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm" p={4} mt={2} mb={4}>
@@ -1496,6 +1558,45 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
  * its state. State still speaks through badges, which are the only things on
  * this screen allowed to be loud.
  */
+/**
+ * One fact on the dark strip.
+ *
+ * Deliberately not a Chakra Badge: these sit on #2c2925 and every Badge
+ * colorScheme in the theme is tuned for a light ground, where the subtle
+ * variants come out around 2:1 against this.
+ */
+function StripChip({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone?: 'good' | 'warn' | 'info';
+}) {
+  const palette =
+    tone === 'good'
+      ? { bg: 'rgba(47,122,77,0.22)', color: '#9ad9b4' }
+      : tone === 'warn'
+        ? { bg: '#fdf6ec', color: '#a9631a' }
+        : tone === 'info'
+          ? { bg: 'rgba(58,110,165,0.28)', color: '#a9c9ea' }
+          : { bg: 'rgba(244,242,238,0.10)', color: '#d5cec4' };
+  return (
+    <Box
+      as="span"
+      fontSize="11px"
+      lineHeight="22px"
+      px="9px"
+      borderRadius="11px"
+      whiteSpace="nowrap"
+      fontWeight={tone === 'warn' ? '600' : '400'}
+      bg={palette.bg}
+      color={palette.color}
+    >
+      {children}
+    </Box>
+  );
+}
+
 function Section({
   title,
   icon,
