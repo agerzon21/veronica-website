@@ -47,3 +47,7 @@ lerna-debug.log*
 .env.*.local
 .vercel
 .env*
+
+# Local agent handoff. Contains real client names, amounts and test
+# credentials, and this repo is PUBLIC. Never commit this file.
+CLAUDE_HANDOFF.md
