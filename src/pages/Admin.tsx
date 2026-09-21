@@ -164,7 +164,25 @@ const Admin = () => {
   const [error, setError] = useState('');
   const [portals, setPortals] = useState<AdminPortalSummary[] | null>(null);
   const [adminLevel, setAdminLevel] = useState<'admin' | 'super'>('admin');
-  const [view, setView] = useState<View>({ kind: 'dashboard' });
+  const [view, setView] = useState<View>(() => {
+    /**
+     * Seeded from the URL so a reload, a shared link or a forward gesture
+     * lands back on the same client. Without this the sync effect below sees
+     * a dashboard view on mount and rewrites the address, wiping the id out
+     * of a link that had just been opened.
+     *
+     * Safe when signed out: the login screen renders instead, and this view
+     * is what appears once the password is accepted. AdminClientDetail
+     * fetches its own portal by id, so it does not wait on the list.
+     */
+    try {
+      const id = new URLSearchParams(window.location.search).get('client');
+      if (id) return { kind: 'detail', id };
+    } catch {
+      /* no URL available, e.g. during a prerender */
+    }
+    return { kind: 'dashboard' };
+  });
   // Clients is the normal landing tab, but an open refine session outranks it:
   // if she was mid-refine on a reply and the page reloaded (a phone
   // pull-to-refresh is the way this actually happens), coming back to Clients
@@ -405,9 +423,92 @@ const Admin = () => {
     if (portals) window.scrollTo(0, 0);
   }, [portals]);
 
+  /**
+   * Back should land her where she was, not at the top of the list.
+   *
+   * The reset fired on every view change, so returning from the fourteenth
+   * booking put her at the top of the Clients list to find it again. The
+   * forward leg still resets, because a new screen starts at its beginning.
+   */
+  const listScrollRef = useRef(0);
+  const prevViewKind = useRef(view.kind);
+  useEffect(() => {
+    const from = prevViewKind.current;
+    prevViewKind.current = view.kind;
+    if (from === view.kind) return;
+    if (view.kind === 'detail') {
+      // Leaving the list: remember where she was standing in it.
+      if (from === 'dashboard') listScrollRef.current = window.scrollY;
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (from === 'detail' && view.kind === 'dashboard') {
+      // Returning to the list. After paint, or the browser restores 0.
+      const y = listScrollRef.current;
+      requestAnimationFrame(() => window.scrollTo(0, y));
+      return;
+    }
+    window.scrollTo(0, 0);
+  }, [view.kind]);
+
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [dashTab, view.kind]);
+  }, [dashTab]);
+
+  /**
+   * The open client, in the URL.
+   *
+   * The panel held its screen in React state and never touched history, so a
+   * phone back gesture did not return to the Clients list: it left /admin
+   * altogether and threw the whole SPA away. Now opening a client PUSHES an
+   * entry, so back pops it and lands on the list, and the address is also
+   * something that can be reopened or sent.
+   */
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const dirtyRef = useRef<string[]>([]);
+  dirtyRef.current = detailDirty;
+
+  /**
+   * The back gesture, guarded like every other exit.
+   *
+   * A popstate cannot be cancelled, so a back press with unsaved work is
+   * undone by pushing the client straight back on, and THEN the question is
+   * asked. Confirming calls history.back() a second time, which is allowed
+   * through because the dirty list has been cleared by then.
+   *
+   * This matters more than it used to. Back used to eject her from the panel,
+   * which is frightening and rare; now it is an ordinary return to the list,
+   * so it is an easy and frequent way to lose a half typed contract field.
+   */
+  useEffect(() => {
+    const onPop = () => {
+      const id = new URLSearchParams(window.location.search).get('client');
+      const apply = () => setView(id ? { kind: 'detail', id } : { kind: 'dashboard' });
+      const current = viewRef.current;
+      const leavingDetail = current.kind === 'detail' && id !== current.id;
+      if (current.kind === 'detail' && leavingDetail && dirtyRef.current.length > 0) {
+        const stay = current.id;
+        window.history.pushState({ adminClient: stay }, '', `/admin?client=${stay}`);
+        setPendingNav(() => () => window.history.back());
+        return;
+      }
+      apply();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  useEffect(() => {
+    const want = view.kind === 'detail' ? `/admin?client=${view.id}` : '/admin';
+    if (window.location.pathname + window.location.search === want) return;
+    if (view.kind === 'detail') {
+      window.history.pushState({ adminClient: view.id }, '', want);
+    } else {
+      // replace, not push: leaving by a control in the page should not leave
+      // a forward entry that walks back INTO the client she just left.
+      window.history.replaceState({}, '', want);
+    }
+  }, [view]);
 
   // Logged in → dashboard / chooser / new form / detail view.
   // Wrap the entire admin surface in the i18n provider so every child
