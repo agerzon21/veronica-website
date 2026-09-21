@@ -965,10 +965,27 @@ const PortalHeader = ({
     () => new Set(steps.map((x) => x.sectionId).filter(Boolean) as string[]),
     [steps],
   );
+  /**
+   * Does the progress track own the desktop row?
+   *
+   * While it does, the track is the section nav: every stage is a link to the
+   * section it names. So the control beside it must NOT be a second list of
+   * the same words. It becomes "More", holding only what no stage reaches.
+   * Once the booking is finished the track stands down and the full account
+   * bar comes back, which is the state Alex has already approved.
+   */
+  const trackOwnsDesktopRow = hasContract(progress) && !isPortalComplete(progress);
+
   const uncoveredRows = useMemo(
     () => accountRowsMobile.filter((r) => !r.jump && !coveredIds.has(r.id)),
     [accountRowsMobile, coveredIds],
   );
+  const uncoveredRowsDesktop = useMemo(
+    () => accountRowsDesktop.filter((r) => !r.jump && !coveredIds.has(r.id)),
+    [accountRowsDesktop, coveredIds],
+  );
+  /** What the desktop control actually offers right now. */
+  const desktopMenuRows = trackOwnsDesktopRow ? uncoveredRowsDesktop : accountRowsDesktop;
 
   const sectionRows = useMemo(
     () => (sectionNav ? buildSectionRows(sectionNav) : []),
@@ -1159,9 +1176,9 @@ const PortalHeader = ({
               triggerRef={accountTriggerRef}
               shown
               mini={accountMini}
-              eyebrow="Your account"
-              label={accountBarLabel}
-              counter={accountBarCounter}
+              eyebrow={trackOwnsDesktopRow ? 'More' : 'Your account'}
+              label={trackOwnsDesktopRow ? (desktopMenuRows[0]?.label ?? '') : accountBarLabel}
+              counter={trackOwnsDesktopRow ? { base: '', md: '' } : accountBarCounter}
               ready={photosReady}
               open={openMenu === 'account'}
               onToggle={(x) => toggleMenu('account', x)}
@@ -1317,9 +1334,9 @@ const PortalHeader = ({
             onPick={(id) => pickFrom(accountNav, id)}
           />
           <DesktopMenuPanel
-            heading="Your account"
-            rows={accountRowsDesktop}
-            cols={2}
+            heading={trackOwnsDesktopRow ? 'More' : 'Your account'}
+            rows={desktopMenuRows}
+            cols={trackOwnsDesktopRow ? 1 : 2}
             open={openMenu === 'account'}
             anchorRef={accountTriggerRef}
             headerRef={headerRef}
