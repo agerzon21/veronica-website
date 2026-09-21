@@ -307,9 +307,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // card reports eight failures on a site where everything works.
   const broken = missing.filter((c) => c.fallback === null);
 
+  /**
+   * Which Stripe world the deployed site is actually in.
+   *
+   * The variable NAMES never change between test and live; only their values
+   * do. So "both Stripe variables are set" has always been true and says
+   * nothing about whether the swap to live keys actually happened, which is
+   * the one question anyone asks at go-live. A key's PREFIX answers it and is
+   * not a secret: sk_test_ and sk_live_ are public knowledge, and nothing
+   * here returns any part of the key itself.
+   *
+   * null means no key at all, so there is no mode to report.
+   */
+  const stripeKey = (process.env.STRIPE_SECRET_KEY ?? '').trim();
+  const stripeMode = !stripeKey
+    ? null
+    : stripeKey.startsWith('sk_live_')
+      ? 'live'
+      : stripeKey.startsWith('sk_test_')
+        ? 'test'
+        : 'unrecognised';
+
   return res.status(200).json({
     success: true,
     environment: process.env.VERCEL_ENV ?? 'development',
+    stripeMode,
     checks: resolved,
     broken: broken.length,
     coveredByFallback: missing.length - broken.length,
