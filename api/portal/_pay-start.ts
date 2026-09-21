@@ -37,11 +37,23 @@ const WRONG_AUTH_DELAY_MS = 750;
 /**
  * Floor on a tip, in dollars.
  *
- * Not arbitrary: Stripe takes 2.9% plus 30 cents, so a 1 dollar tip arrives as
- * 67 cents and a 5 dollar tip as 4 dollars 56. Below this the fee is most of
- * the gesture, and a client who meant to be kind has mostly paid Stripe.
+ * Stripe takes 2.9% plus 30 cents, so a 1 dollar tip arrives as 67 cents. That
+ * is a poor ratio and it is still the client's call: refusing a dollar somebody
+ * meant to give is worse than passing a third of it to Stripe. Below a dollar
+ * there is nothing left to pass on, which is where the floor sits.
  */
-const TIP_MIN = 5;
+const TIP_MIN = 1;
+
+/**
+ * The ceiling is a FAT FINGER GUARD, not a business rule.
+ *
+ * It used to be the booking total, which sounds sensible and is not: on a
+ * small booking it put every sane tip out of range. A $2 test booking had a
+ * ceiling of $5, so typing $10 was refused and the button never enabled. The
+ * booking still raises the ceiling on a big job, it just cannot lower it below
+ * an amount anybody might genuinely mean.
+ */
+const TIP_CEILING_FLOOR = 500;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Row = {
@@ -198,11 +210,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: `The smallest tip we can take by card is $${TIP_MIN}.`,
         });
       }
-      const ceiling = Math.max(total + charges, TIP_MIN);
+      const ceiling = Math.max(total + charges, TIP_CEILING_FLOOR);
       if (amount > ceiling) {
         return res.status(400).json({
           success: false,
-          error: `That is more than the session itself. The most we can take by card is $${ceiling.toFixed(2)}.`,
+          error: `The most we can take by card is $${ceiling.toFixed(2)}. Send more than that any other way and it all reaches her.`,
         });
       }
     } else if (kind === 'retainer') {
@@ -262,7 +274,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // client returns from Stripe to a portal with no card button, which
       // during testing looks exactly like the payment breaking something.
       // Harmless once the mode is 'on', where the flag is ignored anyway.
-      successUrl: `${origin}/portal?paid=1${kind === 'tip' ? '&tip=1' : ''}${preview}`,
+      // The hash brings a tipper back to the tip, not to the top of a long
+      // page they then have to find their place in again.
+      successUrl: `${origin}/portal?paid=1${kind === 'tip' ? '&tip=1#thanks' : ''}${preview}`,
       cancelUrl: `${origin}/portal?paid=0${preview}`,
     });
 

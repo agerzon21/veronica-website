@@ -6,6 +6,9 @@ import FaCopy from '../icons/fa/FaCopy';
 import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
 import FaSync from '../icons/fa/FaSync';
 import FaKey from '../icons/fa/FaKey';
+import FaHeart from '../icons/fa/FaHeart';
+import { m } from 'framer-motion';
+import { prefersReducedMotion } from '../utils/motion';
 import FaUndo from '../icons/fa/FaUndo';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
@@ -2321,12 +2324,23 @@ function TipPanel({
    * Three rungs, the largest that fit, so a normal booking still sees
    * 25 / 50 / 100 and a tiny one sees what it can take.
    */
-  const ceiling = Math.max(bookingTotal, 5);
+  /**
+   * The same two numbers the server enforces, and for the same reasons.
+   * TIP_CEILING_FLOOR is a fat finger guard: the booking can raise it, never
+   * lower it, because a small booking used to make every sane tip illegal.
+   */
+  const TIP_MIN = 1;
+  const TIP_CEILING_FLOOR = 500;
+  const ceiling = Math.max(bookingTotal, TIP_CEILING_FLOOR);
+  // Presets follow the BOOKING so they read as sensible next to it, while
+  // Other stays open all the way down to a dollar.
   const LADDER = [5, 10, 25, 50, 100];
-  const fitted = LADDER.filter((v) => v <= ceiling).slice(-3);
-  const PRESETS = fitted.length ? fitted : [5];
+  const fitted = LADDER.filter((v) => v <= Math.max(bookingTotal, 25)).slice(-3);
+  const PRESETS = fitted.length ? fitted : [5, 10, 25];
   const [chosen, setChosen] = useState<number | null>(null);
+  const [addingMore, setAddingMore] = useState(false);
   const [custom, setCustom] = useState('');
+  const reducedMotion = prefersReducedMotion();
   const [customOpen, setCustomOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -2339,7 +2353,7 @@ function TipPanel({
       ? Math.round(customValue * 100) / 100
       : 0
     : (chosen ?? 0);
-  const ready = amount >= 5 && amount <= ceiling;
+  const ready = amount >= TIP_MIN && amount <= ceiling;
 
   const send = async () => {
     setBusy(true);
@@ -2369,26 +2383,66 @@ function TipPanel({
     }
   };
 
-  return (
-    <Box
-      bg="brand.surface"
-      border="1px solid"
-      borderColor="brand.accentBorder"
-      borderRadius="md"
-      px={{ base: 6, md: 8 }}
-      py={{ base: 6, md: 7 }}
-      textAlign="center"
-    >
-      <Text fontSize="sm" color="gray.700" lineHeight="1.8" mb={alreadyTipped > 0 ? 2 : 5}>
-        {alreadyTipped > 0
-          ? 'Thank you for the tip. If you would like to add to it, you can do that here.'
-          : 'If you would like to add something for Veronika, this goes straight to her.'}
-      </Text>
-      {alreadyTipped > 0 && (
-        <Text fontSize="xs" color="gray.500" fontWeight="300" mb={5}>
-          You have tipped {formatMoney(alreadyTipped)} so far.
+  /**
+   * Somebody who has already tipped is THANKED, not asked again.
+   *
+   * The old state was a grey line reading "You have tipped $5.00 so far",
+   * which manages to be both small and grabby: "so far" is a word you use
+   * when you are expecting more. The gesture gets an actual acknowledgement
+   * now, and the way to add to it is a quiet link underneath rather than the
+   * same ask repeated.
+   */
+  if (alreadyTipped > 0 && !addingMore) {
+    return (
+      <Box textAlign="center">
+        <m.div
+          initial={reducedMotion ? false : { scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+          style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}
+        >
+          <Flex
+            w="44px"
+            h="44px"
+            borderRadius="full"
+            bg="brand.accent"
+            color="white"
+            align="center"
+            justify="center"
+          >
+            <Icon as={FaHeart} boxSize={4} />
+          </Flex>
+        </m.div>
+        <Text fontSize="sm" color="gray.800" fontWeight="500" mb={1}>
+          Thank you for the {formatMoney(alreadyTipped)}.
         </Text>
-      )}
+        <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.6" mb={3}>
+          It goes straight to Veronika, and it is not part of what you owe.
+        </Text>
+        <Box
+          as="button"
+          type="button"
+          onClick={() => setAddingMore(true)}
+          fontSize="xs"
+          color="gray.500"
+          textDecoration="underline"
+          bg="transparent"
+          border="none"
+          cursor="pointer"
+          minH="44px"
+          px={2}
+        >
+          Add to it
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box textAlign="center">
+      <Text fontSize="sm" color="gray.700" lineHeight="1.7" mb={4}>
+        If you would like to add something for Veronika, this goes straight to her.
+      </Text>
 
       <HStack spacing={2} justify="center" mb={3} flexWrap="wrap">
         {PRESETS.map((v) => (

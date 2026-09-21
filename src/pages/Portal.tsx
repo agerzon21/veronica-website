@@ -223,6 +223,34 @@ function PaymentReturnBanner({
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
   }, [flag]);
 
+  /**
+   * Put a returning tipper back where they were.
+   *
+   * Stripe returns to the top of a long page, so somebody who tipped from the
+   * bottom of the gallery had to find their place again. _pay-start.ts sends
+   * them to #thanks; the browser cannot honour that itself because the portal
+   * renders after the navigation, so it is done here once the section exists.
+   *
+   * Polled rather than fired once: the gallery mounts well after the portal
+   * shell, and a single attempt on mount lands before the anchor is in the DOM.
+   */
+  useEffect(() => {
+    if (!isTip || typeof window === 'undefined') return undefined;
+    if (window.location.hash !== '#thanks') return undefined;
+    let tries = 0;
+    const id = window.setInterval(() => {
+      tries += 1;
+      const el = document.getElementById('thanks');
+      if (el) {
+        el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+        window.clearInterval(id);
+      } else if (tries > 40) {
+        window.clearInterval(id);
+      }
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [isTip]);
+
   useEffect(() => {
     if (phase !== 'checking') return undefined;
     let cancelled = false;
@@ -289,7 +317,23 @@ function PaymentReturnBanner({
           : `${isTip ? 'Tip' : 'Payment'} received. Updating your booking...`;
 
   return (
-    <Box px={{ base: 4, md: 6 }} pt={4}>
+    /**
+     * CLEARS THE STICKY HEADER.
+     *
+     * The portal header is sticky at the top of the page, and this banner sat
+     * directly under it in the document with only 16px of padding, so the
+     * header covered almost all of it. Scrolling revealed it for as long as
+     * the header was retracted and then hid it again the moment the header
+     * snapped back, which is the one moment the message matters.
+     *
+     * scrollMarginTop does the same job for the anchor a returning tipper
+     * lands on.
+     */
+    <Box
+      px={{ base: 4, md: 6 }}
+      pt={`calc(${HEADER_CLEARANCE} + 16px)`}
+      sx={{ scrollMarginTop: `calc(${HEADER_CLEARANCE} + 16px)` }}
+    >
       <Box
         role="status"
         aria-live="polite"

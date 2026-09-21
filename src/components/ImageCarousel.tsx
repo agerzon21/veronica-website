@@ -82,80 +82,87 @@ const CUE_PADDING_COMPACT_PX = 8;
 /**
  * Below this width the row does not fit around the cue and sits above it.
  *
- * Twelve numbers plus the cue's 61px and its breathing room measured 348px in
- * a 320px viewport, hanging off both edges. Squeezing the type further would
- * make it unreadable rather than fix it, so on the narrowest phones the rail
- * keeps its full width and moves up a line instead. Everything from a 375px
- * iPhone up still parts around the cue.
+ * It was 380, from when a phone showed all twelve numbers and the row measured
+ * 348px inside a 320px screen. A phone shows a WINDOW of six now, which needs
+ * about 311px including the gap, so every real phone parts around the cue and
+ * the fallback is effectively unreachable. Leaving the threshold at 380 left
+ * the 375px phones, the 13 mini and the SE, on the wrong path: no centre gap,
+ * so numerals ran straight across the mouse icon.
  */
-const SPLIT_MIN_VW = 380;
+const SPLIT_MIN_VW = 320;
 
-function useRailPlacement(ref: React.RefObject<HTMLDivElement>): { bottom: number; cueWidth: number } {
-  const [placement, setPlacement] = useState({ bottom: RAIL_MARGIN_PX, cueWidth: 0 });
+function useRailPlacement(ref: React.RefObject<HTMLDivElement>): {
+  bottom: number;
+  cueWidth: number;
+  narrow: boolean;
+} {
+  const [placement, setPlacement] = useState({ bottom: RAIL_MARGIN_PX, cueWidth: 0, narrow: false });
   useEffect(() => {
+    /**
+     * NO VIEWPORT HEIGHT ANYWHERE IN HERE, and that is the fix.
+     *
+     * This used to compute the offset from window.innerHeight. On a phone
+     * browser that is the LARGE viewport, the one that includes the space the
+     * URL bar sits in, so it is taller than what anybody can actually see. The
+     * rail was positioned against a screen bigger than the screen, and it came
+     * out low on an iPhone in Chrome and on a Pixel, and clean off the bottom
+     * in Safari where the toolbar takes the most. visualViewport would fix the
+     * arithmetic but not the fragility.
+     *
+     * So it measures the two things it actually cares about and nothing else:
+     * where the cue is, and where the slide ends. Both are read at rest, where
+     * the camera is unscaled, and offsetHeight is the layout height so no
+     * transform can reach it. Whatever a device does with its chrome, the rail
+     * lands on the cue, because the cue is what it is measured against.
+     */
     const measure = () => {
       const el = ref.current;
       if (!el) return;
-      const overflow = Math.max((el.offsetHeight - window.innerHeight) / 2, 0);
+      // Only at rest. Mid scroll the camera is scaled and every rect lies.
+      if (window.scrollY > 4) return;
 
-      /**
-       * Line up with the hero's Scroll cue and split around it.
-       *
-       * The cue is NOT a fixed distance from the bottom: measured, its centre
-       * is 94px up on a 1440x900 desktop and 164px up on a 390x844 phone,
-       * because it is pinned at bottom 40px on one and 110px on the other to
-       * clear the iOS toolbar. Any constant here lines up on exactly one of
-       * them, which is why this measures the element rather than assuming.
-       */
-      /**
-       * Two different measurements, and they are not interchangeable.
-       *
-       * VERTICALLY the rail centres on the whole cue BLOCK, the word and the
-       * little mouse under it, because that block is what a person sees as one
-       * object. Centring on the label alone sat the numbers 24px too high,
-       * level with the text and above the mouse.
-       *
-       * HORIZONTALLY the gap only has to clear the LABEL, which is the widest
-       * part at 61px against the mouse's 22px.
-       */
-      const cue = document.querySelector('[data-hero-scroll-cue]') as HTMLElement | null;
       const block = document.querySelector('[data-hero-scroll-block]') as HTMLElement | null;
-      const cueRect = cue?.getBoundingClientRect();
+      const cue = document.querySelector('[data-hero-scroll-cue]') as HTMLElement | null;
       const blockRect = (block ?? cue)?.getBoundingClientRect();
-      const cueFromBottom = blockRect
-        ? window.innerHeight - (blockRect.top + blockRect.height / 2)
-        : RAIL_MARGIN_PX;
+      const cueRect = cue?.getBoundingClientRect();
 
-      const split = window.innerWidth >= SPLIT_MIN_VW;
+      if (!blockRect) {
+        setPlacement({ bottom: RAIL_MARGIN_PX, cueWidth: 0, narrow: window.innerWidth < NARROW_VW });
+        return;
+      }
+
       /**
-       * Half the row's own height, so its CENTRE lands on the block's centre.
-       *
-       * The two rails are different heights: a phone's numerals sit in 44px
-       * tap targets, a desktop's are 17px of text. Using one number put the
-       * phone rail 14px high, measured.
-       *
-       * 768 is Chakra's md, the same line isMobile is decided on, so this and
-       * the rail agree about which one is on screen.
+       * Vertically the rail centres on the whole cue BLOCK, the word and the
+       * mouse under it, because that is what a person sees as one object.
+       * Horizontally the gap only has to clear the LABEL, the widest part.
        */
+      const slideBottom = el.getBoundingClientRect().top + el.offsetHeight;
+      const cueCentre = blockRect.top + blockRect.height / 2;
       const halfRow = window.innerWidth < 768 ? 22 : 9;
+      const split = window.innerWidth >= SPLIT_MIN_VW;
+
       setPlacement({
-        // Splitting: centred on the cue block. Not splitting: clear above it.
-        bottom: Math.round(overflow + cueFromBottom + (split ? -halfRow : 30)),
-        // The raw width, and 0 when there is no room to part around it. How
-        // much space to leave is the rail's call, since it knows how tight the
-        // row already is.
+        bottom: Math.round(slideBottom - cueCentre - (split ? halfRow : -30)),
         cueWidth: cueRect && split ? Math.round(cueRect.width) : 0,
+        narrow: window.innerWidth < NARROW_VW,
       });
     };
+
     measure();
-    // The cue mounts with the hero, so one frame later is not always enough.
-    const t = window.setTimeout(measure, 400);
+    // The cue mounts with the hero, so one frame is not always enough.
+    const t1 = window.setTimeout(measure, 300);
+    const t2 = window.setTimeout(measure, 1200);
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
+    // A phone browser's toolbar sliding away moves the cue without firing a
+    // window resize, and this rail is pinned to the cue.
+    window.visualViewport?.addEventListener('resize', measure);
     return () => {
-      window.clearTimeout(t);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
       window.removeEventListener('resize', measure);
       window.removeEventListener('orientationchange', measure);
+      window.visualViewport?.removeEventListener('resize', measure);
     };
   }, [ref]);
   return placement;
@@ -164,8 +171,17 @@ function useRailPlacement(ref: React.RefObject<HTMLDivElement>): { bottom: numbe
 /** Below this scale the rail is gone. Above it, fully present. */
 const RAIL_FADE_FROM = 1;
 const RAIL_FADE_TO = 0.72;
-/** How many numerals a phone shows at once, three either side of the cue. */
+/**
+ * How many numerals a phone shows at once, half either side of the cue.
+ *
+ * Six on any phone made this decade. Four below 340px, where six plus the
+ * gap measured 347px inside a 320px screen and hung off both edges: the
+ * choice there is fewer numbers or smaller targets, and a target you cannot
+ * hit is worth less than a number you cannot see.
+ */
 const WINDOW_SIZE = 6;
+const WINDOW_SIZE_NARROW = 4;
+const NARROW_VW = 340;
 /** How long one slide is on screen. Must match the rotation interval below. */
 const SLIDE_MS = 5000;
 
@@ -253,7 +269,10 @@ const IndexRail: React.FC<{
   compact: boolean;
   /** Measured width of the hero's Scroll cue, or 0 when there is not one. */
   cueWidth: number;
-}> = ({ total, index, rotating, onPick, scale, bottom, compact, cueWidth }) => {
+  /** Under 340px, where six numerals plus the gap do not fit. */
+  narrow: boolean;
+}> = ({ total, index, rotating, onPick, scale, bottom, compact, cueWidth, narrow }) => {
+  const windowSize = narrow ? WINDOW_SIZE_NARROW : WINDOW_SIZE;
   const centreGap =
     cueWidth > 0
       ? cueWidth + (compact ? CUE_PADDING_COMPACT_PX : CUE_PADDING_PX) * 2
@@ -280,15 +299,99 @@ const IndexRail: React.FC<{
    * Wraps with the modulo, so the last slides show 11 12 01 rather than
    * running out. Desktop keeps every number: there is room for them.
    */
-  const windowed = compact && total > WINDOW_SIZE;
+  const windowed = compact && total > windowSize;
   const slots = windowed
-    ? Array.from({ length: WINDOW_SIZE }, (_, k) => (index + k) % total)
+    ? Array.from({ length: windowSize }, (_, k) => (index + k) % total)
     : Array.from({ length: total }, (_, k) => k);
 
   const reduced =
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /**
+   * One numeral, plus the growing line when it is the active one.
+   *
+   * The line lives INSIDE its half, so its width only ever pushes numbers
+   * within that half. It cannot move the gap, which is what put a number on
+   * top of the mouse icon when the whole row was one centred run.
+   */
+  const renderSlot = (i: number) => {
+    const active = i === index;
+    return (
+      <React.Fragment key={windowed ? `slot-${i}` : i}>
+        <Box
+          as="button"
+          type="button"
+          onClick={() => onPick(i)}
+          aria-label={`Show photo ${i + 1} of ${total}`}
+          aria-current={active ? 'true' : undefined}
+          flexShrink={0}
+          bg="transparent"
+          border="none"
+          p={0}
+          cursor="pointer"
+          lineHeight="1"
+          minW={compact ? '34px' : undefined}
+          minH={compact ? '44px' : undefined}
+          display={compact ? 'inline-flex' : undefined}
+          alignItems={compact ? 'center' : undefined}
+          justifyContent={compact ? 'center' : undefined}
+          fontSize={compact ? '15px' : '17px'}
+          letterSpacing={compact ? '0.06em' : '0.16em'}
+          fontWeight="400"
+          color={active ? 'white' : 'rgba(255,255,255,0.55)'}
+          transition="color 0.35s ease"
+          _hover={{ color: 'white' }}
+          _focusVisible={{ outline: '2px solid white', outlineOffset: '3px' }}
+          sx={{ WebkitTapHighlightColor: 'transparent', textShadow: '0 1px 6px rgba(0,0,0,0.45)' }}
+        >
+          {windowed ? (
+            <Box position="relative" w="100%" h="100%" display="flex" alignItems="center" justifyContent="center">
+              <AnimatePresence initial={false}>
+                <m.span
+                  key={i}
+                  initial={{ opacity: 0, y: 7 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -7 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                  style={{ position: 'absolute', lineHeight: 1 }}
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </m.span>
+              </AnimatePresence>
+            </Box>
+          ) : (
+            String(i + 1).padStart(2, '0')
+          )}
+        </Box>
+        {active && (
+          <m.span
+            key={`rule-${index}`}
+            aria-hidden
+            initial={{ width: 0 }}
+            animate={{ width: reduced || !rotating ? (compact ? 12 : 26) : compact ? 26 : 62 }}
+            transition={
+              reduced || !rotating
+                ? { duration: 0.25 }
+                : { duration: SLIDE_MS / 1000, ease: 'linear' }
+            }
+            style={{
+              height: 1,
+              background: 'rgba(255,255,255,0.9)',
+              boxShadow: '0 1px 6px rgba(0,0,0,0.45)',
+              display: 'block',
+              flexShrink: 0,
+            }}
+          />
+        )}
+      </React.Fragment>
+    );
+  };
+
+  const half = windowed ? windowSize / 2 : Math.ceil(slots.length / 2);
+  const leftSlots = slots.slice(0, half).map(renderSlot);
+  const rightSlots = slots.slice(half).map(renderSlot);
 
   return (
     <m.div
@@ -315,94 +418,21 @@ const IndexRail: React.FC<{
         pointerEvents: 'auto',
       }}
     >
-      <Flex align="center" gap={compact ? '6px' : '14px'} px={compact ? 2 : 4} maxW="100%" flexWrap="nowrap">
-        {slots.map((i, slot) => {
-          // The hero's Scroll cue sits in the middle of the row, so the
-          // numbers part around it: the first half to its left, the rest to
-          // its right. The gap is the cue's measured width plus breathing
-          // room, not a guess.
-          // Which position the cue's gap follows. On the windowed phone rail
-          // that is always the middle of the six shown; on desktop it is the
-          // middle of the whole run.
-          const splitAfter = windowed ? WINDOW_SIZE / 2 - 1 : Math.ceil(total / 2) - 1;
-          const active = i === index;
-          return (
-            // Keyed by SLOT while windowed, so the button itself persists and
-            // only the numeral inside it animates. Keyed by the number
-            // otherwise, where the buttons are the run.
-            <React.Fragment key={windowed ? `slot-${slot}` : i}>
-              <Box
-                as="button"
-                type="button"
-                onClick={() => onPick(i)}
-                aria-label={`Show photo ${i + 1} of ${total}`}
-                aria-current={active ? 'true' : undefined}
-                bg="transparent"
-                border="none"
-                p={0}
-                cursor="pointer"
-                lineHeight="1"
-                // A real target on a phone. The numbers were 15px of text with
-                // nothing around them, which is not something a thumb can hit.
-                minW={compact ? '34px' : undefined}
-                minH={compact ? '44px' : undefined}
-                display={compact ? 'inline-flex' : undefined}
-                alignItems={compact ? 'center' : undefined}
-                justifyContent={compact ? 'center' : undefined}
-                fontSize={compact ? '15px' : '17px'}
-                letterSpacing={compact ? '0.06em' : '0.16em'}
-                fontWeight="400"
-                color={active ? 'white' : 'rgba(255,255,255,0.55)'}
-                transition="color 0.35s ease"
-                _hover={{ color: 'white' }}
-                _focusVisible={{ outline: '2px solid white', outlineOffset: '3px' }}
-                sx={{ WebkitTapHighlightColor: 'transparent', textShadow: '0 1px 6px rgba(0,0,0,0.45)' }}
-              >
-                {windowed ? (
-                  <Box position="relative" w="100%" h="100%" display="flex" alignItems="center" justifyContent="center">
-                    <AnimatePresence initial={false}>
-                      <m.span
-                        key={i}
-                        initial={{ opacity: 0, y: 7 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -7 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                        style={{ position: 'absolute', lineHeight: 1 }}
-                      >
-                        {String(i + 1).padStart(2, '0')}
-                      </m.span>
-                    </AnimatePresence>
-                  </Box>
-                ) : (
-                  String(i + 1).padStart(2, '0')
-                )}
-              </Box>
-              {active && (
-                <m.span
-                  key={`rule-${index}`}
-                  aria-hidden
-                  initial={{ width: 0 }}
-                  animate={{ width: reduced || !rotating ? (compact ? 12 : 26) : compact ? 26 : 62 }}
-                  transition={
-                    reduced || !rotating
-                      ? { duration: 0.25 }
-                      : { duration: SLIDE_MS / 1000, ease: 'linear' }
-                  }
-                  style={{
-                    height: 1,
-                    background: 'rgba(255,255,255,0.9)',
-                    boxShadow: '0 1px 6px rgba(0,0,0,0.45)',
-                    display: 'block',
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-              {slot === splitAfter && centreGap > 0 && (
-                <Box aria-hidden flexShrink={0} width={`${centreGap}px`} height="1px" />
-              )}
-            </React.Fragment>
-          );
-        })}
+      {/* TWO EQUAL HALVES with the gap between them, not one centred run.
+          As one run the whole row was centred, so the growing line added width
+          to the left of the gap and pushed the gap to the RIGHT while the cue
+          stayed where it was. On a narrow phone that was enough for the last
+          number on the left to end up on top of the mouse icon. Each half now
+          takes half the width whatever is inside it, so the gap sits dead
+          centre and the cue sits in it. */}
+      <Flex align="center" w="100%" px={compact ? 2 : 4}>
+        <Flex flex="1" minW={0} align="center" justify="flex-end" gap={compact ? '6px' : '14px'}>
+          {leftSlots}
+        </Flex>
+        <Box aria-hidden flexShrink={0} w={`${centreGap}px`} h="1px" />
+        <Flex flex="1" minW={0} align="center" justify="flex-start" gap={compact ? '6px' : '14px'}>
+          {rightSlots}
+        </Flex>
       </Flex>
     </m.div>
   );
@@ -616,6 +646,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
           scale={indexScale}
           bottom={railPlacement.bottom}
           cueWidth={railPlacement.cueWidth}
+          narrow={railPlacement.narrow}
           compact={isMobile}
         />
       )}

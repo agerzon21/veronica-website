@@ -778,7 +778,12 @@ const ClientGallery = ({
           welcome, before the photo grid. Personal italic note stays —
           it's the emotional anchor. Five gold stars evoke the ask
           without saying "please review" out loud. */}
-      <Box px={6} pb={{ base: 8, md: 10 }}>
+      {/* ONE panel, not two stacked ones. The review ask and the tip were
+          separate bordered cards of the same size and colour, which took most
+          of a phone screen between them and read as two requests. They are one
+          request with two ways to answer it, so they are one box: the stars and
+          the note, the review button, a rule, then the tip. */}
+      <Box px={6} pb={{ base: 8, md: 10 }} id="thanks">
         <Box
           maxW="520px"
           mx="auto"
@@ -786,21 +791,21 @@ const ClientGallery = ({
           border="1px solid"
           borderColor="brand.accentBorder"
           borderRadius="md"
-          px={{ base: 6, md: 8 }}
-          py={{ base: 6, md: 7 }}
+          px={{ base: 5, md: 7 }}
+          py={{ base: 5, md: 6 }}
           textAlign="center"
         >
-          <Flex justify="center" gap={1} mb={4} color="brand.accentText">
+          <Flex justify="center" gap={1} mb={3} color="brand.accentText">
             {[0, 1, 2, 3, 4].map((i) => (
-              <Icon key={i} as={FaStar} boxSize={4} />
+              <Icon key={i} as={FaStar} boxSize={3.5} />
             ))}
           </Flex>
           <Text
             fontSize="sm"
             color="gray.700"
             fontStyle="italic"
-            lineHeight="1.8"
-            mb={5}
+            lineHeight="1.7"
+            mb={4}
           >
             Loved your photos? A few kind words on Google mean the world.
             {/* Signature on its own line, so it does not need a dash to
@@ -824,15 +829,17 @@ const ClientGallery = ({
           >
             Leave a Review
           </CTAButton>
+
+          {/* The tip sits UNDER the review ask, inside the same box, never
+              above it. Kind words are free and are the thing actually being
+              asked for; leading with money turns a thank you into an invoice. */}
+          {tipSlot && (
+            <>
+              <Box h="1px" bg="brand.accentBorder" opacity={0.7} my={5} />
+              {tipSlot}
+            </>
+          )}
         </Box>
-        {/* The tip sits under the review ask, never above it. Kind words are
-            free and are the thing actually being asked for; leading with money
-            would turn a thank you into an invoice. */}
-        {tipSlot && (
-          <Box maxW="520px" mx="auto" mt={4}>
-            {tipSlot}
-          </Box>
-        )}
       </Box>
 
       {/* Filter-on banner — appears only when the favorites filter is
