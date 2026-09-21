@@ -157,12 +157,62 @@ const GREETING_LINE = /^[^\n]*?\binterested in the[^\n]*?\bpackage\.([ \t]*\n?)/
 
 // Date and location are VALIDATED but not REQUIRED: filling one in turns it
 // green, leaving it empty is fine. Keeping the two ideas apart matters, because
-// the counter in the submit bar is "how many required fields are left" and
-// folding the optional pair into the same list would quietly add two to it.
+// the submit button now names the first REQUIRED field still empty, and folding
+// the optional pair into the same list would send it to a field nobody has to
+// fill.
 type FieldName = 'name' | 'email' | 'shoot_type' | 'message' | 'date' | 'location';
 type FieldState = '' | 'valid' | 'error';
 
 const REQUIRED: FieldName[] = ['name', 'email', 'shoot_type', 'message'];
+
+/**
+ * What the submit button calls itself while a field is still empty. The button
+ * carries this instead of a separate counter line above it, so the bar is one
+ * element tall and the button says what pressing it will do for you.
+ *
+ * Every label is measured: the longest here is 178px in Jost at 14px/0.2em
+ * uppercase, inside 216px of room at a 320px viewport. "Check availability",
+ * the label that already shipped, is the widest string this button ever wears
+ * at 180px, so nothing added here can overflow a button that did not already.
+ *
+ * date and location cannot ever be the next MISSING REQUIRED field. They are
+ * here only to keep the map total over FieldName, so adding a field to
+ * REQUIRED cannot leave a hole.
+ */
+const NEXT_LABEL: Record<FieldName, string> = {
+  name: 'Add your name',
+  email: 'Add your email',
+  shoot_type: 'Choose a session',
+  message: 'Add your message',
+  date: 'Check availability',
+  location: 'Check availability',
+};
+
+// The same idea spoken rather than shown. The hidden live region reads this,
+// and audio has no width budget, so it can afford the article the button drops.
+const SPOKEN_OF: Record<FieldName, string> = {
+  name: 'your name',
+  email: 'your email',
+  shoot_type: 'the session type',
+  message: 'your message',
+  date: 'the date',
+  location: 'the location',
+};
+
+// Visually hidden, still read aloud. Written once because there are now two of
+// them: the assertive one that speaks a failed submit, and the polite one that
+// narrates progress in place of the counter line the button replaced.
+const SR_ONLY = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  padding: 0,
+  margin: '-1px',
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+} as const;
 
 /**
  * Which section each control belongs to, so the progress square on that
@@ -337,6 +387,43 @@ const Contact = () => {
   // REQUIRED, not every key of `valid`. The optional pair are in there too now.
   const requiredLeft = REQUIRED.filter((k) => !valid[k]).length;
 
+  // The first required field still empty, in the order they appear on the page.
+  // Deliberately the SAME expression handleSubmit uses to build `missing`, so
+  // the field the button names and the field a press scrolls you to can never
+  // be two different fields.
+  const nextMissing = REQUIRED.find((k) => !valid[k]);
+
+  // What the button says. Never an empty string: CTAButton renders its label
+  // span only when children is truthy, so an empty one would collapse the span
+  // and leave the flex gap behind, painting a blank, off-centre button.
+  const ctaLabel = !nextMissing
+    ? 'Check availability'
+    // Present but flagged. "Add your email" is a lie over a box with something
+    // in it. Read from `state`, NOT from live validity, because state only
+    // turns error on blur or on a failed submit: this cannot scold you while
+    // you are still halfway through typing the address.
+    //
+    // The emptiness check is not redundant with the error state. Pressing the
+    // button on an untouched form flags every required field at once, empty
+    // ones included, and without this the button answered its own press with
+    // "Check that email" over a box with nothing in it to check.
+    : nextMissing === 'email' && state.email === 'error' && email.trim()
+      ? 'Check that email'
+      // A carried package leaves the greeting and the "Our plans so far:"
+      // prompt sitting visibly in the box while messageHasWords is still
+      // false, so "Add your message" would contradict the screen.
+      : nextMissing === 'message' && prefill
+        ? 'Add a few words'
+        : NEXT_LABEL[nextMissing];
+
+  // Spoken, never shown. This is where the count the old counter line carried
+  // survives: a button label has a width budget and a screen reader does not.
+  // It only changes when the count or the next field changes, so it speaks at
+  // most four times over the life of the page, not once per keystroke.
+  const progress = nextMissing
+    ? `${requiredLeft} required field${requiredLeft === 1 ? '' : 's'} left. Next: ${SPOKEN_OF[nextMissing]}.`
+    : 'All required fields are filled.';
+
   const messageFor = (field: FieldName): string => ({
     name: 'Add your name',
     email: email.trim() ? 'That email does not look quite right' : 'Add an email so I can reply',
@@ -486,8 +573,13 @@ const Contact = () => {
     // On the CONTROL, never the wrapper: the browser honours scroll-margin
     // only on the element it scrolls to, so on a wrapper it does nothing and
     // tabbing still parks the field behind the header or the submit bar.
+    //
+    // The bottom number is the submit bar's own height: 14 + 56 + 14 at base,
+    // 14 + 52 + 14 on desktop. It was 112 while the bar also carried a counter
+    // line above the button, and left 28px of dead air under every field it
+    // scrolled to once that line went.
     scrollMarginTop: '88px',
-    scrollMarginBottom: '112px',
+    scrollMarginBottom: '88px',
     _placeholder: { color: 'gray.500' },
     // Chakra paints its own _invalid styling in its own red once isInvalid is
     // set. Pin it to ours so the two can never disagree.
@@ -632,7 +724,7 @@ const Contact = () => {
                     // corner of the photograph is clipped by the plate.
                     _focusVisible={{ outline: '2px solid #e3c98f', outlineOffset: '-4px' }}
                     // Tabbing back up to this left it tucked under the navbar.
-                    sx={{ scrollMarginTop: '88px', scrollMarginBottom: '112px' }}
+                    sx={{ scrollMarginTop: '88px', scrollMarginBottom: '88px' }}
                   >
                     {/* Drawn, for the same reason as the tick in the submit
                         bar: the glyph fell back to another face entirely and
@@ -684,7 +776,7 @@ const Contact = () => {
                         pb={0.5}
                         _focusVisible={{ outline: '2px solid #e3c98f', outlineOffset: '3px' }}
                         // Tabbing back up to this left it under the navbar.
-                        sx={{ scrollMarginTop: '88px', scrollMarginBottom: '112px' }}
+                        sx={{ scrollMarginTop: '88px', scrollMarginBottom: '88px' }}
                       >
                         Change
                       </Box>
@@ -720,23 +812,27 @@ const Contact = () => {
                 {/* Assertive, and visually hidden. This is what makes a failed
                     submit audible; the focus move above is what makes it
                     navigable. */}
-                <Text
-                  as="p"
-                  aria-live="assertive"
-                  m={0}
-                  sx={{
-                    position: 'absolute',
-                    width: '1px',
-                    height: '1px',
-                    padding: 0,
-                    margin: '-1px',
-                    overflow: 'hidden',
-                    clip: 'rect(0 0 0 0)',
-                    whiteSpace: 'nowrap',
-                    border: 0,
-                  }}
-                >
+                <Text as="p" aria-live="assertive" m={0} sx={SR_ONLY}>
                   {announce}
+                </Text>
+
+                {/* The counter line above the submit button is gone: the button
+                    names the next empty field itself now. A button's ACCESSIBLE
+                    NAME changing is not a live-region event though, and it is
+                    only spoken when that button has focus, which it never does
+                    while you are typing. So the progress this page used to show
+                    is spoken here instead.
+
+                    INSIDE THE FORM, not in the bar. The bar sets display:none
+                    for the whole time the on-screen keyboard is up, and a
+                    display:none subtree is out of the accessibility tree
+                    entirely, so a region living there would fall silent during
+                    the exact interaction it exists to narrate. Mounted from the
+                    first render too, with only its text changing: a live region
+                    that appears at the same moment as its content is registered
+                    too late and its first announcement is dropped. */}
+                <Text as="p" aria-live="polite" m={0} sx={SR_ONLY}>
+                  {progress}
                 </Text>
 
                 <Box mb={12}>
@@ -853,7 +949,7 @@ const Contact = () => {
                               outlineColor: 'brand.accentText',
                               outlineOffset: '2px',
                             }}
-                            sx={{ scrollMarginTop: '88px', scrollMarginBottom: '112px' }}
+                            sx={{ scrollMarginTop: '88px', scrollMarginBottom: '88px' }}
                           >
                             {t.label}
                           </Box>
@@ -1101,39 +1197,16 @@ const Contact = () => {
                   bgGradient: 'linear(to-t, brand.surface, rgba(253, 249, 240, 0))',
                 }}
               >
-                <Text fontSize="13px" lineHeight="1.35" textAlign="center" color={requiredLeft === 0 ? 'brand.success' : 'brand.mutedText'} m={0} aria-live="polite">
-                  {requiredLeft === 0 ? (
-                    <>
-                      {/* Drawn, not the U+2713 glyph. The self-hosted Jost is a
-                          latin subset, so that character fell back to whatever
-                          face the device happened to have and sat at a different
-                          weight and baseline from every other mark here. */}
-                      <Box
-                        as="svg"
-                        viewBox="0 0 16 16"
-                        aria-hidden="true"
-                        display="inline-block"
-                        w="14px"
-                        h="14px"
-                        verticalAlign="-2px"
-                        mr="4px"
-                      >
-                        <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-                      </Box>
-                      All set
-                    </>
-                  ) : (
-                    <>
-                      <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">*</Text>
-                      {` ${requiredLeft} required field${requiredLeft === 1 ? '' : 's'} left`}
-                    </>
-                  )}
-                </Text>
                 <Box w="100%" maxW="320px">
                   {/* Muted until the required fields are filled, but still
                       pressable: pressing it is what shows WHICH fields are
                       missing. A disabled submit tells you nothing, which is
-                      why GOV.UK advises against it. */}
+                      why GOV.UK advises against it.
+
+                      There used to be a "4 required fields left" line above
+                      this button. The button carries that job now, one field
+                      at a time, which is 28px of bar back and a label that
+                      describes what the press actually does. */}
                   <CTAButton
                     type="submit"
                     form="contact-form"
@@ -1143,7 +1216,34 @@ const Contact = () => {
                     isLoading={isSubmitting}
                     loadingText="Sending..."
                   >
-                    Check availability
+                    {/* Keyed on the label, because a key change remounts the
+                        node and a remount is what replays a CSS animation.
+                        inline-block because transform does not apply to an
+                        inline box.
+
+                        The animation sits INSIDE the no-preference query rather
+                        than being declared and then switched off for `reduce`,
+                        and fill-mode stays at its default `none` with a resting
+                        opacity of 1. So anywhere the animation does not run at
+                        all, the label is simply there. An opacity that starts
+                        at 0 and waits for a keyframe is how a reveal leaves a
+                        page blank. */}
+                    <Box
+                      as="span"
+                      key={ctaLabel}
+                      display="inline-block"
+                      sx={{
+                        '@keyframes ctaLabelIn': {
+                          from: { opacity: 0, transform: 'translateY(2px)' },
+                          to: { opacity: 1, transform: 'none' },
+                        },
+                        '@media (prefers-reduced-motion: no-preference)': {
+                          animation: 'ctaLabelIn 200ms ease',
+                        },
+                      }}
+                    >
+                      {ctaLabel}
+                    </Box>
                   </CTAButton>
                 </Box>
               </Flex>
