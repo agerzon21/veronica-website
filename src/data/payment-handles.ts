@@ -52,6 +52,63 @@ export type CardPaymentsMode = 'off' | 'preview' | 'on';
 
 export const CARD_PAYMENTS_MODE: CardPaymentsMode = 'on';
 
+/**
+ * What a card payment costs us, and therefore what sending money directly saves.
+ *
+ * WHY A DISCOUNT AND NOT A SURCHARGE. Adding a fee on top of the price when a
+ * client pays by card is legally a surcharge, and the Durbin Amendment forbids
+ * surcharging DEBIT cards outright, even when the customer runs one as credit.
+ * Stripe Checkout accepts debit and the card's funding type is not knowable
+ * until after it is entered, so a flat "card costs more" rule would break
+ * federal law on an unknown share of payments. A discount for paying another
+ * way is the same arithmetic from the other end, is explicitly permitted, needs
+ * no registration with the card networks, and has no debit exception.
+ *
+ * So the contract total IS the card price. Zelle, Venmo and Cash App get money
+ * off, and the round number on the contract stays round.
+ */
+export const CARD_FEE = {
+  /** Stripe's US card rate. */
+  rate: 0.029,
+  /** Stripe's per-transaction charge, in dollars. */
+  fixed: 0.3,
+} as const;
+
+/** Cents, rounded half up, so two callers never disagree by a penny. */
+function toCents(dollars: number): number {
+  return Math.round(dollars * 100);
+}
+
+/**
+ * What Stripe keeps on a card payment of this size.
+ *
+ * Note this is charged on the amount ACTUALLY charged, which is why the naive
+ * "add 2.9% and 30 cents" gross-up comes up short: the fee applies to the
+ * larger number too.
+ */
+export function cardFeeOn(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return toCents(amount * CARD_FEE.rate + CARD_FEE.fixed) / 100;
+}
+
+/**
+ * What to send by Zelle, Venmo or Cash App instead, to leave us the same money.
+ *
+ * Never more than the card price, and never below zero, so a tiny balance
+ * cannot invert into the client being owed money.
+ */
+export function cashPrice(cardPrice: number): number {
+  if (!Number.isFinite(cardPrice) || cardPrice <= 0) return 0;
+  const cents = toCents(cardPrice) - toCents(cardFeeOn(cardPrice));
+  return Math.max(cents, 0) / 100;
+}
+
+/** What the client saves by not using a card. Zero when there is nothing to save. */
+export function cashSaving(cardPrice: number): number {
+  if (!Number.isFinite(cardPrice) || cardPrice <= 0) return 0;
+  return (toCents(cardPrice) - toCents(cashPrice(cardPrice))) / 100;
+}
+
 /** True when cards are real for ordinary clients. */
 export const CARD_PAYMENTS_ENABLED = (CARD_PAYMENTS_MODE as CardPaymentsMode) === 'on';
 

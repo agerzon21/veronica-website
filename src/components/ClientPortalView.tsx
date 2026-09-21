@@ -34,7 +34,13 @@ import {
 import ReadingProgress from './ReadingProgress';
 import { scrollBehavior } from '../utils/motion';
 import type { ContractTemplate } from '../data/contract-template';
-import { PAYMENT_HANDLES, CARD_PAYMENTS_MODE, cardPaymentsVisible } from '../data/payment-handles';
+import {
+  PAYMENT_HANDLES,
+  CARD_PAYMENTS_MODE,
+  cardPaymentsVisible,
+  cashPrice,
+  cashSaving,
+} from '../data/payment-handles';
 
 // Full client portal payload — mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
@@ -2086,7 +2092,7 @@ function NextStepsPanel({
             </VStack>
 
             <PayByCardButton kind="retainer" amount={retainerToSend} credentials={credentials} testMode={cardTestMode} />
-            <PaymentMethodsStack />
+            <PaymentMethodsStack amount={retainerToSend} />
 
             <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
               Once you've sent it, reply to this booking's email or message Veronika so she can confirm receipt. <Text as="span" fontWeight="500" color="gray.700">If she's already confirmed and this page hasn't updated, tap "Refresh Portal" up top.</Text>
@@ -2153,7 +2159,7 @@ function NextStepsPanel({
             </Box>
 
             <PayByCardButton kind="balance" amount={balanceToSend} credentials={credentials} testMode={cardTestMode} />
-            <PaymentMethodsStack />
+            <PaymentMethodsStack amount={balanceToSend} />
 
             <VStack spacing={2} maxW="440px" textAlign="center">
               <Text fontSize="xs" color="gray.600" fontWeight="400" lineHeight="1.7">
@@ -2319,9 +2325,41 @@ function PayByCardButton({
   );
 }
 
-function PaymentMethodsStack() {
+/**
+ * The ways to send money directly, and what doing so saves.
+ *
+ * The contract total is the CARD price, so these three are cheaper by exactly
+ * what Stripe would have taken. That direction is deliberate and is explained
+ * in payment-handles.ts: a fee added for paying by card is a surcharge, and
+ * surcharging a debit card is not allowed, while a discount for paying another
+ * way is the same arithmetic with none of that problem.
+ *
+ * The saving is only shown when the card button is actually on the page. With
+ * no card option there is nothing to be cheaper THAN, and a discount off a
+ * price nobody was offered is just a confusing second number.
+ */
+function PaymentMethodsStack({ amount }: { amount?: number }) {
+  const cardsVisible = cardPaymentsVisible(
+    typeof window === 'undefined' ? '' : window.location.search,
+  );
+  const owed = typeof amount === 'number' ? amount : 0;
+  const discounted = cashPrice(owed);
+  const saving = cashSaving(owed);
+  const showSaving = cardsVisible && saving > 0;
+
   return (
     <VStack spacing={2} w="100%" maxW="380px">
+      {showSaving && (
+        <VStack spacing={0} w="100%" pb={1} textAlign="center">
+          <Text fontSize="sm" color="gray.800">
+            Send <strong>{formatMoney(discounted)}</strong> by any of these instead
+          </Text>
+          <Text fontSize="xs" color="gray.600" fontWeight="300">
+            That is {formatMoney(saving)} less. Card payments carry a processing fee, sending it
+            directly does not, so we pass the difference back to you.
+          </Text>
+        </VStack>
+      )}
       <PaymentMethodRow label="Zelle" value={PAYMENT_HANDLES.zelle} />
       <PaymentMethodRow
         label="Venmo"

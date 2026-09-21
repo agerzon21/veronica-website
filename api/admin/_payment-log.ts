@@ -41,6 +41,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+import { cardFeeOn } from '../../src/data/payment-handles.js';
 
 /**
  * The reasons a charge can carry. Same three the table CHECKs, repeated here
@@ -257,6 +258,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sql`
         insert into payment_entries (client_portal_id, amount, method, note, paid_at)
         values (${id}, ${amount}, ${method || null}, ${note || null}, ${paidAt})
+      `;
+      return recomputeAndReturn(sql, id, res);
+    }
+
+    /**
+     * Close the gap left by a client who paid directly instead of by card.
+     *
+     * The contract total is the CARD price (payment-handles.ts explains why the
+     * discount runs this way round rather than as a surcharge). A client who
+     * sends Zelle pays the smaller number, so the booking is left owing exactly
+     * the fee Stripe never took, and without this it reads as underpaid forever.
+     *
+     * Recorded as a payment row rather than a negative charge, because
+     * portal_charges CHECKs amount > 0, and because this genuinely does settle
+     * the obligation. Labelled so the ledger never pretends cash arrived: the
+     * line says exactly what it is.
+     *
+     * THE AMOUNT IS COMPUTED HERE, never accepted from the caller, and capped
+     * at the card fee on the full price. A waiver larger than the fee it stands
+     * in for is a typo or a mistake, and neither should be writable by calling
+     * this endpoint.
+     */
+    if (action === 'settle-discount') {
+      const rows = (await sql`
+        select contract_total_amount::text t, charges_total::text c, paid_to_date::text p
+        from client_portals where id = ${id} limit 1
+      `) as Array<{ t: string | null; c: string | null; p: string | null }>;
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'No such booking' });
+      }
+      const total = parseFloat(rows[0].t ?? '0');
+      const charges = parseFloat(rows[0].c ?? '0');
+      const paid = parseFloat(rows[0].p ?? '0');
+      const outstandingCents = Math.round((total + charges - paid) * 100);
+
+      if (outstandingCents <= 0) {
+        return res.status(409).json({
+          success: false,
+          error: 'This booking is already settled, there is nothing to waive.',
+        });
+      }
+      const maxCents = Math.round(cardFeeOn(total + charges) * 100);
+      if (outstandingCents > maxCents) {
+        return res.status(409).json({
+          success: false,
+          error:
+            `Still owing ${(outstandingCents / 100).toFixed(2)}, which is more than the ` +
+            `${(maxCents / 100).toFixed(2)} card fee on this booking. Record the payment they sent first.`,
+        });
+      }
+
+      await sql`
+        insert into payment_entries (client_portal_id, amount, method, note, paid_at)
+        values (${id}, ${outstandingCents / 100}, 'Card fee discount',
+                'Paid directly, so the card processing fee was waived', now())
       `;
       return recomputeAndReturn(sql, id, res);
     }

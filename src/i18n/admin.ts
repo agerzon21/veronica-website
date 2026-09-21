@@ -2018,6 +2018,12 @@ const dict = {
     statTotal: { en: 'Total', ru: 'Всего' },
     statPaid: { en: 'Paid', ru: 'Оплачено' },
     statRemaining: { en: 'Remaining', ru: 'Осталось' },
+    settleDiscountTitle: { en: 'They paid directly', ru: 'Оплатили напрямую' },
+    settleDiscountBody: {
+      en: 'The amount left is the card fee they avoided. Waive it to settle this booking.',
+      ru: 'Остаток равен комиссии за карту, которой удалось избежать. Списать его и закрыть бронь.',
+    },
+    settleDiscountAction: { en: 'Waive the card fee', ru: 'Списать комиссию' },
     history: { en: 'History', ru: 'История' },
     logAPayment: { en: 'Log a Payment', ru: 'Записать оплату' },
     amountLabel: { en: 'Amount (USD)', ru: 'Сумма (USD)' },

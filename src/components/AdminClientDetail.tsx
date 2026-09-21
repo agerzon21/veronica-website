@@ -1,4 +1,5 @@
 import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
+import { cardFeeOn } from '../data/payment-handles';
 import { fmtAdminDateTime } from '../utils/adminDate';
 import { createContext, useCallback, useContext, useEffect, useId, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
@@ -1087,6 +1088,22 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
               <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
             </SimpleGrid>
+
+            {/* Only when the leftover IS the card fee. A client who sent Zelle
+                paid the discounted price, so the booking looks a few dollars
+                short by design; anything larger is a real unpaid balance and
+                must not be waivable with one tap. */}
+            {balanceRemaining !== null &&
+              balanceRemaining > 0 &&
+              amountOwed !== null &&
+              balanceRemaining <= cardFeeOn(amountOwed) && (
+                <SettleDiscountCallout
+                  portalId={portalId}
+                  adminPassword={adminPassword}
+                  amount={balanceRemaining}
+                  onSettled={reload}
+                />
+              )}
 
             <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
 
@@ -2649,6 +2666,69 @@ function SessionTypeField({
           ? t.clientDetail.sessionTypeHelpCustom
           : t.clientDetail.sessionTypeHelpStandard}
       </Text>
+    </Box>
+  );
+}
+
+/**
+ * Settle the few dollars a direct payer was discounted.
+ *
+ * The server recomputes the amount and refuses anything above the card fee, so
+ * this button cannot waive a real balance even if it renders when it should
+ * not. It shows its own error inline rather than at the top of the page,
+ * because on a phone the top of the page is three screens away.
+ */
+function SettleDiscountCallout({
+  portalId,
+  adminPassword,
+  amount,
+  onSettled,
+}: {
+  portalId: string;
+  adminPassword: string;
+  amount: number;
+  onSettled: () => void;
+}) {
+  const { t } = useAdminLang();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const settle = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/payment-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, id: portalId, action: 'settle-discount' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        onSettled();
+        return;
+      }
+      setError(data.error || t.clientDetail.serverErrorStatus(res.status));
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Box bg="green.50" border="1px solid" borderColor="green.200" borderRadius="md" p={3}>
+      <Text fontSize="sm" fontWeight="600" color="gray.800">
+        {t.clientDetail.settleDiscountTitle}
+      </Text>
+      <Text fontSize="xs" color="gray.600" mt={1} mb={2} lineHeight="1.6">
+        {t.clientDetail.settleDiscountBody}
+      </Text>
+      <CTAButton onClick={settle} isLoading={busy} size="sm" variant="outline" fullWidth>
+        {t.clientDetail.settleDiscountAction} ({formatMoney(amount)})
+      </CTAButton>
+      {error && (
+        <Text fontSize="xs" color="red.600" mt={2}>
+          {error}
+        </Text>
+      )}
     </Box>
   );
 }
