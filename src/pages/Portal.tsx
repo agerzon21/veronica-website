@@ -565,18 +565,28 @@ const Portal = () => {
     const previewToken = (searchParams.get('preview') ?? '').trim();
 
     try {
-      const res = await fetch('/api/portal/gallery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: galleryPassword.trim(),
-          // ?preview= is the admin panel's short lived pass for a gallery
-          // that has not been released yet. It has to be sent, not just sit
-          // in the address bar: the server is what decides whether the photos
-          // come back, and it cannot see this page's URL.
-          ...(previewToken ? { preview: previewToken } : {}),
-        }),
-      });
+      /**
+       * The preview token goes in the QUERY STRING, not the body.
+       *
+       * ?preview= is the admin panel's short lived pass for a gallery that has
+       * not been released yet (the link is built at AdminClientDetail.tsx:782).
+       * The token has to be forwarded, not just sit in this page's address bar:
+       * the server decides whether the photos come back and it cannot see the
+       * browser's URL.
+       *
+       * And it has to go on the URL, because api/portal/_gallery.ts:97 reads it
+       * off req.query. Putting it in the POST body compiles, typechecks, ships
+       * and does absolutely nothing, which is worse than not sending it: the
+       * button looks fixed and still 403s.
+       */
+      const res = await fetch(
+        `/api/portal/gallery${previewToken ? `?preview=${encodeURIComponent(previewToken)}` : ''}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: galleryPassword.trim() }),
+        },
+      );
       const data = await res.json();
 
       if (res.ok && data.success) {
