@@ -15,6 +15,8 @@ import FaClipboardList from '../icons/fa/FaClipboardList';
 import FaUser from '../icons/fa/FaUser';
 import FaCog from '../icons/fa/FaCog';
 import FaCopy from '../icons/fa/FaCopy';
+import FaChevronLeft from '../icons/fa/FaChevronLeft';
+import FaChevronRight from '../icons/fa/FaChevronRight';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import {
@@ -46,6 +48,13 @@ interface Props {
    * no warning at all.
    */
   onDirtyChange?: (unsavedFieldNames: string[]) => void;
+  /**
+   * Move to the booking either side of this one, in the order the Clients
+   * list shows them. Null at the ends. Reviewing five bookings before a
+   * weekend was five full round trips through the list.
+   */
+  onPrev?: (() => void) | null;
+  onNext?: (() => void) | null;
 }
 
 interface PortalDetail {
@@ -319,7 +328,7 @@ const daysUntil = (iso: string | null): number | null => {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 };
 
-const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange }: Props) => {
+const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext }: Props) => {
   const { t } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
@@ -623,12 +632,81 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   return (
     <DirtyCtx.Provider value={markDirty}>
     <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
-      <AdminBackButton onClick={handleBack} label={t.common.back} />
+      {/* ONE band: the way out, who this is, and where she is in the list.
+          Back used to sit alone in its own row above a VStack with no
+          background, so the first painted surface on the screen was the
+          summary card far below and the two read as unrelated panels. */}
+      <Flex align="flex-start" gap={{ base: 2, md: 3 }} mb={6} pt={1}>
+        {/* AdminBackButton pulls itself 8px left to optically align its
+            chevron; the band supplies the padding for that to cancel
+            against, which is what its own docstring asks for. */}
+        <Box pl={2} flexShrink={0}>
+          <AdminBackButton onClick={handleBack} label={t.common.back} />
+        </Box>
 
-      {/* Sits directly under Back, where the press that raised it happened,
-          and names what is at stake: "unsaved changes" on its own would send
-          her hunting down a page of collapsed sections for whichever box she
-          had been typing in. */}
+        <Box flex="1" minW={0}>
+          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
+            {/* Session type comes from user input via a fixed enum; the
+                value itself is UI-visible copy that stays English on the
+                wire, so only the fallback needs translating. */}
+            {portal.session_type ?? t.clientDetail.kickerFallback}
+          </Text>
+          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mt={0.5}>
+            {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
+          </Text>
+          {/* Joined, not concatenated with a hardcoded separator. The date
+              used to carry its own leading middot, so a booking with no email
+              rendered "· December 31"; and the email was printed here AND as
+              the heading above whenever there was no display name, so it
+              appeared twice. */}
+          {(() => {
+            const showEmail = Boolean(portal.client_display_name) && Boolean(portal.client_email);
+            const meta = [
+              showEmail ? portal.client_email : null,
+              portal.event_date ? formatDate(portal.event_date) : null,
+            ].filter(Boolean);
+            return meta.length ? (
+              <Text fontSize="sm" color="gray.500" mt={1}>
+                {meta.join(' \u00b7 ')}
+              </Text>
+            ) : null;
+          })()}
+          <HStack spacing={2} flexWrap="wrap" mt={1.5}>
+            {portal.mode === 'simple' && (
+              <Badge fontSize="2xs" colorScheme="gray" variant="subtle">{t.clientDetail.badgeGalleryOnly}</Badge>
+            )}
+            {portal.setup_token && (
+              <Badge fontSize="2xs" colorScheme="orange" variant="subtle">{t.clientDetail.badgeInvitePending}</Badge>
+            )}
+          </HStack>
+        </Box>
+
+        {(onPrev || onNext) && (
+          <HStack spacing={1} flexShrink={0} pt={1}>
+            <IconButton
+              aria-label={t.clientDetail.prevClient}
+              title={t.clientDetail.prevClient}
+              icon={<Icon as={FaChevronLeft} boxSize={3} />}
+              onClick={() => onPrev?.()}
+              isDisabled={!onPrev}
+              size="sm"
+              variant="ghost"
+              color="gray.600"
+            />
+            <IconButton
+              aria-label={t.clientDetail.nextClient}
+              title={t.clientDetail.nextClient}
+              icon={<Icon as={FaChevronRight} boxSize={3} />}
+              onClick={() => onNext?.()}
+              isDisabled={!onNext}
+              size="sm"
+              variant="ghost"
+              color="gray.600"
+            />
+          </HStack>
+        )}
+      </Flex>
+
       {leaveConfirm && hasUnsaved && (
         <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm" p={4} mt={2} mb={4}>
           <Text fontSize="sm" fontWeight="500" color="orange.800" mb={1}>
@@ -649,28 +727,6 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           </Stack>
         </Box>
       )}
-
-      <VStack align="flex-start" spacing={2} mb={6}>
-        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
-          {/* Session type comes from user input via a fixed enum; the
-              value itself is UI-visible copy that stays English on the
-              wire, so only the fallback needs translating. */}
-          {portal.session_type ?? t.clientDetail.kickerFallback}
-        </Text>
-        <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
-        </Text>
-        <HStack spacing={2} flexWrap="wrap">
-          {portal.client_email && <Text fontSize="sm" color="gray.500">{portal.client_email}</Text>}
-          {portal.event_date && <Text fontSize="sm" color="gray.500">· {formatDate(portal.event_date)}</Text>}
-          {portal.mode === 'simple' && (
-            <Badge fontSize="2xs" colorScheme="gray" variant="subtle">{t.clientDetail.badgeGalleryOnly}</Badge>
-          )}
-          {portal.setup_token && (
-            <Badge fontSize="2xs" colorScheme="orange" variant="subtle">{t.clientDetail.badgeInvitePending}</Badge>
-          )}
-        </HStack>
-      </VStack>
 
       {error && (
         <Box bg="red.50" border="1px solid" borderColor="red.200" borderRadius="sm" p={3} mb={4}>

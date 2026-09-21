@@ -571,6 +571,18 @@ const Admin = () => {
               adminPassword={password}
               adminLevel={adminLevel}
               onDirtyChange={setDetailDirty}
+              {...(() => {
+                /* The booking either side of this one, in the order the
+                   Clients list renders them. AdminDashboard does not sort or
+                   filter, so the array order IS what she is looking at.
+                   Routed through requestNav like every other exit, because
+                   moving to the next client leaves this one. */
+                const list = portals ?? [];
+                const i = list.findIndex((p) => p.id === view.id);
+                const at = (n: number) =>
+                  i >= 0 && list[n] ? () => requestNav(() => setView({ kind: 'detail', id: list[n].id })) : null;
+                return { onPrev: at(i - 1), onNext: at(i + 1) };
+              })()}
               onBack={async () => {
                 setView({ kind: 'dashboard' });
                 await loadPortals({ password });

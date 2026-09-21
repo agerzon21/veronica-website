@@ -2166,6 +2166,10 @@ const dict = {
     // wording names the fields rather than saying "unsaved changes" on its
     // own: the page is long, several sections collapse, and a warning she
     // cannot act on is a warning she learns to click through.
+    // The header arrows. Reviewing several bookings before a weekend used to
+    // mean a full round trip through the list for each one.
+    prevClient: { en: 'Previous client', ru: 'Предыдущий клиент' },
+    nextClient: { en: 'Next client', ru: 'Следующий клиент' },
     unsavedHeading: { en: 'Unsaved changes', ru: 'Несохранённые изменения' },
     // `fields` is a comma-joined list of the names below plus whatever field
     // labels are dirty, already translated by the caller.
