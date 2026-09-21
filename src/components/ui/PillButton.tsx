@@ -19,15 +19,28 @@ interface Props {
   onClick: () => void;
   icon?: IconType;
   disabled?: boolean;
+  /**
+   * Stretch to fill the cell. True everywhere it has ever been used, because
+   * every one of those is a grid: a whole thumb should hit the target rather
+   * than the letter cluster in the middle of it.
+   *
+   * The Clients filter strip is the first caller that is a ROW, where a pill
+   * at width 100% takes the whole line and six of them wrap into six lines.
+   * Gated behind a prop rather than removed, so the grids are untouched.
+   */
+  fullWidth?: boolean;
+  /** Accessible name, when the visible label is an abbreviation. */
+  ariaLabel?: string;
 }
 
-const PillButton = ({ label, isActive, onClick, icon, disabled = false }: Props) => {
+const PillButton = ({ label, isActive, onClick, icon, disabled = false, fullWidth = true, ariaLabel }: Props) => {
   return (
     <Box
       as="button"
       type="button"
       onClick={disabled ? undefined : onClick}
       aria-pressed={isActive}
+      aria-label={ariaLabel}
       disabled={disabled}
       display="inline-flex"
       alignItems="center"
@@ -35,7 +48,7 @@ const PillButton = ({ label, isActive, onClick, icon, disabled = false }: Props)
       px={{ base: 4, md: 4 }}
       py={{ base: 3, md: 1.5 }}
       minH={{ base: '44px', md: 'auto' }}
-      w="100%"
+      w={fullWidth ? '100%' : 'auto'}
       fontSize={{ base: 'sm', md: 'xs' }}
       fontWeight="500"
       letterSpacing="0.02em"

@@ -70,6 +70,27 @@ const ruFieldWord = (n: number): string => {
   return 'полей';
 };
 
+/**
+ * Generic Russian count-declension picker: 1 день, 2-4 дня, 5+ дней, with the
+ * 11-14 band always taking the many-form whatever its last digit is.
+ *
+ * ruFieldWord above is the same rule hard-wired to one word. The working table
+ * counts days, weeks and months in the same breath ("in 13 days", "3 weeks
+ * ago"), so it needs the rule, not a fourth copy of it.
+ */
+const ruPlural = (n: number, one: string, few: string, many: string): string => {
+  const abs = Math.abs(n);
+  const mod100 = abs % 100;
+  const mod10 = abs % 10;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+};
+
+const portalCountEn = (n: number): string => `${n} portal${n === 1 ? '' : 's'}`;
+const portalCountRu = (n: number): string => `${n} ${ruPlural(n, 'портал', 'портала', 'порталов')}`;
+
 const dict = {
   common: {
     save: { en: 'Save', ru: 'Сохранить' },
@@ -148,8 +169,8 @@ const dict = {
   clients: {
     tabTitle: { en: 'Clients', ru: 'Клиенты' },
     portalCount: {
-      en: (n: number) => `${n} portal${n === 1 ? '' : 's'}`,
-      ru: (n: number) => `${n} ${n === 1 ? 'портал' : n < 5 ? 'портала' : 'порталов'}`,
+      en: portalCountEn,
+      ru: portalCountRu,
     },
     newClient: { en: 'New', ru: 'Новый' },
     emptyState: {
@@ -210,6 +231,119 @@ const dict = {
             return `${n} ${word} осталось`;
           },
         },
+      },
+    },
+
+    // ─── The working table: search, filter chips, sort ───
+    //
+    // The chips read as answers ("Owes", "To deliver"), never as field names,
+    // because their job is to BE the status summary this screen has never had.
+    // Их задача: короткая сводка, поэтому подписи короткие в обоих языках.
+    search: { en: 'Search clients', ru: 'Поиск клиентов' },
+    noMatches: { en: 'Nothing matches that.', ru: 'Ничего не найдено.' },
+    clearFilter: { en: 'Clear', ru: 'Сбросить' },
+    filters: {
+      all: { en: 'All', ru: 'Все' },
+      upcoming: { en: 'Upcoming', ru: 'Ближайшие' },
+      owes: { en: 'Owes', ru: 'Должны' },
+      overpaid: { en: 'Overpaid', ru: 'Переплата' },
+      unsigned: { en: 'Unsigned', ru: 'Без подписи' },
+      deliver: { en: 'To deliver', ru: 'Отдать галерею' },
+    },
+    // Chip label + its live count. One leaf rather than string concatenation
+    // at the call site, so a language that wants the count first can have it.
+    filterCount: {
+      en: (label: string, n: number) => `${label} ${n}`,
+      ru: (label: string, n: number) => `${label} ${n}`,
+    },
+    sortLabel: { en: 'Sort', ru: 'Сортировка' },
+    // Which way the arrow points, spelled out for the mobile action sheet
+    // and for the column header's accessible name. Per column, because
+    // "first to last" says nothing useful about a column of money.
+    sortDir: {
+      date: {
+        asc: { en: 'next shoot first', ru: 'сначала ближайшая съёмка' },
+        desc: { en: 'oldest first', ru: 'сначала самые давние' },
+      },
+      name: {
+        asc: { en: 'A to Z', ru: 'от А до Я' },
+        desc: { en: 'Z to A', ru: 'от Я до А' },
+      },
+      money: {
+        asc: { en: 'least owed first', ru: 'сначала меньший долг' },
+        desc: { en: 'most owed first', ru: 'сначала больший долг' },
+      },
+    },
+    sortBy: {
+      date: { en: 'Date', ru: 'Дата' },
+      name: { en: 'Name', ru: 'Имя' },
+      money: { en: 'Money', ru: 'Деньги' },
+    },
+    sortAria: {
+      en: (field: string) => `Sort by ${field}`,
+      ru: (field: string) => `Сортировать по полю ${field}`,
+    },
+    // The count line under the H1 reports the filter. When nothing is
+    // filtered out it must read EXACTLY like portalCount did, so the
+    // unfiltered screen is unchanged.
+    portalCountFiltered: {
+      en: (total: number, shown: number) =>
+        total === shown ? portalCountEn(total) : `${portalCountEn(total)}, ${shown} shown`,
+      ru: (total: number, shown: number) =>
+        total === shown ? portalCountRu(total) : `${portalCountRu(total)}, показано ${shown}`,
+    },
+    // Money cell. The third case the old balance line swallowed: a client
+    // who sent more than the booking asks for was printed as simply "Paid".
+    overpaid: {
+      en: (amount: string) => `Overpaid ${amount}`,
+      ru: (amount: string) => `Переплата ${amount}`,
+    },
+    owedOf: {
+      en: (paid: string, owed: string) => `${paid} of ${owed}`,
+      ru: (paid: string, owed: string) => `${paid} из ${owed}`,
+    },
+    // The same sentence with its subject left out, so the Money cell can set
+    // the amount already paid in a heavier weight than the rest of the line.
+    owedOfSuffix: {
+      en: (owed: string) => ` of ${owed}`,
+      ru: (owed: string) => ` из ${owed}`,
+    },
+    contractTotal: {
+      en: (amount: string) => `${amount} total`,
+      ru: (amount: string) => `всего ${amount}`,
+    },
+    // Second line under a gallery that has photos but has not been sent.
+    galleryNotSent: { en: 'Link not sent', ru: 'Ссылка не отправлена' },
+    // Relative event date, the second line of the When cell. Arithmetic is
+    // done in AdminDashboard on the UTC midnight value; these leaves only
+    // decline the word.
+    when: {
+      today: { en: 'Today', ru: 'Сегодня' },
+      tomorrow: { en: 'Tomorrow', ru: 'Завтра' },
+      yesterday: { en: 'Yesterday', ru: 'Вчера' },
+      inDays: {
+        en: (n: number) => `in ${n} days`,
+        ru: (n: number) => `через ${n} ${ruPlural(n, 'день', 'дня', 'дней')}`,
+      },
+      daysAgo: {
+        en: (n: number) => `${n} days ago`,
+        ru: (n: number) => `${n} ${ruPlural(n, 'день', 'дня', 'дней')} назад`,
+      },
+      inWeeks: {
+        en: (n: number) => `in ${n} week${n === 1 ? '' : 's'}`,
+        ru: (n: number) => `через ${n} ${ruPlural(n, 'неделю', 'недели', 'недель')}`,
+      },
+      weeksAgo: {
+        en: (n: number) => `${n} week${n === 1 ? '' : 's'} ago`,
+        ru: (n: number) => `${n} ${ruPlural(n, 'неделю', 'недели', 'недель')} назад`,
+      },
+      inMonths: {
+        en: (n: number) => `in ${n} month${n === 1 ? '' : 's'}`,
+        ru: (n: number) => `через ${n} ${ruPlural(n, 'месяц', 'месяца', 'месяцев')}`,
+      },
+      monthsAgo: {
+        en: (n: number) => `${n} month${n === 1 ? '' : 's'} ago`,
+        ru: (n: number) => `${n} ${ruPlural(n, 'месяц', 'месяца', 'месяцев')} назад`,
       },
     },
   },

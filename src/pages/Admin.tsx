@@ -198,6 +198,13 @@ const Admin = () => {
   // the mobile sub-nav strip can toggle it. AdminDashboard reads it
   // as a prop instead of owning its own internal state.
   const [clientsView, setClientsView] = useState<ClientsView>('table');
+  // The ids the Clients list is actually showing, in the order it shows them.
+  // The client screen's Previous and Next walk this, not the raw API array:
+  // the list sorts and filters now, so those two are the only place the two
+  // orders could quietly disagree, and they are also the place where
+  // disagreeing is worst (you press Next and land on a booking that is not
+  // under the one you came from).
+  const [visibleOrder, setVisibleOrder] = useState<string[]>([]);
   // Menu drawer (mobile + desktop). Opens when the user taps the
   // Menu button in the bottom nav (mobile) or the Menu icon in the
   // desktop tab strip. Contents: sign out, jump to public site,
@@ -568,6 +575,7 @@ const Admin = () => {
                   onRefresh={handleRefresh}
                   viewMode={clientsView}
                   onChangeViewMode={setClientsView}
+                  onVisibleOrderChange={setVisibleOrder}
                 />
               )}
               {dashTab === 'messages' && (
@@ -674,11 +682,19 @@ const Admin = () => {
               onDirtyChange={setDetailDirty}
               {...(() => {
                 /* The booking either side of this one, in the order the
-                   Clients list renders them. AdminDashboard does not sort or
-                   filter, so the array order IS what she is looking at.
+                   Clients list renders them. That list sorts, filters and
+                   searches, so it reports the order it is showing and this
+                   walks THAT. Falling back to the raw array only for the case
+                   where the list has not rendered yet (a deep link straight
+                   to a client screen).
                    Routed through requestNav like every other exit, because
                    moving to the next client leaves this one. */
-                const list = portals ?? [];
+                const all = portals ?? [];
+                const byId = new Map(all.map((p) => [p.id, p]));
+                const ordered = visibleOrder
+                  .map((id) => byId.get(id))
+                  .filter((p): p is AdminPortalSummary => Boolean(p));
+                const list = ordered.length > 0 ? ordered : all;
                 const i = list.findIndex((p) => p.id === view.id);
                 const at = (n: number) =>
                   i >= 0 && list[n] ? () => requestNav(() => setView({ kind: 'detail', id: list[n].id })) : null;

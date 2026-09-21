@@ -2,12 +2,22 @@ import { Box, VStack, HStack, Text, Flex, Icon, SimpleGrid, useBreakpointValue }
 import { useMemo, useState } from 'react';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
-import type { AdminPortalSummary } from './AdminDashboard';
+import { balanceOf, eventDayUtc, todayDayUtc, type AdminPortalSummary } from './adminClients';
 
 interface Props {
   portals: AdminPortalSummary[];
   onOpenPortal: (id: string) => void;
-
+  /**
+   * The bookings the Clients filter is currently letting through, when one is
+   * on. Undefined means nothing is filtered.
+   *
+   * The month grid keeps every booking either way and dims the rest, on
+   * purpose: a filtered October that is missing half its bookings does not
+   * look like October any more, and the shape of the month is the only thing
+   * the grid is better at than the list. The agenda, which IS a list, filters
+   * outright.
+   */
+  matchIds?: Set<string>;
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -21,7 +31,7 @@ const ymd = (d: Date): string =>
 const sameYmd = (d: Date) => ymd(d);
 const todayYmd = () => sameYmd(new Date());
 
-const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
+const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
   // The first day of the visible month. Navigation just adjusts this.
   const [cursor, setCursor] = useState<Date>(() => {
     const d = new Date();
@@ -83,9 +93,13 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
       .map(({ date }) => ({
         date,
         key: sameYmd(date),
-        events: portalsByDate.get(sameYmd(date)) ?? [],
-      }));
-  }, [cells, portalsByDate]);
+        events: (portalsByDate.get(sameYmd(date)) ?? []).filter((p) => !matchIds || matchIds.has(p.id)),
+      }))
+      // A day whose every booking was filtered out is not an empty day, it is
+      // a day that is not part of this answer. Dropping it is the difference
+      // between an agenda and a calendar.
+      .filter(({ events }) => events.length > 0);
+  }, [cells, portalsByDate, matchIds]);
 
   // Which layout to render. 'auto' follows the breakpoint (the original
   // behaviour); 'month' and 'agenda' are explicit overrides so the month grid
@@ -109,6 +123,23 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
 
   const isWide = useBreakpointValue({ base: false, md: true }, { ssr: false, fallback: 'base' }) ?? false;
   const effectiveView = viewMode === 'auto' ? (isWide ? 'month' : 'agenda') : viewMode;
+
+  /**
+   * "+2 more" was a grey label. It is the one place in the month grid that
+   * admits it is hiding something, and it could not be pressed.
+   *
+   * It switches to the agenda and scrolls that day into view. The agenda is
+   * display:none until the switch lands, so an element inside it has no box
+   * to scroll to yet: hence the frame.
+   */
+  const showDayInAgenda = (key: string) => {
+    setView('agenda');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById(`admin-agenda-${key}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+    });
+  };
 
   const setView = (v: 'month' | 'agenda') => {
     setViewMode(v);
@@ -227,11 +258,13 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
               return (
                 <Box
                   key={key}
+                  id={`admin-agenda-${key}`}
                   bg="white"
                   border="1px solid"
                   borderColor={isToday ? 'brand.accent' : 'gray.200'}
                   borderRadius="sm"
                   p={4}
+                  sx={{ scrollMarginTop: '96px' }}
                 >
                   <HStack spacing={3} align="baseline" mb={2}>
                     <Text
@@ -326,7 +359,9 @@ const AdminCalendarView = ({ portals, onOpenPortal }: Props) => {
                   inMonth={inMonth}
                   isToday={isToday}
                   events={events}
+                  matchIds={matchIds}
                   onOpenPortal={onOpenPortal}
+                  onShowDay={inMonth ? () => showDayInAgenda(key) : null}
                   isLastColumn={(i + 1) % 7 === 0}
                   isLastRow={i >= 35}
                 />
@@ -395,7 +430,9 @@ function DayCell({
   inMonth,
   isToday,
   events,
+  matchIds,
   onOpenPortal,
+  onShowDay,
   isLastColumn,
   isLastRow,
 }: {
@@ -403,7 +440,9 @@ function DayCell({
   inMonth: boolean;
   isToday: boolean;
   events: AdminPortalSummary[];
+  matchIds?: Set<string>;
   onOpenPortal: (id: string) => void;
+  onShowDay: (() => void) | null;
   isLastColumn: boolean;
   isLastRow: boolean;
 }) {
@@ -450,19 +489,59 @@ function DayCell({
       {/* Event chips */}
       <VStack spacing={1} align="stretch">
         {events.slice(0, 3).map((p) => (
-          <EventChip key={p.id} portal={p} onClick={() => onOpenPortal(p.id)} />
+          <EventChip
+            key={p.id}
+            portal={p}
+            dimmed={matchIds ? !matchIds.has(p.id) : false}
+            onClick={() => onOpenPortal(p.id)}
+          />
         ))}
-        {events.length > 3 && (
-          <Text fontSize="2xs" color="gray.400" px={1}>
-            +{events.length - 3} more
-          </Text>
-        )}
+        {events.length > 3 &&
+          (onShowDay ? (
+            <Box
+              as="button"
+              type="button"
+              onClick={onShowDay}
+              w="100%"
+              minH={{ base: '32px', md: '24px' }}
+              px={1}
+              bg="transparent"
+              border="none"
+              textAlign="left"
+              fontSize="2xs"
+              color="gray.500"
+              cursor="pointer"
+              textDecoration="underline"
+              textUnderlineOffset="2px"
+              _hover={{ color: 'brand.accentText' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              +{events.length - 3} more
+            </Box>
+          ) : (
+            <Text fontSize="2xs" color="gray.400" px={1}>
+              +{events.length - 3} more
+            </Text>
+          ))}
       </VStack>
     </Box>
   );
 }
 
-function EventChip({ portal, onClick }: { portal: AdminPortalSummary; onClick: () => void }) {
+function EventChip({
+  portal,
+  onClick,
+  dimmed = false,
+}: {
+  portal: AdminPortalSummary;
+  onClick: () => void;
+  dimmed?: boolean;
+}) {
+  // Shot, and still owed for. The one state on this screen that costs money
+  // to miss, and the month grid had no way of showing it.
+  const eventAt = eventDayUtc(portal.event_date);
+  const balance = balanceOf(portal);
+  const unpaidPast = balance !== null && balance > 0 && eventAt !== null && eventAt <= todayDayUtc();
   // Color reflects the most-advanced status of the booking. For
   // gallery-only rows, "delivered" is the milestone; for full-mode,
   // "signed" comes first then "delivered".
@@ -485,15 +564,17 @@ function EventChip({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
       py={1}
       bg="white"
       border="1px solid"
-      borderColor={color}
+      borderColor={dimmed ? '#e6e2da' : color}
       borderRadius="sm"
       textAlign="left"
       cursor="pointer"
+      opacity={dimmed ? 0.35 : 1}
+      transition="opacity 0.2s ease"
       _hover={{ bg: 'gray.50' }}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
       <HStack spacing={1.5} align="center">
-        <Box w="6px" h="6px" borderRadius="full" bg={color} flexShrink={0} />
+        <Box w="6px" h="6px" borderRadius="full" bg={dimmed ? '#cfc9bd' : color} flexShrink={0} />
         <Text
           fontSize="2xs"
           color="gray.700"
@@ -504,6 +585,9 @@ function EventChip({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
         >
           {label}
         </Text>
+        {unpaidPast && !dimmed && (
+          <Box w="5px" h="5px" borderRadius="full" bg="orange.400" flexShrink={0} />
+        )}
       </HStack>
     </Box>
   );
