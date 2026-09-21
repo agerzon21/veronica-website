@@ -898,7 +898,30 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             so the whole thing stays readable over any LCD photo. */}
         <MotionBox
           position="absolute"
-          bottom={{ base: '110px', md: '40px' }}
+          /**
+           * ANCHORED TO THE VISIBLE BOTTOM, not to the sticky box's bottom.
+           *
+           * The sticky is height 100lvh, the LARGE viewport, the one measured
+           * with the browser chrome HIDDEN. A phone almost always has its
+           * toolbar showing, so the bottom of that box is behind it, and a
+           * fixed 110px offset was landing inside that strip. On an iPhone 15
+           * Pro Max in Safari, whose bar is the tallest of the lot, the cue and
+           * the numbers under it were not on screen at all.
+           *
+           * 100lvh minus 100svh IS the toolbar's height, by definition: svh is
+           * the viewport with chrome shown, lvh with it hidden. Adding it back
+           * puts this a fixed distance above the part of the screen that is
+           * always visible, on every device, with no measurement and no
+           * JavaScript. Both units are constants, so the cue never moves when
+           * the bar slides away, which is what kept the number rail drifting.
+           *
+           * On a desktop lvh and svh are equal, so the term is zero and the
+           * md value governs anyway.
+           */
+          bottom={{
+            base: 'calc(100lvh - 100svh + env(safe-area-inset-bottom, 0px) + 28px)',
+            md: '40px',
+          }}
           left="50%"
           transform="translateX(-50%)"
           zIndex={5}

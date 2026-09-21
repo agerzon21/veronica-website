@@ -118,8 +118,16 @@ function useRailPlacement(ref: React.RefObject<HTMLDivElement>): {
     const measure = () => {
       const el = ref.current;
       if (!el) return;
-      // Only at rest. Mid scroll the camera is scaled and every rect lies.
-      if (window.scrollY > 4) return;
+      /**
+       * ONLY AT EXACT REST, and the strictness is the point.
+       *
+       * The camera scales with the scroll, and a scaled element's rect no
+       * longer agrees with its offsetHeight, so the arithmetic below is only
+       * true at scale 1. A tolerance of a few pixels let a measurement through
+       * while the scale had already begun to move, which is what made the rail
+       * creep upward a little on every scroll down and back.
+       */
+      if (window.scrollY !== 0) return;
 
       const block = document.querySelector('[data-hero-scroll-block]') as HTMLElement | null;
       const cue = document.querySelector('[data-hero-scroll-cue]') as HTMLElement | null;
@@ -154,15 +162,21 @@ function useRailPlacement(ref: React.RefObject<HTMLDivElement>): {
     const t2 = window.setTimeout(measure, 1200);
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
-    // A phone browser's toolbar sliding away moves the cue without firing a
-    // window resize, and this rail is pinned to the cue.
-    window.visualViewport?.addEventListener('resize', measure);
+    /**
+     * NO visualViewport LISTENER, deliberately.
+     *
+     * It fires continuously while a phone's toolbar slides away, including at
+     * scroll offsets where the camera is mid-scale, and every one of those
+     * firings nudged the rail. It is not needed either: the cue is anchored in
+     * svh units now, so it does not move when the bar does, and a position
+     * measured once at rest stays correct because the rail and the slide scale
+     * together.
+     */
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       window.removeEventListener('resize', measure);
       window.removeEventListener('orientationchange', measure);
-      window.visualViewport?.removeEventListener('resize', measure);
     };
   }, [ref]);
   return placement;
