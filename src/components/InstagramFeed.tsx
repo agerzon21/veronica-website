@@ -496,7 +496,7 @@ const InstagramFeed = () => {
               position="relative"
               overflow="hidden"
               cursor="pointer"
-              role="group"
+              data-group
               onClick={() => setOpenIdx(i)}
               sx={{
                 WebkitTapHighlightColor: 'transparent',

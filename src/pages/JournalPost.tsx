@@ -1054,7 +1054,7 @@ function SiblingNavCard({
   return (
     <RouterLink to={`/journal/${sibling.slug}`}>
       <Box
-        role="group"
+        data-group
         position="relative"
         h={{ base: '110px', md: '150px' }}
         borderRadius="sm"

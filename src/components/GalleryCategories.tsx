@@ -72,7 +72,7 @@ const GalleryCategories = () => {
                   h={{ base: '250px', md: '65vh' }}
                   overflow="hidden"
                   cursor="pointer"
-                  role="group"
+                  data-group
                 >
                   <Box
                     position="absolute"

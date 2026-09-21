@@ -453,7 +453,7 @@ const Weddings = () => {
                   as={RouterLink}
                   to={`/contact?package=${encodeURIComponent(pkg.name)}`}
                   state={{ packagePhoto, packageFocus: pin?.focus ?? 'center' }}
-                  role="group"
+                  data-group
                   direction="column"
                   position="relative"
                   bg="white"
@@ -800,7 +800,7 @@ const Weddings = () => {
               <Flex
                 as={RouterLink}
                 to="/journal"
-                role="group"
+                data-group
                 direction={{ base: 'row', md: 'column' }}
                 align="center"
                 justify="center"
@@ -1088,7 +1088,7 @@ const Weddings = () => {
             <Flex
               as={RouterLink}
               to="/gallery/weddings"
-              role="group"
+              data-group
               direction="column"
               align="center"
               justify="center"
@@ -1137,7 +1137,7 @@ const Weddings = () => {
         <Flex
           as={RouterLink}
           to="/gallery/weddings"
-          role="group"
+          data-group
           display={{ base: 'flex', md: 'none' }}
           align="center"
           justify="center"
