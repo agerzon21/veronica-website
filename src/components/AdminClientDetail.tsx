@@ -37,6 +37,15 @@ interface Props {
   adminPassword: string;
   adminLevel: 'admin' | 'super';
   onBack: () => void;
+  /**
+   * Reports whether anything on this screen is half typed.
+   *
+   * The shell needs it because the nav now lives OUTSIDE this component: a tab
+   * tap is an exit from this screen, and every exit has to meet the same guard
+   * that Back does, or a half written contract variable goes in the bin with
+   * no warning at all.
+   */
+  onDirtyChange?: (unsavedFieldNames: string[]) => void;
 }
 
 interface PortalDetail {
@@ -310,7 +319,7 @@ const daysUntil = (iso: string | null): number | null => {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 };
 
-const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Props) => {
+const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange }: Props) => {
   const { t } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
@@ -357,6 +366,20 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
   useEffect(() => {
     if (!hasUnsaved) setLeaveConfirm(false);
   }, [hasUnsaved]);
+
+  // Tell the shell, so a nav tap from the bottom bar gets the same guard the
+  // Back button has. Cleared on unmount, or leaving the screen would leave the
+  // shell believing a screen that is gone still has unsaved work.
+  // The NAMES, not just a flag, so the shell's dialog can say which fields
+  // are at risk exactly as the inline panel does. Joined here rather than in
+  // the shell so there is one list and one order.
+  const unsavedKey = unsavedNames.join('\u0000');
+  useEffect(() => {
+    onDirtyChange?.(unsavedKey ? unsavedKey.split('\u0000') : []);
+    // unsavedKey, not unsavedNames: a new array every render would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unsavedKey, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.([]), [onDirtyChange]);
 
   /**
    * The same guard for the browser's own back gesture, a reload, and closing

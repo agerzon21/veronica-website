@@ -2171,9 +2171,9 @@ const dict = {
     // labels are dirty, already translated by the caller.
     unsavedBody: {
       en: (fields: string) =>
-        `Not saved yet: ${fields}. Going back now throws it away.`,
+        `Not saved yet: ${fields}. Leaving now throws it away.`,
       ru: (fields: string) =>
-        `Ещё не сохранено: ${fields}. Если сейчас выйти, это пропадёт.`,
+        `Ещё не сохранено: ${fields}. Если сейчас уйти, это пропадёт.`,
     },
     unsavedStay: { en: 'Stay on this page', ru: 'Остаться на странице' },
     unsavedLeave: { en: 'Discard and go back', ru: 'Выйти без сохранения' },

@@ -5,7 +5,7 @@ import {
   Drawer, DrawerBody, DrawerContent, DrawerOverlay, DrawerCloseButton,
   useDisclosure,
 } from '@chakra-ui/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { AnimatePresence, m } from 'framer-motion';
 import FaBars from '../icons/fa/FaBars';
@@ -32,6 +32,7 @@ import Reveal from '../components/ui/Reveal';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import AdminNewClient from '../components/AdminNewClient';
 import type { ClientPrefill } from '../components/clientPrefill';
 import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
@@ -367,6 +368,39 @@ const Admin = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Leaving the client detail screen, guarded.
+   *
+   * The bottom bar and the tab strip used to be hidden on this screen, so the
+   * only way out was one Back button at the very top, and the only guard on
+   * unsaved work sat behind it. Now that a tab tap is also an exit, every exit
+   * has to meet the same guard, or a half typed contract variable is binned by
+   * a tap that does not look like it leaves anything.
+   */
+  const [detailDirty, setDetailDirty] = useState<string[]>([]);
+  const [pendingNav, setPendingNav] = useState<(() => void) | null>(null);
+  const requestNav = useCallback(
+    (go: () => void) => {
+      if (view.kind === 'detail' && detailDirty.length > 0) {
+        // Stored as a thunk. setState treats a bare function as an updater.
+        setPendingNav(() => go);
+        return;
+      }
+      go();
+    },
+    [view.kind, detailDirty],
+  );
+  /** A tab tap from inside a client is also a return to the dashboard. */
+  const navigateToTab = useCallback(
+    (tab: DashTab) => {
+      requestNav(() => {
+        setDashTab(tab);
+        setView({ kind: 'dashboard' });
+      });
+    },
+    [requestNav],
+  );
+
   useEffect(() => {
     if (portals) window.scrollTo(0, 0);
   }, [portals]);
@@ -515,10 +549,28 @@ const Admin = () => {
             />
           )}
           {view.kind === 'detail' && (
+            <>
+              {/* The same sticky band the dashboard has. This screen is the
+                  LONGEST in the panel and was the one that opted out, so on a
+                  desktop the only way anywhere else was one Back button at the
+                  very top, reached by scrolling the whole page back up. The
+                  band is already position:sticky with its own full bleed
+                  margins; it just was not rendered here.
+                  Every tab goes through the same guard the bottom bar uses. */}
+              <AdminTabStrip
+                active={dashTab}
+                onChange={navigateToTab}
+                isSuper={adminLevel === 'super'}
+                onOpenMenu={() => requestNav(menuDisclosure.onOpen)}
+              />
+            </>
+          )}
+          {view.kind === 'detail' && (
             <AdminClientDetail
               portalId={view.id}
               adminPassword={password}
               adminLevel={adminLevel}
+              onDirtyChange={setDetailDirty}
               onBack={async () => {
                 setView({ kind: 'dashboard' });
                 await loadPortals({ password });
@@ -532,11 +584,11 @@ const Admin = () => {
             iOS/Android tab bars work. Hidden during drill-in sub-flows
             (mode-chooser / new-client / client-detail) since those
             have their own back navigation. */}
-        {view.kind === 'dashboard' && (
+        {(view.kind === 'dashboard' || view.kind === 'detail') && (
           <AdminMobileNav
             activeTab={dashTab}
             clientsView={clientsView}
-            onChangeTab={setDashTab}
+            onChangeTab={navigateToTab}
             onChangeClientsView={setClientsView}
             onOpenMenu={menuDisclosure.onOpen}
             isSuper={adminLevel === 'super'}
@@ -547,6 +599,23 @@ const Admin = () => {
             slot. Sign out, public-site links, home, integrations for
             super. Reused on desktop via the Menu button in the top
             pill strip. */}
+        {/* The same question the Back button asks, for the exits that are now
+            possible from the bottom of the screen. ConfirmDialog rather than a
+            second inline panel: the nav bar is fixed at the bottom and an
+            inline warning anchored at the top of a very long page would be off
+            screen at the moment it fires. */}
+        <LeaveDetailDialog
+          isOpen={pendingNav !== null}
+          fields={detailDirty}
+          onConfirm={() => {
+            const go = pendingNav;
+            setPendingNav(null);
+            setDetailDirty([]);
+            go?.();
+          }}
+          onCancel={() => setPendingNav(null)}
+        />
+
         <AdminMenuDrawer
           isOpen={menuDisclosure.isOpen}
           onClose={menuDisclosure.onClose}
@@ -879,6 +948,40 @@ function tabsFor(isSuper: boolean): TabDef[] {
  * button on the right that opens the same drawer the mobile Menu
  * bottom-nav slot opens. Hidden on mobile — bottom nav takes over.
  */
+/**
+ * The unsaved-work question, for an exit triggered from the nav.
+ *
+ * Its own component only so it can call useAdminLang: the shell RENDERS the
+ * i18n provider, so it sits above the context and cannot read `t` itself.
+ * Same three strings the inline panel on the client screen already uses, so
+ * the two exits cannot end up wording the same question differently.
+ */
+function LeaveDetailDialog({
+  isOpen,
+  fields,
+  onConfirm,
+  onCancel,
+}: {
+  isOpen: boolean;
+  fields: string[];
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useAdminLang();
+  return (
+    <ConfirmDialog
+      isOpen={isOpen}
+      title={t.clientDetail.unsavedHeading}
+      body={t.clientDetail.unsavedBody(fields.join(', '))}
+      confirmLabel={t.clientDetail.unsavedLeave}
+      cancelLabel={t.clientDetail.unsavedStay}
+      danger
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  );
+}
+
 function AdminTabStrip({
   active,
   onChange,
