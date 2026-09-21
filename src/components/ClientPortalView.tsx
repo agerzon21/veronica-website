@@ -2660,14 +2660,20 @@ function PaymentMethodsStack({ amount }: { amount?: number }) {
 
   return (
     <VStack spacing={2} w="100%" maxW="380px">
+      {/* THE DIRECT PRICE LEADS, and the card price is the one with something
+          added to it. Same arithmetic as before, read from the other end: the
+          contract's total is the card price and this is the discount off it,
+          which is what keeps it a discount rather than a surcharge. See
+          cardPriceFor in payment-handles.ts for why that distinction is not
+          cosmetic. */}
       {showSaving && (
         <VStack spacing={0} w="100%" pb={1} textAlign="center">
           <Text fontSize="sm" color="gray.800">
-            Send <strong>{formatMoney(discounted)}</strong> by any of these instead
+            Send <strong>{formatMoney(discounted)}</strong> by any of these
           </Text>
           <Text fontSize="xs" color="gray.600" fontWeight="300">
-            That is {formatMoney(saving)} less. Card payments carry a processing fee, sending it
-            directly does not, so we pass the difference back to you.
+            That is the whole amount, and all of it reaches Veronika. Paying by card is{' '}
+            {formatMoney(owed)}, because the card processor takes {formatMoney(saving)} of it.
           </Text>
         </VStack>
       )}

@@ -109,6 +109,43 @@ export function cashSaving(cardPrice: number): number {
   return (toCents(cardPrice) - toCents(cashPrice(cardPrice))) / 100;
 }
 
+/**
+ * The card price that leaves us EXACTLY `direct` after Stripe takes its cut.
+ *
+ * The inverse of cardFeeOn, and the piece that lets the number a client sends
+ * directly be the clean one. Vero decides she wants $750 in hand; this says
+ * the card price has to be $772.45, because Stripe takes 2.9% of THAT plus 30
+ * cents, not 2.9% of $750.
+ *
+ *   direct = card - (card * rate + fixed)
+ *   card   = (direct + fixed) / (1 - rate)
+ *
+ * WHY THE PRICE IS STORED THIS WAY ROUND, and it is not a detail.
+ *
+ * Adding a fee on top of a stated price when somebody pays by card is a
+ * SURCHARGE. Surcharging a debit card is prohibited outright by the Durbin
+ * Amendment, federally, in every state, and Stripe Checkout accepts debit
+ * cards without telling us which is which. Surcharging credit cards is legal
+ * in most states but carries conditions: advance notice to the card networks,
+ * a cap at the cost of acceptance, and disclosure at the point of sale.
+ *
+ * Offering a DISCOUNT for not using a card is permitted everywhere, on every
+ * card type, with no notice and no registration. It is the same arithmetic
+ * seen from the other end.
+ *
+ * So the contract's total is the CARD price, and paying directly is
+ * discounted by the fee. The client still reads what the owner wanted them to
+ * read, "send $750, or $772.45 by card", and we are on the legal side of the
+ * line rather than the one that ends in a Stripe account review.
+ *
+ * Rounded UP to the cent, because rounding down leaves us short.
+ */
+export function cardPriceFor(direct: number): number {
+  if (!Number.isFinite(direct) || direct <= 0) return 0;
+  const cents = Math.ceil((toCents(direct) + toCents(CARD_FEE.fixed)) / (1 - CARD_FEE.rate));
+  return cents / 100;
+}
+
 /** True when cards are real for ordinary clients. */
 export const CARD_PAYMENTS_ENABLED = (CARD_PAYMENTS_MODE as CardPaymentsMode) === 'on';
 
