@@ -685,7 +685,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                   controls on isDevelopment internally, so they only appear in
                   `npm run dev` (Prev/Next/Pause for testing hero candidates) and
                   stay completely off in production. */}
-              <ImageCarousel images={images} height="100%" />
+              {/* cameraScale is handed down so the rail can fade out as the
+                  LCD shrinks. It lives inside CameraBody, so it is already
+                  inside the transform and travels with the photo; what it
+                  cannot do by itself is know when it has become too small to
+                  read or to hit. */}
+              <ImageCarousel images={images} height="100%" showIndex indexScale={cameraScale} />
             </CameraBody>
           </MotionBox>
         </Box>
