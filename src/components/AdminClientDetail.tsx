@@ -3644,9 +3644,11 @@ function EditContractVariables({
         <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em">
           {t.clientDetail.editContractTitle}
         </Text>
-        <Box
-          as="button"
-          type="button"
+        {/* CTAButton, not bare text. This was a hand rolled 17px line of gold
+            with no minimum height, which made it the smallest tap target on a
+            screen used mostly from a phone, and the only control here that
+            was not one of the four house rungs. ghost is the tertiary rung. */}
+        <CTAButton
           onClick={() => {
             // Hide packs the confirmation away with the fields it belongs to.
             // Left standing, it would be the first thing on screen the next
@@ -3655,17 +3657,11 @@ function EditContractVariables({
             setConfirmSave(false);
             setOpen((o) => !o);
           }}
-          fontSize="xs"
-          letterSpacing="0.15em"
-          textTransform="uppercase"
-          color="brand.accent"
-          bg="transparent"
-          border="none"
-          cursor="pointer"
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
+          variant="ghost"
+          size="sm"
         >
           {open ? t.clientDetail.editContractHide : t.clientDetail.editContractEditFields}
-        </Box>
+        </CTAButton>
       </Flex>
       <Text fontSize="xs" color="gray.500" mb={3} fontWeight="300">
         {t.clientDetail.editContractHint}
@@ -3957,8 +3953,13 @@ function DangerZone({
         {t.clientDetail.dangerZoneBody}
       </Text>
       {!confirming && (
-        <CTAButton onClick={() => setConfirming(true)} variant="outline" size="sm">
-          <Icon as={FaTrash} boxSize={3} mr={2} />
+        /* danger on the ARMING press, not only on the confirm. It was
+           variant="outline", pixel for pixel the same button as Waze and
+           Resend invite, and only turned red after she had already pressed
+           it. The press that starts a destructive flow should look like one.
+           icon prop rather than an <Icon> child, which is the other mechanism
+           in this file and renders a different glyph size. */
+        <CTAButton onClick={() => setConfirming(true)} variant="danger" size="sm" icon={FaTrash}>
           {t.clientDetail.deleteThisPortal}
         </CTAButton>
       )}
