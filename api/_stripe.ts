@@ -292,6 +292,36 @@ export async function listRefundsForCharge(
   return out?.data ?? [];
 }
 
+/**
+ * Which events our webhook endpoint is actually subscribed to.
+ *
+ * WHY THIS EXISTS. The dashboard's event picker is a multi select that is easy
+ * to leave unsaved, and the failure is silent in the worst way: money moves in
+ * Stripe and no event ever arrives, so the ledger is quietly wrong and the
+ * only evidence is an absence. There is no way to tell that apart from "no
+ * refunds have happened yet" by looking at our own logs.
+ *
+ * So the panel asks Stripe. Nothing here returns any part of a key.
+ *
+ * A restricted key may not carry the webhook read permission. That is not an
+ * error worth surfacing as a fault, so the caller treats a throw as "cannot
+ * tell" rather than as "not subscribed".
+ */
+export type StripeWebhookEndpoint = {
+  id?: string;
+  url?: string;
+  status?: string;
+  enabled_events?: string[];
+};
+
+export async function listWebhookEndpoints(): Promise<StripeWebhookEndpoint[]> {
+  const out = await stripeRequest<{ data?: StripeWebhookEndpoint[] }>(
+    '/webhook_endpoints?limit=100',
+    { method: 'GET' },
+  );
+  return out?.data ?? [];
+}
+
 /* ------------------------------------------------------------ signature ---- */
 
 export type StripeEvent = {

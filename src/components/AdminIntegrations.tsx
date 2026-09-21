@@ -103,6 +103,20 @@ interface ConfigCheck {
 }
 
 /**
+ * What Stripe says our webhook is subscribed to.
+ *
+ * Shape mirrors api/admin/_config-health.ts. 'unknown' is not a fault: a
+ * restricted key may simply not carry the webhook read permission.
+ */
+interface WebhookHealth {
+  state: 'ok' | 'incomplete' | 'unknown' | 'no-endpoint';
+  missing: string[];
+  subscribed: number;
+  url: string | null;
+  note: string | null;
+}
+
+/**
  * Configuration card — which environment variables the RUNNING deployment can
  * actually see, and what silently stops working when one is missing.
  *
@@ -118,6 +132,7 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
   const { t } = useAdminLang();
   const [checks, setChecks] = useState<ConfigCheck[] | null>(null);
   const [environment, setEnvironment] = useState<string>('');
+  const [webhook, setWebhook] = useState<WebhookHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
@@ -135,6 +150,7 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
       if (res.ok && data.success) {
         setChecks(data.checks);
         setEnvironment(data.environment);
+        setWebhook(data.stripeWebhook ?? null);
       } else {
         setError(data.error || t.integrations.configLoadFailed);
       }
@@ -207,6 +223,54 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
           <Text fontSize="sm" color="gray.500" fontWeight="300">
             {t.integrations.configSubtitle}
           </Text>
+
+          {/* The webhook subscription, asked of Stripe rather than assumed.
+              A missed checkbox in Stripe's event picker means money moves and
+              nothing arrives, and the only symptom is silence, which reads
+              exactly like "it has not happened yet". */}
+          {webhook && webhook.state !== 'unknown' && (
+            <Box
+              mt={3}
+              bg={webhook.state === 'ok' ? 'green.50' : 'orange.50'}
+              border="1px solid"
+              borderColor={webhook.state === 'ok' ? 'green.200' : 'orange.200'}
+              borderRadius="sm"
+              px={3}
+              py={2.5}
+            >
+              <HStack spacing={2} mb={webhook.state === 'ok' ? 0 : 1.5} flexWrap="wrap">
+                <Text fontSize="xs" fontWeight="500" color="gray.700">
+                  {t.integrations.webhookTitle}
+                </Text>
+                <Badge
+                  fontSize="0.65rem"
+                  textTransform="none"
+                  fontWeight="500"
+                  colorScheme={webhook.state === 'ok' ? 'green' : 'orange'}
+                >
+                  {webhook.state === 'ok'
+                    ? t.integrations.webhookOk
+                    : webhook.state === 'no-endpoint'
+                      ? t.integrations.webhookNone
+                      : t.integrations.webhookIncomplete(webhook.missing.length)}
+                </Badge>
+              </HStack>
+              {webhook.missing.length > 0 && (
+                <>
+                  <VStack align="stretch" spacing={0.5} mb={2}>
+                    {webhook.missing.map((ev) => (
+                      <Text key={ev} fontSize="xs" fontFamily="mono" color="orange.800">
+                        {ev}
+                      </Text>
+                    ))}
+                  </VStack>
+                  <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.5">
+                    {t.integrations.webhookMissingHelp}
+                  </Text>
+                </>
+              )}
+            </Box>
+          )}
         </Box>
         <IconButton
           aria-label={t.integrations.configRefreshAria}

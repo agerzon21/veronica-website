@@ -17,6 +17,7 @@
 
 import { getDb } from './_db.js';
 import { stripSubjectHeader } from './_subject-strip.js';
+import { applyHouseStyle } from './_house-style.js';
 import { sendIgTextMessage } from './_ig-send.js';
 import { sendEmailReply, deriveReplySubject } from './_email-send.js';
 import { getResendMessageId } from './_auto-reply.js';
@@ -93,9 +94,29 @@ export async function deliverReply(
    */
   options: { via: SentVia; allowDuplicate?: boolean },
 ): Promise<DeliveryResult> {
-  // A subject line in a reply body is never correct — email threading sets
+  // A subject line in a reply body is never correct: email threading sets
   // "Re:" itself and Instagram has no subjects. See _subject-strip.ts.
   text = stripSubjectHeader(text);
+
+  /**
+   * The LAST gate before a customer reads it.
+   *
+   * applyHouseStyle already runs where text is generated (_ai-reply.ts:1212,
+   * _ai-translate.ts, the assistant's own send path), and that was not enough:
+   * 13 of the 164 messages already sent from this system carry a long dash,
+   * and one unsent draft was still holding one. Generation-time cleaning only
+   * covers text that took the path someone remembered to wrap.
+   *
+   * This is the same lesson the send gate itself is built on, written down in
+   * _house-style.ts: a rule the model is asked to follow is not a rule. Put
+   * the check where the irreversible thing happens, and every path through it
+   * is covered whatever it did beforehand, including a draft written before
+   * this module existed and text Vero pasted in from somewhere else.
+   *
+   * It is a no-op on text with no long dash, byte for byte, so ordinary
+   * messages are untouched.
+   */
+  text = applyHouseStyle(text);
 
   const convoRows = (await sql`
     SELECT external_user_id, platform

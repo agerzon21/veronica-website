@@ -136,6 +136,12 @@ function isPermanentFailure(err: unknown): boolean {
  * counts as money, what is ignored, and what is loudly wrong. Testing it
  * through a fake req/res would exercise the framework instead.
  */
+/**
+ * The switch below is the authority on what is handled. The list the admin
+ * panel checks against lives in api/_stripe-events.ts, so that panel does not
+ * have to import this module and drag raw-body and the ledger with it. The two
+ * must be kept in step.
+ */
 export async function processEvent(event: StripeEvent): Promise<void> {
   // Ignored types are a no-op, NOT an error. Stripe sends whatever the
   // endpoint is subscribed to, and a dashboard change should never be able to

@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
+import { listWebhookEndpoints } from '../_stripe.js';
+import { HANDLED_EVENTS } from '../_stripe-events.js';
 
 /**
  * Config health — which environment variables are actually set in the running
@@ -331,10 +333,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? 'test'
         : 'unrecognised';
 
+  /**
+   * Is the webhook actually subscribed to everything we handle?
+   *
+   * The one go-live question nobody can answer by looking. A missed checkbox
+   * in Stripe's event picker means money moves and nothing arrives, and the
+   * only symptom is silence, which looks exactly like "it has not happened
+   * yet". Asked of Stripe rather than assumed.
+   *
+   * Every failure mode degrades to 'unknown' rather than to 'broken': no key,
+   * a key without the webhook read permission, Stripe being slow. A panel that
+   * cries wolf about a working site is worse than one that says it cannot tell.
+   */
+  let stripeWebhook: {
+    state: 'ok' | 'incomplete' | 'unknown' | 'no-endpoint';
+    missing: string[];
+    subscribed: number;
+    url: string | null;
+    note: string | null;
+  } = { state: 'unknown', missing: [], subscribed: 0, url: null, note: null };
+
+  if (stripeKey) {
+    try {
+      const endpoints = await listWebhookEndpoints();
+      const ours = endpoints.filter((e) => (e.url ?? '').includes('/api/inbox/stripe-webhook'));
+      if (ours.length === 0) {
+        stripeWebhook = {
+          state: 'no-endpoint',
+          missing: [...HANDLED_EVENTS],
+          subscribed: 0,
+          url: null,
+          note: 'No Stripe webhook points at this site yet.',
+        };
+      } else {
+        // The union across endpoints: two endpoints splitting the events
+        // between them is unusual but perfectly valid, and reporting the first
+        // one's gaps would be wrong.
+        const enabled = new Set<string>();
+        let wildcard = false;
+        for (const e of ours) {
+          for (const ev of e.enabled_events ?? []) {
+            if (ev === '*') wildcard = true;
+            enabled.add(ev);
+          }
+        }
+        const missing = wildcard ? [] : HANDLED_EVENTS.filter((ev) => !enabled.has(ev));
+        stripeWebhook = {
+          state: missing.length === 0 ? 'ok' : 'incomplete',
+          missing,
+          subscribed: wildcard ? HANDLED_EVENTS.length : enabled.size,
+          url: ours[0].url ?? null,
+          note: wildcard ? 'Subscribed to all events.' : null,
+        };
+      }
+    } catch {
+      stripeWebhook = {
+        state: 'unknown',
+        missing: [],
+        subscribed: 0,
+        url: null,
+        note: 'Could not ask Stripe. The key may not carry the webhook read permission.',
+      };
+    }
+  }
+
   return res.status(200).json({
     success: true,
     environment: process.env.VERCEL_ENV ?? 'development',
     stripeMode,
+    stripeWebhook,
     checks: resolved,
     broken: broken.length,
     coveredByFallback: missing.length - broken.length,

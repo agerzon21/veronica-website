@@ -2517,6 +2517,18 @@ const dict = {
     configShowProblems: { en: 'Show only problems', ru: 'Только проблемы' },
     configRefreshAria: { en: 'Recheck configuration', ru: 'Перепроверить конфигурацию' },
     configLoadFailed: { en: 'Could not load configuration.', ru: 'Не удалось загрузить конфигурацию.' },
+    webhookTitle: { en: 'Stripe webhook', ru: 'Вебхук Stripe' },
+    webhookOk: { en: 'All events subscribed', ru: 'Все события подключены' },
+    webhookIncomplete: {
+      en: (n: number) => (n === 1 ? '1 event missing' : `${n} events missing`),
+      ru: (n: number) => (n === 1 ? 'Не хватает 1 события' : `Не хватает событий: ${n}`),
+    },
+    webhookNone: { en: 'No webhook points here yet', ru: 'Вебхук сюда ещё не настроен' },
+    webhookUnknown: { en: 'Could not check', ru: 'Не удалось проверить' },
+    webhookMissingHelp: {
+      en: 'Add these in Stripe, Developers, Webhooks, then Save destination. Money can move without them and nothing will be recorded.',
+      ru: 'Добавь их в Stripe: Developers, Webhooks, затем Save destination. Без них деньги проходят, а в журнале ничего не появляется.',
+    },
     configEnvLabel: { en: 'Environment', ru: 'Окружение' },
     // ─── Header ───────────────────────────────────────
     subtitle: {
