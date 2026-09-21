@@ -142,7 +142,37 @@ export async function processEvent(event: StripeEvent): Promise<void> {
   // start a retry storm here.
   switch (event.type) {
     case 'checkout.session.completed':
+    /**
+     * The same handler, deliberately.
+     *
+     * A card authorises and captures in one step, so the money is there when
+     * 'completed' fires. A delayed method is not: the session completes with
+     * payment_status 'processing', handleCheckoutCompleted correctly records
+     * nothing, and the money lands minutes or days later carried by THIS
+     * event with payment_status 'paid'. Without this line that second event
+     * is a no-op and the payment sits in Stripe forever with the booking
+     * still reading unpaid.
+     *
+     * Nothing else has to change: the handler already gates on payment_status
+     * rather than on the event type, and the ledger is keyed on the payment
+     * intent, so a session that somehow delivered both events records once.
+     */
+    case 'checkout.session.async_payment_succeeded':
       return handleCheckoutCompleted(event);
+    /**
+     * The delayed payment FAILED. Nothing was ever recorded, so there is
+     * nothing to reverse, but silence here means a client who thinks they
+     * paid and a booking that disagrees, with nobody told. Logged loudly so
+     * it is visible rather than written to the ledger, which would need a
+     * 'failed' row nothing else reads yet.
+     */
+    case 'checkout.session.async_payment_failed': {
+      const s = event.data.object as { id?: string; metadata?: { portal_id?: string } };
+      console.error(
+        `[inbox/stripe-webhook] delayed payment FAILED for session ${s.id} on portal ${s.metadata?.portal_id ?? 'unknown'}. The client may believe they have paid.`,
+      );
+      return;
+    }
     case 'charge.refunded':
       return handleChargeRefunded(event);
     case 'charge.dispute.created':
