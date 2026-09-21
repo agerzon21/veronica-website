@@ -26,9 +26,10 @@ import {
   requiredVariablesFor,
   type ContractTemplateSpec,
 } from '../data/contract-template';
-import { useAdminLang } from '../i18n/admin';
+import { useAdminLang, type AdminLang } from '../i18n/admin';
 import { appleMapsLink, googleDirectionsLink, wazeLink } from '../data/travel-fee';
 import { travelCopy } from './travelCopy';
+import MobileSheetModal from './ui/MobileSheetModal';
 import { buildShareMessage, galleryDirectUrl } from './galleryShare';
 
 interface Props {
@@ -1045,11 +1046,39 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack }: Prop
                 </Box>
               )}
 
-            {/* Where the shoot is, and one tap to navigate there. Sits in the
-                Contract section because that is where the address lives, and
-                it shows for a SIGNED contract too: the day she actually needs
-                to drive there is long after signing. */}
-            <SessionLocationLinks address={portal.contract_variables?.event_location ?? ''} />
+            {/* The address the CLIENT agreed to, as text. No map links.
+                It had three of its own, reading contract_variables while the
+                Directions button at the top of the screen reads the
+                session_location column. Those two are deliberately separate,
+                so she can correct a venue the morning of a shoot without
+                touching a frozen contract, which means they are EXPECTED to
+                diverge. Two sets of live map buttons on one screen pointing
+                at different places, with nothing saying which was current,
+                is a way to drive to the wrong wedding.
+                The contract value stays visible because it is what was
+                agreed. It just stops offering a second route out of the
+                building. */}
+            {(portal.contract_variables?.event_location ?? '').trim() && (
+              <Box>
+                <Text fontSize="2xs" fontWeight="500" textTransform="uppercase"
+                      letterSpacing="0.18em" color="gray.500" mb={1}>
+                  {t.clientDetail.contractAddressLabel}
+                </Text>
+                <Text fontSize="sm" color="gray.700" fontWeight="300">
+                  {portal.contract_variables!.event_location}
+                </Text>
+                {/* Only when it differs from where she will actually drive.
+                    Same orange note the contract DATE uses eighteen lines up,
+                    for the same reason. */}
+                {effectiveAddress(portal) !== portal.contract_variables!.event_location.trim() && (
+                  <Box mt={2} p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
+                    <Text fontSize="xs" color="orange.800">
+                      {t.clientDetail.contractAddressDrift(effectiveAddress(portal))}
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            )}
 
             {/* While the contract is pending, expose the same variable
                 fields that were used at creation. Saving re-renders the
@@ -1387,6 +1416,91 @@ function Section({
  * place every time, and "No number on file" is information: it tells her to
  * go and add one. Hiding the button just says nothing.
  */
+/**
+ * One Directions control, four rows.
+ *
+ * The address used to be built four times from two different sources: a tile,
+ * a blue plate that was secretly the same link, three buttons under it, and
+ * three MORE in the contract section reading a DIFFERENT value. Eight
+ * tappable links for one fact, and the last set could drive her to a venue
+ * that had since been corrected.
+ *
+ * Same sheet at both widths, by the owner's decision. One behaviour is one
+ * thing to learn, Copy needs a home on a laptop anyway, and neither Waze nor
+ * Apple Maps is a sane silent default there: Waze on desktop is the Live Map
+ * and Apple Maps on desktop is a browser beta.
+ *
+ * A map link HANDS OFF to an app on a phone and never navigates, so opening
+ * it in a new tab leaves an orphan blank one behind on iOS. This file already
+ * reasons that out for tel: and mailto: in SummaryAction; the same rule is
+ * applied here, using the touch test the image viewer already uses.
+ */
+function DirectionsSheet({
+  address,
+  lang,
+  isOpen,
+  onClose,
+}: {
+  address: string;
+  lang: AdminLang;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  const tv = travelCopy(lang);
+  const [copied, setCopied] = useState(false);
+  const isTouch =
+    typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* Clipboard blocked. The address is selectable on the plate above. */
+    }
+  };
+
+  const apps = [
+    { label: tv.waze, href: wazeLink(address) },
+    { label: tv.googleMaps, href: googleDirectionsLink(address) },
+    { label: tv.appleMaps, href: appleMapsLink(address) },
+  ];
+
+  return (
+    <MobileSheetModal isOpen={isOpen} onClose={onClose} title={tv.openIn}>
+      <VStack align="stretch" spacing={2} pb={2}>
+        <Text fontSize="sm" color="gray.600" fontWeight="300" mb={1}>
+          {address}
+        </Text>
+        {apps.map((app) => (
+          <CTAButton
+            key={app.label}
+            href={app.href}
+            newTab={!isTouch}
+            variant="outline"
+            size="md"
+            icon={FaExternalLinkAlt}
+            fullWidth
+            onClick={onClose}
+          >
+            {app.label}
+          </CTAButton>
+        ))}
+        <CTAButton
+          onClick={copy}
+          variant="ghost"
+          size="md"
+          icon={FaCopy}
+          fullWidth
+        >
+          {copied ? tv.addressCopied : tv.copyAddress}
+        </CTAButton>
+      </VStack>
+    </MobileSheetModal>
+  );
+}
+
 function SummaryAction({
   icon,
   label,
@@ -1494,7 +1608,7 @@ function ShootSummary({
   balanceRemaining: number | null;
 }) {
   const { t, lang } = useAdminLang();
-  const tv = travelCopy(lang);
+  const [directionsOpen, setDirectionsOpen] = useState(false);
 
   // The column first, the contract second. session_location is where she
   // actually drives; the contract variable is what the client agreed to, and
@@ -1510,9 +1624,6 @@ function ShootSummary({
   const phone = (portal.client_phone ?? '').trim();
   const email = (portal.client_email ?? '').trim();
 
-  // Destination only, never an origin, so the map routes from wherever she is
-  // standing rather than from an address baked in at booking time.
-  const mapHref = address ? googleDirectionsLink(address) : undefined;
 
   return (
     <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" mb={5} overflow="hidden">
@@ -1521,7 +1632,7 @@ function ShootSummary({
           <SummaryAction
             icon={FaMapMarkerAlt}
             label={t.clientDetail.summaryDirections}
-            href={mapHref}
+            onClick={address ? () => setDirectionsOpen(true) : undefined}
             hint={address ? undefined : t.clientDetail.summaryNoAddress}
           />
           <SummaryAction
@@ -1561,12 +1672,13 @@ function ShootSummary({
           row is the glance target and the three explicit apps stay below for
           when she wants a specific one. */}
       {address ? (
+        /* NOT a link. It was one, to the same URL the Directions tile above
+           already opens, so the address could never be selected or copied:
+           long pressing it on a phone offered link actions and copied a
+           google.com/maps/dir URL rather than the address. This is the place
+           the address is READ. Going there is the tile's job, and copying it
+           is a row in the sheet the tile opens. */
         <Box
-          as="a"
-          href={mapHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          display="block"
           mx={{ base: 4, md: 6 }}
           mb={3}
           px={3}
@@ -1574,15 +1686,12 @@ function ShootSummary({
           minH="56px"
           bg="blue.50"
           borderRadius="md"
-          _hover={{ bg: 'blue.100', textDecoration: 'none' }}
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
         >
           <HStack spacing={3} align="center">
             <Icon as={FaMapMarkerAlt} boxSize={4} color="blue.600" flexShrink={0} />
             <Text fontSize="sm" color="blue.800" fontWeight="500" flex="1" minW={0}>
               {address}
             </Text>
-            <Icon as={FaExternalLinkAlt} boxSize={2.5} color="blue.400" flexShrink={0} />
           </HStack>
         </Box>
       ) : (
@@ -1636,31 +1745,16 @@ function ShootSummary({
         </Box>
       )}
 
-      {/* Keeps the explicit choice of navigator that already existed. Removing
-          it to make room would be losing a capability, not simplifying. */}
-      {address && (
-        <Box px={{ base: 4, md: 6 }} py={3} borderTop="1px solid" borderColor="gray.100">
-          <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
-            {[
-              { label: tv.waze, href: wazeLink(address) },
-              { label: tv.googleMaps, href: googleDirectionsLink(address) },
-              { label: tv.appleMaps, href: appleMapsLink(address) },
-            ].map((target) => (
-              <CTAButton
-                key={target.label}
-                href={target.href}
-                newTab
-                variant="outline"
-                size="sm"
-                icon={FaExternalLinkAlt}
-                fullWidth={{ base: true, md: false }}
-              >
-                {target.label}
-              </CTAButton>
-            ))}
-          </Stack>
-        </Box>
-      )}
+      {/* The one control. Three stacked buttons here plus a fourth set in the
+          contract section made eight tappable map links on one client, two of
+          which opened a byte for byte identical URL. Every app is still
+          reachable; it is one tap further in and one place to look. */}
+      <DirectionsSheet
+        address={address}
+        lang={lang}
+        isOpen={directionsOpen}
+        onClose={() => setDirectionsOpen(false)}
+      />
     </Box>
   );
 }
@@ -3288,63 +3382,6 @@ function AccountSection({
  * Field keys must match the variable names used in the contract
  * template — they round-trip into and out of contract_variables.
  */
-/**
- * The session address, and one tap into whichever map app she prefers.
- *
- * ALL THREE LINKS ARE BUILT IN THE BROWSER, AND THAT IS SAFE, because all
- * three carry a DESTINATION ONLY. Waze and Apple Maps take nothing else, and
- * the Google link here is deliberately the no-origin form, which makes Maps
- * route from wherever she is standing. That is the right behaviour for this
- * screen: the question on the day is "get me there from here", not "how far is
- * this from base".
- *
- * The one link that does carry an origin is the look it up button on the new
- * client form, and that one is built server side in api/admin/_travel-link.ts
- * because the origin is a home address and this bundle is public. Nothing on
- * this screen ever passes a second argument to googleDirectionsLink.
- *
- * Renders nothing at all when there is no address, rather than three dead
- * buttons that open a map of nowhere.
- */
-function SessionLocationLinks({ address }: { address: string }) {
-  const { lang } = useAdminLang();
-  const tv = travelCopy(lang);
-  const trimmed = address.trim();
-  if (!trimmed) return null;
-
-  const targets: Array<{ label: string; href: string }> = [
-    { label: tv.waze, href: wazeLink(trimmed) },
-    { label: tv.googleMaps, href: googleDirectionsLink(trimmed) },
-    { label: tv.appleMaps, href: appleMapsLink(trimmed) },
-  ];
-
-  return (
-    <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.100">
-      <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-        {tv.navHeading}
-      </Text>
-      <Text fontSize="sm" color="gray.700" fontWeight="300" mb={3}>
-        {trimmed}
-      </Text>
-      <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
-        {targets.map((target) => (
-          <CTAButton
-            key={target.label}
-            href={target.href}
-            newTab
-            variant="outline"
-            size="sm"
-            icon={FaExternalLinkAlt}
-            fullWidth={{ base: true, md: false }}
-          >
-            {target.label}
-          </CTAButton>
-        ))}
-      </Stack>
-    </Box>
-  );
-}
-
 function EditContractVariables({
   portal,
   adminPassword,

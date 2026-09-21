@@ -1738,6 +1738,17 @@ const dict = {
     // The booking was rescheduled after the contract was signed, so the signed
     // document still names the old date. Both dates are quoted, because "these
     // disagree" without saying which is which leaves her to guess.
+    // The address on the contract, shown as text in the Contract card.
+    contractAddressLabel: { en: 'Address on the contract', ru: 'Адрес в контракте' },
+    // Only when it differs from the session address, which is the one the
+    // Directions button uses and the one she will actually drive to.
+    contractAddressDrift: {
+      en: (sessionAddress: string) =>
+        `Directions use the session address, ${sessionAddress}. Change it under Details if that is wrong.`,
+      ru: (sessionAddress: string) =>
+        `Маршрут строится по адресу съёмки: ${sessionAddress}. Если это неверно, измени его в разделе «Детали».`,
+      dynamic: true,
+    },
     contractDateDrift: {
       en: (contractDate: string, bookingDate: string) =>
         `The signed contract says ${contractDate}, but this booking is now ${bookingDate}. A signed contract cannot be rewritten, so send the client a note confirming the new date, or void this contract and issue a new one.`,

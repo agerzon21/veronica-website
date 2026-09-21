@@ -92,6 +92,8 @@ export interface TravelCopy {
   // ── Navigate buttons on the client screen ──
   navHeading: string;
   openIn: string;
+  copyAddress: string;
+  addressCopied: string;
   waze: string;
   googleMaps: string;
   appleMaps: string;
@@ -158,6 +160,8 @@ const EN: TravelCopy = {
 
   navHeading: 'Session location',
   openIn: 'Open in',
+  copyAddress: 'Copy address',
+  addressCopied: 'Address copied',
   waze: 'Waze',
   googleMaps: 'Google Maps',
   appleMaps: 'Apple Maps',
@@ -225,6 +229,8 @@ const RU: TravelCopy = {
 
   navHeading: 'Место съёмки',
   openIn: 'Открыть в',
+  copyAddress: 'Скопировать адрес',
+  addressCopied: 'Адрес скопирован',
   waze: 'Waze',
   googleMaps: 'Google Maps',
   appleMaps: 'Apple Maps',
