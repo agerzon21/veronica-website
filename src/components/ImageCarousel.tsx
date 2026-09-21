@@ -69,26 +69,73 @@ interface ImageCarouselProps {
  * rail at y 813 and it ran straight through the Scroll cue. This clears both
  * and reads as a third row above them rather than a collision.
  */
-const RAIL_MARGIN_PX = 196;
+const RAIL_MARGIN_PX = 96;
+/**
+ * Clear space either side of the cue, so the numbers do not crowd it.
+ *
+ * Tighter on a phone: twelve numbers plus the desktop gap measured 384px in a
+ * 390px viewport, which is touching both edges.
+ */
+const CUE_PADDING_PX = 22;
+const CUE_PADDING_COMPACT_PX = 8;
 
-function useRailBottom(ref: React.RefObject<HTMLDivElement>): number {
-  const [bottom, setBottom] = useState(RAIL_MARGIN_PX);
+/**
+ * Below this width the row does not fit around the cue and sits above it.
+ *
+ * Twelve numbers plus the cue's 61px and its breathing room measured 348px in
+ * a 320px viewport, hanging off both edges. Squeezing the type further would
+ * make it unreadable rather than fix it, so on the narrowest phones the rail
+ * keeps its full width and moves up a line instead. Everything from a 375px
+ * iPhone up still parts around the cue.
+ */
+const SPLIT_MIN_VW = 380;
+
+function useRailPlacement(ref: React.RefObject<HTMLDivElement>): { bottom: number; cueWidth: number } {
+  const [placement, setPlacement] = useState({ bottom: RAIL_MARGIN_PX, cueWidth: 0 });
   useEffect(() => {
     const measure = () => {
       const el = ref.current;
       if (!el) return;
       const overflow = Math.max((el.offsetHeight - window.innerHeight) / 2, 0);
-      setBottom(Math.round(overflow + RAIL_MARGIN_PX));
+
+      /**
+       * Line up with the hero's Scroll cue and split around it.
+       *
+       * The cue is NOT a fixed distance from the bottom: measured, its centre
+       * is 94px up on a 1440x900 desktop and 164px up on a 390x844 phone,
+       * because it is pinned at bottom 40px on one and 110px on the other to
+       * clear the iOS toolbar. Any constant here lines up on exactly one of
+       * them, which is why this measures the element rather than assuming.
+       */
+      const cue = document.querySelector('[data-hero-scroll-cue]') as HTMLElement | null;
+      const cueRect = cue?.getBoundingClientRect();
+      const cueFromBottom = cueRect
+        ? window.innerHeight - (cueRect.top + cueRect.height / 2)
+        : RAIL_MARGIN_PX;
+
+      const split = window.innerWidth >= SPLIT_MIN_VW;
+      setPlacement({
+        // Splitting: half the row's own height, so its CENTRE lands on the
+        // cue's centre. Not splitting: clear above the cue's whole block.
+        bottom: Math.round(overflow + cueFromBottom + (split ? -9 : 30)),
+        // The raw width, and 0 when there is no room to part around it. How
+        // much space to leave is the rail's call, since it knows how tight the
+        // row already is.
+        cueWidth: cueRect && split ? Math.round(cueRect.width) : 0,
+      });
     };
     measure();
+    // The cue mounts with the hero, so one frame later is not always enough.
+    const t = window.setTimeout(measure, 400);
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
     return () => {
+      window.clearTimeout(t);
       window.removeEventListener('resize', measure);
       window.removeEventListener('orientationchange', measure);
     };
   }, [ref]);
-  return bottom;
+  return placement;
 }
 
 /** Below this scale the rail is gone. Above it, fully present. */
@@ -179,7 +226,13 @@ const IndexRail: React.FC<{
    * gets a shorter travel here as well.
    */
   compact: boolean;
-}> = ({ total, index, rotating, onPick, scale, bottom, compact }) => {
+  /** Measured width of the hero's Scroll cue, or 0 when there is not one. */
+  cueWidth: number;
+}> = ({ total, index, rotating, onPick, scale, bottom, compact, cueWidth }) => {
+  const centreGap =
+    cueWidth > 0
+      ? cueWidth + (compact ? CUE_PADDING_COMPACT_PX : CUE_PADDING_PX) * 2
+      : 0;
   // Hooks run unconditionally. useTransform needs a MotionValue, and there is
   // no conditional-hook escape, so a constant stand-in keeps the shape stable
   // when the caller passes nothing.
@@ -204,12 +257,27 @@ const IndexRail: React.FC<{
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 3,
+        /**
+         * Above the hero's footer layer, which is what was eating the clicks.
+         *
+         * That footer Box stretches left 0 to right 0 at zIndex 3 with default
+         * pointer events, so it covered the whole row: elementFromPoint at the
+         * centre of a numeral returned the footer DIV, not the button. The
+         * handler was fine, which is why clicking it from script worked and
+         * clicking it with a pointer did nothing. The Scroll cue above this at
+         * zIndex 5 is pointerEvents none, so it is not in the way.
+         */
+        zIndex: 6,
         pointerEvents: 'auto',
       }}
     >
       <Flex align="center" gap={compact ? '6px' : '14px'} px={compact ? 2 : 4} maxW="100%" flexWrap="nowrap">
         {Array.from({ length: total }, (_, i) => {
+          // The hero's Scroll cue sits in the middle of the row, so the
+          // numbers part around it: the first half to its left, the rest to
+          // its right. The gap is the cue's measured width plus breathing
+          // room, not a guess.
+          const splitAfter = Math.ceil(total / 2) - 1;
           const active = i === index;
           return (
             <React.Fragment key={i}>
@@ -224,7 +292,7 @@ const IndexRail: React.FC<{
                 p={0}
                 cursor="pointer"
                 lineHeight="1"
-                fontSize={compact ? '11px' : '15px'}
+                fontSize={compact ? '12px' : '16px'}
                 letterSpacing={compact ? '0.06em' : '0.16em'}
                 fontWeight="400"
                 color={active ? 'white' : 'rgba(255,255,255,0.55)'}
@@ -254,6 +322,9 @@ const IndexRail: React.FC<{
                     flexShrink: 0,
                   }}
                 />
+              )}
+              {i === splitAfter && centreGap > 0 && (
+                <Box aria-hidden flexShrink={0} width={`${centreGap}px`} height="1px" />
               )}
             </React.Fragment>
           );
@@ -297,7 +368,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
     setCycleKey((k) => k + 1);
   };
   const slideBoxRef = useRef<HTMLDivElement>(null);
-  const railBottom = useRailBottom(slideBoxRef);
+  const railPlacement = useRailPlacement(slideBoxRef);
   // `fallback: 'base'` is load-bearing — without it useBreakpoint returns
   // undefined on the first pass and the mobileSkip/desktopSkip filter
   // silently does nothing. ssr:false because main.tsx uses createRoot, never
@@ -469,7 +540,8 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
           rotating={rotating}
           onPick={pickSlide}
           scale={indexScale}
-          bottom={railBottom}
+          bottom={railPlacement.bottom}
+          cueWidth={railPlacement.cueWidth}
           compact={isMobile}
         />
       )}

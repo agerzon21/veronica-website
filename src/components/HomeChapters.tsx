@@ -43,8 +43,13 @@ const CARD_MAX = { lg: '560px' } as const;
 
 /** The shared bottom bar: label, arrow, its own photograph behind a scrim. */
 function CardBar({ to, label, image, pos = 'center' }: { to: string; label: string; image: string; pos?: string }) {
+  // data-group, not role="group". It drives the same _groupHover CSS (Chakra's
+  // toGroup matches [role=group], [data-group] and .group) and carries no ARIA
+  // meaning, so the card stays a link in the accessibility tree. A group is not
+  // a link, and a link's name is not computed through one, which is what failed
+  // the agent-browsing audit on the hero's call to action.
   return (
-    <Box as={RouterLink} to={to} role="group" display="block" position="relative" flex="1 0 20%" overflow="hidden">
+    <Box as={RouterLink} to={to} data-group display="block" position="relative" flex="1 0 20%" overflow="hidden">
       <Image
         src={image}
         alt=""
@@ -141,7 +146,7 @@ export function HomeChapters() {
                 key={c.title}
                 as={RouterLink}
                 to={c.to}
-                role="group"
+                data-group
                 display="block"
                 position="relative"
                 flex="1"
@@ -200,7 +205,7 @@ export function HomeChapters() {
           <Box
             as={RouterLink}
             to={post ? `/journal/${post.slug}` : '/journal'}
-            role="group"
+            data-group
             display="block"
             position="relative"
             flex="4 0 80%"
@@ -279,7 +284,7 @@ export function HomeChapters() {
           <Box
             as={RouterLink}
             to="/wedding-photography"
-            role="group"
+            data-group
             display="block"
             position="relative"
             flex="4 0 80%"

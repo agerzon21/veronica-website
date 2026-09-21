@@ -482,7 +482,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // switched itself off, which is the exact mistake this pass removed from
   // CTAButton. Unsetting restores the default without claiming anything.
   const headerTaps = useTransform(headerOpacity, (v) => (v < 0.2 ? 'none' : ''));
-  const footerTaps = useTransform(footerOpacity, (v) => (v < 0.2 ? 'none' : ''));
+  /**
+   * 'auto', not ''. An empty string UNSETS the property, which makes it
+   * inherit, and the wrapper below is now pointerEvents none so that nothing
+   * decorative captures a tap. Inheriting from a 'none' parent would have
+   * silently disabled the footer's own call to action.
+   */
+  const footerTaps = useTransform(footerOpacity, (v) => (v < 0.2 ? 'none' : 'auto'));
   const scrollHintOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0]);
 
   // Progress indicator visibility: fades in once the user has started
@@ -534,7 +540,24 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
       <Box
         as={RouterLink}
         to="/contact"
-        role="group"
+        /**
+         * data-group, NOT role="group".
+         *
+         * The role was only ever there so Chakra's _groupHover would have an
+         * ancestor to hang off. The cost was that the site's main call to
+         * action stopped being a link to anything reading the accessibility
+         * tree, and PageSpeed's agent checks failed it twice over: "ARIA role
+         * should be appropriate for the element", because a group is not a
+         * link, and "Links must have discernible text", because the name of a
+         * link is not computed through a group.
+         *
+         * Chakra's toGroup compiles _groupHover against [role=group],
+         * [data-group] AND .group (styled-system/dist/esm/pseudos.mjs), so the
+         * data attribute drives exactly the same CSS with no ARIA meaning at
+         * all. Verified in Chrome's own accessibility tree: this now reports
+         * role "link", name "Book a Session".
+         */
+        data-group
         position="relative"
         display="inline-flex"
         alignItems="center"
@@ -719,6 +742,22 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             right="0"
             px={{ base: 4, md: 8 }}
             zIndex={3}
+            /**
+             * A positioning wrapper, not a surface. It is stretched edge to
+             * edge at zIndex 3 and was capturing every tap across the full
+             * width of the hero: elementFromPoint over the carousel's number
+             * rail returned THIS div rather than the button underneath, so
+             * the numbers looked live and did nothing when pressed.
+             *
+             * Raising the rail's own z-index cannot fix it. The rail lives
+             * inside the camera, which is a transformed element and therefore
+             * its own stacking context at zIndex 2, so everything inside it
+             * loses to this box whatever value it uses.
+             *
+             * The child re-enables taps for itself, and only while it is
+             * actually visible. See footerTaps.
+             */
+            pointerEvents="none"
           >
             <MotionBox style={{ opacity: footerOpacity, y: footerY, pointerEvents: footerTaps }}>
               {footerContent}
@@ -870,7 +909,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             {/* Same label, same token — only the colour differs because this
                 one sits over the LCD photo. textShadow stays: it is a
                 legibility affordance, not a type treatment. */}
+            {/* The carousel's number rail measures this element and lines
+                itself up with it, splitting around it so the cue sits in the
+                middle of the row. A data attribute rather than a class or a
+                text match, because it is a deliberate contract between the
+                two and should break loudly if this ever moves. */}
             <Text
+              data-hero-scroll-cue
               textStyle="eyebrowOnDark"
               color="white"
               textShadow="0 1px 2px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6)"

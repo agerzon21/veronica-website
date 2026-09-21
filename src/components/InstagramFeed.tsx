@@ -430,7 +430,10 @@ const InstagramFeed = () => {
                 key={i}
                 href={INSTAGRAM_URL}
                 isExternal
-                role="group"
+                // data-group, not role="group". Same _groupHover CSS, no ARIA
+                // meaning, so this stays a link in the accessibility tree
+                // instead of announcing as a group with no discernible name.
+                data-group
                 _hover={{ textDecoration: 'none' }}
               >
                 <AspectRatio ratio={1}>
