@@ -905,15 +905,15 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           pointerEvents="none"
           style={{ opacity: scrollHintOpacity }}
         >
-          <VStack spacing={3} align="center">
+          {/* The number rail measures THIS block, label plus mouse, and centres
+              itself on it. Measuring the label alone put the numbers 24px high,
+              level with the word rather than with the cue as an object. The
+              label keeps its own marker so the rail knows how wide a gap to
+              leave in the middle of the row. */}
+          <VStack data-hero-scroll-block spacing={3} align="center">
             {/* Same label, same token — only the colour differs because this
                 one sits over the LCD photo. textShadow stays: it is a
                 legibility affordance, not a type treatment. */}
-            {/* The carousel's number rail measures this element and lines
-                itself up with it, splitting around it so the cue sits in the
-                middle of the row. A data attribute rather than a class or a
-                text match, because it is a deliberate contract between the
-                two and should break loudly if this ever moves. */}
             <Text
               data-hero-scroll-cue
               textStyle="eyebrowOnDark"
