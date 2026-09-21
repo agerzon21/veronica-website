@@ -17,6 +17,7 @@ import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
 import { loadDraft, saveDraft, clearDraft, sweepDrafts } from './draftStore';
 import { translationTargetFor } from './translationDirection';
 import VoiceInput from './ui/VoiceInput';
+import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminLang } from '../i18n/admin';
 
 /**
@@ -911,11 +912,32 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
           rendered as icon-only always; Send is icon-only on mobile
           (to keep the row balanced) and CTA-labeled on desktop. */}
       <Box
+        /**
+         * The same bar as the Messages composer, because it is the same
+         * control and the two sit side by side in the refine panel.
+         *
+         * This was a bare Box with a top margin and nothing else: no padding,
+         * no ground, no rule. Next to the Messages composer, which is a padded
+         * white bar under a hairline, they read as two different components
+         * rather than one component twice.
+         *
+         * The negative inline margin cancels the chat's own px on the embedded
+         * path (see the outer Flex), so the bar runs edge to edge and its top
+         * border draws a full line. Without it the rule stops 8px short at
+         * both ends and the bar looks inset.
+         *
+         * Safe-area padding still clears the iOS home indicator when this pane
+         * goes edge to edge; the admin container clears the fixed bottom nav.
+         */
         mt={{ base: 2, md: 3 }}
-        // Safe-area padding so the composer clears the iOS home
-        // indicator when this pane goes edge-to-edge. The admin
-        // container already clears the fixed bottom nav.
-        pb={{ base: 'max(env(safe-area-inset-bottom), 0px)', md: 0 }}
+        mx={embedded ? -2 : 0}
+        px={{ base: 3, md: 4 }}
+        pt={{ base: 3, md: 4 }}
+        pb={{ base: 'calc(12px + env(safe-area-inset-bottom))', md: 4 }}
+        borderTop="1px solid"
+        borderColor="gray.100"
+        bg="white"
+        flexShrink={0}
       >
         {/* Chakra breakpoints measure the VIEWPORT, not this container — so
             inside the 420px refine panel on a 1440px screen the composer was
@@ -944,7 +966,12 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
             // has the room; a phone does not.
             rows={3}
             resize="vertical"
-            minH={embedded ? { base: '112px', md: '148px' } : { base: '112px', md: '132px' }}
+            // 120px from lg up is the Messages composer's figure, not a new
+            // one: the button column beside this divides the row's height 2:1
+            // and the mic cannot go below its own 48px, so the field's height
+            // decides how send and mic split. A different number here made the
+            // same two buttons come out different sizes in the two panes.
+            minH={embedded ? { base: '112px', lg: '120px' } : { base: '112px', md: '132px' }}
             maxH={{ base: '40vh', md: '50vh' }}
             // 16px prevents iOS Safari from zooming the whole page in
             // when the textarea gets focused; matches the Messages tab.
@@ -953,8 +980,23 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
             borderColor="gray.300"
             _hover={{ borderColor: 'gray.400' }}
             _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+            // Character for character the Messages composer's handler, so the
+            // two fields answer the same key the same way.
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              if (e.key !== 'Enter') return;
+              // An IME is mid-composition: Enter is picking a candidate, not
+              // ending the message.
+              if ((e.nativeEvent as unknown as { isComposing?: boolean }).isComposing) return;
+              // Shift+Enter is always a newline, on every device.
+              if (e.shiftKey) return;
+              if (e.metaKey || e.ctrlKey) {
+                e.preventDefault();
+                void handleSend();
+                return;
+              }
+              // Plain Enter sends, but ONLY where there is a real keyboard.
+              // On a touch keyboard Enter is the only way to get a line break.
+              if (hasHardwareKeyboard()) {
                 e.preventDefault();
                 void handleSend();
               }
@@ -1004,6 +1046,10 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
               w={embedded ? { lg: '100%' } : undefined}
               h={embedded ? { lg: '100%' } : undefined}
               flex={embedded ? { base: '0 0 auto', lg: '1 1 0' } : '0 0 auto'}
+              // Matches the Messages composer: the mic goes quiet while a
+              // send is in flight rather than inviting a second input on top
+              // of one already going out.
+              isDisabled={sending}
             />
             <CTAButton
               onClick={handleSend}

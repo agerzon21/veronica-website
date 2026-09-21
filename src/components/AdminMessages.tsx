@@ -60,6 +60,7 @@ import AdminAssistantChat from './AdminAssistantChat';
 import CTAButton from './ui/CTAButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
+import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 import { type ClientPrefill, type PrefillBooking } from './clientPrefill';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
@@ -112,11 +113,6 @@ function conversationLanguage(messages: Message[]): ContentLang | null {
  * Called at keypress rather than read once into state so that plugging a
  * keyboard into an iPad, or unplugging one, is picked up without a reload.
  */
-function hasHardwareKeyboard(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-}
-
 /**
  * On-demand translation of one piece of text.
  *

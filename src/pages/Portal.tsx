@@ -562,11 +562,20 @@ const Portal = () => {
     setIsSubmitting(true);
     setError('');
 
+    const previewToken = (searchParams.get('preview') ?? '').trim();
+
     try {
       const res = await fetch('/api/portal/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: galleryPassword.trim() }),
+        body: JSON.stringify({
+          password: galleryPassword.trim(),
+          // ?preview= is the admin panel's short lived pass for a gallery
+          // that has not been released yet. It has to be sent, not just sit
+          // in the address bar: the server is what decides whether the photos
+          // come back, and it cannot see this page's URL.
+          ...(previewToken ? { preview: previewToken } : {}),
+        }),
       });
       const data = await res.json();
 

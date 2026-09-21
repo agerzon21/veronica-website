@@ -2848,18 +2848,31 @@ function ContractSignSection({
     const pad = sigPadRef.current;
     if (!pad) return;
 
-    const resize = () => {
+    // Resizing a canvas wipes it, so the strokes are read out first and put
+    // back afterwards. Without that, anything that fires a window resize
+    // (a phone rotating, a mobile browser's toolbar sliding away as the page
+    // scrolls) erases a signature the client had already drawn. The
+    // no-op guard matters for the same reason: iOS fires resize on scroll
+    // with the pixel size unchanged, and re-seeding the pad on every one of
+    // those is work the client can see.
+    const resize = (clear: boolean) => {
       const canvas = pad.getCanvas();
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
-      canvas.width = canvas.offsetWidth * ratio;
-      canvas.height = canvas.offsetHeight * ratio;
+      const width = Math.round(canvas.offsetWidth * ratio);
+      const height = Math.round(canvas.offsetHeight * ratio);
+      if (!clear && canvas.width === width && canvas.height === height) return;
+      const strokes = clear ? [] : pad.toData();
+      canvas.width = width;
+      canvas.height = height;
       canvas.getContext('2d')?.scale(ratio, ratio);
-      pad.clear();
+      if (strokes.length > 0) pad.fromData(strokes);
+      else pad.clear();
     };
 
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+    resize(true);
+    const onResize = () => resize(false);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [contract]);
 
   const handleClear = () => {
@@ -3098,6 +3111,9 @@ function ContractSignSection({
             <SignatureCanvas
               ref={sigPadRef}
               penColor="#2d2d2d"
+              // The effect above owns resizing, and it preserves the strokes.
+              // The library's own handler does not: it clears the pad.
+              clearOnResize={false}
               canvasProps={{
                 style: { width: '100%', height: '180px', display: 'block' },
               }}
