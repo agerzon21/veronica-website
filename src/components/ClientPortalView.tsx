@@ -402,6 +402,7 @@ const ClientPortalView = ({
     paidToDate: data.paid_to_date,
     photosDelivered,
     overdue: balanceOverdue,
+    deliveryTimeframe: data.delivery_timeframe,
     // The shoot itself is a step in the header track, between the retainer and
     // whatever is left to pay, because that is the order the contract puts
     // them in.

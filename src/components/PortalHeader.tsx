@@ -144,6 +144,16 @@ export interface PortalProgressData {
   /** True only when a dated installment has actually come and gone unpaid. */
   overdue?: boolean;
   /**
+   * How long after the shoot the gallery is promised, in the contract's own
+   * words, e.g. "Within 5 weeks".
+   *
+   * The Photos step used to read "After the event", which tells a client
+   * something they already knew and nothing they wanted. The portal has always
+   * carried this string and printed it further down the page; the step now
+   * uses it, so the one question the step exists to answer gets an answer.
+   */
+  deliveryTimeframe?: string | null;
+  /**
    * The shoot itself, as YYYY-MM-DD. The track's middle step.
    *
    * It belongs in the sequence because the CONTRACT puts it there: the
@@ -485,6 +495,26 @@ const STEP_TONES: Record<StepTone, { bg: string; border: string; fg: string; lab
   waiting: { bg: 'transparent', border: 'brand.success', fg: 'brand.success', label: 'brand.success' },
 };
 
+/** 2 * PI * r, with r = 15, which is the ring the phone header draws. */
+const RING_CIRCUMFERENCE = 2 * Math.PI * 15;
+
+/**
+ * The ring's own stroke, as raw hex.
+ *
+ * STEP_TONES carries Chakra token names, which an SVG stroke attribute cannot
+ * resolve: it is a DOM attribute, not a style prop, so 'brand.accentText'
+ * reaches the browser verbatim and paints nothing at all. Same colours, spelled
+ * the way SVG can read them.
+ */
+const RING_STROKE: Record<StepTone, string> = {
+  done: '#2f7a4d',
+  action: '#a9631a',
+  progress: '#8a6e35',
+  overdue: '#c53030',
+  upcoming: '#b8b1a6',
+  waiting: '#2f7a4d',
+};
+
 /**
  * Read a YYYY-MM-DD column without letting a timezone move it.
  *
@@ -620,7 +650,7 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
       ? 'Ready to view'
       : eventPassed
         ? 'Veronika is editing'
-        : 'After the event',
+        : p.deliveryTimeframe || 'After your day',
     tone: 'waiting',
     sectionId: 'photos-section',
   });
@@ -1153,6 +1183,7 @@ const PortalHeader = ({
               onToggle={() => toggleMenu('progress')}
               panelId={progressPanelId}
               onGo={(id) => pickFrom(accountNav, id)}
+              railEventDate={progress?.eventDate ?? null}
             />
           </Box>
         )}
@@ -2307,6 +2338,7 @@ function ProgressTrack({
   onToggle,
   panelId,
   onGo,
+  railEventDate = null,
 }: {
   steps: ProgressStep[];
   /** The balance corner already shows the number, so the phone should not. */
@@ -2317,6 +2349,19 @@ function ProgressTrack({
   panelId?: string;
   /** Take the reader to the section a stage IS. */
   onGo?: (sectionId: string) => void;
+  /**
+   * Desktop only: how long until the shoot.
+   *
+   * The bar was mostly empty to the right of five chips. It is NOT where the
+   * money goes: the corner beside it already reports that, and reports it
+   * better, because it separates a retainer that still holds the date from a
+   * balance that does not. Printing an "Outstanding" figure here as well put
+   * the same number on the screen twice, overlapping. So this carries the one
+   * fact nothing else on the header answers.
+   *
+   * Phone gets none of it: at 390px the track is already the whole row.
+   */
+  railEventDate?: string | null;
 }) {
   const current = steps.find((s) => s.current) ?? steps[steps.length - 1];
   /**
@@ -2328,6 +2373,33 @@ function ProgressTrack({
    * read green, grey, green and look like it had lost its place.
    */
   const currentIdx = steps.findIndex((s) => s.current);
+
+  /**
+   * How much of the ring is drawn.
+   *
+   * Counts the step they are ON as reached, so step 3 of 5 shows three fifths
+   * rather than two. Anything else reads as behind where they are.
+   */
+  const stepsReached = currentIdx === -1 ? steps.length : currentIdx + 1;
+  const ringFilled = (RING_CIRCUMFERENCE * stepsReached) / Math.max(steps.length, 1);
+
+  /**
+   * Days until the shoot, or null once it has passed.
+   *
+   * Compared by calendar day in local time, not by elapsed milliseconds, so a
+   * shoot later today reads "is today" rather than "in 0 days" or, worse,
+   * rounding to "in 1 day" because it is 26 hours away.
+   */
+  const railDays = (() => {
+    if (!railEventDate) return null;
+    const parts = railEventDate.slice(0, 10).split('-').map(Number);
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
+    const event = new Date(parts[0], parts[1] - 1, parts[2]);
+    const today = new Date();
+    const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = Math.round((event.getTime() - midnight.getTime()) / 86400000);
+    return days < 0 ? null : days;
+  })();
 
   return (
     <>
@@ -2364,10 +2436,17 @@ function ProgressTrack({
         // A bordered, filled control. A tiny chevron beside plain text is not
         // enough to say "press me", and the whole point of this thing is that
         // pressing it opens the rest of the booking.
-        bg={open ? 'brand.surfaceSunken' : 'brand.surface'}
+        //
+        // WHITE, not cream. The cream fill with a gold hairline was the same
+        // treatment the desktop chips carried, and it read as decoration rather
+        // than as something to press. White with a gold edge and a soft shadow
+        // is the shape a button has everywhere else, and it lets the ring beside
+        // it be the only coloured thing in the row.
+        bg={open ? 'brand.surfaceSunken' : 'white'}
         border="1px solid"
-        borderColor={open ? 'brand.accent' : 'brand.accentBorder'}
-        transition="background 0.2s ease, border-color 0.2s ease"
+        borderColor={'brand.accentText'}
+        boxShadow={open ? 'none' : '0 2px 8px rgba(138, 110, 53, 0.16)'}
+        transition="background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease"
         _hover={{ borderColor: 'brand.accent' }}
         _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
         sx={{ WebkitTapHighlightColor: 'transparent', ...STILL }}
@@ -2376,23 +2455,41 @@ function ProgressTrack({
             2xs lines squeezed into the middle of a header with most of a row
             of empty space around them, so the one thing worth reading was the
             hardest thing to read. */}
-        <Flex
-          align="center"
-          justify="center"
-          w="32px"
-          h="32px"
-          flexShrink={0}
-          borderRadius="full"
-          bg={STEP_TONES[current.tone].bg}
-          border="1px solid"
-          borderColor={STEP_TONES[current.tone].border}
-          color={STEP_TONES[current.tone].fg}
-          fontSize="sm"
-          fontWeight="600"
-          aria-hidden="true"
-        >
-          {current.tone === 'done' ? <Icon as={FaCheck} boxSize={3} /> : current.n}
-        </Flex>
+        {/*
+          The step number inside a ring that fills as the booking progresses.
+
+          A flat badge said which step, and a separate bar said how far along,
+          so the two facts sat in different objects and the phone had room for
+          about one of them. The ring is both: the number is the step, the arc
+          is the progress, and it costs the same 34px either way.
+        */}
+        <Box position="relative" w="34px" h="34px" flexShrink={0} aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 34 34">
+            <circle cx="17" cy="17" r="15" fill="none" stroke="#e6e2da" strokeWidth="3" />
+            <circle
+              cx="17"
+              cy="17"
+              r="15"
+              fill="none"
+              stroke={RING_STROKE[current.tone]}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray={`${ringFilled} ${RING_CIRCUMFERENCE}`}
+              transform="rotate(-90 17 17)"
+            />
+          </svg>
+          <Flex
+            position="absolute"
+            inset="0"
+            align="center"
+            justify="center"
+            fontSize="xs"
+            fontWeight="600"
+            color={STEP_TONES[current.tone].label}
+          >
+            {current.tone === 'done' ? <Icon as={FaCheck} boxSize={2.5} /> : current.n}
+          </Flex>
+        </Box>
         <Flex direction="column" lineHeight="1.2" minW={0} align="flex-start" aria-hidden="true">
           <Text
             fontSize="sm"
@@ -2470,9 +2567,22 @@ function ProgressTrack({
                 // These ARE the nav now, so they carry a resting surface. A
                 // hairline that only fills on hover still reads as text at
                 // rest, which is what made them look unpressable.
-                bg={s.sectionId && onGo ? 'brand.surface' : 'transparent'}
+                // White with a hairline and a shadow, which is what a button
+                // looks like everywhere else. The cream fill with a gold
+                // hairline read as decoration, so the one thing these needed to
+                // say, that they can be pressed, was the thing they did not.
+                bg={s.sectionId && onGo ? 'white' : 'transparent'}
                 border="1px solid"
-                borderColor={s.sectionId && onGo ? 'brand.accentBorder' : 'transparent'}
+                borderColor={
+                  s.current ? 'brand.accentText' : s.sectionId && onGo ? 'gray.200' : 'transparent'
+                }
+                boxShadow={
+                  s.current
+                    ? '0 2px 8px rgba(138, 110, 53, 0.18)'
+                    : s.sectionId && onGo
+                      ? '0 1px 2px rgba(44, 41, 37, 0.06)'
+                      : 'none'
+                }
                 cursor={s.sectionId && onGo ? 'pointer' : 'default'}
                 transition="background 0.15s ease, border-color 0.15s ease"
                 _hover={
@@ -2534,6 +2644,41 @@ function ProgressTrack({
             </Fragment>
           );
         })}
+
+        {/* Sits WITH the track, not pinned right. The balance corner is a
+            sibling outside this Flex and already owns the right edge, so
+            ml="auto" put this on top of it. */}
+        {railDays !== null && (
+          <Flex
+            // Only where there is genuinely room. Logo, five chips, this, and
+            // the balance corner do not fit under about 1536px: measured, not
+            // guessed, after a screenshot showed it sitting on top of the
+            // balance at 1280. Below that the countdown is the one of the four
+            // that nothing else depends on, so it is the one that goes.
+            display={{ base: 'none', '2xl': 'flex' }}
+            align="center"
+            flexShrink={0}
+            gap={4}
+            pl={1}
+          >
+            <Box w="1px" h="26px" bg="gray.200" />
+            {(
+              <Box textAlign="right" lineHeight="1.3">
+                <Text
+                  fontSize="10px"
+                  letterSpacing="0.12em"
+                  textTransform="uppercase"
+                  color="gray.500"
+                >
+                  Your day
+                </Text>
+                <Text fontSize="md" fontWeight="500" color="gray.800" whiteSpace="nowrap">
+                  {railDays === 0 ? 'is today' : railDays === 1 ? 'is tomorrow' : `in ${railDays} days`}
+                </Text>
+              </Box>
+            )}
+          </Flex>
+        )}
       </Flex>
     </>
   );
