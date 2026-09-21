@@ -17,10 +17,10 @@ import FaArrowRight from '../icons/fa/FaArrowRight';
 import FaCamera from '../icons/fa/FaCamera';
 import FaCheck from '../icons/fa/FaCheck';
 import FaChevronDown from '../icons/fa/FaChevronDown';
+import BurgerMenu from './BurgerMenu';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaShareAlt from '../icons/fa/FaShareAlt';
-import BurgerMenu from './BurgerMenu';
 import { HEADER_CLEARANCE } from './portalLayout';
 import { SITE_LOGO_H, SITE_LOGO_H_MOBILE } from './siteHeader';
 import { scrollBehavior } from '../utils/motion';
@@ -429,6 +429,18 @@ interface ProgressStep {
   /** A money step. The phone drops its detail when the balance corner has it. */
   money?: boolean;
   /**
+   * The section of the portal this stage IS, so the stage itself is the way
+   * there.
+   *
+   * Three of the five stages were printed twice: once here as status and
+   * again in the account menu as a link, and only the menu copy did anything.
+   * The other two are not separate places either. The retainer is part of the
+   * Balance section, and the event date is the Top section, which is where it
+   * is printed. So every stage has somewhere to go, and the menu keeps only
+   * what no stage covers.
+   */
+  sectionId?: string;
+  /**
    * Where this step actually stands, in a few words.
    *
    * "SIGN, PAY, PHOTOS" in three small circles told a client the order of
@@ -540,13 +552,21 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
   const eventPassed = eventHasPassed(p.eventDate);
   const eventLabel = prettyEventDate(p.eventDate);
 
-  const raw: Array<{ label: string; done: boolean; detail?: string; tone: StepTone; money?: boolean }> = [];
+  const raw: Array<{
+    label: string;
+    done: boolean;
+    detail?: string;
+    tone: StepTone;
+    money?: boolean;
+    sectionId?: string;
+  }> = [];
 
   raw.push({
     label: 'Contract',
     done: signed,
     detail: signed ? 'Signed' : 'Waiting for you',
     tone: 'action',
+    sectionId: 'contract-section',
   });
 
   if (hasRetainer) {
@@ -558,6 +578,8 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
         : `${formatMoney(Math.max(retainerCents - paidCents, 0) / 100)} due`,
       tone: 'action',
       money: true,
+      // The retainer is money, and the money lives in Balance.
+      sectionId: 'balance-section',
     });
   }
 
@@ -570,6 +592,8 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
       detail: eventLabel,
       // Nothing is being asked of them. The day arrives on its own.
       tone: 'waiting',
+      // The date is printed at the top of the portal, so that is where it is.
+      sectionId: 'portal-top-section',
     });
   }
 
@@ -584,6 +608,7 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
           : `${formatMoney(leftOver)} left`,
       tone: p.overdue ? 'overdue' : 'action',
       money: true,
+      sectionId: 'balance-section',
     });
   }
 
@@ -596,6 +621,7 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
         ? 'Veronika is editing'
         : 'After the event',
     tone: 'waiting',
+    sectionId: 'photos-section',
   });
 
   // The step they are on is the first unfinished one; everything past it is
@@ -609,6 +635,7 @@ function buildSteps(p: PortalProgressData): ProgressStep[] {
     current: i === currentIndex,
     detail: r.detail,
     money: r.money,
+    sectionId: r.sectionId,
     total: raw.length,
   }));
 }
@@ -918,6 +945,31 @@ const PortalHeader = ({
         : [],
     [accountNav, delivered, handoff, photoCount],
   );
+
+  /**
+   * The stages, and the sections no stage reaches.
+   *
+   * Contract, Balance and Photos used to appear twice: as status here and as
+   * links in the account menu, where only the menu copy did anything. Now the
+   * stage is the link, so the menu is whatever is LEFT: Password, Share, and
+   * Top on a booking with no event date to claim it.
+   *
+   * Derived from the stages rather than listed by hand, so a stage that stops
+   * being rendered gives its section back to the menu instead of stranding it.
+   */
+  const steps = useMemo(
+    () => (hasContract(progress) ? buildSteps(progress!) : []),
+    [progress],
+  );
+  const coveredIds = useMemo(
+    () => new Set(steps.map((x) => x.sectionId).filter(Boolean) as string[]),
+    [steps],
+  );
+  const uncoveredRows = useMemo(
+    () => accountRowsMobile.filter((r) => !r.jump && !coveredIds.has(r.id)),
+    [accountRowsMobile, coveredIds],
+  );
+
   const sectionRows = useMemo(
     () => (sectionNav ? buildSectionRows(sectionNav) : []),
     [sectionNav],
@@ -1051,11 +1103,12 @@ const PortalHeader = ({
             }}
           >
             <ProgressTrack
-              steps={buildSteps(progress!)}
+              steps={steps}
               suppressMoneyDetail={showBalance}
               open={openMenu === 'progress'}
               onToggle={() => toggleMenu('progress')}
               panelId={progressPanelId}
+              onGo={(id) => pickFrom(accountNav, id)}
             />
           </Box>
         )}
@@ -1200,42 +1253,15 @@ const PortalHeader = ({
           </Flex>
         )}
 
-        {/* Before the photos land the account menu is a plain burger, at the
-            far right, exactly where the condensed account bar ends up once
-            they arrive. Deliberately the LAST thing in the row: the logo
-            navigates away to the public homepage, and a missed tap there
-            ejects a client out of the portal they were reading. */}
-        {hasAccountBar && (
-          <BurgerMenu
-            isOpen={openMenu === 'account'}
-            onClick={() => toggleMenu('account')}
-            // Dark bars whether it is open or shut. The site's white ones are
-            // for its full screen gray.900 overlay; this one opens a white
-            // panel and stays sitting in a white header.
-            barColor="gray.700"
-            barColorOpen="gray.700"
-            frame={{
-              display: { base: navOwnsMobileSlot ? 'none' : 'flex', md: 'none' },
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              w: CONTROL_H.base,
-              h: CONTROL_H.base,
-              p: 0,
-              // No box. The site's own mobile burger is three bare bars on the
-              // page, and a bordered white tile around them read as a separate
-              // widget stuck onto the header.
-              bg: 'transparent',
-              border: 'none',
-              borderRadius: 0,
-              'aria-label':
-                openMenu === 'account' ? 'Close your booking menu' : 'Open your booking menu',
-              'aria-haspopup': 'menu',
-              'aria-controls': accountPanelId,
-              sx: { WebkitTapHighlightColor: 'transparent' },
-            }}
-          />
-        )}
+        {/* The burger is GONE, and that is the point of this change.
+            It existed only to reach the account menu while the progress track
+            owned the row, and that menu listed Contract, Balance and Photos:
+            the same three words the track was already showing as status, with
+            only the menu copy doing anything. The track's own panel now
+            carries every stage AND the sections no stage covers, so a second
+            control opening a second list of the same words is exactly the
+            duplication being removed. Once the photos land the account bar is
+            back in the slot with its own trigger, as before. */}
       </Flex>
 
       {/* The panels. They hang off the header rather than covering the screen,
@@ -1251,8 +1277,10 @@ const PortalHeader = ({
       {hasContract(progress) && !(navOwnsMobileSlot && isPortalComplete(progress)) && (
         <ProgressPanel
           id={progressPanelId}
-          steps={buildSteps(progress!)}
+          steps={steps}
           open={openMenu === 'progress'}
+          extras={uncoveredRows}
+          onGo={(id) => pickFrom(accountNav, id)}
         />
       )}
 
@@ -2214,6 +2242,7 @@ function ProgressTrack({
   open = false,
   onToggle,
   panelId,
+  onGo,
 }: {
   steps: ProgressStep[];
   /** The balance corner already shows the number, so the phone should not. */
@@ -2222,6 +2251,8 @@ function ProgressTrack({
   open?: boolean;
   onToggle?: () => void;
   panelId?: string;
+  /** Take the reader to the section a stage IS. */
+  onGo?: (sectionId: string) => void;
 }) {
   const current = steps.find((s) => s.current) ?? steps[steps.length - 1];
   /**
@@ -2272,29 +2303,33 @@ function ProgressTrack({
         _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
         sx={{ WebkitTapHighlightColor: 'transparent', ...STILL }}
       >
+        {/* Sized for the room it is actually in. This was a 2xs badge and two
+            2xs lines squeezed into the middle of a header with most of a row
+            of empty space around them, so the one thing worth reading was the
+            hardest thing to read. */}
         <Flex
           align="center"
           justify="center"
-          w="24px"
-          h="24px"
+          w="32px"
+          h="32px"
           flexShrink={0}
           borderRadius="full"
           bg={STEP_TONES[current.tone].bg}
           border="1px solid"
           borderColor={STEP_TONES[current.tone].border}
           color={STEP_TONES[current.tone].fg}
-          fontSize="2xs"
+          fontSize="sm"
           fontWeight="600"
           aria-hidden="true"
         >
-          {current.tone === 'done' ? <Icon as={FaCheck} boxSize={2.5} /> : current.n}
+          {current.tone === 'done' ? <Icon as={FaCheck} boxSize={3} /> : current.n}
         </Flex>
-        <Flex direction="column" lineHeight="1.15" minW={0} align="flex-start" aria-hidden="true">
+        <Flex direction="column" lineHeight="1.2" minW={0} align="flex-start" aria-hidden="true">
           <Text
-            fontSize="2xs"
+            fontSize="sm"
             fontWeight="500"
             textTransform="uppercase"
-            letterSpacing="0.16em"
+            letterSpacing="0.14em"
             color={STEP_TONES[current.tone].label}
             whiteSpace="nowrap"
           >
@@ -2302,7 +2337,7 @@ function ProgressTrack({
           </Text>
           {current.detail && !(current.money && suppressMoneyDetail) && (
             <Text
-              fontSize="2xs"
+              fontSize="xs"
               fontWeight="400"
               color={current.tone === 'overdue' ? 'red.600' : 'gray.500'}
               whiteSpace="nowrap"
@@ -2352,17 +2387,29 @@ function ProgressTrack({
                 />
               )}
               <Flex
+                as={s.sectionId && onGo ? 'button' : 'div'}
+                {...(s.sectionId && onGo
+                  ? { type: 'button' as const, onClick: () => onGo(s.sectionId!) }
+                  : {})}
                 align="center"
                 gap={2}
                 flexShrink={0}
-                // role="img" plus a label is what makes a badge and a word read
-                // as one thing to a screen reader. Without it the number and
-                // the label are announced as loose text and the state, which is
-                // carried entirely in colour, is lost.
-                role="img"
-                aria-label={`Step ${s.n}, ${s.label}${s.detail ? `, ${s.detail}` : ''}, ${
+                px={1}
+                py={1}
+                borderRadius="md"
+                bg="transparent"
+                border="none"
+                cursor={s.sectionId && onGo ? 'pointer' : 'default'}
+                transition="background 0.15s ease"
+                _hover={s.sectionId && onGo ? { bg: 'brand.surface' } : undefined}
+                _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+                // The stage IS the link, so it is announced as one. It used to
+                // be role="img", which was right when it was only a picture of
+                // a state and is wrong now that pressing it goes somewhere.
+                aria-label={`${s.label}${s.detail ? `, ${s.detail}` : ''}, ${
                   s.tone === 'done' ? 'done' : s.current ? 'in progress' : 'not started'
-                }`}
+                }${s.sectionId && onGo ? '. Go to this section.' : ''}`}
               >
                 <Flex
                   align="center"
@@ -2421,14 +2468,28 @@ function ProgressTrack({
  * of thing opening, but its rows are STATUS and not navigation: nothing here is
  * pickable, because none of it is somewhere to go.
  */
+/**
+ * Every stage, under the phone header, and every one of them a way in.
+ *
+ * It used to be a read only list, which is why opening it felt pointless: the
+ * rows named the Contract and the Balance and the Photos and then did nothing,
+ * while a separate menu behind the burger listed the same three words as
+ * links. Now the stage IS the link, and the menu keeps only the sections no
+ * stage covers.
+ */
 function ProgressPanel({
   id,
   steps,
   open,
+  extras,
+  onGo,
 }: {
   id: string;
   steps: ProgressStep[];
   open: boolean;
+  /** Sections no stage covers: Password, Share, and Top when there is no event. */
+  extras: MenuRow[];
+  onGo: (sectionId: string) => void;
 }) {
   return (
     <Box
@@ -2451,6 +2512,8 @@ function ProgressPanel({
       transition={`opacity ${MENU_FADE} ease, visibility ${MENU_FADE} ease`}
       sx={STILL}
       aria-hidden={!open}
+      role="menu"
+      aria-label="Your booking"
     >
       <Text
         fontSize="2xs"
@@ -2464,11 +2527,29 @@ function ProgressPanel({
       >
         Your booking
       </Text>
-      <VStack align="stretch" spacing={0} pb={2}>
+      <VStack align="stretch" spacing={0} pb={extras.length ? 0 : 2}>
         {steps.map((s) => {
           const tone = STEP_TONES[s.tone];
+          const go = s.sectionId;
           return (
-            <Flex key={s.label} align="center" gap={3} px={4} py={2.5}>
+            <Flex
+              key={s.label}
+              as={go ? 'button' : 'div'}
+              {...(go ? { type: 'button' as const, onClick: () => onGo(go) } : {})}
+              role={go ? 'menuitem' : undefined}
+              align="center"
+              gap={3}
+              px={4}
+              py={3}
+              w="100%"
+              textAlign="left"
+              bg="transparent"
+              border="none"
+              cursor={go ? 'pointer' : 'default'}
+              _hover={go ? { bg: 'brand.surface' } : undefined}
+              _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '-2px' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
               <Flex
                 align="center"
                 justify="center"
@@ -2486,7 +2567,7 @@ function ProgressPanel({
               >
                 {s.tone === 'done' ? <Icon as={FaCheck} boxSize={2.5} /> : s.n}
               </Flex>
-              <Flex direction="column" lineHeight="1.2" minW={0}>
+              <Flex direction="column" lineHeight="1.2" minW={0} align="flex-start">
                 <Text
                   fontSize="2xs"
                   fontWeight="500"
@@ -2524,6 +2605,41 @@ function ProgressPanel({
           );
         })}
       </VStack>
+
+      {/* Everything the five stages do not already reach. */}
+      {extras.length > 0 && (
+        <>
+          <Box h="1px" bg="gray.100" mx={4} my={1} />
+          <VStack align="stretch" spacing={0} pb={2}>
+            {extras.map((row) => (
+              <Flex
+                key={row.id}
+                as="button"
+                type="button"
+                role="menuitem"
+                onClick={() => onGo(row.id)}
+                align="center"
+                gap={3}
+                px={4}
+                py={2.5}
+                w="100%"
+                textAlign="left"
+                bg="transparent"
+                border="none"
+                cursor="pointer"
+                _hover={{ bg: 'brand.surface' }}
+                _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '-2px' }}
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <Box w="26px" flexShrink={0} />
+                <Text fontSize="sm" fontWeight="300" color="gray.700">
+                  {row.label}
+                </Text>
+              </Flex>
+            ))}
+          </VStack>
+        </>
+      )}
     </Box>
   );
 }
