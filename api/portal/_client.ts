@@ -26,6 +26,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
 import { isGalleryReleased } from './_gallery-gate.js';
 import { getDb } from '../_db.js';
+import { isStripeTestMode } from '../_stripe.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -264,6 +265,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       mode: 'full',
+
+      /**
+       * Whether the deployed Stripe keys are TEST keys.
+       *
+       * The portal used to infer this from CARD_PAYMENTS_MODE, the ROLLOUT
+       * flag, which is a different fact. The moment the live keys went in
+       * while the rollout was still 'preview', the portal carried on telling
+       * clients "no real money moves and a real card will be declined" over a
+       * button that was by then charging real cards. A flag about who can see
+       * the button cannot answer a question about which Stripe account is
+       * behind it, so the server answers it instead.
+       */
+      card_test_mode: isStripeTestMode(),
       client_name: row.client_display_name,
       client_email: row.client_email,
       // Null until release, not "present but hidden": the Drive URL is the

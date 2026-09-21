@@ -53,6 +53,8 @@ export interface ClientPortalData {
   // Delivered yet" apart from "no photos uploaded yet", and the Photos
   // section says a different thing for each. See api/portal/_gallery-gate.ts.
   gallery_withheld?: boolean;
+  /** True when the deployed Stripe keys are test keys. See api/portal/_client.ts. */
+  card_test_mode?: boolean;
 
   // Session metadata — surfaced in the portal header so clients see
   // what they booked without having to open the contract. Every field
@@ -1159,6 +1161,7 @@ const ClientPortalView = ({
           // Panel returns null in that case (fully-paid + delivered).
           photosDelivered={photosDelivered}
           credentials={credentials}
+          cardTestMode={data.card_test_mode === true}
         />
       </Box>
 
@@ -2004,8 +2007,11 @@ function NextStepsPanel({
   wording,
   photosDelivered,
   credentials,
+  cardTestMode,
 }: {
   contractStatus: 'none' | 'pending' | 'signed' | 'void';
+  /** Test Stripe keys are deployed, so a real card would be declined. */
+  cardTestMode: boolean;
   total: number | null;
   retainer: number | null;
   paidToDate: number;
@@ -2079,7 +2085,7 @@ function NextStepsPanel({
               </Text>
             </VStack>
 
-            <PayByCardButton kind="retainer" amount={retainerToSend} credentials={credentials} />
+            <PayByCardButton kind="retainer" amount={retainerToSend} credentials={credentials} testMode={cardTestMode} />
             <PaymentMethodsStack />
 
             <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
@@ -2146,7 +2152,7 @@ function NextStepsPanel({
               </Text>
             </Box>
 
-            <PayByCardButton kind="balance" amount={balanceToSend} credentials={credentials} />
+            <PayByCardButton kind="balance" amount={balanceToSend} credentials={credentials} testMode={cardTestMode} />
             <PaymentMethodsStack />
 
             <VStack spacing={2} maxW="440px" textAlign="center">
@@ -2230,10 +2236,13 @@ function PayByCardButton({
   kind,
   amount,
   credentials,
+  testMode,
 }: {
   kind: 'retainer' | 'balance';
   amount: number;
   credentials: { email: string; password: string };
+  /** The KEYS are test keys, which is not the same as the rollout being in preview. */
+  testMode: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -2292,8 +2301,13 @@ function PayByCardButton({
       )}
       {/* Unmissable while the keys are test keys. A real card is DECLINED in
           test mode, so anyone who reaches this button before go-live needs to
-          know that before they try. */}
-      {CARD_PAYMENTS_MODE === 'preview' && (
+          know that before they try.
+
+          Driven by the KEYS, reported by the server, not by CARD_PAYMENTS_MODE.
+          Those two came apart the moment the live keys landed while the rollout
+          was still 'preview', and this line went on promising that no real
+          money moved while it moved real money. */}
+      {testMode && (
         <Text fontSize="2xs" color="orange.700" textAlign="center" fontWeight="600">
           TEST MODE. No real money moves and a real card will be declined.
         </Text>
