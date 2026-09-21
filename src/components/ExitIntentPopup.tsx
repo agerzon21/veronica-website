@@ -260,7 +260,7 @@ const ExitIntentPopup = () => {
                   </Text>
                   <Text textStyle="bodyLead">
                     {submittedCode === 'already'
-                      ? 'You signed up before — your code is in your inbox.'
+                      ? 'You signed up before. Your code is in your inbox.'
                       : 'Check your inbox in a moment.'}
                   </Text>
                   <Text textStyle="bodyCopy" maxW="measure">

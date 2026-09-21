@@ -87,7 +87,7 @@ function JournalIndex() {
         <title>Journal | Vero Photography</title>
         <meta
           name="description"
-          content="Long-form recaps from behind the lens — recent portrait, wedding, family, and maternity sessions with the stories, favorite frames, and small moments that made them."
+          content="Long-form recaps from behind the lens: recent portrait, wedding, family, and maternity sessions with the stories, favorite frames, and small moments that made them."
         />
         <meta property="og:title" content="Journal | Vero Photography" />
         <meta property="og:description" content="Long-form recaps from behind the lens." />

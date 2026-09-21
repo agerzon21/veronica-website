@@ -28,7 +28,7 @@ const Terms = () => {
         <title>Terms of Service | Vero Photography</title>
         <meta
           name="description"
-          content="Terms of service for vero.photography — how the site may be used, photo copyright, and how to request image removal."
+          content="Terms of service for vero.photography: how the site may be used, photo copyright, and how to request image removal."
         />
         <meta name="robots" content="index, follow" />
       </Helmet>
@@ -83,7 +83,7 @@ const Terms = () => {
           <PolicyList
             items={[
               'Reproduce, redistribute, or republish photos elsewhere (including on your own website, social feeds, or third-party services).',
-              'Use photos for commercial purposes — advertising, promotion, resale, print sale, stock, etc.',
+              'Use photos for commercial purposes: advertising, promotion, resale, print sale, stock, etc.',
               'Alter, edit, crop, filter, or add watermarks to any photograph.',
               'Remove or obscure any watermark, signature, or credit line.',
               'Feed photos to any machine-learning training dataset or generative AI system.',
@@ -118,7 +118,7 @@ const Terms = () => {
             items={[
               'A description or link to the photograph(s) you want removed.',
               'Confirmation that you are the person depicted (or the parent/guardian of a depicted minor).',
-              'Any preference — full removal from public pages, removal from social sharing metadata only, etc.',
+              'Any preference: full removal from public pages, removal from social sharing metadata only, etc.',
             ]}
           />
           <P>

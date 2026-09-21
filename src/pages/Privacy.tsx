@@ -27,7 +27,7 @@ const Privacy = () => {
         <title>Privacy Policy | Vero Photography</title>
         <meta
           name="description"
-          content="Privacy policy for vero.photography — what information we collect, how we use it, and how to request deletion."
+          content="Privacy policy for vero.photography: what information we collect, how we use it, and how to request deletion."
         />
         <meta name="robots" content="index, follow" />
       </Helmet>
@@ -111,7 +111,7 @@ const Privacy = () => {
           <PolicyList
             items={[
               'To respond to inquiries and coordinate photography sessions.',
-              'To fulfill the terms of any photography contract you enter into with us — including delivering galleries, collecting payment, and providing customer support.',
+              'To fulfill the terms of any photography contract you enter into with us, including delivering galleries, collecting payment, and providing customer support.',
               'To send transactional emails (booking confirmations, gallery-ready notifications, contract copies, invoices).',
               'To understand how the Site is used, so we can make it better.',
               'To measure the effectiveness of any advertising we run (Google Ads inquiry-form conversions).',
@@ -188,7 +188,7 @@ const Privacy = () => {
             items={[
               'Access the personal information we hold about you.',
               'Correct inaccurate information.',
-              'Request deletion of your information (subject to our legal record-keeping obligations — see next section).',
+              'Request deletion of your information (subject to our legal record-keeping obligations, see next section).',
               'Object to or restrict certain processing.',
               'Opt out of analytics: install a browser extension like Google Analytics Opt-Out, or use your browser&rsquo;s "Do Not Track" setting.',
               'Opt out of Google Ads personalization at https://adssettings.google.com.',

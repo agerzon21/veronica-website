@@ -288,7 +288,7 @@ const Weddings = () => {
         <title>Wedding Photography Services | Vero Photography</title>
         <meta
           name="description"
-          content="Wedding photography by Veronika Gerzon — coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide."
+          content="Wedding photography by Veronika Gerzon: coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide."
         />
         <link rel="canonical" href="https://vero.photography/wedding-photography" />
         <meta property="og:title" content="Wedding Photography Services | Vero Photography" />

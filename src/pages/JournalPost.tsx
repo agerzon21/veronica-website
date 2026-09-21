@@ -297,7 +297,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
       });
     } catch {
       toast({
-        title: `Could not copy — the URL is ${url}`,
+        title: `Could not copy. The URL is ${url}`,
         status: 'warning',
         duration: 5000,
         isClosable: true,
@@ -367,7 +367,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
     <>
       <Helmet>
         <title>{post.title} | Vero Photography Journal</title>
-        <meta name="description" content={post.excerpt || `${post.title} — a recent recap from behind the lens.`} />
+        <meta name="description" content={post.excerpt || `${post.title}, a recent recap from behind the lens.`} />
         <link rel="canonical" href={canonicalUrl} />
         <meta property="og:type" content="article" />
         <meta property="og:title" content={post.title} />

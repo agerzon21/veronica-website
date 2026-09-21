@@ -19,23 +19,23 @@ const ROUTE_META: Record<string, RouteMeta> = {
     // was 78 chars and got truncated mid-word.
     title: 'Vero Photography | Scranton Wedding & Portrait Photographer',
     description:
-      'Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania — available worldwide.',
+      'Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania, available worldwide.',
   },
   '/about': {
     title: 'About Veronika Gerzon | Vero Photography',
     description:
-      'About Veronika Gerzon — wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
+      'About Veronika Gerzon: wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
     image: `${SITE_URL}/assets/photos/site/about-bg.webp`,
   },
   '/contact': {
     title: 'Book a Session | Vero Photography',
     description:
-      'Get in touch to plan a wedding, portrait, family, or maternity session. Based in Scranton, Pennsylvania — available worldwide.',
+      'Get in touch to plan a wedding, portrait, family, or maternity session. Based in Scranton, Pennsylvania, available worldwide.',
   },
   '/contact/thank-you': {
     title: 'Thank You | Vero Photography',
     description:
-      'Your inquiry has been received — Veronika will be in touch shortly to discuss your photography session.',
+      'Your inquiry has been received. Veronika will be in touch shortly to discuss your photography session.',
   },
   // Was missing entirely, so this route fell through to the home defaults and
   // shipped the homepage's title, description and canonical — on the site's
@@ -43,7 +43,7 @@ const ROUTE_META: Record<string, RouteMeta> = {
   '/wedding-photography': {
     title: 'Wedding Photography Services | Vero Photography',
     description:
-      'Wedding photography by Veronika Gerzon — coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
+      'Wedding photography by Veronika Gerzon: coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
     image: `${SITE_URL}/assets/photos/site/weddings-hero.webp`,
   },
   '/gallery': {
@@ -54,25 +54,25 @@ const ROUTE_META: Record<string, RouteMeta> = {
   '/gallery/portraits': {
     title: 'Portrait Photography Portfolio | Vero Photography',
     description:
-      'Portrait photography portfolio — natural-light, lifestyle, and editorial portraits by Veronika Gerzon.',
+      'Portrait photography portfolio: natural-light, lifestyle, and editorial portraits by Veronika Gerzon.',
     image: `${SITE_URL}/assets/photos/portraits/shadow-play-portrait.webp`,
   },
   '/gallery/weddings': {
     title: 'Wedding Photography Portfolio | Vero Photography',
     description:
-      'Wedding photography portfolio — destination, beach, and intimate ceremony coverage by Veronika Gerzon.',
+      'Wedding photography portfolio: destination, beach, and intimate ceremony coverage by Veronika Gerzon.',
     image: `${SITE_URL}/assets/photos/weddings/newlyweds-running-sea.webp`,
   },
   '/gallery/family': {
     title: 'Family Photography Portfolio | Vero Photography',
     description:
-      'Family photography portfolio — multi-generation, lifestyle, and candid family sessions by Veronika Gerzon.',
+      'Family photography portfolio: multi-generation, lifestyle, and candid family sessions by Veronika Gerzon.',
     image: `${SITE_URL}/assets/photos/family/elegant-family-studio-portrait-black.webp`,
   },
   '/gallery/maternity': {
     title: 'Maternity Photography Portfolio | Vero Photography',
     description:
-      'Maternity photography portfolio — beach, studio, and artistic maternity sessions by Veronika Gerzon.',
+      'Maternity photography portfolio: beach, studio, and artistic maternity sessions by Veronika Gerzon.',
     image: `${SITE_URL}/assets/photos/maternity/couples-beach-baby-bump-moment.webp`,
   },
 };
@@ -149,7 +149,7 @@ const SEO = () => {
       <meta property="og:locale:alternate" content="es_DO" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content="Vero Photography — Professional Photographer" />
+      <meta property="og:image:alt" content="Vero Photography, Professional Photographer" />
 
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
