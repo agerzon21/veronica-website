@@ -315,16 +315,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
    * nothing about whether the swap to live keys actually happened, which is
    * the one question anyone asks at go-live. A key's PREFIX answers it and is
    * not a secret: sk_test_ and sk_live_ are public knowledge, and nothing
-   * here returns any part of the key itself.
+   * here returns any part of the key itself. Restricted keys made by Stripe's
+   * scoped flow read rk_test_ / rk_live_ and mean exactly the same thing, so
+   * both key classes are matched. Missing that reported a perfectly good live
+   * restricted key as 'unrecognised' at the one moment anyone looks at this.
    *
    * null means no key at all, so there is no mode to report.
    */
   const stripeKey = (process.env.STRIPE_SECRET_KEY ?? '').trim();
   const stripeMode = !stripeKey
     ? null
-    : stripeKey.startsWith('sk_live_')
+    : /^[sr]k_live_/.test(stripeKey)
       ? 'live'
-      : stripeKey.startsWith('sk_test_')
+      : /^[sr]k_test_/.test(stripeKey)
         ? 'test'
         : 'unrecognised';
 

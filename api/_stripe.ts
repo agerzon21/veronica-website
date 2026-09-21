@@ -51,9 +51,19 @@ function secretKey(): string {
   return key;
 }
 
-/** True while pointed at test keys, which is what gates the live UI. */
+/**
+ * True while pointed at test keys, which is what gates the live UI.
+ *
+ * Both key SHAPES matter, not just both modes. A standard secret key reads
+ * sk_test_ / sk_live_, but a key made through Stripe's scoped "create a secret
+ * key" flow is RESTRICTED and reads rk_test_ / rk_live_. Matching only sk_test_
+ * meant a restricted TEST key answered "not test mode", which silently defeats
+ * the one guard in _pay-start.ts that refuses to send a client to a checkout
+ * that cannot take their money. The mode segment carries the meaning, so match
+ * that and let the key class vary.
+ */
 export function isStripeTestMode(): boolean {
-  return (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_');
+  return /^[sr]k_test_/.test((process.env.STRIPE_SECRET_KEY ?? '').trim());
 }
 
 export function isStripeConfigured(): boolean {
