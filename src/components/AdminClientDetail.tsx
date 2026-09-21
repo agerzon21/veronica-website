@@ -1027,6 +1027,115 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </VStack>
       </Section>
 
+      {/* ─── Payments section. Surfaces whenever a total is on the
+            books — full-mode portals always have one; simple-mode rows
+            have one only when Vero entered totals at creation. ─── */}
+      {/* The whole Payments section is gated on a total existing, and the box
+          that sets one lives in the LAST section of the screen. So logging a
+          Zelle on a booking with no total meant scrolling to the bottom,
+          typing a total, saving, waiting for a full reload, and scrolling back
+          up to a section that had only just appeared. Ten of eighteen real
+          bookings are gallery-only and four of those carry no total at all, so
+          this is the common case, not an edge one. Set it from here instead. */}
+      {portal.contract_total_amount === null && (
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
+          <VStack align="stretch" spacing={3}>
+            <Text fontSize="sm" color="gray.600">
+              {t.clientDetail.noTotalYetHelp}
+            </Text>
+            <InlineField
+              label={t.clientDetail.totalAmountLabel}
+              type="text"
+              value=""
+              placeholder="0"
+              helpText={t.clientDetail.totalAmountHelp}
+              saving={savingField === 'contract_total_amount'}
+              validate={(v) => {
+                const parsed = parseMoneyInput(v);
+                if (parsed === 'invalid') return t.clientDetail.amountInvalid;
+                // Clearing an already-empty field is not an edit. Without this
+                // the Save button offers to do nothing.
+                if (parsed === null) return t.clientDetail.amountInvalid;
+                return null;
+              }}
+              onSave={(v) => {
+                const amount = parseMoneyInput(v);
+                if (amount === 'invalid' || amount === null) return Promise.resolve(false);
+                return patch({ contract_total_amount: amount }, 'contract_total_amount');
+              }}
+            />
+          </VStack>
+        </Section>
+      )}
+
+      {portal.contract_total_amount !== null && (
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
+          <VStack align="stretch" spacing={5}>
+            {/* 3-up stat row, 4-up once something has been charged. On mobile
+                the columns stay side-by-side but spacing shrinks so the
+                numbers fit without wrapping, which is why a fourth one drops
+                to a 2x2 there rather than squeezing onto one row. */}
+            <SimpleGrid
+              columns={{ base: chargesTotal > 0 ? 2 : 3, md: chargesTotal > 0 ? 4 : 3 }}
+              spacing={{ base: 3, md: 6 }}
+              fontSize="sm"
+            >
+              <Stat label={t.clientDetail.statTotal} value={formatMoney(portal.contract_total_amount)} />
+              {chargesTotal > 0 && (
+                <Stat label={t.clientDetail.statCharges} value={formatMoney(chargesTotal)} />
+              )}
+              <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
+              <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
+            </SimpleGrid>
+
+            <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
+
+            {payments.length > 0 && (
+              <Box>
+                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+                  {t.clientDetail.history}
+                </Text>
+                <VStack align="stretch" spacing={2}>
+                  {payments.map((p) => (
+                    <PaymentRow
+                      key={p.id}
+                      entry={p}
+                      portalId={portalId}
+                      adminPassword={adminPassword}
+                      onDeleted={reload}
+                    />
+                  ))}
+                </VStack>
+              </Box>
+            )}
+
+            {/* Charges: money owed rather than money in, so it sits below the
+                payment log with its own form and its own list. Every line here
+                is printed in the client's portal with its reason and note. */}
+            <AddChargeForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
+
+            {charges.length > 0 && (
+              <Box>
+                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+                  {t.clientDetail.chargesHistory}
+                </Text>
+                <VStack align="stretch" spacing={2}>
+                  {charges.map((c) => (
+                    <ChargeRow
+                      key={c.id}
+                      entry={c}
+                      portalId={portalId}
+                      adminPassword={adminPassword}
+                      onDeleted={reload}
+                    />
+                  ))}
+                </VStack>
+              </Box>
+            )}
+          </VStack>
+        </Section>
+      )}
+
       {/* ─── Account (full-mode only): onboarding status + tech-support
             actions. Resend invite if they haven't finished welcome,
             override password if they have. ─── */}
@@ -1175,114 +1284,6 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </Section>
       )}
 
-      {/* ─── Payments section. Surfaces whenever a total is on the
-            books — full-mode portals always have one; simple-mode rows
-            have one only when Vero entered totals at creation. ─── */}
-      {/* The whole Payments section is gated on a total existing, and the box
-          that sets one lives in the LAST section of the screen. So logging a
-          Zelle on a booking with no total meant scrolling to the bottom,
-          typing a total, saving, waiting for a full reload, and scrolling back
-          up to a section that had only just appeared. Ten of eighteen real
-          bookings are gallery-only and four of those carry no total at all, so
-          this is the common case, not an edge one. Set it from here instead. */}
-      {portal.contract_total_amount === null && (
-        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
-          <VStack align="stretch" spacing={3}>
-            <Text fontSize="sm" color="gray.600">
-              {t.clientDetail.noTotalYetHelp}
-            </Text>
-            <InlineField
-              label={t.clientDetail.totalAmountLabel}
-              type="text"
-              value=""
-              placeholder="0"
-              helpText={t.clientDetail.totalAmountHelp}
-              saving={savingField === 'contract_total_amount'}
-              validate={(v) => {
-                const parsed = parseMoneyInput(v);
-                if (parsed === 'invalid') return t.clientDetail.amountInvalid;
-                // Clearing an already-empty field is not an edit. Without this
-                // the Save button offers to do nothing.
-                if (parsed === null) return t.clientDetail.amountInvalid;
-                return null;
-              }}
-              onSave={(v) => {
-                const amount = parseMoneyInput(v);
-                if (amount === 'invalid' || amount === null) return Promise.resolve(false);
-                return patch({ contract_total_amount: amount }, 'contract_total_amount');
-              }}
-            />
-          </VStack>
-        </Section>
-      )}
-
-      {portal.contract_total_amount !== null && (
-        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
-          <VStack align="stretch" spacing={5}>
-            {/* 3-up stat row, 4-up once something has been charged. On mobile
-                the columns stay side-by-side but spacing shrinks so the
-                numbers fit without wrapping, which is why a fourth one drops
-                to a 2x2 there rather than squeezing onto one row. */}
-            <SimpleGrid
-              columns={{ base: chargesTotal > 0 ? 2 : 3, md: chargesTotal > 0 ? 4 : 3 }}
-              spacing={{ base: 3, md: 6 }}
-              fontSize="sm"
-            >
-              <Stat label={t.clientDetail.statTotal} value={formatMoney(portal.contract_total_amount)} />
-              {chargesTotal > 0 && (
-                <Stat label={t.clientDetail.statCharges} value={formatMoney(chargesTotal)} />
-              )}
-              <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
-              <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
-            </SimpleGrid>
-
-            <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
-
-            {payments.length > 0 && (
-              <Box>
-                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
-                  {t.clientDetail.history}
-                </Text>
-                <VStack align="stretch" spacing={2}>
-                  {payments.map((p) => (
-                    <PaymentRow
-                      key={p.id}
-                      entry={p}
-                      portalId={portalId}
-                      adminPassword={adminPassword}
-                      onDeleted={reload}
-                    />
-                  ))}
-                </VStack>
-              </Box>
-            )}
-
-            {/* Charges: money owed rather than money in, so it sits below the
-                payment log with its own form and its own list. Every line here
-                is printed in the client's portal with its reason and note. */}
-            <AddChargeForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
-
-            {charges.length > 0 && (
-              <Box>
-                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
-                  {t.clientDetail.chargesHistory}
-                </Text>
-                <VStack align="stretch" spacing={2}>
-                  {charges.map((c) => (
-                    <ChargeRow
-                      key={c.id}
-                      entry={c}
-                      portalId={portalId}
-                      adminPassword={adminPassword}
-                      onDeleted={reload}
-                    />
-                  ))}
-                </VStack>
-              </Box>
-            )}
-          </VStack>
-        </Section>
-      )}
 
       {/* ─── Editable details (admin can correct typos etc.) ─── */}
       <Section title={t.clientDetail.sectionDetails} icon={FaUser} hue="blue">
