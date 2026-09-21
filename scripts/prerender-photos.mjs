@@ -788,7 +788,7 @@ const STATIC_PAGES = [
     heading: 'About Veronika Gerzon',
     title: 'About Veronika Gerzon | Vero Photography',
     description:
-      'About Veronika Gerzon — wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
+      'About Veronika Gerzon: wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
     image: `${SITE}/assets/photos/site/about-bg.webp`,
   },
   {
@@ -796,7 +796,7 @@ const STATIC_PAGES = [
     heading: 'Book a Session',
     title: 'Book a Session | Vero Photography',
     description:
-      'Get in touch to plan a wedding, portrait, family, or maternity session. Based in Scranton, Pennsylvania — available worldwide.',
+      'Get in touch to plan a wedding, portrait, family, or maternity session. Based in Scranton, Pennsylvania, available worldwide.',
     image: `${SITE}/assets/photos/site/contact-bg.webp`,
     extra:
       '<p>Call or text <a href="tel:+15709095707">(570) 909-5707</a>.</p>',
@@ -806,7 +806,7 @@ const STATIC_PAGES = [
     heading: 'Wedding Photography Services',
     title: 'Wedding Photography Services | Vero Photography',
     description:
-      'Wedding photography by Veronika Gerzon — coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
+      'Wedding photography by Veronika Gerzon: coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
     image: `${SITE}/assets/photos/site/weddings-hero.webp`,
   },
   {
