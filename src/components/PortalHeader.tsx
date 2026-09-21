@@ -495,6 +495,67 @@ const STEP_TONES: Record<StepTone, { bg: string; border: string; fg: string; lab
   waiting: { bg: 'transparent', border: 'brand.success', fg: 'brand.success', label: 'brand.success' },
 };
 
+/**
+ * Where the desktop header starts.
+ *
+ * Chakra's md is 768px, and between there and about 1100 the desktop track does
+ * not fit: the logo gets overlapped and the last chip is cut off. Measured on
+ * screenshots, not guessed. Not a Chakra breakpoint because adding one shifts
+ * every array-syntax responsive prop in the codebase, and this is one decision
+ * in one component.
+ */
+const DESKTOP_AT = '@media (min-width: 1100px)';
+
+/**
+ * Where a chip can afford its second line.
+ *
+ * Between 1100 and here the logo, five chips, their details and the rail do not
+ * fit, and the chips ran under the rail. The detail is the part that gives:
+ * "Contract" without "Signed" still names the stage and the tick still says it
+ * is done, whereas dropping a whole chip loses a stage and dropping the rail
+ * loses the two facts the client came for.
+ */
+const CHIP_DETAIL_AT = '@media (min-width: 1400px)';
+
+/**
+ * Where the countdown fits beside the outstanding amount.
+ *
+ * At 1100 the logo, five chips and both halves of the rail overflow, and a
+ * centred track spills over BOTH neighbours rather than wrapping. Outstanding
+ * is the half that stays, because it is the one a client can act on.
+ */
+const COUNTDOWN_AT = '@media (min-width: 1250px)';
+
+/**
+ * Where the rail fits beside the track.
+ *
+ * Between 1100 and here the desktop track is on, but the chips still run into
+ * the rail's label: measured, not guessed. In that band the compact corner
+ * below carries the money instead, which is what it was built for. So the
+ * header has four states, each one measured: phone, chips with the corner,
+ * chips with the rail, and then the countdown and the chip details as room
+ * appears.
+ */
+const RAIL_AT = '@media (min-width: 1200px)';
+
+/**
+ * Whole days until the shoot, or null once it has passed.
+ *
+ * Compared by calendar day in local time, never by elapsed milliseconds, so a
+ * shoot later today reads as today rather than rounding to "in 1 day" because
+ * it happens to be 26 hours away.
+ */
+function daysUntilShoot(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const parts = iso.slice(0, 10).split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
+  const event = new Date(parts[0], parts[1] - 1, parts[2]);
+  const now = new Date();
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((event.getTime() - midnight.getTime()) / 86400000);
+  return days < 0 ? null : days;
+}
+
 /** 2 * PI * r, with r = 15, which is the ring the phone header draws. */
 const RING_CIRCUMFERENCE = 2 * Math.PI * 15;
 
@@ -1183,10 +1244,91 @@ const PortalHeader = ({
               onToggle={() => toggleMenu('progress')}
               panelId={progressPanelId}
               onGo={(id) => pickFrom(accountNav, id)}
-              railEventDate={progress?.eventDate ?? null}
             />
           </Box>
         )}
+
+        {/*
+          THE DESKTOP RAIL. The two facts a client opens this page to check.
+
+          Right aligned and outside the track, because the track is centred and
+          anything pinned inside it lands on top of the corner next door. It
+          REPLACES that corner above 1100px rather than sitting beside it: an
+          earlier pass printed the outstanding figure in both and they
+          overlapped on screen.
+
+          Outstanding shows even at zero, unlike the corner it replaces, because
+          "$0.00" is the answer to the question and a blank space is not.
+        */}
+        <Flex
+          display="none"
+          sx={{ [RAIL_AT]: { display: 'flex' } }}
+          align="center"
+          gap={5}
+          flexShrink={0}
+          ml="auto"
+          pl={5}
+        >
+          {daysUntilShoot(progress?.eventDate) !== null && (
+            <Box
+              display="none"
+              sx={{ [COUNTDOWN_AT]: { display: 'block' } }}
+              textAlign="right"
+              lineHeight="1.3"
+            >
+              <Text
+                fontSize="10px"
+                letterSpacing="0.14em"
+                textTransform="uppercase"
+                color="gray.500"
+              >
+                Your day
+              </Text>
+              <Text fontSize="md" fontWeight="500" color="gray.800" whiteSpace="nowrap">
+                {daysUntilShoot(progress?.eventDate) === 0
+                  ? 'is today'
+                  : daysUntilShoot(progress?.eventDate) === 1
+                    ? 'is tomorrow'
+                    : `in ${daysUntilShoot(progress?.eventDate)} days`}
+              </Text>
+            </Box>
+          )}
+          {daysUntilShoot(progress?.eventDate) !== null && remaining !== null && (
+            <Box
+              display="none"
+              sx={{ [COUNTDOWN_AT]: { display: 'block' } }}
+              w="1px"
+              h="28px"
+              bg="gray.200"
+            />
+          )}
+          {remaining !== null && (
+            <Box textAlign="right" lineHeight="1.3">
+              <Text
+                fontSize="10px"
+                letterSpacing="0.14em"
+                textTransform="uppercase"
+                color={retainerOutstanding ? 'red.600' : 'gray.500'}
+              >
+                {retainerOutstanding ? 'Retainer due' : 'Outstanding'}
+              </Text>
+              <Text
+                fontSize="md"
+                fontWeight="500"
+                whiteSpace="nowrap"
+                color={
+                  retainerOutstanding || progress?.overdue
+                    ? 'red.600'
+                    : remaining > 0
+                      ? 'gray.800'
+                      : 'brand.success'
+                }
+              >
+                {formatMoney(retainerOutstanding ? retainerDue : Math.max(remaining, 0))}
+              </Text>
+            </Box>
+          )}
+        </Flex>
 
         {/* The slot. It holds the two-bar nav, or the 1-2-3 progress, and the
             choice is made separately per width by plain `display`, never by a
@@ -1253,7 +1395,18 @@ const PortalHeader = ({
         </Flex>
 
         {showBalance && (
-          <Flex direction="column" align="flex-end" flexShrink={0} lineHeight="1.15">
+          // Stands down exactly where the rail takes over, not where the
+          // desktop track starts. The rail reports the same money and reports
+          // it at zero too, so both mounted put two outstanding figures on one
+          // row; but between 1100 and 1200 the rail does not fit and this does,
+          // so this is what carries it there.
+          <Flex
+            direction="column"
+            align="flex-end"
+            flexShrink={0}
+            lineHeight="1.15"
+            sx={{ [RAIL_AT]: { display: 'none' } }}
+          >
             <Text
               fontSize="2xs"
               fontWeight="500"
@@ -2338,7 +2491,6 @@ function ProgressTrack({
   onToggle,
   panelId,
   onGo,
-  railEventDate = null,
 }: {
   steps: ProgressStep[];
   /** The balance corner already shows the number, so the phone should not. */
@@ -2349,19 +2501,6 @@ function ProgressTrack({
   panelId?: string;
   /** Take the reader to the section a stage IS. */
   onGo?: (sectionId: string) => void;
-  /**
-   * Desktop only: how long until the shoot.
-   *
-   * The bar was mostly empty to the right of five chips. It is NOT where the
-   * money goes: the corner beside it already reports that, and reports it
-   * better, because it separates a retainer that still holds the date from a
-   * balance that does not. Printing an "Outstanding" figure here as well put
-   * the same number on the screen twice, overlapping. So this carries the one
-   * fact nothing else on the header answers.
-   *
-   * Phone gets none of it: at 390px the track is already the whole row.
-   */
-  railEventDate?: string | null;
 }) {
   const current = steps.find((s) => s.current) ?? steps[steps.length - 1];
   /**
@@ -2383,23 +2522,6 @@ function ProgressTrack({
   const stepsReached = currentIdx === -1 ? steps.length : currentIdx + 1;
   const ringFilled = (RING_CIRCUMFERENCE * stepsReached) / Math.max(steps.length, 1);
 
-  /**
-   * Days until the shoot, or null once it has passed.
-   *
-   * Compared by calendar day in local time, not by elapsed milliseconds, so a
-   * shoot later today reads "is today" rather than "in 0 days" or, worse,
-   * rounding to "in 1 day" because it is 26 hours away.
-   */
-  const railDays = (() => {
-    if (!railEventDate) return null;
-    const parts = railEventDate.slice(0, 10).split('-').map(Number);
-    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
-    const event = new Date(parts[0], parts[1] - 1, parts[2]);
-    const today = new Date();
-    const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const days = Math.round((event.getTime() - midnight.getTime()) / 86400000);
-    return days < 0 ? null : days;
-  })();
 
   return (
     <>
@@ -2423,7 +2545,7 @@ function ProgressTrack({
         aria-label={`Step ${current.n} of ${steps.length}, ${current.label}${
           current.detail ? `, ${current.detail}` : ''
         }. Show every step.`}
-        display={{ base: 'flex', md: 'none' }}
+        display="flex"
         align="center"
         justify="center"
         gap={2}
@@ -2449,7 +2571,7 @@ function ProgressTrack({
         transition="background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease"
         _hover={{ borderColor: 'brand.accent' }}
         _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
-        sx={{ WebkitTapHighlightColor: 'transparent', ...STILL }}
+        sx={{ WebkitTapHighlightColor: 'transparent', ...STILL, [DESKTOP_AT]: { display: 'none' } }}
       >
         {/* Sized for the room it is actually in. This was a 2xs badge and two
             2xs lines squeezed into the middle of a header with most of a row
@@ -2530,7 +2652,8 @@ function ProgressTrack({
 
       {/* THE DESKTOP: the whole track, centred in the space it was given. */}
       <Flex
-        display={{ base: 'none', md: 'flex' }}
+        display="none"
+        sx={{ [DESKTOP_AT]: { display: 'flex' } }}
         align="center"
         justify="center"
         gap={2.5}
@@ -2629,6 +2752,8 @@ function ProgressTrack({
                   </Text>
                   {s.detail && (
                     <Text
+                      display="none"
+                      sx={{ [CHIP_DETAIL_AT]: { display: 'block' } }}
                       fontSize="xs"
                       fontWeight="400"
                       letterSpacing="0.01em"
@@ -2645,40 +2770,6 @@ function ProgressTrack({
           );
         })}
 
-        {/* Sits WITH the track, not pinned right. The balance corner is a
-            sibling outside this Flex and already owns the right edge, so
-            ml="auto" put this on top of it. */}
-        {railDays !== null && (
-          <Flex
-            // Only where there is genuinely room. Logo, five chips, this, and
-            // the balance corner do not fit under about 1536px: measured, not
-            // guessed, after a screenshot showed it sitting on top of the
-            // balance at 1280. Below that the countdown is the one of the four
-            // that nothing else depends on, so it is the one that goes.
-            display={{ base: 'none', '2xl': 'flex' }}
-            align="center"
-            flexShrink={0}
-            gap={4}
-            pl={1}
-          >
-            <Box w="1px" h="26px" bg="gray.200" />
-            {(
-              <Box textAlign="right" lineHeight="1.3">
-                <Text
-                  fontSize="10px"
-                  letterSpacing="0.12em"
-                  textTransform="uppercase"
-                  color="gray.500"
-                >
-                  Your day
-                </Text>
-                <Text fontSize="md" fontWeight="500" color="gray.800" whiteSpace="nowrap">
-                  {railDays === 0 ? 'is today' : railDays === 1 ? 'is tomorrow' : `in ${railDays} days`}
-                </Text>
-              </Box>
-            )}
-          </Flex>
-        )}
       </Flex>
     </>
   );
