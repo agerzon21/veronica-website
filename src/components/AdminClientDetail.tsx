@@ -32,7 +32,7 @@ import {
 import { useAdminLang, type AdminLang } from '../i18n/admin';
 import { appleMapsLink, googleDirectionsLink, wazeLink } from '../data/travel-fee';
 import { travelCopy } from './travelCopy';
-import MobileSheetModal from './ui/MobileSheetModal';
+import MobileSheetModal, { MobileSheetFooter } from './ui/MobileSheetModal';
 import { buildShareMessage, galleryDirectUrl } from './galleryShare';
 
 interface Props {
@@ -1570,6 +1570,9 @@ function DirectionsSheet({
   onClose: () => void;
 }) {
   const tv = travelCopy(lang);
+  // `lang` is passed in for travelCopy; the panel dictionary still comes from
+  // the context, so the footer Close reads the same string as every other one.
+  const { t } = useAdminLang();
   const [copied, setCopied] = useState(false);
   const isTouch =
     typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -1591,7 +1594,31 @@ function DirectionsSheet({
   ];
 
   return (
-    <MobileSheetModal isOpen={isOpen} onClose={onClose} title={tv.openIn}>
+    <MobileSheetModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={tv.openIn}
+      /**
+       * A bottom sheet, and no corner X.
+       *
+       * This opens while Vero is standing outside a venue holding a camera.
+       * Full screen put the map buttons near the TOP of the phone and the only
+       * way out was a 40px close button pinned to the top right: under the
+       * 44px floor, and in the one corner a right thumb cannot reach without
+       * putting something down. The rows now sit in the bottom half and the
+       * way out is a full width control in the footer, which already clears
+       * the home indicator.
+       */
+      sheet
+      hideCloseButton
+      footer={
+        <MobileSheetFooter>
+          <CTAButton variant="ghost" size="md" fullWidth onClick={onClose}>
+            {t.common.close}
+          </CTAButton>
+        </MobileSheetFooter>
+      }
+    >
       <VStack align="stretch" spacing={2} pb={2}>
         <Text fontSize="sm" color="gray.600" fontWeight="300" mb={1}>
           {address}
