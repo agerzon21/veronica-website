@@ -152,7 +152,12 @@ function encodeForm(obj: Record<string, unknown>, prefix = ''): string {
 
 /* ------------------------------------------------------------- checkout ---- */
 
-export type CheckoutKind = 'retainer' | 'balance';
+/**
+ * 'tip' is the one kind whose amount the CLIENT chooses. The other two are
+ * computed from the booking, so _pay-start.ts validates and caps a tip before
+ * it ever reaches here. See the guard in that file.
+ */
+export type CheckoutKind = 'retainer' | 'balance' | 'tip';
 
 export type CreateCheckoutInput = {
   portalId: string;

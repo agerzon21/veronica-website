@@ -32,7 +32,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import getRawBody from 'raw-body';
 import { getDb } from '../_db.js';
 import { verifyStripeEvent, type StripeEvent } from '../_stripe.js';
-import { recordPayment } from '../_payments.js';
+import { recordPayment, type PaymentKind } from '../_payments.js';
 
 /** Inert here (Vercel reads it from api/inbox.ts), kept as documentation. */
 export const config = { api: { bodyParser: false } };
@@ -166,17 +166,19 @@ export async function processEvent(event: StripeEvent): Promise<void> {
  * Null means we have never recorded the original payment, which for a refund
  * means there is nothing to reverse.
  */
-async function portalIdForPaymentIntent(
+async function originalForPaymentIntent(
   sql: ReturnType<typeof getDb>,
   paymentIntentId: string,
-): Promise<string | null> {
+): Promise<{ portalId: string; kind: PaymentKind } | null> {
   const rows = (await sql`
-    select client_portal_id
+    select client_portal_id, kind
     from payment_entries
     where processor_payment_id = ${paymentIntentId}
     limit 1
-  `) as Array<{ client_portal_id: string }>;
-  return rows[0]?.client_portal_id ?? null;
+  `) as Array<{ client_portal_id: string; kind: PaymentKind }>;
+  const row = rows[0];
+  if (!row) return null;
+  return { portalId: row.client_portal_id, kind: row.kind === 'tip' ? 'tip' : 'payment' };
 }
 
 /** Stripe sends ids as a string or an expanded object depending on the call. */
@@ -208,6 +210,12 @@ function idOf(v: unknown): string | undefined {
  * refund, so the fee row on the original payment stays exactly as it is and
  * the refund row carries no fee of its own. Recording one would claim money
  * came back that did not.
+ *
+ * THE REVERSAL COPIES THE ORIGINAL'S KIND. A tip never entered paid_to_date
+ * (migration 043), so reversing it as a plain payment row would SUBTRACT money
+ * that was never added, and the client would be told they owe the value of the
+ * tip they were refunded. The negative has to be the same kind as the positive
+ * it undoes, which is why the lookup reads it back rather than assuming.
  */
 async function handleChargeRefunded(event: StripeEvent): Promise<void> {
   const charge = event.data.object as {
@@ -223,8 +231,8 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
   }
 
   const sql = getDb();
-  const portalId = await portalIdForPaymentIntent(sql, paymentIntentId);
-  if (!portalId) {
+  const original = await originalForPaymentIntent(sql, paymentIntentId);
+  if (!original) {
     // Not an error worth retrying: we never recorded the payment, so there is
     // nothing to reverse. Loud anyway, because it means the ledger and Stripe
     // disagree about a charge that existed.
@@ -233,6 +241,7 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
     );
     return;
   }
+  const { portalId, kind: originalKind } = original;
 
   const refunds = charge.refunds?.data ?? [];
   if (charge.refunds?.has_more) {
@@ -247,11 +256,12 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
     const result = await recordPayment(sql, {
       portalId,
       amount: -(refund.amount / 100),
-      method: 'Card refund',
+      method: originalKind === 'tip' ? 'Tip refund' : 'Card refund',
       note: refund.reason ? `Refunded by Stripe (${refund.reason})` : 'Refunded by Stripe',
       paidAt: refund.created ? new Date(refund.created * 1000).toISOString() : null,
       source: 'stripe',
       status: 'succeeded',
+      kind: originalKind,
       processorPaymentId: refund.id,
       processorAccountId: event.account ?? null,
       feeAmount: null,
@@ -296,11 +306,12 @@ async function handleDisputeOpened(event: StripeEvent): Promise<void> {
   }
 
   const sql = getDb();
-  const portalId = await portalIdForPaymentIntent(sql, paymentIntentId);
-  if (!portalId) {
+  const original = await originalForPaymentIntent(sql, paymentIntentId);
+  if (!original) {
     console.error(`[inbox/stripe-webhook] dispute ${dispute.id} has no original row in the ledger. Nothing recorded.`);
     return;
   }
+  const { portalId, kind: originalKind } = original;
 
   const result = await recordPayment(sql, {
     portalId,
@@ -310,6 +321,9 @@ async function handleDisputeOpened(event: StripeEvent): Promise<void> {
     paidAt: dispute.created ? new Date(dispute.created * 1000).toISOString() : null,
     source: 'stripe',
     status: 'succeeded',
+    // Same rule as the refund: reverse a tip as a tip, or the client is told
+    // they owe money because somebody disputed a gratuity.
+    kind: originalKind,
     processorPaymentId: dispute.id,
     processorAccountId: event.account ?? null,
     feeAmount: null,
@@ -347,8 +361,9 @@ async function handleDisputeClosed(event: StripeEvent): Promise<void> {
   if (!dispute.id || typeof dispute.amount !== 'number' || !paymentIntentId) return;
 
   const sql = getDb();
-  const portalId = await portalIdForPaymentIntent(sql, paymentIntentId);
-  if (!portalId) return;
+  const original = await originalForPaymentIntent(sql, paymentIntentId);
+  if (!original) return;
+  const { portalId, kind: originalKind } = original;
 
   const result = await recordPayment(sql, {
     portalId,
@@ -357,6 +372,7 @@ async function handleDisputeClosed(event: StripeEvent): Promise<void> {
     note: 'Dispute won, funds returned by Stripe',
     source: 'stripe',
     status: 'succeeded',
+    kind: originalKind,
     processorPaymentId: `${dispute.id}:won`,
     processorAccountId: event.account ?? null,
     feeAmount: null,
@@ -416,7 +432,9 @@ async function handleCheckoutCompleted(event: StripeEvent): Promise<void> {
     return;
   }
 
-  const kind = session.metadata?.kind === 'retainer' ? 'retainer' : 'balance';
+  const asked = session.metadata?.kind;
+  const kind: 'retainer' | 'balance' | 'tip' =
+    asked === 'retainer' ? 'retainer' : asked === 'tip' ? 'tip' : 'balance';
 
   /**
    * The fee is NOT read here, and is left to api/cron/_stripe-fee-backfill.ts.
@@ -439,9 +457,17 @@ async function handleCheckoutCompleted(event: StripeEvent): Promise<void> {
     portalId,
     amount,
     method: 'Card',
-    note: kind === 'retainer' ? 'Retainer paid by card' : 'Balance paid by card',
+    note:
+      kind === 'retainer'
+        ? 'Retainer paid by card'
+        : kind === 'tip'
+          ? 'Tip paid by card'
+          : 'Balance paid by card',
     source: 'stripe',
     status: 'succeeded',
+    // The ONE place a tip becomes a tip in the ledger. Everything downstream,
+    // including the two reversal paths above, reads it back from here.
+    kind: kind === 'tip' ? 'tip' : 'payment',
     processorPaymentId: paymentIntentId,
     processorAccountId: event.account ?? null,
     feeAmount: null,

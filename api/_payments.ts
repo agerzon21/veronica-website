@@ -15,6 +15,16 @@ import { getDb } from './_db.js';
 
 export type PaymentSource = 'manual' | 'stripe';
 export type PaymentStatus = 'succeeded' | 'pending' | 'failed';
+/**
+ * What the money WAS, as opposed to how it arrived or whether it cleared.
+ *
+ * 'payment' settles the contract and counts toward paid_to_date. 'tip' does
+ * not count toward anything: it is money the client chose to add on top, and
+ * letting it into the balance sum would report the booking as overpaid, and
+ * would open the delivery gate in _portal-deliver.ts on an unpaid balance.
+ * Migration 043.
+ */
+export type PaymentKind = 'payment' | 'tip';
 
 export type RecordPaymentInput = {
   portalId: string;
@@ -34,6 +44,8 @@ export type RecordPaymentInput = {
   paidAt?: string | null;
   source?: PaymentSource;
   status?: PaymentStatus;
+  /** Defaults to 'payment'. A tip is recorded here but excluded from the balance. */
+  kind?: PaymentKind;
   /**
    * The processor's id for the PAYMENT, not for the event.
    *
@@ -67,6 +79,11 @@ export type RecordPaymentResult = {
  * nothing now; it is what stops an unsettled bank debit from opening the
  * delivery gate once ACH exists.
  *
+ * Counts CONTRACT money only. A tip is a payment_entries row like any other,
+ * but it settles nothing, so it is filtered out here. This subquery is the
+ * only writer of paid_to_date in the codebase, which is why one filter in one
+ * place is enough to keep tips out of all eight balance readers.
+ *
  * A full re-sum rather than an increment, deliberately. Re-summing heals
  * itself the moment a bad row is deleted. An increment carries its error
  * forever, and the error is somebody's money.
@@ -80,7 +97,9 @@ export async function recomputePaidToDate(
     set paid_to_date = (
           select coalesce(sum(amount), 0)
           from payment_entries
-          where client_portal_id = ${portalId} and status = 'succeeded'
+          where client_portal_id = ${portalId}
+            and status = 'succeeded'
+            and kind = 'payment'
         ),
         updated_at = now()
     where id = ${portalId}
@@ -123,6 +142,7 @@ export async function recordPayment(
     paidAt = null,
     source = 'manual',
     status = 'succeeded',
+    kind = 'payment',
     processorPaymentId = null,
     processorAccountId = null,
     feeAmount = null,
@@ -139,12 +159,12 @@ export async function recordPayment(
   const inserted = (await sql`
     insert into payment_entries (
       client_portal_id, amount, method, note, paid_at,
-      source, status, processor_payment_id, processor_account_id,
+      source, status, kind, processor_payment_id, processor_account_id,
       fee_amount, card_brand, card_last4
     )
     values (
       ${portalId}, ${amount}, ${method}, ${note}, ${when},
-      ${source}, ${status}, ${processorPaymentId}, ${processorAccountId},
+      ${source}, ${status}, ${kind}, ${processorPaymentId}, ${processorAccountId},
       ${feeAmount}, ${cardBrand}, ${cardLast4}
     )
     on conflict (processor_payment_id) where processor_payment_id is not null

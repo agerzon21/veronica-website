@@ -8,7 +8,7 @@ import {
   Input,
   SimpleGrid,
 } from '@chakra-ui/react';
-import { useState, useRef, useCallback, useEffect, useMemo, Fragment } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, Fragment, type ReactNode } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaClock from '../icons/fa/FaClock';
@@ -70,6 +70,14 @@ export interface FolderSection {
 }
 
 interface ClientGalleryProps {
+  /**
+   * Rendered directly under the review card, at the end of the gallery
+   * welcome. Undefined on /portal/pass and that is the point: a tip needs a
+   * known booking to attach the money to, and a guest who typed the gallery
+   * password has no booking. The gallery therefore never builds this itself,
+   * it only makes room for whatever the full portal hands down.
+   */
+  tipSlot?: ReactNode;
   clientName: string | null;
   driveUrl: string;
   // Files placed directly in the gallery's root folder (no subfolder).
@@ -408,6 +416,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
 };
 
 const ClientGallery = ({
+  tipSlot,
   clientName,
   driveUrl,
   rootFiles,
@@ -816,6 +825,14 @@ const ClientGallery = ({
             Leave a Review
           </CTAButton>
         </Box>
+        {/* The tip sits under the review ask, never above it. Kind words are
+            free and are the thing actually being asked for; leading with money
+            would turn a thank you into an invoice. */}
+        {tipSlot && (
+          <Box maxW="520px" mx="auto" mt={4}>
+            {tipSlot}
+          </Box>
+        )}
       </Box>
 
       {/* Filter-on banner — appears only when the favorites filter is

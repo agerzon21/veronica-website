@@ -109,6 +109,12 @@ interface PaymentEntry {
   method: string | null;
   note: string | null;
   paid_at: string;
+  /**
+   * A tip settles nothing. It is in this list but not in paid_to_date, so
+   * summing this array to reach a balance would overstate what has been paid.
+   * Migration 043.
+   */
+  kind: 'payment' | 'tip';
 }
 
 /** A charge reason, as stored. The table CHECKs these same three values. */
@@ -628,6 +634,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
     portal.contract_total_amount !== null ? portal.contract_total_amount + chargesTotal : null;
   const balanceRemaining =
     amountOwed !== null ? Math.max(amountOwed - portal.paid_to_date, 0) : null;
+  /**
+   * Summed from the rows, not from paid_to_date, because paid_to_date is
+   * exactly the number a tip is kept out of (migration 043). This is the only
+   * place on this screen tips are totalled, and it never feeds the balance.
+   */
+  const tipsTotal = payments
+    .filter((p) => p.kind === 'tip')
+    .reduce((sum, p) => sum + p.amount, 0);
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
 
   return (
@@ -1087,6 +1101,11 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               )}
               <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
               <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
+              {/* Only when there is one. A permanent "Tips $0" on every
+                  booking reads as a prompt to go and ask for one. */}
+              {tipsTotal > 0 && (
+                <Stat label={t.clientDetail.statTips} value={formatMoney(tipsTotal)} />
+              )}
             </SimpleGrid>
 
             {/* Only when the leftover IS the card fee. A client who sent Zelle
@@ -1106,6 +1125,13 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               )}
 
             <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
+
+            {/* Said once, near the number it explains, rather than on every
+                tip row. The stat above already separates the two totals; this
+                is the sentence that stops the separation looking like a bug. */}
+            {tipsTotal > 0 && (
+              <Text fontSize="xs" color="gray.500">{t.clientDetail.tipNotInBalance}</Text>
+            )}
 
             {payments.length > 0 && (
               <Box>
@@ -2954,6 +2980,24 @@ function PaymentRow({
             <Text fontSize="sm" fontWeight="500" color="gray.800">
               ${entry.amount.toFixed(0)}
             </Text>
+            {entry.kind === 'tip' && (
+              <Box
+                as="span"
+                fontSize="2xs"
+                fontWeight="600"
+                textTransform="uppercase"
+                letterSpacing="0.1em"
+                color="purple.600"
+                bg="purple.50"
+                border="1px solid"
+                borderColor="purple.200"
+                borderRadius="sm"
+                px={1.5}
+                py={0.5}
+              >
+                {t.clientDetail.tipBadge}
+              </Box>
+            )}
             {entry.method && (
               <Text fontSize="sm" color="gray.500">· {entry.method}</Text>
             )}

@@ -1,7 +1,7 @@
 /**
  * Client portal: start a card payment.
  *
- * POST { email, password, kind: 'retainer' | 'balance' }
+ * POST { email, password, kind: 'retainer' | 'balance' | 'tip', tipAmount?: number }
  *   → 200 { success, url }   a Stripe hosted Checkout URL to redirect to
  *   → 400 if there is nothing to pay
  *   → 401 on wrong email/password
@@ -11,6 +11,14 @@
  * database, and never read from the request. A client could otherwise post
  * `amount: 1` and settle a three thousand dollar wedding. The browser says
  * WHICH payment it is making, never how much it is worth.
+ *
+ * A TIP IS THE ONE EXCEPTION, and it is safe for the reason the rule exists.
+ * The rule protects against a client paying LESS than they owe. A tip settles
+ * nothing, so understating it takes nothing from anyone: the worst a hostile
+ * client achieves is tipping less than they meant to. The guard below is
+ * therefore about fat fingers rather than fraud, and it is a floor, a ceiling
+ * and a rounding, not a lookup. Migration 043 keeps the money out of the
+ * balance once it lands.
  *
  * Authentication is the same email plus password the portal already proves on
  * every request. There is no session to hijack because there is no session:
@@ -25,6 +33,15 @@ import { createCheckoutSession, isStripeConfigured, isStripeTestMode } from '../
 import { CARD_PAYMENTS_MODE } from '../../src/data/payment-handles.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
+
+/**
+ * Floor on a tip, in dollars.
+ *
+ * Not arbitrary: Stripe takes 2.9% plus 30 cents, so a 1 dollar tip arrives as
+ * 67 cents and a 5 dollar tip as 4 dollars 56. Below this the fee is most of
+ * the gesture, and a client who meant to be kind has mostly paid Stripe.
+ */
+const TIP_MIN = 5;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Row = {
@@ -37,6 +54,7 @@ type Row = {
   contract_retainer_amount: string | null;
   paid_to_date: string;
   charges_total: string | null;
+  tips_total: string;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -97,7 +115,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
-  const kind = req.body?.kind === 'retainer' ? 'retainer' : 'balance';
+  const asked = req.body?.kind;
+  const kind: 'retainer' | 'balance' | 'tip' =
+    asked === 'retainer' ? 'retainer' : asked === 'tip' ? 'tip' : 'balance';
 
   if (!email || !password) {
     await sleep(WRONG_AUTH_DELAY_MS);
@@ -109,7 +129,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = (await sql`
       select id, client_display_name, client_email, client_password_hash,
              session_type, contract_total_amount, contract_retainer_amount,
-             paid_to_date, charges_total
+             paid_to_date, charges_total,
+             coalesce((
+               select sum(amount) from payment_entries
+               where client_portal_id = client_portals.id
+                 and kind = 'tip' and status = 'succeeded'
+             ), 0) as tips_total
       from client_portals
       where lower(client_email) = ${email} and mode = 'full'
       limit 1
@@ -149,8 +174,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * larger than what is left can never overcharge.
      */
     const outstanding = Math.max(total + charges - paid, 0);
-    const amount =
-      kind === 'retainer' ? Math.min(Math.max(retainer - paid, 0), outstanding) : outstanding;
+    const tipsTotal = parseFloat(row.tips_total ?? '0') || 0;
+
+    let amount: number;
+    if (kind === 'tip') {
+      /**
+       * The only amount in this file that comes from the browser.
+       *
+       * Rounded to cents before anything else, because a tip arrives from a
+       * text input and 12.005 is a real thing a person types. Then floored and
+       * capped. The ceiling is the booking itself: nobody means to tip more
+       * than the entire session cost, and a client who genuinely does can send
+       * it by any of the other methods, where a human sees the number.
+       */
+      const raw = Number(req.body?.tipAmount);
+      if (!Number.isFinite(raw) || raw <= 0) {
+        return res.status(400).json({ success: false, error: 'Choose a tip amount first.' });
+      }
+      amount = Math.round(raw * 100) / 100;
+      if (amount < TIP_MIN) {
+        return res.status(400).json({
+          success: false,
+          error: `The smallest tip we can take by card is ${TIP_MIN}.`,
+        });
+      }
+      const ceiling = Math.max(total + charges, TIP_MIN);
+      if (amount > ceiling) {
+        return res.status(400).json({
+          success: false,
+          error: `That is more than the session itself. The most we can take by card is ${ceiling.toFixed(2)}.`,
+        });
+      }
+    } else if (kind === 'retainer') {
+      amount = Math.min(Math.max(retainer - paid, 0), outstanding);
+    } else {
+      amount = outstanding;
+    }
 
     if (amount <= 0) {
       return res.status(400).json({
@@ -174,15 +233,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const label =
       kind === 'retainer'
         ? `Retainer for ${who}`
-        : `Balance for ${who}`;
+        : kind === 'tip'
+          ? `Tip for ${who}`
+          : `Balance for ${who}`;
 
     const session = await createCheckoutSession({
       portalId: row.id,
       kind,
       amount,
-      // Part of the idempotency key: once money lands, a later payment of the
-      // same amount must open a NEW session rather than replay this one.
-      paidToDate: paid,
+      /**
+       * Part of the idempotency key: once money lands, a later payment of the
+       * same amount must open a NEW session rather than replay this one.
+       *
+       * For a tip that has to be the TIPS total, not paid_to_date. A tip never
+       * moves paid_to_date (migration 043), so keying on it would leave the
+       * number identical before and after, and a client tipping the same
+       * amount twice inside Stripe's 24 hour idempotency window would be
+       * handed back the completed first session. The second tip would silently
+       * never happen.
+       */
+      paidToDate: kind === 'tip' ? tipsTotal : paid,
       clientEmail: row.client_email,
       description: label,
       // The portal reads its own state on load, so returning to it is enough
@@ -192,7 +262,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // client returns from Stripe to a portal with no card button, which
       // during testing looks exactly like the payment breaking something.
       // Harmless once the mode is 'on', where the flag is ignored anyway.
-      successUrl: `${origin}/portal?paid=1${preview}`,
+      successUrl: `${origin}/portal?paid=1${kind === 'tip' ? '&tip=1' : ''}${preview}`,
       cancelUrl: `${origin}/portal?paid=0${preview}`,
     });
 

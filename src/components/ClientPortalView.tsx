@@ -103,7 +103,15 @@ export interface ClientPortalData {
     method: string | null;
     note: string | null;
     paid_at: string;
+    /**
+     * 'tip' rows are shown in this list but are NOT in paid_to_date, so
+     * anything that sums this array to check the balance would be wrong.
+     * Migration 043.
+     */
+    kind: 'payment' | 'tip';
   }>;
+  /** Already excluded from paid_to_date. Shown as thanks, never as credit. */
+  tips_total: number;
   /**
    * Charges added after the booking: extra time at the client's request, and
    * costs paid on the day. Owed on top of contract_total_amount, which is why
@@ -1532,6 +1540,17 @@ const ClientPortalView = ({
           if (galleryRendered) {
             return (
               <ClientGallery
+                // Full portal only. /portal/pass leaves this undefined, which
+                // is what keeps the tip off a gallery opened with a password
+                // by somebody who may not be the client.
+                tipSlot={
+                  <TipPanel
+                    credentials={credentials}
+                    testMode={data.card_test_mode === true}
+                    alreadyTipped={data.tips_total ?? 0}
+                    bookingTotal={(data.contract_total_amount ?? 0) + (data.charges_total ?? 0)}
+                  />
+                }
                 clientName={data.client_name}
                 driveUrl={data.drive_url!}
                 rootFiles={data.rootFiles}
@@ -2239,6 +2258,205 @@ function NextStepsPanel({
  * The label carries the amount anyway, because the client is on a phone and
  * should not have to reconcile "Pay now" against a figure further up the page.
  */
+/**
+ * A tip, at the end of the journey.
+ *
+ * Deliberately NOT part of the balance and deliberately NOT a percentage. A
+ * percentage of a three thousand dollar wedding suggests six hundred dollars,
+ * which is not a tip, it is a second retainer, and putting that number in
+ * front of somebody who wanted to say thank you makes them close the page.
+ * Flat amounts ask for what a person actually means.
+ *
+ * The amount is the only figure in this portal that the browser chooses. That
+ * is safe for the reason _pay-start.ts explains at length: the rule against
+ * client-sent amounts protects against paying LESS than is owed, and a tip
+ * owes nothing, so the worst a tampered request achieves is a smaller tip.
+ */
+function TipPanel({
+  credentials,
+  testMode,
+  alreadyTipped,
+  bookingTotal,
+}: {
+  credentials: { email: string; password: string };
+  /** The KEYS are test keys, so a real card would be declined. */
+  testMode: boolean;
+  /** What this booking has been tipped already, so a second tip reads as a second. */
+  alreadyTipped: number;
+  /** Ceiling the server enforces. Mirrored here only to keep the input honest. */
+  bookingTotal: number;
+}) {
+  const PRESETS = [25, 50, 100];
+  const [chosen, setChosen] = useState<number | null>(null);
+  const [custom, setCustom] = useState('');
+  const [customOpen, setCustomOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!cardPaymentsVisible(typeof window === 'undefined' ? '' : window.location.search)) return null;
+
+  const customValue = Number(custom);
+  const amount = customOpen
+    ? Number.isFinite(customValue) && customValue > 0
+      ? Math.round(customValue * 100) / 100
+      : 0
+    : (chosen ?? 0);
+  const ready = amount >= 5 && amount <= Math.max(bookingTotal, 5);
+
+  const send = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch('/api/portal/pay-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: credentials.email,
+          password: credentials.password,
+          kind: 'tip',
+          tipAmount: amount,
+          preview: CARD_PAYMENTS_MODE === 'preview',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setError(data.error || 'Could not start the payment. Please try again.');
+    } catch {
+      setError('Could not reach the payment page. Please check your connection.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Box
+      bg="brand.surface"
+      border="1px solid"
+      borderColor="brand.accentBorder"
+      borderRadius="md"
+      px={{ base: 6, md: 8 }}
+      py={{ base: 6, md: 7 }}
+      textAlign="center"
+    >
+      <Text fontSize="sm" color="gray.700" lineHeight="1.8" mb={alreadyTipped > 0 ? 2 : 5}>
+        {alreadyTipped > 0
+          ? 'Thank you for the tip. If you would like to add to it, you can do that here.'
+          : 'If you would like to add something for Veronika, this goes straight to her.'}
+      </Text>
+      {alreadyTipped > 0 && (
+        <Text fontSize="xs" color="gray.500" fontWeight="300" mb={5}>
+          You have tipped {formatMoney(alreadyTipped)} so far.
+        </Text>
+      )}
+
+      <HStack spacing={2} justify="center" mb={3} flexWrap="wrap">
+        {PRESETS.map((v) => (
+          <Box
+            key={v}
+            as="button"
+            type="button"
+            onClick={() => {
+              setCustomOpen(false);
+              setChosen(v);
+              setError('');
+            }}
+            aria-pressed={!customOpen && chosen === v}
+            minH="44px"
+            minW="76px"
+            px={4}
+            borderRadius="md"
+            border="1px solid"
+            borderColor={!customOpen && chosen === v ? 'brand.accent' : 'brand.accentBorder'}
+            bg={!customOpen && chosen === v ? 'brand.accent' : 'white'}
+            color={!customOpen && chosen === v ? 'white' : 'gray.700'}
+            fontSize="sm"
+            fontWeight="500"
+            cursor="pointer"
+            transition="all 0.15s"
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            {formatMoney(v)}
+          </Box>
+        ))}
+        <Box
+          as="button"
+          type="button"
+          onClick={() => {
+            setCustomOpen(true);
+            setChosen(null);
+            setError('');
+          }}
+          aria-pressed={customOpen}
+          minH="44px"
+          minW="76px"
+          px={4}
+          borderRadius="md"
+          border="1px solid"
+          borderColor={customOpen ? 'brand.accent' : 'brand.accentBorder'}
+          bg={customOpen ? 'brand.accent' : 'white'}
+          color={customOpen ? 'white' : 'gray.700'}
+          fontSize="sm"
+          fontWeight="500"
+          cursor="pointer"
+          transition="all 0.15s"
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          Other
+        </Box>
+      </HStack>
+
+      <Collapse in={customOpen} animateOpacity>
+        <Flex justify="center" mb={3}>
+          <Input
+            type="number"
+            inputMode="decimal"
+            min={5}
+            step="1"
+            value={custom}
+            onChange={(e) => {
+              setCustom(e.target.value);
+              setError('');
+            }}
+            placeholder="Amount"
+            maxW="180px"
+            textAlign="center"
+            bg="white"
+            aria-label="Tip amount in dollars"
+          />
+        </Flex>
+      </Collapse>
+
+      <CTAButton
+        onClick={send}
+        variant="solid"
+        size="sm"
+        isDisabled={!ready}
+        isLoading={busy}
+        loadingText="Opening"
+      >
+        {ready ? `Send a ${formatMoney(amount)} tip` : 'Choose an amount'}
+      </CTAButton>
+
+      {error && (
+        <Text fontSize="xs" color="red.600" mt={3}>
+          {error}
+        </Text>
+      )}
+      {testMode && (
+        <Text fontSize="2xs" color="orange.700" mt={3} fontWeight="600">
+          TEST MODE. No real money moves and a real card will be declined.
+        </Text>
+      )}
+      <Text fontSize="2xs" color="gray.500" mt={3}>
+        Secure payment by Stripe. A tip is never part of what you owe.
+      </Text>
+    </Box>
+  );
+}
+
 function PayByCardButton({
   kind,
   amount,

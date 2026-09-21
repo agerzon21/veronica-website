@@ -2018,6 +2018,14 @@ const dict = {
     statTotal: { en: 'Total', ru: 'Всего' },
     statPaid: { en: 'Paid', ru: 'Оплачено' },
     statRemaining: { en: 'Remaining', ru: 'Осталось' },
+    // A tip is money in that settles nothing, so it gets its own stat rather
+    // than joining Paid. Shown only when there is one.
+    statTips: { en: 'Tips', ru: 'Чаевые' },
+    tipBadge: { en: 'Tip', ru: 'Чаевые' },
+    tipNotInBalance: {
+      en: 'Tips are not counted toward what this booking owes.',
+      ru: 'Чаевые не учитываются в сумме к оплате по этой брони.',
+    },
     settleDiscountTitle: { en: 'They paid directly', ru: 'Оплатили напрямую' },
     settleDiscountBody: {
       en: 'The amount left is the card fee they avoided. Waive it to settle this booking.',

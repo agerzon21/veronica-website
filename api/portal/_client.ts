@@ -166,7 +166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // via Zelle — Jun 25"). This is separate from `installments`,
     // which is for the planned Stripe-managed payment-plan flow.
     const paymentRows = (await sql`
-      select id, amount, method, note, paid_at
+      select id, amount, method, note, paid_at, kind
       from payment_entries
       where client_portal_id = ${row.id}
       order by paid_at desc, created_at desc
@@ -176,14 +176,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       method: string | null;
       note: string | null;
       paid_at: string;
+      kind: string | null;
     }>;
+    /**
+     * Tips are in this list but are NOT part of the balance.
+     *
+     * The list is a history of money the client has sent, so leaving a tip out
+     * of it would mean they paid something the portal never admits receiving.
+     * But paid_to_date deliberately excludes them (migration 043), so a row
+     * that reads the same as a payment while not counting like one would make
+     * the arithmetic underneath look broken. Each row says which it is, and
+     * the UI labels tip rows instead of quietly summing them.
+     */
     const payments = paymentRows.map((p) => ({
       id: p.id,
       amount: parseFloat(p.amount),
       method: p.method,
       note: p.note,
       paid_at: p.paid_at,
+      kind: p.kind === 'tip' ? ('tip' as const) : ('payment' as const),
     }));
+    const tipsTotal = payments
+      .filter((p) => p.kind === 'tip')
+      .reduce((sum, p) => sum + p.amount, 0);
 
     /**
      * Charges added to the booking after the fact: extra time, and costs paid
@@ -319,6 +334,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       installments,
       payments,
       charges,
+      // What the client has tipped, already excluded from paid_to_date. Sent
+      // so the portal can thank them for it without the number having to be
+      // re-derived in the browser.
+      tips_total: tipsTotal,
 
       // Gallery Pass (manageable here)
       gallery_password: row.gallery_password,

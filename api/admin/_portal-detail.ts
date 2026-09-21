@@ -59,6 +59,12 @@ type PaymentRow = {
   note: string | null;
   paid_at: string;
   created_at: string;
+  /**
+   * 'tip' rows are in this list but are NOT in paid_to_date (migration 043).
+   * The client screen must not sum this array to reach a balance, and the
+   * Paid stat it shows comes off the portal row rather than from here.
+   */
+  kind: 'payment' | 'tip';
 };
 
 type ChargeRow = {
@@ -167,7 +173,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const payments = (await sql`
-      select id, amount, method, note, paid_at, created_at
+      select id, amount, method, note, paid_at, created_at,
+             coalesce(kind, 'payment') as kind
       from payment_entries
       where client_portal_id = ${id}
       order by paid_at desc, created_at desc
