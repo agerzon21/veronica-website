@@ -25,7 +25,7 @@ description and related work.
 ## Individual photographs
 
 Every published photograph has a page at
-`https://vero.photography/photo/{category}/{slug}` — for example
+`https://vero.photography/photo/{category}/{slug}`, for example
 [a beach wedding celebration](https://vero.photography/photo/weddings/beach-wedding-celebration).
 The full list is enumerated in the [sitemap](https://vero.photography/sitemap.xml).
 
