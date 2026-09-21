@@ -744,7 +744,12 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       const res = await fetch('/api/admin/resend-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, portal_id: createdPortalId }),
+        // `id`, not `portal_id`. _resend-invite.ts reads req.body.id and
+        // nothing else, so this posted an empty id and answered 400 "id
+        // required" every time, burning one of three retry attempts per press
+        // without a single email being re-sent. AdminClientDetail posts the
+        // same endpoint correctly, which is why it went unnoticed.
+        body: JSON.stringify({ password: adminPassword, id: createdPortalId }),
       });
       const data = await res.json();
       setSendAttempts((n) => n + 1);

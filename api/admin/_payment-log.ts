@@ -42,6 +42,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { cardFeeOn } from '../../src/data/payment-handles.js';
+import { recomputePaidToDate } from '../_payments.js';
 
 /**
  * The reasons a charge can carry. Same three the table CHECKs, repeated here
@@ -67,40 +68,23 @@ function parseWhen(raw: unknown): string {
 
 async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: string, res: VercelResponse) {
   /**
-   * One statement, so the sum and the write cannot be separated.
+   * Delegated, not duplicated.
    *
-   * This was a SELECT sum followed by a separate UPDATE, outside any
-   * transaction and with no row lock. Two writers interleaving between the two
-   * statements both read the same total and both write it, so one payment
-   * silently vanishes from paid_to_date while its row sits in the table.
+   * This used to hold its own copy of the re-sum, identical to the one in
+   * api/_payments.ts. Two copies of an arithmetic rule is a bug with a delay
+   * on it, and the delay ran out with migration 043: the canonical sum learned
+   * to exclude tips and this copy did not, so a tip landed outside the balance
+   * where it belongs, and then silently folded INTO the balance the next time
+   * Vero added or deleted any payment on that booking. The client would be
+   * told the tip they had given was money they were owed.
    *
-   * Today that is nearly theoretical, because the only writer is Vero pressing
-   * a button. It stops being theoretical the moment a card webhook can write
-   * at the same time as she does, which is exactly the shape of a client
-   * paying from their phone while she logs the cash they handed her.
-   *
-   * Still a full re-sum rather than an increment. Re-summing is self-healing:
-   * delete a bad row and the next recompute is correct. An increment carries
-   * its error forever.
+   * recomputePaidToDate is the same single statement for the same reason the
+   * copy was: the sum and the write cannot be separated by another writer
+   * landing between them, which matters now that a card webhook can write at
+   * the same moment Vero is logging cash. It is still a full re-sum rather
+   * than an increment, so deleting a bad row heals the total.
    */
-  const updated = (await sql`
-    update client_portals
-    set paid_to_date = (
-          select coalesce(sum(amount), 0)
-          from payment_entries
-          where client_portal_id = ${portalId}
-            -- CLEARED money only. Every row is 'succeeded' today, so this
-            -- changes nothing now, and it is what stops a bank debit that has
-            -- not settled from opening the delivery gate once ACH exists.
-            -- Retrofitting this later would be an edit that silently releases
-            -- photos against money still in flight.
-            and status = 'succeeded'
-        ),
-        updated_at = now()
-    where id = ${portalId}
-    returning paid_to_date
-  `) as Array<{ paid_to_date: string }>;
-  const newTotal = parseFloat(updated[0]?.paid_to_date ?? '0');
+  const newTotal = await recomputePaidToDate(sql, portalId);
 
   const payments = (await sql`
     select id, amount, method, note, paid_at, created_at

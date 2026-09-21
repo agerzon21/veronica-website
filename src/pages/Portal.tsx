@@ -5,7 +5,7 @@ import ToastHost from '../components/ui/ToastHost';
 // code-split, the extra features land in Portal's chunk, not the homepage's.
 import { LazyMotion, domMax } from 'framer-motion';
 import { Box, Flex, VStack, Text, Input, HStack, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { m, AnimatePresence } from 'framer-motion';
@@ -161,6 +161,153 @@ function restorableSession(pathname: string, search: string): StoredSession | nu
   if (door !== 'gallery') return null;
   const linkPassword = new URLSearchParams(search).get('password') ?? '';
   return linkPassword.trim() ? null : stored;
+}
+
+
+/**
+ * What the client sees when Stripe sends them back.
+ *
+ * _pay-start.ts has always returned them to /portal?paid=1, and the comment
+ * above that line claimed "the query flag only decides which message they land
+ * on". Nothing read it. Nothing in src/ ever had. So a client paid, landed back
+ * on a portal identical to the one they left, and because the browser redirect
+ * beats the webhook, the page could still be asking for the money they had
+ * just sent. The only reasonable reading is that the payment failed, and the
+ * next thing anyone does is pay again.
+ *
+ * The webhook is still the only thing that records money. This polls the
+ * portal until the ledger moves, so the page tells the truth on its own rather
+ * than depending on the client thinking to press Refresh Portal.
+ *
+ * Give up after five tries and say so plainly. A banner that spins forever is
+ * a worse lie than the silence it replaced.
+ */
+function PaymentReturnBanner({
+  credentials,
+  data,
+  onDataUpdate,
+}: {
+  credentials: { email: string; password: string };
+  data: ClientPortalData;
+  onDataUpdate: (d: ClientPortalData) => void;
+}) {
+  // Read the flags ONCE, before the effect below strips them from the URL.
+  const [flag] = useState(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('paid'),
+  );
+  const [isTip] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : new URLSearchParams(window.location.search).get('tip') === '1',
+  );
+
+  // The numbers as they stood the moment we landed. A ref, because `data`
+  // changes under us the instant the poll succeeds and a state copy would
+  // then be comparing the new total against itself.
+  const baseline = useRef<{ paid: number; tips: number } | null>(null);
+  if (baseline.current === null) {
+    baseline.current = { paid: data.paid_to_date ?? 0, tips: data.tips_total ?? 0 };
+  }
+
+  const [phase, setPhase] = useState<'checking' | 'confirmed' | 'slow' | 'cancelled' | 'none'>(
+    flag === '1' ? 'checking' : flag === '0' ? 'cancelled' : 'none',
+  );
+
+  // Strip the flags immediately. A reload, a back button, or a URL pasted to
+  // somebody else must not replay a payment confirmation.
+  useEffect(() => {
+    if (flag == null || typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('paid');
+    url.searchParams.delete('tip');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [flag]);
+
+  useEffect(() => {
+    if (phase !== 'checking') return undefined;
+    let cancelled = false;
+    let tries = 0;
+    let timer = 0;
+
+    const moved = (d: ClientPortalData) =>
+      isTip
+        ? (d.tips_total ?? 0) > (baseline.current?.tips ?? 0)
+        : (d.paid_to_date ?? 0) > (baseline.current?.paid ?? 0);
+
+    const tick = async () => {
+      tries += 1;
+      try {
+        const res = await fetch('/api/portal/client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+        });
+        const next = await res.json();
+        if (cancelled) return;
+        if (res.ok && next.success && moved(next as ClientPortalData)) {
+          onDataUpdate(next as ClientPortalData);
+          setPhase('confirmed');
+          return;
+        }
+      } catch {
+        // A dropped request is not a failed payment. Keep trying.
+      }
+      if (cancelled) return;
+      if (tries >= 5) {
+        setPhase('slow');
+        return;
+      }
+      timer = window.setTimeout(tick, 2000);
+    };
+
+    timer = window.setTimeout(tick, 1200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [phase, isTip, credentials.email, credentials.password, onDataUpdate]);
+
+  if (phase === 'none') return null;
+
+  const tone =
+    phase === 'confirmed'
+      ? { bg: 'green.50', border: 'green.200', fg: 'green.800' }
+      : phase === 'cancelled'
+        ? { bg: 'gray.50', border: 'gray.200', fg: 'gray.700' }
+        : { bg: 'brand.surface', border: 'brand.accentBorder', fg: 'gray.800' };
+
+  const noun = isTip ? 'tip' : 'payment';
+  const message =
+    phase === 'confirmed'
+      ? isTip
+        ? 'Your tip came through. Thank you, truly.'
+        : 'Payment received. Your booking is up to date.'
+      : phase === 'cancelled'
+        ? `No ${noun} was taken. Nothing has been charged.`
+        : phase === 'slow'
+          ? `Your ${noun} went through at Stripe. It can take a minute to show here, so tap Refresh Portal below if the figures still look old.`
+          : `${isTip ? 'Tip' : 'Payment'} received. Updating your booking...`;
+
+  return (
+    <Box px={{ base: 4, md: 6 }} pt={4}>
+      <Box
+        role="status"
+        aria-live="polite"
+        maxW="720px"
+        mx="auto"
+        bg={tone.bg}
+        border="1px solid"
+        borderColor={tone.border}
+        borderRadius="md"
+        px={5}
+        py={4}
+      >
+        <Text fontSize="sm" color={tone.fg} fontWeight="400" lineHeight="1.6" textAlign="center">
+          {message}
+        </Text>
+      </Box>
+    </Box>
+  );
 }
 
 const Portal = () => {
@@ -505,6 +652,11 @@ const Portal = () => {
           <title>{clientData.client_name ? `${clientData.client_name}, Portal` : 'Client Portal'} | Vero Photography</title>
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
+        <PaymentReturnBanner
+          credentials={{ email: email.trim(), password: clientPassword.trim() }}
+          data={clientData}
+          onDataUpdate={setClientData}
+        />
         <ClientPortalView
           data={clientData}
           credentials={{ email: email.trim(), password: clientPassword.trim() }}

@@ -31,7 +31,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import getRawBody from 'raw-body';
 import { getDb } from '../_db.js';
-import { verifyStripeEvent, type StripeEvent } from '../_stripe.js';
+import { verifyStripeEvent, listRefundsForCharge, type StripeEvent, type StripeRefund } from '../_stripe.js';
 import { recordPayment, type PaymentKind } from '../_payments.js';
 
 /** Inert here (Vercel reads it from api/inbox.ts), kept as documentation. */
@@ -175,6 +175,8 @@ export async function processEvent(event: StripeEvent): Promise<void> {
     }
     case 'charge.refunded':
       return handleChargeRefunded(event);
+    case 'refund.created':
+      return handleRefundCreated(event);
     case 'charge.dispute.created':
       return handleDisputeOpened(event);
     case 'charge.dispute.closed':
@@ -280,32 +282,113 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
     console.warn(`[inbox/stripe-webhook] charge ${charge.id} has more refunds than this event carried`);
   }
 
-  let recorded = 0;
-  for (const refund of refunds) {
-    if (!refund.id || typeof refund.amount !== 'number' || refund.amount <= 0) continue;
-    const result = await recordPayment(sql, {
-      portalId,
-      amount: -(refund.amount / 100),
-      method: originalKind === 'tip' ? 'Tip refund' : 'Card refund',
-      note: refund.reason ? `Refunded by Stripe (${refund.reason})` : 'Refunded by Stripe',
-      paidAt: refund.created ? new Date(refund.created * 1000).toISOString() : null,
-      source: 'stripe',
-      status: 'succeeded',
-      kind: originalKind,
-      processorPaymentId: refund.id,
-      processorAccountId: event.account ?? null,
-      feeAmount: null,
-    });
-    if (result.inserted) {
-      recorded++;
-      console.log(
-        `[inbox/stripe-webhook] recorded refund ${refund.id} of ${(refund.amount / 100).toFixed(2)} for portal ${portalId}, paid_to_date now ${result.paidToDate}`,
-      );
+  let list = refunds;
+  if (list.length === 0 && charge.id) {
+    /**
+     * The event arrived without its refunds, which is the NORMAL case.
+     *
+     * We pin no Stripe-Version, so payloads follow the account's default API
+     * version, and since 2022-11-15 Charge.refunds is not expanded on the
+     * Charge object. Reading the empty array and stopping is how a refund got
+     * to move real money while the ledger recorded nothing and the log line
+     * said everything had already been handled.
+     *
+     * One API call, on a path that fires a few times a year, in exchange for
+     * the difference between a correct ledger and a silently wrong one.
+     */
+    try {
+      list = await listRefundsForCharge(charge.id, event.account ?? null);
+      console.log(`[inbox/stripe-webhook] charge ${charge.id} carried no refunds, fetched ${list.length} from Stripe`);
+    } catch (err) {
+      // Rethrown so the endpoint 500s and Stripe retries. Money has left the
+      // account and we cannot say how much, which is not a case to pass over.
+      console.error(`[inbox/stripe-webhook] could not list refunds for charge ${charge.id}:`, err);
+      throw err;
     }
   }
-  if (recorded === 0) {
-    console.log(`[inbox/stripe-webhook] charge ${charge.id}: every refund on it was already recorded`);
+
+  let recorded = 0;
+  let seen = 0;
+  for (const refund of list) {
+    if (!refund.id || typeof refund.amount !== 'number' || refund.amount <= 0) continue;
+    seen++;
+    const result = await recordRefundRow(sql, {
+      portalId, originalKind, refund, accountId: event.account ?? null,
+    });
+    if (result.inserted) recorded++;
   }
+  if (seen === 0) {
+    // NOT a console.log. charge.refunded firing for a charge with no readable
+    // refund on it is a contradiction, and the old reassuring wording is
+    // precisely what hid this for as long as it was hidden.
+    console.error(
+      `[inbox/stripe-webhook] charge ${charge.id} fired charge.refunded but carried NO readable refund, and none could be fetched. Money may have left Stripe with nothing recorded.`,
+    );
+  } else if (recorded === 0) {
+    console.log(`[inbox/stripe-webhook] charge ${charge.id}: all ${seen} refund(s) were already recorded`);
+  }
+}
+
+/**
+ * refund.created, which needs no expansion at all.
+ *
+ * A Refund object carries payment_intent, amount and created directly, so this
+ * path does not depend on which API version the account defaults to. Both
+ * events are handled and both key on the refund id, so a dashboard refund that
+ * fires both records exactly once.
+ *
+ * This event has to be SUBSCRIBED in the Stripe dashboard. Without it the
+ * charge.refunded fallback above still works, at the cost of one API call.
+ */
+async function handleRefundCreated(event: StripeEvent): Promise<void> {
+  const refund = event.data.object as StripeRefund;
+  const paymentIntentId = idOf(refund.payment_intent);
+  if (!refund.id || typeof refund.amount !== 'number' || refund.amount <= 0 || !paymentIntentId) {
+    console.error(`[inbox/stripe-webhook] refund ${refund.id} is missing a payment_intent or amount, nothing recorded`);
+    return;
+  }
+  const sql = getDb();
+  const original = await originalForPaymentIntent(sql, paymentIntentId);
+  if (!original) {
+    console.error(
+      `[inbox/stripe-webhook] refund ${refund.id} on ${paymentIntentId} has no original row in the ledger. Nothing reversed.`,
+    );
+    return;
+  }
+  await recordRefundRow(sql, {
+    portalId: original.portalId,
+    originalKind: original.kind,
+    refund,
+    accountId: event.account ?? null,
+  });
+}
+
+/** The one place a refund becomes a negative row, shared by both events. */
+async function recordRefundRow(
+  sql: ReturnType<typeof getDb>,
+  input: { portalId: string; originalKind: PaymentKind; refund: StripeRefund; accountId: string | null },
+): Promise<{ inserted: boolean }> {
+  const { portalId, originalKind, refund, accountId } = input;
+  const amount = refund.amount as number;
+  const result = await recordPayment(sql, {
+    portalId,
+    amount: -(amount / 100),
+    method: originalKind === 'tip' ? 'Tip refund' : 'Card refund',
+    note: refund.reason ? `Refunded by Stripe (${refund.reason})` : 'Refunded by Stripe',
+    paidAt: refund.created ? new Date(refund.created * 1000).toISOString() : null,
+    source: 'stripe',
+    status: 'succeeded',
+    kind: originalKind,
+    processorPaymentId: refund.id ?? null,
+    processorAccountId: accountId,
+    feeAmount: null,
+  });
+  if (result.inserted) {
+    console.log(
+      `[inbox/stripe-webhook] recorded refund ${refund.id} of ${(amount / 100).toFixed(2)} for portal ${portalId}, paid_to_date now ${result.paidToDate}`,
+    );
+  }
+  return result;
 }
 
 /**

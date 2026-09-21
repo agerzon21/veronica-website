@@ -257,6 +257,41 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
   });
 }
 
+/**
+ * Every refund on a charge, asked for directly.
+ *
+ * THE REASON THIS EXISTS. We send no Stripe-Version header, so webhook
+ * payloads arrive shaped by the account's DEFAULT API version, and from
+ * 2022-11-15 onward Charge.refunds is no longer expanded on the Charge object.
+ * The charge.refunded handler used to read charge.refunds.data straight off
+ * the event, find an empty array, record nothing, and log a line saying every
+ * refund was already recorded. A refund would move money out of Stripe and
+ * nothing in the ledger would notice.
+ *
+ * A Refund object carries payment_intent, amount and created without any
+ * expansion, so this is only the fallback for an event that arrived thin.
+ */
+export type StripeRefund = {
+  id?: string;
+  amount?: number;
+  created?: number;
+  reason?: string | null;
+  payment_intent?: unknown;
+  charge?: unknown;
+  status?: string;
+};
+
+export async function listRefundsForCharge(
+  chargeId: string,
+  stripeAccount: string | null = null,
+): Promise<StripeRefund[]> {
+  const out = await stripeRequest<{ data?: StripeRefund[] }>(
+    `/refunds?charge=${encodeURIComponent(chargeId)}&limit=100`,
+    { method: 'GET', stripeAccount },
+  );
+  return out?.data ?? [];
+}
+
 /* ------------------------------------------------------------ signature ---- */
 
 export type StripeEvent = {

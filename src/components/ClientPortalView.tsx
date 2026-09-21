@@ -1382,6 +1382,29 @@ const ClientPortalView = ({
                           <Text fontSize="sm" color="gray.800" fontWeight="500">
                             {formatMoney(p.amount)}
                           </Text>
+                          {/* Said on the row, not only in the note. Without it
+                              this list reads as money that settles the booking
+                              while Paid above deliberately excludes it, and the
+                              client is left doing arithmetic that cannot work
+                              out. */}
+                          {p.kind === 'tip' && (
+                            <Text
+                              as="span"
+                              fontSize="2xs"
+                              fontWeight="600"
+                              textTransform="uppercase"
+                              letterSpacing="0.1em"
+                              color="purple.600"
+                              bg="purple.50"
+                              border="1px solid"
+                              borderColor="purple.200"
+                              borderRadius="sm"
+                              px={1.5}
+                              py={0.5}
+                            >
+                              Tip
+                            </Text>
+                          )}
                           {p.method && (
                             <Text fontSize="sm" color="gray.500">
                               · {p.method}
@@ -2286,7 +2309,22 @@ function TipPanel({
   /** Ceiling the server enforces. Mirrored here only to keep the input honest. */
   bookingTotal: number;
 }) {
-  const PRESETS = [25, 50, 100];
+  /**
+   * The ladder is filtered to what the server will actually accept.
+   *
+   * _pay-start.ts caps a tip at the booking itself, so on a small booking a
+   * fixed [25, 50, 100] put EVERY preset above the ceiling: tapping one left
+   * the button disabled reading "Choose an amount", with no explanation,
+   * because the server's explanatory 400 is never reached from a disabled
+   * button. A $2 test booking had exactly one legal tip and no way to pick it.
+   *
+   * Three rungs, the largest that fit, so a normal booking still sees
+   * 25 / 50 / 100 and a tiny one sees what it can take.
+   */
+  const ceiling = Math.max(bookingTotal, 5);
+  const LADDER = [5, 10, 25, 50, 100];
+  const fitted = LADDER.filter((v) => v <= ceiling).slice(-3);
+  const PRESETS = fitted.length ? fitted : [5];
   const [chosen, setChosen] = useState<number | null>(null);
   const [custom, setCustom] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
@@ -2301,7 +2339,7 @@ function TipPanel({
       ? Math.round(customValue * 100) / 100
       : 0
     : (chosen ?? 0);
-  const ready = amount >= 5 && amount <= Math.max(bookingTotal, 5);
+  const ready = amount >= 5 && amount <= ceiling;
 
   const send = async () => {
     setBusy(true);

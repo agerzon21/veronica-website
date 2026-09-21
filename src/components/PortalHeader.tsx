@@ -2290,7 +2290,10 @@ function PhoneMenuPanel({
       id={id}
       role="menu"
       aria-label={heading}
-      display={{ base: 'block', md: 'none' }}
+      // Same 1100 line as ProgressPanel above, and for the same reason: a
+      // panel must not stop existing at a width where its own trigger is
+      // still on screen.
+      display="block"
       position="absolute"
       top="100%"
       left={MENU_INSET}
@@ -2308,7 +2311,7 @@ function PhoneMenuPanel({
       visibility={open ? 'visible' : 'hidden'}
       pointerEvents={open ? 'auto' : 'none'}
       transition={`opacity ${MENU_FADE} ease, visibility ${MENU_FADE} ease`}
-      sx={STILL}
+      sx={{ ...STILL, [DESKTOP_AT]: { display: 'none' } }}
     >
       <Text
         fontSize="2xs"
@@ -2808,7 +2811,18 @@ function ProgressPanel({
   return (
     <Box
       id={id}
-      display={{ base: 'block', md: 'none' }}
+      /**
+       * The SAME line as the control that opens it, which is the whole point.
+       *
+       * This used to hide at Chakra's md (768) while the pill that toggles it
+       * hides at DESKTOP_AT (1100). Between those two numbers the pill was the
+       * only navigation the header offered, it flipped aria-expanded to true
+       * on press, and nothing appeared: an iPad in portrait, or a desktop
+       * window dragged narrow, had no way to reach Contract, Balance or
+       * Photos. The band was opened by the commit that moved the track to
+       * 1100 and left these panels on md.
+       */
+      display="block"
       position="absolute"
       top="100%"
       left={MENU_INSET}
@@ -2824,7 +2838,7 @@ function ProgressPanel({
       visibility={open ? 'visible' : 'hidden'}
       pointerEvents={open ? 'auto' : 'none'}
       transition={`opacity ${MENU_FADE} ease, visibility ${MENU_FADE} ease`}
-      sx={STILL}
+      sx={{ ...STILL, [DESKTOP_AT]: { display: 'none' } }}
       aria-hidden={!open}
       role="menu"
       aria-label="Your booking"

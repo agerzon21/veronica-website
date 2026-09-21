@@ -16,7 +16,8 @@ import FaUser from '../icons/fa/FaUser';
 import CTAButton from './ui/CTAButton';
 import MobileSheetModal, { MobileSheetFooter } from './ui/MobileSheetModal';
 import ConfirmDialog from './ui/ConfirmDialog';
-import { useAdminLang } from '../i18n/admin';
+import { useAdminLang, type AdminLang } from '../i18n/admin';
+import { fmtAdminDate, adminLocale } from '../utils/adminDate';
 
 /**
  * "Leads" tab in /admin — every submission from the public contact form.
@@ -348,7 +349,7 @@ function LeadCard({
   row: LeadRow;
   onEdit: () => void;
 }) {
-  const { t } = useAdminLang();
+  const { t, lang } = useAdminLang();
   const initials = getInitials(row.name);
   const messagePreview = (row.message || '').trim();
   const isNew = row.status === 'new';
@@ -413,7 +414,7 @@ function LeadCard({
             {row.preferred_date && (
               <>
                 <Text>·</Text>
-                <Text>{formatDate(row.preferred_date)}</Text>
+                <Text>{formatDate(row.preferred_date, lang)}</Text>
               </>
             )}
           </HStack>
@@ -477,7 +478,7 @@ function LeadEditorModal({
   onSaved: (updated: LeadRow) => void;
   onRequestDelete?: () => void;
 }) {
-  const { t } = useAdminLang();
+  const { t, lang } = useAdminLang();
   const [status, setStatus] = useState<LeadStatus>(lead.status);
   const [notes, setNotes] = useState(lead.notes ?? '');
   const [saving, setSaving] = useState(false);
@@ -680,7 +681,7 @@ function LeadEditorModal({
             <DetailRow icon={FaCamera} label={t.leadsEditor.packageLabel} value={lead.package} />
           )}
           {lead.preferred_date && (
-            <DetailRow icon={FaCalendarAlt} label={t.leadsEditor.preferredDateLabel} value={formatDate(lead.preferred_date)} />
+            <DetailRow icon={FaCalendarAlt} label={t.leadsEditor.preferredDateLabel} value={formatDate(lead.preferred_date, lang)} />
           )}
           {lead.location && (
             <DetailRow icon={FaMapMarkerAlt} label={t.leadsEditor.locationLabel} value={lead.location} />
@@ -951,10 +952,20 @@ function getInitials(name: string): string {
 
 // Note: preferred_date is stored as TEXT (not DATE) so it can be an ISO
 // timestamp, a YYYY-MM-DD, or free text. Try to parse; fall back to raw.
-function formatDate(raw: string): string {
+//
+// THE DAY-EARLY BUG. A bare `new Date('2026-10-15')` parses the date-only
+// form as UTC midnight, and toLocaleDateString then renders it in the
+// viewer's zone: in New York that is 'Oct 14'. This is the date read off the
+// lead in order to create the booking, so it was wrong at exactly the moment
+// it mattered. Date-only values now go through the house helper, which pins
+// UTC and follows the panel's language rather than the device's; anything
+// else (a full timestamp, free text) keeps the old path, where a zone shift
+// is meaningful rather than an artefact.
+function formatDate(raw: string, lang: AdminLang): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return fmtAdminDate(raw.trim(), lang);
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return raw;
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString(adminLocale(lang), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
