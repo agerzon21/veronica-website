@@ -300,22 +300,31 @@ const IndexRail: React.FC<{
   const opacity = useTransform(source, [RAIL_FADE_TO, RAIL_FADE_FROM], [0, 1]);
 
   /**
-   * A PHONE SHOWS A WINDOW, NOT THE WHOLE RUN.
+   * A PHONE SHOWS A PAGE, NOT THE WHOLE RUN AND NOT A SLIDING WINDOW.
    *
    * Twelve numbers on a 390px screen came out at 15px of text with nothing
-   * around them: too small to read and far too small to hit. Six are shown
-   * instead, three either side of the cue, and the window slides with the
-   * slideshow: 01 02 03 | scroll | 04 05 06 becomes 02 03 04 | scroll | 05 06
-   * 07 as it advances, each numeral crossfading in place rather than the row
-   * jumping. The active slide is the leftmost of the six, so the window always
-   * reads forward from where you are.
+   * around them: too small to read and far too small to hit. So six.
    *
-   * Wraps with the modulo, so the last slides show 11 12 01 rather than
-   * running out. Desktop keeps every number: there is room for them.
+   * The first version SLID those six, advancing by one on every slide, and it
+   * was wrong in a way that only shows once it is moving: every numeral
+   * changes every five seconds, so instead of reading as a position in a set
+   * it reads as one number churning over and over.
+   *
+   * It pages instead. The same six sit still while the highlight walks across
+   * them, and only when it reaches the end does the set turn over to the next
+   * six. Six slides of stillness, then one change, rather than a change every
+   * slide.
+   *
+   * The last page is clamped to a full row rather than left ragged, so a
+   * count that does not divide by six overlaps the previous page instead of
+   * showing two numerals and a gap. Desktop keeps every number: there is room.
    */
   const windowed = compact && total > windowSize;
+  const pageStart = windowed
+    ? Math.max(0, Math.min(Math.floor(index / windowSize) * windowSize, total - windowSize))
+    : 0;
   const slots = windowed
-    ? Array.from({ length: windowSize }, (_, k) => (index + k) % total)
+    ? Array.from({ length: windowSize }, (_, k) => pageStart + k)
     : Array.from({ length: total }, (_, k) => k);
 
   const reduced =
