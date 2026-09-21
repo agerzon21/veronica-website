@@ -5,6 +5,7 @@ import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaCopy from '../icons/fa/FaCopy';
 import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
 import FaSync from '../icons/fa/FaSync';
+import FaKey from '../icons/fa/FaKey';
 import FaUndo from '../icons/fa/FaUndo';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
@@ -499,13 +500,21 @@ const ClientPortalView = ({
   if (data.contract_total_amount !== null) {
     navItems.push({ id: 'balance-section', label: 'Balance' });
   }
-  navItems.push({ id: 'password-section', label: 'Password' });
+  // Password is NOT in the nav. It is one setting, changed once, and a whole
+  // dropdown existing to hold a single item is the redundancy this header has
+  // been shedding. It is a button beside Refresh and Sign Out instead, which
+  // is where the other things you do to your account already live.
+  //
   // `role` rather than an id the header would have to recognise: the header
   // pins Photos to the top of the account menu once there is a gallery behind
-  // it, and turns Share into a button in the desktop corner. Both of those are
-  // facts about what the section IS, and this is the one place that knows.
+  // it. That is a fact about what the section IS, and this is the one place
+  // that knows.
   navItems.push({ id: 'photos-section', label: 'Photos', role: 'photos' });
-  navItems.push({ id: 'gallery-share-section', label: 'Share', role: 'share' });
+  // Share only once there is something to share. Offering it beforehand asks
+  // the client to pass on an empty gallery.
+  if (photosDelivered) {
+    navItems.push({ id: 'gallery-share-section', label: 'Share', role: 'share' });
+  }
 
   const [activeNavId, setActiveNavId] = useActiveSection(navItems, chrome);
 
@@ -1068,6 +1077,18 @@ const ClientPortalView = ({
             loadingText="Refreshing..."
           >
             Refresh Portal
+          </CTAButton>
+          {/* Between Refresh and Sign Out because it is the same kind of
+              thing: something you do to your account rather than a place in
+              the portal to read. It used to be a nav entry, which meant a
+              dropdown existed to hold one item. */}
+          <CTAButton
+            onClick={() => handleNavSelect('password-section')}
+            icon={FaKey}
+            variant="outline"
+            size="sm"
+          >
+            Change Password
           </CTAButton>
           {onLogout && (
             <CTAButton

@@ -1,5 +1,6 @@
 import { Box, Flex, Icon, Image, Text, VStack } from '@chakra-ui/react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import ConfirmDialog from './ui/ConfirmDialog';
 import {
   Fragment,
   useCallback,
@@ -849,6 +850,8 @@ const PortalHeader = ({
     retainerAmt !== null && retainerAmt > 0 ? Math.max(retainerAmt - paidSoFar, 0) : 0;
 
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const navigate = useNavigate();
   /**
    * Where the reader's pointer was when they opened the menu, in viewport x, or
    * null when there was no pointer.
@@ -976,13 +979,24 @@ const PortalHeader = ({
    */
   const trackOwnsDesktopRow = hasContract(progress) && !isPortalComplete(progress);
 
+  /**
+   * Next Steps is not offered as a leftover.
+   *
+   * It is the panel directly under the top of the portal, which the Event
+   * stage already lands on, and it says the same thing the current stage says.
+   * Listing it would put the header back to naming one fact twice.
+   */
+  const isLeftover = useCallback(
+    (r: MenuRow) => !r.jump && !coveredIds.has(r.id) && r.id !== 'next-steps-section',
+    [coveredIds],
+  );
   const uncoveredRows = useMemo(
-    () => accountRowsMobile.filter((r) => !r.jump && !coveredIds.has(r.id)),
-    [accountRowsMobile, coveredIds],
+    () => accountRowsMobile.filter(isLeftover),
+    [accountRowsMobile, isLeftover],
   );
   const uncoveredRowsDesktop = useMemo(
-    () => accountRowsDesktop.filter((r) => !r.jump && !coveredIds.has(r.id)),
-    [accountRowsDesktop, coveredIds],
+    () => accountRowsDesktop.filter(isLeftover),
+    [accountRowsDesktop, isLeftover],
   );
   /** What the desktop control actually offers right now. */
   const desktopMenuRows = trackOwnsDesktopRow ? uncoveredRowsDesktop : accountRowsDesktop;
@@ -1045,10 +1059,23 @@ const PortalHeader = ({
       borderColor="gray.100"
     >
       <Flex h="100%" align="center" gap={{ base: 2, md: 4 }} px={{ base: 3, md: 6 }}>
-        {/* Logo. Plain navigation home, nothing clever attached to it. */}
+        {/* The logo leaves the portal, so it ASKS FIRST.
+            It sits in the top left corner of a page people read on a phone,
+            which is exactly where a thumb lands by accident, and the cost of
+            that accident is being thrown out of the portal and having to find
+            the way back in. Only guarded when there is a booking behind the
+            header: on the public site the same logo is plain navigation. */}
         <Box
           as={RouterLink}
           to={logoTo}
+          onClick={
+            progress
+              ? (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  setLeaveOpen(true);
+                }
+              : undefined
+          }
           flexShrink={0}
           display="flex"
           alignItems="center"
@@ -1150,7 +1177,14 @@ const PortalHeader = ({
           maxW={{ base: 'none', md: isPortalComplete(progress) ? 'none' : '300px' }}
           display={{
             base: navOwnsMobileSlot ? 'flex' : 'none',
-            md: navOwnsDesktopSlot ? 'flex' : 'none',
+            // Hidden outright when the control inside it is not rendering.
+            // An empty flex box still claimed its share of the row, which is
+            // why the track sat left of centre with 300px of nothing beside
+            // it after the second menu was removed.
+            md:
+              navOwnsDesktopSlot && !(trackOwnsDesktopRow && uncoveredRowsDesktop.length === 0)
+                ? 'flex'
+                : 'none',
           }}
         >
           {/* The photo bar LEADS and the account bar follows it, so that when
@@ -1170,7 +1204,7 @@ const PortalHeader = ({
               ticks={{ total: sectionNav!.items.length, index: sectionIndex }}
             />
           )}
-          {hasAccountBar && (
+          {hasAccountBar && !(trackOwnsDesktopRow && uncoveredRowsDesktop.length === 0) && (
             <NavBar
               kind="account"
               triggerRef={accountTriggerRef}
@@ -1289,6 +1323,19 @@ const PortalHeader = ({
           is left below it, a desktop spends its width showing every item at
           once in columns and never scrolls at all. The ROWS are built once and
           shared, so the two cannot disagree about what is in the list. */}
+      <ConfirmDialog
+        isOpen={leaveOpen}
+        title="Leave your portal?"
+        body="This goes to the main Vero Photography site. Your booking stays exactly as it is, and you can come back, but you will have to sign in again."
+        confirmLabel="Leave"
+        cancelLabel="Stay here"
+        onConfirm={() => {
+          setLeaveOpen(false);
+          navigate(logoTo);
+        }}
+        onCancel={() => setLeaveOpen(false)}
+      />
+
       {/* Every step, under the phone header, when the current step is tapped.
           Desktop never opens this: the whole track is already on screen. */}
       {hasContract(progress) && !(navOwnsMobileSlot && isPortalComplete(progress)) && (
@@ -2311,12 +2358,17 @@ function ProgressTrack({
         w="100%"
         minW={0}
         h={CONTROL_H.base}
-        px={2}
+        px={3}
         borderRadius={CONTROL_RADIUS.base}
         cursor="pointer"
-        bg="transparent"
-        transition="background 0.2s ease"
-        _hover={{ bg: 'brand.surface' }}
+        // A bordered, filled control. A tiny chevron beside plain text is not
+        // enough to say "press me", and the whole point of this thing is that
+        // pressing it opens the rest of the booking.
+        bg={open ? 'brand.surfaceSunken' : 'brand.surface'}
+        border="1px solid"
+        borderColor={open ? 'brand.accent' : 'brand.accentBorder'}
+        transition="background 0.2s ease, border-color 0.2s ease"
+        _hover={{ borderColor: 'brand.accent' }}
         _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
         sx={{ WebkitTapHighlightColor: 'transparent', ...STILL }}
       >
@@ -2369,9 +2421,10 @@ function ProgressTrack({
         </Flex>
         <Icon
           as={FaChevronDown}
-          boxSize={2.5}
-          color="gray.400"
+          boxSize={3}
+          color="brand.accentText"
           flexShrink={0}
+          ml="auto"
           aria-hidden="true"
           transform={open ? 'rotate(180deg)' : 'none'}
           transition="transform 0.25s ease"
@@ -2411,14 +2464,22 @@ function ProgressTrack({
                 align="center"
                 gap={2}
                 flexShrink={0}
-                px={1}
-                py={1}
+                px={2}
+                py={1.5}
                 borderRadius="md"
-                bg="transparent"
-                border="none"
+                // These ARE the nav now, so they carry a resting surface. A
+                // hairline that only fills on hover still reads as text at
+                // rest, which is what made them look unpressable.
+                bg={s.sectionId && onGo ? 'brand.surface' : 'transparent'}
+                border="1px solid"
+                borderColor={s.sectionId && onGo ? 'brand.accentBorder' : 'transparent'}
                 cursor={s.sectionId && onGo ? 'pointer' : 'default'}
-                transition="background 0.15s ease"
-                _hover={s.sectionId && onGo ? { bg: 'brand.surface' } : undefined}
+                transition="background 0.15s ease, border-color 0.15s ease"
+                _hover={
+                  s.sectionId && onGo
+                    ? { bg: 'brand.surfaceSunken', borderColor: 'brand.accent' }
+                    : undefined
+                }
                 _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
                 // The stage IS the link, so it is announced as one. It used to
@@ -2431,8 +2492,8 @@ function ProgressTrack({
                 <Flex
                   align="center"
                   justify="center"
-                  w="30px"
-                  h="30px"
+                  w="34px"
+                  h="34px"
                   borderRadius="full"
                   bg={tone.bg}
                   border="1px solid"
@@ -2447,10 +2508,10 @@ function ProgressTrack({
                 </Flex>
                 <Flex direction="column" lineHeight="1.15" minW={0} aria-hidden="true">
                   <Text
-                    fontSize="2xs"
+                    fontSize="xs"
                     fontWeight="500"
                     textTransform="uppercase"
-                    letterSpacing="0.16em"
+                    letterSpacing="0.14em"
                     color={tone.label}
                     whiteSpace="nowrap"
                   >
@@ -2458,9 +2519,9 @@ function ProgressTrack({
                   </Text>
                   {s.detail && (
                     <Text
-                      fontSize="2xs"
+                      fontSize="xs"
                       fontWeight="400"
-                      letterSpacing="0.02em"
+                      letterSpacing="0.01em"
                       color={s.tone === 'overdue' ? 'red.600' : 'gray.500'}
                       whiteSpace="nowrap"
                       mt="2px"
