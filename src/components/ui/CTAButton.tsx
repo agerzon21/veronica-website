@@ -541,9 +541,25 @@ const CTAButton = ({
     ? { ref: rootRef as React.Ref<HTMLDivElement>, 'data-play': play ? 'true' : undefined }
     : {};
 
+  /**
+   * onClick is wired on ALL THREE branches, not just the button.
+   *
+   * It used to live only on the button branch, so passing href AND onClick
+   * silently dropped the handler: common (above) carries no onClick, and the
+   * two link branches spread only common. Exactly one call site in the repo
+   * passes both, the DirectionsSheet map buttons in AdminClientDetail, which
+   * pass onClick={onClose}. Vero tapped Waze, iOS handed off to the Waze app,
+   * and when she came back the sheet was still covering the whole client
+   * record, its only exit a 40px X in the top right corner: under the 44px
+   * floor, and in the one corner a right thumb cannot reach while she is
+   * holding a camera.
+   *
+   * A navigation handler must not block the navigation, so nothing here calls
+   * preventDefault and the link still follows its href.
+   */
   if (to) {
     return (
-      <Box as={RouterLink} to={to} aria-label={ariaLabel} {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})} {...photoTabProps} {...common}>
+      <Box as={RouterLink} to={to} onClick={onClick} aria-label={ariaLabel} {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})} {...photoTabProps} {...common}>
         {content}
       </Box>
     );
@@ -557,6 +573,7 @@ const CTAButton = ({
       <Box
         as="a"
         href={href}
+        onClick={onClick}
         aria-label={ariaLabel}
         {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         {...(download !== undefined

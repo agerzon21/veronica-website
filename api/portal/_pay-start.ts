@@ -195,14 +195,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (amount < TIP_MIN) {
         return res.status(400).json({
           success: false,
-          error: `The smallest tip we can take by card is ${TIP_MIN}.`,
+          error: `The smallest tip we can take by card is $${TIP_MIN}.`,
         });
       }
       const ceiling = Math.max(total + charges, TIP_MIN);
       if (amount > ceiling) {
         return res.status(400).json({
           success: false,
-          error: `That is more than the session itself. The most we can take by card is ${ceiling.toFixed(2)}.`,
+          error: `That is more than the session itself. The most we can take by card is $${ceiling.toFixed(2)}.`,
         });
       }
     } else if (kind === 'retainer') {
