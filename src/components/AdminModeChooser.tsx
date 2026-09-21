@@ -13,20 +13,27 @@ const AdminModeChooser = ({ onPick, onCancel }: Props) => {
   const { t } = useAdminLang();
   return (
     <Box maxW="900px" mx="auto" px={{ base: 4, md: 6 }} py={{ base: 6, md: 8 }}>
-      <Flex align="center" mb={8} gap={3}>
-        {/* Standard 44×44 back affordance — replaces the old hand-rolled
-            chevron-with-Back-text link that had a ~20px tap target. */}
-        <AdminBackButton onClick={onCancel} label={t.common.back} />
+      {/* Back sits WITH the heading, not alone above it.
+          AdminBackButton paints nothing (transparent background and border),
+          so a Flex whose only child is one meant a small grey chevron hanging
+          in white space with 32px of nothing under it. These three screens
+          also render no tab strip and no bottom bar, so that chevron was the
+          only navigation on the whole page. Same band as the client screen. */}
+      <Flex align="flex-start" gap={{ base: 2, md: 3 }} mb={8} pt={1}>
+        {/* The button pulls itself 8px left to optically align its chevron;
+            the band supplies the padding for that to cancel against. */}
+        <Box pl={2} flexShrink={0}>
+          <AdminBackButton onClick={onCancel} label={t.common.back} />
+        </Box>
+        <Box flex="1" minW={0}>
+          <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
+            {t.modeChooser.kicker}
+          </Text>
+          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mt={0.5}>
+            {t.modeChooser.title}
+          </Text>
+        </Box>
       </Flex>
-
-      <VStack align="flex-start" spacing={1} mb={8}>
-        <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accent">
-          {t.modeChooser.kicker}
-        </Text>
-        <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0}>
-          {t.modeChooser.title}
-        </Text>
-      </VStack>
 
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
         <Card

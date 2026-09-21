@@ -377,9 +377,16 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
                 {portal.session_type}
               </Text>
             )}
-            <Text fontSize="xs" color="gray.500">
-              · {formatDate(portal.event_date)}
-            </Text>
+            {/* The separator belongs to the JOIN, not to the date. It was
+                hardcoded in front, so a booking with no event date rendered a
+                lone floating dot, and on a gallery-only row with no session
+                type either the dot was the whole line. The same bug was found
+                and fixed on the client detail screen; the list never got it. */}
+            {formatDate(portal.event_date) && (
+              <Text fontSize="xs" color="gray.500">
+                {formatDate(portal.event_date)}
+              </Text>
+            )}
             {portal.pending_invite && (
               <Badge fontSize="2xs" colorScheme="orange" variant="subtle">
                 {t.clients.status.pendingInvite}
@@ -445,7 +452,13 @@ function ContractStatusBadge({ status }: { status: AdminPortalSummary['contract_
  */
 function BalanceLine({ paid, total, charges }: { paid: number; total: number | null; charges: number }) {
   const { t } = useAdminLang();
-  if (total === null) return <Text color="gray.500">—</Text>;
+  // Nothing, not a dash. A booking with no total has no balance to report,
+  // and this branch is the one MOST rows take: every gallery-only booking
+  // lands here. It was printing the one character the owner has banned
+  // outright, on the screen he opens most, and four lines above it
+  // formatDate already says "No long dashes, anywhere. An empty cell reads
+  // as empty on its own."
+  if (total === null) return null;
   const owed = total + charges;
   const remaining = owed - paid;
   if (remaining <= 0 && owed > 0) {
