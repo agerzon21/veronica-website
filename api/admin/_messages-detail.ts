@@ -30,6 +30,14 @@ interface ConversationRow {
   is_personal: boolean;
   linked_client_portal_id: string | null;
   linked_client_display_name: string | null;
+  /**
+   * The portal this thread belongs to, by the explicit link OR by email.
+   * linked_client_portal_id remains the raw column; this is the resolved one,
+   * and it is the one anything acting on the client should use.
+   */
+  client_portal_id: string | null;
+  /** Their number on file, so the thread knows whether to offer one it finds. */
+  linked_client_phone: string | null;
   notes: string;
   last_message_at: string | null;
   unread_count: number;
@@ -88,9 +96,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         c.ai_enabled, c.is_promotional, c.is_personal,
         c.linked_client_portal_id, c.notes,
         c.last_message_at, c.unread_count, c.created_at,
-        cp.client_display_name AS linked_client_display_name
+        -- The explicit link first, then the email match. Both are needed.
+        COALESCE(cp.id, cpe.id) AS client_portal_id,
+        COALESCE(cp.client_display_name, cpe.client_display_name) AS linked_client_display_name,
+        -- Whether this client already has a number on file, so the thread can
+        -- offer to capture one it finds and stay quiet when it should.
+        COALESCE(cp.client_phone, cpe.client_phone) AS linked_client_phone
       FROM conversations c
       LEFT JOIN client_portals cp ON cp.id = c.linked_client_portal_id
+      /*
+       * THE EMAIL FALLBACK, and it carries most of the weight.
+       *
+       * conversations.linked_client_portal_id is written in exactly one place,
+       * when a portal is created FROM a thread, and nothing backfills it. On
+       * the live database that is 4 of 19 portals: a client whose portal was
+       * made from the Clients tab has no link at all, so anything keyed on it
+       * alone is silent for the other fifteen.
+       *
+       * client_portals carries a UNIQUE index on LOWER(client_email) and an
+       * email conversation's external_user_id IS the sender's lowercased
+       * address (api/_inbox-record.ts lowercases before the upsert), so this
+       * join resolves to at most one row. Restricted to the email platform
+       * because an Instagram external_user_id is an opaque IGSID that must
+       * never be compared against an address.
+       */
+      LEFT JOIN client_portals cpe
+        ON cp.id IS NULL
+       AND c.platform = 'email'
+       AND LOWER(cpe.client_email) = LOWER(c.external_user_id)
       WHERE c.id = ${conversationId}
       LIMIT 1
     `) as ConversationRow[];

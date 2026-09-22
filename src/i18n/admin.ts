@@ -819,6 +819,25 @@ const dict = {
       en: (status: number) => `Create failed (${status})`,
       ru: (status: number) => `Не удалось создать (${status})`,
     },
+    /**
+     * The phone-number suggestion in the AI panel's Summary tab.
+     *
+     * "Found in this thread" rather than anything about AI: the number is
+     * read straight out of the message, and saying so is the reason to
+     * trust it.
+     */
+    phoneSuggestHeading: { en: 'Found in this thread', ru: 'Найдено в переписке' },
+    phoneSuggestBody: {
+      en: 'No number on their record yet.',
+      ru: 'В карточке клиента номера пока нет.',
+    },
+    phoneSuggestAdd: { en: 'Add to their account', ru: 'Добавить в карточку' },
+    phoneSuggestDismiss: { en: 'Not their number', ru: 'Это не их номер' },
+    phoneAdded: {
+      en: (v: string) => `${v} saved to their account`,
+      ru: (v: string) => `${v} сохранён в карточке`,
+    },
+    phoneAddFailed: { en: 'Could not save the number', ru: 'Не удалось сохранить номер' },
   },
 
   assistant: {

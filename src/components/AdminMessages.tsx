@@ -28,7 +28,7 @@ import {
   MenuItem,
   useBreakpointValue,
 } from '@chakra-ui/react';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import FaCheckCircle from '../icons/fa/FaCheckCircle';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
@@ -64,6 +64,7 @@ import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 import { type ClientPrefill, type PrefillBooking } from './clientPrefill';
 import { readWeddingPackage } from '../data/formMessage';
+import { findPhonesInText, formatPhone, type FoundPhone } from '../utils/phoneFromText';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
 import { translationTargetFor, type ContentLang } from './translationDirection';
 
@@ -309,6 +310,15 @@ export interface ConversationSummary {
 
 export interface ConversationDetail extends ConversationSummary {
   notes: string;
+  /**
+   * The portal this thread belongs to, resolved by the explicit link OR by a
+   * matching client email. Use this, not linked_client_portal_id, which is
+   * only set when the portal was created from this thread: on the live data
+   * that is 4 of 19 portals.
+   */
+  client_portal_id?: string | null;
+  /** Their number on file, so the thread knows whether to offer one. */
+  linked_client_phone?: string | null;
 }
 
 export interface Message {
@@ -1803,6 +1813,7 @@ function ConversationView({
   const { t, lang: adminLang } = useAdminLang();
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Restored per conversation. ConversationView is already keyed by
@@ -2111,6 +2122,116 @@ function ConversationView({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
+
+  /**
+   * Numbers this thread offered that Vero said no to.
+   *
+   * localStorage, not a column. A dismissal is a UI preference about one
+   * suggestion, not a fact about the booking, and the alternative is a
+   * migration plus an endpoint for something that only has to survive a
+   * reload. The cost is that a dismissal does not follow her to another
+   * device, where the suggestion appears once more and she taps it away
+   * again. Keyed by conversation and digits so dismissing one number never
+   * hides a different one found later in the same thread.
+   */
+  const [dismissedPhones, setDismissedPhones] = useState<string[]>([]);
+  useEffect(() => {
+    // Wrapped: a private window, cleared site data or a blocked store all
+    // throw here rather than returning empty, and a suggestion panel is not
+    // worth taking the screen down for.
+    try {
+      const raw = window.localStorage.getItem(`vero.dismissedPhones.${summary.id}`);
+      setDismissedPhones(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      setDismissedPhones([]);
+    }
+  }, [summary.id]);
+
+  /**
+   * Phone numbers this client typed, that are not already on their record.
+   *
+   * Read from the message bytes, never from the summary's prose. The model is
+   * asked to reformat phone numbers for display, which is a paraphrase step
+   * on a value that gets dialled, and a model-authored value is exactly what
+   * this project's "prompt rules are not gates" incident was about. Running
+   * it here also means it needs no summary version bump and appears on the
+   * next render rather than after the model has run again.
+   *
+   * Inbound and from the contact only: an outbound message is Vero writing,
+   * and the numbers in it are hers.
+   */
+  const phoneSuggestions = useMemo<FoundPhone[]>(() => {
+    const portalId = detail?.client_portal_id ?? detail?.linked_client_portal_id ?? null;
+    if (!portalId) return [];
+    // Already has one: this offers to FILL an empty field, never to replace a
+    // number a person put there.
+    if ((detail?.linked_client_phone ?? '').trim()) return [];
+    const seen = new Set<string>(dismissedPhones);
+    const out: FoundPhone[] = [];
+    for (const m of messages) {
+      if (m.direction !== 'inbound' || m.sender !== 'contact') continue;
+      for (const found of findPhonesInText(m.body)) {
+        if (seen.has(found.digits)) continue;
+        seen.add(found.digits);
+        out.push(found);
+      }
+    }
+    return out;
+  }, [messages, detail, dismissedPhones]);
+
+  const dismissPhone = useCallback((digits: string) => {
+    setDismissedPhones((prev) => {
+      const next = prev.includes(digits) ? prev : [...prev, digits];
+      try {
+        window.localStorage.setItem(`vero.dismissedPhones.${summary.id}`, JSON.stringify(next));
+      } catch {
+        /* a dismissal that does not survive a reload is still a dismissal */
+      }
+      return next;
+    });
+  }, [summary.id]);
+
+  /**
+   * Put the number on the client's record.
+   *
+   * ONLY client_phone goes in the patch. portal-update re-renders a pending
+   * contract body whenever contract variables are touched, so a patch sent
+   * from this screen carrying anything else could reach a contract.
+   */
+  const addPhoneToClient = useCallback(
+    async (digits: string) => {
+      const portalId = detail?.client_portal_id ?? detail?.linked_client_portal_id ?? null;
+      if (!portalId) return;
+      const pretty = formatPhone(digits);
+      try {
+        const res = await fetch('/api/admin/portal-update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, id: portalId, patch: { client_phone: pretty } }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Could not save');
+        // The suggestion disappears because the record now has a number, not
+        // because it was hidden: the memo is gated on linked_client_phone.
+        setDetail((d) => (d ? { ...d, linked_client_phone: pretty } : d));
+        toast({
+          title: t.messages.phoneAdded(pretty),
+          status: 'success',
+          duration: 2500,
+          isClosable: true,
+        });
+      } catch (err) {
+        toast({
+          title: t.messages.phoneAddFailed,
+          description: err instanceof Error ? err.message : undefined,
+          status: 'error',
+          duration: 4000,
+          isClosable: true,
+        });
+      }
+    },
+    [detail, adminPassword, toast, t],
+  );
 
   const loadAiSummary = useCallback(
     // Pass force=true from the Regenerate button so the server
@@ -3271,6 +3392,9 @@ function ConversationView({
               // conversation open (loadAiSummary() with no args) uses
               // the cached summary whenever it's still valid.
               onRegenerate={() => loadAiSummary({ force: true })}
+              phoneSuggestions={phoneSuggestions}
+              onAddPhone={addPhoneToClient}
+              onDismissPhone={dismissPhone}
             />
           ) : (
             <DraftPanel
@@ -4010,6 +4134,9 @@ function DraftPanel({
  * glance. Collapsible so she can reclaim the vertical space once
  * she's read it.
  */
+/** Stable identity: a fresh [] in a default would be a new value each render. */
+const EMPTY_PHONES: FoundPhone[] = [];
+
 function SummaryCard({
   summary,
   loading,
@@ -4018,6 +4145,9 @@ function SummaryCard({
   onToggleCollapsed,
   onRegenerate,
   inPanel = false,
+  phoneSuggestions = EMPTY_PHONES,
+  onAddPhone,
+  onDismissPhone,
 }: {
   summary: AiSummary | null;
   loading: boolean;
@@ -4028,6 +4158,15 @@ function SummaryCard({
   onRegenerate: () => void;
   /** Rendered inside the AI panel, which owns opening and closing. */
   inPanel?: boolean;
+  /**
+   * Suggestions live in the Summary tab, not over the thread. The panel is
+   * the one place Vero looks for "what does this conversation need from me",
+   * so a suggestion parked anywhere else is a second answer to that question.
+   * Acting on one, either way, removes it.
+   */
+  phoneSuggestions?: FoundPhone[];
+  onAddPhone?: (digits: string) => void;
+  onDismissPhone?: (digits: string) => void;
 }) {
   // Content and chrome both read the ONE language control now. The card used to
   // take a `language` prop fed by its own RU|EN toggle, which meant the summary
@@ -4174,6 +4313,69 @@ function SummaryCard({
       {/* Body — hidden when collapsed */}
       {!collapsed && (
         <Box mt={3}>
+          {/* Above the model's own output on purpose: this is read straight
+              out of the thread, so it is the one thing here that is not a
+              guess, and it is actionable in one tap. */}
+          {phoneSuggestions.length > 0 && (
+            <VStack align="stretch" spacing={2} mb={3}>
+              {phoneSuggestions.map((found) => (
+                <Box
+                  key={found.digits}
+                  borderWidth="1px"
+                  borderColor="brand.accent"
+                  borderRadius="md"
+                  bg="orange.50"
+                  px={3}
+                  py={2.5}
+                >
+                  <Text
+                    fontSize={{ base: 'xs', md: '2xs' }}
+                    color="gray.500"
+                    letterSpacing="0.08em"
+                    textTransform="uppercase"
+                    mb={1}
+                  >
+                    {t.messages.phoneSuggestHeading}
+                  </Text>
+                  <Text fontSize="md" color="gray.800" fontWeight="600" lineHeight="1.3">
+                    {formatPhone(found.digits)}
+                  </Text>
+                  <Text fontSize="xs" color="gray.600" mt={0.5} lineHeight="1.45">
+                    {t.messages.phoneSuggestBody}
+                  </Text>
+                  {/* The sentence it came out of. Vero decides from the
+                      context, not from the digits alone. */}
+                  <Text fontSize="xs" color="gray.500" mt={1.5} fontStyle="italic" noOfLines={2}>
+                    &ldquo;{found.context}&rdquo;
+                  </Text>
+                  <Flex gap={2} mt={2} wrap="wrap">
+                    <Button
+                      size="sm"
+                      minH="36px"
+                      bg="brand.accent"
+                      // Ink, not white. GOLD is a FILL token; white on it is
+                      // ~2:1 and this button carries a word, not an icon.
+                      color="gray.900"
+                      _hover={{ bg: 'brand.accentStrong' }}
+                      onClick={() => onAddPhone?.(found.digits)}
+                    >
+                      {t.messages.phoneSuggestAdd}
+                    </Button>
+                    <Button
+                      size="sm"
+                      minH="36px"
+                      variant="ghost"
+                      color="gray.500"
+                      onClick={() => onDismissPhone?.(found.digits)}
+                    >
+                      {t.messages.phoneSuggestDismiss}
+                    </Button>
+                  </Flex>
+                </Box>
+              ))}
+            </VStack>
+          )}
+
           {loading && !summary ? (
             <Flex align="center" gap={2} py={2}>
               <Spinner size="xs" color="brand.accent" />
