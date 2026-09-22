@@ -85,13 +85,31 @@ const force = args.includes('--force');
 
 const slides = JSON.parse(readFileSync(slidesPath, 'utf-8'));
 
+/**
+ * PAGE HEROES, as opposed to the homepage carousel above.
+ *
+ * Each of these is a single full-bleed photograph at the top of a page, and
+ * each was being served to phones at its full desktop resolution. The weddings
+ * one is the worst: a 1,019,098 byte original painted into a 390px window.
+ *
+ * They go through the same machinery, the same output directory and the same
+ * committed-not-built rule as the carousel, so there is one mechanism to
+ * understand and one --check to trust. Listed explicitly rather than
+ * discovered, because "every photo used as a hero somewhere" is not something
+ * a script can work out, and a wrong guess here ships a soft hero.
+ */
+const PAGE_HEROES = [
+  '/assets/photos/weddings/ocean-vows-ceremony.webp',
+];
+
 // Only slides that can actually appear on mobile need a derivative. A slide's
 // mobile source is its mobileUrl when set, otherwise its url — entry 8
 // deliberately shows a different photo on mobile than on desktop.
 const mobileSources = [
-  ...new Set(
-    slides.filter((s) => !s.mobileSkip).map((s) => s.mobileUrl || s.url),
-  ),
+  ...new Set([
+    ...slides.filter((s) => !s.mobileSkip).map((s) => s.mobileUrl || s.url),
+    ...PAGE_HEROES,
+  ]),
 ];
 
 // Desktop uses `url`, never mobileUrl — entry 8 deliberately shows a different

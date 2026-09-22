@@ -46,5 +46,9 @@
   "/assets/photos/portraits/yellow-tank-top-sunflower-field.webp": {
     "1280": "/assets/hero/yellow-tank-top-sunflower-field-m1280.webp",
     "1600": "/assets/hero/yellow-tank-top-sunflower-field-m.webp"
+  },
+  "/assets/photos/weddings/ocean-vows-ceremony.webp": {
+    "1280": "/assets/hero/ocean-vows-ceremony-m1280.webp",
+    "1600": "/assets/hero/ocean-vows-ceremony-m.webp"
   }
 }

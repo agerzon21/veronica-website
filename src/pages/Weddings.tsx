@@ -5,6 +5,7 @@ import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaArrowRight from '../icons/fa/FaArrowRight';
 import { Helmet } from 'react-helmet-async';
 import { useEffect, useState } from 'react';
+import heroVariants from '../data/hero-variants.json';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
@@ -314,8 +315,26 @@ const Weddings = () => {
           52/58 on weddings — five different first impressions for one site.
           About's is the reference. */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
+        {/* srcSet carries ONLY the two derivatives, never the original.
+            ocean-vows-ceremony.webp is 995KB and was being painted into a
+            390px window, which made it the single heaviest thing on this page
+            by a wide margin. With w descriptors a browser that understands
+            srcset picks from these candidates and never touches src, so the
+            original survives purely as the fallback for one that does not.
+
+            The derivatives come from scripts/build-hero-variants.mjs, the same
+            generator and the same committed-not-built rule as the homepage
+            carousel, so there is one mechanism and one --check to trust.
+
+            The two heroes stay two elements rather than becoming one <picture>.
+            They are different photographs with different descriptions, and a
+            picture element has room for exactly one alt, so collapsing them
+            would have cost a real description to save a hidden 182KB fetch.
+            That trade is recorded rather than taken. */}
         <Image
           src="/assets/photos/weddings/ocean-vows-ceremony.webp"
+          srcSet={`${heroVariants[MOBILE_HERO]['1280']} 1280w, ${heroVariants[MOBILE_HERO]['1600']} 1600w`}
+          sizes="100vw"
           alt="Wedding couple exchanging vows by the ocean."
           display={{ base: 'block', lg: 'none' }}
           objectFit="cover"
@@ -1363,6 +1382,8 @@ const DECOR_SLOTS: Record<string, DecorSlot[]> = {
     { left: 6, top: 66, w: 115, rot: 6 },
   ],
 };
+
+const MOBILE_HERO = '/assets/photos/weddings/ocean-vows-ceremony.webp' as keyof typeof heroVariants;
 
 const SEAM_COUNT = 7;
 const SEAM_SIZE = 4;
