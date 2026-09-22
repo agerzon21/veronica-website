@@ -21,6 +21,21 @@ import { m, AnimatePresence } from 'framer-motion';
  * caller keeps its own container and only the slot is shared.
  */
 
+/**
+ * How many numerals a phone shows at once.
+ *
+ * Six on any phone made this decade. Four below 340px, where six plus the
+ * gap measured 347px inside a 320px screen and hung off both edges: the
+ * choice there is fewer numbers or smaller targets, and a target you cannot
+ * hit is worth less than a number you cannot see.
+ *
+ * Exported because both rails page by these, and a phone that pages at six in
+ * one place and seven in another is two bugs waiting to be found separately.
+ */
+export const WINDOW_SIZE = 6;
+export const WINDOW_SIZE_NARROW = 4;
+export const NARROW_VW = 340;
+
 /** How far the rule travels while a slide runs. */
 const RULE_TRAVEL_PX = { compact: 26, full: 62 };
 /**
@@ -157,8 +172,17 @@ export const SlideIndexSlot: React.FC<SlideIndexSlotProps> = ({
 };
 
 export interface SlideIndexRailProps
-  extends Omit<SlideIndexSlotProps, 'i' | 'index'> {
+  // swapNumerals is not a caller's choice here: it is exactly "is this row
+  // paging", and the rail is the only thing that knows.
+  extends Omit<SlideIndexSlotProps, 'i' | 'index' | 'swapNumerals'> {
   index: number;
+  /**
+   * Page the row instead of showing every numeral. 0 shows them all.
+   *
+   * Pass WINDOW_SIZE_NARROW below NARROW_VW and WINDOW_SIZE on any other
+   * phone; desktop has the room and should pass 0.
+   */
+  windowSize?: number;
 }
 
 /**
@@ -174,23 +198,47 @@ export interface SlideIndexRailProps
  *
  * The homepage cannot use this: it has a scroll cue sitting in the middle of
  * its rail and solves the same problem by splitting into two fixed halves.
+ *
+ * IT PAGES, it does not slide. The same numerals sit still while the
+ * highlight walks across them, and only when it reaches the end does the set
+ * turn over. Advancing by one every slide would change every numeral every
+ * few seconds, so instead of reading as a position in a set it reads as one
+ * number churning. The last page is clamped to a full row rather than left
+ * ragged, so a count that does not divide evenly overlaps the previous page
+ * instead of showing one numeral and a gap.
  */
 export const SlideIndexRail: React.FC<SlideIndexRailProps> = ({
   total,
   index,
   compact,
+  windowSize = 0,
   ...slot
-}) => (
-  <Flex align="center" gap={compact ? '6px' : '14px'} justify="flex-start">
-    {Array.from({ length: total }, (_, i) => (
-      <SlideIndexSlot
-        key={i}
-        i={i}
-        total={total}
-        index={index}
-        compact={compact}
-        {...slot}
-      />
-    ))}
-  </Flex>
-);
+}) => {
+  const windowed = windowSize > 0 && total > windowSize;
+  const pageStart = windowed
+    ? Math.max(0, Math.min(Math.floor(index / windowSize) * windowSize, total - windowSize))
+    : 0;
+  const count = windowed ? windowSize : total;
+
+  return (
+    <Flex align="center" gap={compact ? '6px' : '14px'} justify="flex-start">
+      {Array.from({ length: count }, (_, k) => {
+        const i = pageStart + k;
+        return (
+          <SlideIndexSlot
+            // Keyed by SLOT, not by numeral, so a page turn animates the
+            // numerals inside slots that stay put rather than remounting the
+            // whole row.
+            key={windowed ? `slot-${k}` : i}
+            i={i}
+            total={total}
+            index={index}
+            compact={compact}
+            swapNumerals={windowed}
+            {...slot}
+          />
+        );
+      })}
+    </Flex>
+  );
+};

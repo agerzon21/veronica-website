@@ -45,6 +45,18 @@ type PostSummary = {
   session_type: string | null;
   tags: string[];
   published_at: string;
+  /**
+   * Set only when this entry belongs to a multi-part story.
+   *
+   * The list carries the three columns but NOT the sibling entries, unlike
+   * the single-post response. A caller that wants the whole story already has
+   * every published entry in this same array and can group by series_slug;
+   * resolving siblings per row would mean a Drive listing per part on a
+   * response that already fans out once per post.
+   */
+  series_slug: string | null;
+  series_part: number | null;
+  series_label: string | null;
 };
 
 type PhotoOut = {
@@ -59,10 +71,6 @@ type PostFull = Omit<PostSummary, 'photos'> & {
   cover_photo: PhotoOut | null;     // first photo, rendered as hero
   photos: PhotoOut[];               // gallery (everything AFTER the cover)
   updated_at: string;
-  /** Set only when this entry belongs to a multi-part story. */
-  series_slug: string | null;
-  series_part: number | null;
-  series_label: string | null;
   /** Every published entry in that story, this one included, in order. */
   series: Array<{ slug: string; title: string; excerpt: string; part: number | null; cover: string | null }>;
 };
@@ -86,6 +94,9 @@ interface ListRow {
   session_type: string | null;
   tags: string[];
   published_at: string;
+  series_slug: string | null;
+  series_part: number | null;
+  series_label: string | null;
 }
 
 async function handleList(_req: VercelRequest, res: VercelResponse) {
@@ -95,7 +106,8 @@ async function handleList(_req: VercelRequest, res: VercelResponse) {
       SELECT
         slug, title, excerpt,
         cover_image_alt, drive_folder_url,
-        session_type, tags, published_at
+        session_type, tags, published_at,
+        series_slug, series_part, series_label
       FROM journal_posts
       WHERE status = 'published' AND published_at IS NOT NULL
       ORDER BY published_at DESC
@@ -122,6 +134,9 @@ async function handleList(_req: VercelRequest, res: VercelResponse) {
           session_type: r.session_type,
           tags: r.tags,
           published_at: r.published_at,
+          series_slug: r.series_slug,
+          series_part: r.series_part,
+          series_label: r.series_label,
         };
       }),
     );

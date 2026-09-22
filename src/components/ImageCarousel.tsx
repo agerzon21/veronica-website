@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Box, Image, Flex, Text, Button, useBreakpointValue } from '@chakra-ui/react';
 import { m, AnimatePresence, useTransform, type MotionValue } from 'framer-motion';
-import { SlideIndexSlot } from './ui/SlideIndex';
+import {
+  SlideIndexSlot,
+  WINDOW_SIZE,
+  WINDOW_SIZE_NARROW,
+  NARROW_VW,
+} from './ui/SlideIndex';
 
 interface ImageCarouselProps {
   images: Array<{
@@ -220,17 +225,8 @@ function useRailPlacement(ref: React.RefObject<HTMLDivElement>): {
 /** Below this scale the rail is gone. Above it, fully present. */
 const RAIL_FADE_FROM = 1;
 const RAIL_FADE_TO = 0.72;
-/**
- * How many numerals a phone shows at once, half either side of the cue.
- *
- * Six on any phone made this decade. Four below 340px, where six plus the
- * gap measured 347px inside a 320px screen and hung off both edges: the
- * choice there is fewer numbers or smaller targets, and a target you cannot
- * hit is worth less than a number you cannot see.
- */
-const WINDOW_SIZE = 6;
-const WINDOW_SIZE_NARROW = 4;
-const NARROW_VW = 340;
+/* WINDOW_SIZE, WINDOW_SIZE_NARROW and NARROW_VW live in ui/SlideIndex,
+   because the journal rail pages by the same three numbers. */
 /** How long one slide is on screen. Must match the rotation interval below. */
 const SLIDE_MS = 5000;
 

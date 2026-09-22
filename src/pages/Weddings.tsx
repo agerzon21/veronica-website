@@ -1,6 +1,6 @@
 import {
   Box, VStack, HStack, Text, Flex, Image, SimpleGrid, Grid, GridItem, Icon,
-  useBreakpointValue,
+  useBreakpointValue, useMediaQuery,
 } from '@chakra-ui/react';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaArrowRight from '../icons/fa/FaArrowRight';
@@ -10,7 +10,13 @@ import heroVariants from '../data/hero-variants.json';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
-import { SlideIndexRail } from '../components/ui/SlideIndex';
+import {
+  SlideIndexRail,
+  WINDOW_SIZE,
+  WINDOW_SIZE_NARROW,
+  NARROW_VW,
+} from '../components/ui/SlideIndex';
+import { partWord } from '../utils/seriesWords';
 import Reveal, { useReveal } from '../components/ui/Reveal';
 import weddingData from '../data/wedding-page.json';
 
@@ -124,6 +130,19 @@ interface FeaturedPost {
   published_at: string;
   session_type: string | null;
   tags?: string[];
+  /** Set only when this entry belongs to a multi-part story. */
+  series_slug?: string | null;
+  series_part?: number | null;
+  series_label?: string | null;
+}
+
+/** One part of a multi-part story, as the stage shows it. */
+interface SeriesPart {
+  slug: string;
+  title: string;
+  cover: string | null;
+  part: number | null;
+  focus: string;
 }
 
 /** One slide in the journal slideshow, joined from settings + journal. */
@@ -135,6 +154,308 @@ interface FeaturedItem {
   label: 'Advice' | 'Real Wedding';
   focusStage: string;
   focusThumb: string;
+  /**
+   * Set only when this slide is one story told in several parts. When it is,
+   * `slug`/`title`/`cover` describe the story rather than any one entry: the
+   * title is the series label, so the rail announces the story, and the cover
+   * is part one's, so the thumbnail has something to show.
+   */
+  series?: { label: string; parts: SeriesPart[] };
+}
+
+/** Vero tags advice articles; everything else on this page is a wedding. */
+const isAdvicePost = (p: FeaturedPost) =>
+  p.session_type === 'article' || (p.tags ?? []).some((t) => /advice|guide/i.test(t));
+
+/**
+ * Turn Vero's ordered featured picks into the slides the stage shows.
+ *
+ * The one rule that is not obvious: A MULTI-PART STORY IS ONE SLIDE. Two
+ * entries about the same couple are not two things to look at, they are one
+ * thing in two halves, and splitting them across two slides four and a half
+ * seconds apart is the one arrangement that hides the connection rather than
+ * showing it.
+ *
+ * Three cases, in this order:
+ *
+ *  1. A pick that belongs to a story becomes the WHOLE story, at the position
+ *     she put it in. Her ordering is the editorial decision and it is kept.
+ *  2. A second pick from a story she has already placed is dropped, so
+ *     featuring both halves gives one slide rather than the same diptych
+ *     twice.
+ *  3. A wedding story that she has featured NO part of is appended at the
+ *     end. This is the only case that shows something she did not pick, and
+ *     it is here because a two-part story is the journal's headline format
+ *     and a weddings page that does not mention one is the worse default. The
+ *     moment she features either half, case 1 takes over and moves it to
+ *     wherever she wants it.
+ *
+ * Pure, and exported-shaped as a plain function, so the ordering rules can be
+ * read without a browser.
+ */
+function buildStageEntries(
+  picks: Array<{ slug: string; focusStage?: string; focusThumb?: string }>,
+  posts: FeaturedPost[],
+): FeaturedItem[] {
+  const bySlug = new Map(posts.map((p) => [p.slug, p]));
+  const focusBySlug = new Map(picks.map((e) => [e.slug, e]));
+
+  // Every story in the journal, in part order. NULLS LAST matches the SQL the
+  // single-post response uses, so the two surfaces order a story the same way.
+  const stories = new Map<string, FeaturedPost[]>();
+  for (const p of posts) {
+    if (!p.series_slug) continue;
+    const list = stories.get(p.series_slug) ?? [];
+    list.push(p);
+    stories.set(p.series_slug, list);
+  }
+  for (const list of stories.values()) {
+    list.sort((a, b) => {
+      const ap = a.series_part ?? Number.MAX_SAFE_INTEGER;
+      const bp = b.series_part ?? Number.MAX_SAFE_INTEGER;
+      return ap - bp || a.published_at.localeCompare(b.published_at);
+    });
+  }
+
+  const toStoryEntry = (key: string, parts: FeaturedPost[]): FeaturedItem => {
+    const head = parts[0];
+    const pick = parts.map((x) => focusBySlug.get(x.slug)).find(Boolean);
+    return {
+      slug: `series:${key}`,
+      title: head.series_label || 'One story, in two parts',
+      cover: head.cover_image_url,
+      label: isAdvicePost(head) ? 'Advice' : 'Real Wedding',
+      focusStage: pick?.focusStage ?? 'center',
+      focusThumb: pick?.focusThumb ?? 'center',
+      series: {
+        label: head.series_label || 'One story, in two parts',
+        parts: parts.map((x) => ({
+          slug: x.slug,
+          title: x.title,
+          cover: x.cover_image_url,
+          part: x.series_part ?? null,
+          // A per-part focal point would need a per-part admin control, which
+          // does not exist. Centre is the honest default until it does.
+          focus: focusBySlug.get(x.slug)?.focusStage ?? 'center',
+        })),
+      },
+    };
+  };
+
+  const out: FeaturedItem[] = [];
+  const placed = new Set<string>();
+  for (const e of picks) {
+    const post = bySlug.get(e.slug);
+    if (!post) continue;
+    const key = post.series_slug;
+    if (key && stories.has(key)) {
+      if (placed.has(key)) continue; // case 2
+      placed.add(key);
+      out.push(toStoryEntry(key, stories.get(key)!)); // case 1
+      continue;
+    }
+    out.push({
+      slug: post.slug,
+      title: post.title,
+      cover: post.cover_image_url,
+      label: isAdvicePost(post) ? 'Advice' : 'Real Wedding',
+      focusStage: e.focusStage ?? 'center',
+      focusThumb: e.focusThumb ?? 'center',
+    });
+  }
+
+  // Case 3. Only stories with a wedding in them: this is the weddings page,
+  // and a two-part portrait story belongs on the journal, not here.
+  for (const [key, parts] of stories) {
+    if (placed.has(key) || parts.length < 2) continue;
+    const weddingish = parts.some(
+      (x) => x.session_type === 'wedding' || (x.tags ?? []).some((t) => /wedding/i.test(t)),
+    );
+    if (!weddingish) continue;
+    placed.add(key);
+    out.push(toStoryEntry(key, parts));
+  }
+
+  return out;
+}
+
+/**
+ * A story told in parts, as one slide: a diptych.
+ *
+ * WHY THE STAGE SPLITS RATHER THAN THE STORY.
+ * Every other slide here is one photograph with one title, and a two-part
+ * story shown that way is two of them four and a half seconds apart, which is
+ * the one arrangement that hides the fact that they are the same couple. So
+ * the slide divides instead: two frames, one hairline between them, and the
+ * story's name across the top of that line. The division IS the idea, which
+ * is why it earns a layout of its own rather than a badge on a normal slide.
+ *
+ * Restraint, deliberately. No numerals in circles, no ribbon, no "part 1 of 2"
+ * counter: a seam, a name and two panels that each say which half they are.
+ * Everything a visitor needs to know is in the shape.
+ *
+ * The seam is an absolutely positioned hairline rather than a border on the
+ * second panel, so it can run the full height and start at the label without
+ * taking a pixel out of either frame's width.
+ *
+ * Two links, not one, which is the whole reason this is not a slide-shaped
+ * RouterLink like its neighbours: each half goes to its own entry.
+ */
+function SeriesSlide({
+  series,
+  active,
+  eager,
+}: {
+  series: NonNullable<FeaturedItem['series']>;
+  active: boolean;
+  /** The first slide loads its covers eagerly; the rest wait. */
+  eager: boolean;
+}) {
+  return (
+    <Box
+      position="absolute"
+      inset={0}
+      display="flex"
+      opacity={active ? 1 : 0}
+      transition="opacity 0.8s ease"
+      pointerEvents={active ? 'auto' : 'none'}
+      aria-hidden={active ? undefined : true}
+    >
+      {series.parts.map((part) => (
+        <Box
+          key={part.slug}
+          as={RouterLink}
+          to={`/journal/${part.slug}`}
+          state={{ back: { to: '/wedding-photography', label: 'Back to weddings' } }}
+          position="relative"
+          flex="1"
+          minW={0}
+          overflow="hidden"
+          role="group"
+        >
+          <Image
+            src={coverLarge(part.cover)}
+            alt=""
+            w="100%"
+            h="100%"
+            objectFit="cover"
+            objectPosition={part.focus}
+            loading={eager ? undefined : 'lazy'}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+          {/* Stronger and starting higher than a single slide's, because this
+              panel carries the same chip and title in half the width, so the
+              text block is taller and reaches further up the photograph.
+              Measured on a phone against the brightest cover in the set: at
+              the single slide's ramp (transparent to 0.68, from 55%) the
+              titles were sitting on a white dress and a bright sky. */}
+          <Box
+            position="absolute"
+            inset={0}
+            bg="linear-gradient(180deg, transparent 28%, rgba(10,8,4,0.50) 56%, rgba(10,8,4,0.94) 100%)"
+          />
+          <Flex
+            position="absolute"
+            inset={0}
+            align="flex-end"
+            p={{ base: 3, md: 6 }}
+            // The rail runs along the bottom of the stage and is not in this
+            // subtree, so nothing makes these get out of its way but this.
+            pb={RAIL_CLEARANCE}
+          >
+            <VStack align="flex-start" spacing={{ base: 1.5, md: 2 }}>
+              <JournalLabel tone="plate">
+                {part.part != null ? `Part ${partWord(part.part)}` : 'Also'}
+              </JournalLabel>
+              <Text
+                fontFamily="heading"
+                fontWeight="400"
+                color="white"
+                // Smaller than a single slide's title, because this one has
+                // half the width to live in.
+                fontSize={{ base: 'sm', md: 'xl' }}
+                lineHeight="1.25"
+                noOfLines={3}
+                textShadow="0 1px 12px rgba(0,0,0,0.45)"
+              >
+                {part.title}
+              </Text>
+            </VStack>
+          </Flex>
+        </Box>
+      ))}
+
+      {/* One scrim across the top of BOTH panels, rather than a band in each.
+          The name spans the seam, so a per-panel gradient would have run it
+          over two different darknesses with a step in the middle of a word. */}
+      <Box
+        aria-hidden
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        h={{ base: '88px', md: '104px' }}
+        bg="linear-gradient(180deg, rgba(10,8,4,0.42) 0%, rgba(10,8,4,0.14) 54%, transparent 100%)"
+        pointerEvents="none"
+      />
+
+      {/* The seam. Declared AFTER the scrim so the scrim does not paint over
+          its top 88px, which is exactly the stretch the story's name sits on
+          and the one place the line has a job to do. Decorative: the two
+          panels already say in words what they are. */}
+      <Box
+        aria-hidden
+        position="absolute"
+        top={0}
+        bottom={0}
+        left="50%"
+        w="1px"
+        bg="linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.22) 60%, rgba(255,255,255,0.45) 100%)"
+        pointerEvents="none"
+      />
+
+      {/* The story's name, centred on the head of the seam.
+          ON A PLATE, and it took a measurement to get there. Set as bare
+          letterspaced caps over the scrim alone it came out at 2.44:1 against
+          the brightest cover in the set, which is small white text on a
+          bright sky and not readable. The scrim cannot fix that on its own:
+          reaching 4.5:1 over a sky that bright needs about 0.79 alpha, and a
+          band that dark across the top of two photographs is a letterbox bar.
+          So the darkness goes only where the words are.
+          A filled plate is this section's own vocabulary, not a new idea: the
+          thumbnails below use exactly one, blackAlpha over the photograph. */}
+      <Flex
+        position="absolute"
+        top={{ base: 2.5, md: 4 }}
+        left="50%"
+        transform="translateX(-50%)"
+        maxW={{ base: '90%', md: '74%' }}
+        px={{ base: 2, md: 2.5 }}
+        py={{ base: 1, md: 1.5 }}
+        borderRadius="2px"
+        border="1px solid"
+        borderColor="whiteAlpha.300"
+        bg="rgba(10,8,4,0.78)"
+        backdropFilter="blur(2px)"
+        pointerEvents="none"
+      >
+        <Text
+          textAlign="center"
+          color="white"
+          fontSize={{ base: '9px', md: '10px' }}
+          fontWeight="500"
+          letterSpacing={{ base: '0.12em', md: '0.18em' }}
+          textTransform="uppercase"
+          lineHeight="1.5"
+        >
+          {series.label}
+        </Text>
+      </Flex>
+
+    </Box>
+  );
 }
 
 /** Fisher-Yates. Runtime-only (inside an effect) — never at module init. */
@@ -158,7 +479,21 @@ const coverLarge = (url: string | null): string =>
  * width. Gold-filled for advice articles, hairline-outlined for real
  * weddings.
  */
-function JournalLabel({ label }: { label: 'Advice' | 'Real Wedding' }) {
+function JournalLabel({
+  children,
+  tone = 'outline',
+}: {
+  children: React.ReactNode;
+  /**
+   * gold     advice articles
+   * outline  everything on a single slide
+   * plate    the diptych, where a chip sits in half the width over a
+   *          photograph that has not been dimmed for it. Measured: the
+   *          outline chip came out at 2.99:1 there against the brightest
+   *          cover in the set, and small white text needs 4.5:1.
+   */
+  tone?: 'gold' | 'outline' | 'plate';
+}) {
   return (
     <Box
       alignSelf="flex-start"
@@ -171,11 +506,20 @@ function JournalLabel({ label }: { label: 'Advice' | 'Real Wedding' }) {
       py={1}
       borderRadius="2px"
       border="1px solid"
-      borderColor={label === 'Advice' ? 'transparent' : 'whiteAlpha.600'}
-      bg={label === 'Advice' ? 'rgba(201,169,110,0.92)' : 'transparent'}
-      color={label === 'Advice' ? '#1c1509' : 'white'}
+      borderColor={
+        tone === 'gold' ? 'transparent' : tone === 'plate' ? 'whiteAlpha.300' : 'whiteAlpha.600'
+      }
+      bg={
+        tone === 'gold'
+          ? 'rgba(201,169,110,0.92)'
+          : tone === 'plate'
+            ? 'rgba(10,8,4,0.78)'
+            : 'transparent'
+      }
+      color={tone === 'gold' ? '#1c1509' : 'white'}
+      whiteSpace="nowrap"
     >
-      {label}
+      {children}
     </Box>
   );
 }
@@ -234,6 +578,24 @@ const Weddings = () => {
    */
   const railCompact =
     useBreakpointValue({ base: true, md: false }, { ssr: false, fallback: 'base' }) ?? true;
+  /**
+   * Below 340px, where four numerals fit and six do not.
+   *
+   * A media query rather than a breakpoint, because Chakra's smallest step is
+   * 480px and paging a 390px phone down to four numerals to protect a 320px
+   * one would cost every phone the three numbers it has room for.
+   */
+  const [railNarrow] = useMediaQuery(`(max-width: ${NARROW_VW - 1}px)`, {
+    ssr: false,
+    fallback: false,
+  });
+  /**
+   * Desktop shows every numeral; there is room for a dozen. A phone pages,
+   * because the row grows with the number of entries and at seven it already
+   * hung 26px off the right edge of a 320px screen, taking the last numeral
+   * out of reach of a finger with it.
+   */
+  const railWindow = railCompact ? (railNarrow ? WINDOW_SIZE_NARROW : WINDOW_SIZE) : 0;
 
   useEffect(() => {
     if (featured.length < 2 || slidePaused) {
@@ -304,28 +666,12 @@ const Weddings = () => {
           const jr = await fetch('/api/journal/list');
           const jd = await jr.json();
           if (cancelled || !jr.ok || !jd.success) return;
-          const bySlug = new Map<string, FeaturedPost>(
-            (jd.posts as FeaturedPost[]).map((p) => [p.slug, p]),
-          );
-          setFeatured(
-            entries
-              .map((e) => {
-                const p = bySlug.get(e.slug);
-                if (!p) return null;
-                const isAdvice =
-                  p.session_type === 'article' ||
-                  (p.tags ?? []).some((t) => /advice|guide/i.test(t));
-                return {
-                  slug: p.slug,
-                  title: p.title,
-                  cover: p.cover_image_url,
-                  label: isAdvice ? ('Advice' as const) : ('Real Wedding' as const),
-                  focusStage: e.focusStage ?? 'center',
-                  focusThumb: e.focusThumb ?? 'center',
-                };
-              })
-              .filter((p): p is FeaturedItem => Boolean(p)),
-          );
+          // buildStageEntries reads the whole journal, not just the picks:
+          // case 3 in there needs to see a story Vero has featured no part
+          // of. series_slug arrives null on an edge-cached payload predating
+          // the column, which simply means no story is found and the stage is
+          // exactly what it was.
+          setFeatured(buildStageEntries(entries, jd.posts as FeaturedPost[]));
         }
       } catch {
         // Static page still stands on its own; photo bands just stay out.
@@ -742,6 +1088,20 @@ const Weddings = () => {
             >
               {featured.map((p, i) => {
                 const active = i === Math.min(slideIdx, featured.length - 1);
+                // A story in parts is one slide showing both of them, not a
+                // link to one entry. It is a different element because a
+                // diptych holds two links and a slide-as-RouterLink can only
+                // hold one destination.
+                if (p.series) {
+                  return (
+                    <SeriesSlide
+                      key={p.slug}
+                      series={p.series}
+                      active={active}
+                      eager={i === 0}
+                    />
+                  );
+                }
                 return (
                   <Box
                     key={p.slug}
@@ -781,7 +1141,9 @@ const Weddings = () => {
                       pb={RAIL_CLEARANCE}
                     >
                       <VStack align="flex-start" spacing={{ base: 1.5, md: 2.5 }}>
-                        <JournalLabel label={p.label} />
+                        <JournalLabel tone={p.label === 'Advice' ? 'gold' : 'outline'}>
+                          {p.label}
+                        </JournalLabel>
                         <Text
                           fontFamily="heading"
                           fontWeight="400"
@@ -835,6 +1197,7 @@ const Weddings = () => {
                   slideMs={JOURNAL_SLIDE_MS}
                   onPick={pickSlide}
                   compact={railCompact}
+                  windowSize={railWindow}
                   // The numeral is in the name as well as the title, so the
                   // visible "01" is speakable and the entry is identified.
                   label={(i) =>
@@ -886,18 +1249,43 @@ const Weddings = () => {
                   _hover={{ opacity: 1 }}
                   sx={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                 >
-                  <Image
-                    src={p.cover ?? undefined}
-                    alt=""
-                    w="100%"
-                    h="100%"
-                    objectFit="cover"
-                    objectPosition={p.focusThumb}
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
+                  {/* A story's tile is divided the way its slide is, so the
+                      strip shows at a glance that one of these is two
+                      entries. Same seam, same proportion, one sixty-sixth of
+                      the size. */}
+                  {p.series ? (
+                    <Flex w="100%" h="100%" gap="1px" bg="whiteAlpha.500">
+                      {p.series.parts.map((part) => (
+                        <Image
+                          key={part.slug}
+                          src={part.cover ?? undefined}
+                          alt=""
+                          flex="1"
+                          minW={0}
+                          h="100%"
+                          objectFit="cover"
+                          objectPosition={part.focus}
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ))}
+                    </Flex>
+                  ) : (
+                    <Image
+                      src={p.cover ?? undefined}
+                      alt=""
+                      w="100%"
+                      h="100%"
+                      objectFit="cover"
+                      objectPosition={p.focusThumb}
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  )}
                   <Box
                     position="absolute"
                     left={1.5}
@@ -912,7 +1300,7 @@ const Weddings = () => {
                     bg={p.label === 'Advice' ? 'rgba(201,169,110,0.92)' : 'blackAlpha.600'}
                     color={p.label === 'Advice' ? '#1c1509' : 'white'}
                   >
-                    {p.label}
+                    {p.series ? `In ${partWord(p.series.parts.length)} Parts` : p.label}
                   </Box>
                 </Box>
               ))}
