@@ -75,6 +75,21 @@ const ROUTE_META: Record<string, RouteMeta> = {
       'Maternity photography portfolio: beach, studio, and artistic maternity sessions by Veronika Gerzon.',
     image: `${SITE_URL}/assets/photos/maternity/couples-beach-baby-bump-moment.webp`,
   },
+  // The two policy routes were absent, so they fell through to the '/' entry
+  // and every social card, canonical and WebPage JSON-LD on /privacy and
+  // /terms described the homepage. Both strings are byte-identical to the
+  // Helmet already in Privacy.tsx and Terms.tsx, which is what lets the
+  // prerender drift guard below hold all three sources together.
+  '/privacy': {
+    title: 'Privacy Policy | Vero Photography',
+    description:
+      'Privacy policy for vero.photography: what information we collect, how we use it, and how to request deletion.',
+  },
+  '/terms': {
+    title: 'Terms of Service | Vero Photography',
+    description:
+      'Terms of service for vero.photography: how the site may be used, photo copyright, and how to request image removal.',
+  },
 };
 
 const SEO = () => {

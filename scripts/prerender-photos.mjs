@@ -817,15 +817,65 @@ const STATIC_PAGES = [
       'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Gerzon.',
     image: `${SITE}/assets/photos/site/home-cta-bg.webp`,
   },
+  // The two policy pages had no static build, so the catch-all rewrite answered
+  // them with index.html: anything that does not run JavaScript asked for the
+  // privacy policy and was handed the homepage, h1 and all. These are the two
+  // pages a platform reviewer, an app store, a payment processor or an agent is
+  // most likely to fetch without a browser.
+  //
+  // The body copy in extra is a SUMMARY with the real contact route in it, not
+  // a copy of the policy. Duplicating the policy text here would create a second
+  // version to keep in step with Privacy.tsx, and the one thing worse than a
+  // policy a crawler cannot read is two policies that disagree.
+  {
+    path: '/privacy',
+    heading: 'Privacy Policy',
+    title: 'Privacy Policy | Vero Photography',
+    description:
+      'Privacy policy for vero.photography: what information we collect, how we use it, and how to request deletion.',
+    image: `${SITE}/assets/photos/site/contact-bg.webp`,
+    extra:
+      '<p>This policy covers what the site collects when you send an enquiry or use a client portal, how it is used, how long it is kept, and how to have it removed.</p>' +
+      '<h2>Data deletion requests</h2>' +
+      '<p>Email <a href="mailto:vero@vero.photography">vero@vero.photography</a> with the subject line "Data deletion request", including the email address or name on your enquiry or booking and what you would like removed.</p>' +
+      '<p>Or call or text <a href="tel:+15709095707">(570) 909-5707</a>.</p>',
+  },
+  {
+    path: '/terms',
+    heading: 'Terms of Service',
+    title: 'Terms of Service | Vero Photography',
+    description:
+      'Terms of service for vero.photography: how the site may be used, photo copyright, and how to request image removal.',
+    image: `${SITE}/assets/photos/site/contact-bg.webp`,
+    extra:
+      '<p>These terms cover how the site may be used, who owns the photographs, how they may be shared, and how to ask for an image to be taken down.</p>' +
+      '<h2>Image removal requests</h2>' +
+      '<p>Email <a href="mailto:vero@vero.photography">vero@vero.photography</a> with the subject line "Image removal request" and a link to the photograph.</p>',
+  },
 ];
 
 // Drift guard. If a title or description here stops matching SEO.tsx, the two
 // sources have diverged and one of them is now lying to Google.
 {
   const seoSource = readFileSync(join(__dirname, '..', 'src/components/SEO.tsx'), 'utf-8');
-  const drifted = STATIC_PAGES.filter(
-    (pg) => !seoSource.includes(pg.title) || !seoSource.includes(pg.description),
-  ).map((pg) => pg.path);
+  // Pages that render their own Helmet as well. A title written in three
+  // places drifts in three directions, and the symptom is a tab that says one
+  // thing and a search result that says another.
+  const PAGE_SOURCES = {
+    '/privacy': 'src/pages/Privacy.tsx',
+    '/terms': 'src/pages/Terms.tsx',
+  };
+  const ownSource = Object.fromEntries(
+    Object.entries(PAGE_SOURCES).map(([path, file]) => [
+      path,
+      readFileSync(join(__dirname, '..', file), 'utf-8'),
+    ]),
+  );
+  const drifted = STATIC_PAGES.filter((pg) => {
+    if (!seoSource.includes(pg.title) || !seoSource.includes(pg.description)) return true;
+    const own = ownSource[pg.path];
+    return own ? !own.includes(pg.title) || !own.includes(pg.description) : false;
+  }).map((pg) => pg.path);
   if (drifted.length) {
     console.error(
       `[prerender] static page metadata no longer matches ROUTE_META in SEO.tsx: ${drifted.join(', ')}`,
@@ -861,6 +911,7 @@ for (const pg of STATIC_PAGES) {
     <meta property="og:title" content="${esc(pg.title)}" />
     <meta property="og:description" content="${esc(pg.description)}" />
     <meta property="og:image" content="${pg.image}" />
+    <meta property="og:image:alt" content="Vero Photography, Professional Photographer" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:url" content="${canonical}" />

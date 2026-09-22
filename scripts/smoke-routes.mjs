@@ -106,7 +106,10 @@ const mustHaveOwnTitle = [
   // HOMEPAGE's title and canonical because they were SPA-only, which tells
   // Google they are duplicates of / and not to index them. Asserting their
   // titles here is what stops that returning unnoticed.
-  ...['/about', '/contact', '/wedding-photography', '/gallery'].filter((p) =>
+  // /privacy and /terms joined this list when they were prerendered. They are
+  // the two pages most likely to be fetched by something that does not run JS,
+  // which is exactly the audience 'generated but not routed' fails silently for.
+  ...['/about', '/contact', '/wedding-photography', '/gallery', '/privacy', '/terms'].filter((p) =>
     sitemapPaths.includes(p),
   ),
 ];
