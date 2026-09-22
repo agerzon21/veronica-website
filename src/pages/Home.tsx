@@ -11,6 +11,10 @@ import heroVariantsDesktop from '../data/hero-variants-desktop.json';
 
 type Slide = {
   url: string;
+  /** The photograph's own description, handed to the carousel's <img>. */
+  alt?: string;
+  /** Only set when mobileUrl is a different photograph, not a derivative. */
+  mobileAlt?: string;
   mobileUrl?: string;
   /** "path 1280w, path 1600w" — mobile derivatives only. */
   mobileSrcSet?: string;
@@ -54,13 +58,66 @@ const desktopSrcSetFor = (original: string): string | undefined => {
   ].join(', ');
 };
 
+// Every hero photograph was announced to a screen reader as "Slide 3", or
+// whatever its index happened to be, which says nothing about the photograph.
+// These are the alt strings photos.csv already holds for the same files,
+// copied rather than imported: photos.ts does `import csv?raw` and parses at
+// module init, and Home is the eager LCP chunk, so importing it would drag
+// 64KB of CSV onto the one route that must paint fastest.
+const HERO_ALT: Record<string, string> = {
+  '/assets/photos/portraits/tropical-bikini-pose-bamboo.webp':
+    'Athletic girl in a bikini leaning against a bamboo fence with palm trees behind.',
+  '/assets/photos/portraits/shadow-play-portrait.webp':
+    'Girl gently covering her face with her hand, casting intriguing shadows across her features.',
+  '/assets/photos/portraits/girl-embracing-palm-leaf.webp':
+    'Joyful girl embracing a large palm leaf against a clear blue sky.',
+  '/assets/photos/portraits/ocean-swimming-joy.webp':
+    'Girl swimming in the ocean, submerged to her neck.',
+  '/assets/photos/weddings/winged-couple-fantasy-portrait.webp':
+    'Bride and groom posed together with large white wings, in a fantasy-like atmosphere.',
+  '/assets/photos/weddings/wedding-party-seafoam.webp':
+    'Bride and groom with their wedding party in seafoam-colored attire.',
+  '/assets/photos/weddings/newlyweds-running-sea.webp':
+    'Newlyweds running hand-in-hand toward the ocean.',
+  '/assets/photos/family/elegant-family-studio-portrait-black.webp':
+    'Elegant family portrait against a black background, lit with artistic studio lighting.',
+  '/assets/photos/portraits/lace-pink-dress-blue-glacier.webp':
+    'Girl in a delicate lace pink dress posing before a blue glacier.',
+  '/assets/photos/weddings/couple-back-camera-ocean-view.webp':
+    'Bride and groom from behind, looking out at an ocean view.',
+  '/assets/photos/weddings/wedding-kiss-pink-sunset.webp':
+    'Bride and groom kissing beneath a pink sunset sky.',
+  '/assets/photos/weddings/confident-bride-bouquet.webp':
+    'Bride holding a bouquet and looking confidently at the camera.',
+  '/assets/photos/family/family-camping-adventure.webp':
+    'Family enjoying time outdoors with tents set up for camping.',
+  '/assets/photos/weddings/bride-groom-under-veil-smiles.webp':
+    'Bride and groom smiling beneath a delicate veil.',
+  '/assets/photos/portraits/friendship-tree-roots.webp':
+    'Two girls posing gracefully against the intricate roots of a tree.',
+  '/assets/photos/weddings/lotus-pond-reflection-newlyweds.webp':
+    'Reflection of a newlywed couple in a tranquil lotus pond.',
+  '/assets/photos/portraits/woman-poppy-petals-floating.webp':
+    'Elegant woman seated in a poppy field with petals drifting through the air around her.',
+  '/assets/photos/portraits/yellow-tank-top-sunflower-field.webp':
+    'Girl in a yellow tank top standing among blooming sunflowers.',
+};
+
 const CAROUSEL_IMAGES: Slide[] = (heroSlides as Slide[]).map((slide) => {
   const mobileSource = slide.mobileUrl || slide.url;
   const rungs = VARIANTS[mobileSource];
   const desktopSrcSet = desktopSrcSetFor(slide.url);
-  if (!rungs) return { ...slide, mobileUrl: mobileSource, desktopSrcSet };
+  const alt = HERO_ALT[slide.url];
+  // Looked up from the ORIGINAL mobileUrl, before it is rewritten to a
+  // derivative below. One slide shows a different photograph on mobile, and
+  // only that one needs a second description; the rest resolve to alt.
+  const mobileAlt =
+    slide.mobileUrl && slide.mobileUrl !== slide.url ? HERO_ALT[slide.mobileUrl] : undefined;
+  if (!rungs) return { ...slide, alt, mobileAlt, mobileUrl: mobileSource, desktopSrcSet };
   return {
     ...slide,
+    alt,
+    mobileAlt,
     desktopSrcSet,
     // src falls back to the widest rung for anything that ignores srcSet.
     mobileUrl: rungs['1600'] ?? mobileSource,

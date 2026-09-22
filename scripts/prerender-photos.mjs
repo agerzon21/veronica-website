@@ -691,7 +691,19 @@ ${others.map((o) => `          <li><a href="/journal/${o.slug}">${esc(o.title)}<
 {
   const canonical = `${SITE}/journal`;
   const pageTitle = `Journal${TITLE_SUFFIX}`;
-  const desc = 'Wedding and portrait stories, written after the gallery is delivered.';
+  const desc =
+    'Long-form recaps from behind the lens: recent portrait, wedding, family, and maternity sessions with the stories, favorite frames, and small moments that made them.';
+  {
+    // Same drift guard the static pages get. /journal is built outside
+    // STATIC_PAGES, so it needs its own, or the three copies quietly diverge
+    // again the first time anyone edits one of them.
+    const journalSource = readFileSync(join(__dirname, '..', 'src/pages/Journal.tsx'), 'utf-8');
+    const seo = readFileSync(join(__dirname, '..', 'src/components/SEO.tsx'), 'utf-8');
+    if (!journalSource.includes(desc) || !seo.includes(desc)) {
+      console.error('[prerender] the /journal description no longer matches Journal.tsx and SEO.tsx');
+      failProd('journal index description drifted.');
+    }
+  }
   let html = photoTemplate;
   html = html.replace(/[ \t]*<title>[\s\S]*?<\/title>\n?/, '');
   html = html.replace(/[ \t]*<meta name="description"[^>]*>\n?/, '');
@@ -700,6 +712,17 @@ ${others.map((o) => `          <li><a href="/journal/${o.slug}">${esc(o.title)}<
   html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
 
   const meta = `
+    <!-- Every journal thumbnail is a drive.google.com URL that 301s to
+         lh3.googleusercontent.com, so each one pays a redirect plus a fresh
+         DNS, TCP and TLS handshake to an origin the browser has never met.
+         These go first so the hints are discovered before anything needs them.
+         Deliberately NO crossorigin on the preconnect: the thumbnails render
+         through Chakra Image with no crossOrigin prop, so they are non-CORS
+         requests, and an anonymous socket lands in a different connection pool
+         and never gets reused. That is the trap already documented for
+         googletagmanager in index.html. -->
+    <link rel="dns-prefetch" href="https://drive.google.com" />
+    <link rel="preconnect" href="https://lh3.googleusercontent.com" />
     <title>${esc(pageTitle)}</title>
     <meta name="description" content="${esc(desc)}" />
     <link rel="canonical" href="${canonical}" />
@@ -710,6 +733,10 @@ ${others.map((o) => `          <li><a href="/journal/${o.slug}">${esc(o.title)}<
     <meta property="og:url" content="${canonical}" />
     <meta property="og:site_name" content="Vero Photography" />
     <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${esc(pageTitle)}" />
+    <meta name="twitter:description" content="${esc(desc)}" />
+    <meta name="twitter:image" content="${DEFAULT_OG}" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -790,6 +817,15 @@ const STATIC_PAGES = [
     description:
       'About Veronika Gerzon: wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
     image: `${SITE}/assets/photos/site/about-bg.webp`,
+    extra:
+      '<h2>My Approach</h2>' +
+      '<p>Every session starts with understanding your vision. Whether it is a wedding, portrait, editorial, or commercial project, I focus on capturing authentic moments and genuine emotion, so you look at your photos and feel exactly what you felt that day.</p>' +
+      '<h2>A Unique Perspective</h2>' +
+      '<p>Before picking up a camera, I spent years working as a model. That experience taught me how it feels to be directed, what makes a subject comfortable, and how small adjustments in posing and light transform an image. I know how to guide you naturally because I have been in your shoes.</p>' +
+      '<h2>Whatever the Angle Asks For</h2>' +
+      '<p>Flat on the dance floor at midnight, knee deep in a field, up on a chair for the one frame that shows the whole room. The picture decides where I stand, and I have never been precious about my dress.</p>' +
+      '<h2>Your Turn</h2>' +
+      '<p>Have a session in mind? I would love to hear about it.</p>',
   },
   {
     path: '/contact',
@@ -815,7 +851,10 @@ const STATIC_PAGES = [
     title: 'Photography Portfolio | Vero Photography',
     description:
       'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Gerzon.',
-    image: `${SITE}/assets/photos/site/home-cta-bg.webp`,
+    // One file, named identically here, in SEO.tsx and in Gallery.tsx. Three
+    // sources each nominated a different photograph, so which one a shared
+    // link previewed depended on whether the sharer's crawler ran JavaScript.
+    image: `${SITE}/assets/photos/portraits/sunset-sunflower-field-joy.webp`,
   },
   // The two policy pages had no static build, so the catch-all rewrite answered
   // them with index.html: anything that does not run JavaScript asked for the

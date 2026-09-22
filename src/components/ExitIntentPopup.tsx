@@ -219,7 +219,14 @@ const ExitIntentPopup = () => {
             onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', maxWidth: '460px' }}
           >
+            {/* role="dialog" only. NOT aria-modal: that tells a screen
+                reader everything outside is inert, and there is no focus trap
+                here, so tabbing past "No thanks" walks focus onto content the
+                reader has been told does not exist. Add both together with a
+                real trap, never one without the other. */}
             <Box
+              role="dialog"
+              aria-labelledby="exit-popup-title"
               position="relative"
               bg="white"
               borderRadius="md"
@@ -255,7 +262,9 @@ const ExitIntentPopup = () => {
                   >
                     <Icon as={FaCheck} boxSize={6} />
                   </Box>
-                  <Text textStyle="eyebrow">
+                  {/* Same id in both branches: only one is ever mounted, so the
+                      dialog name always matches the heading on screen. */}
+                  <Text id="exit-popup-title" textStyle="eyebrow">
                     {submittedCode === 'already' ? 'Already on the list' : 'You’re in'}
                   </Text>
                   <Text textStyle="bodyLead">
@@ -283,7 +292,7 @@ const ExitIntentPopup = () => {
                       a 460px modal. Same tokens, modal-appropriate step. */}
                   <Text textStyle="eyebrow">Before you go</Text>
                   <Box w="40px" h="1px" bg="brand.accent" />
-                  <Text as="h2" textStyle="sectionTitle" m={0}>
+                  <Text as="h2" id="exit-popup-title" textStyle="sectionTitle" m={0}>
                     Get <Box as="span" color="brand.accentText">10% off</Box>
                     <br />
                     your next session
@@ -296,6 +305,7 @@ const ExitIntentPopup = () => {
                     <VStack spacing={3}>
                       <Input
                         type="email"
+                        aria-label="Email address"
                         placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}

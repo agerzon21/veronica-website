@@ -6,6 +6,10 @@ import { m, AnimatePresence, useTransform, type MotionValue } from 'framer-motio
 interface ImageCarouselProps {
   images: Array<{
     url: string;
+    /** The photograph's own description. Absent leaves the image decorative. */
+    alt?: string;
+    /** Only when mobileUrl is a DIFFERENT photograph, not a derivative of url. */
+    mobileAlt?: string;
     position?: string;
     mobileUrl?: string;
     mobileSrcSet?: string;
@@ -660,7 +664,12 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
                 ? HERO_SIZES
                 : undefined
             }
-            alt={`Slide ${currentIndex + 1}`}
+            // Same isMobile branch as src and objectPosition above: one slide
+            // carries a different photograph on mobile, so its description has
+            // to swap with it. || not ?? so an empty string falls through to
+            // the desktop text rather than silently blanking the name.
+            data-hero-slide
+            alt={(isMobile && currentImage.mobileAlt) || currentImage.alt || ''}
             objectFit="cover"
             width="100%"
             height="100%"

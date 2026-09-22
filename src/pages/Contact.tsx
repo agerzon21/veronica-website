@@ -919,7 +919,15 @@ const Contact = () => {
                     // A group with a name: the five buttons were otherwise
                     // announced one by one with nothing saying what they were
                     // choosing between.
-                    <Box id="shoot_type_group" mb={6} role="group" aria-labelledby="shoot_type_label">
+                    //
+                    // The name is typed out here instead of pointing at the
+                    // label span, because the asterisk is the only thing that
+                    // says "required" and it is aria-hidden. Putting the word
+                    // in the span would also put it in the page's text, where a
+                    // drag-select copies it and Cmd+F scrolls to a spot with
+                    // nothing visible on it. Cost of doing it this way: renaming
+                    // the visible "Type" means renaming it here too.
+                    <Box id="shoot_type_group" mb={6} role="group" aria-label="Type, required">
                       <Text as="span" id="shoot_type_label" sx={labelSx}>
                         Type <Text as="span" color="red.600" fontWeight="500" aria-hidden="true">*</Text>
                       </Text>

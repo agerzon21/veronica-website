@@ -410,9 +410,21 @@ function TimelineCard({ post }: { post: PostSummary }) {
             >
               {rest.map((ph, i) => (
                 <Box key={i} overflow="hidden" bg="gray.100" minH={0}>
+                  {/* Hidden from assistive tech, not from sight. The list
+                      endpoint hands every supporting frame the post title as
+                      its alt, so a screen reader reading this link announced
+                      that title five times over. The lead frame and the h2
+                      below already name the link, and an aria-hidden subtree
+                      is left out of name-from-contents.
+
+                      alt itself stays exactly as it is: Chrome keys its
+                      broken-image painting on whether alt is empty, and an
+                      empty one would outline all four cells with a hairline
+                      border whenever Drive rate-limits the thumbnails. */}
                   <Image
                     src={ph.url}
                     alt={ph.alt ?? ''}
+                    aria-hidden="true"
                     w="100%"
                     h="100%"
                     objectFit="cover"

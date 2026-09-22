@@ -50,6 +50,19 @@ const ROUTE_META: Record<string, RouteMeta> = {
     title: 'Photography Portfolio | Vero Photography',
     description:
       'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Gerzon.',
+    // Named explicitly rather than inherited. Without it this fell through to
+    // DEFAULT_IMAGE while the prerendered /gallery named a second file and
+    // Gallery.tsx named a third, so a shared link previewed whichever
+    // photograph the sharer's crawler happened to read.
+    image: `${SITE_URL}/assets/photos/portraits/sunset-sunflower-field-joy.webp`,
+  },
+  // Absent, so /journal took the '/' entry and its twitter card and WebPage
+  // JSON-LD advertised the homepage. Byte-identical to the Helmet in
+  // Journal.tsx so the two cannot disagree.
+  '/journal': {
+    title: 'Journal | Vero Photography',
+    description:
+      'Long-form recaps from behind the lens: recent portrait, wedding, family, and maternity sessions with the stories, favorite frames, and small moments that made them.',
   },
   '/gallery/portraits': {
     title: 'Portrait Photography Portfolio | Vero Photography',
