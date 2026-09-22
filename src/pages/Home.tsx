@@ -7,7 +7,7 @@ import { HomeChapters } from '../components/HomeChapters';
 import InstagramFeed from '../components/InstagramFeed';
 import heroSlides from '../data/hero-slides.json';
 import heroVariants from '../data/hero-variants.json';
-import heroVariantsDesktop from '../data/hero-variants-desktop.json';
+import { desktopSrcSetFor } from '../utils/heroSrcSet';
 
 type Slide = {
   url: string;
@@ -43,20 +43,9 @@ const VARIANTS = heroVariants as Record<string, Record<string, string>>;
 // up to 5947px wide — which is why mobile PageSpeed moved and desktop stayed
 // at 72. The ORIGINAL remains the widest srcset candidate, so a large retina
 // display still gets the full-quality file; everything smaller takes a rung.
-const DESKTOP = heroVariantsDesktop as {
-  rungs: Record<string, Record<string, string>>;
-  originalWidths: Record<string, number>;
-};
-
-const desktopSrcSetFor = (original: string): string | undefined => {
-  const rungs = DESKTOP.rungs[original];
-  const width = DESKTOP.originalWidths[original];
-  if (!rungs || !Object.keys(rungs).length || !width) return undefined;
-  return [
-    ...Object.entries(rungs).map(([w, path]) => `${path} ${w}w`),
-    `${original} ${width}w`,
-  ].join(', ');
-};
+// desktopSrcSetFor moved to utils/heroSrcSet when the contact and gallery
+// heroes needed the same manifests. It is unchanged; the carousel still gets
+// exactly the candidates it got before.
 
 // Every hero photograph was announced to a screen reader as "Slide 3", or
 // whatever its index happened to be, which says nothing about the photograph.

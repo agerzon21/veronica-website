@@ -2,6 +2,7 @@ import { Box, VStack, Text, Flex, Image, SimpleGrid, Icon } from '@chakra-ui/rea
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import FaArrowRight from '../icons/fa/FaArrowRight';
+import { pageHeroSrcSet } from '../utils/heroSrcSet';
 
 /**
  * The chapter row between the hero and the Instagram feed: three cards,
@@ -50,8 +51,18 @@ function CardBar({ to, label, image, pos = 'center' }: { to: string; label: stri
   // the agent-browsing audit on the hero's call to action.
   return (
     <Box as={RouterLink} to={to} data-group display="block" position="relative" flex="1 0 20%" overflow="hidden">
+      {/* The gallery bar paints a 358x84 strip out of a 2812x2000 file, which
+          was 720KB of the homepage's image weight for 30,000 visible pixels.
+          pageHeroSrcSet returns undefined for anything without derivatives, so
+          the journal bar beside it is untouched and picks rungs up for free if
+          that photograph ever gets any.
+          sizes is measured, not guessed: the bar is 92vw on a 390px phone and
+          29vw at 1440. 95/35 rounds each up, because a sizes that is too small
+          hands the browser a candidate it then has to upscale. */}
       <Image
         src={image}
+        srcSet={pageHeroSrcSet(image)}
+        sizes="(min-width: 48em) 35vw, 95vw"
         alt=""
         position="absolute"
         inset={0}

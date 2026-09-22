@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
+import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
+
+/** Also the site-wide og:image, which keeps pointing at the original. */
+const CONTACT_HERO = '/assets/photos/site/contact-bg.webp';
 import { prefetchChunk } from '../components/ChunkErrorBoundary';
 import ContactRail, { SectionHead } from '../components/ContactRail';
 import Reveal from '../components/ui/Reveal';
@@ -667,8 +671,19 @@ const Contact = () => {
       {/* Hero — the same band every other page opens with: 45vh / 53vh, the
           same veil, the same header ramp. */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden" bg="#3a342d">
+          {/* srcSet is the whole ladder, mobile rungs and desktop rungs
+              together, because this is ONE element serving every screen: there
+              is no breakpoint to choose by, so the browser picks on width. The
+              original stays the widest candidate, so a large retina display
+              still gets the untouched file.
+              The `src` is the widest MOBILE rung rather than the original: a
+              browser old enough to ignore srcSet is not one to send 4289
+              pixels to. The original URL is untouched everywhere it matters as
+              an og:image, which is a crawler fetching a file, not a layout. */}
         <Image
-          src="/assets/photos/site/contact-bg.webp"
+          src={pageHeroFallback(CONTACT_HERO)}
+          srcSet={pageHeroSrcSet(CONTACT_HERO)}
+          sizes="100vw"
           alt=""
           w="100%"
           h="100%"

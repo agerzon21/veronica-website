@@ -55,6 +55,17 @@
       "1680": "/assets/hero/yellow-tank-top-sunflower-field-d1680.webp",
       "1920": "/assets/hero/yellow-tank-top-sunflower-field-d1920.webp",
       "2560": "/assets/hero/yellow-tank-top-sunflower-field-d2560.webp"
+    },
+    "/assets/photos/site/contact-bg.webp": {
+      "1680": "/assets/hero/contact-bg-d1680.webp",
+      "1920": "/assets/hero/contact-bg-d1920.webp",
+      "2560": "/assets/hero/contact-bg-d2560.webp",
+      "2880": "/assets/hero/contact-bg-d2880.webp"
+    },
+    "/assets/photos/portraits/sunset-sunflower-field-joy.webp": {
+      "1680": "/assets/hero/sunset-sunflower-field-joy-d1680.webp",
+      "1920": "/assets/hero/sunset-sunflower-field-joy-d1920.webp",
+      "2560": "/assets/hero/sunset-sunflower-field-joy-d2560.webp"
     }
   },
   "originalWidths": {
@@ -69,6 +80,8 @@
     "/assets/photos/weddings/confident-bride-bouquet.webp": 3000,
     "/assets/photos/family/family-camping-adventure.webp": 2500,
     "/assets/photos/weddings/lotus-pond-reflection-newlyweds.webp": 3000,
-    "/assets/photos/portraits/yellow-tank-top-sunflower-field.webp": 3000
+    "/assets/photos/portraits/yellow-tank-top-sunflower-field.webp": 3000,
+    "/assets/photos/site/contact-bg.webp": 4289,
+    "/assets/photos/portraits/sunset-sunflower-field-joy.webp": 2812
   }
 }

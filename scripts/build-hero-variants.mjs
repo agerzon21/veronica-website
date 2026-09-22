@@ -98,9 +98,39 @@ const slides = JSON.parse(readFileSync(slidesPath, 'utf-8'));
  * discovered, because "every photo used as a hero somewhere" is not something
  * a script can work out, and a wrong guess here ships a soft hero.
  */
-const PAGE_HEROES = [
-  '/assets/photos/weddings/ocean-vows-ceremony.webp',
-];
+const PAGE_HEROES = {
+  // MOBILE ONLY, and the flag is load-bearing. Weddings shows a different
+  // photograph on desktop and hides this one with display:none, so desktop
+  // rungs for it would be three files nobody can ever be served. Chrome does
+  // fetch the hidden element, which is why it has mobile rungs at all, and it
+  // resolves sizes="100vw" against the desktop viewport and takes the widest
+  // mobile rung. That is the right answer for a picture nobody sees.
+  '/assets/photos/weddings/ocean-vows-ceremony.webp': { mobileOnly: true },
+  // The contact hero, which is also the ThankYou hero: 4289x3166 painted into
+  // a 390px window, and the LCP element on both pages. The ORIGINAL stays
+  // exactly where it is, because it is the site-wide og:image and a social
+  // crawler should get the full-size file.
+  '/assets/photos/site/contact-bg.webp': {},
+  // The gallery hero, which is also the LCP there, and the same 2812x2000
+  // file the homepage paints into a 358x84 bar. One source, three surfaces,
+  // and until now every one of them fetched all of it.
+  '/assets/photos/portraits/sunset-sunflower-field-joy.webp': {},
+};
+
+const PAGE_HERO_SRCS = Object.keys(PAGE_HEROES);
+const PAGE_HERO_DESKTOP_SRCS = PAGE_HERO_SRCS.filter((s) => !PAGE_HEROES[s].mobileOnly);
+
+/**
+ * Page heroes get one rung the carousel does not: 2880.
+ *
+ * A full-bleed page hero is exactly viewport-wide, so a 1440px retina laptop
+ * paints 2880 device pixels. With 2560 as the top rung there is no candidate
+ * that reaches it and the browser falls back to the original, which measured
+ * as zero saving on desktop for the one hero whose original is far wider than
+ * that. The carousel does not need this rung and would waste files on it: its
+ * slide is 1.2x the viewport, so at 1440 it needs ~3456 and skips 2880 too.
+ */
+const PAGE_HERO_EXTRA_WIDTHS = [2880];
 
 // Only slides that can actually appear on mobile need a derivative. A slide's
 // mobile source is its mobileUrl when set, otherwise its url — entry 8
@@ -108,13 +138,21 @@ const PAGE_HEROES = [
 const mobileSources = [
   ...new Set([
     ...slides.filter((s) => !s.mobileSkip).map((s) => s.mobileUrl || s.url),
-    ...PAGE_HEROES,
+    ...PAGE_HERO_SRCS,
   ]),
 ];
 
 // Desktop uses `url`, never mobileUrl — entry 8 deliberately shows a different
 // photo on each.
-const desktopSources = [...new Set(slides.filter((s) => !s.desktopSkip).map((s) => s.url))];
+// Page heroes need desktop rungs too, and for the same reason the carousel
+// does: at 1440 a full-bleed hero paints 2880 device pixels on a retina
+// screen, so "it is only the mobile ones that are oversized" is false.
+const desktopSources = [
+  ...new Set([
+    ...slides.filter((s) => !s.desktopSkip).map((s) => s.url),
+    ...PAGE_HERO_DESKTOP_SRCS,
+  ]),
+];
 
 // 1600 keeps the historical `-m.webp` name so existing committed files and the
 // manifest stay stable; 1280 gets an explicit suffix.
@@ -207,7 +245,10 @@ for (const src of desktopSources) {
   // srcset candidate.
   if (meta.width) originalWidths[src] = meta.width;
 
-  for (const w of DESKTOP_WIDTHS) {
+  const widths = PAGE_HERO_DESKTOP_SRCS.includes(src)
+    ? [...DESKTOP_WIDTHS, ...PAGE_HERO_EXTRA_WIDTHS]
+    : DESKTOP_WIDTHS;
+  for (const w of widths) {
     // Never emit a rung at or above the original's own width — that is pure
     // re-encode with no pixels gained, and for the 2000px-wide slides it would
     // hand the browser a same-size candidate that is not actually better.
@@ -262,7 +303,7 @@ if (isCheck) {
       .filter(Boolean)
       .map((p) => '/' + p.replace(/^public\//, '')),
   );
-  const untracked = Object.values(manifest)
+  const untracked = [...Object.values(manifest), ...Object.values(desktopManifest)]
     .flatMap((r) => Object.values(r))
     .filter((p) => !tracked.has(p));
   if (untracked.length) {
@@ -284,6 +325,23 @@ if (isCheck) {
   if (drift.length) {
     console.error('\n[hero-variants] FATAL: hero-variants.json is out of sync with hero-slides.json:');
     drift.forEach((s) => console.error(`  ${s} -> committed:${JSON.stringify(onDisk[s]) ?? 'MISSING'}`));
+    console.error('Run: npm run hero-variants');
+    process.exit(1);
+  }
+
+  // Same check on the desktop side. It was never here, and it now guards the
+  // page heroes, whose desktop rungs are the ones a 1440px screen actually
+  // paints. A rung missing from this manifest is not a blank hero, which is
+  // why it could go unnoticed: it is the full-size original served silently.
+  const onDiskD = existsSync(desktopManifestPath)
+    ? JSON.parse(readFileSync(desktopManifestPath, 'utf-8'))
+    : {};
+  const driftD = desktopSources.filter(
+    (s) => JSON.stringify((onDiskD.rungs ?? {})[s]) !== JSON.stringify(desktopManifest[s]),
+  );
+  if (driftD.length) {
+    console.error('\n[hero-variants] FATAL: hero-variants-desktop.json is out of sync:');
+    driftD.forEach((s) => console.error(`  ${s} -> committed:${JSON.stringify((onDiskD.rungs ?? {})[s]) ?? 'MISSING'}`));
     console.error('Run: npm run hero-variants');
     process.exit(1);
   }

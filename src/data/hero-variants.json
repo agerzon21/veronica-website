@@ -50,5 +50,13 @@
   "/assets/photos/weddings/ocean-vows-ceremony.webp": {
     "1280": "/assets/hero/ocean-vows-ceremony-m1280.webp",
     "1600": "/assets/hero/ocean-vows-ceremony-m.webp"
+  },
+  "/assets/photos/site/contact-bg.webp": {
+    "1280": "/assets/hero/contact-bg-m1280.webp",
+    "1600": "/assets/hero/contact-bg-m.webp"
+  },
+  "/assets/photos/portraits/sunset-sunflower-field-joy.webp": {
+    "1280": "/assets/hero/sunset-sunflower-field-joy-m1280.webp",
+    "1600": "/assets/hero/sunset-sunflower-field-joy-m.webp"
   }
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
+import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
 import GalleryCategories from '../components/GalleryCategories';
 import Reveal from '../components/ui/Reveal';
 import GalleryGrid from '../components/GalleryGrid';
@@ -115,7 +116,9 @@ const Gallery = () => {
         {/* Hero */}
         <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
           <Image
-            src={GALLERY_HERO_IMAGE}
+            src={pageHeroFallback(GALLERY_HERO_IMAGE)}
+            srcSet={pageHeroSrcSet(GALLERY_HERO_IMAGE)}
+            sizes="100vw"
             alt="Gallery"
             objectFit="cover"
             objectPosition="center 15%"

@@ -5,6 +5,10 @@ import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
 import { Helmet } from 'react-helmet-async';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
+import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
+
+/** The same file /contact opens with, deliberately. */
+const CONTACT_HERO = '/assets/photos/site/contact-bg.webp';
 import ContactRail, { SectionHead } from '../components/ContactRail';
 import Reveal from '../components/ui/Reveal';
 import { useEffect, useRef, useState } from 'react';
@@ -198,7 +202,9 @@ const ThankYou = () => {
           whole thing feel like a different site. */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden" bg="#3a342d">
         <Image
-          src="/assets/photos/site/contact-bg.webp"
+          src={pageHeroFallback(CONTACT_HERO)}
+          srcSet={pageHeroSrcSet(CONTACT_HERO)}
+          sizes="100vw"
           alt=""
           w="100%"
           h="100%"
