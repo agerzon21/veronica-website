@@ -89,7 +89,7 @@ const FINAL_WIDTH_MIN = 200;
 // height, drop into "extracted footer" mode: footer is hoisted to live just
 // below the sticky viewport so the user can reveal it by continuing to scroll.
 // Camera then only has to share space with the header above it.
-const MIN_FULL_LAYOUT_CAMERA_HEIGHT = 180;
+const MIN_FULL_LAYOUT_CAMERA_HEIGHT = 120;
 
 // Cap natural size so we don't allocate absurd GPU memory on 4K monitors.
 const MAX_NATURAL_WIDTH = 6000;
@@ -142,6 +142,37 @@ const HEADER_CONTENT_MD = 162;
 const HEADER_CONTENT_LG = 195;
 
 /**
+ * 100svh, measured.
+ *
+ * svh is the viewport WITH the browser's chrome showing: the part of the
+ * screen a phone can always see. It is a constant per device, which is the
+ * property that matters here, because window.innerHeight is not: on iOS Safari
+ * it returns 812 when the toolbar is hidden and 724 when it is showing, and
+ * the hero read whichever one happened to be true at mount and then kept it.
+ * Load the page scrolled, get 812, and the whole composition is budgeted for a
+ * screen 88px taller than the one holding it, which puts Book a Session behind
+ * the toolbar. That is the missing call to action on an iPhone 13 mini.
+ *
+ * There is no JS property for svh, so it is measured off a probe. The rect of
+ * a visibility:hidden element is still reported, so the probe never paints.
+ */
+const measureSvh = (): number | null => {
+  if (typeof document === 'undefined' || !document.body) return null;
+  try {
+    if (!window.CSS?.supports?.('height', '100svh')) return null;
+    const probe = document.createElement('div');
+    probe.style.cssText =
+      'position:absolute;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none';
+    document.body.appendChild(probe);
+    const h = probe.getBoundingClientRect().height;
+    probe.remove();
+    return h > 0 ? Math.round(h) : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * The viewport the hero lays itself out against.
  *
  * It has to be the viewport CSS is using, and window.innerWidth/innerHeight
@@ -152,24 +183,25 @@ const HEADER_CONTENT_LG = 195;
  *
  * The hero then recomputed its whole composition against a viewport that does
  * not exist. Measured on an iPhone 15 Pro Max, pinching to 0.5 moved the
- * eyebrow from 93px down the screen to 31px, up underneath the fixed navbar,
- * doubled the camera from 1999px to 3999px tall, and pushed Book a Session
- * from 662px to 756px, which on an 840px visible strip leaves it 12px off the
- * bottom edge. A pinch is supposed to make the picture smaller. It is not
- * supposed to re-lay out the page.
+ * eyebrow from 123px down the screen to 61px, up underneath the fixed navbar,
+ * and pushed Book a Session from 632px to 726px. A pinch is supposed to make
+ * the picture smaller. It is not supposed to re-lay out the page.
  *
  * Multiplying by the pinch scale undoes exactly that, and nothing else. At
  * scale 1, which is every desktop and every phone that is not mid-pinch, this
- * is the identity: the numbers are the ones this component has always used.
+ * is the identity.
  *
  * This predates the number rail. The same measurements on 948c491, the commit
  * before any of that work, are identical to the digit.
  */
 const layoutViewport = (): { vw: number; vh: number } => {
   const scale = (typeof window !== 'undefined' && window.visualViewport?.scale) || 1;
+  // svh first, and innerHeight only where the unit is unsupported. On a
+  // desktop the two are the same number, so nothing there changes.
+  const svh = measureSvh();
   return {
     vw: Math.round(window.innerWidth * scale),
-    vh: Math.round(window.innerHeight * scale),
+    vh: svh ?? Math.round(window.innerHeight * scale),
   };
 };
 
@@ -345,10 +377,26 @@ const computeCameraSize = (
   const availableH = extractFooter
     ? vh - headerReserved - CAMERA_GAP - SAFE_BUFFER
     : fullAvailableH;
-  const final = Math.max(
-    FINAL_WIDTH_MIN,
-    Math.min(availableW, availableH * camAspect, maxFinalW),
-  );
+  /**
+   * FINAL_WIDTH_MIN is a floor for how small the camera may LOOK, not a
+   * licence to overflow the space it was given.
+   *
+   * It used to be applied last, as a plain max(), so on a short screen it won
+   * against the height budget: an iPhone 13 mini has room for a 196px camera
+   * and the floor made one 272px tall. The extra 76px came out of the bottom
+   * of the composition, which is where Book a Session and the next-section
+   * arrow live, and they went behind the browser's toolbar.
+   *
+   * So the floor is itself capped by the budget. On every screen with room for
+   * it nothing changes (an iPhone 15 Pro Max and every desktop compute the
+   * identical number either way); on the screens where it did not fit, the
+   * camera now gives up the difference, which is the trade the owner asked
+   * for: a smaller camera you can see all of, rather than a bigger one with
+   * the button cut off.
+   */
+  const heightCap = availableH * camAspect;
+  const fitted = Math.min(availableW, heightCap, maxFinalW);
+  const final = Math.max(Math.min(FINAL_WIDTH_MIN, heightCap), fitted);
   const finalHeight = final / camAspect;
 
   // The fixed Navbar overlays the top NAVBAR_HEIGHT of the viewport. If the

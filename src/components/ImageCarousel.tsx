@@ -160,7 +160,37 @@ function useRailPlacement(ref: React.RefObject<HTMLDivElement>): {
     // The cue mounts with the hero, so one frame is not always enough.
     const t1 = window.setTimeout(measure, 300);
     const t2 = window.setTimeout(measure, 1200);
-    window.addEventListener('resize', measure);
+
+    /**
+     * WIDTH ONLY. This is the creep, and it took three attempts to catch
+     * because it cannot happen in a headless browser.
+     *
+     * A phone's toolbar retracts when you scroll down and extends when you
+     * scroll back up, and each of those fires a window resize. Scroll down a
+     * little and straight back and the resize arrives with scrollY returned to
+     * exactly 0, so it passed the guard above and re-measured, except the bar
+     * was still sliding: blockRect and the slide's rect were both caught
+     * mid-animation. Every round trip landed on a slightly different answer and
+     * the rail walked up the screen, a few pixels at a time, exactly as
+     * reported. Simulating the bar by resizing the window across a scroll nudge
+     * reproduces it: 761 to 754 on the first pass.
+     *
+     * A toolbar only ever changes the HEIGHT. A real relayout that the rail
+     * needs to hear about, an orientation flip or a desktop window drag,
+     * changes the WIDTH. So the listener ignores height-only changes, which is
+     * the same rule HeroSection already applies to its own viewport state four
+     * files up, and the mechanism is gone rather than tuned.
+     *
+     * The rail does not need the height anyway: the cue is anchored in svh
+     * units, so it does not move when the bar does.
+     */
+    let lastWidth = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      measure();
+    };
+    window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', measure);
     /**
      * NO visualViewport LISTENER, deliberately.
@@ -175,7 +205,7 @@ function useRailPlacement(ref: React.RefObject<HTMLDivElement>): {
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
-      window.removeEventListener('resize', measure);
+      window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', measure);
     };
   }, [ref]);
