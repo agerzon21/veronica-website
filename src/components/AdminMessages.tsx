@@ -63,6 +63,7 @@ import VoiceInput from './ui/VoiceInput';
 import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 import { type ClientPrefill, type PrefillBooking } from './clientPrefill';
+import { readWeddingPackage } from '../data/formMessage';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
 import { translationTargetFor, type ContentLang } from './translationDirection';
 
@@ -2689,6 +2690,26 @@ function ConversationView({
       // an old cached row and a thread that never mentions a length look the
       // same here, and both mean the form leaves its end time blank.
       session_durations: b?.session_durations ?? [],
+      /**
+       * NOT from the summary. Read straight out of the website submission's
+       * own message body, which api/_inbox-record.ts wrote with the package
+       * api/_packages.ts had already resolved server-side.
+       *
+       * The summariser never sees contact_submissions and is not asked for a
+       * package, so the only route through it would be a new BookingFields
+       * key, a prompt change and a SUMMARY_VERSION bump, which re-runs the
+       * model over every thread and hands the name to something that can
+       * paraphrase it. This reads the same bytes the server resolved, every
+       * time, and costs nothing: `messages` is already loaded on this screen.
+       *
+       * The FIRST inbound form message, because a repeat client's second
+       * enquiry shares the conversation and the booking being created here is
+       * the one that thread opened with.
+       */
+      wedding_package:
+        readWeddingPackage(
+          messages.find((m) => m.channel === 'form' && m.direction === 'inbound')?.body,
+        ) ?? null,
     };
   };
 

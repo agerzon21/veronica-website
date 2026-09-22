@@ -16,6 +16,10 @@
 
 import { getDb } from './_db.js';
 import { FROM_ADDRESS, type ContactPayload } from './_auto-reply.js';
+// The admin reads this same prefix back out to prefill the new-client form.
+// Shared rather than retyped: see src/data/formMessage.ts for why that module
+// has no imports of its own.
+import { WEDDING_PACKAGE_LINE_PREFIX } from '../src/data/formMessage.js';
 
 export interface RecordResult {
   conversationId: string | null;
@@ -57,7 +61,7 @@ export function buildSubmissionBody(data: ContactPayload): string {
   // Added after 017's backfill was written, so imported history has no such
   // line while new submissions do. Deliberate: the alternative is rewriting
   // old rows to claim a package nobody chose.
-  if (data.package?.trim()) lines.push(`Wedding package: ${data.package.trim()}`);
+  if (data.package?.trim()) lines.push(`${WEDDING_PACKAGE_LINE_PREFIX}${data.package.trim()}`);
   if (data.date?.trim()) lines.push(`Preferred date: ${data.date.trim()}`);
   if (data.location?.trim()) lines.push(`Location: ${data.location.trim()}`);
   if (data.message?.trim()) lines.push('', data.message.trim());

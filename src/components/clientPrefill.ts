@@ -91,6 +91,20 @@ export interface ClientPrefill extends PrefillBooking {
   conversationId: string;
   /** Platform display name, used only as a last-resort label. */
   displayName: string;
+  /**
+   * The wedding package this lead arrived with, as the contact form resolved
+   * it: "Full Wedding Day; Up to 8 hours; from $1,200". Null on every thread
+   * that did not come from the website with a package chosen.
+   *
+   * ON ClientPrefill AND NOT ON PrefillBooking, deliberately. PrefillBooking
+   * mirrors BookingFields in api/admin/_messages-summary.ts, so a field there
+   * means a prompt change and a SUMMARY_VERSION bump, which re-runs the model
+   * over every thread on next view and hands a package name to something that
+   * can paraphrase it. This value is read straight out of the submission's own
+   * message body instead, so it is the string the server resolved, byte for
+   * byte, on every run.
+   */
+  wedding_package: string | null;
 }
 
 /** One clock reading found in a sentence, before anything is decided about it. */
@@ -493,6 +507,62 @@ export const FALLBACK_END = '18:00';
  * exact line that was wrong: the form used to fall back per field, so a
  * known start and an unknown length produced 11:30 AM to 6:00 PM.
  */
+/**
+ * Which coverage preset a wedding package implies, by EXACT name.
+ *
+ * Exact, never substring: "Wedding Day" is a substring of "Full Wedding Day",
+ * so a contains-check maps the wrong one and does it silently.
+ *
+ * ONLY ONE PACKAGE IS IN HERE, and the two that are missing are the point.
+ * The half-day preset writes "approximately 4 hours" into the client's own
+ * contract, twice. "Wedding Day" sells up to 6 hours and "Intimate Wedding"
+ * up to 3, so mapping either to half-day would put a figure nobody agreed to
+ * on a document they sign: two hours short on one, an hour long on the other.
+ * Full-day is the only preset that pins no hour count, which is exactly why
+ * it is the only one a package can safely imply. Everything else falls
+ * through to the behaviour this form has today.
+ */
+const PACKAGE_COVERAGE_MODE: Readonly<Record<string, 'half-day' | 'full-day'>> = {
+  'Full Wedding Day': 'full-day',
+};
+
+/**
+ * The coverage preset the form should open on, or null to leave it alone.
+ *
+ * Three gates, and each one is a way this could go wrong:
+ *
+ * PRESETS MUST BE OFFERED. half-day and full-day are filtered out of the
+ * option row unless the contract type allows them, and the reset that clears
+ * a stale preset lives inside the type-change handler rather than an effect,
+ * so it never runs at mount. Seeding full-day onto a portrait contract would
+ * leave no chip selected, the preview box still on screen, and "Full-day
+ * coverage" submitted as the time on a one-hour session.
+ *
+ * A STATED WINDOW WINS. If the thread agreed "2:00 PM to 10:00 PM", choosing
+ * a preset would replace hours both sides settled with "exact schedule to be
+ * confirmed". The test is endSource === null, meaning the window was READ off
+ * the conversation rather than computed by adding a duration to a start: the
+ * package's own "Up to 8 hours" can reach session_durations from the same
+ * submission message, and an 8-hour window synthesised from a cap is not an
+ * agreement.
+ *
+ * THE PACKAGE MUST BE ONE WE KNOW. An unrecognised, retired or misspelled
+ * name returns null rather than guessing.
+ *
+ * Pure, and exported, so its rules can be exercised without a browser.
+ */
+export function seededCoverageMode(
+  weddingPackage: string | null | undefined,
+  suggestion: CoverageSuggestion,
+  presetsAllowed: boolean,
+): 'half-day' | 'full-day' | null {
+  if (!presetsAllowed) return null;
+  if (suggestion.start && suggestion.end && suggestion.endSource === null) return null;
+  const name = (weddingPackage ?? '').split(';')[0].trim();
+  if (!name) return null;
+  return PACKAGE_COVERAGE_MODE[name] ?? null;
+}
+
 export function coverageFieldValues(suggestion: CoverageSuggestion): {
   start: string;
   end: string;

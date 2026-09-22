@@ -18,6 +18,7 @@ import {
   COVERAGE_NOTES,
   coverageFieldValues,
   resolveCoverage,
+  seededCoverageMode,
   isCoupleSession,
   toSessionType,
 } from './clientPrefill';
@@ -343,7 +344,37 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   // common for weddings booked months out where the timeline gets
   // finalized closer to the event.
   type Coverage = 'specific' | 'half-day' | 'full-day' | 'custom';
-  const [coverage, setCoverage] = useState<Coverage>('specific');
+  /**
+   * SEEDED FROM THE PACKAGE, which it never used to be.
+   *
+   * A lead who clicked Full Wedding Day on the weddings page arrived with a
+   * date and no clock time, so resolveCoverage correctly declined to invent
+   * one and coverageFieldValues handed back its 17:00/18:00 pair. With the
+   * mode hardcoded to 'specific', that rendered as a one hour session at 5 PM
+   * on a booking sold as up to eight, which is the form disagreeing with the
+   * summary panel sitting beside it.
+   *
+   * seededCoverageMode owns every judgement: which packages may imply a
+   * preset at all, that a window the thread actually agreed outranks one, and
+   * that a type whose contract has no presets is left alone. It returns null
+   * for everything it is unsure about, and null is today's behaviour.
+   *
+   * A LAZY INITIALISER, so the rule runs once at mount. There is no effect
+   * behind this: the only thing that clears a stale preset lives inside the
+   * type-change handler, so a value put here is the value the form opens on.
+   *
+   * The two time inputs keep their seeded values on purpose. They are not
+   * rendered, validated or submitted while a preset is selected, and they are
+   * what she lands on if she taps Specific Times.
+   */
+  const [coverage, setCoverage] = useState<Coverage>(
+    () =>
+      seededCoverageMode(
+        prefill?.wedding_package,
+        seededTimes,
+        Boolean(CONTRACT_TEMPLATES[seededTemplate]?.coveragePresets),
+      ) ?? 'specific',
+  );
   const [customCoverage, setCustomCoverage] = useState('');
 
   // 'other' only: Vero's own word for the shoot. It is what the portal is
