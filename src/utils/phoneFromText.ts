@@ -42,6 +42,57 @@ export function formatPhone(digits: string): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+/**
+ * E.164, or null when the number cannot be trusted to dial.
+ *
+ * Everything that LEAVES this system keyed on a phone number wants this shape:
+ * tel:, sms:, wa.me, and the wa_id a WhatsApp webhook reports. Migration 037's
+ * column comment is explicit that normalisation lives in application code
+ * precisely "so it can be matched against a WhatsApp wa_id and an SMS sender
+ * without a second parse" — this is that function.
+ *
+ * Returns null rather than guessing. A half-parsed number is worse than no
+ * button: the button appears, she taps it in a hurry, and it dials somebody
+ * else. The one assumption made is +1 for a bare 10-digit number, which is
+ * safe here because this business is in the USA and every stored number so far
+ * is NANP; anything international has to arrive with its own + and country
+ * code, which is how a person writes one.
+ */
+export function toE164(raw: string | null | undefined): string | null {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const digits = s.replace(/\D/g, '');
+  if (!digits) return null;
+
+  // Written with a +: believe the country code as given. E.164 allows up to
+  // 15 digits and needs at least a country code plus a subscriber number.
+  if (s.trimStart().startsWith('+') || /^00\d/.test(digits)) {
+    const d = /^00\d/.test(digits) ? digits.slice(2) : digits;
+    if (d.length < 8 || d.length > 15) return null;
+    return `+${d}`;
+  }
+
+  // NANP, with or without the trunk 1. An NANP area code and exchange both
+  // start 2-9, so a 10-digit run beginning with 0 or 1 is not a phone number.
+  if (digits.length === 11 && digits[0] === '1' && /^[2-9]/.test(digits[1])) return `+${digits}`;
+  if (digits.length === 10 && /^[2-9]/.test(digits)) return `+1${digits}`;
+
+  return null;
+}
+
+/**
+ * The same number as WhatsApp wants it: E.164 with the plus removed.
+ *
+ * wa.me and the wa_id on an inbound webhook are both this shape. Keeping one
+ * function for it means a stored number and a webhook's sender are compared
+ * after the SAME transformation, which is the only way the match can be
+ * trusted to link a thread to a client.
+ */
+export function toWaId(raw: string | null | undefined): string | null {
+  const e = toE164(raw);
+  return e ? e.slice(1) : null;
+}
+
 /** Toll-free prefixes. A client's own mobile is never one of these. */
 const TOLL_FREE = new Set(['800', '833', '844', '855', '866', '877', '888']);
 
@@ -66,6 +117,24 @@ function withoutQuotedHistory(text: string): string {
 }
 
 const CANDIDATE = /(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})[\s.\-]?\d{3}[\s.\-]?\d{4}/g;
+
+/**
+ * A company printing its OWN contact line.
+ *
+ * The tel:-target rule catches the href in "call our friendly Customer
+ * Experience team on (424) 227-5323 <tel:+14242275869>" and misses the number
+ * printed beside it, which is a different number. The discriminator is not the
+ * shape of either one, it is that the sentence is a business referring to
+ * itself in the first person plural. A client writing their own number does
+ * not say "our team".
+ *
+ * Deliberately narrower than matching every tel: link: a great many people
+ * have an email signature that renders as "Mobile: 555-1234 <tel:+15551234>",
+ * and rejecting those would lose a real client's number rather than a
+ * marketer's.
+ */
+const SUPPORT_LINE_NEARBY =
+  /\b(?:customer\s+(?:experience|service|support)|support\s+team|our\s+team|help\s?line|toll[-\s]?free|(?:call|contact|reach)\s+us\s+(?:on|at))\b/i;
 
 /** Words that mark a phone-shaped run as an identifier instead. */
 const IDENTIFIER_NEARBY =
@@ -123,6 +192,7 @@ export function findPhonesInText(
     const before = body.slice(Math.max(0, at - 60), at);
     const context = body.slice(Math.max(0, at - 60), at + m[0].length + 30);
     if (IDENTIFIER_NEARBY.test(context)) continue;
+    if (SUPPORT_LINE_NEARBY.test(context)) continue;
     // Inside a URL it is an identifier, not something to ring.
     if (/https?:\/\/\S*$/.test(before)) continue;
     /**
