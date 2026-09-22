@@ -6,7 +6,6 @@ import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaArrowRight from '../icons/fa/FaArrowRight';
 import { Helmet } from 'react-helmet-async';
 import { useEffect, useState } from 'react';
-import heroVariants from '../data/hero-variants.json';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
@@ -19,6 +18,7 @@ import {
 import { partWord } from '../utils/seriesWords';
 import Reveal, { useReveal } from '../components/ui/Reveal';
 import weddingData from '../data/wedding-page.json';
+import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
 
 /**
  * The weddings page: photographs woven through packages, planning help,
@@ -747,8 +747,8 @@ const Weddings = () => {
             would have cost a real description to save a hidden 182KB fetch.
             That trade is recorded rather than taken. */}
         <Image
-          src="/assets/photos/weddings/ocean-vows-ceremony.webp"
-          srcSet={`${heroVariants[MOBILE_HERO]['1280']} 1280w, ${heroVariants[MOBILE_HERO]['1600']} 1600w`}
+          src={pageHeroFallback(MOBILE_HERO)}
+          srcSet={pageHeroSrcSet(MOBILE_HERO)}
           sizes="100vw"
           alt="Wedding couple exchanging vows by the ocean."
           display={{ base: 'block', lg: 'none' }}
@@ -758,8 +758,13 @@ const Weddings = () => {
           h="100%"
           fetchPriority="high"
         />
+        {/* The DESKTOP hero, and it was missed when its mobile twin was
+            fixed: they are two elements, so doing one says nothing about the
+            other. 2400x1600 into a 1440x477 band. */}
         <Image
-          src="/assets/photos/site/weddings-hero.webp"
+          src={pageHeroFallback(DESKTOP_HERO)}
+          srcSet={pageHeroSrcSet(DESKTOP_HERO)}
+          sizes="100vw"
           alt="Bride and groom kissing on a pier at sunset, her veil lifting in the wind."
           display={{ base: 'none', lg: 'block' }}
           objectFit="cover"
@@ -1871,7 +1876,8 @@ const DECOR_SLOTS: Record<string, DecorSlot[]> = {
   ],
 };
 
-const MOBILE_HERO = '/assets/photos/weddings/ocean-vows-ceremony.webp' as keyof typeof heroVariants;
+const MOBILE_HERO = '/assets/photos/weddings/ocean-vows-ceremony.webp';
+const DESKTOP_HERO = '/assets/photos/site/weddings-hero.webp';
 
 /**
  * One journal entry's time on the stage.

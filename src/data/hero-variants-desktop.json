@@ -80,6 +80,25 @@
       "1920": "/assets/hero/couples-beach-baby-bump-moment-d1920.webp",
       "2560": "/assets/hero/couples-beach-baby-bump-moment-d2560.webp",
       "2880": "/assets/hero/couples-beach-baby-bump-moment-d2880.webp"
+    },
+    "/assets/photos/site/weddings-hero.webp": {
+      "1680": "/assets/hero/weddings-hero-d1680.webp",
+      "1920": "/assets/hero/weddings-hero-d1920.webp"
+    },
+    "/assets/photos/site/vero-camera.webp": {},
+    "/assets/photos/site/journal-hero.webp": {
+      "1680": "/assets/hero/journal-hero-d1680.webp",
+      "1920": "/assets/hero/journal-hero-d1920.webp"
+    },
+    "/assets/photos/site/home-cta-bg.webp": {
+      "1680": "/assets/hero/home-cta-bg-d1680.webp",
+      "1920": "/assets/hero/home-cta-bg-d1920.webp"
+    },
+    "/assets/photos/portraits/white-dress-lighthouse.webp": {
+      "1680": "/assets/hero/white-dress-lighthouse-d1680.webp",
+      "1920": "/assets/hero/white-dress-lighthouse-d1920.webp",
+      "2560": "/assets/hero/white-dress-lighthouse-d2560.webp",
+      "2880": "/assets/hero/white-dress-lighthouse-d2880.webp"
     }
   },
   "originalWidths": {
@@ -98,6 +117,15 @@
     "/assets/photos/site/contact-bg.webp": 4289,
     "/assets/photos/portraits/sunset-sunflower-field-joy.webp": 2812,
     "/assets/photos/weddings/newlyweds-running-sea.webp": 3500,
-    "/assets/photos/maternity/couples-beach-baby-bump-moment.webp": 3000
+    "/assets/photos/maternity/couples-beach-baby-bump-moment.webp": 3000,
+    "/assets/photos/site/weddings-hero.webp": 2400,
+    "/assets/photos/site/vero-camera.webp": 1600,
+    "/assets/photos/site/journal-hero.webp": 2400,
+    "/assets/photos/site/home-cta-bg.webp": 2534,
+    "/assets/photos/portraits/white-dress-lighthouse.webp": 3000,
+    "/assets/photos/site/about-bg.webp": 3033,
+    "/assets/photos/site/vero-art.webp": 1600,
+    "/assets/photos/site/vero-ceremony-lawn.webp": 960,
+    "/assets/photos/site/vero-portrait-truck-tulips.webp": 1600
   }
 }

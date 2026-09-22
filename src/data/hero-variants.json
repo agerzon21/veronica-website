@@ -66,5 +66,24 @@
   "/assets/photos/maternity/couples-beach-baby-bump-moment.webp": {
     "1280": "/assets/hero/couples-beach-baby-bump-moment-m1280.webp",
     "1600": "/assets/hero/couples-beach-baby-bump-moment-m.webp"
+  },
+  "/assets/photos/site/weddings-hero.webp": {
+    "1280": "/assets/hero/weddings-hero-m1280.webp",
+    "1600": "/assets/hero/weddings-hero-m.webp"
+  },
+  "/assets/photos/site/vero-camera.webp": {
+    "1280": "/assets/hero/vero-camera-m1280.webp"
+  },
+  "/assets/photos/site/journal-hero.webp": {
+    "1280": "/assets/hero/journal-hero-m1280.webp",
+    "1600": "/assets/hero/journal-hero-m.webp"
+  },
+  "/assets/photos/site/home-cta-bg.webp": {
+    "1280": "/assets/hero/home-cta-bg-m1280.webp",
+    "1600": "/assets/hero/home-cta-bg-m.webp"
+  },
+  "/assets/photos/portraits/white-dress-lighthouse.webp": {
+    "1280": "/assets/hero/white-dress-lighthouse-m1280.webp",
+    "1600": "/assets/hero/white-dress-lighthouse-m.webp"
   }
 }

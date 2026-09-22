@@ -37,6 +37,7 @@ const root = join(__dirname, '..');
 const slidesPath = join(root, 'src', 'data', 'hero-slides.json');
 const manifestPath = join(root, 'src', 'data', 'hero-variants.json');
 const desktopManifestPath = join(root, 'src', 'data', 'hero-variants-desktop.json');
+const srcsetsPath = join(root, 'src', 'data', 'photo-srcsets.json');
 const outDir = join(root, 'public', 'assets', 'hero');
 
 // The slide does NOT render at viewport width. It renders inside the camera
@@ -124,7 +125,44 @@ const PAGE_HEROES = {
   '/assets/photos/weddings/newlyweds-running-sea.webp': {},
   '/assets/photos/family/elegant-family-studio-portrait-black.webp': {},
   '/assets/photos/maternity/couples-beach-baby-bump-moment.webp': {},
+  // The weddings page's DESKTOP hero. Its mobile twin was fixed first and
+  // this one was missed, which is exactly the trap the mobileOnly flag above
+  // describes in reverse: they are two elements, so fixing one says nothing
+  // about the other.
+  '/assets/photos/site/weddings-hero.webp': {},
+  // The About hero, and the LCP element there.
+  '/assets/photos/site/vero-camera.webp': {},
+  // The Journal hero, and also the source for a 358x84 bar on the homepage:
+  // 662KB for 30,000 visible pixels. CardBar already asks for a srcset, so
+  // wiring this here fixes the homepage bar at the same time.
+  '/assets/photos/site/journal-hero.webp': {},
+  // The homepage's full-bleed call-to-action band.
+  '/assets/photos/site/home-cta-bg.webp': {},
+  // The homepage reviews backdrop: 1151KB, the heaviest single file left.
+  '/assets/photos/portraits/white-dress-lighthouse.webp': {},
 };
+
+/**
+ * INLINE PHOTOGRAPHS, as opposed to the full-bleed heroes above.
+ *
+ * These never span the viewport. They sit in a column at 165..518 CSS px, so
+ * the hero ladder is the wrong shape for them entirely: its smallest rung is
+ * 1280, which is more than twice what the largest of these ever paints.
+ *
+ * Measured boxes, from the layout harness:
+ *   PortraitPair main   165x220 phone (DPR 3 -> 495)   518x648 desk (DPR 2 -> 1036)
+ *   PortraitPair inset  165x248 phone (DPR 3 -> 495)   257x392 desk (DPR 2 ->  514)
+ *
+ * So 640 and 1280 bracket every one of them with a rung to spare.
+ */
+const INLINE_PHOTOS = [
+  '/assets/photos/site/about-bg.webp',
+  '/assets/photos/site/vero-art.webp',
+  '/assets/photos/site/vero-ceremony-lawn.webp',
+  '/assets/photos/site/vero-portrait-truck-tulips.webp',
+];
+const INLINE_WIDTHS = [640, 1280];
+const INLINE_QUALITY = 78;
 
 const PAGE_HERO_SRCS = Object.keys(PAGE_HEROES);
 const PAGE_HERO_DESKTOP_SRCS = PAGE_HERO_SRCS.filter((s) => !PAGE_HEROES[s].mobileOnly);
@@ -185,7 +223,16 @@ for (const src of mobileSources) {
   }
   manifest[src] = {};
 
+  // The ORIGINAL's width, so a rung wider than the source can be skipped.
+  // The desktop loop below has always done this; this one never did, and
+  // with `withoutEnlargement: true` that meant a 960px source silently
+  // produced two identical 960px files carrying 1280w and 1600w descriptors.
+  // A `w` descriptor that lies makes the browser choose badly in BOTH
+  // directions. It had not bitten yet only because every source listed here
+  // happened to be wider than 1600.
+  const srcMeta = await sharp(srcPath).metadata();
   for (const w of WIDTHS) {
+    if (srcMeta.width && srcMeta.width <= w) continue;
     const outName = variantName(src, w);
     const outPath = join(outDir, outName);
     manifest[src][w] = `/assets/hero/${outName}`;
@@ -294,6 +341,89 @@ for (const src of desktopSources) {
   }
 }
 
+// ---- inline photographs ----------------------------------------------
+// Same generator, same output directory, same committed-not-built rule. The
+// -i prefix keeps them from ever colliding with a hero rung for the same
+// photograph, which matters because vero-portrait-truck-tulips could
+// plausibly become a hero one day.
+const inlineManifest = {};
+const inlineName = (src, w) => `${basename(src, '.webp')}-i${w}.webp`;
+for (const src of INLINE_PHOTOS) {
+  const srcPath = join(root, 'public', src);
+  if (!existsSync(srcPath)) {
+    missingSources.push(src);
+    continue;
+  }
+  const meta = await sharp(srcPath).metadata();
+  inlineManifest[src] = {};
+  if (meta.width) originalWidths[src] = meta.width;
+
+  for (const w of INLINE_WIDTHS) {
+    // Same guard as everywhere else: never claim a width the file does not
+    // have. vero-ceremony-lawn.webp is 960 wide and gets one rung, not two.
+    if (!meta.width || meta.width <= w) continue;
+    const outName = inlineName(src, w);
+    const outPath = join(outDir, outName);
+    inlineManifest[src][w] = `/assets/hero/${outName}`;
+
+    const fresh = isCheck
+      ? existsSync(outPath)
+      : !force && existsSync(outPath) && statSync(outPath).mtimeMs >= statSync(srcPath).mtimeMs;
+    if (fresh) { reused++; continue; }
+    if (isCheck) { stale++; console.error(`  MISSING ${outName}`); continue; }
+    if (isDryRun) { console.log(`  WOULD WRITE ${outName}`); generated++; continue; }
+
+    const buf = await sharp(srcPath)
+      .rotate()
+      .resize({ width: w, withoutEnlargement: true })
+      .webp({ quality: INLINE_QUALITY, effort: 6 })
+      .toBuffer();
+    if (buf.length >= statSync(srcPath).size) {
+      delete inlineManifest[src][w];
+      continue;
+    }
+    writeFileSync(outPath, buf);
+    const before = statSync(srcPath).size / 1024;
+    const after = buf.length / 1024;
+    console.log(`  \u2713 ${outName}: ${Math.round(before)}KB \u2192 ${Math.round(after)}KB (-${Math.round(100 - (after / before) * 100)}%)`);
+    generated++;
+  }
+}
+
+/**
+ * ONE PRECOMPUTED srcset PER OPTIMISED PHOTOGRAPH.
+ *
+ * Both the client (src/utils/heroSrcSet.ts) and the prerenderer
+ * (scripts/prerender-photos.mjs, which emits <link rel=preload> for the LCP
+ * hero of each static page) need the exact same string. A preload whose
+ * candidate list differs from the img's by one character is not a slow
+ * preload, it is a SECOND DOWNLOAD of the largest image on the page.
+ *
+ * So neither of them builds it. This does, once, and they both look it up.
+ * TypeScript and plain .mjs cannot share a function, but they can share a
+ * JSON file.
+ *
+ * `src` is the widest MOBILE rung where one exists: a browser old enough to
+ * ignore srcset is not one to hand a 4289px original to.
+ */
+const srcsets = {};
+for (const src of [...PAGE_HERO_SRCS, ...INLINE_PHOTOS]) {
+  const rungs = [];
+  for (const [w, path] of Object.entries(manifest[src] ?? {})) rungs.push([Number(w), path]);
+  for (const [w, path] of Object.entries(desktopManifest[src] ?? {})) rungs.push([Number(w), path]);
+  for (const [w, path] of Object.entries(inlineManifest[src] ?? {})) rungs.push([Number(w), path]);
+  if (!rungs.length) continue;
+  // The original is a candidate only when its real width is known.
+  const width = originalWidths[src];
+  if (width) rungs.push([width, src]);
+  rungs.sort((a, b) => a[0] - b[0]);
+  const mobileRungs = manifest[src] ?? {};
+  srcsets[src] = {
+    srcset: rungs.map(([w, path]) => `${path} ${w}w`).join(', '),
+    src: mobileRungs['1600'] ?? mobileRungs['1280'] ?? (inlineManifest[src] ?? {})['1280'] ?? (inlineManifest[src] ?? {})['640'] ?? src,
+  };
+}
+
 if (missingSources.length) {
   console.error('\n[hero-variants] FATAL: source photos missing from public/:');
   missingSources.forEach((s) => console.error(`  ${s}`));
@@ -355,6 +485,22 @@ if (isCheck) {
     process.exit(1);
   }
 
+  // photo-srcsets.json is the file the bundle imports AND the file the
+  // prerenderer reads to emit its preload links. If it drifts, the preload
+  // stops matching the img and the page downloads its hero twice.
+  const onDiskS = existsSync(srcsetsPath) ? JSON.parse(readFileSync(srcsetsPath, 'utf-8')) : {};
+  const driftS = Object.keys(srcsets).filter(
+    (k) => JSON.stringify(onDiskS[k]) !== JSON.stringify(srcsets[k]),
+  );
+  const orphanS = Object.keys(onDiskS).filter((k) => !srcsets[k]);
+  if (driftS.length || orphanS.length) {
+    console.error('\n[hero-variants] FATAL: photo-srcsets.json is out of sync:');
+    driftS.forEach((k) => console.error(`  drifted: ${k}`));
+    orphanS.forEach((k) => console.error(`  no longer generated: ${k}`));
+    console.error('Run: npm run hero-variants');
+    process.exit(1);
+  }
+
   if (stale) {
     console.error(
       `\n[hero-variants] ${stale} variant(s) stale. Run: npm run hero-variants`,
@@ -374,6 +520,9 @@ if (!isDryRun) {
     desktopManifestPath,
     JSON.stringify({ rungs: desktopManifest, originalWidths: originalWidths }, null, 2) + '\n',
   );
+  // The one both the bundle and the prerenderer read. See the comment above
+  // `srcsets` for why it is precomputed rather than derived twice.
+  writeFileSync(srcsetsPath, JSON.stringify(srcsets, null, 2) + '\n');
 }
 
 console.log(
