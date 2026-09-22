@@ -141,6 +141,38 @@ const HEADER_CONTENT_BASE = 120;
 const HEADER_CONTENT_MD = 162;
 const HEADER_CONTENT_LG = 195;
 
+/**
+ * The viewport the hero lays itself out against.
+ *
+ * It has to be the viewport CSS is using, and window.innerWidth/innerHeight
+ * are not always that. On iOS Safari, and only there, those two report the
+ * VISUAL viewport: pinch out to half and a script is told the screen is 860
+ * wide and 1680 tall, while every media query in the theme, and every lvh and
+ * svh in this file, is still answering 430 and 932.
+ *
+ * The hero then recomputed its whole composition against a viewport that does
+ * not exist. Measured on an iPhone 15 Pro Max, pinching to 0.5 moved the
+ * eyebrow from 93px down the screen to 31px, up underneath the fixed navbar,
+ * doubled the camera from 1999px to 3999px tall, and pushed Book a Session
+ * from 662px to 756px, which on an 840px visible strip leaves it 12px off the
+ * bottom edge. A pinch is supposed to make the picture smaller. It is not
+ * supposed to re-lay out the page.
+ *
+ * Multiplying by the pinch scale undoes exactly that, and nothing else. At
+ * scale 1, which is every desktop and every phone that is not mid-pinch, this
+ * is the identity: the numbers are the ones this component has always used.
+ *
+ * This predates the number rail. The same measurements on 948c491, the commit
+ * before any of that work, are identical to the digit.
+ */
+const layoutViewport = (): { vw: number; vh: number } => {
+  const scale = (typeof window !== 'undefined' && window.visualViewport?.scale) || 1;
+  return {
+    vw: Math.round(window.innerWidth * scale),
+    vh: Math.round(window.innerHeight * scale),
+  };
+};
+
 const headerContentFor = (vw: number) =>
   vw >= 992 ? HEADER_CONTENT_LG : vw >= 768 ? HEADER_CONTENT_MD : HEADER_CONTENT_BASE;
 
@@ -364,24 +396,33 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // time iOS Safari or Chrome decides to hide a URL bar.
   const [vp, setVp] = useState(() => {
     if (typeof window === 'undefined') return { vw: 1200, vh: 800 };
-    return { vw: window.innerWidth, vh: window.innerHeight };
+    return layoutViewport();
   });
   useEffect(() => {
-    let lastW = window.innerWidth;
-    let lastH = window.innerHeight;
+    let last = layoutViewport();
     const update = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      const { vw: w, vh: h } = layoutViewport();
       // Real resize: width changed (window drag, orientation flip) OR the
       // height changed by more than 200px (only possible on orientation
       // flip — chrome bars are smaller than that). Below 200px = ignore.
-      if (w === lastW && Math.abs(h - lastH) < 200) return;
-      lastW = w;
-      lastH = h;
+      //
+      // A pinch now produces no change in either number, so it cannot reach
+      // this line at all, which is the point: the composition a visitor
+      // pinched to look at is the composition that stays on screen.
+      if (w === last.vw && Math.abs(h - last.vh) < 200) return;
+      last = { vw: w, vh: h };
       setVp({ vw: w, vh: h });
     };
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    // Safari fires resize on the VISUAL viewport too. Listening here as well
+    // costs nothing (update is a no-op unless the layout viewport really
+    // moved) and catches the one case window resize misses: a rotation
+    // performed while the page is pinched.
+    window.visualViewport?.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+    };
   }, []);
   const size = computeCameraSize(vp.vw, vp.vh);
 

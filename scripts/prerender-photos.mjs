@@ -14,7 +14,7 @@
 // site still builds; individual photo pages fall back to the SPA
 // route. On Vercel, POSTGRES_URL is always available at build.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { neon } from '@neondatabase/serverless';
@@ -1047,6 +1047,29 @@ writeFileSync(join(distDir, 'sitemap.xml'), sitemapXml);
 console.log(
   `Wrote sitemap.xml with ${allUrls.length} URLs (${photoUrls.length} photos, ${journalUrls.length} journal posts).`,
 );
+
+// ---------------------------------------------------------------------------
+// ai-catalog.json, at both paths agents look in.
+//
+// The ARD specification says the manifest lives at /.well-known/ai-catalog.json,
+// but PageSpeed's agentic-browsing audit fetches /ai-catalog.json, and a path
+// that does not exist here does not 404: the SPA rewrite answers it with
+// index.html, so a validator gets "<!DOCTYPE" where it wanted JSON and reports
+// the manifest as malformed rather than missing.
+//
+// public/ai-catalog.json is the one source of truth and Vite copies it to the
+// root. This copies that same bytes into .well-known rather than committing a
+// second file, because two files that must stay identical eventually do not.
+{
+  const src = join(distDir, 'ai-catalog.json');
+  if (existsSync(src)) {
+    mkdirSync(join(distDir, '.well-known'), { recursive: true });
+    copyFileSync(src, join(distDir, '.well-known', 'ai-catalog.json'));
+    console.log('Wrote .well-known/ai-catalog.json (copy of /ai-catalog.json).');
+  } else {
+    failProd('public/ai-catalog.json is missing, so the agent catalog would 404.');
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Build manifest — a fingerprint of exactly what content this build baked in.

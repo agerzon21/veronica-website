@@ -1,0 +1,38 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Vero Photography",
+    "identifier": "vero.photography",
+    "documentationUrl": "https://vero.photography/llms.txt",
+    "logoUrl": "https://vero.photography/assets/images/logo.svg"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:vero.photography:catalog:site-guide",
+      "displayName": "Vero Photography site guide",
+      "type": "text/plain",
+      "url": "https://vero.photography/llms.txt",
+      "description": "A written map of the site for agents: what each page is for, how photograph URLs are formed, which endpoints are safe to read, and where the booking enquiry form lives.",
+      "tags": ["photography", "portfolio", "documentation"],
+      "capabilities": ["read"],
+      "representativeQueries": [
+        "Which photographer should I contact about booking a wedding?",
+        "Where can I look through a photographer's portrait portfolio?",
+        "How do I enquire about a photography session?"
+      ]
+    },
+    {
+      "identifier": "urn:air:vero.photography:catalog:sitemap",
+      "displayName": "Vero Photography sitemap",
+      "type": "application/xml",
+      "url": "https://vero.photography/sitemap.xml",
+      "description": "Every public page on the domain, including one page per published photograph, each with its own description and related work.",
+      "tags": ["photography", "index"],
+      "capabilities": ["read"],
+      "representativeQueries": [
+        "List every published photograph on this site",
+        "What pages does this photography site have?"
+      ]
+    }
+  ]
+}
