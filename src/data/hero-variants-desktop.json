@@ -7,7 +7,8 @@
     "/assets/photos/portraits/shadow-play-portrait.webp": {
       "1680": "/assets/hero/shadow-play-portrait-d1680.webp",
       "1920": "/assets/hero/shadow-play-portrait-d1920.webp",
-      "2560": "/assets/hero/shadow-play-portrait-d2560.webp"
+      "2560": "/assets/hero/shadow-play-portrait-d2560.webp",
+      "2880": "/assets/hero/shadow-play-portrait-d2880.webp"
     },
     "/assets/photos/portraits/ocean-swimming-joy.webp": {
       "1680": "/assets/hero/ocean-swimming-joy-d1680.webp",
@@ -25,7 +26,8 @@
     "/assets/photos/family/elegant-family-studio-portrait-black.webp": {
       "1680": "/assets/hero/elegant-family-studio-portrait-black-d1680.webp",
       "1920": "/assets/hero/elegant-family-studio-portrait-black-d1920.webp",
-      "2560": "/assets/hero/elegant-family-studio-portrait-black-d2560.webp"
+      "2560": "/assets/hero/elegant-family-studio-portrait-black-d2560.webp",
+      "2880": "/assets/hero/elegant-family-studio-portrait-black-d2880.webp"
     },
     "/assets/photos/weddings/couple-back-camera-ocean-view.webp": {
       "1680": "/assets/hero/couple-back-camera-ocean-view-d1680.webp",
@@ -66,6 +68,18 @@
       "1680": "/assets/hero/sunset-sunflower-field-joy-d1680.webp",
       "1920": "/assets/hero/sunset-sunflower-field-joy-d1920.webp",
       "2560": "/assets/hero/sunset-sunflower-field-joy-d2560.webp"
+    },
+    "/assets/photos/weddings/newlyweds-running-sea.webp": {
+      "1680": "/assets/hero/newlyweds-running-sea-d1680.webp",
+      "1920": "/assets/hero/newlyweds-running-sea-d1920.webp",
+      "2560": "/assets/hero/newlyweds-running-sea-d2560.webp",
+      "2880": "/assets/hero/newlyweds-running-sea-d2880.webp"
+    },
+    "/assets/photos/maternity/couples-beach-baby-bump-moment.webp": {
+      "1680": "/assets/hero/couples-beach-baby-bump-moment-d1680.webp",
+      "1920": "/assets/hero/couples-beach-baby-bump-moment-d1920.webp",
+      "2560": "/assets/hero/couples-beach-baby-bump-moment-d2560.webp",
+      "2880": "/assets/hero/couples-beach-baby-bump-moment-d2880.webp"
     }
   },
   "originalWidths": {
@@ -82,6 +96,8 @@
     "/assets/photos/weddings/lotus-pond-reflection-newlyweds.webp": 3000,
     "/assets/photos/portraits/yellow-tank-top-sunflower-field.webp": 3000,
     "/assets/photos/site/contact-bg.webp": 4289,
-    "/assets/photos/portraits/sunset-sunflower-field-joy.webp": 2812
+    "/assets/photos/portraits/sunset-sunflower-field-joy.webp": 2812,
+    "/assets/photos/weddings/newlyweds-running-sea.webp": 3500,
+    "/assets/photos/maternity/couples-beach-baby-bump-moment.webp": 3000
   }
 }

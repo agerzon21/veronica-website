@@ -124,6 +124,9 @@ const Gallery = () => {
             objectPosition="center 15%"
             w="100%"
             h="100%"
+            // The LCP element here, same as its neighbours on /contact and
+            // /wedding-photography, which have said so for a while.
+            fetchPriority="high"
           />
           <Box position="absolute" inset={0} bg="rgba(0,0,0,0.5)" />
           <Flex
@@ -171,13 +174,20 @@ const Gallery = () => {
       </Helmet>
       {/* Category Hero */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
+        {/* The same ladder as every other page hero, and fetchPriority
+            because this is the LCP element on a category page. It was the
+            one full-bleed hero on the site still serving its original: a
+            3500x2333 file into a 390px window. */}
         <Image
-          src={categoryInfo.image}
+          src={pageHeroFallback(categoryInfo.image)}
+          srcSet={pageHeroSrcSet(categoryInfo.image)}
+          sizes="100vw"
           alt={categoryInfo.title}
           objectFit="cover"
           objectPosition={categoryInfo.backgroundPosition}
           w="100%"
           h="100%"
+          fetchPriority="high"
         />
         <Box position="absolute" inset={0} bg="rgba(0,0,0,0.5)" />
         <Flex

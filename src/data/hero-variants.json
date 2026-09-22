@@ -58,5 +58,13 @@
   "/assets/photos/portraits/sunset-sunflower-field-joy.webp": {
     "1280": "/assets/hero/sunset-sunflower-field-joy-m1280.webp",
     "1600": "/assets/hero/sunset-sunflower-field-joy-m.webp"
+  },
+  "/assets/photos/family/elegant-family-studio-portrait-black.webp": {
+    "1280": "/assets/hero/elegant-family-studio-portrait-black-m1280.webp",
+    "1600": "/assets/hero/elegant-family-studio-portrait-black-m.webp"
+  },
+  "/assets/photos/maternity/couples-beach-baby-bump-moment.webp": {
+    "1280": "/assets/hero/couples-beach-baby-bump-moment-m1280.webp",
+    "1600": "/assets/hero/couples-beach-baby-bump-moment-m.webp"
   }
 }

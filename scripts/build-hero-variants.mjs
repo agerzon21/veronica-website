@@ -115,6 +115,15 @@ const PAGE_HEROES = {
   // file the homepage paints into a 358x84 bar. One source, three surfaces,
   // and until now every one of them fetched all of it.
   '/assets/photos/portraits/sunset-sunflower-field-joy.webp': {},
+  // The four category heroes, one per /gallery/<category>. Three of them are
+  // also carousel slides, so they already had part of a ladder: one had
+  // mobile rungs and no desktop, another desktop and no mobile, and the
+  // maternity one neither. Listing them here gives all four the same full
+  // ladder rather than whatever their carousel membership happened to leave.
+  '/assets/photos/portraits/shadow-play-portrait.webp': {},
+  '/assets/photos/weddings/newlyweds-running-sea.webp': {},
+  '/assets/photos/family/elegant-family-studio-portrait-black.webp': {},
+  '/assets/photos/maternity/couples-beach-baby-bump-moment.webp': {},
 };
 
 const PAGE_HERO_SRCS = Object.keys(PAGE_HEROES);
