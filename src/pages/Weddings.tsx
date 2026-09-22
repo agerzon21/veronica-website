@@ -362,7 +362,10 @@ const Weddings = () => {
         <Flex justify="center" ref={introRef}>
           <Reveal shown={introShown} from={{ opacity: 0, y: 24 }} duration={0.7}>
             <VStack spacing={7} maxW="720px" textAlign="center">
-              <Text textStyle="eyebrow">My Approach</Text>
+              {/* The eyebrow is this section's only label, so it carries the
+                  heading level. CSSReset flattens h2 font-size, weight and
+                  margin to nothing, so the tag is semantics with no paint. */}
+              <Text as="h2" textStyle="eyebrow">My Approach</Text>
               <Box w="35px" h="1px" bg="brand.accent" />
               {/* The pitch as a statement, not a paragraph — set in the
                   serif display face so it reads as her voice, with the
@@ -409,7 +412,7 @@ const Weddings = () => {
         <DecorPrints items={tapestry.packages} />
         <Box maxW="1200px" mx="auto">
           <VStack spacing={3} mb={{ base: 4, md: 6 }} textAlign="center">
-            <Text textStyle="eyebrow">Wedding Photography</Text>
+            <Text as="h2" textStyle="eyebrow">Wedding Photography</Text>
             <Box w="35px" h="1px" bg="brand.accent" />
           </VStack>
           <Text
@@ -632,7 +635,7 @@ const Weddings = () => {
         <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 4, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
           <DecorPrints items={tapestry.journal} />
           <VStack spacing={3} mb={{ base: 8, md: 10 }} textAlign="center">
-            <Text textStyle="eyebrow">From the Journal</Text>
+            <Text as="h2" textStyle="eyebrow">From the Journal</Text>
             <Box w="35px" h="1px" bg="brand.accent" />
             <Text textStyle="bodyCopy" color="gray.600" maxW="560px">
               Real weddings, planning advice, and notes from behind the lens.
@@ -858,7 +861,7 @@ const Weddings = () => {
         >
           <Box position={{ lg: 'sticky' }} top={{ lg: '110px' }}>
             <VStack spacing={5} align={{ base: 'center', lg: 'flex-start' }} textAlign={{ base: 'center', lg: 'left' }}>
-              <Text textStyle="eyebrow">Wedding Photography FAQ</Text>
+              <Text as="h2" textStyle="eyebrow">Wedding Photography FAQ</Text>
               <Box w="35px" h="1px" bg="brand.accent" />
               <Text
                 fontFamily="heading"
@@ -921,7 +924,7 @@ const Weddings = () => {
           <DecorPrints items={tapestry.vendors} />
           <Box maxW="1000px" mx="auto">
             <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
-              <Text textStyle="eyebrow">Recommended Vendors</Text>
+              <Text as="h2" textStyle="eyebrow">Recommended Vendors</Text>
               <Box w="35px" h="1px" bg="brand.accent" />
               <Text textStyle="bodyCopy" color="gray.600" maxW="620px">
                 Local wedding businesses I know and trust. No commissions, no
@@ -1018,7 +1021,7 @@ const Weddings = () => {
       <Box bg="white" py={{ base: 14, md: 20 }} px={{ base: 6, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
         <DecorPrints items={tapestry.selected} />
         <VStack spacing={3} mb={{ base: 10, md: 14 }} textAlign="center">
-          <Text textStyle="eyebrow">Selected Work</Text>
+          <Text as="h2" textStyle="eyebrow">Selected Work</Text>
           <Box w="35px" h="1px" bg="brand.accent" />
         </VStack>
         <Grid

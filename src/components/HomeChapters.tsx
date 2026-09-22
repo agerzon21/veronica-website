@@ -133,7 +133,10 @@ export function HomeChapters() {
   return (
     <Box bg="white" pt={{ base: 12, md: 16 }} pb={{ base: 6, md: 8 }} px={{ base: 4, md: 8 }}>
       <VStack spacing={3} mb={{ base: 8, md: 12 }} textAlign="center">
-        <Text textStyle="eyebrow">Where to Begin</Text>
+        {/* as="h2", not a visual change: Home was one h1 with nothing under it,
+            so no section had a name in the heading outline. The theme sets no
+            styles on h1-h6 and CSSReset gives them the same margin as p. */}
+        <Text as="h2" textStyle="eyebrow">Where to Begin</Text>
         <Box w="40px" h="1px" bg="brand.accent" />
       </VStack>
 

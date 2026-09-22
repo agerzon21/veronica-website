@@ -289,7 +289,10 @@ const InstagramFeed = () => {
       {/* Eyebrow + 40px rule. Not PageHeader: this section has no title of its
           own, and PageHeader requires one. Same tokens either way. */}
       <VStack spacing={{ base: 4, md: 5 }} mb={{ base: 10, md: 12 }}>
-        <Text textStyle="eyebrow">Follow Along</Text>
+        {/* as="h2", not a visual change: Home was one h1 with nothing under it,
+            so no section had a name in the heading outline. The theme sets no
+            styles on h1-h6 and CSSReset gives them the same margin as p. */}
+        <Text as="h2" textStyle="eyebrow">Follow Along</Text>
         <Box w="40px" h="1px" bg="brand.accent" />
       </VStack>
 

@@ -279,10 +279,11 @@ function GalleryImg({ src, alt, title }: { src: string; alt: string; title: stri
         opacity={loaded ? 0 : 1}
         transition="opacity 0.35s ease"
         pointerEvents="none"
-        // Once the img has loaded the spinner is invisible; setting
-        // aria-hidden keeps it out of the accessibility tree so it
-        // doesn't get announced as "busy" on screen readers.
-        aria-hidden={loaded}
+        // Unconditional, not {loaded}: React serialises aria-hidden={false}
+        // to the literal string "false", which un-hides Chakra's srOnly
+        // "Loading..." label and folds it into the accessible name of the
+        // link wrapping this tile. The spinner is decorative either way.
+        aria-hidden
       />
       <img
         src={src}

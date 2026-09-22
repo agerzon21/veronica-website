@@ -286,9 +286,14 @@ const PortraitPair = ({
 // The tucked label wraps inside half a phone's width, so it needs a real
 // line height; the eyebrow style's 1 is for single lines. It carries the same
 // short gold rule as every other label on the page.
+//
+// h2, because it names the section it sits beside. Its lg-only twin further
+// down carries the same words, but the two are display:none of each other, so
+// only one is ever in the accessibility tree and the heading is never
+// announced twice.
 const TuckedEyebrow = ({ children }: { children: React.ReactNode }) => (
   <VStack align="flex-start" spacing={4}>
-    <Text textStyle="eyebrow" lineHeight="1.7">
+    <Text as="h2" textStyle="eyebrow" lineHeight="1.7">
       {children}
     </Text>
     <Box w="35px" h="1px" bg="brand.accent" />
@@ -409,7 +414,11 @@ const About = () => {
             >
               <Reveal shown={approachShown} from={{ opacity: 0, y: 24 }} duration={FADE_IN_SEC}>
                 <VStack align="flex-start" spacing={5}>
-                  <Text textStyle="eyebrow">My Approach</Text>
+                  {/* The four section labels are the page's only headings
+                      below the h1. eyebrow sets font-size, font-weight and
+                      margin itself, which is every property a bare h2 would
+                      otherwise inherit differently from a p. */}
+                  <Text as="h2" textStyle="eyebrow">My Approach</Text>
                   <Box w="35px" h="1px" bg="brand.accent" />
                   <Text
                     fontFamily="heading"
@@ -484,7 +493,7 @@ const About = () => {
                     bg="brand.accentBorder"
                     my={3}
                   />
-                  <Text textStyle="eyebrow" display={{ base: 'none', lg: 'block' }}>
+                  <Text as="h2" textStyle="eyebrow" display={{ base: 'none', lg: 'block' }}>
                     A Unique Perspective
                   </Text>
                   <Text
@@ -541,7 +550,7 @@ const About = () => {
             <GridItem gridColumn={{ lg: 2 }} gridRow={{ base: 1, lg: 2 }}>
               <Reveal shown={angleShown} from={{ opacity: 0, y: 24 }} duration={FADE_IN_SEC}>
                 <VStack align="flex-start" spacing={5}>
-                  <Text textStyle="eyebrow">Whatever the Angle Asks For</Text>
+                  <Text as="h2" textStyle="eyebrow">Whatever the Angle Asks For</Text>
                   <Box w="35px" h="1px" bg="brand.accent" />
                   <Text
                     fontFamily="heading"
@@ -612,7 +621,7 @@ const About = () => {
                     bg="brand.accentBorder"
                     my={3}
                   />
-                  <Text textStyle="eyebrow" display={{ base: 'none', lg: 'block' }}>
+                  <Text as="h2" textStyle="eyebrow" display={{ base: 'none', lg: 'block' }}>
                     Your Turn
                   </Text>
                   <Text

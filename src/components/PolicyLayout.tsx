@@ -154,11 +154,19 @@ export const P = ({ children }: { children: React.ReactNode }) => (
 /**
  * Bulleted list rendered underneath a paragraph. Uses gold dot markers
  * to match the site's accent color.
+ *
+ * The explicit roles are load-bearing, not redundant: `listStyleType="none"`
+ * makes Safari/VoiceOver drop list semantics entirely, and Flex sets
+ * `display: flex` on the <li>, which overrides `display: list-item` so the
+ * item stops computing a listitem role. Without these two attributes a
+ * screen reader reads every policy bullet as loose prose with no "list of
+ * N items" announcement. They are ARIA only, so nothing about the visual
+ * treatment changes.
  */
 export const PolicyList = ({ items }: { items: React.ReactNode[] }) => (
-  <Box as="ul" pl={0} m={0} listStyleType="none">
+  <Box as="ul" role="list" pl={0} m={0} listStyleType="none">
     {items.map((item, i) => (
-      <Flex key={i} as="li" align="flex-start" gap={3} mb={2}>
+      <Flex key={i} as="li" role="listitem" align="flex-start" gap={3} mb={2}>
         <Box
           as="span"
           w="4px"

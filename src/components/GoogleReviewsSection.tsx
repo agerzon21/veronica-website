@@ -309,7 +309,10 @@ const GoogleReviewsSection = () => {
       <Reveal amount="some" from={{ opacity: 0, y: 20 }} duration={0.8}>
         {/* Header */}
         <VStack spacing={6} mb={{ base: 10, md: 14 }} maxW="measureWide" mx="auto">
-          <Text textStyle="eyebrowOnDark">Kind Words</Text>
+          {/* as="h2", not a visual change: Home was one h1 with nothing under
+              it, so no section had a name in the heading outline. The theme sets
+              no styles on h1-h6 and CSSReset gives them the same margin as p. */}
+          <Text as="h2" textStyle="eyebrowOnDark">Kind Words</Text>
           {/* 40px, not 35 — the one rule width PageHeader uses everywhere. */}
           <Box w="40px" h="1px" bg="brand.accent" />
 

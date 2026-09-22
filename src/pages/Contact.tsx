@@ -282,6 +282,13 @@ const Contact = () => {
   // screen reader: no count, no field names, and no focus move either, so the
   // button appeared to do nothing at all.
   const [announce, setAnnounce] = useState('');
+  // A live region only speaks when its text actually changes, so the same
+  // sentence written twice is silent. The re-announce below blanks it first
+  // and writes it back a tick later; this holds that tick so it can be
+  // cancelled. setTimeout rather than requestAnimationFrame, which does not
+  // fire in headless Chrome.
+  const announceTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(announceTimer.current), []);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
 
@@ -492,6 +499,9 @@ const Contact = () => {
   // ── submit ─────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // A re-announce still in flight belongs to the previous attempt and would
+    // otherwise speak its count over this one.
+    window.clearTimeout(announceTimer.current);
     setSubmitted(true);
 
     const missing = REQUIRED.filter((k) => !valid[k]);
@@ -515,7 +525,12 @@ const Contact = () => {
           ? target?.querySelector<HTMLElement>('button')
           : (target as HTMLElement | null);
       control?.focus({ preventScroll: true });
-      setAnnounce(`${missing.length} field${missing.length === 1 ? ' needs' : 's need'} attention.`);
+      // Pressing submit again with the same fields missing produced a
+      // byte-identical string, React mutated nothing, and the region stayed
+      // quiet. Blanking it first guarantees the mutation.
+      const msg = `${missing.length} field${missing.length === 1 ? ' needs' : 's need'} attention.`;
+      setAnnounce('');
+      announceTimer.current = window.setTimeout(() => setAnnounce(msg), 60);
       return;
     }
     setAnnounce('');
@@ -797,6 +812,9 @@ const Contact = () => {
                 // appeared and the other empty fields were never flagged.
                 noValidate
                 id="contact-form"
+                // A form is only a landmark once it has a name, and the CTA
+                // that submits it lives outside it. Matches the h1.
+                aria-label="Book a session"
                 w="100%"
                 maxW={{ base: '640px', lg: 'none' }}
                 mx="auto"
@@ -929,6 +947,10 @@ const Contact = () => {
                             type="button"
                             onClick={() => { setShootType(t.value); setState((s) => ({ ...s, shoot_type: '' })); }}
                             aria-pressed={shootType === t.value}
+                            // Submit sends focus to the first chip, which was
+                            // the one flagged control whose error line named
+                            // nothing.
+                            {...describe('shoot_type')}
                             display="flex"
                             alignItems="center"
                             minH={{ base: '44px', lg: '40px' }}
