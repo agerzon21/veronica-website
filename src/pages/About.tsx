@@ -460,9 +460,13 @@ const About = () => {
             >
               <PortraitPair
                 main={{
-                  src: '/assets/photos/site/vero-portrait-tulips.webp',
-                  alt: 'Portrait of Veronika Gerzon in a field of tulips.',
-                  position: 'center 55%',
+                  src: '/assets/photos/site/vero-portrait-truck-tulips.webp',
+                  alt: 'Veronika Gerzon seated on the roof of a vintage truck in a field of tulips.',
+                  // 45%, not the 55% the previous photograph used. This one is
+                  // an environmental frame rather than a tight portrait: the
+                  // subject sits near the top and the tulips fill the bottom
+                  // third, so the 3/4 box crops the sky above her hat at 55%.
+                  position: 'center 45%',
                 }}
                 mainRatio={3 / 4}
                 inset={{
