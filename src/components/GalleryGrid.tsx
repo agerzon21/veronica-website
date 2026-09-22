@@ -3,6 +3,7 @@ import { m } from 'framer-motion';
 import ImageModal from './ImageModal';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { justifyLayout } from '../utils/justifyLayout';
+import { gridSrcSet } from '../utils/gridSrcSet';
 
 interface GalleryImage {
   id?: string;
@@ -227,7 +228,18 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
                 whileHover={{ scale: 1.01 }}
                 transition={{ duration: 0.3 }}
               >
-                <GalleryImg src={image.url} alt={image.alt} title={image.title} />
+                {/* sizes is the tile's EXACT rendered width, which this
+                    layout happens to know: justifyLayout returns it in px.
+                    That is the ideal case for srcset — the browser multiplies
+                    by device pixel ratio and picks a rung, with no vw
+                    arithmetic to get wrong on a masonry whose tiles are
+                    different widths in every row. */}
+                <GalleryImg
+                  src={image.url}
+                  alt={image.alt}
+                  title={image.title}
+                  sizes={`${Math.round(tile.width)}px`}
+                />
               </MotionBox>
             );
           })}
@@ -263,7 +275,18 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
  * opacity 0→1 — so the transition reads as intentional loading
  * rather than a hard pop.
  */
-function GalleryImg({ src, alt, title }: { src: string; alt: string; title: string }) {
+function GalleryImg({
+  src,
+  alt,
+  title,
+  sizes,
+}: {
+  src: string;
+  alt: string;
+  title: string;
+  /** The tile's exact rendered width in px, e.g. "358px". */
+  sizes: string;
+}) {
   const [loaded, setLoaded] = useState(false);
   return (
     <>
@@ -287,6 +310,8 @@ function GalleryImg({ src, alt, title }: { src: string; alt: string; title: stri
       />
       <img
         src={src}
+        srcSet={gridSrcSet(src)}
+        sizes={sizes}
         alt={alt}
         title={title}
         onLoad={() => setLoaded(true)}

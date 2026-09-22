@@ -54,3 +54,9 @@ CLAUDE_HANDOFF.md
 
 # Internal audit, public repo, keep local.
 CLAUDE_HANDOFF_AUDIT.md
+
+# Gallery grid derivatives: 39MB, fully derivable, and the build
+# regenerates them from whatever photos it actually has (34 of the live
+# gallery photos are downloaded from Drive at build time and have never
+# been in git). See scripts/build-grid-variants.mjs.
+public/assets/grid/
