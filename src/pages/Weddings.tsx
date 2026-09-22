@@ -1,5 +1,6 @@
 import {
   Box, VStack, HStack, Text, Flex, Image, SimpleGrid, Grid, GridItem, Icon,
+  useBreakpointValue,
 } from '@chakra-ui/react';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaArrowRight from '../icons/fa/FaArrowRight';
@@ -9,6 +10,7 @@ import heroVariants from '../data/hero-variants.json';
 import { Link as RouterLink } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
+import { SlideIndexRail } from '../components/ui/SlideIndex';
 import Reveal, { useReveal } from '../components/ui/Reveal';
 import weddingData from '../data/wedding-page.json';
 
@@ -197,16 +199,83 @@ const Weddings = () => {
   // Journal slideshow: active slide + hover-pause for the autoplay.
   const [slideIdx, setSlideIdx] = useState(0);
   const [slidePaused, setSlidePaused] = useState(false);
+  /**
+   * Is the slideshow actually advancing right now?
+   *
+   * The rail's filling line is a promise about when the next entry arrives,
+   * so it must not run while rotation is stopped. Rotation stops on hover,
+   * stops on a hidden tab, and never starts under prefers-reduced-motion, so
+   * "there are several entries" is not the same question as "is it rotating".
+   */
+  const [slideRotating, setSlideRotating] = useState(false);
+  /**
+   * Bumped whenever the visitor picks an entry themselves, so the rotation
+   * effect tears down and starts a fresh interval.
+   *
+   * Without it the timer keeps running from whenever it last fired, so
+   * choosing an entry 4.7 seconds in shows it for 100ms and then moves on.
+   * It also keeps the rail honest, since the line is a promise about when the
+   * next entry arrives and it has to restart from zero on a pick.
+   */
+  const [slideCycle, setSlideCycle] = useState(0);
+  const pickSlide = (i: number) => {
+    setSlideIdx(i);
+    setSlideCycle((k) => k + 1);
+  };
+  /**
+   * Tighten the rail's type and gaps below md, and give every numeral a 44px
+   * tap target there.
+   *
+   * `fallback: 'base'` matters: without it useBreakpointValue returns
+   * undefined on the first pass, and a rail that renders desktop-sized on a
+   * phone for one frame is a visible jump on the element whose whole job is
+   * to look steady. ssr:false because main.tsx uses createRoot, never
+   * hydrateRoot, and prerender-photos.mjs does no React rendering.
+   */
+  const railCompact =
+    useBreakpointValue({ base: true, md: false }, { ssr: false, fallback: 'base' }) ?? true;
 
   useEffect(() => {
-    if (featured.length < 2 || slidePaused) return;
-    // Re-created whenever slideIdx changes, so a manual thumb/dot click
-    // earns a full interval before the next auto-advance.
-    const t = setInterval(() => {
-      setSlideIdx((i) => (i + 1) % featured.length);
-    }, 4800);
-    return () => clearInterval(t);
-  }, [featured.length, slidePaused, slideIdx]);
+    if (featured.length < 2 || slidePaused) {
+      setSlideRotating(false);
+      return;
+    }
+    if (
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      setSlideRotating(false);
+      return;
+    }
+
+    let id: number | undefined;
+    const tick = () => setSlideIdx((i) => (i + 1) % featured.length);
+    const start = () => {
+      // Never rotate a hidden tab: it advances entries nobody is looking at
+      // and, now that there is a rail, draws a countdown to go with them.
+      if (document.hidden) return;
+      if (id === undefined) id = window.setInterval(tick, JOURNAL_SLIDE_MS);
+      setSlideRotating(true);
+    };
+    const stop = () => {
+      if (id !== undefined) {
+        clearInterval(id);
+        id = undefined;
+      }
+      setSlideRotating(false);
+    };
+    const onVisibility = () => (document.hidden ? stop() : start());
+
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // slideCycle, not slideIdx: the interval now survives an auto-advance and
+    // is rebuilt only when the visitor picks one, which is the only case that
+    // needs a fresh full interval.
+  }, [featured.length, slidePaused, slideCycle]);
 
   useEffect(() => {
     let cancelled = false;
@@ -702,7 +771,15 @@ const Weddings = () => {
                       inset={0}
                       bg="linear-gradient(180deg, transparent 55%, rgba(10,8,4,0.68) 100%)"
                     />
-                    <Flex position="absolute" inset={0} align="flex-end" p={{ base: 4, md: 8 }}>
+                    <Flex
+                      position="absolute"
+                      inset={0}
+                      align="flex-end"
+                      p={{ base: 4, md: 8 }}
+                      // Clearing the rail, which sits below this and cannot
+                      // push it because it is not in the same subtree.
+                      pb={RAIL_CLEARANCE}
+                    >
                       <VStack align="flex-start" spacing={{ base: 1.5, md: 2.5 }}>
                         <JournalLabel label={p.label} />
                         <Text
@@ -722,26 +799,49 @@ const Weddings = () => {
                 );
               })}
 
-              <HStack position="absolute" right={{ base: 3, md: 6 }} bottom={{ base: 3, md: 6 }} spacing={2} zIndex={2}>
-                {featured.map((p, i) => (
-                  <Box
-                    key={p.slug}
-                    as="button"
-                    type="button"
-                    aria-label={p.title}
-                    onClick={() => setSlideIdx(i)}
-                    w={i === slideIdx ? '9px' : '7px'}
-                    h={i === slideIdx ? '9px' : '7px'}
-                    borderRadius="full"
-                    bg={i === slideIdx ? 'brand.accent' : 'whiteAlpha.600'}
-                    border="none"
-                    p={0}
-                    cursor="pointer"
-                    transition="all 0.3s ease"
-                    sx={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
-                  />
-                ))}
-              </HStack>
+              {/* The 01 02 03 rail, the homepage's, from the shared slot.
+                  It replaces six dots that said which entry you were on but
+                  nothing about how long it would stay, which on a stage that
+                  turns itself over every 4.8s is the more useful half.
+
+                  BOTTOM LEFT, under the title, not bottom right where the
+                  dots were. Two reasons, and they point the same way. The
+                  rule grows by up to 62px while an entry runs, so whichever
+                  edge the row is anchored from is the one that holds still:
+                  anchored left, only the numerals ahead of the active one
+                  move, which reads as the line pushing forward; anchored
+                  right, the ones already behind you drift. And a full-width
+                  title set at 3xl with noOfLines={2} can reach into the right
+                  third of the stage, so a rail parked there was one long
+                  headline away from a collision. Under the title there is no
+                  arrangement of words that can reach it.
+
+                  A sibling of the slides rather than a child, because each
+                  slide is a RouterLink and a numeral inside one would
+                  navigate to the entry instead of switching to it. zIndex 2
+                  keeps it above them, exactly as the dots were. */}
+              <Box
+                position="absolute"
+                left={{ base: 4, md: 8 }}
+                right={{ base: 4, md: 8 }}
+                bottom={{ base: 4, md: 8 }}
+                zIndex={2}
+                sx={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
+              >
+                <SlideIndexRail
+                  total={featured.length}
+                  index={slideIdx}
+                  rotating={slideRotating}
+                  slideMs={JOURNAL_SLIDE_MS}
+                  onPick={pickSlide}
+                  compact={railCompact}
+                  // The numeral is in the name as well as the title, so the
+                  // visible "01" is speakable and the entry is identified.
+                  label={(i) =>
+                    `${String(i + 1).padStart(2, '0')}: ${featured[i]?.title ?? ''}`
+                  }
+                />
+              </Box>
             </Box>
 
             <Grid
@@ -1384,6 +1484,27 @@ const DECOR_SLOTS: Record<string, DecorSlot[]> = {
 };
 
 const MOBILE_HERO = '/assets/photos/weddings/ocean-vows-ceremony.webp' as keyof typeof heroVariants;
+
+/**
+ * One journal entry's time on the stage.
+ *
+ * The rail's filling line animates over exactly this, so the two cannot be
+ * changed independently: a line that finishes early or late is worse than no
+ * line, because it is a countdown that turns out not to have been one.
+ */
+const JOURNAL_SLIDE_MS = 4800;
+
+/**
+ * How much room the rail needs beneath the entry title, per breakpoint.
+ *
+ * The rail is a sibling of the slides (the slides are links, and a numeral
+ * inside one would navigate instead of switching), so nothing in the layout
+ * makes the title get out of its way automatically. These are the numbers:
+ * the stage's own bottom padding, plus the slot height the shared component
+ * renders (44px on a phone, where it is a tap target; 17px otherwise), plus a
+ * breathing gap.
+ */
+const RAIL_CLEARANCE = { base: '68px', md: '63px' };
 
 const SEAM_COUNT = 7;
 const SEAM_SIZE = 4;

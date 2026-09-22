@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Box, Image, Flex, Text, Button, useBreakpointValue } from '@chakra-ui/react';
 import { m, AnimatePresence, useTransform, type MotionValue } from 'framer-motion';
+import { SlideIndexSlot } from './ui/SlideIndex';
 
 interface ImageCarouselProps {
   images: Array<{
@@ -361,90 +362,33 @@ const IndexRail: React.FC<{
     ? Array.from({ length: windowSize }, (_, k) => pageStart + k)
     : Array.from({ length: total }, (_, k) => k);
 
-  const reduced =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
   /**
-   * One numeral, plus the growing line when it is the active one.
+   * One numeral, plus its growing rule, from the shared slot.
    *
-   * The line lives INSIDE its half, so its width only ever pushes numbers
-   * within that half. It cannot move the gap, which is what put a number on
-   * top of the mouse icon when the whole row was one centred run.
+   * The slot moved to ui/SlideIndex.tsx when the weddings journal slideshow
+   * asked for the same rail. Everything that was tuned here — the rule
+   * widths, the 44px phone target, the reduced-motion fallback, the colours —
+   * moved with it unchanged; what stayed behind is this rail's LAYOUT, which
+   * the journal has no use for.
+   *
+   * swapNumerals rides on `windowed` exactly as the animated branch used to:
+   * only the paging phone rail needs the numerals themselves to animate,
+   * because there the slots stay put and their contents turn over.
    */
-  const renderSlot = (i: number) => {
-    const active = i === index;
-    return (
-      <React.Fragment key={windowed ? `slot-${i}` : i}>
-        <Box
-          as="button"
-          type="button"
-          onClick={() => onPick(i)}
-          aria-label={`Show photo ${i + 1} of ${total}`}
-          aria-current={active ? 'true' : undefined}
-          flexShrink={0}
-          bg="transparent"
-          border="none"
-          p={0}
-          cursor="pointer"
-          lineHeight="1"
-          minW={compact ? '34px' : undefined}
-          minH={compact ? '44px' : undefined}
-          display={compact ? 'inline-flex' : undefined}
-          alignItems={compact ? 'center' : undefined}
-          justifyContent={compact ? 'center' : undefined}
-          fontSize={compact ? '15px' : '17px'}
-          letterSpacing={compact ? '0.06em' : '0.16em'}
-          fontWeight="400"
-          color={active ? 'white' : 'rgba(255,255,255,0.55)'}
-          transition="color 0.35s ease"
-          _hover={{ color: 'white' }}
-          _focusVisible={{ outline: '2px solid white', outlineOffset: '3px' }}
-          sx={{ WebkitTapHighlightColor: 'transparent', textShadow: '0 1px 6px rgba(0,0,0,0.45)' }}
-        >
-          {windowed ? (
-            <Box position="relative" w="100%" h="100%" display="flex" alignItems="center" justifyContent="center">
-              <AnimatePresence initial={false}>
-                <m.span
-                  key={i}
-                  initial={{ opacity: 0, y: 7 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -7 }}
-                  transition={{ duration: 0.3, ease: 'easeOut' }}
-                  style={{ position: 'absolute', lineHeight: 1 }}
-                >
-                  {String(i + 1).padStart(2, '0')}
-                </m.span>
-              </AnimatePresence>
-            </Box>
-          ) : (
-            String(i + 1).padStart(2, '0')
-          )}
-        </Box>
-        {active && (
-          <m.span
-            key={`rule-${index}`}
-            aria-hidden
-            initial={{ width: 0 }}
-            animate={{ width: reduced || !rotating ? (compact ? 12 : 26) : compact ? 26 : 62 }}
-            transition={
-              reduced || !rotating
-                ? { duration: 0.25 }
-                : { duration: SLIDE_MS / 1000, ease: 'linear' }
-            }
-            style={{
-              height: 1,
-              background: 'rgba(255,255,255,0.9)',
-              boxShadow: '0 1px 6px rgba(0,0,0,0.45)',
-              display: 'block',
-              flexShrink: 0,
-            }}
-          />
-        )}
-      </React.Fragment>
-    );
-  };
+  const renderSlot = (i: number) => (
+    <React.Fragment key={windowed ? `slot-${i}` : i}>
+      <SlideIndexSlot
+        i={i}
+        total={total}
+        index={index}
+        rotating={rotating}
+        slideMs={SLIDE_MS}
+        onPick={onPick}
+        compact={compact}
+        swapNumerals={windowed}
+      />
+    </React.Fragment>
+  );
 
   const half = windowed ? windowSize / 2 : Math.ceil(slots.length / 2);
   const leftSlots = slots.slice(0, half).map(renderSlot);
