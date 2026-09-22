@@ -2,7 +2,7 @@
  * The gallery grid's srcset, built by convention rather than from a manifest.
  *
  * scripts/build-grid-variants.mjs writes
- *   public/assets/grid/<category>/<slug>-g{400,800,1280}.webp
+ *   public/assets/grid/<category>/<slug>-g{400,800,1600}.webp
  * for every photograph under public/assets/photos/<category>/, during the
  * build, immediately after build-gallery-statics.mjs has downloaded the ones
  * that are not in git. `npm run grid-variants:check` runs straight afterwards

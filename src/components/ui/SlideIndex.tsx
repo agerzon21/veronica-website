@@ -117,6 +117,11 @@ export const SlideIndexSlot: React.FC<SlideIndexSlotProps> = ({
         border="none"
         p={0}
         cursor="pointer"
+        // Explicit, because the journal rail's wrapper sets pointerEvents
+        // none so its full-width band stops covering the slide underneath.
+        // The homepage rail's container already sets auto, so this changes
+        // nothing there.
+        pointerEvents="auto"
         lineHeight="1"
         minW={compact ? '34px' : undefined}
         minH={compact ? '44px' : undefined}

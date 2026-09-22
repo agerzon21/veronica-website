@@ -381,6 +381,93 @@ const CATEGORY_META = {
   },
 };
 
+/**
+ * LCP HERO PRELOADS.
+ *
+ * Every one of these pages is served as real HTML to real browsers (see the
+ * rewrites in vercel.json), and then boots the SPA. So the hero <img> is not
+ * discovered until the bundle has downloaded, parsed and rendered. A preload
+ * in this head starts that fetch immediately instead.
+ *
+ * THE CANDIDATE LIST IS NOT BUILT HERE. It is read from
+ * src/data/photo-srcsets.json, the same file src/utils/heroSrcSet.ts reads,
+ * because a preload whose srcset differs from the img's by ONE CHARACTER is
+ * not a slow preload: it is a second download of the largest image on the
+ * page, which is the exact opposite of the point. `imagesizes` must match the
+ * component's `sizes` for the same reason.
+ *
+ * NO crossorigin attribute, deliberately. These images are non-CORS, and an
+ * anonymous socket lands in a different connection pool, so the preload would
+ * warm a connection the img then does not use. The same trap is already
+ * documented against googletagmanager in index.html.
+ */
+const PHOTO_SRCSETS = JSON.parse(
+  readFileSync(join(__dirname, '..', 'src/data/photo-srcsets.json'), 'utf-8'),
+);
+
+const heroPreload = (photo, sizes = '100vw', media = null) => {
+  const entry = PHOTO_SRCSETS[photo];
+  // No derivatives for this photograph means no preload rather than a preload
+  // of the original, which would race the img for the same bytes at best.
+  if (!entry) return '';
+  return (
+    `\n    <link rel="preload" as="image" fetchpriority="high"` +
+    (media ? ` media="${media}"` : '') +
+    `\n      href="${entry.src}"` +
+    `\n      imagesrcset="${esc(entry.srcset)}"` +
+    `\n      imagesizes="${sizes}" />`
+  );
+};
+
+/**
+ * Which photograph each static page opens on, and the `sizes` its component
+ * declares. Duplicated from the page components, so the assertion below fails
+ * the build if either side moves.
+ */
+const PAGE_HEROES = {
+  '/about': [['/assets/photos/site/vero-camera.webp', '100vw', null]],
+  '/contact': [['/assets/photos/site/contact-bg.webp', '100vw', null]],
+  '/gallery': [['/assets/photos/portraits/sunset-sunflower-field-joy.webp', '100vw', null]],
+  '/journal': [['/assets/photos/site/journal-hero.webp', '100vw', null]],
+  // Two elements, one per breakpoint, so two media-scoped preloads. The
+  // boundary is Chakra's `lg`, 62em, which is what display={{base,lg}} uses.
+  '/wedding-photography': [
+    ['/assets/photos/weddings/ocean-vows-ceremony.webp', '100vw', '(max-width: 61.9375em)'],
+    ['/assets/photos/site/weddings-hero.webp', '100vw', '(min-width: 62em)'],
+  ],
+};
+
+/** The hero on /gallery/<category>, from CATEGORY_INFO in src/pages/Gallery.tsx. */
+const CATEGORY_HEROES = {
+  portraits: '/assets/photos/portraits/shadow-play-portrait.webp',
+  weddings: '/assets/photos/weddings/newlyweds-running-sea.webp',
+  family: '/assets/photos/family/elegant-family-studio-portrait-black.webp',
+  maternity: '/assets/photos/maternity/couples-beach-baby-bump-moment.webp',
+};
+
+// Drift guard, the same shape as the ROUTE_META one below: these paths are
+// copied out of TypeScript this script cannot import, so assert them against
+// the source rather than trusting the copy.
+{
+  const gallerySrc = readFileSync(join(__dirname, '..', 'src/pages/Gallery.tsx'), 'utf-8');
+  const wrong = Object.entries(CATEGORY_HEROES).filter(([, path]) => !gallerySrc.includes(path));
+  const heroWrong = Object.values(PAGE_HEROES)
+    .flat()
+    .map(([path]) => path)
+    .filter((path) => {
+      const files = ['About', 'Contact', 'Gallery', 'Journal', 'Weddings'].map((f) =>
+        readFileSync(join(__dirname, '..', `src/pages/${f}.tsx`), 'utf-8'),
+      );
+      return !files.some((src) => src.includes(path));
+    });
+  if (wrong.length || heroWrong.length) {
+    console.error('\n[prerender] FATAL: preload hero paths no longer match the page components:');
+    wrong.forEach(([c, p]) => console.error(`  /gallery/${c} -> ${p} not found in Gallery.tsx`));
+    heroWrong.forEach((p) => console.error(`  ${p} not found in any page component`));
+    process.exit(1);
+  }
+}
+
 const esc = (t) =>
   String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -411,7 +498,7 @@ for (const [category, meta] of Object.entries(CATEGORY_META)) {
   const categoryMeta = `
     <title>${esc(pageTitle)}</title>
     <meta name="description" content="${esc(meta.description)}" />
-    <link rel="canonical" href="${canonical}" />
+    <link rel="canonical" href="${canonical}" />${heroPreload(CATEGORY_HEROES[category])}
     <meta property="og:type" content="website" />
     <meta property="og:title" content="${esc(pageTitle)}" />
     <meta property="og:description" content="${esc(meta.description)}" />
@@ -725,7 +812,9 @@ ${others.map((o) => `          <li><a href="/journal/${o.slug}">${esc(o.title)}<
     <link rel="preconnect" href="https://lh3.googleusercontent.com" />
     <title>${esc(pageTitle)}</title>
     <meta name="description" content="${esc(desc)}" />
-    <link rel="canonical" href="${canonical}" />
+    <link rel="canonical" href="${canonical}" />${(PAGE_HEROES['/journal'] ?? [])
+      .map(([photo, sizes, media]) => heroPreload(photo, sizes, media))
+      .join('')}
     <meta property="og:type" content="website" />
     <meta property="og:title" content="${esc(pageTitle)}" />
     <meta property="og:description" content="${esc(desc)}" />
@@ -945,7 +1034,9 @@ for (const pg of STATIC_PAGES) {
   const meta = `
     <title>${esc(pg.title)}</title>
     <meta name="description" content="${esc(pg.description)}" />
-    <link rel="canonical" href="${canonical}" />
+    <link rel="canonical" href="${canonical}" />${(PAGE_HEROES[pg.path] ?? [])
+      .map(([photo, sizes, media]) => heroPreload(photo, sizes, media))
+      .join('')}
     <meta property="og:type" content="website" />
     <meta property="og:title" content="${esc(pg.title)}" />
     <meta property="og:description" content="${esc(pg.description)}" />

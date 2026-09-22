@@ -45,7 +45,7 @@
  */
 
 import sharp from 'sharp';
-import { readdirSync, existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
+import { readdirSync, existsSync, mkdirSync, statSync, writeFileSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -169,13 +169,25 @@ async function run(job) {
     reused++;
     return;
   }
-  const buf = await sharp(job.src)
+  const srcBytes = statSync(job.src).size;
+  let buf = await sharp(job.src)
     // EXIF orientation applied, so a phone-shot original cannot come out
     // sideways in a tile while its original sits upright in the lightbox.
     .rotate()
-    .resize({ width: job.w })
+    // withoutEnlargement: NEVER upscale. Nine of the 198 photographs here are
+    // narrower than the top rung, and re-encoding an 843px photograph at
+    // 1600 produced a 347KB file where the original was 107KB: 3.2x heavier
+    // for not one extra pixel of detail. Six of the nine came out heavier.
+    .resize({ width: job.w, withoutEnlargement: true })
     .webp({ quality: QUALITY, effort: 5 })
     .toBuffer();
+  // And if the re-encode is still not smaller, serve the original's bytes at
+  // the rung's path. The file has to exist either way, because the client
+  // builds these URLs by convention and a srcset candidate that 404s fails
+  // the image rather than falling back. This way the descriptor can overstate
+  // the width of a narrow photograph, but the BYTES are exactly what the page
+  // sends today, so the change can never make one heavier.
+  if (buf.length >= srcBytes) buf = readFileSync(job.src);
   writeFileSync(job.out, buf);
   bytesIn += statSync(job.src).size;
   bytesOut += buf.length;

@@ -222,13 +222,13 @@ function buildStageEntries(
     const pick = parts.map((x) => focusBySlug.get(x.slug)).find(Boolean);
     return {
       slug: `series:${key}`,
-      title: head.series_label || 'One story, in two parts',
+      title: head.series_label || `One story, in ${partWord(parts.length).toLowerCase()} parts`,
       cover: head.cover_image_url,
       label: isAdvicePost(head) ? 'Advice' : 'Real Wedding',
       focusStage: pick?.focusStage ?? 'center',
       focusThumb: pick?.focusThumb ?? 'center',
       series: {
-        label: head.series_label || 'One story, in two parts',
+        label: head.series_label || `One story, in ${partWord(parts.length).toLowerCase()} parts`,
         parts: parts.map((x) => ({
           slug: x.slug,
           title: x.title,
@@ -248,10 +248,17 @@ function buildStageEntries(
     const post = bySlug.get(e.slug);
     if (!post) continue;
     const key = post.series_slug;
-    if (key && stories.has(key)) {
+    const parts = key ? stories.get(key) : undefined;
+    // TWO PUBLISHED PARTS OR IT IS NOT A STORY. /api/journal/list returns
+    // published posts only, so a story whose second half is still a draft
+    // arrives as a one-element array, and rendering that as a diptych paints
+    // a seam down the middle of a single photograph under a plate that says
+    // "in two parts". Fall through and show her pick as the ordinary slide it
+    // currently is; it becomes a diptych the day part two publishes.
+    if (key && parts && parts.length >= 2) {
       if (placed.has(key)) continue; // case 2
       placed.add(key);
-      out.push(toStoryEntry(key, stories.get(key)!)); // case 1
+      out.push(toStoryEntry(key, parts)); // case 1
       continue;
     }
     out.push({
@@ -316,6 +323,12 @@ function SeriesSlide({
       position="absolute"
       inset={0}
       display="flex"
+      // THE SEAM IS THE GAP, not a hairline parked at 50%. At 50% it lands on
+      // a boundary only when there are exactly two parts; with three it runs
+      // down the middle of the second photograph. As a 1px gap over a light
+      // background it falls on every boundary whatever the count.
+      gap="1px"
+      bg="whiteAlpha.600"
       opacity={active ? 1 : 0}
       transition="opacity 0.8s ease"
       pointerEvents={active ? 'auto' : 'none'}
@@ -331,10 +344,16 @@ function SeriesSlide({
           flex="1"
           minW={0}
           overflow="hidden"
-          role="group"
+          // NO role="group" here. This renders as an <a href>, and an explicit
+          // ARIA role overrides the host-language one, so both halves of the
+          // story would stop being announced as links. The same note is
+          // written in HomeChapters, HeroSection, Journal and InstagramFeed.
+          // Nothing in this subtree uses _groupHover, so there is no group to
+          // declare; if one is added later it is data-group, not role.
+          tabIndex={active ? undefined : -1}
         >
           <Image
-            src={coverLarge(part.cover)}
+            src={coverHalf(part.cover)}
             alt=""
             w="100%"
             h="100%"
@@ -401,21 +420,6 @@ function SeriesSlide({
         pointerEvents="none"
       />
 
-      {/* The seam. Declared AFTER the scrim so the scrim does not paint over
-          its top 88px, which is exactly the stretch the story's name sits on
-          and the one place the line has a job to do. Decorative: the two
-          panels already say in words what they are. */}
-      <Box
-        aria-hidden
-        position="absolute"
-        top={0}
-        bottom={0}
-        left="50%"
-        w="1px"
-        bg="linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.22) 60%, rgba(255,255,255,0.45) 100%)"
-        pointerEvents="none"
-      />
-
       {/* The story's name, centred on the head of the seam.
           ON A PLATE, and it took a measurement to get there. Set as bare
           letterspaced caps over the scrim alone it came out at 2.44:1 against
@@ -472,6 +476,14 @@ function shuffled<T>(arr: T[]): T[] {
 /** Journal covers arrive as w800 thumbs; the slideshow stage renders big. */
 const coverLarge = (url: string | null): string =>
   url ? url.replace(/([?&]sz=)w\d+/, '$1w2000') : '';
+
+/**
+ * A diptych panel is half a stage, so it asks Drive for half the pixels.
+ * w2000 into a 575px panel was two oversized fetches on the one slide added
+ * by a batch of commits about not shipping oversized images.
+ */
+const coverHalf = (url: string | null): string =>
+  url ? url.replace(/([?&]sz=)w\d+/, '$1w1200') : '';
 
 /**
  * The type chip over a slide. Width hugs the text — the box ends where
@@ -1088,8 +1100,17 @@ const Weddings = () => {
               borderRadius="sm"
               overflow="hidden"
               bg="brand.surface"
-              onMouseEnter={() => setSlidePaused(true)}
-              onMouseLeave={() => setSlidePaused(false)}
+              // POINTER type, not mouse events. Phones synthesise mouseenter
+              // on tap and leave the element hovered until something else is
+              // tapped, so an ungated pause meant one tap on a numeral stopped
+              // autoplay for good and dropped the rail's line to its 12px
+              // stub. A paused stage is a hover affordance; a phone has none.
+              onPointerEnter={(e) => {
+                if (e.pointerType === 'mouse') setSlidePaused(true);
+              }}
+              onPointerLeave={(e) => {
+                if (e.pointerType === 'mouse') setSlidePaused(false);
+              }}
             >
               {featured.map((p, i) => {
                 const active = i === Math.min(slideIdx, featured.length - 1);
@@ -1134,7 +1155,14 @@ const Weddings = () => {
                     <Box
                       position="absolute"
                       inset={0}
-                      bg="linear-gradient(180deg, transparent 55%, rgba(10,8,4,0.68) 100%)"
+                      // The SAME ramp as the diptych, and for the same
+                      // reason. Clearing the rail lifted this title 52px on a
+                      // phone, out of the dark end of the old
+                      // `transparent 55% -> 0.68` gradient and into its thin
+                      // part, which was never re-measured when the rail
+                      // landed. This ramp was measured against the brightest
+                      // cover in the set.
+                      bg="linear-gradient(180deg, transparent 28%, rgba(10,8,4,0.50) 56%, rgba(10,8,4,0.94) 100%)"
                     />
                     <Flex
                       position="absolute"
@@ -1193,6 +1221,12 @@ const Weddings = () => {
                 right={{ base: 4, md: 8 }}
                 bottom={{ base: 4, md: 8 }}
                 zIndex={2}
+                // The wrapper spans the stage, so without this it laid a dead
+                // band the height of one slot across the whole bottom of the
+                // photograph, and the slide underneath is the link to the
+                // entry. The numerals take their own pointer events back in
+                // SlideIndexSlot.
+                pointerEvents="none"
                 sx={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
               >
                 <SlideIndexRail
@@ -1227,7 +1261,14 @@ const Weddings = () => {
                   as="button"
                   type="button"
                   aria-label={p.title}
-                  onClick={() => setSlideIdx(i)}
+                  // pickSlide, not setSlideIdx. The rail's line is a promise
+                  // about when the next entry arrives, and only pickSlide
+                  // bumps the cycle counter that rebuilds the interval. The
+                  // dot row this strip used to sit beside got that guarantee
+                  // from the effect's old slideIdx dependency; when the rail
+                  // replaced the dots the dependency moved to slideCycle and
+                  // the thumbnails silently lost it.
+                  onClick={() => pickSlide(i)}
                   position="relative"
                   h={{ base: '58px', md: '66px' }}
                   borderRadius="sm"

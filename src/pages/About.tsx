@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import CTAButton from '../components/ui/CTAButton';
 import PageHeader from '../components/ui/PageHeader';
 import Reveal, { useReveal } from '../components/ui/Reveal';
+import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
 
 const MotionDiv = m.div;
 
@@ -39,6 +40,8 @@ const MotionDiv = m.div;
  * whole transition object; the easing in it was 'easeOut', which is Reveal's
  * default, so only the number is left.
  */
+const ABOUT_HERO = '/assets/photos/site/vero-camera.webp';
+
 const FADE_IN_SEC = 0.75;
 
 /**
@@ -242,8 +245,14 @@ const PortraitPair = ({
       borderRadius="sm"
       bg="brand.surface"
     >
+      {/* sizes is measured, not guessed: this frame paints 165px on a
+          phone and 456-518px from lg up. 540/50vw rounds each up, because a
+          sizes that is too small hands the browser a candidate it then has
+          to upscale. */}
       <Image
-        src={main.src}
+        src={pageHeroFallback(main.src)}
+        srcSet={pageHeroSrcSet(main.src)}
+        sizes="(min-width: 62em) 540px, 50vw"
         alt={main.alt}
         w="100%"
         h="100%"
@@ -267,8 +276,12 @@ const PortraitPair = ({
       border={{ base: 'none', lg: '6px solid white' }}
       boxShadow={{ base: 'none', lg: '0 26px 60px -30px rgba(20, 15, 5, 0.6)' }}
     >
+      {/* The inset is the smaller of the pair: 165px on a phone, 225-257px
+          from lg up. */}
       <Image
-        src={inset.src}
+        src={pageHeroFallback(inset.src)}
+        srcSet={pageHeroSrcSet(inset.src)}
+        sizes="(min-width: 62em) 280px, 50vw"
         alt={inset.alt}
         w="100%"
         h="100%"
@@ -332,7 +345,9 @@ const About = () => {
         overflow="hidden"
       >
         <Image
-          src="/assets/photos/site/vero-camera.webp"
+          src={pageHeroFallback(ABOUT_HERO)}
+          srcSet={pageHeroSrcSet(ABOUT_HERO)}
+          sizes="100vw"
           alt="Veronika Gerzon kneeling on the grass with her camera."
           position="absolute"
           inset={0}

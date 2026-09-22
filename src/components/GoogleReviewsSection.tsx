@@ -11,6 +11,10 @@ import { attemptChunkRecovery, isChunkLoadError, prefetchChunk } from './ChunkEr
 // Type only, so this import is erased and the popup stays out of the
 // homepage bundle until it is needed.
 import type { PublicReview } from './ReviewModal';
+import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
+
+const CTA_BG = '/assets/photos/site/home-cta-bg.webp';
+const REVIEWS_BG = '/assets/photos/portraits/white-dress-lighthouse.webp';
 
 // The full-review popup. Fetched the first time a visitor points at, touches
 // or tabs to a card, so it is usually already loaded by the time they click.
@@ -238,7 +242,9 @@ const GoogleReviewsSection = () => {
           style={{ y: parallaxY, position: 'absolute', top: '-51%', bottom: '-51%', left: 0, right: 0, zIndex: -2 }}
         >
           <Image
-            src="/assets/photos/site/home-cta-bg.webp"
+            src={pageHeroFallback(CTA_BG)}
+            srcSet={pageHeroSrcSet(CTA_BG)}
+            sizes="100vw"
             alt=""
             w="100%"
             h="100%"
@@ -276,8 +282,14 @@ const GoogleReviewsSection = () => {
               1.1 scale is what keeps the frame covered at a 5% shift: scaling is
               centred, so a scale of s leaves (s-1)/2 of spare height at each
               edge, and anything past that pulls the image's own edge into view. */}
+          {/* 120vw, not 100vw: this one is scaled 1.1 and shifted inside a
+              box that is already wider than the column, so the painted width
+              exceeds the viewport. A sizes that undershoots would pick a
+              candidate the browser then upscales. */}
           <Image
-            src="/assets/photos/portraits/white-dress-lighthouse.webp"
+            src={pageHeroFallback(REVIEWS_BG)}
+            srcSet={pageHeroSrcSet(REVIEWS_BG)}
+            sizes="120vw"
             alt=""
             w="100%"
             h="100%"

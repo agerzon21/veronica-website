@@ -9,6 +9,10 @@ import { Link as RouterLink, useParams } from 'react-router-dom';
 import FaBookOpen from '../icons/fa/FaBookOpen';
 import CTAButton from '../components/ui/CTAButton';
 import JournalPost from './JournalPost';
+import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
+
+/** Also the source for a 358x84 bar on the homepage, via CardBar. */
+const JOURNAL_HERO = '/assets/photos/site/journal-hero.webp';
 
 /**
  * Journal — Vero's periodic long-form recaps of recent photoshoots
@@ -104,7 +108,9 @@ function JournalIndex() {
           About's is the reference. */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
         <Image
-          src="/assets/photos/site/journal-hero.webp"
+          src={pageHeroFallback(JOURNAL_HERO)}
+          srcSet={pageHeroSrcSet(JOURNAL_HERO)}
+          sizes="100vw"
           alt="A couple outside a stone building, the bride leaning back across a bench as the groom watches."
           w="100%"
           h="100%"

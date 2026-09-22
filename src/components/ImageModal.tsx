@@ -33,6 +33,17 @@ interface ImageModalProps {
   isOpen: boolean;
   onClose: (currentIndex: number) => void;
   imageUrl: string;
+  /**
+   * A version of THIS photograph the browser has already downloaded, so the
+   * lightbox opens on the picture instead of a spinner.
+   *
+   * The gallery grid serves a 400/800/1600 rung and the modal loads the
+   * 2400px original, so once the grid stopped serving originals the first
+   * click on any tile became a cold 300-900KB fetch behind an empty box. This
+   * is the exact url the tile already has, whichever rung that turned out to
+   * be, so it is guaranteed warm.
+   */
+  placeholderUrl?: string;
   imageAlt?: string;
   onNext?: () => void;
   onPrevious?: () => void;
@@ -407,6 +418,7 @@ const ImageModal = ({
   isOpen,
   onClose,
   imageUrl,
+  placeholderUrl,
   imageAlt = 'Gallery image',
   onNext,
   onPrevious,
@@ -1543,6 +1555,26 @@ const ImageModal = ({
           zIndex: 1400,
         }}
       >
+        {/* Underneath the real one, and only until it lands. objectFit
+            contain, matching the photo above it, so the swap is a change of
+            resolution and nothing else: no reframe, no jump. aria-hidden
+            because the photograph above carries the description. */}
+        {placeholderUrl && currentImageLoading && (
+          <img
+            src={placeholderUrl}
+            alt=""
+            aria-hidden
+            draggable={false}
+            style={{
+              position: 'absolute',
+              maxHeight: '100%',
+              maxWidth: '100%',
+              objectFit: 'contain',
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         <img
           ref={imgRef}
           src={displayUrl}

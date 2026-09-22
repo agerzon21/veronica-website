@@ -48,6 +48,8 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [originRect, setOriginRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  /** The already-downloaded url of the tile the lightbox is showing. */
+  const [placeholderUrl, setPlaceholderUrl] = useState<string | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -83,6 +85,16 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     [images, category],
   );
 
+  /**
+   * The url the tile at this index has ALREADY downloaded.
+   *
+   * currentSrc, not src: the tile carries a srcset, so which rung it actually
+   * fetched depends on the device, and only the browser knows. Anything else
+   * would be a second cold url.
+   */
+  const warmUrlAt = (index: number): string | undefined =>
+    imageRefs.current[index]?.querySelector('img')?.currentSrc || undefined;
+
   const handleImageClick = (index: number) => {
     // Capture the bounding rect of the clicked thumbnail before opening the modal
     const el = imageRefs.current[index];
@@ -92,6 +104,7 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
     } else {
       setOriginRect(null);
     }
+    setPlaceholderUrl(warmUrlAt(index));
     setSelectedImageIndex(index);
     setIsModalOpen(true);
 
@@ -143,12 +156,14 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
 
   const handleNextImage = () => {
     if (selectedImageIndex !== null && selectedImageIndex < images.length - 1) {
+      setPlaceholderUrl(warmUrlAt(selectedImageIndex + 1));
       setSelectedImageIndex(selectedImageIndex + 1);
     }
   };
 
   const handlePreviousImage = () => {
     if (selectedImageIndex !== null && selectedImageIndex > 0) {
+      setPlaceholderUrl(warmUrlAt(selectedImageIndex - 1));
       setSelectedImageIndex(selectedImageIndex - 1);
     }
   };
@@ -251,6 +266,7 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
           isOpen={isModalOpen}
           onClose={handleModalClose}
           imageUrl={images[selectedImageIndex].url}
+          placeholderUrl={placeholderUrl}
           imageAlt={images[selectedImageIndex].alt}
           onNext={handleNextImage}
           onPrevious={handlePreviousImage}

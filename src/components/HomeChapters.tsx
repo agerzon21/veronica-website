@@ -168,8 +168,15 @@ export function HomeChapters() {
                 borderBottom="1px solid"
                 borderColor="whiteAlpha.400"
               >
+                {/* The four category photographs are the same files the
+                    /gallery/<category> heroes use, so their ladders were
+                    already generated and committed; these cards were simply
+                    never wired to them. 1.5MB of originals into strips about
+                    300px tall. */}
                 <Image
                   src={c.image}
+                  srcSet={pageHeroSrcSet(c.image)}
+                  sizes="(min-width: 62em) 33vw, 92vw"
                   alt=""
                   position="absolute"
                   inset={0}
@@ -306,6 +313,8 @@ export function HomeChapters() {
           >
             <Image
               src={WEDDINGS_CARD_IMAGE}
+              srcSet={pageHeroSrcSet(WEDDINGS_CARD_IMAGE)}
+              sizes="(min-width: 62em) 55vw, 95vw"
               alt=""
               position="absolute"
               inset={0}

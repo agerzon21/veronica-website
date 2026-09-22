@@ -1,27 +1,34 @@
-import heroVariants from '../data/hero-variants.json';
 import heroVariantsDesktop from '../data/hero-variants-desktop.json';
+import photoSrcsets from '../data/photo-srcsets.json';
 
 /**
- * srcset builders for the photographs served at full-bleed size.
+ * srcset lookups for the photographs that have generated derivatives.
  *
- * Both manifests are written by scripts/build-hero-variants.mjs and committed,
- * never built. `npm run hero-variants:check` fails the build if either drifts
- * from what is on disk or from what is committed.
+ * NOTHING IS COMPUTED HERE. scripts/build-hero-variants.mjs writes
+ * src/data/photo-srcsets.json with the finished candidate list for each
+ * photograph, and this file looks it up. That is not laziness, it is the only
+ * way to guarantee one particular thing: scripts/prerender-photos.mjs emits a
+ * <link rel="preload"> for the LCP hero of each static page, and a preload
+ * whose candidate list differs from the img's by a single character is not a
+ * slow preload, it is a SECOND DOWNLOAD of the largest image on the page.
+ * TypeScript and plain .mjs cannot share a function; they can share a JSON
+ * file. `npm run hero-variants:check` fails the build if it drifts.
  *
- * The `?? original` fallbacks are deliberate throughout: a stale manifest or a
- * missing derivative serves the original rather than rendering a blank hero.
- * Slower, never broken.
+ * The `?? undefined` fallbacks are deliberate: a photograph with no entry
+ * gets no srcset and keeps its own src. Heavier, never broken.
  */
-const MOBILE = heroVariants as Record<string, Record<string, string>>;
+const SRCSETS = photoSrcsets as Record<string, { srcset: string; src: string }>;
+
 const DESKTOP = heroVariantsDesktop as {
   rungs: Record<string, Record<string, string>>;
   originalWidths: Record<string, number>;
 };
 
 /**
- * The carousel's DESKTOP candidates, for the element that is only ever shown
- * from lg up. The ORIGINAL stays the widest candidate, so a large retina
- * display still gets the untouched file; everything smaller takes a rung.
+ * The homepage carousel's DESKTOP candidates, for the element that is only
+ * ever shown from lg up. Still computed, because the carousel renders a
+ * separate element per breakpoint and so takes a separate srcset for each —
+ * it is the one caller that must NOT get the full ladder.
  */
 export const desktopSrcSetFor = (original: string): string | undefined => {
   const rungs = DESKTOP.rungs[original];
@@ -34,45 +41,25 @@ export const desktopSrcSetFor = (original: string): string | undefined => {
 };
 
 /**
- * EVERY candidate, mobile rungs and desktop rungs together, for a page hero.
+ * Every candidate for a photograph served at one element across all screens:
+ * a full-bleed page hero, or an inline photograph in a column.
  *
- * A page hero is one <img> that serves every screen, unlike the homepage
- * carousel, which renders a separate element per breakpoint and so can take a
- * separate srcset for each. That is the whole reason this is a different
- * function rather than a parameter: there is no breakpoint to choose by, so
- * the browser gets the full ladder and picks on width.
- *
- * The two halves of the ladder were encoded at different qualities (72 for
- * mobile rungs, 78 for desktop). That is not a mistake to tidy up: a phone
+ * The two halves of a hero ladder were encoded at different qualities (72 for
+ * mobile rungs, 78 for desktop and inline). Not a mistake to tidy up: a phone
  * rung is displayed at 2-3x device pixel ratio where compression artefacts
  * are invisible, and a 1440px desktop hero is not.
- *
- * Sorted by width, because a srcset is a set of candidates rather than an
- * ordered list and an unsorted one is merely harder to read in devtools.
  */
-export const pageHeroSrcSet = (original: string): string | undefined => {
-  const entries: Array<[number, string]> = [];
-  for (const [w, path] of Object.entries(MOBILE[original] ?? {})) entries.push([Number(w), path]);
-  for (const [w, path] of Object.entries(DESKTOP.rungs[original] ?? {})) entries.push([Number(w), path]);
-  if (!entries.length) return undefined;
-
-  const width = DESKTOP.originalWidths[original];
-  // The original is only a candidate when its real width is known. Without it
-  // the descriptor would be a guess, and a wrong `w` makes the browser pick
-  // badly in BOTH directions.
-  if (width) entries.push([width, original]);
-
-  return entries
-    .sort((a, b) => a[0] - b[0])
-    .map(([w, path]) => `${path} ${w}w`)
-    .join(', ');
-};
+export const pageHeroSrcSet = (original: string): string | undefined =>
+  SRCSETS[original]?.srcset;
 
 /**
- * The widest MOBILE rung, as a plain `src` for anything that ignores srcset.
+ * The `src` to pair with it: the widest MOBILE rung where there is one.
  *
- * Not the original: a browser old enough to ignore srcset is not a browser
- * worth sending 4289 pixels to.
+ * Not the original. A browser old enough to ignore srcset is not one to hand
+ * a 4289px photograph to.
  */
 export const pageHeroFallback = (original: string): string =>
-  MOBILE[original]?.['1600'] ?? original;
+  SRCSETS[original]?.src ?? original;
+
+/** Is this photograph optimised at all? Used to decide whether to preload. */
+export const hasSrcSet = (original: string): boolean => Boolean(SRCSETS[original]);
