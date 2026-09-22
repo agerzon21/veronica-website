@@ -782,6 +782,42 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           {portal.mode === 'simple' && <StripChip>{t.clientDetail.badgeGalleryOnly}</StripChip>}
           {portal.setup_token && <StripChip tone="warn">{t.clientDetail.badgeInvitePending}</StripChip>}
         </Flex>
+
+        {/* THE ARITHMETIC BEHIND THE CHIP ABOVE, because "$1200 left" alone
+            never says left of what.
+
+            Total is the CONTRACT total and charges are listed separately, so
+            the row adds up in front of her: total, plus charges, less paid,
+            leaves the chip. Folding charges into Total would show the right
+            balance and a figure matching no contract anybody signed, which is
+            the same confusion this screen's one-arithmetic rule exists to
+            stop. Charges appear only when there are some.
+
+            Retainer is what the contract asked for up front, not a payment.
+            It sits between the two so the row reads as the deal, then the
+            money: it is the number she is chasing before the date, and on an
+            unpaid booking it is the one she quotes.
+
+            Gated on contract_total_amount, the same value the chip is gated
+            on, so a gallery-only portal with no contract shows neither. */}
+        {amountOwed !== null && (
+          <Flex flexWrap="wrap" columnGap={3} rowGap={0} mt={1.5}>
+            <StripFact
+              label={t.clientDetail.stripTotal}
+              value={formatMoney(portal.contract_total_amount ?? 0)}
+            />
+            {chargesTotal > 0 && (
+              <StripFact label={t.clientDetail.stripCharges} value={formatMoney(chargesTotal)} />
+            )}
+            {portal.contract_retainer_amount !== null && (
+              <StripFact
+                label={t.clientDetail.stripRetainer}
+                value={formatMoney(portal.contract_retainer_amount)}
+              />
+            )}
+            <StripFact label={t.clientDetail.stripPaid} value={formatMoney(portal.paid_to_date)} />
+          </Flex>
+        )}
       </Box>
 
       {leaveConfirm && hasUnsaved && (
@@ -1565,6 +1601,23 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
  * colorScheme in the theme is tuned for a light ground, where the subtle
  * variants come out around 2:1 against this.
  */
+/**
+ * One labelled figure on the dark strip.
+ *
+ * Deliberately NOT a StripChip. The chips are states, each one a thing that
+ * is either true or needs doing, and they earn their pill. These are the
+ * arithmetic behind one of those chips, so they read as a line of numbers
+ * under it rather than four more things to act on.
+ */
+function StripFact({ label, value }: { label: string; value: string }) {
+  return (
+    <Box as="span" fontSize="11px" lineHeight="18px" whiteSpace="nowrap">
+      <Box as="span" color="rgba(244,242,238,0.55)">{label} </Box>
+      <Box as="span" color="#e6e1d8" fontWeight="500">{value}</Box>
+    </Box>
+  );
+}
+
 function StripChip({
   children,
   tone,

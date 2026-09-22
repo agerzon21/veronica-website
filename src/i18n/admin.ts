@@ -2164,6 +2164,19 @@ const dict = {
     chipContractUnsigned: { en: 'Contract unsigned', ru: 'Договор не подписан' },
     chipGalleryDelivered: { en: 'Gallery sent', ru: 'Галерея отправлена' },
     chipGalleryNotSent: { en: 'Gallery not sent', ru: 'Галерея не отправлена' },
+    /**
+     * The numbers behind the balance chip, on the strip itself.
+     *
+     * Labels rather than bare figures, because four sums in a row with no
+     * words is a puzzle. They read left to right as the arithmetic this
+     * system allows: total, plus charges, less paid, leaves the chip above.
+     * Charges appear only when there are some, so the usual booking shows
+     * three numbers and the sum still adds up.
+     */
+    stripTotal: { en: 'Total', ru: 'Итого' },
+    stripCharges: { en: 'Charges', ru: 'Доплаты' },
+    stripRetainer: { en: 'Retainer', ru: 'Предоплата' },
+    stripPaid: { en: 'Paid', ru: 'Оплачено' },
     tipBadge: { en: 'Tip', ru: 'Чаевые' },
     tipNotInBalance: {
       en: 'Tips are not counted toward what this booking owes.',

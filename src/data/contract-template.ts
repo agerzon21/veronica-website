@@ -610,14 +610,41 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
   },
   {
     key: 'overtime_rate',
-    label: 'Overtime Rate (optional)',
+    label: 'Overtime Rate',
     placeholder: 'e.g. $150 per hour',
-    // Deliberately NO defaultValue. The clause is gated on this field, so a
-    // blank one prunes it away and every wedding contract already out there
-    // keeps rendering exactly as it did. Vero opts a booking in by typing a
-    // rate.
+    /**
+     * ON BY DEFAULT, and it used to be off.
+     *
+     * The clause is gated on this field, so a blank one prunes it away. It was
+     * left blank so that Vero opted a booking in by typing a rate, out of
+     * caution about the frozen wedding template. That caution was misplaced:
+     * a contract's body is SERIALISED INTO client_portals.contract_body when
+     * it is created and read back from there to display and to sign
+     * (api/portal/_sign-contract.ts reads the stored body and parses it), so a
+     * default added here cannot reach anything already created. Checked
+     * against the real database: all six signed wedding contracts have a
+     * stored body and no overtime_rate variable, and they keep rendering
+     * exactly as they were signed.
+     *
+     * Which left the default deciding one thing only: whether a NEW booking is
+     * protected unless Vero remembers to type a number. It is her protection,
+     * for time she works because the day ran long on the client's side, so the
+     * safe direction is on. Of the wedding contracts on file, exactly one has
+     * a rate on it.
+     *
+     * $150 per hour because that is the rate the weddings page already
+     * publishes to the client: "Any package extends at $150 per hour" in
+     * src/data/wedding-page.json. A contract quoting a different number than
+     * the page they booked from is the one version of this worth avoiding.
+     *
+     * Clearing it still removes the whole clause, which is how she turns it
+     * off for a booking where she does not want it. A value she has typed
+     * survives a contract-type change; only an untouched field takes a
+     * default (AdminNewClient.tsx, the prevDefaults comparison).
+     */
+    defaultValue: '$150 per hour',
     helpText:
-      'Leave blank for none. Fill it in to add the clause covering extra time and out-of-pocket costs such as parking.',
+      'Covers extra time the client causes, plus out-of-pocket costs such as parking. Clear it to drop the clause entirely.',
   },
   {
     key: 'payment_methods',
