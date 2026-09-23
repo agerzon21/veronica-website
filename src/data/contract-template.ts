@@ -88,7 +88,7 @@ export interface WeddingContractVariables {
   retainer_amount: string;         // formatted "$50"
   remaining_balance: string;       // formatted "$180"
   balance_due_window: string;      // e.g. "TEN (10) Days"
-  payment_methods: string;         // e.g. "Cash, Venmo, CashApp or Zelle"
+  payment_methods: string;         // e.g. "Card, cash, Venmo, Cash App or Zelle"
   retention_months: string;        // e.g. "3" — how long the gallery stays online
   additional_notes: string;        // free-text addendum; section is hidden if empty
   // Optional — if a third party is paying and signing on behalf of the
@@ -681,7 +681,23 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
   {
     key: 'payment_methods',
     label: 'Payment Methods',
-    defaultValue: 'Cash, Venmo, CashApp or Zelle',
+    /**
+     * CARD FIRST, because it is the one that always works and the one the
+     * portal can actually take money through. The others are still here
+     * because most clients use them and they cost nothing to accept.
+     *
+     * Safe to change despite the wedding template being frozen: a contract's
+     * body is serialised into client_portals.contract_body when it is
+     * created and read back from there to display and to sign, so a default
+     * edited here reaches new contracts only and cannot touch a signed one.
+     * Same reasoning as overtime_rate above, checked the same way.
+     *
+     * Note what this does NOT say: that paying another way is cheaper.
+     * src/data/payment-handles.ts prices a card payment as the contract total
+     * and discounts the rest, and whether that belongs in the contract or
+     * stays a conversation is the owner's call, not a default's.
+     */
+    defaultValue: 'Card, cash, Venmo, Cash App or Zelle',
     helpText: 'Comma-separated payment methods the client can use.',
   },
   {
@@ -1299,7 +1315,23 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
     key: 'payment_methods',
     label: 'Payment Methods',
     labelRu: 'Способы оплаты',
-    defaultValue: 'Cash, Venmo, CashApp or Zelle',
+    /**
+     * CARD FIRST, because it is the one that always works and the one the
+     * portal can actually take money through. The others are still here
+     * because most clients use them and they cost nothing to accept.
+     *
+     * Safe to change despite the wedding template being frozen: a contract's
+     * body is serialised into client_portals.contract_body when it is
+     * created and read back from there to display and to sign, so a default
+     * edited here reaches new contracts only and cannot touch a signed one.
+     * Same reasoning as overtime_rate above, checked the same way.
+     *
+     * Note what this does NOT say: that paying another way is cheaper.
+     * src/data/payment-handles.ts prices a card payment as the contract total
+     * and discounts the rest, and whether that belongs in the contract or
+     * stays a conversation is the owner's call, not a default's.
+     */
+    defaultValue: 'Card, cash, Venmo, Cash App or Zelle',
     helpText: 'Comma-separated payment methods the client can use.',
   },
   {

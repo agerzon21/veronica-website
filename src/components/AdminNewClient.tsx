@@ -370,6 +370,7 @@ const TravelLeg = ({
   lookupBusy,
   lookupNote,
   origin,
+  originHelp,
 }: {
   copy: ReturnType<typeof travelCopy>;
   miles: string;
@@ -381,6 +382,8 @@ const TravelLeg = ({
   lookupNote?: string;
   /** The "from home / from the place before it" control, when there is one. */
   origin?: React.ReactNode;
+  /** What that control means, added to the dot when it is there. */
+  originHelp?: string;
 }) => (
   <Box>
     <Flex align="center" gap={2} wrap="wrap">
@@ -414,6 +417,7 @@ const TravelLeg = ({
         _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
       />
       <InfoDot label={copy.heading}>
+        {originHelp && <Text mb={2} fontWeight="500" color="gray.700">{originHelp}</Text>}
         <Text mb={2}>{copy.lookItUpHelp}</Text>
         <Text mb={2}>{copy.milesHelp}</Text>
         <Text>{copy.minutesHelp}</Text>
@@ -1017,6 +1021,47 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
   const handleVarChange = (key: string, value: string) => {
     setVariables((prev) => ({ ...prev, [key]: value }));
+  };
+
+  /**
+   * Overtime, as a tick and a number rather than a sentence.
+   *
+   * The clause prints the variable verbatim: "the additional time is billed
+   * at {{overtime_rate}}, charged in half hour increments". So the field was
+   * a text box that had to be filled in with the words "$150 per hour", and
+   * getting that phrasing wrong puts the mistake straight on a contract.
+   *
+   * The stored variable does not change shape, because the clause and every
+   * already-signed contract depend on it. What changes is that the form
+   * composes it: the tick decides whether there is a clause at all, since a
+   * blank gate prunes the section, and the number is just a number.
+   */
+  const overtimeLabel =
+    fields.find((f) => f.key === 'overtime_rate')?.[lang === 'ru' ? 'labelRu' : 'label'] ??
+    fields.find((f) => f.key === 'overtime_rate')?.label ??
+    'Overtime';
+  /**
+   * REAL STATE, not derived from the variable.
+   *
+   * Deriving the tick from "is the variable non-empty" means ticking the box
+   * has to write something immediately, and the only thing available before
+   * she types a number is "$ per hour". That is a string the clause would
+   * print verbatim onto a contract. Holding the tick separately lets the box
+   * be on while the number is still blank, and the variable stays empty
+   * until there is a real rate, which prunes the clause rather than printing
+   * a broken one.
+   */
+  const [overtimeOn, setOvertimeOn] = useState(() =>
+    Boolean(moneyDigits(fields.find((f) => f.key === 'overtime_rate')?.defaultValue)),
+  );
+  const [overtimeRate, setOvertimeRate] = useState(
+    () => moneyDigits(fields.find((f) => f.key === 'overtime_rate')?.defaultValue) ?? '',
+  );
+  const setOvertime = (on: boolean, rate: string) => {
+    setOvertimeOn(on);
+    setOvertimeRate(rate);
+    const digits = moneyDigits(rate);
+    handleVarChange('overtime_rate', on && digits ? `$${digits} per hour` : '');
   };
 
   // ─── Where it happens, derived ───
@@ -2015,7 +2060,10 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               is attached to the location field the day is actually planned
               around. Left in the generic loop it would render a second,
               empty box asking the same question in prose. */}
-          {fields.filter((f) => f.key !== 'session_schedule').map((f) => (
+          {/* overtime_rate is a tick and a number, below, not a line of
+              prose. Typing "$150 per hour" by hand is three chances to write
+              something the clause then prints verbatim. */}
+          {fields.filter((f) => f.key !== 'session_schedule' && f.key !== 'overtime_rate').map((f) => (
             // The travel block rides directly under the location field rather
             // than living in its own section, because the three inputs are one
             // question: where is it, how far is that, and how long does it
@@ -2105,6 +2153,34 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               wedding spec, alongside the minor, illness and permit clauses
               the session types offer. A type's forced-on clauses are not
               listed here at all, because they are not a choice. */}
+          {fields.some((f) => f.key === 'overtime_rate') && (
+            <Field label={overtimeLabel} helpText={t.newClient.overtimeHelp}>
+              <Flex align="center" gap={3} wrap="wrap">
+                <Checkbox
+                  isChecked={overtimeOn}
+                  onChange={(e) => setOvertime(e.target.checked, overtimeRate)}
+                  colorScheme="yellow"
+                >
+                  <Text fontSize="sm" color="gray.700">{t.newClient.overtimeOn}</Text>
+                </Checkbox>
+                <Flex align="center" gap={2} opacity={overtimeOn ? 1 : 0.45}>
+                  <Text fontSize="sm" color="gray.600">$</Text>
+                  <Input
+                    value={overtimeRate}
+                    onChange={(e) => setOvertime(overtimeOn, e.target.value)}
+                    isDisabled={!overtimeOn}
+                    inputMode="decimal"
+                    aria-label={t.newClient.overtimeRateAria}
+                    h="44px" w="110px" bg="white" border="1px solid" borderColor="gray.300"
+                    fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+                  />
+                  <Text fontSize="sm" color="gray.600">{t.newClient.overtimePerHour}</Text>
+                </Flex>
+              </Flex>
+            </Field>
+          )}
+
           {offeredClauses.length > 0 && (
             <>
               <SectionHeading>{t.newClient.sectionOptionalClauses}</SectionHeading>
@@ -2831,6 +2907,7 @@ function PlacesBlock({
                 onMiles={(v) => onSet(i, 'miles', v)}
                 onMinutes={(v) => onSet(i, 'minutes', v)}
                 onLookup={() => onLookupLeg(i)}
+                originHelp={t.newClient.placeFromHelp}
                 origin={
                   <Select
                     value={row.from}

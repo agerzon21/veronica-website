@@ -1,0 +1,11 @@
+import { neon } from '@neondatabase/serverless';
+import fs from 'node:fs';
+const env = fs.readFileSync('/Users/alexgerzon/Documents/Projects/VeronicaWebsite/.env.local','utf8');
+const get = (k) => { const m = env.match(new RegExp('^'+k+'=(.*)$','m')); return m ? m[1].trim().replace(/^["']|["']$/g,'') : null; };
+const sql = neon(get('POSTGRES_URL') || get('DATABASE_URL'));
+const rows = await sql`select id, category, label, source, active, content from ai_context where id = '49e0335a-07b2-490e-94b4-c1317399bd28'`;
+console.log('BYID_COUNT', rows.length);
+console.log(JSON.stringify(rows, null, 2));
+const like = await sql`select id, category, label, source, active, left(content, 400) as head from ai_context where content ilike '%officially booked%' or label ilike '%portal%'`;
+console.log('MATCHES', like.length);
+console.log(JSON.stringify(like, null, 2));

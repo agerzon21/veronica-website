@@ -1410,6 +1410,21 @@ const dict = {
     placeFromLabel: { en: 'Getting there from', ru: 'Едешь туда от' },
     placeFromPrevious: { en: 'the place before it', ru: 'предыдущего места' },
     placeFromHome: { en: 'home', ru: 'дома' },
+    // What the dropdown is actually asking, spelled out where the rest of the
+    // travel explanation lives. It is two words on screen and the wrong pick
+    // silently mis-prices the day.
+    // ─── Overtime, as a tick and a number ─────────────────────────────
+    overtimeOn: { en: 'Bill for overtime', ru: 'Брать плату за переработку' },
+    overtimePerHour: { en: 'per hour', ru: 'в час' },
+    overtimeRateAria: { en: 'Overtime rate, dollars per hour', ru: 'Ставка за переработку, долларов в час' },
+    overtimeHelp: {
+      en: 'Billed only if the session runs long at the client\u2019s request. Untick it and the whole clause goes, including the part covering parking and entry fees.',
+      ru: 'Берётся только если съёмка затянулась по просьбе клиента. Сними галочку, и весь пункт исчезнет, включая часть про парковку и входные билеты.',
+    },
+    placeFromHelp: {
+      en: 'The two choices are about WHICH DRIVE you are measuring, not about where you sleep. "The place before it" is the hop between venues, for a day that runs straight from one to the next. "Home" is for a place you set off to separately, which is the right answer when you go back in between. Either way the miles are added to the ones above, because either way you drove them.',
+      ru: 'Выбор о том, КАКУЮ поездку ты измеряешь, а не о том, где ночуешь. «Предыдущего места» — это перегон между площадками, когда день идёт с одной прямо на другую. «Дома» — когда ты едешь туда отдельно, то есть если между ними заезжаешь домой. В обоих случаях мили прибавляются к тем, что выше: ты их всё равно проехала.',
+    },
     placeMilesLabel: { en: 'Miles one way', ru: 'Миль в одну сторону' },
     placeLookItUp: { en: 'Look it up', ru: 'Посмотреть' },
     placeLookNeedsBoth: {
