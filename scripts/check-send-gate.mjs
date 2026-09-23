@@ -90,6 +90,35 @@ expect('send', 'Send it to her please', NO_OFFER, 'an explicit send verb needs n
 expect('send', 'отправь', NO_OFFER, 'Russian, same thing');
 expect('send', 'resend it', NO_OFFER, 'resend counts');
 
+// ── Every ordinary Russian verb for "send", not just the one ────────────────
+// Vero typed "Хорошо отсылай" and was refused twice, because отсылать was not
+// on the list. A verb this gate does not know is not a safer gate; it is a
+// gate that tells her the product is broken. Each of these is unambiguously
+// an instruction to send.
+expect('send', 'Хорошо отсылай', NO_OFFER, 'THE message that was wrongly refused');
+expect('send', 'отсылай', NO_OFFER, 'отсылать, imperative');
+expect('send', 'отсылайте', NO_OFFER, 'and its polite form');
+expect('send', 'отправляй', NO_OFFER, 'отправлять, imperative');
+expect('send', 'отправьте', NO_OFFER, 'and its polite form');
+expect('send', 'отошли', NO_OFFER, 'отослать, imperative');
+expect('send', 'отошлите', NO_OFFER, 'and its polite form');
+expect('send', 'высылай', NO_OFFER, 'высылать, imperative');
+expect('send', 'скинь', NO_OFFER, 'скинуть, the informal one');
+expect('send', 'ок отсылай', NO_OFFER, 'with an affirmative in front of it');
+
+// Widening the verb list must not widen anything else. Each of these still
+// refuses, for a reason that has nothing to do with which verb was used.
+expect('refuse', 'не отсылай', OFFERED, 'a refusal, in the newly added verb');
+expect('refuse', 'не высылай пока', OFFERED, 'a hold, in the newly added verb');
+expect('refuse', 'отсылай после того как исправишь приветствие', OFFERED,
+  'a condition, in the newly added verb');
+expect('refuse', 'ты уже отослал?', OFFERED, 'a question about the past');
+// "пошли" stays OFF the verb list on purpose: it is far more often "let's
+// go" than "send them". It can still approve, but only down the STRICTER
+// path, where the assistant has to have asked whether to send.
+expect('send',   'пошли', OFFERED,  'a bare affirmative, and the assistant did ask');
+expect('refuse', 'пошли', NO_OFFER, 'the same word with nothing to answer');
+
 // ── A bare yes only counts when the assistant asked ─────────────────────────
 expect('send',   'yes', OFFERED,  'yes, to an offer to send');
 expect('refuse', 'yes', NO_OFFER, 'yes, to a question about TONE');

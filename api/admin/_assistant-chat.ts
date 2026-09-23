@@ -1831,11 +1831,28 @@ async function executeToolCall(
         `[assistant-chat] send BLOCKED (${approval.why}) convo=${conversationId}: ` +
           `${sendCtx.userMessage.slice(0, 160)}`,
       );
+      /**
+       * WORDED FOR VERO, because she is the one who reads it.
+       *
+       * The old wording named exactly two acceptable words, "send it" and
+       * "отправь", and that is how she learned the wrong one: she typed
+       * "Хорошо отсылай", was refused, and had no way to tell whether the
+       * product was broken or she had said it wrong. The model then told her
+       * "there was an issue with sending the email", which is not what
+       * happened at all.
+       *
+       * So: say plainly that nothing was sent, say it is waiting for her, and
+       * name several ways to say it rather than two. The instruction not to
+       * dress this up as a technical failure is for the model.
+       */
       return {
         error:
-          'NOT SENT. Vero has not told you to send it in this turn, so nothing went to the customer. ' +
-          'Show her the text and wait for her to say "send it" or "отправь". ' +
-          'Do not claim anything was sent, and do not call this tool again until she does.',
+          'NOT SENT, and nothing went wrong: the email is waiting for Vero to say so. ' +
+          'Show her the text and tell her, in her own language, that it will go as soon as she says to. ' +
+          'Any of these is enough on its own: "send it", "отправь", "отправляй", "отсылай", "отошли", "скинь", ' +
+          'or a plain "yes" / "да" right after you have asked whether to send it. ' +
+          'Do NOT describe this as an error, a problem, or an issue with sending, because it is none of those. ' +
+          'Do not claim anything was sent, and do not call this tool again until she says to.',
       };
     }
 

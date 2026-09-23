@@ -232,9 +232,35 @@ const NOT_AFTER = `(?![${WORD_CHAR}])`;
  * an instruction to send now. The Russian entries are bounded on the left only
  * because they are stems, not words: отправь, отправьте, отправляй, отправить
  * are all one instruction with four endings.
+ *
+ * ── WHY THERE ARE FOUR RUSSIAN STEMS AND NOT ONE ─────────────────────────
+ *
+ * Russian has several ordinary verbs for "send" and they do not share a stem.
+ * Vero typed "Хорошо отсылай", which is as plain an instruction as exists,
+ * and the gate refused her because отсылать was not on the list: it knew
+ * отправить, отослать and скинуть and no others. She retyped, it refused
+ * again, and the model then told her "there was an issue with sending the
+ * email", which is not what happened and is worse than the refusal.
+ *
+ * A MISSING VERB IS NOT A SAFER GATE. Every other refusal here costs one
+ * retyped message; this one cost her the belief that the thing works, and it
+ * did not make a wrong send any less likely. These four stems are each
+ * unambiguously "send" in the imperative:
+ *
+ *   отправ…   отправь, отправьте, отправляй, отправить
+ *   отосл…    отошли, отошлите, отослать   (отошли is the common form)
+ *   отсыл…    отсылай, отсылайте
+ *   высыл…    высылай, высылайте
+ *   скинь     скинь, скиньте
+ *
+ * DELIBERATELY ABSENT: "шли" and "пошли". "пошли" is far more often "let's
+ * go" than "send them", and "шли" is three letters that appear inside
+ * ordinary words. Both would widen the gate on ambiguity rather than on a
+ * verb, which is the one thing this list must not do.
  */
 const SEND_VERB = new RegExp(
-  `${NOT_BEFORE}(send|resend|ship)${NOT_AFTER}` + `|${NOT_BEFORE}(отправ|отошли|скинь)`,
+  `${NOT_BEFORE}(send|resend|ship)${NOT_AFTER}` +
+    `|${NOT_BEFORE}(отправ|отосл|отошл|отсыл|высыл|скинь)`,
   'iu',
 );
 
