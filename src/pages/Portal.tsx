@@ -1238,24 +1238,24 @@ const SPOT = {
   // `soft` is how far the cream fades OUTWARD past the shape. It carries the
   // blur number from each board, but it is no longer a filter; see SoftSpot.
   eyebrow: {
-    a: { base: 1, md: 1 },
-    x: { base: '48px', md: '13px' }, y: { base: '14.5px', md: '4.5px' },
-    soft: { base: 18, md: 4 },
+    a: { base: 0.93, md: 0.93 },
+    x: { base: '60px', md: '40px' }, y: { base: '26px', md: '20px' },
+    soft: { base: 58, md: 58 },
   },
   rule: {
-    a: { base: 1, md: 1 },
-    x: { base: '25px', md: '5px' }, y: { base: '14.5px', md: '4.5px' },
-    soft: { base: 14, md: 4 },
+    a: { base: 0.93, md: 0.93 },
+    x: { base: '40px', md: '30px' }, y: { base: '22px', md: '16px' },
+    soft: { base: 58, md: 58 },
   },
   title: {
-    a: { base: 1, md: 1 },
-    x: { base: '45px', md: '38px' }, y: { base: '38px', md: '4.5px' },
-    soft: { base: 26, md: 10 },
+    a: { base: 0.93, md: 0.93 },
+    x: { base: '70px', md: '150px' }, y: { base: '60px', md: '60px' },
+    soft: { base: 58, md: 58 },
   },
   offramp: {
-    a: { base: 1, md: 1 },
-    x: { base: '16.5px', md: '17px' }, y: { base: '9px', md: '6px' },
-    soft: { base: 16, md: 10 },
+    a: { base: 0.93, md: 0.93 },
+    x: { base: '50px', md: '60px' }, y: { base: '26px', md: '26px' },
+    soft: { base: 58, md: 58 },
   },
 } as const;
 
@@ -1292,7 +1292,7 @@ const SPOT_RADIUS = { base: roundness(55), md: roundness(35) };
 
 type Spot = {
   /**
-   * How opaque the patch is, 0 to 1.
+   * The peak, at the centre, under the words themselves. 0 to 1.
    *
    * A KNOB, not a constant, and it was a constant for exactly one version.
    * Nailing it to 1 for the sake of the contrast figure left no setting
@@ -1303,6 +1303,7 @@ type Spot = {
   a: { base: number; md: number };
   x: { base: string; md: string };
   y: { base: string; md: string };
+  /** How much of the radius is spent fading, 0 to 100. See baldSpot. */
   soft: { base: number; md: number };
 };
 
@@ -1330,16 +1331,44 @@ type Spot = {
  * the shadow is still deep inside its own plateau: cream meets cream, and the
  * fade begins outside the shape rather than at it.
  */
-const cream = (a: number) => `rgba(253, 249, 240, ${a})`;
+const CREAM_RGB = '253, 249, 240';
 
 /**
- * The falloff takes the SAME alpha as the fill.
+ * A BALD SPOT, which is a gradient, not a shape with a soft edge.
  *
- * A shadow left at 1 under a fill that has come down paints a halo more solid
- * than the middle it surrounds, which reads as an outline drawn around the
- * words: the exact opposite of a patch of light.
+ * This is the difference that made the last two rounds impossible, and it is
+ * not a matter of values. A box-shadow paints a SOLID PLATEAU and fades only
+ * outside the border box, so however it is set there is an area of flat cream
+ * with a boundary around it: an object on the page. The thing Alex has been
+ * asking for since the beginning fades from the MIDDLE OUT and never has an
+ * edge at all. No opacity, padding or spread setting turns one into the
+ * other, so every slider he tried was the wrong slider.
+ *
+ * So the fill is a radial gradient again, the way it was the first time.
+ *
+ *   `a`    the peak, at the centre, under the words themselves.
+ *   `soft` how much of the radius is spent fading, 0 to 100.
+ *          0 is a hard-edged shape, the box-shadow look.
+ *          100 starts falling the moment it leaves the centre.
+ *          58 with a peak of 0.93 is the original halo, near enough.
+ *
+ * The middle two stops keep the original's curve rather than running
+ * straight: it held almost full strength through the plateau, dropped to
+ * about half over the next stretch, then trailed off. A linear ramp reads as
+ * a vignette; this reads as paper.
  */
-const falloff = (soft: number, a: number) => `0 0 ${soft * 2}px ${soft}px ${cream(a)}`;
+const baldSpot = (a: number, soft: number) => {
+  const s = Math.max(0, Math.min(100, soft));
+  const plateau = 100 - s;
+  const mid = plateau + s * 0.55;
+  return (
+    `radial-gradient(ellipse 50% 50% at 50% 50%, ` +
+    `rgba(${CREAM_RGB}, ${a}) 0%, ` +
+    `rgba(${CREAM_RGB}, ${(a * 0.97).toFixed(3)}) ${plateau}%, ` +
+    `rgba(${CREAM_RGB}, ${(a * 0.42).toFixed(3)}) ${mid.toFixed(1)}%, ` +
+    `rgba(${CREAM_RGB}, 0) 100%)`
+  );
+};
 
 /**
  * One line, on its own patch of light.
@@ -1376,9 +1405,13 @@ const SoftSpot = ({ spot, children }: { spot: Spot; children: React.ReactNode })
         bottom={{ base: `-${spot.y.base}`, md: `-${spot.y.md}` }}
         zIndex={-1}
         pointerEvents="none"
+        // Only bites while `soft` is low. Once the gradient is doing the
+        // work there is no edge left for a corner radius to round.
         borderRadius={SPOT_RADIUS}
-        bg={{ base: cream(spot.a.base), md: cream(spot.a.md) }}
-        boxShadow={{ base: falloff(spot.soft.base, spot.a.base), md: falloff(spot.soft.md, spot.a.md) }}
+        sx={{
+          backgroundImage: baldSpot(spot.a.base, spot.soft.base),
+          '@media (min-width: 48em)': { backgroundImage: baldSpot(spot.a.md, spot.soft.md) },
+        }}
       />
       {children}
     </Box>
