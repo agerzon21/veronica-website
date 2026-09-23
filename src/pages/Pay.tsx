@@ -4,8 +4,18 @@ import { useCopyNotification } from '../components/CopyNotification';
 import CTAButton from '../components/ui/CTAButton';
 import Reveal, { useReveal } from '../components/ui/Reveal';
 import FaHeart from '../icons/fa/FaHeart';
+import { PAYMENT_HANDLES, CARD_PAYMENTS_MODE } from '../data/payment-handles';
 
-const ZELLE_PHONE = '(570) 909-5707';
+/**
+ * ONE copy of the number, not two.
+ *
+ * This file used to declare it again, which is precisely the drift
+ * payment-handles.ts was written to end: the portal, the assistant and this
+ * page all quote a number at clients, and a number that is right in two
+ * places and stale in a third is worse than one that is wrong everywhere,
+ * because nobody notices.
+ */
+const ZELLE_PHONE = PAYMENT_HANDLES.zelle;
 
 // Zelle wordmark logo (official purple, from Wikimedia Commons — public domain)
 const ZelleLogo = ({ width = 120 }: { width?: number }) => (
@@ -133,6 +143,26 @@ const Pay = () => {
                     <br />
                     and send to the number above.
                   </Text>
+
+                  {/* CARD, named but not offered here, and the difference
+                      matters. A card charge needs an amount and a booking to
+                      put it against, and this page has neither: it is a bare
+                      link Vero hands out, with no client and no balance
+                      behind it. So it says where the card button IS rather
+                      than pretending to be one, which is the honest version
+                      of "we take card now".
+                      Gated on the same constant the portal and the assistant
+                      read, so the day cards are switched off this sentence
+                      goes with them. */}
+                  {CARD_PAYMENTS_MODE !== 'off' && (
+                    <>
+                      <Box w="100%" h="1px" bg="gray.100" />
+                      <Text textStyle="bodyCopy" color="gray.500" textAlign="center">
+                        Prefer to pay by card? Sign in to your client portal and
+                        the balance is payable there.
+                      </Text>
+                    </>
+                  )}
                 </VStack>
               </Box>
             </VStack>

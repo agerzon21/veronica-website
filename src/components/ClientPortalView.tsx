@@ -2133,7 +2133,7 @@ function NextStepsPanel({
                 Send your retainer of <strong>{formatMoney(retainerToSend)}</strong> to reserve {wording.reserveDate}.
               </Text>
               <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
-                Your contract is signed, but per the agreement the {wording.dateNoun} isn't officially booked until the retainer arrives. Send it through any of the methods below, and note "retainer" in the comments so Veronika can match it up.
+                Your contract is signed, but per the agreement the {wording.dateNoun} isn't officially booked until the retainer arrives. Pay by card below, or send it any of the other ways and note "retainer" in the comments so Veronika can match it up.
               </Text>
             </VStack>
 

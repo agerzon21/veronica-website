@@ -9,3 +9,6 @@ console.log(JSON.stringify(rows, null, 2));
 const like = await sql`select id, category, label, source, active, left(content, 400) as head from ai_context where content ilike '%officially booked%' or label ilike '%portal%'`;
 console.log('MATCHES', like.length);
 console.log(JSON.stringify(like, null, 2));
+const pay = await sql`select id, category, label, source, active, left(content, 600) as head from ai_context where content ilike '%zelle%' or content ilike '%venmo%' or content ilike '%stripe%' or content ilike '%cash%' or content ilike '%payment method%' or content ilike '%how to pay%'`;
+console.log('PAYROWS', pay.length);
+console.log(JSON.stringify(pay, null, 2));
