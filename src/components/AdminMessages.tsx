@@ -27,6 +27,7 @@ import {
   MenuList,
   MenuItem,
   useBreakpointValue,
+  Input,
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import FaCheckCircle from '../icons/fa/FaCheckCircle';
@@ -630,9 +631,76 @@ export const ASSISTANT_HANDOFF_KEY = 'assistant-handoff-prompt';
  */
 export const REFINE_SESSION_KEY = 'vero_refine_session';
 
+/** One conversation the search matched, and why. */
+interface SearchResult {
+  conversation: ConversationSummary;
+  matches: Array<{ where: 'name' | 'date' | 'fact' | 'summary' | 'message' | 'assistant'; snippet: string }>;
+}
+
 const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient, onOpenClient }: Props) => {
   const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
+
+  /**
+   * SEARCH, over everything a conversation is.
+   *
+   * Server side, in one request, because the thing being searched is not on
+   * this screen: the summaries, the facts Vero recorded and the assistant
+   * transcripts are all per-conversation rows the rail never loads. Filtering
+   * what the browser happens to be holding would search the previews and
+   * nothing else, which is the version of this that looks like it works.
+   *
+   * DEBOUNCED at 250ms and gated at two characters. One person types into
+   * this; the cost is a serverless invocation per keystroke otherwise, and a
+   * single letter matches most of the inbox anyway.
+   *
+   * A stale response can never win: every request carries its own sequence
+   * number and anything older than the newest answered is dropped. Without
+   * it, typing quickly and pausing shows the results for a prefix.
+   */
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchSeq = useRef(0);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults(null);
+      setSearching(false);
+      setSearchError(null);
+      return;
+    }
+    setSearching(true);
+    const seq = ++searchSeq.current;
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch('/api/admin/messages-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, q }),
+        });
+        const data = await res.json();
+        if (seq !== searchSeq.current) return;
+        if (res.ok && data.success) {
+          setSearchResults(data.results ?? []);
+          setSearchError(null);
+        } else {
+          setSearchResults([]);
+          setSearchError(data.error || t.messages.searchFailed);
+        }
+      } catch {
+        if (seq !== searchSeq.current) return;
+        setSearchResults([]);
+        setSearchError(t.common.couldNotReach);
+      } finally {
+        if (seq === searchSeq.current) setSearching(false);
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, adminPassword]);
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Left rail fold. Default open; folds to avatars so the thread and the
@@ -1009,15 +1077,67 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                 onClick={() => setListCollapsed((v) => !v)}
               />
             </Flex>
-            <ConversationList
-              conversations={conversations}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              // Belt to the capture-fix's suspenders: whatever state the fold
-              // is in, a phone never renders the avatar strip. The fold's own
-              // control is already desktop-only; the rendering now is too.
-              collapsed={listCollapsed && isDesktopRail}
-            />
+            {/* SEARCH, above the list, hidden while the rail is folded to
+                76px because there is nowhere to put it. */}
+            {!(listCollapsed && isDesktopRail) && (
+              <Box px={2} py={2} borderBottom="1px solid" borderColor="gray.100">
+                <Flex align="center" gap={1}>
+                  <Input
+                    value={searchQuery}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                    placeholder={t.messages.searchPlaceholder}
+                    aria-label={t.messages.searchPlaceholder}
+                    h="36px"
+                    bg="white"
+                    border="1px solid"
+                    borderColor="gray.300"
+                    borderRadius="sm"
+                    fontSize={{ base: 'md', md: 'sm' }}
+                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+                  />
+                  {searchQuery && (
+                    <IconButton
+                      aria-label={t.messages.searchClear}
+                      icon={<Icon as={FaTimes} boxSize={3} />}
+                      size="xs"
+                      variant="ghost"
+                      color="gray.500"
+                      onClick={() => setSearchQuery('')}
+                    />
+                  )}
+                </Flex>
+                {searchResults !== null && (
+                  <Text fontSize="xs" color="gray.500" mt={1.5} px={1}>
+                    {searching
+                      ? t.messages.searchSearching
+                      : searchError
+                        ? searchError
+                        : searchResults.length === 0
+                          ? t.messages.searchNone(searchQuery.trim())
+                          : t.messages.searchCount(searchResults.length)}
+                  </Text>
+                )}
+              </Box>
+            )}
+
+            {searchResults !== null && !(listCollapsed && isDesktopRail) ? (
+              <SearchResultsList
+                results={searchResults}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                t={t}
+              />
+            ) : (
+              <ConversationList
+                conversations={conversations}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                // Belt to the capture-fix's suspenders: whatever state the fold
+                // is in, a phone never renders the avatar strip. The fold's own
+                // control is already desktop-only; the rendering now is too.
+                collapsed={listCollapsed && isDesktopRail}
+              />
+            )}
           </Box>
 
           {/* Right pane — selected conversation or empty prompt.
@@ -1317,6 +1437,67 @@ function GlobalAiTogglePill({
         <Icon as={FaPowerOff} boxSize={2.5} opacity={0.75} />
       )}
     </Box>
+  );
+}
+
+/**
+ * Search results, which are conversations plus the reason they are here.
+ *
+ * Deliberately NOT the same row as the rail. The rail's row shows the last
+ * message, which is the right preview when you are scanning an inbox and the
+ * wrong one when you have just searched for a word that appears nowhere near
+ * the end of the thread. Every result carries the text that actually matched,
+ * and a tag saying where it came from, so a hit in an assistant aside is
+ * visibly different from a hit in what the client wrote.
+ */
+function SearchResultsList({
+  results,
+  selectedId,
+  onSelect,
+  t,
+}: {
+  results: SearchResult[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  t: AdminT;
+}) {
+  if (results.length === 0) return null;
+  return (
+    <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
+      {results.map(({ conversation, matches }) => (
+        <Box key={conversation.id}>
+          <ConversationListRow
+            conv={conversation}
+            isSelected={conversation.id === selectedId}
+            onClick={() => onSelect(conversation.id)}
+          />
+          {matches.length > 0 && (
+            <VStack align="stretch" spacing={1} px={4} pb={2.5} mt={-1}>
+              {matches.slice(0, 3).map((m, i) => (
+                <Flex key={i} gap={2} align="flex-start">
+                  <Text
+                    fontSize="2xs"
+                    color="brand.accentText"
+                    border="1px solid"
+                    borderColor="brand.accentBorder"
+                    borderRadius="sm"
+                    px={1.5}
+                    flexShrink={0}
+                    lineHeight="1.6"
+                    whiteSpace="nowrap"
+                  >
+                    {t.messages.searchWhere[m.where] ?? m.where}
+                  </Text>
+                  <Text fontSize="xs" color="gray.600" fontWeight="300" noOfLines={2} lineHeight="1.5">
+                    {m.snippet}
+                  </Text>
+                </Flex>
+              ))}
+            </VStack>
+          )}
+        </Box>
+      ))}
+    </VStack>
   );
 }
 

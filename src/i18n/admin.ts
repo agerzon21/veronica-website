@@ -450,6 +450,24 @@ const dict = {
       ru: (phone: string) => phone,
     },
     noMessagesYet: { en: 'No messages yet', ru: 'Пока нет сообщений' },
+    // ─── Search ───────────────────────────────────────────────────────
+    searchPlaceholder: { en: 'Search by name, date, or anything said', ru: 'Поиск по имени, дате или чему угодно' },
+    searchClear: { en: 'Clear search', ru: 'Очистить поиск' },
+    searchSearching: { en: 'Searching…', ru: 'Ищу…' },
+    searchNone: {
+      en: (q: string) => `Nothing matches "${q}".`,
+      ru: (q: string) => `Ничего не найдено по «${q}».`,
+    },
+    searchCount: {
+      en: (n: number) => (n === 1 ? '1 conversation' : `${n} conversations`),
+      ru: (n: number) => `Диалогов: ${n}`,
+    },
+    searchFailed: { en: 'Search failed. Try again.', ru: 'Поиск не удался. Попробуй ещё раз.' },
+    // Where a hit was found, shown as a small tag on the result.
+    searchWhere: {
+      en: { name: 'name', date: 'date', fact: 'you noted', summary: 'summary', message: 'message', assistant: 'assistant' },
+      ru: { name: 'имя', date: 'дата', fact: 'ты записала', summary: 'сводка', message: 'сообщение', assistant: 'ассистент' },
+    },
     needsVero: { en: 'Needs Vero', ru: 'Нужна Веро' },
     clientBadge: { en: 'Client', ru: 'Клиент' },
     // Last-message preview prefixes shown in the sidebar
