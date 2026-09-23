@@ -15,12 +15,19 @@ import { useEffect, useMemo, useState } from 'react';
  * tiles twice and translates by exactly -50%, which is what makes the loop
  * seamless rather than snapping.
  *
- * THE VEIL IS ONE VALUE ON EVERY ROW. Earlier versions lightened the top so
- * the gold eyebrow would clear 4.5:1 and it read as a spotlight, which the
- * owner rejected twice. Measured against the real sheet, a third of its
- * pixels sit in the darkest luminance decile and brand.accentText needs a
- * background within two percent of cream, so no uniform value was ever going
- * to carry it. The header brings its own soft spot instead (PortalHalo).
+ * THE VEIL IS ONE VALUE ON EVERY ROW, and a different one on a phone. Earlier
+ * versions lightened the TOP of the field so the gold eyebrow would clear
+ * 4.5:1, and it read as a spotlight, which the owner rejected twice. Measured
+ * against the real sheet, a third of its pixels sit in the darkest luminance
+ * decile and brand.accentText needs a background within two percent of cream,
+ * so no uniform value was ever going to carry it and none is asked to: the
+ * header and the offramp bring their own opaque soft spots (SoftSpot, in
+ * src/pages/Portal.tsx), which is what actually puts the gold on cream.
+ *
+ * The pair {base, md} is not a gradient and does not reintroduce one. It is
+ * two flat values, one per screen, because a phone shows about a third as
+ * many tiles at three times the size and the same veil leaves far more of one
+ * photograph showing. Both numbers were read off the tuning canvas.
  *
  * IT STOPS COMPLETELY under prefers-reduced-motion, and never starts at all
  * on a connection that cannot afford it.
@@ -123,11 +130,25 @@ function useField(): { tile: Tile; rows: number; perRow: number } {
 }
 
 interface Props {
-  /** Cream over the photographs, 0 to 1. One value, every row. */
-  veil?: number;
+  /**
+   * Cream over the photographs, 0 to 1. One value, every row.
+   *
+   * A pair rather than a number, because the right amount is not the same on
+   * the two screens. A phone shows about a third as many tiles at three times
+   * the size, so the same veil leaves far more of one photograph under the
+   * words, and the words are bigger relative to the page. Both numbers were
+   * read off the tuner, one per board.
+   */
+  veil?: number | { base: number; md: number };
 }
 
 const PortalMosaic = ({ veil = 0.62 }: Props) => {
+  // One cream value, or two. Written once here so the two places that paint
+  // the veil cannot answer the question differently.
+  const veilBg =
+    typeof veil === 'number'
+      ? `rgba(253,249,240,${veil})`
+      : { base: `rgba(253,249,240,${veil.base})`, md: `rgba(253,249,240,${veil.md})` };
   const affords = useAffordsMosaic();
   const { tile, rows: rowCount, perRow } = useField();
   const [sheetReady, setSheetReady] = useState(false);
@@ -170,7 +191,7 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
           backgroundRepeat="no-repeat"
           aria-hidden="true"
         />
-        <Box position="absolute" inset={0} bg={`rgba(253,249,240,${veil})`} aria-hidden="true" />
+        <Box position="absolute" inset={0} bg={veilBg} aria-hidden="true" />
       </>
     );
   }
@@ -227,7 +248,7 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
 @keyframes veroMosaicRight { from { transform: translateX(-50%); } to { transform: translateX(0); } }
 `}</style>
       {field(tile, rows)}
-      <Box position="absolute" inset={0} bg={`rgba(253,249,240,${veil})`} aria-hidden="true" />
+      <Box position="absolute" inset={0} bg={veilBg} aria-hidden="true" />
     </>
   );
 };
