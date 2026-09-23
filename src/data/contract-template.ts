@@ -185,6 +185,28 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       ],
     },
     {
+      /**
+       * Only when the booking happens in more than one place.
+       *
+       * pruneEmptyOptionalSections drops a section whose gate variable is
+       * blank, so a single-location contract is byte for byte what it was.
+       *
+       * The Location field above keeps naming the FIRST place rather than
+       * summarising both. Four live consumers read that field as a street
+       * address, the row the paying client sees in their own portal and the
+       * Maps destination among them, and a sentence there would reach all of
+       * them.
+       */
+      title: 'SESSION SCHEDULE',
+      optional: true,
+      requireVariables: ['session_schedule'],
+      paragraphs: [
+        { kind: 'text', text: 'This booking takes place in more than one location on the same day, as follows:' },
+        { kind: 'text', text: '{{session_schedule}}' },
+        { kind: 'text', text: 'The fee stated in this agreement covers all of the above as one session.' },
+      ],
+    },
+    {
       number: 'III',
       title: 'SERVICES',
       paragraphs: [
@@ -585,6 +607,16 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     required: true,
   },
   {
+    key: 'session_schedule',
+    label: 'Second Location and Schedule',
+    labelRu: 'Второе место и расписание',
+    type: 'textarea',
+    placeholder:
+      'Proposal, Mountain View Vineyard, 3:00 PM to 3:30 PM\nSunset portraits, Gouldsboro State Park, 6:30 PM to 7:00 PM',
+    helpText:
+      'Only for a booking that happens in more than one place: a ceremony and a reception, a proposal and the portraits after it. One line per place. Leave it blank and the contract says nothing about it and the section does not appear. The Location field above stays the FIRST place, because that is what the client portal shows and what the Directions button drives to.',
+  },
+  {
     key: 'effective_date',
     label: 'Effective Date',
     type: 'date',
@@ -766,6 +798,28 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
     paragraphs: [
       { kind: 'text', text: 'This agreement covers the following session:' },
       { kind: 'text', text: '{{session_scope}}' },
+    ],
+  },
+  {
+    /**
+     * Only when the booking happens in more than one place.
+     *
+     * pruneEmptyOptionalSections drops a section whose gate variable is
+     * blank, so a single-location contract is byte for byte what it was.
+     *
+     * The Location field above keeps naming the FIRST place rather than
+     * summarising both. Four live consumers read that field as a street
+     * address, the row the paying client sees in their own portal and the
+     * Maps destination among them, and a sentence there would reach all of
+     * them.
+     */
+    title: 'SESSION SCHEDULE',
+    optional: true,
+    requireVariables: ['session_schedule'],
+    paragraphs: [
+      { kind: 'text', text: 'This booking takes place in more than one location on the same day, as follows:' },
+      { kind: 'text', text: '{{session_schedule}}' },
+      { kind: 'text', text: 'The fee stated in this agreement covers all of the above as one session.' },
     ],
   },
   {
@@ -1184,6 +1238,16 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
     helpText:
       'A full street address, not just the place name. A name that resolves on one map app often resolves nowhere else. Use Look it up below to check it, and to read off the distance and drive time.',
     required: true,
+  },
+  {
+    key: 'session_schedule',
+    label: 'Second Location and Schedule',
+    labelRu: 'Второе место и расписание',
+    type: 'textarea',
+    placeholder:
+      'Proposal, Mountain View Vineyard, 3:00 PM to 3:30 PM\nSunset portraits, Gouldsboro State Park, 6:30 PM to 7:00 PM',
+    helpText:
+      'Only for a booking that happens in more than one place: a ceremony and a reception, a proposal and the portraits after it. One line per place. Leave it blank and the contract says nothing about it and the section does not appear. The Location field above stays the FIRST place, because that is what the client portal shows and what the Directions button drives to.',
   },
   {
     key: 'effective_date',
