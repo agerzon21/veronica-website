@@ -916,6 +916,34 @@ const PortalHeader = ({
   const showBalance = remaining !== null && remaining > 0;
 
   /**
+   * Is there anything in the desktop rail to report?
+   *
+   * It carries two facts and both of them come off the booking, so on the
+   * gallery-only route it has nothing whatsoever to say. It rendered there
+   * anyway, empty, and an empty flex box carrying `ml="auto"` and 20px of left
+   * padding is not nothing: the auto margin swallows every spare pixel in the
+   * row. That is what pinned the section bar to the far right edge of a 2560px
+   * header with two thousand pixels of white space beside it.
+   */
+  const showRail = daysUntilShoot(progress?.eventDate) !== null || remaining !== null;
+
+  /**
+   * Is the progress track sharing the desktop row with the slot?
+   *
+   * This is the question the slot's width cap has always been asking. It used
+   * to ask it as `isPortalComplete(progress)`, which is the right answer for a
+   * booking and the wrong one for a route that has no booking: a guest on a
+   * shared gallery link has no track, no account control and no money in the
+   * row, so there is nothing for the cap to protect, and it held the only
+   * control on the screen down to 300px.
+   *
+   * Written as the track's OWN visibility condition rather than as another
+   * reading of it, so the cap and the thing it is making room for cannot
+   * disagree. The two must be changed together or not at all.
+   */
+  const trackSharesDesktopRow = hasContract(progress) && !isPortalComplete(progress);
+
+  /**
    * Which money state the corner is reporting, because they are three
    * different messages and a single "Balance" label said one thing for all of
    * them.
@@ -1260,75 +1288,77 @@ const PortalHeader = ({
           Outstanding shows even at zero, unlike the corner it replaces, because
           "$0.00" is the answer to the question and a blank space is not.
         */}
-        <Flex
-          display="none"
-          sx={{ [RAIL_AT]: { display: 'flex' } }}
-          align="center"
-          gap={5}
-          flexShrink={0}
-          ml="auto"
-          pl={5}
-        >
-          {daysUntilShoot(progress?.eventDate) !== null && (
-            <Box
-              display="none"
-              sx={{ [COUNTDOWN_AT]: { display: 'block' } }}
-              textAlign="right"
-              lineHeight="1.3"
-            >
-              <Text
-                fontSize="10px"
-                letterSpacing="0.14em"
-                textTransform="uppercase"
-                color="gray.500"
+        {showRail && (
+          <Flex
+            display="none"
+            sx={{ [RAIL_AT]: { display: 'flex' } }}
+            align="center"
+            gap={5}
+            flexShrink={0}
+            ml="auto"
+            pl={5}
+          >
+            {daysUntilShoot(progress?.eventDate) !== null && (
+              <Box
+                display="none"
+                sx={{ [COUNTDOWN_AT]: { display: 'block' } }}
+                textAlign="right"
+                lineHeight="1.3"
               >
-                Your day
-              </Text>
-              <Text fontSize="md" fontWeight="500" color="gray.800" whiteSpace="nowrap">
-                {daysUntilShoot(progress?.eventDate) === 0
-                  ? 'is today'
-                  : daysUntilShoot(progress?.eventDate) === 1
-                    ? 'is tomorrow'
-                    : `in ${daysUntilShoot(progress?.eventDate)} days`}
-              </Text>
-            </Box>
-          )}
-          {daysUntilShoot(progress?.eventDate) !== null && remaining !== null && (
-            <Box
-              display="none"
-              sx={{ [COUNTDOWN_AT]: { display: 'block' } }}
-              w="1px"
-              h="28px"
-              bg="gray.200"
-            />
-          )}
-          {remaining !== null && (
-            <Box textAlign="right" lineHeight="1.3">
-              <Text
-                fontSize="10px"
-                letterSpacing="0.14em"
-                textTransform="uppercase"
-                color={retainerOutstanding ? 'red.600' : 'gray.500'}
-              >
-                {retainerOutstanding ? 'Retainer due' : 'Outstanding'}
-              </Text>
-              <Text
-                fontSize="md"
-                fontWeight="500"
-                whiteSpace="nowrap"
-                color={
-                  retainerOutstanding || progress?.overdue
-                    ? 'red.600'
-                    : remaining > 0
-                      ? 'gray.800'
-                      : 'brand.success'
-                }
-              >
-                {formatMoney(retainerOutstanding ? retainerDue : Math.max(remaining, 0))}
-              </Text>
-            </Box>
-          )}
-        </Flex>
+                <Text
+                  fontSize="10px"
+                  letterSpacing="0.14em"
+                  textTransform="uppercase"
+                  color="gray.500"
+                >
+                  Your day
+                </Text>
+                <Text fontSize="md" fontWeight="500" color="gray.800" whiteSpace="nowrap">
+                  {daysUntilShoot(progress?.eventDate) === 0
+                    ? 'is today'
+                    : daysUntilShoot(progress?.eventDate) === 1
+                      ? 'is tomorrow'
+                      : `in ${daysUntilShoot(progress?.eventDate)} days`}
+                </Text>
+              </Box>
+            )}
+            {daysUntilShoot(progress?.eventDate) !== null && remaining !== null && (
+              <Box
+                display="none"
+                sx={{ [COUNTDOWN_AT]: { display: 'block' } }}
+                w="1px"
+                h="28px"
+                bg="gray.200"
+              />
+            )}
+            {remaining !== null && (
+              <Box textAlign="right" lineHeight="1.3">
+                <Text
+                  fontSize="10px"
+                  letterSpacing="0.14em"
+                  textTransform="uppercase"
+                  color={retainerOutstanding ? 'red.600' : 'gray.500'}
+                >
+                  {retainerOutstanding ? 'Retainer due' : 'Outstanding'}
+                </Text>
+                <Text
+                  fontSize="md"
+                  fontWeight="500"
+                  whiteSpace="nowrap"
+                  color={
+                    retainerOutstanding || progress?.overdue
+                      ? 'red.600'
+                      : remaining > 0
+                        ? 'gray.800'
+                        : 'brand.success'
+                  }
+                >
+                  {formatMoney(retainerOutstanding ? retainerDue : Math.max(remaining, 0))}
+                </Text>
+              </Box>
+            )}
+          </Flex>
+        )}
 
         {/* The slot. It holds the two-bar nav, or the 1-2-3 progress, and the
             choice is made separately per width by plain `display`, never by a
@@ -1341,13 +1371,19 @@ const PortalHeader = ({
           minW={0}
           align="center"
           gap={SLOT_GAP}
-          // Capped on a WIDE screen while the progress track is still beside
-          // it. Left to flex freely the account control stretched to nearly
-          // seven hundred pixels, which reads as a search field rather than a
-          // menu: a control that wide looks like somewhere to type. Uncapped
-          // again once the booking is finished, because then it shares the row
-          // with the photo bar and the two split the width between them.
-          maxW={{ base: 'none', md: isPortalComplete(progress) ? 'none' : '300px' }}
+          // Capped ONLY while the progress track is actually beside it. Left
+          // to flex freely next to the track, the account control stretched to
+          // nearly seven hundred pixels, which reads as a search field rather
+          // than a menu: a control that wide looks like somewhere to type.
+          //
+          // Uncapped when the track is gone, which is two different rows and
+          // not one. A finished booking shares this slot between the photo bar
+          // and the condensed account bar, so they split the width. The
+          // gallery-only route has neither a track nor an account bar nor a
+          // balance, so the photo bar simply takes the row, which is the whole
+          // point of a header that is otherwise a logo and two thousand pixels
+          // of nothing. See trackSharesDesktopRow.
+          maxW={{ base: 'none', md: trackSharesDesktopRow ? '300px' : 'none' }}
           display={{
             base: navOwnsMobileSlot ? 'flex' : 'none',
             // Hidden outright when the control inside it is not rendering.

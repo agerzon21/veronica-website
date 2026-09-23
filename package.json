@@ -32,7 +32,8 @@
     "check:overlay": "node scripts/check-summary-overlay.mjs",
     "check:quotes": "node scripts/check-fact-quotes.mjs",
     "check:money": "node scripts/check-money-prefill.mjs",
-    "check:hooks": "node scripts/check-hooks.mjs"
+    "check:hooks": "node scripts/check-hooks.mjs",
+    "check:portal-header": "node scripts/check-portal-header.mjs"
   },
   "dependencies": {
     "@chakra-ui/icons": "^2.2.4",
