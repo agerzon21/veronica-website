@@ -1,4 +1,7 @@
-import { Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox, Button, Icon } from '@chakra-ui/react';
+import {
+  Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox, Button, Icon,
+  Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverBody,
+} from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import FaComments from '../icons/fa/FaComments';
 import { useEmailDelivery } from '../hooks/useEmailDelivery';
@@ -48,12 +51,11 @@ import {
   quoteTravel,
   travelShareIsHigh,
   travelShareOfSessionPct,
-  type TravelApplication,
   type TravelDecision,
   type TravelQuote,
   type TravelStatus,
 } from '../data/travel-fee';
-import { travelCopy, type TravelCopy } from './travelCopy';
+import { travelCopy } from './travelCopy';
 
 interface Props {
   adminPassword: string;
@@ -272,9 +274,11 @@ type PlaceRow = SessionLocation & {
   from: 'previous' | 'home';
   /** One way, as Google Maps prints it for that hop. */
   miles: string;
+  /** And how long that hop takes, the way Maps prints that too. */
+  minutes: string;
 };
 
-const EMPTY_PLACE_ROW: PlaceRow = { ...EMPTY_LOCATION, from: 'previous', miles: '' };
+const EMPTY_PLACE_ROW: PlaceRow = { ...EMPTY_LOCATION, from: 'previous', miles: '', minutes: '' };
 
 /**
  * Directions between two places, neither of which is her home.
@@ -305,6 +309,123 @@ const looksLikeStreetAddress = (raw: string): boolean => {
   if (/\d/.test(v) && /\s/.test(v)) return true;
   return /\b(po box|rural route|rr\s*\d)/i.test(v);
 };
+
+/**
+ * The explanation, behind a dot.
+ *
+ * The travel panel carried five paragraphs about how the fee is worked out,
+ * what Maps prints, and why the drive time exists. All of it true, all of it
+ * read once, and all of it permanently between her and the next field. It is
+ * the same text; it is just not on screen until asked for.
+ *
+ * A Popover rather than a Tooltip, because a tooltip needs a hover and half
+ * the people using this are on a phone.
+ */
+const InfoDot = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <Popover trigger="click" placement="top" isLazy>
+    <PopoverTrigger>
+      <Box
+        as="button"
+        type="button"
+        aria-label={label}
+        w="18px"
+        h="18px"
+        flexShrink={0}
+        borderRadius="full"
+        border="1px solid"
+        borderColor="gray.300"
+        color="gray.500"
+        fontSize="11px"
+        lineHeight="16px"
+        fontStyle="italic"
+        fontFamily="serif"
+        bg="white"
+        _hover={{ borderColor: 'brand.accent', color: 'brand.accentText' }}
+      >
+        i
+      </Box>
+    </PopoverTrigger>
+    <PopoverContent fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.6" maxW="320px">
+      <PopoverArrow />
+      <PopoverBody>{children}</PopoverBody>
+    </PopoverContent>
+  </Popover>
+);
+
+/**
+ * The drive to one place: how far, how long, and the link that tells you.
+ *
+ * Sits directly under the address it belongs to, because that is the order
+ * the day happens in and the order she fills it in. It used to be one panel
+ * at the bottom covering the whole booking, which worked while a booking had
+ * one place in it.
+ */
+const TravelLeg = ({
+  copy,
+  miles,
+  minutes,
+  onMiles,
+  onMinutes,
+  onLookup,
+  lookupBusy,
+  lookupNote,
+  origin,
+}: {
+  copy: ReturnType<typeof travelCopy>;
+  miles: string;
+  minutes: string;
+  onMiles: (v: string) => void;
+  onMinutes: (v: string) => void;
+  onLookup: () => void;
+  lookupBusy?: boolean;
+  lookupNote?: string;
+  /** The "from home / from the place before it" control, when there is one. */
+  origin?: React.ReactNode;
+}) => (
+  <Box>
+    <Flex align="center" gap={2} wrap="wrap">
+      {origin}
+      <Button
+        size="sm" variant="outline" fontWeight="400" h="38px" flexShrink={0}
+        borderColor="brand.accentBorder" color="brand.accentText"
+        _hover={{ borderColor: 'brand.accent' }}
+        isLoading={lookupBusy}
+        onClick={onLookup}
+      >
+        {copy.lookItUp}
+      </Button>
+      <Input
+        value={miles}
+        onChange={(e) => onMiles(e.target.value)}
+        placeholder={copy.milesLabel}
+        aria-label={copy.milesLabel}
+        inputMode="decimal"
+        h="38px" w="120px" bg="white" border="1px solid" borderColor="gray.300"
+        fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+        _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+      />
+      <Input
+        value={minutes}
+        onChange={(e) => onMinutes(e.target.value)}
+        placeholder={copy.minutesLabel}
+        aria-label={copy.minutesLabel}
+        h="38px" w="130px" bg="white" border="1px solid" borderColor="gray.300"
+        fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+        _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+      />
+      <InfoDot label={copy.heading}>
+        <Text mb={2}>{copy.lookItUpHelp}</Text>
+        <Text mb={2}>{copy.milesHelp}</Text>
+        <Text>{copy.minutesHelp}</Text>
+      </InfoDot>
+    </Flex>
+    {lookupNote && (
+      <Text fontSize="xs" color="orange.700" mt={1.5} fontWeight="400" lineHeight="1.5">
+        {lookupNote}
+      </Text>
+    )}
+  </Box>
+);
 
 const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly }: Props) => {
   const { t, lang } = useAdminLang();
@@ -936,7 +1057,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
         // Changing a leg reopens the travel question, for the same reason
         // editing the main mileage does: a fee agreed against one distance
         // must not quietly become a different fee.
-        if (key === 'miles' || key === 'from') {
+        if (key === 'miles' || key === 'from' || key === 'minutes') {
           setTravelStatus('none');
           setTravelOverride(null);
         }
@@ -984,10 +1105,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     (sum, row) => sum + (parseMiles(row.miles ?? '') ?? 0),
     0,
   );
+  /**
+   * Every leg's drive time, added up the same way the miles are.
+   *
+   * null only when NOTHING is typed anywhere, because null means "she has not
+   * said" and 0 would mean "no time at all", and the long-haul check reads
+   * the difference.
+   */
+  const totalDriveMinutes = (() => {
+    const parts = [
+      parseDriveTimeMinutes(travelMinutesOneWay),
+      ...extraPlaces.map((row) => parseDriveTimeMinutes(row.minutes ?? '')),
+    ].filter((n): n is number => n !== null);
+    return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+  })();
   const baseLegMiles = parseMiles(travelMilesOneWay);
   const travelQuote = quoteTravel(
     baseLegMiles === null ? NaN : baseLegMiles + extraLegMiles,
-    parseDriveTimeMinutes(travelMinutesOneWay),
+    totalDriveMinutes,
   );
   // The ONE number every surface reads: her figure when she agreed one, the
   // computed figure otherwise. The total, the share warning, the line item and
@@ -1903,9 +2038,28 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                     {t.newClient.addressLooksIncomplete}
                   </Text>
                 )}
+              {/* The drive to the FIRST place, directly under its address,
+                  because that is the order the day happens in. It used to be
+                  a panel at the bottom, below the other places, describing a
+                  journey that starts before them. */}
+              {f.key === 'event_location' && (
+                <Box mt={3}>
+                  <TravelLeg
+                    copy={tv}
+                    miles={travelMilesOneWay}
+                    minutes={travelMinutesOneWay}
+                    onMiles={applyTravelMiles}
+                    onMinutes={setTravelMinutesOneWay}
+                    onLookup={openTravelLookup}
+                    lookupBusy={travelLinkBusy}
+                    lookupNote={travelLinkNote}
+                  />
+                </Box>
+              )}
               {f.key === 'event_location' && (
                 <PlacesBlock
                   t={t}
+                  tv={tv}
                   places={extraPlaces}
                   atMax={extraPlaces.length + 1 >= MAX_LOCATIONS}
                   firstAddress={firstPlace.address}
@@ -1921,17 +2075,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                 />
               )}
               {f.key === 'event_location' && (
-                <TravelBlock
+                <TravelSummary
                   copy={tv}
-                  address={variables.event_location ?? ''}
                   oneWayMiles={travelMilesOneWay}
                   extraLegMiles={extraLegMiles}
-                  oneWayMinutes={travelMinutesOneWay}
-                  onMilesChange={applyTravelMiles}
-                  onMinutesChange={setTravelMinutesOneWay}
-                  onLookup={openTravelLookup}
-                  lookupBusy={travelLinkBusy}
-                  lookupNote={travelLinkNote}
+                  totalMinutes={totalDriveMinutes}
                   quote={travelQuote}
                   status={travelStatus}
                   onAccept={() => { cancelTravelCustom(); setTravelStatus('accepted'); }}
@@ -2183,17 +2331,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
  * anything in above $100 computed and told her to quote a routine two hour
  * wedding by hand, which is the bug this replaced.
  */
-function TravelBlock({
+/**
+ * What the whole day adds up to, and the one money question.
+ *
+ * Everything above this is now beside the place it belongs to: the address,
+ * the miles, the drive time. What is left is the part that is about the
+ * BOOKING rather than about a leg of it, and it belongs at the end because
+ * it cannot be answered until every leg is in.
+ *
+ * The five paragraphs that used to explain the rate, what Maps prints and
+ * why the drive time exists are not gone, they are behind the dot next to
+ * each leg. They were read once and then sat permanently between her and the
+ * next field.
+ */
+function TravelSummary({
   copy,
-  address,
   oneWayMiles,
   extraLegMiles = 0,
-  oneWayMinutes,
-  onMilesChange,
-  onMinutesChange,
-  onLookup,
-  lookupBusy,
-  lookupNote,
+  totalMinutes,
   quote,
   status,
   onAccept,
@@ -2209,26 +2364,18 @@ function TravelBlock({
   onCustomAccept,
   onCustomCancel,
 }: {
-  copy: TravelCopy;
-  address: string;
+  copy: ReturnType<typeof travelCopy>;
   oneWayMiles: string;
-  /** Miles from the hops to any places after the first. */
   extraLegMiles?: number;
-  oneWayMinutes: string;
-  onMilesChange: (v: string) => void;
-  onMinutesChange: (v: string) => void;
-  onLookup: () => void;
-  lookupBusy: boolean;
-  lookupNote: string;
+  /** Every leg's drive time added up, in minutes, or null when none is typed. */
+  totalMinutes: number | null;
   quote: TravelQuote | null;
   status: TravelStatus;
   onAccept: () => void;
   onDecline: () => void;
   onReopen: () => void;
-  /** The raw total input, so the share can be computed against the session. */
   sessionTotal: string;
-  application: TravelApplication;
-  /** The FINAL amount: her figure when she agreed one, the computed one otherwise. */
+  application: ReturnType<typeof applyTravelDecision>;
   fee: number;
   customOpen: boolean;
   customInput: string;
@@ -2237,7 +2384,7 @@ function TravelBlock({
   onCustomAccept: () => void;
   onCustomCancel: () => void;
 }) {
-  const minutes = parseDriveTimeMinutes(oneWayMinutes);
+  const base = parseMiles(oneWayMiles) ?? 0;
   const sessionTotalNumber = parseFloat(sessionTotal);
   // The share is judged on whatever is actually going on the contract. While
   // the money box is open that is the figure being typed, so the warning moves
@@ -2250,100 +2397,31 @@ function TravelBlock({
   const included = formatMiles(TRAVEL_FREE_ROUND_TRIP_MILES);
   // Two decimals on purpose. This is the only place the unrounded figure is
   // shown, and seeing $60.20 become $65 is what makes the rounding a policy
-  // she is applying rather than a number the form invented. It matters more at
-  // $0.70 a mile than it did at $1.00, because the raw figure is almost never
-  // a round number now.
+  // she is applying rather than a number the form invented.
   const rawFeeText = quote ? `$${quote.rawFee.toFixed(2)}` : '';
   /** What the miles produce. Still shown when she is overriding it, never as a nag. */
   const computedFeeText = quote ? formatTravelFee(quote.fee) : '';
   /** What goes on the contract. The accept button and the share both read this. */
   const feeText = quote ? formatTravelFee(pendingFee) : '';
-
+  if (!quote && extraLegMiles === 0 && base === 0) return null;
   return (
-    <Box
-      mt={4}
-      p={4}
-      bg="brand.surface"
-      border="1px solid"
-      borderColor="brand.accentBorder"
-      borderRadius="sm"
-    >
-      <Flex justify="space-between" align="center" gap={3} wrap="wrap" mb={2}>
-        <Text
-          fontSize={{ base: 'xs', md: '2xs' }}
-          fontWeight="500"
-          color="brand.accent"
-          letterSpacing={{ base: '0.15em', md: '0.2em' }}
-          textTransform="uppercase"
-        >
-          {copy.heading}
-        </Text>
-        <CTAButton
-          onClick={onLookup}
-          variant="outline"
-          size="sm"
-          isLoading={lookupBusy}
-          isDisabled={!address.trim()}
-        >
-          {copy.lookItUp}
-        </CTAButton>
-      </Flex>
-
-      <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
-        {copy.lookItUpHelp}
-      </Text>
-      {lookupNote && (
-        <Text fontSize="xs" color="orange.700" mt={2} fontWeight="400" lineHeight="1.5">
-          {lookupNote}
+    <Box mt={4}>
+      {/* The arithmetic, in one line, when there is more than one leg to add
+          up. Without it the boxes say 32 and 7 and the fee is priced off 39,
+          and nothing on screen joins them. */}
+      {extraLegMiles > 0 && (
+        <Text fontSize="sm" color="gray.700" fontWeight="400" mb={1}>
+          {base} + {extraLegMiles} = {Math.round((base + extraLegMiles) * 10) / 10} {copy.milesLabel.toLowerCase()}
         </Text>
       )}
-
-      <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start" mt={4}>
-        <Field label={copy.milesLabel} helpText={copy.milesHelp} w={{ base: '100%', md: '50%' }}>
-          <FormInput
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            min="0"
-            value={oneWayMiles}
-            onChange={(e) => onMilesChange(e.target.value)}
-            placeholder={copy.milesPlaceholder}
-          />
-          {/* What the fee is actually being worked out from, once the day has
-              more than one place in it. Without this the box says 103 and the
-              fee is priced off 139, and there is nothing on the screen that
-              explains the difference. */}
-          {extraLegMiles > 0 && (
-            <Text fontSize="xs" color="brand.accentText" fontWeight="400" mt={1.5}>
-              + {extraLegMiles} between places ={' '}
-              {Math.round(((parseMiles(oneWayMiles) ?? 0) + extraLegMiles) * 10) / 10} one way
-            </Text>
-          )}
-        </Field>
-        <Field label={copy.minutesLabel} helpText={copy.minutesHelp} w={{ base: '100%', md: '50%' }}>
-          {/* TEXT, not number: Maps prints "2 hr 2 min" and she should be able
-              to type exactly that rather than converting it to 122 in her head.
-              parseDriveTimeMinutes reads Google's wording, the compact forms,
-              a clock, or a bare number of minutes. Safe to be lenient here
-              because drive time never touches the fee. */}
-          <FormInput
-            type="text"
-            inputMode="text"
-            value={oneWayMinutes}
-            onChange={(e) => onMinutesChange(e.target.value)}
-            placeholder={copy.minutesPlaceholder}
-          />
-        </Field>
-      </Stack>
-
       {quote && (
         <Box mt={3}>
           <Text fontSize="sm" color="gray.700" fontWeight="400">
             {copy.roundTrip(formatMiles(quote.roundTripMiles))}
           </Text>
-          {minutes !== null && (
+          {totalMinutes !== null && (
             <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1}>
-              {copy.driveTime(formatDriveTime(minutes), formatDriveTime(minutes * 2))}
+              {copy.driveTime(formatDriveTime(totalMinutes), formatDriveTime(totalMinutes * 2))}
             </Text>
           )}
           {!quote.triggered && (
@@ -2625,8 +2703,10 @@ function PlacesBlock({
   onMove,
   onScheduleChange,
   onLookupLeg,
+  tv,
 }: {
   t: ReturnType<typeof useAdminLang>['t'];
+  tv: ReturnType<typeof travelCopy>;
   places: PlaceRow[];
   atMax: boolean;
   firstAddress: string;
@@ -2742,36 +2822,30 @@ function PlacesBlock({
               </Text>
             )}
 
-            {/* The drive to THIS place, on one row. */}
-            <Flex align="center" gap={2} mt={2} ml="26px" wrap="wrap">
-              <Text fontSize="xs" color="gray.500" flexShrink={0}>{t.newClient.placeFromLabel}</Text>
-              <Select
-                value={row.from}
-                onChange={(e) => onSet(i, 'from', e.target.value)}
-                h="36px" bg="white" border="1px solid" borderColor="gray.300" w="auto"
-                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-              >
-                <option value="previous">{t.newClient.placeFromPrevious}</option>
-                <option value="home">{t.newClient.placeFromHome}</option>
-              </Select>
-              <Button size="sm" variant="outline" fontWeight="400" h="36px" flexShrink={0}
-                borderColor="brand.accentBorder" color="brand.accentText"
-                _hover={{ borderColor: 'brand.accent' }}
-                onClick={() => onLookupLeg(i)}>
-                {t.newClient.placeLookItUp}
-              </Button>
-              <Input
-                value={row.miles}
-                onChange={(e) => onSet(i, 'miles', e.target.value)}
-                placeholder={t.newClient.placeMilesLabel}
-                aria-label={t.newClient.placeMilesLabel}
-                inputMode="decimal"
-                h="36px" bg="white" border="1px solid" borderColor="gray.300" w="130px"
-                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+            {/* The drive to THIS place, right under it. */}
+            <Box mt={2} ml="26px">
+              <TravelLeg
+                copy={tv}
+                miles={row.miles}
+                minutes={row.minutes}
+                onMiles={(v) => onSet(i, 'miles', v)}
+                onMinutes={(v) => onSet(i, 'minutes', v)}
+                onLookup={() => onLookupLeg(i)}
+                origin={
+                  <Select
+                    value={row.from}
+                    onChange={(e) => onSet(i, 'from', e.target.value)}
+                    h="38px" bg="white" border="1px solid" borderColor="gray.300" w="auto"
+                    fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                    aria-label={t.newClient.placeFromLabel}
+                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+                  >
+                    <option value="previous">{t.newClient.placeFromPrevious}</option>
+                    <option value="home">{t.newClient.placeFromHome}</option>
+                  </Select>
+                }
               />
-            </Flex>
+            </Box>
           </Box>
         ))}
       </VStack>
