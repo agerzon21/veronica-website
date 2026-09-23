@@ -902,7 +902,7 @@ const Portal = () => {
           sprite sheet. It replaces a single 913 KB photograph and costs about
           220 KB, and it carries its own still fallback for a connection that
           cannot afford it. PortalMosaic has the whole argument. */}
-      <PortalMosaic veil={{ base: 0.62, md: 0.55 }} />
+      <PortalMosaic veil={0.62} />
 
       <Flex
         position="relative"
@@ -1232,42 +1232,29 @@ const Portal = () => {
  */
 const SPOT = {
   /**
-   * READ OFF THE TUNING BOARD, both of them, verbatim.
+   * ONE recipe, both widths. The phone's, because the phone was right.
    *
-   * base is the Phone board and md is the Desktop board, each carrying that
-   * board's own four numbers per spot. Nothing here is averaged, rounded or
-   * improved: where the two disagree it is because he tuned one and not the
-   * other, and that is his to change, not mine to reconcile.
+   * These were split, with the desktop board running fade 0. That is not a
+   * hard-edged rectangle, which is what it sounds like: the fill is a radial
+   * gradient, and a radial gradient with nothing to fade is a hard-edged
+   * ELLIPSE. Two of them, one round the gold rule and one enormous one round
+   * the title, both with a crisp visible outline. The corner radius could not
+   * help, because the gradient paints its own shape and the corners of the
+   * box are already transparent.
+   *
+   * So the number that makes a bald spot look like a bald spot is `soft`,
+   * and it has to be well above zero. 58 is the original halo's falloff and
+   * it is what the phone was using while the phone was the one that looked
+   * right.
    *
    *   a     peak cream at the centre
    *   x, y  how far the patch reaches past the words
    *   soft  how much of the radius is spent fading, 0 to 100
-   *
-   * Desktop runs soft 0 on three of the four, which is a hard-edged shape on
-   * purpose, and a title at 0.69 so the photographs read through it. Those
-   * two together are the look he has been asking for and neither is a
-   * mistake to be smoothed out.
    */
-  eyebrow: {
-    a: { base: 0.93, md: 1 },
-    x: { base: '60px', md: '0px' }, y: { base: '26px', md: '0px' },
-    soft: { base: 58, md: 0 },
-  },
-  rule: {
-    a: { base: 0.93, md: 0.93 },
-    x: { base: '40px', md: '30px' }, y: { base: '22px', md: '16px' },
-    soft: { base: 58, md: 0 },
-  },
-  title: {
-    a: { base: 0.93, md: 0.69 },
-    x: { base: '70px', md: '70px' }, y: { base: '60px', md: '0px' },
-    soft: { base: 58, md: 0 },
-  },
-  offramp: {
-    a: { base: 0.93, md: 0.93 },
-    x: { base: '50px', md: '60px' }, y: { base: '26px', md: '26px' },
-    soft: { base: 58, md: 58 },
-  },
+  eyebrow: { a: 0.93, x: '60px', y: '26px', soft: 58 },
+  rule:    { a: 0.93, x: '40px', y: '22px', soft: 58 },
+  title:   { a: 0.93, x: '70px', y: '60px', soft: 58 },
+  offramp: { a: 0.93, x: '50px', y: '26px', soft: 58 },
 } as const;
 
 /**
@@ -1292,31 +1279,22 @@ const SPOT = {
  * sentence sits on solid cream at every width, so none of his padding had to
  * move to fix it.
  *
- * The phone keeps 55: its patches are bigger relative to their text and
- * never narrowed into anything.
+ * ONE value now, both widths. Splitting it was how desktop ended up at 0,
+ * and 0 on a gradient is not a rectangle, it is a hard-edged ellipse.
  */
 const roundness = (r: number) => {
   const k = [1, 0.62, 0.84, 0.48, 0.74, 0.55, 0.92, 0.68].map((f) => Math.round(r * f));
   return `${k[0]}% ${k[1]}% ${k[2]}% ${k[3]}% / ${k[4]}% ${k[5]}% ${k[6]}% ${k[7]}%`;
 };
-// Phone 55, desktop 0. Desktop is a rectangle, which is what he set.
-const SPOT_RADIUS = { base: roundness(55), md: roundness(0) };
+const SPOT_RADIUS = roundness(55);
 
 type Spot = {
-  /**
-   * The peak, at the centre, under the words themselves. 0 to 1.
-   *
-   * A KNOB, not a constant, and it was a constant for exactly one version.
-   * Nailing it to 1 for the sake of the contrast figure left no setting
-   * anywhere that made the patch less white, which is not a design decision,
-   * it is a missing control. What it costs is measurable and stated where the
-   * numbers live; what to spend is not mine to decide.
-   */
-  a: { base: number; md: number };
-  x: { base: string; md: string };
-  y: { base: string; md: string };
+  /** The peak, at the centre, under the words themselves. 0 to 1. */
+  a: number;
+  x: string;
+  y: string;
   /** How much of the radius is spent fading, 0 to 100. See baldSpot. */
-  soft: { base: number; md: number };
+  soft: number;
 };
 
 /**
@@ -1411,19 +1389,14 @@ const SoftSpot = ({ spot, children }: { spot: Spot; children: React.ReactNode })
       <Box
         aria-hidden="true"
         position="absolute"
-        left={{ base: `-${spot.x.base}`, md: `-${spot.x.md}` }}
-        right={{ base: `-${spot.x.base}`, md: `-${spot.x.md}` }}
-        top={{ base: `-${spot.y.base}`, md: `-${spot.y.md}` }}
-        bottom={{ base: `-${spot.y.base}`, md: `-${spot.y.md}` }}
+        left={`-${spot.x}`}
+        right={`-${spot.x}`}
+        top={`-${spot.y}`}
+        bottom={`-${spot.y}`}
         zIndex={-1}
         pointerEvents="none"
-        // Only bites while `soft` is low. Once the gradient is doing the
-        // work there is no edge left for a corner radius to round.
         borderRadius={SPOT_RADIUS}
-        sx={{
-          backgroundImage: baldSpot(spot.a.base, spot.soft.base),
-          '@media (min-width: 48em)': { backgroundImage: baldSpot(spot.a.md, spot.soft.md) },
-        }}
+        sx={{ backgroundImage: baldSpot(spot.a, spot.soft) }}
       />
       {children}
     </Box>
