@@ -826,6 +826,11 @@ const dict = {
      * read straight out of the message, and saying so is the reason to
      * trust it.
      */
+    factsHeading: { en: 'What you told the assistant', ru: 'Что вы сообщили ассистенту' },
+    factsNote: {
+      en: 'Recorded against this conversation only, and used to fill in the New Client form. Edit anything there before creating the booking.',
+      ru: 'Сохранено только для этой переписки и подставляется в форму нового клиента. Всё можно поправить там перед созданием брони.',
+    },
     phoneSuggestHeading: { en: 'Found in this thread', ru: 'Найдено в переписке' },
     phoneSuggestBody: {
       en: 'No number on their record yet.',

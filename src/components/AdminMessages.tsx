@@ -317,6 +317,8 @@ export interface ConversationDetail extends ConversationSummary {
    * that is 4 of 19 portals.
    */
   client_portal_id?: string | null;
+  /** Facts Vero gave the assistant about this client, outside the thread. */
+  client_facts?: unknown;
   /** Their number on file, so the thread knows whether to offer one. */
   linked_client_phone?: string | null;
 }
@@ -2160,6 +2162,32 @@ function ConversationView({
    * Inbound and from the contact only: an outbound message is Vero writing,
    * and the numbers in it are hers.
    */
+  /**
+   * What Vero told the assistant about this client, outside the thread.
+   *
+   * These beat the summariser everywhere they overlap, because she typed them
+   * for a reason: a detail settled over SMS is not in the transcript at all,
+   * and one that changed is in there twice with the stale version first.
+   *
+   * Each carries the span of her own message it came from. The screen shows
+   * both, so "3:00pm-3:30pm" turning into "3:00 PM to 3:30 PM" is checkable
+   * at a glance rather than on a contract.
+   */
+  const recordedFacts = useMemo<Array<{ field: string; value: string; quote: string }>>(() => {
+    const raw = (detail as { client_facts?: unknown } | null)?.client_facts;
+    if (!Array.isArray(raw)) return [];
+    const out: Array<{ field: string; value: string; quote: string }> = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const r = item as Record<string, unknown>;
+      const field = typeof r.field === 'string' ? r.field : '';
+      const value = typeof r.value === 'string' ? r.value : '';
+      if (!field || !value) continue;
+      out.push({ field, value, quote: typeof r.quote === 'string' ? r.quote : '' });
+    }
+    return out;
+  }, [detail]);
+
   const phoneSuggestions = useMemo<FoundPhone[]>(() => {
     const portalId = detail?.client_portal_id ?? detail?.linked_client_portal_id ?? null;
     if (!portalId) return [];
@@ -2786,18 +2814,29 @@ function ConversationView({
    */
   const buildPrefill = (): ClientPrefill => {
     const b = aiSummary?.booking ?? null;
+    /** A fact Vero recorded by hand against this thread, if she recorded one. */
+    const fact = (field: string): string | undefined => {
+      const hit = recordedFacts.find((f) => f.field === field);
+      const v = (hit?.value ?? '').trim();
+      return v || undefined;
+    };
     return {
       conversationId: summary.id,
       displayName,
-      session_type: b?.session_type ?? null,
-      event_date: b?.event_date ?? null,
-      event_time: b?.event_time ?? null,
-      event_location: b?.event_location ?? null,
-      client_full_name: b?.client_full_name ?? null,
-      partner_full_name: b?.partner_full_name ?? null,
-      client_email: b?.client_email ?? null,
-      total_amount: b?.total_amount ?? null,
-      retainer_amount: b?.retainer_amount ?? null,
+      // Facts Vero recorded BY HAND win over the summariser's reading of the
+      // thread. She typed them because the thread was wrong or silent: a
+      // detail settled over SMS is not in the transcript at all, and one that
+      // changed is in it twice. `fact()` returns undefined when she never
+      // recorded that field, so the summary still answers for everything else.
+      session_type: fact('session_type') ?? b?.session_type ?? null,
+      event_date: fact('event_date') ?? b?.event_date ?? null,
+      event_time: fact('event_time') ?? b?.event_time ?? null,
+      event_location: fact('event_location') ?? b?.event_location ?? null,
+      client_full_name: fact('client_name') ?? b?.client_full_name ?? null,
+      partner_full_name: fact('partner_name') ?? b?.partner_full_name ?? null,
+      client_email: fact('client_email') ?? b?.client_email ?? null,
+      total_amount: fact('total_amount') ?? b?.total_amount ?? null,
+      retainer_amount: fact('retainer_amount') ?? b?.retainer_amount ?? null,
       // Per-type details. The summariser drops each of these unless the
       // session type is the one whose contract has a field for it, so a
       // family booking arrives here with all three already null.
@@ -3395,6 +3434,7 @@ function ConversationView({
               phoneSuggestions={phoneSuggestions}
               onAddPhone={addPhoneToClient}
               onDismissPhone={dismissPhone}
+              recordedFacts={recordedFacts}
             />
           ) : (
             <DraftPanel
@@ -4136,6 +4176,23 @@ function DraftPanel({
  */
 /** Stable identity: a fresh [] in a default would be a new value each render. */
 const EMPTY_PHONES: FoundPhone[] = [];
+const EMPTY_FACTS: Array<{ field: string; value: string; quote: string }> = [];
+
+/** snake_case field to something a person reads. Unknown keys pass through. */
+const FACT_LABEL: Record<string, string> = {
+  client_name: 'Name',
+  partner_name: 'Partner',
+  client_email: 'Email',
+  client_phone: 'Phone',
+  event_date: 'Date',
+  event_time: 'Time',
+  event_location: 'Location',
+  session_type: 'Session type',
+  total_amount: 'Total',
+  retainer_amount: 'Retainer',
+  payment_method: 'Paying by',
+  notes: 'Notes',
+};
 
 function SummaryCard({
   summary,
@@ -4148,6 +4205,7 @@ function SummaryCard({
   phoneSuggestions = EMPTY_PHONES,
   onAddPhone,
   onDismissPhone,
+  recordedFacts = EMPTY_FACTS,
 }: {
   summary: AiSummary | null;
   loading: boolean;
@@ -4167,6 +4225,12 @@ function SummaryCard({
   phoneSuggestions?: FoundPhone[];
   onAddPhone?: (digits: string) => void;
   onDismissPhone?: (digits: string) => void;
+  /**
+   * What Vero told the assistant, as opposed to what the model read off the
+   * thread. Shown ABOVE the model's own output, and visibly separated from
+   * it, because the two have different standing: these are hers.
+   */
+  recordedFacts?: Array<{ field: string; value: string; quote: string }>;
 }) {
   // Content and chrome both read the ONE language control now. The card used to
   // take a `language` prop fed by its own RU|EN toggle, which meant the summary
@@ -4374,6 +4438,39 @@ function SummaryCard({
                 </Box>
               ))}
             </VStack>
+          )}
+
+          {recordedFacts.length > 0 && (
+            <Box mb={3} borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={3} py={2.5}>
+              <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em"
+                    textTransform="uppercase" mb={1.5}>
+                {t.messages.factsHeading}
+              </Text>
+              <VStack align="stretch" spacing={1.5}>
+                {recordedFacts.map((f, i) => (
+                  <Box key={i}>
+                    <Flex gap={2} align="baseline">
+                      <Text fontSize="xs" color="gray.500" minW="86px" flexShrink={0}>
+                        {FACT_LABEL[f.field] ?? f.field.replace(/_/g, ' ')}
+                      </Text>
+                      <Text fontSize="sm" color="gray.800" lineHeight="1.45">{f.value}</Text>
+                    </Flex>
+                    {/* The words she typed, beside what they became. This is
+                        the whole reason the quote is stored: a value on its
+                        own is an assertion, a value next to its source is
+                        checkable. */}
+                    {f.quote && (
+                      <Text fontSize="xs" color="gray.400" fontStyle="italic" ml="94px" noOfLines={1}>
+                        &ldquo;{f.quote}&rdquo;
+                      </Text>
+                    )}
+                  </Box>
+                ))}
+              </VStack>
+              <Text fontSize="xs" color="gray.500" mt={2}>
+                {t.messages.factsNote}
+              </Text>
+            </Box>
           )}
 
           {loading && !summary ? (

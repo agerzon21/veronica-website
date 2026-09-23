@@ -496,6 +496,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Execute each tool call and record the response.
       for (const toolCall of msg.tool_calls) {
         const toolResult = await executeToolCall(sql, toolCall, dbWrites, contactNames, {
+          // Ground truth, resolved from the slot before the model ran. Never a
+          // tool parameter: see record_client_facts.
+          openConversationId: slot === GENERAL_SLOT ? null : slot.slice('conv:'.length),
           userMessage,
           lastAssistantText: lastAssistantTextOf(priorMessages),
           sends: sendsThisRequest,
@@ -846,6 +849,46 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'record_client_facts',
+      description:
+        "Write down booking details about THE CLIENT ON THIS THREAD that Vero learned somewhere else: over text, on the phone, in person. Use this whenever she gives you details about this client and asks you to remember them, update the info, or get them ready for a contract. This is NOT the knowledge base: upsert_knowledge is global and shared by every customer, and naming a client in it is refused. These facts belong to this one conversation and appear on its summary and on the New Client form. You do NOT pass a conversation id; the panel is already open on one and the server uses that. Every fact MUST carry the exact words from Vero's own message that it came from, copied verbatim, or the write is refused.",
+      parameters: {
+        type: 'object',
+        properties: {
+          facts: {
+            type: 'array',
+            description: 'One entry per detail. Replaces any earlier fact with the same field.',
+            items: {
+              type: 'object',
+              properties: {
+                field: {
+                  type: 'string',
+                  description:
+                    "Which detail this is. Prefer one of: client_name, partner_name, client_email, client_phone, event_date, event_time, event_location, session_type, total_amount, retainer_amount, payment_method, notes. Any other short snake_case name is accepted and shown as-is.",
+                },
+                value: { type: 'string', description: 'The detail itself, tidied up. English or as written.' },
+                quote: {
+                  type: 'string',
+                  description:
+                    "The exact words from VERO'S message this came from, copied character for character. Not a paraphrase. The write is refused if this text is not found in what she just typed.",
+                },
+              },
+              required: ['field', 'value', 'quote'],
+            },
+          },
+          content_summary: {
+            type: 'string',
+            description:
+              'A very short (5-12 word) paraphrase for the toast she sees, IN THE SAME LANGUAGE she is chatting in.',
+          },
+        },
+        required: ['facts', 'content_summary'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_conversations',
       description:
         "List recent customer conversations from the unified inbox (Instagram DMs and email). Use this when Vero refers to a customer by name or asks about 'the conversation with X' and you need to find the right conversation_id. Returns the most recently active conversations first.",
@@ -1155,6 +1198,16 @@ async function executeToolCall(
     sends: { n: number };
     /** Everything the assistant has shown Vero, this turn and the one before. */
     shownText: string;
+    /**
+     * The conversation the PANEL is open on, resolved from the slot.
+     *
+     * Not a tool parameter, deliberately. A conversation id the model supplies
+     * is a model-authored value, and the whole point of this store is that one
+     * client's details never land on another client's record. The server knows
+     * which thread it is on before the model says anything; that is the value
+     * that gets written.
+     */
+    openConversationId: string | null;
   },
 ): Promise<unknown> {
   // The SDK's ChatCompletionMessageToolCall is a union: function calls and
@@ -1170,6 +1223,120 @@ async function executeToolCall(
     args = JSON.parse(toolCall.function.arguments || '{}');
   } catch {
     return { error: 'Could not parse tool arguments' };
+  }
+
+  /**
+   * Facts about the client on THIS thread.
+   *
+   * Three things make this safe to write, and none of them is the model
+   * promising it was careful:
+   *
+   * 1. THE CONVERSATION IS NOT A PARAMETER. It comes from the slot the panel
+   *    resolved before the model was called. There is no argument the model
+   *    can set that redirects this at another client's record.
+   * 2. EVERY FACT CARRIES A QUOTE, AND THE QUOTE IS CHECKED. The span has to
+   *    appear in the message Vero actually typed this turn. This is the rule
+   *    from reference_prompt_rules_are_not_gates: the send gate failed because
+   *    `confirmed: true` was a parameter the model set, so the check has to be
+   *    on evidence the model did not author. Her typed message is that
+   *    evidence.
+   * 3. NOTHING HERE REACHES A CONTRACT. These seed the New Client FORM, which
+   *    she reads and edits. The quote travels with the value so the screen can
+   *    show both on one line and she can see what became what.
+   *
+   * The quote check is not a claim that the extraction is RIGHT. A model can
+   * quote her correctly and still put the winery's time against the park. It
+   * is a claim that the extraction is TRACEABLE, which is what lets a person
+   * catch that in one glance instead of reading a contract.
+   */
+  if (name === 'record_client_facts') {
+    const conversationId = sendCtx?.openConversationId ?? null;
+    if (!conversationId) {
+      return {
+        error:
+          'This only works with a conversation open. Open the client\'s thread in Messages and ask again there; the general assistant has no thread to attach facts to.',
+      };
+    }
+
+    const raw = Array.isArray(args.facts) ? args.facts : [];
+    if (raw.length === 0) return { error: 'No facts given.' };
+
+    // The haystack is what SHE typed, normalised for whitespace and case only.
+    // Nothing the model wrote is in here.
+    const norm = (v: string) => v.replace(/\s+/g, ' ').trim().toLowerCase();
+    const typed = norm(sendCtx?.userMessage ?? '');
+    if (!typed) {
+      return { error: 'No message of yours to check these against. Say them in a message first.' };
+    }
+
+    const accepted: Array<{ field: string; value: string; quote: string; at: string }> = [];
+    const rejected: Array<{ field: string; why: string }> = [];
+    const now = new Date().toISOString();
+
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const r = item as Record<string, unknown>;
+      const field = typeof r.field === 'string' ? r.field.trim().slice(0, 64) : '';
+      const value = typeof r.value === 'string' ? r.value.trim().slice(0, 500) : '';
+      const quote = typeof r.quote === 'string' ? r.quote.trim().slice(0, 500) : '';
+      if (!field || !value) continue;
+      if (!quote) {
+        rejected.push({ field, why: 'no quote given' });
+        continue;
+      }
+      if (!typed.includes(norm(quote))) {
+        rejected.push({ field, why: 'the quoted words are not in what she typed' });
+        continue;
+      }
+      accepted.push({ field, value, quote, at: now });
+    }
+
+    if (accepted.length === 0) {
+      return {
+        error:
+          'Nothing was written down. Every fact has to quote the exact words from her message that it came from, copied character for character. ' +
+          (rejected.length ? `Refused: ${rejected.map((x) => `${x.field} (${x.why})`).join(', ')}.` : ''),
+      };
+    }
+
+    // Latest wins per field, order preserved. Read-modify-write rather than a
+    // jsonb merge because the list is short and the merge rule is "same field
+    // replaces", which SQL would express far less clearly than this does.
+    const [existingRow] = (await sql`
+      SELECT client_facts FROM conversations WHERE id = ${conversationId} LIMIT 1
+    `) as Array<{ client_facts: unknown }>;
+    if (!existingRow) return { error: 'That conversation no longer exists.' };
+
+    const prior = Array.isArray(existingRow.client_facts)
+      ? (existingRow.client_facts as Array<Record<string, unknown>>)
+      : [];
+    const replaced = new Set(accepted.map((f) => f.field));
+    const merged = [
+      ...prior.filter((f) => typeof f?.field === 'string' && !replaced.has(f.field as string)),
+      ...accepted,
+    ].slice(-40);
+
+    await sql`
+      UPDATE conversations
+         SET client_facts = ${JSON.stringify(merged)}::jsonb
+       WHERE id = ${conversationId}
+    `;
+
+    dbWrites.push({
+      type: 'updated',
+      category: 'client_facts',
+      label: accepted.map((f) => f.field).join(', '),
+      content_summary:
+        typeof args.content_summary === 'string' && args.content_summary.trim()
+          ? args.content_summary.trim()
+          : `${accepted.length} detail${accepted.length === 1 ? '' : 's'} recorded`,
+    });
+
+    return {
+      recorded: accepted.map((f) => ({ field: f.field, value: f.value })),
+      ...(rejected.length ? { refused: rejected } : {}),
+      note: 'Saved against this conversation only. They show on its summary and seed the New Client form, where you can correct anything before a contract is made.',
+    };
   }
 
   if (name === 'search_knowledge_base') {
