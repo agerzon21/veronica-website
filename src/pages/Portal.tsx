@@ -1110,49 +1110,66 @@ const Portal = () => {
 
               {/* The way out, for someone who is not a client at all.
 
-                  It needs its own soft spot, like the header: this sits
-                  directly on the mosaic, where 13px type over a dark
-                  photograph measures under 2:1.
+                  The soft spot is the BOX'S OWN BACKGROUND, not a fixed
+                  rectangle behind it, so it is exactly as wide as the
+                  sentence and no wider. It was a 720px slab under a 440px
+                  line, which extended a long way past both ends and looked
+                  like a smudge.
 
-                  zIndex -1 is load bearing. This block comes AFTER the two
-                  doors in the document, so without it the halo paints on top
-                  of the panel above and visibly washes out the button inside
-                  it. The header's halo has never had that problem because the
-                  header comes first. */}
-              <Box position="relative" pt={2}>
+                  inline-flex plus a centred parent is what makes it hug: the
+                  box shrinks to its content, and the gradient is measured
+                  against that box. The plateau runs to 78% so the words sit
+                  on the flat part and only the padding does the fading. */}
+              <Box pt={2} textAlign="center">
                 <Box
-                  aria-hidden="true"
-                  position="absolute"
-                  zIndex={-1}
-                  left="50%"
-                  top={{ base: '38px', md: '34px' }}
-                  transform="translate(-50%, -50%)"
-                  width={{ base: '500px', md: '720px' }}
-                  height={{ base: '116px', md: '96px' }}
-                  pointerEvents="none"
-                  sx={{
-                    background:
-                      'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(253,249,240,0.93) 0%, rgba(253,249,240,0.93) 62%, rgba(253,249,240,0) 100%)',
-                  }}
-                />
-                <VStack spacing={2} position="relative">
-                  <Text fontSize="xs" color="gray.700" fontWeight="300" textAlign="center">
+                  display="inline-flex"
+                  alignItems="baseline"
+                  flexWrap="wrap"
+                  justifyContent="center"
+                  gap={2}
+                  px={4}
+                  py={1.5}
+                  // A SOLID CORE WITH A SOFT GLOW, not a gradient.
+                  //
+                  // A radial gradient measures distance from its centre on
+                  // both axes at once, so a spot sized to hug one line of
+                  // text puts the ENDS of that line near a corner, where the
+                  // normalised distance is already past the plateau however
+                  // wide the plateau is. The arrow and the last word kept
+                  // landing at 3:1 while the middle read fine.
+                  //
+                  // A flat background with a blurred, spread box-shadow in
+                  // the same colour gives a core that is even across every
+                  // glyph and a falloff that happens entirely OUTSIDE the
+                  // box. It also hugs, which is the point: the core is
+                  // exactly the sentence plus its padding.
+                  bg="rgba(253, 249, 240, 0.95)"
+                  boxShadow="0 0 20px 16px rgba(253, 249, 240, 0.95)"
+                >
+                  <Text fontSize="xs" color="gray.700" fontWeight="300">
                     Not a client? No problem,
                   </Text>
+                  {/* Sentence case and underlined, not uppercase with 0.2em
+                      tracking. That treatment rendered about 480px wide,
+                      which is WIDER than the 460px column this sits in, so
+                      the ends of it hung outside the soft spot entirely and
+                      measured 2.5:1 against the photographs while the middle
+                      read fine. Underline carries "this is a link" without
+                      needing the width. */}
                   <Text
                     as={RouterLink}
                     to="/gallery"
                     fontSize="xs"
                     fontWeight="500"
                     color="brand.accentText"
-                    letterSpacing="0.2em"
-                    textTransform="uppercase"
+                    textDecoration="underline"
+                    textUnderlineOffset="3px"
                     _hover={{ color: 'brand.accent' }}
                     transition="color 0.3s"
                   >
                     Browse the public portfolio →
                   </Text>
-                </VStack>
+                </Box>
               </Box>
             </VStack>
           </Reveal>

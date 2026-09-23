@@ -34,16 +34,29 @@ const N_TILES = COLS * ROWS_IN_SHEET;
 /** The single photograph the page used to be, kept as the fallback. */
 const FALLBACK = '/assets/photos/site/client-portal.webp';
 
-interface Size {
+interface Tile {
   tw: number;
   th: number;
   gap: number;
-  rows: number;
-  perRow: number;
 }
 
-const DESKTOP: Size = { tw: 105, th: 140, gap: 5, rows: 7, perRow: 14 };
-const PHONE: Size = { tw: 70, th: 94, gap: 4, rows: 10, perRow: 9 };
+/**
+ * Tile sizes only. How MANY is measured from the window, not guessed.
+ *
+ * Both counts were fixed numbers and both were wrong. 7 rows of 140 is
+ * 1010px, so any window taller than that, which is most of them, showed a
+ * band of bare cream under the photographs. And because each row renders its
+ * tiles twice and travels exactly -50%, one copy has to be at least as wide
+ * as the window or a gap walks across the screen partway through the loop;
+ * 14 tiles of 110 is 1540px, narrower than a 1920 monitor.
+ *
+ * Neither appeared at 1280x880, which is the size I had been screenshotting.
+ * Deriving both from the viewport fixes the small screens and the large ones
+ * at once, and means a phone does not carry the tile count a 2560 monitor
+ * needs.
+ */
+const DESKTOP: Tile = { tw: 105, th: 140, gap: 5 };
+const PHONE: Tile = { tw: 70, th: 94, gap: 4 };
 
 /**
  * Is this a connection we should be putting a 220 KB decorative sheet on?
@@ -76,6 +89,39 @@ function useAffordsMosaic(): boolean {
   return affords;
 }
 
+/**
+ * The window, as the field needs to know it: which tile size, and how many.
+ *
+ * One field is built, not two behind a responsive `display`, because the
+ * losing one's tiles would sit in the DOM doing nothing.
+ */
+function useField(): { tile: Tile; rows: number; perRow: number } {
+  const read = () => {
+    const w = typeof window === 'undefined' ? 1280 : window.innerWidth;
+    const h = typeof window === 'undefined' ? 900 : window.innerHeight;
+    const tile = w < 768 ? PHONE : DESKTOP;
+    return {
+      tile,
+      // One spare row past the bottom edge, so a fractional row never leaves a
+      // sliver of background showing.
+      rows: Math.ceil(h / (tile.th + tile.gap)) + 1,
+      // One COPY must cover the width; the row renders two of them.
+      perRow: Math.ceil(w / (tile.tw + tile.gap)) + 2,
+    };
+  };
+  const [field, setField] = useState(read);
+  useEffect(() => {
+    let frame = 0;
+    const onResize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setField(read()));
+    };
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('resize', onResize); cancelAnimationFrame(frame); };
+  }, []);
+  return field;
+}
+
 interface Props {
   /** Cream over the photographs, 0 to 1. One value, every row. */
   veil?: number;
@@ -83,6 +129,7 @@ interface Props {
 
 const PortalMosaic = ({ veil = 0.62 }: Props) => {
   const affords = useAffordsMosaic();
+  const { tile, rows: rowCount, perRow } = useField();
   const [sheetReady, setSheetReady] = useState(false);
   const [sheetFailed, setSheetFailed] = useState(false);
 
@@ -103,13 +150,13 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
 
   const still = !affords || sheetFailed;
 
-  const tiles = useMemo(() => {
-    const build = (s: Size) =>
-      Array.from({ length: s.rows }, (_, r) =>
-        Array.from({ length: s.perRow }, (_, i) => ((r + 1) * 17 + i * 11) % N_TILES),
-      );
-    return { desktop: build(DESKTOP), phone: build(PHONE) };
-  }, []);
+  const rows = useMemo(
+    () =>
+      Array.from({ length: rowCount }, (_, r) =>
+        Array.from({ length: perRow }, (_, i) => ((r + 1) * 17 + i * 11) % N_TILES),
+      ),
+    [rowCount, perRow],
+  );
 
   if (still) {
     return (
@@ -128,20 +175,20 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
     );
   }
 
-  const field = (s: Size, rows: number[][], display: Record<string, string>) => (
+  const field = (s: Tile, tileRows: number[][]) => (
     <Box
       aria-hidden="true"
       position="absolute"
       inset={0}
       overflow="hidden"
-      display={display}
+      display="flex"
       flexDirection="column"
       gap={`${s.gap}px`}
       opacity={sheetReady ? 1 : 0}
       transition="opacity 0.6s ease"
       sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
     >
-      {rows.map((row, r) => (
+      {tileRows.map((row, r) => (
         <Box
           key={r}
           display="flex"
@@ -179,8 +226,7 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
 @keyframes veroMosaicLeft { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes veroMosaicRight { from { transform: translateX(-50%); } to { transform: translateX(0); } }
 `}</style>
-      {field(PHONE, tiles.phone, { base: 'flex', md: 'none' })}
-      {field(DESKTOP, tiles.desktop, { base: 'none', md: 'flex' })}
+      {field(tile, rows)}
       <Box position="absolute" inset={0} bg={`rgba(253,249,240,${veil})`} aria-hidden="true" />
     </>
   );
