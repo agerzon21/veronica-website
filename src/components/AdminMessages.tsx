@@ -1216,6 +1216,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                         : null
                     }
                     onDraftUpdated={() => setThreadRefresh((n) => n + 1)}
+                    onClientFactsRecorded={() => setThreadRefresh((n) => n + 1)}
                     onReplySent={handleReplySentFromPanel}
                   />
                 </Box>
@@ -4200,6 +4201,60 @@ const EMPTY_PHONES: FoundPhone[] = [];
 const EMPTY_FACTS: Array<{ field: string; value: string; quote: string }> = [];
 
 /** snake_case field to something a person reads. Unknown keys pass through. */
+/**
+ * Which of the model's GATHERED lines a recorded fact replaces.
+ *
+ * The summary's gathered list is prose the model wrote off the transcript:
+ * "Location: Hawk Falls", "Total amount quoted: $300 for a one-hour session".
+ * A fact Vero recorded by hand is the newer and better answer to the same
+ * question, and showing both leaves the screen contradicting itself. That is
+ * exactly what she reported: she corrected the price to $500 over text, the
+ * assistant wrote it down, and the summary went on saying $300 underneath.
+ *
+ * Matched on the LABEL only, the part before the first colon, never on the
+ * value. Matching the value would drop a line for coincidental wording, and a
+ * wrongly dropped line is worse than a duplicated one: it is information
+ * disappearing with nothing left to show it was ever there.
+ *
+ * Deliberately narrow. A field with no keywords here never drops anything,
+ * which is the safe direction, and `notes` is absent on purpose because a
+ * free-text note answers no particular question.
+ */
+const FACT_SUPERSEDES: Record<string, string[]> = {
+  client_name: ['name'],
+  partner_name: ['partner'],
+  client_email: ['email'],
+  client_phone: ['phone', 'number'],
+  event_date: ['date'],
+  event_time: ['time'],
+  event_location: ['location', 'venue', 'place'],
+  session_type: ['session type', 'shoot type', 'type of'],
+  total_amount: ['total', 'amount', 'quote', 'quoted', 'price'],
+  retainer_amount: ['retainer', 'deposit'],
+  payment_method: ['payment', 'paying', 'pays'],
+};
+
+/**
+ * Does a recorded fact answer the question this label asks?
+ *
+ * One label can match several fields: "Customer's name" contains 'name', and
+ * a recorded PARTNER name would otherwise delete the line naming the client.
+ * So every field that could claim the label is collected and the most
+ * specific one wins, measured by the length of the keyword that matched. The
+ * line drops only if that winner is a field she actually recorded.
+ */
+const supersededBy = (label: string, fields: string[]): boolean => {
+  const l = label.toLowerCase();
+  const claimants = Object.entries(FACT_SUPERSEDES)
+    .filter(([, keys]) => keys.some((k) => l.includes(k)))
+    .map(([field]) => field);
+  if (claimants.length === 0) return false;
+  const score = (field: string) =>
+    Math.max(0, ...(FACT_SUPERSEDES[field] ?? []).filter((k) => l.includes(k)).map((k) => k.length));
+  const winner = claimants.reduce((a, b) => (score(b) > score(a) ? b : a));
+  return fields.includes(winner);
+};
+
 const FACT_LABEL: Record<string, string> = {
   client_name: 'Name',
   partner_name: 'Partner',
@@ -4261,6 +4316,25 @@ function SummaryCard({
   const classStyle = CLASSIFICATION_STYLE[classification] ?? CLASSIFICATION_STYLE.unclear;
   const classLabel = t.messages.classification[classification];
   const localized = readSummaryLocale(summary, lang);
+
+  /**
+   * The model's gathered lines, minus the ones Vero has since answered
+   * herself. Recomputed on every read rather than stored: the summary is
+   * regenerated from the transcript whenever a message arrives, so a
+   * superseded line comes back each time and has to be dropped each time.
+   */
+  const survivingGathered = useMemo(() => {
+    if (recordedFacts.length === 0) return localized.gathered;
+    const fields = recordedFacts.map((f) => f.field);
+    return localized.gathered.filter((line) => {
+      const colon = line.indexOf(':');
+      // No label, no claim. A gathered line written as a sentence rather than
+      // as "Label: value" is never dropped, because the only thing left to
+      // match against would be the value.
+      if (colon < 0) return true;
+      return !supersededBy(line.slice(0, colon), fields);
+    });
+  }, [localized.gathered, recordedFacts]);
 
   const strings = {
     header: t.messages.summaryTitle,
@@ -4461,39 +4535,6 @@ function SummaryCard({
             </VStack>
           )}
 
-          {recordedFacts.length > 0 && (
-            <Box mb={3} borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={3} py={2.5}>
-              <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em"
-                    textTransform="uppercase" mb={1.5}>
-                {t.messages.factsHeading}
-              </Text>
-              <VStack align="stretch" spacing={1.5}>
-                {recordedFacts.map((f, i) => (
-                  <Box key={i}>
-                    <Flex gap={2} align="baseline">
-                      <Text fontSize="xs" color="gray.500" minW="86px" flexShrink={0}>
-                        {FACT_LABEL[f.field] ?? f.field.replace(/_/g, ' ')}
-                      </Text>
-                      <Text fontSize="sm" color="gray.800" lineHeight="1.45">{f.value}</Text>
-                    </Flex>
-                    {/* The words she typed, beside what they became. This is
-                        the whole reason the quote is stored: a value on its
-                        own is an assertion, a value next to its source is
-                        checkable. */}
-                    {f.quote && (
-                      <Text fontSize="xs" color="gray.400" fontStyle="italic" ml="94px" noOfLines={1}>
-                        &ldquo;{f.quote}&rdquo;
-                      </Text>
-                    )}
-                  </Box>
-                ))}
-              </VStack>
-              <Text fontSize="xs" color="gray.500" mt={2}>
-                {t.messages.factsNote}
-              </Text>
-            </Box>
-          )}
-
           {loading && !summary ? (
             <Flex align="center" gap={2} py={2}>
               <Spinner size="xs" color="brand.accent" />
@@ -4512,13 +4553,51 @@ function SummaryCard({
                 </Text>
               </Box>
 
-              {localized.gathered.length > 0 && (
+              {(recordedFacts.length > 0 || survivingGathered.length > 0) && (
                 <Box>
                   <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
                     {strings.gathered}
                   </Text>
                   <VStack align="stretch" spacing={0.5}>
-                    {localized.gathered.map((fact, i) => (
+                    {/* HERS FIRST, and marked as hers. They are newer than
+                        anything the model read off the thread and they are
+                        what a contract gets made from, so they lead the list
+                        rather than sitting in a box beside it disagreeing
+                        with it. */}
+                    {recordedFacts.map((f, i) => (
+                      <Box key={`own-${i}`}>
+                        <Flex gap={2} align="flex-start">
+                          <Text fontSize="sm" color="brand.accent" lineHeight="1.5">•</Text>
+                          <Text fontSize="sm" color="gray.800" lineHeight="1.5" fontWeight="500">
+                            {FACT_LABEL[f.field] ?? f.field.replace(/_/g, ' ')}:{' '}
+                            <Text as="span" fontWeight="400">{formatPhoneNumbersInText(f.value)}</Text>
+                          </Text>
+                          <Text
+                            fontSize="2xs"
+                            color="brand.accentText"
+                            border="1px solid"
+                            borderColor="brand.accentBorder"
+                            borderRadius="sm"
+                            px={1.5}
+                            flexShrink={0}
+                            lineHeight="1.6"
+                            whiteSpace="nowrap"
+                          >
+                            {t.messages.factsFromYou}
+                          </Text>
+                        </Flex>
+                        {/* The words she typed, beside what they became. This
+                            is the whole reason the quote is stored: a value on
+                            its own is an assertion, a value next to its source
+                            is checkable at a glance. */}
+                        {f.quote && (
+                          <Text fontSize="xs" color="gray.400" fontStyle="italic" ml={5} noOfLines={1}>
+                            &ldquo;{f.quote}&rdquo;
+                          </Text>
+                        )}
+                      </Box>
+                    ))}
+                    {survivingGathered.map((fact, i) => (
                       <Flex key={i} gap={2} align="flex-start">
                         <Text fontSize="sm" color="brand.accent" lineHeight="1.5">•</Text>
                         <Text fontSize="sm" color="gray.700" lineHeight="1.5">
@@ -4527,6 +4606,11 @@ function SummaryCard({
                       </Flex>
                     ))}
                   </VStack>
+                  {recordedFacts.length > 0 && (
+                    <Text fontSize="xs" color="gray.500" mt={2}>
+                      {t.messages.factsNote}
+                    </Text>
+                  )}
                 </Box>
               )}
 

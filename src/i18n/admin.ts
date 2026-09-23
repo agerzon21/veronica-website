@@ -835,6 +835,10 @@ const dict = {
      * trust it.
      */
     factsHeading: { en: 'What you told the assistant', ru: 'Что вы сообщили ассистенту' },
+    // A tag on the lines that came from her, not from the transcript. Short
+    // because it sits at the end of a line that already carries a label, a
+    // value and a quote.
+    factsFromYou: { en: 'from you', ru: 'от вас' },
     factsNote: {
       en: 'Recorded against this conversation only, and used to fill in the New Client form. Edit anything there before creating the booking.',
       ru: 'Сохранено только для этой переписки и подставляется в форму нового клиента. Всё можно поправить там перед созданием брони.',

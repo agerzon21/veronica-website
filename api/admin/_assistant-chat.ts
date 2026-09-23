@@ -127,6 +127,18 @@ function lastAssistantTextOf(messages: StoredMessage[]): string {
   return said.join('\n');
 }
 
+/**
+ * Prose that reads as "I wrote that down", in both languages the panel
+ * speaks. Used only to decide whether to POINT OUT that nothing was written;
+ * see the note where it is used for why over-matching is harmless.
+ */
+const CLAIM_PHRASES: RegExp[] = [
+  /\b(updated|recorded|saved|noted|logged|added)\b/i,
+  /\bhas been (updated|recorded|saved|added|changed)\b/i,
+  /\bI(?:'ve| have) (updated|recorded|saved|noted|added)\b/i,
+  /(обновил|записал|сохранил|добавил|внёс|внес)/i,
+];
+
 const GENERAL_SLOT = 'general';
 /**
  * What the shared thread was called before it had siblings. Migration 029
@@ -746,12 +758,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const draftText =
       [...dbWrites].reverse().find((w) => w.category === 'draft')?.draft_text ?? null;
 
+    /**
+     * IT SAID IT SAVED SOMETHING AND IT DID NOT.
+     *
+     * A real one, on a real booking: Vero typed "it's now quoted at 500$ not
+     * 300$", the assistant answered "The one-hour session pricing has been
+     * updated to $500", and record_client_facts was never called. Six other
+     * details from the same conversation WERE written, so nothing looked
+     * broken; the price simply was not there, and the only way to find out
+     * was to read the database.
+     *
+     * This repo already has the lesson written down from the send-gate
+     * incident: a rule the model is asked to follow is not a rule, and a
+     * safety-critical claim needs a check in CODE on evidence the model did
+     * not author. So the evidence here is dbWrites, which only this handler
+     * can append to.
+     *
+     * THE NOTE CANNOT BE WRONG. It is emitted only when no fact was written
+     * this turn, so what it says, that nothing was recorded, is true whatever
+     * the prose meant. A phrase list that over-matches therefore costs a
+     * correct sentence appearing where it was not strictly needed, and never
+     * a false accusation. Only in a conversation slot, because the general
+     * assistant has no client to record anything against.
+     */
+    const claimedToRecord =
+      slot !== GENERAL_SLOT &&
+      !dbWrites.some((w) => w.category === 'client_facts') &&
+      CLAIM_PHRASES.some((re) => re.test(finalReply));
+
     return res.status(200).json({
       success: true,
       reply: finalReply,
       assistantTurns,
       draftText,
       dbWrites,
+      ...(claimedToRecord ? { nothingRecorded: true } : {}),
       messageCount: updatedThread.filter((m) => m.role === 'user' || m.role === 'assistant').length,
     });
   } catch (err) {

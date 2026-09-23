@@ -82,6 +82,17 @@ interface Props {
    * the thread can reload and the Reply tab stops showing the stale original.
    */
   onDraftUpdated?: () => void;
+  /**
+   * The assistant wrote a booking detail against THIS conversation.
+   *
+   * Without this the write was invisible: record_client_facts updated the
+   * row and the panel carried on rendering the conversation it fetched when
+   * the thread was opened, so the summary kept showing the value she had
+   * just corrected and the only way to see the new one was to click away and
+   * back. She reported it as "why isn't the summary changing", which is
+   * exactly what it looked like.
+   */
+  onClientFactsRecorded?: () => void;
 }
 
 interface ChatMessage {
@@ -125,6 +136,8 @@ interface Strings {
   toastLabels: { created: string; updated: string; deleted: string };
   draftToastLabel: string;
   errorReply: (detail: string) => string;
+  /** Shown when a turn claimed to save a booking detail and saved nothing. */
+  nothingRecorded: string;
   serverUnreachable: string;
   serverError: string;
   looping: string;
@@ -183,6 +196,9 @@ const STRINGS: Record<AdminLang, Strings> = {
     toastLabels: { created: 'Записал', updated: 'Обновил', deleted: 'Удалил' },
     draftToastLabel: 'Черновик обновлён — вкладка «Ответ»',
     errorReply: (detail) => `(Что-то пошло не так: ${detail})`,
+    nothingRecorded:
+      '(Ничего не записано в карточку этого клиента. Если деталь нужно сохранить, ' +
+      'напишите её ещё раз, например: «запиши: сумма 500 долларов».)',
     serverUnreachable: '(Не удалось связаться с сервером.)',
     serverError: 'ошибка сервера',
     looping: '(Ассистент продолжал вызывать инструменты без ответа. Попробуй перефразировать.)',
@@ -236,13 +252,16 @@ const STRINGS: Record<AdminLang, Strings> = {
     toastLabels: { created: 'Saved', updated: 'Updated', deleted: 'Deleted' },
     draftToastLabel: 'Draft updated — see the Reply tab',
     errorReply: (detail) => `(Something went wrong: ${detail})`,
+    nothingRecorded:
+      '(Nothing was written down against this client. If a detail needs saving, ' +
+      'say it again as an instruction, for example: "write down: total is $500".)',
     serverUnreachable: '(Could not reach the server.)',
     serverError: 'server error',
     looping: '(The assistant kept calling tools without giving a final answer. Try rephrasing.)',
   },
 };
 
-const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, seed = null, onReplySent, onDraftUpdated }: Props) => {
+const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, seed = null, onReplySent, onDraftUpdated, onClientFactsRecorded }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // A conversation can hand a question over — "this draft isn't right,
   // help me fix it" — by parking a prompt in sessionStorage and switching
@@ -681,6 +700,20 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         // the draft card, so let the parent close the panel.
         if (writes.some((w) => w.label === 'Reply sent')) onReplySent?.();
         if (writes.some((w) => w.category === 'draft')) onDraftUpdated?.();
+        if (writes.some((w) => w.category === 'client_facts')) onClientFactsRecorded?.();
+
+        /**
+         * It said it saved something and it did not.
+         *
+         * The server decides this, from the writes it made rather than from
+         * the words it chose, and it only ever says so when nothing was in
+         * fact recorded. Rendered as a turn in the thread rather than a toast
+         * because a toast disappears and this is a correction to what the
+         * message directly above it just claimed.
+         */
+        if (data.nothingRecorded) {
+          setMessages((prev) => [...prev, { role: 'assistant', content: t.nothingRecorded }]);
+        }
       } else {
         setMessages((prev) => {
           const next = [...prev];
