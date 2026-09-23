@@ -3274,6 +3274,27 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
                         lineHeight="1.7"
                         fontWeight={p.emphasis === 'bold' ? '500' : '300'}
                         fontStyle={p.emphasis === 'italic' ? 'italic' : 'normal'}
+                        /**
+                         * pre-line, so a paragraph that was written as several
+                         * lines is READ as several lines.
+                         *
+                         * Without it HTML collapses every newline to a space,
+                         * and the two halves of a multi-location schedule fuse
+                         * into one run-on sentence: "Proposal, the vineyard,
+                         * 3:00 PM to 3:30 PM Sunset portraits, the park, 6:30
+                         * PM to 7:00 PM". The PDF does NOT collapse it, so the
+                         * client was reading a run-on on the screen where they
+                         * sign and getting a correctly broken list in the
+                         * attachment. The two now agree.
+                         *
+                         * Affects text paragraphs only, which today means
+                         * additional_notes, session_scope and session_schedule.
+                         * No existing contract has a newline in any of them:
+                         * the one multi-line value in the database is an
+                         * event_location, and that renders through the fields
+                         * path below, which this does not touch.
+                         */
+                        whiteSpace="pre-line"
                       >
                         {p.text}
                       </Text>

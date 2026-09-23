@@ -4206,7 +4206,22 @@ function EditContractVariables({
         <VStack align="stretch" spacing={3}>
           {valueKeys.map((k) => {
             const value = vars[k] ?? '';
-            const isLong = value.length > 80 || k === 'additional_notes';
+            /**
+             * Ask the TEMPLATE what shape the field is, rather than guessing
+             * from the value's length.
+             *
+             * This panel builds its rows from extractVariableKeys and never
+             * consulted spec.fields, so a field declared `type: 'textarea'`
+             * got a single-line Input whenever its current value was short,
+             * which for a NEW field means always. session_schedule wants one
+             * line per place and could not be given one: the box silently ate
+             * the newline. The previous answer to this was hard-coding
+             * `additional_notes` into the test; reading the declaration fixes
+             * that one too, and the next one for free.
+             */
+            const declaredLong =
+              templateSpec?.fields?.some((f) => f.key === k && f.type === 'textarea') ?? false;
+            const isLong = declaredLong || value.length > 80;
             return (
               <Box key={k}>
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="brand.accent" letterSpacing="0.15em" textTransform="uppercase" mb={1}>
