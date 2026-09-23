@@ -902,7 +902,7 @@ const Portal = () => {
           sprite sheet. It replaces a single 913 KB photograph and costs about
           220 KB, and it carries its own still fallback for a connection that
           cannot afford it. PortalMosaic has the whole argument. */}
-      <PortalMosaic veil={{ base: 0.55, md: 0.55 }} />
+      <PortalMosaic veil={{ base: 0.62, md: 0.55 }} />
 
       <Flex
         position="relative"
@@ -1231,31 +1231,42 @@ const Portal = () => {
  * complaint that the look could not be got back. The knob is a knob.
  */
 const SPOT = {
-  // ALEX'S OWN NUMBERS, read straight off the Tweaks panel in the screenshot
-  // he sent, and applied at both widths because the desktop board is the one
-  // he tuned and "exactly like that" is what he asked for.
-  //
-  // softness 0 everywhere is deliberate on his part: no falloff, a hard edge.
-  // It is not an oversight to be helpfully smoothed away.
+  /**
+   * READ OFF THE TUNING BOARD, both of them, verbatim.
+   *
+   * base is the Phone board and md is the Desktop board, each carrying that
+   * board's own four numbers per spot. Nothing here is averaged, rounded or
+   * improved: where the two disagree it is because he tuned one and not the
+   * other, and that is his to change, not mine to reconcile.
+   *
+   *   a     peak cream at the centre
+   *   x, y  how far the patch reaches past the words
+   *   soft  how much of the radius is spent fading, 0 to 100
+   *
+   * Desktop runs soft 0 on three of the four, which is a hard-edged shape on
+   * purpose, and a title at 0.69 so the photographs read through it. Those
+   * two together are the look he has been asking for and neither is a
+   * mistake to be smoothed out.
+   */
   eyebrow: {
-    a: { base: 1, md: 1 },
-    x: { base: '5px', md: '5px' }, y: { base: '4px', md: '4px' },
-    soft: { base: 0, md: 0 },
+    a: { base: 0.93, md: 1 },
+    x: { base: '60px', md: '0px' }, y: { base: '26px', md: '0px' },
+    soft: { base: 58, md: 0 },
   },
   rule: {
-    a: { base: 1, md: 1 },
-    x: { base: '5px', md: '5px' }, y: { base: '4.5px', md: '4.5px' },
-    soft: { base: 0, md: 0 },
+    a: { base: 0.93, md: 0.93 },
+    x: { base: '40px', md: '30px' }, y: { base: '22px', md: '16px' },
+    soft: { base: 58, md: 0 },
   },
   title: {
-    a: { base: 0.78, md: 0.78 },
-    x: { base: '38px', md: '38px' }, y: { base: '4.5px', md: '4.5px' },
-    soft: { base: 0, md: 0 },
+    a: { base: 0.93, md: 0.69 },
+    x: { base: '70px', md: '70px' }, y: { base: '60px', md: '0px' },
+    soft: { base: 58, md: 0 },
   },
   offramp: {
-    a: { base: 1, md: 1 },
-    x: { base: '17px', md: '17px' }, y: { base: '6px', md: '6px' },
-    soft: { base: 0, md: 0 },
+    a: { base: 0.93, md: 0.93 },
+    x: { base: '50px', md: '60px' }, y: { base: '26px', md: '26px' },
+    soft: { base: 58, md: 58 },
   },
 } as const;
 
@@ -1288,12 +1299,12 @@ const roundness = (r: number) => {
   const k = [1, 0.62, 0.84, 0.48, 0.74, 0.55, 0.92, 0.68].map((f) => Math.round(r * f));
   return `${k[0]}% ${k[1]}% ${k[2]}% ${k[3]}% / ${k[4]}% ${k[5]}% ${k[6]}% ${k[7]}%`;
 };
-// roundness 25, his setting.
-const SPOT_RADIUS = { base: roundness(25), md: roundness(25) };
+// Phone 55, desktop 0. Desktop is a rectangle, which is what he set.
+const SPOT_RADIUS = { base: roundness(55), md: roundness(0) };
 
 type Spot = {
   /**
-   * How opaque the patch is, 0 to 1.
+   * The peak, at the centre, under the words themselves. 0 to 1.
    *
    * A KNOB, not a constant, and it was a constant for exactly one version.
    * Nailing it to 1 for the sake of the contrast figure left no setting
@@ -1304,6 +1315,7 @@ type Spot = {
   a: { base: number; md: number };
   x: { base: string; md: string };
   y: { base: string; md: string };
+  /** How much of the radius is spent fading, 0 to 100. See baldSpot. */
   soft: { base: number; md: number };
 };
 
@@ -1331,16 +1343,44 @@ type Spot = {
  * the shadow is still deep inside its own plateau: cream meets cream, and the
  * fade begins outside the shape rather than at it.
  */
-const cream = (a: number) => `rgba(253, 249, 240, ${a})`;
+const CREAM_RGB = '253, 249, 240';
 
 /**
- * The falloff takes the SAME alpha as the fill.
+ * A BALD SPOT, which is a gradient, not a shape with a soft edge.
  *
- * A shadow left at 1 under a fill that has come down paints a halo more solid
- * than the middle it surrounds, which reads as an outline drawn around the
- * words: the exact opposite of a patch of light.
+ * This is the difference that made the last two rounds impossible, and it is
+ * not a matter of values. A box-shadow paints a SOLID PLATEAU and fades only
+ * outside the border box, so however it is set there is an area of flat cream
+ * with a boundary around it: an object on the page. The thing Alex has been
+ * asking for since the beginning fades from the MIDDLE OUT and never has an
+ * edge at all. No opacity, padding or spread setting turns one into the
+ * other, so every slider he tried was the wrong slider.
+ *
+ * So the fill is a radial gradient again, the way it was the first time.
+ *
+ *   `a`    the peak, at the centre, under the words themselves.
+ *   `soft` how much of the radius is spent fading, 0 to 100.
+ *          0 is a hard-edged shape, the box-shadow look.
+ *          100 starts falling the moment it leaves the centre.
+ *          58 with a peak of 0.93 is the original halo, near enough.
+ *
+ * The middle two stops keep the original's curve rather than running
+ * straight: it held almost full strength through the plateau, dropped to
+ * about half over the next stretch, then trailed off. A linear ramp reads as
+ * a vignette; this reads as paper.
  */
-const falloff = (soft: number, a: number) => `0 0 ${soft * 2}px ${soft}px ${cream(a)}`;
+const baldSpot = (a: number, soft: number) => {
+  const s = Math.max(0, Math.min(100, soft));
+  const plateau = 100 - s;
+  const mid = plateau + s * 0.55;
+  return (
+    `radial-gradient(ellipse 50% 50% at 50% 50%, ` +
+    `rgba(${CREAM_RGB}, ${a}) 0%, ` +
+    `rgba(${CREAM_RGB}, ${(a * 0.97).toFixed(3)}) ${plateau}%, ` +
+    `rgba(${CREAM_RGB}, ${(a * 0.42).toFixed(3)}) ${mid.toFixed(1)}%, ` +
+    `rgba(${CREAM_RGB}, 0) 100%)`
+  );
+};
 
 /**
  * One line, on its own patch of light.
@@ -1377,9 +1417,13 @@ const SoftSpot = ({ spot, children }: { spot: Spot; children: React.ReactNode })
         bottom={{ base: `-${spot.y.base}`, md: `-${spot.y.md}` }}
         zIndex={-1}
         pointerEvents="none"
+        // Only bites while `soft` is low. Once the gradient is doing the
+        // work there is no edge left for a corner radius to round.
         borderRadius={SPOT_RADIUS}
-        bg={{ base: cream(spot.a.base), md: cream(spot.a.md) }}
-        boxShadow={{ base: falloff(spot.soft.base, spot.a.base), md: falloff(spot.soft.md, spot.a.md) }}
+        sx={{
+          backgroundImage: baldSpot(spot.a.base, spot.soft.base),
+          '@media (min-width: 48em)': { backgroundImage: baldSpot(spot.a.md, spot.soft.md) },
+        }}
       />
       {children}
     </Box>

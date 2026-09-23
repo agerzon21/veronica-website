@@ -911,7 +911,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
                 quote: {
                   type: 'string',
                   description:
-                    "The exact words from VERO'S message this came from, copied character for character. Not a paraphrase. The write is refused if this text is not found in what she just typed.",
+                    "A span COPIED OUT OF VERO'S OWN MESSAGE this turn, her words rather than your rephrasing of them. Punctuation and spacing do not have to match, so \"$500\" is fine for \"500$\", but the words and digits must be hers. If the write is refused, copy a different span from the same message and call again; never ask her to retype it or to supply wording.",
                 },
               },
               required: ['field', 'value', 'quote'],
@@ -1305,7 +1305,25 @@ async function executeToolCall(
     // The haystack is what SHE typed, normalised for whitespace and case only.
     // Nothing the model wrote is in here.
     const norm = (v: string) => v.replace(/\s+/g, ' ').trim().toLowerCase();
+    /**
+     * The same words with the punctuation taken out.
+     *
+     * The guard is here to prove a value came from HER message, and it was
+     * comparing the quote to her text character for character. She typed
+     * "the price is 500$ for the photosoot we agreed change it"; the model
+     * quoted "$500", because that is how a price is written; one character
+     * of disagreement about where the dollar sign goes, and the write was
+     * refused. She said it four times and the summary kept showing the old
+     * figure.
+     *
+     * Letters and digits only, so "$500", "500$" and "500 $" are one key.
+     * This does NOT weaken what the guard is for: the evidence is still that
+     * the digits she typed appear in the message she just sent, and the
+     * model still cannot invent a number that is not in it.
+     */
+    const loose = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
     const typed = norm(sendCtx?.userMessage ?? '');
+    const typedLoose = loose(sendCtx?.userMessage ?? '');
     if (!typed) {
       return { error: 'No message of yours to check these against. Say them in a message first.' };
     }
@@ -1325,7 +1343,25 @@ async function executeToolCall(
         rejected.push({ field, why: 'no quote given' });
         continue;
       }
-      if (!typed.includes(norm(quote))) {
+      const q = norm(quote);
+      const qLoose = loose(quote);
+      /**
+       * Strict first, then the same words without their punctuation.
+       *
+       * Three characters minimum on the loose path, because a one or two
+       * character quote stripped of punctuation matches almost anything: "5"
+       * would be found inside "500" and inside "2025".
+       */
+      // Three characters of letters or digits, on EITHER path. A one or two
+      // character quote is not evidence of anything: "5" is inside "500",
+      // inside "2025" and inside half the messages ever sent, so it would
+      // let a number nobody typed be attached to a real-looking source.
+      // This was already true of the strict path before the loose one
+      // existed; it is tightened here rather than left because it is the
+      // same hole.
+      const quoted =
+        qLoose.length >= 3 && (typed.includes(q) || typedLoose.includes(qLoose));
+      if (!quoted) {
         rejected.push({ field, why: 'the quoted words are not in what she typed' });
         continue;
       }
@@ -1335,7 +1371,9 @@ async function executeToolCall(
     if (accepted.length === 0) {
       return {
         error:
-          'Nothing was written down. Every fact has to quote the exact words from her message that it came from, copied character for character. ' +
+          'Nothing was written down. Each fact needs a `quote`: a span COPIED OUT OF THE MESSAGE SHE JUST SENT, ' +
+          'her words and not your rephrasing of them. ' +
+          'DO NOT ask her to retype anything or to supply wording; her message is above you, take the span from it and call this tool again. ' +
           (rejected.length ? `Refused: ${rejected.map((x) => `${x.field} (${x.why})`).join(', ')}.` : ''),
       };
     }
