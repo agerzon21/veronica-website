@@ -60,3 +60,8 @@ CLAUDE_HANDOFF_AUDIT.md
 # gallery photos are downloaded from Drive at build time and have never
 # been in git). See scripts/build-grid-variants.mjs.
 public/assets/grid/
+
+# The client portal's mosaic sheet: one sprite of 120 photographs, rebuilt by
+# the build from whatever photos it actually has, for the same reason as the
+# grid derivatives above. See scripts/build-portal-mosaic.mjs.
+public/assets/portal/

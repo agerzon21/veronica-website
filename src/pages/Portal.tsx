@@ -1,14 +1,17 @@
 import ToastHost from '../components/ui/ToastHost';
-// domMax, not domAnimation: the tab underline at `layoutId="portal-tab-underline"`
-// needs layout projection, which the light feature set does not include. This
-// nests inside the app's LazyMotion and wins for this subtree. Because Portal is
-// code-split, the extra features land in Portal's chunk, not the homepage's.
-import { LazyMotion, domMax } from 'framer-motion';
+// domAnimation, not domMax. This was domMax for one reason: the tab strip's
+// underline used `layoutId="portal-tab-underline"`, and shared-layout
+// animation needs layout projection. The tabs are accordion doors now and
+// nothing left under this provider animates layout, so the heavier feature
+// set is dead weight in Portal's chunk. If a `layout`, `layoutId` or `drag`
+// prop ever appears in this subtree, it silently does nothing until this goes
+// back to domMax.
+import { LazyMotion, domAnimation } from 'framer-motion';
 import { Box, Flex, VStack, Text, Input, HStack, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { m, AnimatePresence } from 'framer-motion';
+import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
@@ -26,6 +29,7 @@ import ClientGallery, {
 } from '../components/ClientGallery';
 import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
 import Reveal from '../components/ui/Reveal';
+import PortalMosaic from '../components/PortalMosaic';
 import { prefersReducedMotion } from '../utils/motion';
 
 /**
@@ -84,19 +88,10 @@ function clearStoredSession(): void {
 }
 
 
-const MotionDiv = m.div;
-
-/**
- * The tab panel cross-fade, in seconds, zeroed for a visitor who asked for
- * reduced motion. Read at module scope rather than per render because it runs
- * on a tab switch and the preference cannot change between the read and the
- * frame that uses it.
- *
- * The card's own entrance fade used to sit beside this as REVEAL_SEC. It now
- * comes from <Reveal>, which answers the same query per instance and also
- * gates taps on the card's live opacity.
- */
-const TAB_FADE_SEC = prefersReducedMotion() ? 0 : 0.25;
+/* The tab strip's cross-fade lived here, with MotionDiv and TAB_FADE_SEC.
+   Both are gone with it: the two ways in are accordion panels now, and the
+   panel animates on its own height in CSS rather than swapping two cards
+   through AnimatePresence. prefersReducedMotion is still used further down. */
 
 type Tab = 'client' | 'gallery';
 
@@ -897,29 +892,17 @@ const Portal = () => {
   return (
     <>
     <Navbar />
-    <Box position="relative" minH="100vh" overflow="hidden" bg="#0a0a0a">
+    <Box position="relative" minH="100vh" overflow="hidden" bg="brand.surfaceSunken">
       <Helmet>
         <title>Portal | Vero Photography</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      {/* Background photo — same treatment as the Contact page so the two
-          feel like siblings. */}
-      <Box
-        position="absolute"
-        inset={0}
-        backgroundImage="url('/assets/photos/site/client-portal.webp')"
-        backgroundSize="cover"
-        backgroundPosition={{ base: 'center 30%', md: 'center' }}
-        backgroundRepeat="no-repeat"
-        filter="brightness(0.6)"
-      />
-      <Box
-        position="absolute"
-        inset={0}
-        bgGradient="linear(to-b, rgba(0,0,0,0.5), rgba(0,0,0,0.7))"
-        pointerEvents="none"
-      />
+      {/* A hundred and twenty photographs drifting behind the form, as one
+          sprite sheet. It replaces a single 913 KB photograph and costs about
+          220 KB, and it carries its own still fallback for a connection that
+          cannot afford it. PortalMosaic has the whole argument. */}
+      <PortalMosaic veil={0.62} />
 
       <Flex
         position="relative"
@@ -949,246 +932,228 @@ const Portal = () => {
               was still invisible. */}
           <Reveal immediate from={{ opacity: 0 }} duration={0.6}>
             <VStack spacing={8}>
-              {/* Heading */}
-              <VStack spacing={4}>
-                <Text
-                  fontSize="xs"
-                  fontWeight="500"
-                  textTransform="uppercase"
-                  letterSpacing="0.25em"
-                  color="brand.accent"
-                >
-                  Welcome
-                </Text>
-                <Box w="40px" h="1px" bg="brand.accent" />
-                <Text
-                  as="h1"
-                  fontSize={{ base: '2xl', md: '3xl' }}
-                  fontWeight="200"
-                  color="white"
-                  textAlign="center"
-                  lineHeight="1.4"
-                  m={0}
-                  letterSpacing="0.02em"
-                >
-                  Sign In
-                </Text>
-              </VStack>
+              {/* The house header, exactly as PageHeader renders it on
+                  Journal, Gallery, Weddings and About: eyebrow, rule, title,
+                  lead. It is written out rather than imported because it sits
+                  on its own soft spot, which PageHeader has no notion of.
 
-              {/* Tabs */}
-              <HStack
-                spacing={0}
-                w="100%"
-                borderBottom="1px solid"
-                borderColor="whiteAlpha.200"
-              >
-                {(
-                  [
-                    { id: 'client' as Tab, label: 'Client Portal' },
-                    { id: 'gallery' as Tab, label: 'Gallery Pass' },
-                  ]
-                ).map((t) => {
-                  const active = tab === t.id;
-                  return (
-                    <Box
-                      key={t.id}
-                      as="button"
-                      type="button"
-                      onClick={() => switchTab(t.id)}
-                      flex={1}
-                      py={3}
-                      bg="transparent"
-                      border="none"
-                      cursor="pointer"
-                      position="relative"
-                      fontSize="xs"
-                      fontWeight="500"
-                      letterSpacing="0.2em"
-                      textTransform="uppercase"
-                      color={active ? 'brand.accent' : 'whiteAlpha.600'}
-                      transition="color 0.3s"
-                      _hover={{ color: active ? 'brand.accent' : 'whiteAlpha.800' }}
-                      sx={{ WebkitTapHighlightColor: 'transparent' }}
-                    >
-                      {t.label}
-                      {/* Gold underline indicating the active tab */}
-                      {active && (
-                        <MotionDiv
-                          layoutId="portal-tab-underline"
-                          style={{
-                            position: 'absolute',
-                            bottom: '-1px',
-                            left: 0,
-                            right: 0,
-                            height: '1px',
-                            background: '#c9a96e',
-                          }}
-                        />
-                      )}
-                    </Box>
-                  );
-                })}
-              </HStack>
-
-              {/* Form card — different fields per tab. AnimatePresence handles
-                  the cross-fade so switching tabs feels intentional rather
-                  than jarring. */}
-              <Box
-                w="100%"
-                bg="rgba(0, 0, 0, 0.55)"
-                border="1px solid"
-                borderColor="whiteAlpha.200"
-                borderRadius="sm"
-                px={{ base: 5, md: 7 }}
-                py={{ base: 6, md: 7 }}
-                backdropFilter="blur(8px)"
-              >
-                <AnimatePresence mode="wait" initial={false}>
-                  {tab === 'client' ? (
-                    <MotionDiv
-                      key="client-form"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: TAB_FADE_SEC }}
-                    >
-                      <Box as="form" onSubmit={handleClientSubmit} w="100%">
-                        <VStack spacing={4} w="100%">
-                          <FieldLabel htmlFor="client-email">Email</FieldLabel>
-                          <PortalInput
-                            id="client-email"
-                            name="email"
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            autoFocus
-                          />
-
-                          <FieldLabel htmlFor="client-password">Password</FieldLabel>
-                          <PortalPasswordInput
-                            id="client-password"
-                            value={clientPassword}
-                            onChange={setClientPassword}
-                            placeholder="Enter your password"
-                            show={showClientPassword}
-                            onToggleShow={() => setShowClientPassword((s) => !s)}
-                          />
-
-                          {error && <ErrorText>{error}</ErrorText>}
-
-                          <CTAButton
-                            type="submit"
-                            variant="solid"
-                            size="lg"
-                            fullWidth
-                            isLoading={isSubmitting}
-                            loadingText="Signing in..."
-                          >
-                            Sign In
-                          </CTAButton>
-
-                          {/* Deliberately understated — it should be findable
-                              when needed without competing with Sign In. */}
-                          {resetRequested ? (
-                            <Text
-                              fontSize="xs"
-                              color="whiteAlpha.700"
-                              textAlign="center"
-                              pt={1}
-                              lineHeight="1.6"
-                            >
-                              If that email is on file, a reset link is on its way.
-                              It works for one hour.
-                            </Text>
-                          ) : (
-                            <Text
-                              as="button"
-                              type="button"
-                              onClick={handleForgotPassword}
-                              fontSize="xs"
-                              color="whiteAlpha.600"
-                              textAlign="center"
-                              pt={1}
-                              alignSelf="center"
-                              bg="transparent"
-                              _hover={{ color: 'brand.accent' }}
-                              transition="color 0.2s"
-                              sx={{ WebkitTapHighlightColor: 'transparent' }}
-                            >
-                              {resetSending ? 'Sending…' : 'Forgot your password?'}
-                            </Text>
-                          )}
-
-                          <Text fontSize="xs" color="whiteAlpha.500" textAlign="center" pt={1}>
-                            Full access: contract, payments, photos
-                          </Text>
-                        </VStack>
-                      </Box>
-                    </MotionDiv>
-                  ) : (
-                    <MotionDiv
-                      key="gallery-form"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: TAB_FADE_SEC }}
-                    >
-                      <Box as="form" onSubmit={handleGallerySubmit} w="100%">
-                        <VStack spacing={4} w="100%">
-                          <FieldLabel htmlFor="gallery-password">Password</FieldLabel>
-                          <PortalPasswordInput
-                            id="gallery-password"
-                            value={galleryPassword}
-                            onChange={setGalleryPassword}
-                            placeholder="Enter the gallery password"
-                            show={showGalleryPassword}
-                            onToggleShow={() => setShowGalleryPassword((s) => !s)}
-                            autoFocus
-                          />
-
-                          {error && <ErrorText>{error}</ErrorText>}
-
-                          <CTAButton
-                            type="submit"
-                            variant="solid"
-                            size="lg"
-                            fullWidth
-                            isLoading={isSubmitting}
-                            loadingText="Checking..."
-                          >
-                            View Gallery
-                          </CTAButton>
-
-                          <Text fontSize="xs" color="whiteAlpha.500" textAlign="center" pt={1}>
-                            View photos only, for guests and family
-                          </Text>
-                        </VStack>
-                      </Box>
-                    </MotionDiv>
-                  )}
-                </AnimatePresence>
+                  THE SOFT SPOT. A gold eyebrow cannot sit on photographs:
+                  brand.accentText reaches only 4.58:1 against SOLID cream, so
+                  any visible picture behind it puts the label under AA. A
+                  uniform veil dark enough to fix that hides the photographs
+                  entirely, and lightening the top of the page reads as a
+                  spotlight. This is the third answer: a wide, edgeless halo
+                  under the words only, which holds the label steady at about
+                  4.2:1 instead of letting it swing between 2.5 and 6 as
+                  pictures drift past. */}
+              <Box position="relative" w="100%">
+                <PortalHalo w="1420px" h="800px" />
+                <VStack spacing={{ base: 3, md: 4 }} position="relative">
+                  <Text textStyle="eyebrow">Client portal</Text>
+                  <Box w="40px" h="1px" bg="brand.accent" />
+                  <Text
+                    as="h1"
+                    textStyle="contentTitle"
+                    textAlign="center"
+                    maxW="26ch"
+                    m={0}
+                    sx={{ textWrap: 'balance' }}
+                  >
+                    Everything from your session
+                  </Text>
+                  <Text textStyle="bodyLead" color="gray.700" textAlign="center" maxW="46ch">
+                    Sign in with your email and password to find your contract, your
+                    payments and your finished photographs. Given a gallery password
+                    instead? Open Gallery pass below.
+                  </Text>
+                </VStack>
               </Box>
 
-              {/* Graceful offramp */}
-              <VStack spacing={3} pt={2}>
-                <Text fontSize="xs" color="whiteAlpha.600" fontWeight="300" textAlign="center">
-                  Not a client? No problem,
-                </Text>
-                <Text
-                  as={RouterLink}
-                  to="/gallery"
-                  fontSize="xs"
-                  fontWeight="500"
-                  color="brand.accent"
-                  letterSpacing="0.2em"
-                  textTransform="uppercase"
-                  _hover={{ color: 'brand.accentSoft' }}
-                  transition="color 0.3s"
+              {/* Two doors, one open.
+
+                  This replaces a tab strip. A tab strip made the two ways in
+                  look like two views of one thing; they are not, they are two
+                  different people. The one that is open is the one whose
+                  question you answered, and each keeps its name and its
+                  description visible when closed so nobody has to open a
+                  panel to find out what is behind it.
+
+                  `tab` already drives the URL (/portal versus /portal/pass)
+                  and the stored-session logic, so opening a door IS switching
+                  tab: no second source of truth, and every deep link that
+                  worked before still lands on the right panel, now open. */}
+              <VStack spacing={3} w="100%">
+                <PortalDoor
+                  kicker="You booked a session"
+                  name="Your account"
+                  blurb="Your contract, your payments and your finished photographs, all in one place."
+                  open={tab === 'client'}
+                  onOpen={() => switchTab('client')}
+                  panelId="portal-door-client"
                 >
-                  Browse the public portfolio →
-                </Text>
+                  <Box as="form" onSubmit={handleClientSubmit} w="100%">
+                  <VStack spacing={4} w="100%">
+                    <FieldLabel htmlFor="client-email">Email</FieldLabel>
+                    <PortalInput
+                      id="client-email"
+                      name="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoFocus
+                    />
+                  
+                    <FieldLabel htmlFor="client-password">Password</FieldLabel>
+                    <PortalPasswordInput
+                      id="client-password"
+                      value={clientPassword}
+                      onChange={setClientPassword}
+                      placeholder="Enter your password"
+                      show={showClientPassword}
+                      onToggleShow={() => setShowClientPassword((s) => !s)}
+                    />
+                  
+                    {error && <ErrorText>{error}</ErrorText>}
+                  
+                    <CTAButton
+                      type="submit"
+                      variant="solid"
+                      size="lg"
+                      fullWidth
+                      isLoading={isSubmitting}
+                      loadingText="Signing in..."
+                    >
+                      Sign In
+                    </CTAButton>
+                  
+                    {/* Deliberately understated — it should be findable
+                        when needed without competing with Sign In. */}
+                    {resetRequested ? (
+                      <Text
+                        fontSize="xs"
+                        color="brand.mutedText"
+                        textAlign="center"
+                        pt={1}
+                        lineHeight="1.6"
+                      >
+                        If that email is on file, a reset link is on its way.
+                        It works for one hour.
+                      </Text>
+                    ) : (
+                      <Text
+                        as="button"
+                        type="button"
+                        onClick={handleForgotPassword}
+                        fontSize="xs"
+                        color="brand.accentText"
+                        textAlign="center"
+                        pt={1}
+                        alignSelf="center"
+                        bg="transparent"
+                        _hover={{ color: 'brand.accent' }}
+                        transition="color 0.2s"
+                        sx={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        {resetSending ? 'Sending…' : 'Forgot your password?'}
+                      </Text>
+                    )}
+                  
+                    <Text fontSize="xs" color="brand.mutedText" textAlign="center" pt={1}>
+                      Full access: contract, payments, photos
+                    </Text>
+                  </VStack>
+                  </Box>
+                </PortalDoor>
+
+                <PortalDoor
+                  kicker="You were given a password"
+                  name="Gallery pass"
+                  blurb="One gallery, no account needed. Type the password you were given."
+                  open={tab === 'gallery'}
+                  onOpen={() => switchTab('gallery')}
+                  panelId="portal-door-gallery"
+                >
+                  <Box as="form" onSubmit={handleGallerySubmit} w="100%">
+                  <VStack spacing={4} w="100%">
+                    <FieldLabel htmlFor="gallery-password">Password</FieldLabel>
+                    <PortalPasswordInput
+                      id="gallery-password"
+                      value={galleryPassword}
+                      onChange={setGalleryPassword}
+                      placeholder="Enter the gallery password"
+                      show={showGalleryPassword}
+                      onToggleShow={() => setShowGalleryPassword((s) => !s)}
+                      autoFocus
+                    />
+                  
+                    {error && <ErrorText>{error}</ErrorText>}
+                  
+                    <CTAButton
+                      type="submit"
+                      variant="solid"
+                      size="lg"
+                      fullWidth
+                      isLoading={isSubmitting}
+                      loadingText="Checking..."
+                    >
+                      View Gallery
+                    </CTAButton>
+                  
+                    <Text fontSize="xs" color="brand.mutedText" textAlign="center" pt={1}>
+                      View photos only, for guests and family
+                    </Text>
+                  </VStack>
+                  </Box>
+                </PortalDoor>
               </VStack>
+
+              {/* The way out, for someone who is not a client at all.
+
+                  It needs its own soft spot, like the header: this sits
+                  directly on the mosaic, where 13px type over a dark
+                  photograph measures under 2:1.
+
+                  zIndex -1 is load bearing. This block comes AFTER the two
+                  doors in the document, so without it the halo paints on top
+                  of the panel above and visibly washes out the button inside
+                  it. The header's halo has never had that problem because the
+                  header comes first. */}
+              <Box position="relative" pt={2}>
+                <Box
+                  aria-hidden="true"
+                  position="absolute"
+                  zIndex={-1}
+                  left="50%"
+                  top={{ base: '38px', md: '34px' }}
+                  transform="translate(-50%, -50%)"
+                  width={{ base: '500px', md: '720px' }}
+                  height={{ base: '116px', md: '96px' }}
+                  pointerEvents="none"
+                  sx={{
+                    background:
+                      'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(253,249,240,0.93) 0%, rgba(253,249,240,0.93) 62%, rgba(253,249,240,0) 100%)',
+                  }}
+                />
+                <VStack spacing={2} position="relative">
+                  <Text fontSize="xs" color="gray.700" fontWeight="300" textAlign="center">
+                    Not a client? No problem,
+                  </Text>
+                  <Text
+                    as={RouterLink}
+                    to="/gallery"
+                    fontSize="xs"
+                    fontWeight="500"
+                    color="brand.accentText"
+                    letterSpacing="0.2em"
+                    textTransform="uppercase"
+                    _hover={{ color: 'brand.accent' }}
+                    transition="color 0.3s"
+                  >
+                    Browse the public portfolio →
+                  </Text>
+                </VStack>
+              </Box>
             </VStack>
           </Reveal>
         </Box>
@@ -1201,6 +1166,162 @@ const Portal = () => {
 
 // Small reusable bits — extracted so the JSX above reads as flow, not noise.
 
+/**
+ * The soft spot behind the header.
+ *
+ * Edgeless on purpose. A bordered panel and a lightened top band were both
+ * tried and both read as an object sitting on the page; this is a wide
+ * plateau that fades to nothing long before it reaches anything, so it
+ * settles the background under the words without announcing itself.
+ *
+ * aria-hidden and pointer-events none: it is paper, not content.
+ */
+const PortalHalo = ({ w, h }: { w: string; h: string }) => (
+  <Box
+    aria-hidden="true"
+    position="absolute"
+    left="50%"
+    top="50%"
+    transform="translate(-50%, -50%)"
+    width={w}
+    height={h}
+    pointerEvents="none"
+    sx={{
+      background:
+        'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(253,249,240,0.93) 0%, rgba(253,249,240,0.902) 42%, rgba(253,249,240,0.512) 64%, rgba(253,249,240,0) 88%)',
+    }}
+  />
+);
+
+/**
+ * One of the two ways in.
+ *
+ * The header is a real <button>, so it is reachable by keyboard and
+ * announces its state; a div with an onClick is skipped by Tab, and this is
+ * the control the whole screen turns on.
+ *
+ * The panel animates on `grid-template-rows: 0fr -> 1fr` rather than
+ * max-height. A max-height accordion has to guess a number larger than its
+ * content, and every pixel of that guess is dead time at the end of the close
+ * where nothing appears to happen. 0fr to 1fr is the content's own height, so
+ * the curve lands exactly when the panel does.
+ *
+ * The body stays MOUNTED when closed, clipped to nothing. Unmounting it would
+ * throw away whatever the person had typed if they tapped the other door to
+ * read it, and would lose the transition. It is hidden from assistive tech
+ * and from tab order instead.
+ */
+function PortalDoor({
+  kicker,
+  name,
+  blurb,
+  open,
+  onOpen,
+  panelId,
+  children,
+}: {
+  kicker: string;
+  name: string;
+  blurb: string;
+  open: boolean;
+  onOpen: () => void;
+  panelId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box
+      w="100%"
+      // POSITIONED ON PURPOSE. The header above is a positioned element and
+      // so is its halo, and positioned elements paint above non-positioned
+      // ones whatever the document order says. Without this the halo washed
+      // the top of this panel: kicker, name and blurb all came out faded
+      // while the fields below them stayed crisp. Being positioned puts this
+      // panel in the same layer, where coming later in the document is what
+      // decides.
+      position="relative"
+      border="1px solid"
+      borderColor={open ? 'brand.accent' : 'brand.accentBorder'}
+      // Solid, not 0.97. Three percent of mosaic showing through was enough
+      // to put the gold field labels at 4.46:1, four hundredths under AA,
+      // because brand.accentText only reaches 4.58:1 on cream to begin with.
+      // The doors are paper; the page behind them is where the photographs
+      // belong.
+      bg="brand.surface"
+      boxShadow={open ? '0 26px 60px -40px rgba(44,41,37,0.5)' : 'none'}
+      transition="border-color 0.45s ease, box-shadow 0.45s ease"
+      sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
+    >
+      <Box
+        as="button"
+        type="button"
+        onClick={onOpen}
+        aria-expanded={open}
+        aria-controls={panelId}
+        w="100%"
+        display="flex"
+        alignItems="flex-start"
+        gap={4}
+        textAlign="left"
+        bg="transparent"
+        border="none"
+        cursor="pointer"
+        px={{ base: 5, md: 6 }}
+        py={{ base: 4, md: 5 }}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        <Box flexGrow={1} minW={0}>
+          <Text
+            fontSize="2xs"
+            letterSpacing="0.2em"
+            textTransform="uppercase"
+            color="brand.accentText"
+            mb={1.5}
+          >
+            {kicker}
+          </Text>
+          <Text textStyle="cardTitle" fontFamily="heading" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="400" m={0}>
+            {name}
+          </Text>
+          <Text fontSize="sm" color="brand.mutedText" mt={1.5} lineHeight="1.55">
+            {blurb}
+          </Text>
+        </Box>
+        <Icon
+          as={FaChevronRight}
+          boxSize={3.5}
+          mt={1}
+          flexShrink={0}
+          color="brand.accentText"
+          transform={open ? 'rotate(90deg)' : 'none'}
+          transition="transform 0.45s cubic-bezier(.4,0,.2,1)"
+          sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
+        />
+      </Box>
+
+      <Box
+        id={panelId}
+        display="grid"
+        gridTemplateRows={open ? '1fr' : '0fr'}
+        transition="grid-template-rows 0.5s cubic-bezier(.4,0,.2,1)"
+        sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
+      >
+        <Box overflow="hidden" minH={0} aria-hidden={!open} {...(!open && { inert: '' })}>
+          <Box
+            px={{ base: 5, md: 6 }}
+            pb={{ base: 5, md: 6 }}
+            opacity={open ? 1 : 0}
+            transform={open ? 'none' : 'translateY(-6px)'}
+            transition="opacity 0.3s ease 0.05s, transform 0.4s ease 0.05s"
+            sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
+          >
+            {children}
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 const FieldLabel = ({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) => (
   <Text
     as="label"
@@ -1209,7 +1330,7 @@ const FieldLabel = ({ htmlFor, children }: { htmlFor: string; children: React.Re
     w="100%"
     fontSize="2xs"
     fontWeight="500"
-    color="brand.accent"
+    color="brand.accentText"
     letterSpacing="0.2em"
     textTransform="uppercase"
     mb={-2}
@@ -1226,19 +1347,22 @@ const PortalInput = (
   <Input
     {...props}
     h="48px"
-    bg="blackAlpha.500"
+    bg="white"
     border="1px solid"
-    borderColor="whiteAlpha.300"
-    color="white"
+    // brand.field, not accentBorder. accentBorder is 1.41:1 on cream and
+    // decorative, which is below the 3:1 WCAG 1.4.11 asks of a control's
+    // boundary: a field outlined in it is not reliably visible AS a field.
+    borderColor="brand.field"
+    color="gray.800"
     fontSize="sm"
     fontWeight="300"
     borderRadius="sm"
-    _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
-    _hover={{ borderColor: 'whiteAlpha.500' }}
+    _placeholder={{ color: 'gray.500', fontWeight: '300' }}
+    _hover={{ borderColor: 'brand.accentText' }}
     _focus={{
       borderColor: 'brand.accent',
       boxShadow: '0 0 0 1px #c9a96e',
-      bg: 'blackAlpha.600',
+      bg: 'white',
     }}
   />
 );
@@ -1276,20 +1400,20 @@ function PortalPasswordInput({
         autoCorrect="off"
         spellCheck={false}
         h="48px"
-        bg="blackAlpha.500"
+        bg="white"
         border="1px solid"
-        borderColor="whiteAlpha.300"
-        color="white"
+        borderColor="brand.field"
+        color="gray.800"
         fontSize="sm"
         fontWeight="300"
         borderRadius="sm"
         pr="3.2rem"
-        _placeholder={{ color: 'whiteAlpha.500', fontWeight: '300' }}
-        _hover={{ borderColor: 'whiteAlpha.500' }}
+        _placeholder={{ color: 'gray.500', fontWeight: '300' }}
+        _hover={{ borderColor: 'brand.accentText' }}
         _focus={{
           borderColor: 'brand.accent',
           boxShadow: '0 0 0 1px #c9a96e',
-          bg: 'blackAlpha.600',
+          bg: 'white',
         }}
       />
       <InputRightElement h="48px" pr={2}>
@@ -1298,7 +1422,7 @@ function PortalPasswordInput({
           type="button"
           onClick={onToggleShow}
           aria-label={show ? 'Hide password' : 'Show password'}
-          color="whiteAlpha.600"
+          color="brand.accentText"
           _hover={{ color: 'brand.accent' }}
           bg="transparent"
           border="none"
@@ -1328,7 +1452,7 @@ const ErrorText = ({ children }: { children: React.ReactNode }) => (
 export default function PortalWithToasts(props: Record<string, never>) {
   return (
     <ToastHost>
-      <LazyMotion features={domMax} strict>
+      <LazyMotion features={domAnimation} strict>
         <Portal {...props} />
       </LazyMotion>
     </ToastHost>

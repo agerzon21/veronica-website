@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-send-gate.mjs && node scripts/check-phone-numbers.mjs && rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && node scripts/build-hero-variants.mjs --check && node scripts/build-grid-variants.mjs && node scripts/build-grid-variants.mjs --check && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs && node scripts/build-gallery-statics.mjs --check",
+    "build": "node scripts/check-send-gate.mjs && node scripts/check-phone-numbers.mjs && rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && node scripts/build-hero-variants.mjs --check && node scripts/build-grid-variants.mjs && node scripts/build-grid-variants.mjs --check && node scripts/build-portal-mosaic.mjs && node scripts/build-portal-mosaic.mjs --check && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs && node scripts/build-gallery-statics.mjs --check",
     "lint": "eslint . --report-unused-disable-directives",
     "preview": "vite preview",
     "hero-variants": "node scripts/build-hero-variants.mjs",
@@ -23,7 +23,9 @@
     "gallery-statics:check": "node scripts/build-gallery-statics.mjs --check",
     "check:stripe": "node scripts/check-stripe-signature.mjs",
     "check:send-gate": "node scripts/check-send-gate.mjs",
-    "check:phones": "node scripts/check-phone-numbers.mjs"
+    "check:phones": "node scripts/check-phone-numbers.mjs",
+    "portal-mosaic": "node scripts/build-portal-mosaic.mjs",
+    "portal-mosaic:check": "node scripts/build-portal-mosaic.mjs --check"
   },
   "dependencies": {
     "@chakra-ui/icons": "^2.2.4",
