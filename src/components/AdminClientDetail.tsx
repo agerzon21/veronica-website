@@ -627,6 +627,26 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
     }
   };
 
+  /**
+   * The places this booking happens in, ABOVE THE EARLY RETURNS.
+   *
+   * This was a useMemo written inline in the JSX, which is a hook that only
+   * runs on the renders that reach it. The two returns below do not, so the
+   * hook count changed between the loading render and the loaded one and
+   * React threw #310 on every full-mode client: "Something went wrong" on
+   * the client screen, for a booking that was perfectly fine underneath.
+   *
+   * It is the FIRST thing every render does now, because a hook has to run
+   * the same number of times whatever the component decides to draw.
+   */
+  const sessionLocationsValue = useMemo(() => {
+    if (!portal) return [];
+    const stored = parseLocations(portal.session_locations);
+    if (stored.length) return stored;
+    const one = effectiveAddress(portal);
+    return one ? [{ ...EMPTY_LOCATION, address: one }] : [];
+  }, [portal]);
+
   if (loading && !portal) {
     return (
       <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }} textAlign="center" py={20}>
@@ -1497,12 +1517,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               had an address at all, which made the Directions button at the
               top of this screen dead for the majority of records. */}
           <SessionLocationsField
-            value={useMemo(() => {
-              const stored = parseLocations(portal.session_locations);
-              if (stored.length) return stored;
-              const one = effectiveAddress(portal);
-              return one ? [{ ...EMPTY_LOCATION, address: one }] : [];
-            }, [portal])}
+            value={sessionLocationsValue}
             saving={savingField === 'session_locations'}
             onSave={(v) => patch({ session_locations: v }, 'session_locations')}
           />
