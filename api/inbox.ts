@@ -33,12 +33,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import igWebhookHandler from './inbox/_ig-webhook.js';
 import emailWebhookHandler from './inbox/_email-webhook.js';
 import stripeWebhookHandler from './inbox/_stripe-webhook.js';
+import whatsappWebhookHandler from './inbox/_whatsapp-webhook.js';
 
 const HANDLERS: Record<
   string,
   (req: VercelRequest, res: VercelResponse) => Promise<unknown> | unknown
 > = {
   'ig-webhook': igWebhookHandler,
+  // Same signature scheme as Instagram, same raw-body requirement, so it
+  // rides the same bodyParser:false declared at the bottom of this file.
+  'whatsapp-webhook': whatsappWebhookHandler,
   'email-webhook': emailWebhookHandler,
   // Money arriving. Here rather than under /api/admin because Stripe signs the
   // RAW bytes and this dispatcher is the one that turns the body parser off.

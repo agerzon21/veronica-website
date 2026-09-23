@@ -207,6 +207,45 @@ const CHECKS: Check[] = [
     ifMissing: 'The Instagram webhook cannot be re-subscribed in the Meta dashboard.',
     fallback: null,
   },
+  // ── WhatsApp ───────────────────────────────────────────────────────
+  // Four variables, and three of the four fail SILENTLY rather than loudly,
+  // which is exactly the shape of problem this card exists for. Listed
+  // together so a half-configured channel reads as half-configured.
+  {
+    key: 'WHATSAPP_APP_SECRET',
+    severity: 'feature',
+    purpose: 'Verifying WhatsApp webhook signatures',
+    ifMissing: 'Every WhatsApp webhook is refused with a 500, so messages never arrive.',
+    // NOT the same secret as IG_APP_SECRET. Instagram's product creates a
+    // nested app with its own secret; WhatsApp hangs off the PARENT app.
+    // Setting one to the other's value makes every webhook fail a signature
+    // check that looks correct.
+    fallback: null,
+  },
+  {
+    key: 'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+    severity: 'feature',
+    purpose: "Meta's WhatsApp webhook subscription handshake",
+    ifMissing: 'The WhatsApp webhook cannot be subscribed in the Meta dashboard.',
+    fallback: null,
+  },
+  {
+    key: 'WHATSAPP_ACCESS_TOKEN',
+    severity: 'feature',
+    purpose: 'Sending WhatsApp replies from the inbox',
+    ifMissing: 'Inbound WhatsApp still arrives; replying returns an error every time.',
+    fallback: null,
+  },
+  {
+    key: 'WHATSAPP_PHONE_NUMBER_ID',
+    severity: 'feature',
+    purpose: 'Which of the business numbers a reply is sent FROM',
+    // Worth stating precisely: this one is not "nothing happens". A wrong id
+    // sends successfully from the wrong number, which is why it is not
+    // inferred from the token.
+    ifMissing: 'Replying returns an error. Set to the wrong number, replies send from the wrong business number.',
+    fallback: null,
+  },
   {
     key: 'RESEND_WEBHOOK_SECRET',
     severity: 'optional',

@@ -45,6 +45,7 @@ import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import FaFolder from '../icons/fa/FaFolder';
 import FaInstagram from '../icons/fa/FaInstagram';
 import FaLanguage from '../icons/fa/FaLanguage';
+import FaWhatsapp from '../icons/fa/FaWhatsapp';
 import FaLightbulb from '../icons/fa/FaLightbulb';
 import FaPaperPlane from '../icons/fa/FaPaperPlane';
 import FaPenNib from '../icons/fa/FaPenNib';
@@ -64,7 +65,7 @@ import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 import { type ClientPrefill, type PrefillBooking } from './clientPrefill';
 import { readWeddingPackage } from '../data/formMessage';
-import { findPhonesInText, formatPhone, type FoundPhone } from '../utils/phoneFromText';
+import { findPhonesInText, formatPhone, formatWaId, type FoundPhone } from '../utils/phoneFromText';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
 import { translationTargetFor, type ContentLang } from './translationDirection';
 
@@ -1472,7 +1473,9 @@ function ConversationListRow({
     conv.linked_client_display_name ||
     (conv.platform === 'email'
       ? t.messages.emailSenderFallback(conv.external_user_id)
-      : t.messages.instagramUserFallback(conv.external_user_id.slice(-6)));
+      : conv.platform === 'whatsapp'
+        ? t.messages.whatsappSenderFallback(formatWaId(conv.external_user_id))
+        : t.messages.instagramUserFallback(conv.external_user_id.slice(-6)));
 
   if (compact) {
     // Folded rail. Avatar plus an unread dot is enough to find a thread you
@@ -1686,13 +1689,16 @@ function PlatformAvatar({
   const platformIcon =
     platform === 'instagram' ? FaInstagram
       : platform === 'email' ? FaEnvelope
+      : platform === 'whatsapp' ? FaWhatsapp
       : FaCommentDots;
   const platformGradient =
     platform === 'instagram'
       ? 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)'
       : platform === 'email'
         ? 'linear-gradient(135deg, #c9a96e, #b8964f)'
-        : 'linear-gradient(135deg, #4a5568, #718096)';
+        : platform === 'whatsapp'
+          ? 'linear-gradient(135deg, #25D366, #128C7E)'
+          : 'linear-gradient(135deg, #4a5568, #718096)';
   return (
     <Box position="relative" flexShrink={0}>
       <Box
@@ -2801,7 +2807,9 @@ function ConversationView({
     detail.linked_client_display_name ||
     (detail.platform === 'email'
       ? t.messages.emailSenderFallback(detail.external_user_id)
-      : t.messages.instagramUserFallback(detail.external_user_id.slice(-6)));
+      : detail.platform === 'whatsapp'
+        ? t.messages.whatsappSenderFallback(formatWaId(detail.external_user_id))
+        : t.messages.instagramUserFallback(detail.external_user_id.slice(-6)));
 
   /**
    * What this thread established, in the shape the full new-client form wants.
@@ -2886,6 +2894,10 @@ function ConversationView({
   const rawIdentifier =
     detail.platform === 'email'
       ? detail.external_user_id
+      // A WhatsApp thread has no handle. Its number is the identifier, and
+      // under a profile name it is the only place the number appears.
+      : detail.platform === 'whatsapp'
+        ? formatWaId(detail.external_user_id)
       : detail.contact_handle
       ? `@${detail.contact_handle.replace(/^@/, '')}`
       : null;
@@ -3161,8 +3173,15 @@ function ConversationView({
                 the toggle entirely on email conversations to avoid
                 the confusing "I flipped it and nothing happened"
                 UX. When email AI eventually lands, remove this
-                platform check. */}
-            {detail.platform !== 'email' && (
+                platform check.
+                WhatsApp is hidden for the same reason and a stronger
+                one: api/inbox/_whatsapp-webhook.ts deliberately does
+                not auto-reply, and WhatsApp is where real clients
+                discuss real bookings inside a 24-hour window where a
+                mistimed automated message costs money as well as
+                trust. Instagram is the only platform with a reply
+                pipeline behind this switch. */}
+            {detail.platform === 'instagram' && (
               <>
                 <Icon as={FaRobot} boxSize={3.5} color={detail.ai_enabled ? 'brand.accent' : 'gray.400'} />
                 <Switch
@@ -3367,8 +3386,10 @@ function ConversationView({
           space once she's acknowledged it.
           Suppressed for email conversations — email doesn't have an
           AI reply pipeline yet, so a "AI is off" banner would be
-          misleading (implies it could be on). */}
-      {detail.platform !== 'email' && !detail.ai_enabled && !aiOffBannerDismissed && (
+          misleading (implies it could be on). Same for WhatsApp,
+          which has no auto-reply on purpose: the banner would report
+          a switch that is not there as being in the off position. */}
+      {detail.platform === 'instagram' && !detail.ai_enabled && !aiOffBannerDismissed && (
         <Flex
           bg="orange.50"
           borderBottom="1px solid"

@@ -43,6 +43,26 @@ export function formatPhone(digits: string): string {
 }
 
 /**
+ * A wa_id, as a person reads it.
+ *
+ * A WhatsApp sender IS a phone number, so the thread has no handle and no
+ * display name until Meta happens to send a profile. The raw wa_id
+ * "15705550123" is the worst of both: it looks like an id, so nobody tries to
+ * dial it, and it is in fact the number she may already have on the booking.
+ *
+ * North American numbers get the grouping the rest of the admin uses; anything
+ * else keeps its digits behind a '+', because guessing at foreign grouping
+ * produces a number that looks authoritative and is wrong.
+ */
+export function formatWaId(waId: string): string {
+  const d = String(waId ?? '').replace(/\D/g, '');
+  if (!d) return String(waId ?? '');
+  if (d.length === 11 && d[0] === '1') return `+1 ${formatPhone(d.slice(1))}`;
+  if (d.length === 10) return formatPhone(d);
+  return `+${d}`;
+}
+
+/**
  * E.164, or null when the number cannot be trusted to dial.
  *
  * Everything that LEAVES this system keyed on a phone number wants this shape:

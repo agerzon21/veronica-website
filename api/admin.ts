@@ -23,6 +23,7 @@ import resendInviteHandler from './admin/_resend-invite.js';
 import portalPdfHandler from './admin/_portal-pdf.js';
 import instagramStatusHandler from './admin/_instagram-status.js';
 import instagramMarkRefreshedHandler from './admin/_instagram-mark-refreshed.js';
+import whatsappStatusHandler from './admin/_whatsapp-status.js';
 import journalListHandler from './admin/_journal-list.js';
 import journalDetailHandler from './admin/_journal-detail.js';
 import journalCreateHandler from './admin/_journal-create.js';
@@ -93,6 +94,7 @@ const HANDLERS: Record<
   'portal-pdf': portalPdfHandler,
   'instagram-status': instagramStatusHandler,
   'instagram-mark-refreshed': instagramMarkRefreshedHandler,
+  'whatsapp-status': whatsappStatusHandler,
   'journal-list': journalListHandler,
   'journal-detail': journalDetailHandler,
   'journal-create': journalCreateHandler,

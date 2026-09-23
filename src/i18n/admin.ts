@@ -441,6 +441,14 @@ const dict = {
       en: (address: string) => address,
       ru: (address: string) => address,
     },
+    // WhatsApp falls back to the number itself, because that IS the identity
+    // and it is the thing she can dial. Never a masked suffix: "WhatsApp user
+    // 550123" is useless when the whole point of the channel is that the
+    // sender is a phone number she may already have on a booking.
+    whatsappSenderFallback: {
+      en: (phone: string) => phone,
+      ru: (phone: string) => phone,
+    },
     noMessagesYet: { en: 'No messages yet', ru: 'Пока нет сообщений' },
     needsVero: { en: 'Needs Vero', ru: 'Нужна Веро' },
     clientBadge: { en: 'Client', ru: 'Клиент' },
@@ -2727,6 +2735,57 @@ const dict = {
     subtitle: {
       en: 'Third-party services that power the site.',
       ru: 'Сторонние сервисы, на которых работает сайт.',
+    },
+
+    // ─── WhatsApp card ────────────────────────────────
+    // Super-only screen, so the copy can be specific rather than reassuring.
+    // Every string here answers "what do I do next", because a half-configured
+    // channel looks identical to a working one from the outside.
+    whatsappTitle: { en: 'WhatsApp messages', ru: 'Сообщения WhatsApp' },
+    whatsappChecking: { en: 'Checking WhatsApp…', ru: 'Проверяю WhatsApp…' },
+    whatsappLoadFailed: { en: 'Could not read WhatsApp status.', ru: 'Не удалось получить статус WhatsApp.' },
+    whatsappLive: { en: 'Connected', ru: 'Подключено' },
+    whatsappPartial: { en: 'Half configured', ru: 'Настроено наполовину' },
+    whatsappOff: { en: 'Not connected', ru: 'Не подключено' },
+    whatsappIntro: {
+      en: 'Inbound messages land in the same inbox as Instagram and email, and replies go out from there. Nothing here answers anyone automatically.',
+      ru: 'Входящие приходят в тот же раздел «Сообщения», что Instagram и почта, ответы отправляются оттуда. Ничего не отвечает автоматически.',
+    },
+    whatsappEnvTitle: { en: 'Credentials', ru: 'Ключи' },
+    whatsappReceiving: { en: 'Receiving', ru: 'Приём' },
+    whatsappSending: { en: 'Sending', ru: 'Отправка' },
+    whatsappWebhookTitle: { en: 'Webhook URL', ru: 'Адрес вебхука' },
+    whatsappWebhookHelp: {
+      en: 'Paste this into Meta, WhatsApp, Configuration, Edit callback URL, with the verify token, then subscribe to the messages field.',
+      ru: 'Вставь этот адрес в Meta: WhatsApp, Configuration, Edit callback URL, вместе с verify token, затем подпишись на поле messages.',
+    },
+    whatsappCopyAria: { en: 'Copy webhook URL', ru: 'Скопировать адрес вебхука' },
+    whatsappCopied: { en: 'Webhook URL copied', ru: 'Адрес вебхука скопирован' },
+    whatsappTrafficTitle: { en: 'Traffic', ru: 'Трафик' },
+    whatsappThreads: {
+      en: (n: number) => (n === 1 ? '1 conversation' : `${n} conversations`),
+      ru: (n: number) => `Диалогов: ${n}`,
+    },
+    whatsappMessages: {
+      en: (n: number) => (n === 1 ? '1 message' : `${n} messages`),
+      ru: (n: number) => `Сообщений: ${n}`,
+    },
+    whatsappLinked: {
+      en: (n: number) => (n === 1 ? '1 matched to a client' : `${n} matched to a client`),
+      ru: (n: number) => `Привязано к клиентам: ${n}`,
+    },
+    whatsappNothingYet: {
+      en: 'Nothing has arrived yet. If the credentials are set, the webhook is probably not subscribed in Meta.',
+      ru: 'Пока ничего не приходило. Если ключи заданы, скорее всего вебхук не подписан в Meta.',
+    },
+    whatsappLastIn: { en: 'Last received', ru: 'Последнее входящее' },
+    whatsappLastOut: { en: 'Last sent', ru: 'Последнее исходящее' },
+    whatsappRefreshAria: { en: 'Recheck WhatsApp', ru: 'Перепроверить WhatsApp' },
+    // The one decision that is not a code problem.
+    whatsappDecisionTitle: { en: 'One decision is still open', ru: 'Осталось одно решение' },
+    whatsappDecisionBody: {
+      en: 'Registering the number to the Cloud API is self-serve and free, but it stops working in the WhatsApp Business app on the phone and its history goes. Keeping the app as well needs Meta business verification and app review, and the number has to be opened in the app roughly every 13 days. The code here works the same either way.',
+      ru: 'Регистрация номера в Cloud API делается самостоятельно и бесплатно, но номер перестаёт работать в приложении WhatsApp Business на телефоне и история пропадает. Чтобы сохранить и приложение, нужны верификация бизнеса и ревью приложения в Meta, а номер придётся открывать в приложении примерно раз в 13 дней. Коду здесь всё равно.',
     },
 
     // ─── Instagram card ───────────────────────────────

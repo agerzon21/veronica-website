@@ -5,6 +5,7 @@ import FaCopy from '../icons/fa/FaCopy';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaInstagram from '../icons/fa/FaInstagram';
+import FaWhatsapp from '../icons/fa/FaWhatsapp';
 import FaSyncAlt from '../icons/fa/FaSyncAlt';
 import FaTerminal from '../icons/fa/FaTerminal';
 import CTAButton from './ui/CTAButton';
@@ -12,9 +13,9 @@ import RebuildSiteButton from './ui/RebuildSiteButton';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * The "Integrations" tab in /admin. Currently just Instagram; will grow
- * as we plug in other third-party services (WhatsApp messaging, Stripe
- * payments, etc.).
+ * The "Integrations" tab in /admin: Instagram, WhatsApp, rebuilds and the
+ * configuration health check. Will grow as other third-party services are
+ * plugged in.
  *
  * Superadmin-only. The parent (Admin.tsx) hides the whole tab when the
  * signed-in level is 'admin' rather than 'super'.
@@ -59,12 +60,282 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
       </VStack>
 
       <InstagramCard adminPassword={adminPassword} />
+      <WhatsAppCard adminPassword={adminPassword} />
       <RebuildCard adminPassword={adminPassword} />
       <ConfigHealthCard adminPassword={adminPassword} />
     </Box>
   );
 };
 
+
+/**
+ * WhatsApp card.
+ *
+ * Reports two things that fail independently and look identical from the
+ * outside: whether the four credentials are set, and whether anything is
+ * actually coming through. All four can be set while Meta was never pointed
+ * at the webhook, in which case the channel is silent and nothing says why;
+ * and messages can be arriving perfectly while the send token is missing, in
+ * which case every reply fails at the moment it matters.
+ *
+ * Split into RECEIVING and SENDING for that reason, rather than one list of
+ * four variables. A single "3 of 4 set" badge would not say which half works.
+ */
+interface WaStatus {
+  configured: boolean;
+  env: Record<string, boolean>;
+  webhookUrl: string;
+  threads: number;
+  linkedThreads: number;
+  messages: number;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+}
+
+function WhatsAppCard({ adminPassword }: { adminPassword: string }) {
+  const { t } = useAdminLang();
+  const toast = useToast();
+  const [status, setStatus] = useState<WaStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/whatsapp-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) setStatus(data as WaStatus);
+      else setError(data.error || t.integrations.whatsappLoadFailed);
+    } catch {
+      setError(t.common.couldNotReach);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminPassword]);
+
+  const copyWebhook = async () => {
+    if (!status) return;
+    try {
+      await navigator.clipboard.writeText(status.webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({
+        title: t.integrations.whatsappCopied,
+        status: 'success',
+        duration: 2000,
+        // Chakra toast cards take pointer events and pause their own dismiss
+        // timer on hover, so one parked over a control freezes the UI.
+        containerStyle: { pointerEvents: 'none' },
+      });
+    } catch {
+      /* Clipboard denied. The URL is on screen and selectable. */
+    }
+  };
+
+  // Receiving and sending each need their own pair, and each pair fails on
+  // its own. Grouped so the card can say which half is working.
+  const RECEIVING = ['WHATSAPP_APP_SECRET', 'WHATSAPP_WEBHOOK_VERIFY_TOKEN'];
+  const SENDING = ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID'];
+  const env = status?.env ?? {};
+  const allSet = (keys: string[]) => keys.every((k) => env[k]);
+  const someSet = (keys: string[]) => keys.some((k) => env[k]);
+
+  const badge = !status
+    ? null
+    : status.configured
+      ? { tone: 'green', label: t.integrations.whatsappLive }
+      : someSet([...RECEIVING, ...SENDING])
+        ? { tone: 'orange', label: t.integrations.whatsappPartial }
+        : { tone: 'gray', label: t.integrations.whatsappOff };
+
+  const when = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : null;
+
+  const EnvRow = ({ k }: { k: string }) => (
+    <HStack spacing={2} align="center">
+      <Icon
+        as={env[k] ? FaCheck : FaExclamationTriangle}
+        boxSize={3}
+        color={env[k] ? 'green.500' : 'orange.500'}
+        flexShrink={0}
+      />
+      <Text fontSize="xs" fontFamily="mono" color="gray.700" wordBreak="break-all">
+        {k}
+      </Text>
+      <Text fontSize="xs" color={env[k] ? 'green.600' : 'orange.600'} fontWeight="400">
+        {env[k] ? t.integrations.configSet : t.integrations.configNotSet}
+      </Text>
+    </HStack>
+  );
+
+  return (
+    <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="sm" p={{ base: 5, md: 7 }} maxW="720px" mt={4}>
+      <Flex align="center" justify="space-between" mb={4} wrap="wrap" gap={3}>
+        <HStack spacing={3}>
+          <Flex
+            w="40px" h="40px" borderRadius="sm" bg="#25D366"
+            align="center" justify="center" color="white" flexShrink={0}
+          >
+            <Icon as={FaWhatsapp} boxSize={5} />
+          </Flex>
+          <VStack align="flex-start" spacing={0}>
+            <Text
+              fontSize={{ base: 'xs', md: '2xs' }}
+              fontWeight="500"
+              textTransform="uppercase"
+              letterSpacing={{ base: '0.15em', md: '0.2em' }}
+              color="brand.accent"
+            >
+              {t.integrations.kicker}
+            </Text>
+            <Text fontSize="md" fontWeight="500" color="gray.800">
+              {t.integrations.whatsappTitle}
+            </Text>
+          </VStack>
+        </HStack>
+        <HStack spacing={2}>
+          {badge && (
+            <Badge fontSize="0.65rem" textTransform="none" fontWeight="500" colorScheme={badge.tone}>
+              {badge.label}
+            </Badge>
+          )}
+          <IconButton
+            aria-label={t.integrations.whatsappRefreshAria}
+            icon={<Icon as={FaSyncAlt} boxSize={3} />}
+            size="xs"
+            variant="ghost"
+            isLoading={loading}
+            onClick={() => void load()}
+          />
+        </HStack>
+      </Flex>
+
+      <Text fontSize="sm" color="gray.600" fontWeight="300" mb={5}>
+        {t.integrations.whatsappIntro}
+      </Text>
+
+      {loading && !status ? (
+        <Text fontSize="sm" color="gray.500" fontWeight="300">{t.integrations.whatsappChecking}</Text>
+      ) : error ? (
+        <Flex align="center" gap={2} bg="red.50" border="1px solid" borderColor="red.200" borderRadius="sm" px={3} py={2}>
+          <Icon as={FaExclamationTriangle} color="red.500" boxSize={3.5} />
+          <Text fontSize="xs" color="red.700" fontWeight="400">{error}</Text>
+        </Flex>
+      ) : status ? (
+        <VStack align="stretch" spacing={5}>
+          {/* Credentials, split by what each half does */}
+          <Box>
+            <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.15em" color="gray.500" mb={2}>
+              {t.integrations.whatsappEnvTitle}
+            </Text>
+            <Stack direction={{ base: 'column', md: 'row' }} spacing={{ base: 3, md: 8 }}>
+              <VStack align="flex-start" spacing={1.5} flex="1" minW={0}>
+                <Text fontSize="xs" fontWeight="500" color={allSet(RECEIVING) ? 'green.600' : 'gray.700'}>
+                  {t.integrations.whatsappReceiving}
+                </Text>
+                {RECEIVING.map((k) => <EnvRow key={k} k={k} />)}
+              </VStack>
+              <VStack align="flex-start" spacing={1.5} flex="1" minW={0}>
+                <Text fontSize="xs" fontWeight="500" color={allSet(SENDING) ? 'green.600' : 'gray.700'}>
+                  {t.integrations.whatsappSending}
+                </Text>
+                {SENDING.map((k) => <EnvRow key={k} k={k} />)}
+              </VStack>
+            </Stack>
+          </Box>
+
+          {/* The URL Meta has to be pointed at */}
+          <Box>
+            <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.15em" color="gray.500" mb={2}>
+              {t.integrations.whatsappWebhookTitle}
+            </Text>
+            <Flex
+              align="center" gap={2} bg="gray.50" border="1px solid" borderColor="gray.200"
+              borderRadius="sm" px={3} py={2}
+            >
+              <Text fontSize="xs" fontFamily="mono" color="gray.700" wordBreak="break-all" flex="1" minW={0}>
+                {status.webhookUrl}
+              </Text>
+              <IconButton
+                aria-label={t.integrations.whatsappCopyAria}
+                icon={<Icon as={copied ? FaCheck : FaCopy} boxSize={3} />}
+                size="xs"
+                variant="ghost"
+                onClick={() => void copyWebhook()}
+              />
+            </Flex>
+            <Text fontSize="xs" color="gray.500" fontWeight="300" mt={2}>
+              {t.integrations.whatsappWebhookHelp}
+            </Text>
+          </Box>
+
+          {/* Whether anything is actually flowing */}
+          <Box>
+            <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.15em" color="gray.500" mb={2}>
+              {t.integrations.whatsappTrafficTitle}
+            </Text>
+            {status.messages === 0 ? (
+              <Text fontSize="xs" color="gray.500" fontWeight="300">
+                {t.integrations.whatsappNothingYet}
+              </Text>
+            ) : (
+              <VStack align="flex-start" spacing={1}>
+                <HStack spacing={2} flexWrap="wrap">
+                  <Text fontSize="sm" color="gray.700" fontWeight="400">
+                    {t.integrations.whatsappThreads(status.threads)}
+                  </Text>
+                  <Text fontSize="sm" color="gray.400">&middot;</Text>
+                  <Text fontSize="sm" color="gray.700" fontWeight="400">
+                    {t.integrations.whatsappMessages(status.messages)}
+                  </Text>
+                  {status.linkedThreads > 0 && (
+                    <>
+                      <Text fontSize="sm" color="gray.400">&middot;</Text>
+                      <Text fontSize="sm" color="gray.700" fontWeight="400">
+                        {t.integrations.whatsappLinked(status.linkedThreads)}
+                      </Text>
+                    </>
+                  )}
+                </HStack>
+                {when(status.lastInboundAt) && (
+                  <Text fontSize="xs" color="gray.500" fontWeight="300">
+                    {t.integrations.whatsappLastIn}: {when(status.lastInboundAt)}
+                  </Text>
+                )}
+                {when(status.lastOutboundAt) && (
+                  <Text fontSize="xs" color="gray.500" fontWeight="300">
+                    {t.integrations.whatsappLastOut}: {when(status.lastOutboundAt)}
+                  </Text>
+                )}
+              </VStack>
+            )}
+          </Box>
+
+          {/* The part no amount of code settles */}
+          <Box pt={4} borderTop="1px solid" borderColor="gray.100">
+            <Text fontSize="xs" fontWeight="500" color="gray.700" mb={1}>
+              {t.integrations.whatsappDecisionTitle}
+            </Text>
+            <Text fontSize="xs" color="gray.600" fontWeight="300" lineHeight="1.7">
+              {t.integrations.whatsappDecisionBody}
+            </Text>
+          </Box>
+        </VStack>
+      ) : null}
+    </Box>
+  );
+}
 
 /**
  * Rebuild card — regenerate the prerendered pages from current database

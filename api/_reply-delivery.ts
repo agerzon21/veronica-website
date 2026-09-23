@@ -19,6 +19,7 @@ import { getDb } from './_db.js';
 import { stripSubjectHeader } from './_subject-strip.js';
 import { applyHouseStyle } from './_house-style.js';
 import { sendIgTextMessage } from './_ig-send.js';
+import { sendWhatsAppTextMessage, WHATSAPP_MAX_TEXT_LEN } from './_whatsapp-send.js';
 import { sendEmailReply, deriveReplySubject } from './_email-send.js';
 import { getResendMessageId } from './_auto-reply.js';
 import {
@@ -163,8 +164,16 @@ export async function deliverReply(
     }
   }
 
-  // IG has a Meta-enforced 1000-char limit; email supports long bodies.
-  const maxLen = convo.platform === 'email' ? MAX_EMAIL_MESSAGE_LEN : MAX_IG_MESSAGE_LEN;
+  // Each channel's own ceiling. IG rejects over 1000, WhatsApp over 4096,
+  // email has no real limit and gets a sane bound instead. Checked here
+  // rather than at the sender so the caller gets a 400 it can explain
+  // instead of a 502 from Meta.
+  const maxLen =
+    convo.platform === 'email'
+      ? MAX_EMAIL_MESSAGE_LEN
+      : convo.platform === 'whatsapp'
+        ? WHATSAPP_MAX_TEXT_LEN
+        : MAX_IG_MESSAGE_LEN;
   if (text.length > maxLen) {
     return {
       ok: false,
@@ -178,7 +187,9 @@ export async function deliverReply(
       ? await sendInstagram(sql, conversationId, convo.external_user_id, text, options.via)
       : convo.platform === 'email'
         ? await sendEmail(sql, conversationId, convo.external_user_id, text, options.via)
-        : null;
+        : convo.platform === 'whatsapp'
+          ? await sendWhatsApp(sql, conversationId, convo.external_user_id, text, options.via)
+          : null;
 
   if (result) {
     // A successful send resolves whatever draft was pending — whether Vero
@@ -198,7 +209,7 @@ export async function deliverReply(
     }
     return result;
   }
-  // WhatsApp / SMS / etc. handlers go here later.
+  // SMS / etc. handlers go here later.
   return {
     ok: false,
     status: 400,
@@ -234,6 +245,54 @@ async function sendInstagram(
     )
     VALUES (
       ${conversationId}, 'outbound', 'human', 'instagram', ${text},
+      ${sendResult.externalMessageId ?? null}, NOW(), ${via}
+    )
+    ON CONFLICT (external_message_id) DO NOTHING
+    RETURNING id, sent_at, external_message_id
+  `) as Array<{ id: string; sent_at: string; external_message_id: string | null }>;
+
+  return { ok: true, status: 200, message: inserted[0] ?? null };
+}
+
+/**
+ * WhatsApp send path.
+ *
+ * Structurally identical to sendInstagram: send first, and INSERT the
+ * outbound row only once Meta has accepted it, so a thread never shows a
+ * message the customer did not receive. That ordering is the opposite of
+ * the inbound webhook's (persist first, ack fast) and both are deliberate.
+ *
+ * The only real difference is the status code. Two of Meta's failures are
+ * permanent facts about the thread rather than transport trouble: the
+ * 24-hour window has closed, or the number is not on WhatsApp. Those come
+ * back as 422, so the panel can show the sentence instead of a retry
+ * button that will never work. Everything else stays 502.
+ */
+async function sendWhatsApp(
+  sql: ReturnType<typeof getDb>,
+  conversationId: string,
+  recipientWaId: string,
+  text: string,
+  via: SentVia,
+): Promise<DeliveryResult> {
+  const sendResult = await sendWhatsAppTextMessage({ recipientWaId, text });
+  if (!sendResult.ok) {
+    const permanent =
+      sendResult.metaCode === 131047 || sendResult.metaCode === 131026;
+    return {
+      ok: false,
+      status: permanent ? 422 : 502,
+      error: sendResult.error || 'WhatsApp send failed',
+    };
+  }
+
+  const inserted = (await sql`
+    INSERT INTO messages (
+      conversation_id, direction, sender, channel, body,
+      external_message_id, sent_at, sent_via
+    )
+    VALUES (
+      ${conversationId}, 'outbound', 'human', 'whatsapp', ${text},
       ${sendResult.externalMessageId ?? null}, NOW(), ${via}
     )
     ON CONFLICT (external_message_id) DO NOTHING
