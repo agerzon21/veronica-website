@@ -1396,6 +1396,39 @@ const dict = {
   },
 
   newClient: {
+
+    // ─── More than one place ──────────────────────────────────────────
+    // A booking that happens in two places is one booking, one contract and
+    // one fee. Everything here is hidden until the button is pressed, so a
+    // single-location booking looks exactly as it did.
+    addPlaceButton: { en: '+ Another place', ru: '+ Ещё место' },
+    placesTitle: { en: 'Where it happens', ru: 'Где проходит съёмка' },
+    placesIntro: {
+      en: 'The day is split across these places, in this order. Each one gets its own line on the contract and its own directions button on the client screen.',
+      ru: 'День разбит по этим местам, в этом порядке. Каждое попадёт отдельной строкой в договор и отдельной кнопкой маршрута на экране клиента.',
+    },
+    placeLabelPlaceholder: { en: 'Proposal', ru: 'Предложение' },
+    placeAddressPlaceholder: { en: 'Street address', ru: 'Адрес' },
+    placeFrom: { en: 'From', ru: 'С' },
+    placeTo: { en: 'To', ru: 'До' },
+    placeFirstIs: { en: 'First place', ru: 'Первое место' },
+    placeFirstNote: {
+      en: 'Taken from the location and time above. The travel fee is measured to this one.',
+      ru: 'Берётся из адреса и времени выше. Плата за дорогу считается до него.',
+    },
+    placeRemoveAria: { en: 'Remove this place', ru: 'Убрать это место' },
+    placeUpAria: { en: 'Move earlier', ru: 'Выше' },
+    placeDownAria: { en: 'Move later', ru: 'Ниже' },
+    placeMaxReached: {
+      en: (n: number) => `That is the most a schedule holds (${n}).`,
+      ru: (n: number) => `Больше мест в расписании не помещается (${n}).`,
+    },
+    schedulePreviewLabel: { en: 'On the contract', ru: 'В договоре' },
+    schedulePreviewHelp: {
+      en: 'Written from the places above. Edit it and it stops following them.',
+      ru: 'Составлено по местам выше. Если отредактировать, обновляться перестанет.',
+    },
+    scheduleResync: { en: 'Rebuild from the places above', ru: 'Собрать заново по местам выше' },
     // Header
     kicker: { en: 'New Client', ru: 'Новый клиент' },
     headline: { en: 'Set up a portal', ru: 'Создать портал' },

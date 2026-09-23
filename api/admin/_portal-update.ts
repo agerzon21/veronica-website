@@ -29,7 +29,7 @@ import { requireAdmin } from '../_admin-auth.js';
 // .js extension is load bearing: an extensionless relative import in anything
 // api/ reaches kills the whole admin API at runtime while the build passes.
 // See scripts/check-api-imports.mjs.
-import { parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
+import { formatSchedule, parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
@@ -160,13 +160,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const existing = (await sql`
       select id, contract_status, contract_template_key, contract_variables,
-             contract_total_amount, contract_retainer_amount
+             contract_total_amount, contract_retainer_amount, session_locations
       from client_portals where id = ${id} limit 1
     `) as Array<{
       id: string;
       contract_status: string;
       contract_template_key: string;
       contract_variables: Record<string, string> | null;
+      // The list as it stands, so the schedule sentence can tell whether it is
+      // still the one this code wrote or one a person typed over it.
+      session_locations: unknown;
       // Needed when only ONE of the two amounts is patched: the other half of
       // the Payment Terms table still has to be re-rendered from something.
       contract_total_amount: string | null;
@@ -322,6 +325,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (composed) {
           patchedVariables = foldDerivedVariables(patchedVariables, existingVars, {
             client_names: composed,
+          });
+        }
+      }
+    }
+
+    /**
+     * Adding a second place has to reach the contract, not just her own list.
+     *
+     * Same shape as the date and the names below: session_locations is a
+     * COLUMN and {{session_schedule}} is the contract VARIABLE composed from
+     * it. Written together by the create form and, before this, never again,
+     * so adding the evening location on the client screen moved the Maps
+     * buttons and the day-of list while the contract carried on describing a
+     * booking in one place. That is the silent half-update this file already
+     * has two other guards against.
+     *
+     * ONLY WHILE IT STILL FOLLOWS. If the stored sentence is exactly the one
+     * formatSchedule produced from the stored list, nobody has touched it and
+     * it can keep tracking. The moment it differs, those are somebody's own
+     * words and this stops writing over them. An empty sentence counts as
+     * following, which is what lets a booking that started in one place pick
+     * the schedule up when it gains a second.
+     *
+     * Never on a signed contract, which is frozen: there the list is
+     * bookkeeping and the document stays byte-identical to what was agreed.
+     */
+    if (Array.isArray(patch.session_locations) && !contractFrozen) {
+      const existingVars = existing[0].contract_variables ?? {};
+      // Only when the contract carries the variable at all. A gallery-only
+      // portal has no contract to keep in step, and a template without the
+      // field would gain a key it never asked for.
+      if ('session_schedule' in existingVars) {
+        const storedList = parseLocations(existing[0].session_locations);
+        const storedSentence = (existingVars.session_schedule ?? '').trim();
+        const followed = formatSchedule(storedList).trim();
+        if (!storedSentence || storedSentence === followed) {
+          patchedVariables = foldDerivedVariables(patchedVariables, existingVars, {
+            // Blank on a booking that has come back down to one place, which
+            // prunes the SESSION SCHEDULE section away exactly as never
+            // having had one would.
+            session_schedule: formatSchedule(parseLocations(patch.session_locations)),
           });
         }
       }

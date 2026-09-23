@@ -37,6 +37,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomBytes } from 'node:crypto';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+import { parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
 import { sendEmail } from '../_auto-reply.js';
 import {
   CONTRACT_TEMPLATES,
@@ -248,6 +249,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         returning id
       `) as Array<{ id: string }>;
       portalId = inserted[0].id;
+
+      /**
+       * The day-of list, when the booking happens in more than one place.
+       *
+       * A SEPARATE statement rather than two more columns on the insert
+       * above, because the insert is the path every existing booking takes
+       * and this is the path almost none of them do. Skipped entirely when
+       * nothing was sent, so a single-place create runs exactly the SQL it
+       * ran before this existed.
+       *
+       * session_location is written from primaryAddress in the SAME
+       * statement, which is the invariant src/data/sessionLocations.ts
+       * exists to hold: the list is the truth, the single column is the
+       * first entry that has an address, and the eight readers that can only
+       * hold one address keep getting a real address rather than a summary
+       * of several. Two statements could leave them disagreeing.
+       */
+      if (Array.isArray(body.session_locations) && body.session_locations.length > 0) {
+        const locations = parseLocations(body.session_locations);
+        if (locations.length > 0) {
+          const primary = primaryAddress(locations);
+          await sql`
+            update client_portals
+               set session_locations = ${JSON.stringify(locations)}::jsonb,
+                   session_location  = ${primary || null},
+                   updated_at        = now()
+             where id = ${portalId}
+          `;
+        }
+      }
     } else {
       // Simple mode: a gallery-only delivery (no contract, no login email,
       // no setup token). Optional fields can come in: display name,

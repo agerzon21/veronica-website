@@ -23,6 +23,14 @@ import {
   toSessionType,
 } from './clientPrefill';
 import { fmtAdminDate } from '../utils/adminDate';
+import {
+  EMPTY_LOCATION,
+  MAX_LOCATIONS,
+  formatSchedule,
+  isMultiLocation,
+  parseLocations,
+  type SessionLocation,
+} from '../data/sessionLocations';
 import ConversationPeek from './ConversationPeek';
 import ConfirmDialog from './ui/ConfirmDialog';
 import {
@@ -376,6 +384,26 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       ) ?? 'specific',
   );
   const [customCoverage, setCustomCoverage] = useState('');
+
+  /**
+   * The SECOND and later places, when a booking happens in more than one.
+   *
+   * Empty is the normal case and the whole block stays hidden, so a booking
+   * in one place submits exactly the payload it did before this existed. The
+   * FIRST place is not held here: it is the location and time fields above,
+   * because the travel fee is measured to it and duplicating the address into
+   * a row would give this screen two answers to one question.
+   */
+  const [extraPlaces, setExtraPlaces] = useState<SessionLocation[]>([]);
+  /**
+   * The schedule sentence, once she has edited it.
+   *
+   * null means "still following the places above", which is what it does
+   * until she types. Same shape as galleryPasswordOverride, and for the same
+   * reason: a derived value that silently overwrites a person's own words is
+   * worse than one that visibly stops deriving.
+   */
+  const [scheduleOverride, setScheduleOverride] = useState<string | null>(null);
 
   // 'other' only: Vero's own word for the shoot. It is what the portal is
   // filed under (session_type) and what the auto event title is built from.
@@ -814,6 +842,46 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     setVariables((prev) => ({ ...prev, [key]: value }));
   };
 
+  // ─── Where it happens, derived ───
+  //
+  // ONE list, built from the fields that already exist plus whatever extra
+  // places she added. The first entry is the location and time above, so
+  // there is exactly one place on this screen where the main address lives
+  // and the travel fee cannot end up measured to a different one.
+  //
+  // parseLocations drops the empty rows, which is what makes an untouched
+  // form produce an empty list and every derived value below fall back to
+  // today's behaviour.
+  const firstPlace: SessionLocation = {
+    label: '',
+    address: (variables.event_location ?? '').trim(),
+    // Only a specific-times booking has clock times to put on a line. A
+    // half-day package has no start to print, and printing the preset's
+    // placeholder pair would put a time on the contract nobody agreed to.
+    starts_at: coverage === 'specific' && eventStartTime ? fmtTime12h(eventStartTime) : '',
+    ends_at: coverage === 'specific' && eventEndTime ? fmtTime12h(eventEndTime) : '',
+  };
+  const allPlaces = parseLocations([firstPlace, ...extraPlaces]);
+  const multiPlace = isMultiLocation(allPlaces);
+  const derivedSchedule = formatSchedule(allPlaces);
+  // What the contract will actually say. The override wins once she types,
+  // and reverts to following the places the moment she clears it.
+  const scheduleText = scheduleOverride ?? derivedSchedule;
+
+  const addPlace = () =>
+    setExtraPlaces((p) => (p.length + 1 >= MAX_LOCATIONS ? p : [...p, { ...EMPTY_LOCATION }]));
+  const setPlace = (i: number, key: keyof SessionLocation, v: string) =>
+    setExtraPlaces((p) => p.map((row, j) => (j === i ? { ...row, [key]: v } : row)));
+  const removePlace = (i: number) => setExtraPlaces((p) => p.filter((_, j) => j !== i));
+  const movePlace = (i: number, by: number) =>
+    setExtraPlaces((p) => {
+      const j = i + by;
+      if (j < 0 || j >= p.length) return p;
+      const next = [...p];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+
   // ─── Travel, derived ───
   //
   // The session price and the travel fee are held apart right up to submit.
@@ -1118,6 +1186,15 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       // box ticked before the type was switched cannot ride along into a
       // contract that never showed it.
       ...Object.fromEntries(offeredClauses.map((k) => [k, clauseFlags[k] ? 'yes' : ''])),
+      /**
+       * The SESSION SCHEDULE section's gate.
+       *
+       * Empty on a single-place booking, which is what makes the section
+       * prune away and the contract render byte for byte as it did before
+       * this feature existed. Non-empty only when the day genuinely happens
+       * in more than one place, or when she wrote the sentence herself.
+       */
+      session_schedule: multiPlace || scheduleOverride !== null ? scheduleText : '',
     };
     // For date fields where the user typed an ISO date (e.g. effective_date
     // from the date picker), convert to friendly form for the contract.
@@ -1154,6 +1231,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           // Links portal ↔ conversation so the inbox shows the CLIENT badge
           // and Vero can jump between the two.
           link_to_conversation_id: prefill?.conversationId ?? null,
+          /**
+           * The day-of list, for her own screen rather than the contract.
+           *
+           * Sent ONLY when the booking is genuinely in more than one place.
+           * A single-place booking sends null and the create handler skips
+           * the write entirely, so the row it produces is identical to one
+           * produced before this existed. The handler mirrors the first
+           * address into session_location, which the eight single-address
+           * readers keep using unchanged.
+           */
+          session_locations: multiPlace ? allPlaces : null,
         }),
       });
       const data = await res.json();
@@ -1665,7 +1753,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
             {t.newClient.contractDetailsIntro}
           </Text>
 
-          {fields.map((f) => (
+          {/* session_schedule is written by the places editor below, which
+              is attached to the location field the day is actually planned
+              around. Left in the generic loop it would render a second,
+              empty box asking the same question in prose. */}
+          {fields.filter((f) => f.key !== 'session_schedule').map((f) => (
             // The travel block rides directly under the location field rather
             // than living in its own section, because the three inputs are one
             // question: where is it, how far is that, and how long does it
@@ -1678,6 +1770,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                 hasError={fieldErrors.has(varFieldId(f.key))}
                 onChange={(v) => { handleVarChange(f.key, v); clearFieldError(varFieldId(f.key)); }}
               />
+              {f.key === 'event_location' && (
+                <PlacesBlock
+                  t={t}
+                  places={extraPlaces}
+                  atMax={extraPlaces.length + 1 >= MAX_LOCATIONS}
+                  firstAddress={firstPlace.address}
+                  firstStart={firstPlace.starts_at}
+                  firstEnd={firstPlace.ends_at}
+                  schedule={scheduleText}
+                  derivedSchedule={derivedSchedule}
+                  edited={scheduleOverride !== null}
+                  onAdd={addPlace}
+                  onSet={setPlace}
+                  onRemove={removePlace}
+                  onMove={movePlace}
+                  onScheduleChange={setScheduleOverride}
+                />
+              )}
               {f.key === 'event_location' && (
                 <TravelBlock
                   copy={tv}
@@ -2336,6 +2446,239 @@ function TravelCustomLink({
       cursor="pointer"
     >
       {label}
+    </Box>
+  );
+}
+
+/**
+ * More than one place, on the New Client form.
+ *
+ * COLLAPSED TO ONE BUTTON until she presses it. A booking in one place is
+ * almost all of them, and a screen that asks every booking to justify being
+ * in one place is worse for the common case than it is better for the rare
+ * one. Pressing it adds a row; removing the last row puts the button back.
+ *
+ * The FIRST place is shown but not editable here. It is the location and
+ * time fields directly above, and the travel fee is measured to it, so
+ * giving it a second set of inputs would let this screen hold two different
+ * answers to where the shoot starts. Shown rather than hidden because the
+ * order is the point: she is reading a schedule, and a schedule missing its
+ * first line reads as if the day starts at 6:30.
+ */
+function PlacesBlock({
+  t,
+  places,
+  atMax,
+  firstAddress,
+  firstStart,
+  firstEnd,
+  schedule,
+  derivedSchedule,
+  edited,
+  onAdd,
+  onSet,
+  onRemove,
+  onMove,
+  onScheduleChange,
+}: {
+  t: ReturnType<typeof useAdminLang>['t'];
+  places: SessionLocation[];
+  atMax: boolean;
+  firstAddress: string;
+  firstStart: string;
+  firstEnd: string;
+  schedule: string;
+  derivedSchedule: string;
+  edited: boolean;
+  onAdd: () => void;
+  onSet: (i: number, key: keyof SessionLocation, v: string) => void;
+  onRemove: (i: number) => void;
+  onMove: (i: number, by: number) => void;
+  onScheduleChange: (v: string | null) => void;
+}) {
+  // Grows to fit whatever it holds, at whatever width it is being read at.
+  //
+  // Re-measured on resize as well as on content, because how many visual
+  // lines a place takes is a function of the WIDTH, not of the text: the
+  // same two places are two lines on a laptop and five on a phone. Measuring
+  // once would fit the width it happened to mount at and clip after a
+  // rotation.
+  const scheduleRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const fit = () => {
+      const el = scheduleRef.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [schedule, places.length]);
+
+  if (places.length === 0) {
+    return (
+      <Button
+        mt={3}
+        size="sm"
+        variant="outline"
+        fontWeight="400"
+        borderColor="gray.300"
+        color="gray.600"
+        _hover={{ borderColor: 'brand.accent', color: 'brand.accent' }}
+        onClick={onAdd}
+      >
+        {t.newClient.addPlaceButton}
+      </Button>
+    );
+  }
+
+  const when = firstStart && firstEnd ? `${firstStart} to ${firstEnd}` : firstStart || firstEnd;
+
+  return (
+    <Box mt={4} p={{ base: 3, md: 4 }} bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="sm">
+      <Text fontSize="2xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={1}>
+        {t.newClient.placesTitle}
+      </Text>
+      <Text fontSize="xs" color="gray.500" fontWeight="300" mb={4} lineHeight="1.6">
+        {t.newClient.placesIntro}
+      </Text>
+
+      <VStack align="stretch" spacing={3}>
+        {/* Place one, read-only, so the schedule reads in order */}
+        <Flex
+          align="flex-start" gap={3} bg="white" border="1px solid" borderColor="gray.200"
+          borderRadius="sm" px={3} py={2.5}
+        >
+          <Text fontSize="sm" fontWeight="500" color="gray.400" w="18px" flexShrink={0} lineHeight="1.6">1</Text>
+          <Box minW={0} flex="1">
+            <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.15em" color="gray.400" mb={0.5}>
+              {t.newClient.placeFirstIs}
+            </Text>
+            <Text fontSize="sm" color={firstAddress ? 'gray.800' : 'gray.400'} fontWeight="400" wordBreak="break-word">
+              {firstAddress || t.newClient.placeAddressPlaceholder}
+              {when ? `, ${when}` : ''}
+            </Text>
+            <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
+              {t.newClient.placeFirstNote}
+            </Text>
+          </Box>
+        </Flex>
+
+        {places.map((row, i) => (
+          <Box key={i} bg="white" border="1px solid" borderColor="gray.200" borderRadius="sm" px={3} py={2.5}>
+            <Flex align="center" gap={2} mb={2}>
+              <Text fontSize="sm" fontWeight="500" color="gray.400" w="18px" flexShrink={0}>{i + 2}</Text>
+              <Input
+                value={row.label}
+                onChange={(e) => onSet(i, 'label', e.target.value)}
+                placeholder={t.newClient.placeLabelPlaceholder}
+                h="36px" bg="white" border="1px solid" borderColor="gray.300"
+                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm" maxW="220px"
+                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+              />
+              <Box flex="1" />
+              {/* Real buttons, so the order can be changed from a keyboard */}
+              <Button
+                size="xs" variant="ghost" color="gray.500" aria-label={t.newClient.placeUpAria}
+                isDisabled={i === 0} onClick={() => onMove(i, -1)}
+              >
+                &uarr;
+              </Button>
+              <Button
+                size="xs" variant="ghost" color="gray.500" aria-label={t.newClient.placeDownAria}
+                isDisabled={i === places.length - 1} onClick={() => onMove(i, 1)}
+              >
+                &darr;
+              </Button>
+              <Button
+                size="xs" variant="ghost" color="red.400" aria-label={t.newClient.placeRemoveAria}
+                onClick={() => onRemove(i)}
+              >
+                &times;
+              </Button>
+            </Flex>
+            <Input
+              value={row.address}
+              onChange={(e) => onSet(i, 'address', e.target.value)}
+              placeholder={t.newClient.placeAddressPlaceholder}
+              h="44px" bg="white" border="1px solid" borderColor="gray.300"
+              fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm" mb={2}
+              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+            />
+            <Stack direction={{ base: 'column', sm: 'row' }} spacing={2}>
+              <Input
+                value={row.starts_at}
+                onChange={(e) => onSet(i, 'starts_at', e.target.value)}
+                placeholder={t.newClient.placeFrom}
+                aria-label={t.newClient.placeFrom}
+                h="44px" bg="white" border="1px solid" borderColor="gray.300"
+                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+              />
+              <Input
+                value={row.ends_at}
+                onChange={(e) => onSet(i, 'ends_at', e.target.value)}
+                placeholder={t.newClient.placeTo}
+                aria-label={t.newClient.placeTo}
+                h="44px" bg="white" border="1px solid" borderColor="gray.300"
+                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+              />
+            </Stack>
+          </Box>
+        ))}
+      </VStack>
+
+      {!atMax ? (
+        <Button
+          mt={3} size="sm" variant="outline" fontWeight="400" borderColor="gray.300" color="gray.600"
+          _hover={{ borderColor: 'brand.accent', color: 'brand.accent' }}
+          onClick={onAdd}
+        >
+          {t.newClient.addPlaceButton}
+        </Button>
+      ) : (
+        <Text fontSize="xs" color="gray.500" fontWeight="300" mt={3}>
+          {t.newClient.placeMaxReached(MAX_LOCATIONS)}
+        </Text>
+      )}
+
+      {/* Exactly what the contract will say, before it is written */}
+      <Box mt={5} pt={4} borderTop="1px solid" borderColor="gray.200">
+        <Text fontSize="2xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="brand.accent" mb={2}>
+          {t.newClient.schedulePreviewLabel}
+        </Text>
+        <Textarea
+          ref={scheduleRef}
+          value={schedule}
+          // null puts it back to following the places. Clearing the box is
+          // how you ask for that, so an empty string is read as null rather
+          // than as "the contract says nothing".
+          onChange={(e) => onScheduleChange(e.target.value.trim() ? e.target.value : null)}
+          // Height comes from scrollHeight, not from a rows count. A rows
+          // count is a count of LINES, and on a phone each of these lines
+          // wraps to two or three, so rows={2} clipped the second place off
+          // the bottom of the box on the screen where she is most likely to
+          // be reading it back.
+          rows={1}
+          overflow="hidden"
+          resize="none"
+          bg="white" border="1px solid" borderColor="gray.300" color="gray.800"
+          fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+        />
+        <Flex align="center" justify="space-between" gap={3} mt={1.5} wrap="wrap">
+          <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.5">
+            {t.newClient.schedulePreviewHelp}
+          </Text>
+          {edited && schedule !== derivedSchedule && (
+            <Button size="xs" variant="link" color="brand.accent" fontWeight="400" onClick={() => onScheduleChange(null)}>
+              {t.newClient.scheduleResync}
+            </Button>
+          )}
+        </Flex>
+      </Box>
     </Box>
   );
 }
