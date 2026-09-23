@@ -1406,6 +1406,29 @@ const dict = {
     // one fee. Everything here is hidden until the button is pressed, so a
     // single-location booking looks exactly as it did.
     addPlaceButton: { en: '+ Another place', ru: '+ Ещё место' },
+    // ─── The drive to a place after the first ─────────────────────────
+    placeFromLabel: { en: 'Getting there from', ru: 'Едешь туда от' },
+    placeFromPrevious: { en: 'the place before it', ru: 'предыдущего места' },
+    placeFromHome: { en: 'home', ru: 'дома' },
+    placeMilesLabel: { en: 'Miles one way', ru: 'Миль в одну сторону' },
+    placeLookItUp: { en: 'Look it up', ru: 'Посмотреть' },
+    placeLookNeedsBoth: {
+      en: 'Fill in both addresses first and this opens directions between them.',
+      ru: 'Заполни оба адреса, и откроется маршрут между ними.',
+    },
+    placeMilesHelp: {
+      en: 'Added to the miles above, so the travel fee covers the whole day. The round trip is counted as coming home the way you went.',
+      ru: 'Добавится к милям выше, чтобы плата за дорогу покрыла весь день. Обратный путь считается тем же маршрутом.',
+    },
+    placeLegsTotal: {
+      en: (n: number) => `${n} miles one way across the day`,
+      ru: (n: number) => `${n} миль в одну сторону за весь день`,
+    },
+    // ─── "That is a place name, not an address" ───────────────────────
+    addressLooksIncomplete: {
+      en: 'That looks like a place name, not a street address. Open Look it up, copy the full address off Google Maps and paste it here, or the Directions button will have nothing to navigate to on the day.',
+      ru: 'Похоже на название места, а не на адрес. Нажми «Посмотреть», скопируй полный адрес из Google Maps и вставь сюда, иначе в день съёмки кнопке «Маршрут» некуда будет вести.',
+    },
     placesTitle: { en: 'Where it happens', ru: 'Где проходит съёмка' },
     placesIntro: {
       en: 'The day is split across these places, in this order. Each one gets its own line on the contract and its own directions button on the client screen.',

@@ -257,6 +257,54 @@ const todayYmd = (): string => {
 
 // ─── Component ─────────────────────────────────────────────────────────
 
+/**
+ * A place after the first, as the FORM holds it.
+ *
+ * SessionLocation plus the leg she drives to reach it. The two extra keys are
+ * about the day's mileage, not about the day, so they never reach the
+ * database: parseLocations builds a fresh object from the four fields it
+ * knows and drops everything else, which is what lets this type be the wider
+ * one here without the stored list gaining anything.
+ */
+type PlaceRow = SessionLocation & {
+  /** Where she sets off from to reach it. */
+  from: 'previous' | 'home';
+  /** One way, as Google Maps prints it for that hop. */
+  miles: string;
+};
+
+const EMPTY_PLACE_ROW: PlaceRow = { ...EMPTY_LOCATION, from: 'previous', miles: '' };
+
+/**
+ * Directions between two places, neither of which is her home.
+ *
+ * Built in the browser on purpose, unlike the main Look it up, which has to
+ * go through api/admin/_travel-link.ts because its origin IS her home address
+ * and the client bundle is public. Both ends of this one are the client's own
+ * venues, already on this screen and already going into their contract, so
+ * there is nothing here to keep off it.
+ */
+const legDirectionsUrl = (origin: string, destination: string) =>
+  `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}` +
+  `&destination=${encodeURIComponent(destination)}`;
+
+/**
+ * Does this read like somewhere a phone can navigate to?
+ *
+ * "Gill's Place" resolves on the one map app that happens to know it and
+ * nowhere else, and the failure lands on the morning of the shoot, in the
+ * car, with the client waiting. A street address has a number in it; a PO box
+ * or a rural route has its own shape. Deliberately loose: this only ever puts
+ * a sentence on the screen, never blocks a save, so the cost of it being
+ * wrong is one sentence she ignores.
+ */
+const looksLikeStreetAddress = (raw: string): boolean => {
+  const v = (raw ?? '').trim();
+  if (v.length < 8) return false;
+  if (/\d/.test(v) && /\s/.test(v)) return true;
+  return /\b(po box|rural route|rr\s*\d)/i.test(v);
+};
+
 const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly }: Props) => {
   const { t, lang } = useAdminLang();
   // Travel copy lives in its own module rather than in the admin dictionary,
@@ -394,7 +442,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * because the travel fee is measured to it and duplicating the address into
    * a row would give this screen two answers to one question.
    */
-  const [extraPlaces, setExtraPlaces] = useState<SessionLocation[]>([]);
+  const [extraPlaces, setExtraPlaces] = useState<PlaceRow[]>([]);
   /**
    * The schedule sentence, once she has edited it.
    *
@@ -869,9 +917,22 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const scheduleText = scheduleOverride ?? derivedSchedule;
 
   const addPlace = () =>
-    setExtraPlaces((p) => (p.length + 1 >= MAX_LOCATIONS ? p : [...p, { ...EMPTY_LOCATION }]));
-  const setPlace = (i: number, key: keyof SessionLocation, v: string) =>
-    setExtraPlaces((p) => p.map((row, j) => (j === i ? { ...row, [key]: v } : row)));
+    setExtraPlaces((p) => (p.length + 1 >= MAX_LOCATIONS ? p : [...p, { ...EMPTY_PLACE_ROW }]));
+  const setPlace = (i: number, key: keyof PlaceRow, v: string) =>
+    setExtraPlaces((p) =>
+      p.map((row, j) => {
+        if (j !== i) return row;
+        const next = { ...row, [key]: v };
+        // Changing a leg reopens the travel question, for the same reason
+        // editing the main mileage does: a fee agreed against one distance
+        // must not quietly become a different fee.
+        if (key === 'miles' || key === 'from') {
+          setTravelStatus('none');
+          setTravelOverride(null);
+        }
+        return next;
+      }),
+    );
   const removePlace = (i: number) => setExtraPlaces((p) => p.filter((_, j) => j !== i));
   const movePlace = (i: number, by: number) =>
     setExtraPlaces((p) => {
@@ -896,8 +957,26 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   // reproducible from the contract. What the minutes buy is the long haul
   // checklist and the typo guard, both of which need to know how long she is
   // actually going to be in the car.
+  /**
+   * Every leg she actually drives, added up.
+   *
+   * The main field is home to the first place. Each extra place adds the hop
+   * she looked up for it, whether that hop starts at the place before it or
+   * back at home, because either way it is miles under her wheels on the day.
+   *
+   * ROUND TRIP IS TWICE THE SUM, which quoteTravel does by doubling. That
+   * assumes she comes home the way she went, which is exactly true for a
+   * there-and-back-again day and close enough for the rest: the alternative
+   * is asking her for a third and fourth number off a screen she is reading
+   * in a hurry, to move a fee by a few dollars.
+   */
+  const extraLegMiles = extraPlaces.reduce(
+    (sum, row) => sum + (parseMiles(row.miles ?? '') ?? 0),
+    0,
+  );
+  const baseLegMiles = parseMiles(travelMilesOneWay);
   const travelQuote = quoteTravel(
-    parseMiles(travelMilesOneWay) ?? NaN,
+    baseLegMiles === null ? NaN : baseLegMiles + extraLegMiles,
     parseDriveTimeMinutes(travelMinutesOneWay),
   );
   // The ONE number every surface reads: her figure when she agreed one, the
@@ -939,6 +1018,39 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     setTravelCustomInput('');
   };
 
+  /**
+   * Directions for ONE hop of the day.
+   *
+   * From home it goes through the server, for the same reason the main Look
+   * it up does: the origin is her home address and this bundle is public.
+   * From the place before it, both ends are the client's own venues, already
+   * on this screen and already going into their contract, so the link is
+   * built here and no round trip is needed.
+   */
+  const openLegLookup = async (i: number) => {
+    const row = extraPlaces[i];
+    const destination = (row?.address ?? '').trim();
+    if (!destination) {
+      setTravelLinkNote(t.newClient.placeLookNeedsBoth);
+      return;
+    }
+    if (row.from === 'home') {
+      await openTravelLookupFor(destination);
+      return;
+    }
+    // The nearest place above it that has an address: the one she is actually
+    // driving from. Falls back to the main location, which is place one.
+    let origin = '';
+    for (let j = i - 1; j >= 0 && !origin; j--) origin = (extraPlaces[j].address ?? '').trim();
+    if (!origin) origin = (variables.event_location ?? '').trim();
+    if (!origin) {
+      setTravelLinkNote(t.newClient.placeLookNeedsBoth);
+      return;
+    }
+    setTravelLinkNote('');
+    window.open(legDirectionsUrl(origin, destination), '_blank', 'noopener,noreferrer');
+  };
+
   /** Opens the money box on the computed figure, so agreeing to it is one tap. */
   const openTravelCustom = () => {
     const start = travelOverride ?? travelQuote?.fee ?? null;
@@ -974,8 +1086,9 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * in this file. See that handler for exactly what does and does not reach the
    * browser as a result.
    */
-  const openTravelLookup = async () => {
-    const destination = (variables.event_location ?? '').trim();
+  const openTravelLookup = () => openTravelLookupFor((variables.event_location ?? '').trim());
+
+  const openTravelLookupFor = async (destination: string) => {
     if (!destination) {
       setTravelLinkNote(tv.noAddressYet);
       return;
@@ -1770,6 +1883,16 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                 hasError={fieldErrors.has(varFieldId(f.key))}
                 onChange={(v) => { handleVarChange(f.key, v); clearFieldError(varFieldId(f.key)); }}
               />
+              {/* Same sentence as the one under an extra place, and for the
+                  same reason: this address is what the client portal shows
+                  and what the Directions button drives to on the day. */}
+              {f.key === 'event_location' &&
+                (variables.event_location ?? '').trim() &&
+                !looksLikeStreetAddress(variables.event_location ?? '') && (
+                  <Text fontSize="xs" color="orange.600" fontWeight="300" mt={2} lineHeight="1.5">
+                    {t.newClient.addressLooksIncomplete}
+                  </Text>
+                )}
               {f.key === 'event_location' && (
                 <PlacesBlock
                   t={t}
@@ -1786,6 +1909,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                   onRemove={removePlace}
                   onMove={movePlace}
                   onScheduleChange={setScheduleOverride}
+                  onLookupLeg={openLegLookup}
                 />
               )}
               {f.key === 'event_location' && (
@@ -1793,6 +1917,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                   copy={tv}
                   address={variables.event_location ?? ''}
                   oneWayMiles={travelMilesOneWay}
+                  extraLegMiles={extraLegMiles}
                   oneWayMinutes={travelMinutesOneWay}
                   onMilesChange={applyTravelMiles}
                   onMinutesChange={setTravelMinutesOneWay}
@@ -2054,6 +2179,7 @@ function TravelBlock({
   copy,
   address,
   oneWayMiles,
+  extraLegMiles = 0,
   oneWayMinutes,
   onMilesChange,
   onMinutesChange,
@@ -2078,6 +2204,8 @@ function TravelBlock({
   copy: TravelCopy;
   address: string;
   oneWayMiles: string;
+  /** Miles from the hops to any places after the first. */
+  extraLegMiles?: number;
   oneWayMinutes: string;
   onMilesChange: (v: string) => void;
   onMinutesChange: (v: string) => void;
@@ -2173,6 +2301,16 @@ function TravelBlock({
             onChange={(e) => onMilesChange(e.target.value)}
             placeholder={copy.milesPlaceholder}
           />
+          {/* What the fee is actually being worked out from, once the day has
+              more than one place in it. Without this the box says 103 and the
+              fee is priced off 139, and there is nothing on the screen that
+              explains the difference. */}
+          {extraLegMiles > 0 && (
+            <Text fontSize="xs" color="brand.accentText" fontWeight="400" mt={1.5}>
+              + {extraLegMiles} between places ={' '}
+              {Math.round(((parseMiles(oneWayMiles) ?? 0) + extraLegMiles) * 10) / 10} one way
+            </Text>
+          )}
         </Field>
         <Field label={copy.minutesLabel} helpText={copy.minutesHelp} w={{ base: '100%', md: '50%' }}>
           {/* TEXT, not number: Maps prints "2 hr 2 min" and she should be able
@@ -2480,9 +2618,10 @@ function PlacesBlock({
   onRemove,
   onMove,
   onScheduleChange,
+  onLookupLeg,
 }: {
   t: ReturnType<typeof useAdminLang>['t'];
-  places: SessionLocation[];
+  places: PlaceRow[];
   atMax: boolean;
   firstAddress: string;
   firstStart: string;
@@ -2491,10 +2630,11 @@ function PlacesBlock({
   derivedSchedule: string;
   edited: boolean;
   onAdd: () => void;
-  onSet: (i: number, key: keyof SessionLocation, v: string) => void;
+  onSet: (i: number, key: keyof PlaceRow, v: string) => void;
   onRemove: (i: number) => void;
   onMove: (i: number, by: number) => void;
   onScheduleChange: (v: string | null) => void;
+  onLookupLeg: (i: number) => void;
 }) {
   // Grows to fit whatever it holds, at whatever width it is being read at.
   //
@@ -2626,6 +2766,63 @@ function PlacesBlock({
                 _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
               />
             </Stack>
+
+            {/* "That is a place name, not an address."
+                Never blocks anything. It is here because the cost of the
+                mistake lands in the car on the morning of the shoot, when
+                the Directions button has nothing to navigate to. */}
+            {row.address.trim() && !looksLikeStreetAddress(row.address) && (
+              <Text fontSize="xs" color="orange.600" fontWeight="300" mt={2} lineHeight="1.5">
+                {t.newClient.addressLooksIncomplete}
+              </Text>
+            )}
+
+            {/* The drive to THIS place. */}
+            <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.100">
+              <Stack direction={{ base: 'column', md: 'row' }} spacing={2} align={{ md: 'flex-end' }}>
+                <Box flex="1" minW={0}>
+                  <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.12em" color="gray.500" mb={1}>
+                    {t.newClient.placeFromLabel}
+                  </Text>
+                  <Select
+                    value={row.from}
+                    onChange={(e) => onSet(i, 'from', e.target.value)}
+                    h="44px" bg="white" border="1px solid" borderColor="gray.300"
+                    fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+                  >
+                    <option value="previous">{t.newClient.placeFromPrevious}</option>
+                    <option value="home">{t.newClient.placeFromHome}</option>
+                  </Select>
+                </Box>
+                <Box flex="1" minW={0}>
+                  <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.12em" color="gray.500" mb={1}>
+                    {t.newClient.placeMilesLabel}
+                  </Text>
+                  <Input
+                    value={row.miles}
+                    onChange={(e) => onSet(i, 'miles', e.target.value)}
+                    placeholder="0"
+                    inputMode="decimal"
+                    aria-label={t.newClient.placeMilesLabel}
+                    h="44px" bg="white" border="1px solid" borderColor="gray.300"
+                    fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+                  />
+                </Box>
+                <Button
+                  size="sm" variant="outline" fontWeight="400" h="44px"
+                  borderColor="brand.accentBorder" color="brand.accentText"
+                  _hover={{ borderColor: 'brand.accent' }}
+                  onClick={() => onLookupLeg(i)}
+                >
+                  {t.newClient.placeLookItUp}
+                </Button>
+              </Stack>
+              <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1.5} lineHeight="1.5">
+                {t.newClient.placeMilesHelp}
+              </Text>
+            </Box>
           </Box>
         ))}
       </VStack>
