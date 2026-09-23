@@ -902,7 +902,7 @@ const Portal = () => {
           sprite sheet. It replaces a single 913 KB photograph and costs about
           220 KB, and it carries its own still fallback for a connection that
           cannot afford it. PortalMosaic has the whole argument. */}
-      <PortalMosaic veil={{ base: 0.62, md: 0.55 }} />
+      <PortalMosaic veil={0.62} />
 
       <Flex
         position="relative"
@@ -958,14 +958,18 @@ const Portal = () => {
 
                   The soft spot shrinks with it, which is most of the point:
                   less type to carry means less of the mosaic covered. */}
-              <VStack spacing={{ base: 3, md: 4 }} w="100%">
-                <SoftSpot spot={SPOT.eyebrow}>
+              {/* ONE soft spot behind the whole header, not four.
+                  This is the version that was approved and shipped, restored
+                  from what was actually running rather than rebuilt from a
+                  description of it. Four spots hugging four lines were my
+                  idea of "individually tweakable" and they read as four
+                  objects however they were tuned; this reads as a thinning
+                  of the background, which is what a bald spot is. */}
+              <Box position="relative" w="100%">
+                <PortalHalo w="1180px" h="520px" />
+                <VStack spacing={{ base: 3, md: 4 }} position="relative">
                   <Text textStyle="eyebrow">Client portal</Text>
-                </SoftSpot>
-                <SoftSpot spot={SPOT.rule}>
                   <Box w="40px" h="1px" bg="brand.accent" />
-                </SoftSpot>
-                <SoftSpot spot={SPOT.title}>
                   <Text
                     as="h1"
                     textStyle="contentTitle"
@@ -976,8 +980,8 @@ const Portal = () => {
                   >
                     A home for every story
                   </Text>
-                </SoftSpot>
-              </VStack>
+                </VStack>
+              </Box>
 
               {/* Two doors, one open.
 
@@ -1130,14 +1134,31 @@ const Portal = () => {
                   box shrinks to its content, and the gradient is measured
                   against that box. The plateau runs to 78% so the words sit
                   on the flat part and only the padding does the fading. */}
-              <Box pt={2} w="100%">
-                <SoftSpot spot={SPOT.offramp}>
+              <Box pt={2} textAlign="center">
                 <Box
                   display="inline-flex"
                   alignItems="baseline"
                   flexWrap="wrap"
                   justifyContent="center"
                   gap={2}
+                  px={4}
+                  py={1.5}
+                  // A SOLID CORE WITH A SOFT GLOW, not a gradient.
+                  //
+                  // A radial gradient measures distance from its centre on
+                  // both axes at once, so a spot sized to hug one line of
+                  // text puts the ENDS of that line near a corner, where the
+                  // normalised distance is already past the plateau however
+                  // wide the plateau is. The arrow and the last word kept
+                  // landing at 3:1 while the middle read fine.
+                  //
+                  // A flat background with a blurred, spread box-shadow in
+                  // the same colour gives a core that is even across every
+                  // glyph and a falloff that happens entirely OUTSIDE the
+                  // box. It also hugs, which is the point: the core is
+                  // exactly the sentence plus its padding.
+                  bg="rgba(253, 249, 240, 0.95)"
+                  boxShadow="0 0 20px 16px rgba(253, 249, 240, 0.95)"
                 >
                   <Text fontSize="xs" color="gray.700" fontWeight="300">
                     Not a client? No problem,
@@ -1163,7 +1184,6 @@ const Portal = () => {
                     Browse the public portfolio →
                   </Text>
                 </Box>
-                </SoftSpot>
               </Box>
             </VStack>
           </Reveal>
@@ -1178,244 +1198,44 @@ const Portal = () => {
 // Small reusable bits — extracted so the JSX above reads as flow, not noise.
 
 /**
- * The soft spots behind the words, four of them, one per line.
+ * The soft spot behind the header.
  *
- * ── WHY FOUR, AND NOT ONE ────────────────────────────────────────────────
+ * Edgeless on purpose. A bordered panel and a lightened top band were both
+ * tried and both read as an object sitting on the page; this is a wide
+ * plateau that fades to nothing long before it reaches anything, so it
+ * settles the background under the words without announcing itself.
  *
- * There was one, a 1180x520 ellipse behind the whole header, and one spot
- * cannot be right for four lines sitting on four different amounts of
- * photograph. An ellipse big enough to settle the title washed the eyebrow
- * and reached the panel below it; one small enough to hug the eyebrow left
- * the title floating. The offramp, two hundred pixels further down, needed a
- * different answer again.
+ * ── WHY THIS IS BACK, VERBATIM ───────────────────────────────────────────
  *
- * ── WHY A BLURRED BLOB, AND NOT A GRADIENT ───────────────────────────────
+ * It was replaced by four spots, one per line, each hugging its own text,
+ * because "four separate bald spots, individually tweakable" is what was
+ * asked for and four hugging boxes is how I read it. That was the wrong
+ * reading and three rounds of tuning could not rescue it: a patch sized to a
+ * line of text has a silhouette, and a silhouette is an object, whatever its
+ * opacity or its corner radii. What makes this one disappear is that it is
+ * far larger than anything it sits behind, so nothing on the page lines up
+ * with its edge.
  *
- * A radial gradient is ALWAYS AN ELLIPSE. However it was sized or faded it
- * read as a drawn oval sitting on the page, which was the one thing it was
- * not allowed to look like. This is a solid shape with eight different
- * corner radii, which is not a shape anyone recognises, and blur turns it
- * from an object into a patch of light. A gradient also measures distance on
- * both axes at once, so a spot sized to hug one line puts the ENDS of that
- * line near a corner where the falloff has already started: the arrow on the
- * offramp kept measuring 3:1 while the middle of the same sentence read
- * fine. A flat core is even across every glyph.
+ * The numbers are the ones that were running when this was last approved,
+ * taken from git rather than rebuilt from a description of them.
  *
- * ── WHERE THE NUMBERS CAME FROM, AND WHY THEY ARE PADDING ────────────────
- *
- * Alex tuned them on a canvas of this page, a slider per value, over the
- * same moving mosaic. He sized each blob in absolute pixels, and carrying
- * those pixels here directly would have carried a number that was right
- * about a DIFFERENT piece of text: the board renders the title at 46px and
- * this page renders it at 52px on a wide screen, where it wraps to two lines
- * that a 60px-tall blob covered exactly half of.
- *
- * So each pair below is his blob size MINUS what the board actually rendered
- * inside it, which is the space around the line he was really choosing. On
- * any line whose type matches the board the spot comes out pixel-identical
- * to what he tuned; where this page's type differs, the spot follows the
- * words instead of missing them. Changing one means changing it on the
- * canvas and reading it back, not reasoning about it here.
- *
- * ── WHAT OPACITY COSTS, WHICH IS NOT THE SAME AS WHAT IT SHOULD BE ──────
- *
- * brand.accentText is 4.58:1 on SOLID cream, which is the ceiling: there is
- * nothing above it for this gold. So the two gold lines, the eyebrow and the
- * offramp link, clear 4.5:1 only while their patch is very close to opaque,
- * and every step down from 1 is a step below AA for those two. The title and
- * the rule have enormous headroom and do not care.
- *
- * That is a fact to state, not a decision to make on his behalf, and for one
- * version it was made on his behalf by hard-coding the fill to 1. The result
- * was a screen with no setting that made the patch any less white and a
- * complaint that the look could not be got back. The knob is a knob.
+ * aria-hidden and pointer-events none: it is paper, not content.
  */
-const SPOT = {
-  // base is the phone board, md is the desktop board. The phone wants far
-  // more of everything: each mosaic tile is about three times the size, so
-  // the same margin leaves a whole face showing through one word.
-  //
-  // `soft` is how far the cream fades OUTWARD past the shape. It carries the
-  // blur number from each board, but it is no longer a filter; see SoftSpot.
-  eyebrow: {
-    a: { base: 0.93, md: 0.93 },
-    x: { base: '60px', md: '40px' }, y: { base: '26px', md: '20px' },
-    soft: { base: 58, md: 58 },
-  },
-  rule: {
-    a: { base: 0.93, md: 0.93 },
-    x: { base: '40px', md: '30px' }, y: { base: '22px', md: '16px' },
-    soft: { base: 58, md: 58 },
-  },
-  title: {
-    a: { base: 0.93, md: 0.93 },
-    x: { base: '70px', md: '150px' }, y: { base: '60px', md: '60px' },
-    soft: { base: 58, md: 58 },
-  },
-  offramp: {
-    a: { base: 0.93, md: 0.93 },
-    x: { base: '50px', md: '60px' }, y: { base: '26px', md: '26px' },
-    soft: { base: 58, md: 58 },
-  },
-} as const;
-
-/**
- * Eight radii, so no two quadrants agree and the shape reads as a patch
- * rather than as a drawn oval. The ratios are fixed; only the overall
- * roundness varies, 0 being a rectangle and 100 fully round.
- *
- * ── 35 ON A WIDE SCREEN, WHERE THE CANVAS SAID 100 ───────────────────────
- *
- * The one number here that is not Alex's, and the technique change is what
- * took his answer away rather than a disagreement with it. He picked 100 on
- * a TRANSLUCENT blob, where it read as a patch of light. The same 100 on an
- * opaque one reads as a drawn lens, which is the single thing this is not
- * allowed to look like: on a wide, short box CSS scales those eight radii
- * until the shape is essentially an ellipse.
- *
- * 35 keeps the corners uneven enough that the shape is still nobody's idea
- * of an oval, and it also settles the contrast on its own. A lens sized to a
- * line of text is NARROWEST exactly where the first and last words are, and
- * that is where the arrow on the offramp kept measuring 3.7:1 while the
- * middle of the same sentence read 4.58. Without the narrowing the whole
- * sentence sits on solid cream at every width, so none of his padding had to
- * move to fix it.
- *
- * The phone keeps 55: its patches are bigger relative to their text and
- * never narrowed into anything.
- */
-const roundness = (r: number) => {
-  const k = [1, 0.62, 0.84, 0.48, 0.74, 0.55, 0.92, 0.68].map((f) => Math.round(r * f));
-  return `${k[0]}% ${k[1]}% ${k[2]}% ${k[3]}% / ${k[4]}% ${k[5]}% ${k[6]}% ${k[7]}%`;
-};
-const SPOT_RADIUS = { base: roundness(55), md: roundness(35) };
-
-type Spot = {
-  /**
-   * The peak, at the centre, under the words themselves. 0 to 1.
-   *
-   * A KNOB, not a constant, and it was a constant for exactly one version.
-   * Nailing it to 1 for the sake of the contrast figure left no setting
-   * anywhere that made the patch less white, which is not a design decision,
-   * it is a missing control. What it costs is measurable and stated where the
-   * numbers live; what to spend is not mine to decide.
-   */
-  a: { base: number; md: number };
-  x: { base: string; md: string };
-  y: { base: string; md: string };
-  /** How much of the radius is spent fading, 0 to 100. See baldSpot. */
-  soft: { base: number; md: number };
-};
-
-/**
- * How the cream fades out past the shape.
- *
- * NOT `filter: blur()`, which is what this was first built with and which was
- * wrong in a way that looked right. CSS blur(<len>) is a Gaussian whose
- * stdDeviation IS <len>, not half of it, and a filter operates on the
- * element's own alpha channel. So blurring a fully opaque shape whose short
- * side is only about 2 sigma does not soften its edge, it makes the WHOLE
- * shape translucent: the eyebrow's 40px-tall patch at blur(18px) came out at
- * 0.74 alpha AT ITS CENTRE. Measured against the mosaic, the gold eyebrow
- * reached 3.8:1 and the offramp arrow 3.0:1, and the offramp was a straight
- * regression, because what it replaced put an opaque fill on the border box
- * and really was opaque under the glyphs.
- *
- * A box-shadow does what was actually wanted. It is painted OUTSIDE the
- * border box and never touches the fill, so the core stays at alpha 1 and the
- * gold gets the whole 4.58:1 that brand.accentText has on cream. It also
- * follows border-radius, so the eight-radius blob keeps its shape.
- *
- * The spread is what keeps the join invisible. The shadow's own shape is the
- * box grown by `soft`, and its blur straddles THAT edge, so at the border box
- * the shadow is still deep inside its own plateau: cream meets cream, and the
- * fade begins outside the shape rather than at it.
- */
-const CREAM_RGB = '253, 249, 240';
-
-/**
- * A BALD SPOT, which is a gradient, not a shape with a soft edge.
- *
- * This is the difference that made the last two rounds impossible, and it is
- * not a matter of values. A box-shadow paints a SOLID PLATEAU and fades only
- * outside the border box, so however it is set there is an area of flat cream
- * with a boundary around it: an object on the page. The thing Alex has been
- * asking for since the beginning fades from the MIDDLE OUT and never has an
- * edge at all. No opacity, padding or spread setting turns one into the
- * other, so every slider he tried was the wrong slider.
- *
- * So the fill is a radial gradient again, the way it was the first time.
- *
- *   `a`    the peak, at the centre, under the words themselves.
- *   `soft` how much of the radius is spent fading, 0 to 100.
- *          0 is a hard-edged shape, the box-shadow look.
- *          100 starts falling the moment it leaves the centre.
- *          58 with a peak of 0.93 is the original halo, near enough.
- *
- * The middle two stops keep the original's curve rather than running
- * straight: it held almost full strength through the plateau, dropped to
- * about half over the next stretch, then trailed off. A linear ramp reads as
- * a vignette; this reads as paper.
- */
-const baldSpot = (a: number, soft: number) => {
-  const s = Math.max(0, Math.min(100, soft));
-  const plateau = 100 - s;
-  const mid = plateau + s * 0.55;
-  return (
-    `radial-gradient(ellipse 50% 50% at 50% 50%, ` +
-    `rgba(${CREAM_RGB}, ${a}) 0%, ` +
-    `rgba(${CREAM_RGB}, ${(a * 0.97).toFixed(3)}) ${plateau}%, ` +
-    `rgba(${CREAM_RGB}, ${(a * 0.42).toFixed(3)}) ${mid.toFixed(1)}%, ` +
-    `rgba(${CREAM_RGB}, 0) 100%)`
-  );
-};
-
-/**
- * One line, on its own patch of light.
- *
- * The spot is sized by NEGATIVE INSETS on a box that hugs its content, not by
- * a fixed width and height. That is what makes it follow the words: a title
- * that wraps gets a taller spot for free, and no measuring code has to run
- * for it to be right on the first paint.
- *
- * z-index -1 is load bearing and is what fixed a bug that came back twice.
- * Positioned elements paint above non-positioned ones whatever the document
- * order says, so an absolutely positioned spot washed whatever came after it:
- * first the top of the panel below the header, then the panel above the
- * offramp. A negative index puts every spot below all the in-flow content of
- * the surrounding stacking context, which is the Flex at zIndex 2, so it can
- * no longer reach a sibling at all. The mosaic is outside that context and
- * stays underneath.
- *
- * Neither wrapper carries a z-index, on purpose. Giving one to either would
- * make it a stacking context of its own and trap the -1 inside it, behind
- * that wrapper's own background, where it would not be visible at all.
- *
- * aria-hidden and pointerEvents none: it is paper, not content.
- */
-const SoftSpot = ({ spot, children }: { spot: Spot; children: React.ReactNode }) => (
-  <Box display="flex" justifyContent="center" w="100%">
-    <Box position="relative" display="inline-flex" maxW="100%">
-      <Box
-        aria-hidden="true"
-        position="absolute"
-        left={{ base: `-${spot.x.base}`, md: `-${spot.x.md}` }}
-        right={{ base: `-${spot.x.base}`, md: `-${spot.x.md}` }}
-        top={{ base: `-${spot.y.base}`, md: `-${spot.y.md}` }}
-        bottom={{ base: `-${spot.y.base}`, md: `-${spot.y.md}` }}
-        zIndex={-1}
-        pointerEvents="none"
-        // Only bites while `soft` is low. Once the gradient is doing the
-        // work there is no edge left for a corner radius to round.
-        borderRadius={SPOT_RADIUS}
-        sx={{
-          backgroundImage: baldSpot(spot.a.base, spot.soft.base),
-          '@media (min-width: 48em)': { backgroundImage: baldSpot(spot.a.md, spot.soft.md) },
-        }}
-      />
-      {children}
-    </Box>
-  </Box>
+const PortalHalo = ({ w, h }: { w: string; h: string }) => (
+  <Box
+    aria-hidden="true"
+    position="absolute"
+    left="50%"
+    top="50%"
+    transform="translate(-50%, -50%)"
+    width={w}
+    height={h}
+    pointerEvents="none"
+    sx={{
+      background:
+        'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(253,249,240,0.93) 0%, rgba(253,249,240,0.902) 42%, rgba(253,249,240,0.512) 64%, rgba(253,249,240,0) 88%)',
+    }}
+  />
 );
 
 /**
