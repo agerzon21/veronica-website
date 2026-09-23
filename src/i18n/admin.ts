@@ -1867,9 +1867,22 @@ const dict = {
     // which is a term the client agreed to and is frozen once signed.
     sessionLocationLabel: { en: 'Session Address', ru: 'Адрес съёмки' },
     sessionLocationHelp: {
-      en: 'Where she drives to. Used by the Directions button at the top. Editing this does not change a signed contract.',
-      ru: 'Куда ехать. Используется кнопкой «Маршрут» наверху. Изменение не затрагивает подписанный контракт.',
+      en: 'Where she drives to, in the order the day runs. Add a second place for a ceremony and a reception, or a proposal and the portraits after it. Editing this does not change a signed contract.',
+      ru: 'Куда ехать, в порядке дня. Добавьте второе место для церемонии и банкета или для предложения и съёмки после него. Изменение не затрагивает подписанный контракт.',
     },
+    // One place or several. The label changes with the count so a single
+    // location booking never reads as though something is missing.
+    sessionLocationsLabel: { en: 'Session Addresses', ru: 'Адреса съёмки' },
+    placeN: { en: (n: number) => `Place ${n}`, ru: (n: number) => `Место ${n}` },
+    addPlace: { en: '+ Add another place', ru: '+ Добавить место' },
+    removePlace: { en: 'Remove this place', ru: 'Удалить это место' },
+    moveUp: { en: 'Move earlier', ru: 'Переместить выше' },
+    moveDown: { en: 'Move later', ru: 'Переместить ниже' },
+    openInMaps: { en: 'Open in Maps', ru: 'Открыть в картах' },
+    placeLabelPlaceholder: { en: 'Ceremony, Reception, Proposal…', ru: 'Церемония, банкет, предложение…' },
+    placeAddressPlaceholder: { en: 'Full street address', ru: 'Полный адрес' },
+    placeStartPlaceholder: { en: 'Starts, e.g. 3:00 PM', ru: 'Начало, напр. 15:00' },
+    placeEndPlaceholder: { en: 'Ends, e.g. 3:30 PM', ru: 'Конец, напр. 15:30' },
     // Full legal names. Not a greeting: these are what the contract binds and
     // what the client's welcome page shows them, so the help text says where
     // they surface rather than describing the field.

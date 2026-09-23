@@ -911,7 +911,7 @@ const Portal = () => {
         align="center"
         justify="center"
         px={6}
-        pt={{ base: 24, md: 20 }}
+        pt={{ base: 32, md: 28 }}
         pb={{ base: 16, md: 12 }}
       >
         <Box w="100%" maxW="460px">
@@ -932,22 +932,22 @@ const Portal = () => {
               was still invisible. */}
           <Reveal immediate from={{ opacity: 0 }} duration={0.6}>
             <VStack spacing={8}>
-              {/* The house header, exactly as PageHeader renders it on
-                  Journal, Gallery, Weddings and About: eyebrow, rule, title,
-                  lead. It is written out rather than imported because it sits
-                  on its own soft spot, which PageHeader has no notion of.
+              {/* The house header: eyebrow, gold rule under it, one line.
+                  No paragraph.
 
-                  THE SOFT SPOT. A gold eyebrow cannot sit on photographs:
-                  brand.accentText reaches only 4.58:1 against SOLID cream, so
-                  any visible picture behind it puts the label under AA. A
-                  uniform veil dark enough to fix that hides the photographs
-                  entirely, and lightening the top of the page reads as a
-                  spotlight. This is the third answer: a wide, edgeless halo
-                  under the words only, which holds the label steady at about
-                  4.2:1 instead of letting it swing between 2.5 and 6 as
-                  pictures drift past. */}
+                  There WAS a paragraph, and it was the wrong call: it sat
+                  across the middle of the page covering the photographs,
+                  worst of all on a phone where it ran to four lines, and it
+                  explained what each panel already explains about itself an
+                  inch below. Two panels that say "your contract, your
+                  payments and your finished photographs" and "one gallery,
+                  no account needed" do not need a paragraph above them
+                  repeating both.
+
+                  The soft spot shrinks with it, which is most of the point:
+                  less type to carry means less of the mosaic covered. */}
               <Box position="relative" w="100%">
-                <PortalHalo w="1420px" h="800px" />
+                <PortalHalo w="1180px" h="520px" />
                 <VStack spacing={{ base: 3, md: 4 }} position="relative">
                   <Text textStyle="eyebrow">Client portal</Text>
                   <Box w="40px" h="1px" bg="brand.accent" />
@@ -959,12 +959,7 @@ const Portal = () => {
                     m={0}
                     sx={{ textWrap: 'balance' }}
                   >
-                    Everything from your session
-                  </Text>
-                  <Text textStyle="bodyLead" color="gray.700" textAlign="center" maxW="46ch">
-                    Sign in with your email and password to find your contract, your
-                    payments and your finished photographs. Given a gallery password
-                    instead? Open Gallery pass below.
+                    Your photographs live here
                   </Text>
                 </VStack>
               </Box>

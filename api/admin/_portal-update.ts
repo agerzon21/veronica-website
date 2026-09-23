@@ -26,6 +26,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { hashPortalPassword } from '../portal/_password.js';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
+// .js extension is load bearing: an extensionless relative import in anything
+// api/ reaches kills the whole admin API at runtime while the build passes.
+// See scripts/check-api-imports.mjs.
+import { parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
@@ -515,6 +519,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // and she must be able to correct it the morning of the shoot.
     if (typeof patch.session_location === 'string') {
       await sql`update client_portals set session_location = ${setStr(patch.session_location)}, updated_at = now() where id = ${id}`;
+    }
+    /**
+     * The ordered list, and the single address written WITH it.
+     *
+     * session_location is a mirror of the first entry that has an address.
+     * Eight readers take the single address, the client's own portal row and
+     * the Maps destination among them, so it has to keep being a real address.
+     * Writing both here, in one statement, is what stops the two drifting: a
+     * caller cannot update the list and forget the mirror, because it has no
+     * way to update the list alone.
+     */
+    if (Array.isArray(patch.session_locations)) {
+      const locations = parseLocations(patch.session_locations);
+      const primary = primaryAddress(locations);
+      await sql`
+        update client_portals
+           set session_locations = ${JSON.stringify(locations)}::jsonb,
+               session_location = ${primary || null},
+               updated_at = now()
+         where id = ${id}`;
     }
     if (typeof patch.event_date === 'string') {
       const v = patch.event_date.trim() || null;

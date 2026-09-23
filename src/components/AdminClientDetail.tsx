@@ -1,7 +1,7 @@
 import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
 import { cardFeeOn } from '../data/payment-handles';
 import { fmtAdminDateTime } from '../utils/adminDate';
-import { createContext, useCallback, useContext, useEffect, useId, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaTrash from '../icons/fa/FaTrash';
@@ -18,6 +18,17 @@ import FaCog from '../icons/fa/FaCog';
 import FaCopy from '../icons/fa/FaCopy';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
+import {
+  type SessionLocation,
+  EMPTY_LOCATION,
+  MAX_LOCATIONS,
+  parseLocations,
+  primaryAddress,
+  directionsUrl,
+} from '../data/sessionLocations';
+import FaChevronUp from '../icons/fa/FaChevronUp';
+import FaChevronDown from '../icons/fa/FaChevronDown';
+import FaTimes from '../icons/fa/FaTimes';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import {
@@ -68,6 +79,7 @@ interface PortalDetail {
   client_email: string | null;
   client_phone: string | null;
   session_location: string | null;
+  session_locations?: unknown;
   same_date_bookings?: Array<{ id: string; client_display_name: string | null; session_type: string | null }>;
   event_date: string | null;
   gallery_password: string;
@@ -185,7 +197,12 @@ function effectiveAddress(p: {
   session_location?: string | null;
   contract_variables?: Record<string, string> | null;
 }): string {
-  return (p.session_location ?? '').trim() || (p.contract_variables?.event_location ?? '').trim();
+  // The LIST first, because it is what she edits now and session_location is
+  // its mirror. The mirror is still consulted for rows written before the
+  // list existed, and the contract variable last, for gallery-only bookings
+  // that never had either.
+  const fromList = primaryAddress(parseLocations((p as { session_locations?: unknown }).session_locations));
+  return fromList || (p.session_location ?? '').trim() || (p.contract_variables?.event_location ?? '').trim();
 }
 
 const formatMoney = (amount: number | null): string => {
@@ -1479,12 +1496,15 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               Ten of eighteen real bookings are gallery-only and none of them
               had an address at all, which made the Directions button at the
               top of this screen dead for the majority of records. */}
-          <InlineField
-            label={t.clientDetail.sessionLocationLabel}
-            value={effectiveAddress(portal)}
-            helpText={t.clientDetail.sessionLocationHelp}
-            saving={savingField === 'session_location'}
-            onSave={(v) => patch({ session_location: v }, 'session_location')}
+          <SessionLocationsField
+            value={useMemo(() => {
+              const stored = parseLocations(portal.session_locations);
+              if (stored.length) return stored;
+              const one = effectiveAddress(portal);
+              return one ? [{ ...EMPTY_LOCATION, address: one }] : [];
+            }, [portal])}
+            saving={savingField === 'session_locations'}
+            onSave={(v) => patch({ session_locations: v }, 'session_locations')}
           />
           <InlineField
             label={t.clientDetail.clientEmailLabel}
@@ -1712,13 +1732,167 @@ function Section({
  * reasons that out for tel: and mailto: in SummaryAction; the same rule is
  * applied here, using the touch test the image viewer already uses.
  */
+/**
+ * Open one of this booking's places in a navigator.
+ *
+ * A booking happens in more than one place often enough that this takes the
+ * LIST, not an address: a ceremony and a reception, a proposal and the sunset
+ * portraits after it. With one place it is exactly what it always was. With
+ * several it asks which one first, because the alternative is Vero standing
+ * outside a church being given directions to the reception venue.
+ *
+ * The place she is most likely to want is NOT the first one; it is the next
+ * one she has not been to yet, and nothing here knows that. So it asks rather
+ * than guessing, and it shows each place's label and time so the question is
+ * answerable at a glance.
+ */
+/**
+ * Where this booking happens, as an ordered list.
+ *
+ * ONE field replaces the single Session Location box. A booking with one
+ * place looks and behaves exactly as it did: one address, one row, no extra
+ * chrome. "Add another place" is what turns it into a ceremony and a
+ * reception, or a proposal and the sunset portraits after it.
+ *
+ * Saves as a whole list rather than per row, because the order matters and a
+ * half-saved list is worse than an unsaved one. The Save button appears only
+ * once something has changed, matching InlineField beside it.
+ *
+ * The times are free text on purpose, in the same register as the contract's
+ * own Time field, which is already prose for half of real bookings
+ * ("Half-day coverage, approximately 4 hours"). A time picker here would
+ * refuse a schedule that is genuinely not fixed yet.
+ */
+function SessionLocationsField({
+  value,
+  saving,
+  onSave,
+}: {
+  value: SessionLocation[];
+  saving?: boolean;
+  onSave: (v: SessionLocation[]) => Promise<boolean | void>;
+}) {
+  const { t } = useAdminLang();
+  const [draft, setDraft] = useState<SessionLocation[]>(() =>
+    value.length ? value : [{ ...EMPTY_LOCATION }],
+  );
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    setDraft(value.length ? value : [{ ...EMPTY_LOCATION }]);
+    setTouched(false);
+  }, [value]);
+
+  const dirty = touched && JSON.stringify(parseLocations(draft)) !== JSON.stringify(value);
+  useDirtyFlag(dirty, t.clientDetail.sessionLocationsLabel);
+
+  const set = (i: number, key: keyof SessionLocation, v: string) => {
+    setDraft((d) => d.map((row, j) => (j === i ? { ...row, [key]: v } : row)));
+    setTouched(true);
+  };
+  const add = () => { setDraft((d) => [...d, { ...EMPTY_LOCATION }]); setTouched(true); };
+  const remove = (i: number) => {
+    setDraft((d) => (d.length <= 1 ? [{ ...EMPTY_LOCATION }] : d.filter((_, j) => j !== i)));
+    setTouched(true);
+  };
+  const move = (i: number, by: number) => {
+    setDraft((d) => {
+      const j = i + by;
+      if (j < 0 || j >= d.length) return d;
+      const next = [...d];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+    setTouched(true);
+  };
+
+  const many = draft.length > 1;
+
+  return (
+    <Box>
+      <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" color="brand.accent"
+            letterSpacing={{ base: '0.15em', md: '0.2em' }} textTransform="uppercase" mb={2}>
+        {many ? t.clientDetail.sessionLocationsLabel : t.clientDetail.sessionLocationLabel}
+      </Text>
+
+      <VStack align="stretch" spacing={3}>
+        {draft.map((row, i) => (
+          <Box key={i} borderWidth={many ? '1px' : '0'} borderColor="gray.200"
+               borderRadius={many ? 'md' : undefined} p={many ? 3 : 0}>
+            {many && (
+              <Flex align="center" gap={2} mb={2}>
+                <Text fontSize="2xs" fontWeight="500" letterSpacing="0.18em"
+                      textTransform="uppercase" color="gray.400" flex="1">
+                  {t.clientDetail.placeN(i + 1)}
+                </Text>
+                <IconButton aria-label={t.clientDetail.moveUp} icon={<Icon as={FaChevronUp} boxSize={3} />}
+                  size="sm" variant="ghost" minW="36px" minH="36px" isDisabled={i === 0}
+                  onClick={() => move(i, -1)} />
+                <IconButton aria-label={t.clientDetail.moveDown} icon={<Icon as={FaChevronDown} boxSize={3} />}
+                  size="sm" variant="ghost" minW="36px" minH="36px" isDisabled={i === draft.length - 1}
+                  onClick={() => move(i, 1)} />
+                <IconButton aria-label={t.clientDetail.removePlace} icon={<Icon as={FaTimes} boxSize={3} />}
+                  size="sm" variant="ghost" color="red.500" minW="36px" minH="36px"
+                  onClick={() => remove(i)} />
+              </Flex>
+            )}
+
+            <VStack align="stretch" spacing={2}>
+              {many && (
+                <Input value={row.label} h="44px" bg="white" fontSize="sm"
+                  placeholder={t.clientDetail.placeLabelPlaceholder}
+                  onChange={(e) => set(i, 'label', e.target.value)} />
+              )}
+              <Input value={row.address} h="44px" bg="white" fontSize="sm"
+                placeholder={t.clientDetail.placeAddressPlaceholder}
+                onChange={(e) => set(i, 'address', e.target.value)} />
+              <Flex gap={2}>
+                <Input value={row.starts_at} h="44px" bg="white" fontSize="sm" flex="1"
+                  placeholder={t.clientDetail.placeStartPlaceholder}
+                  onChange={(e) => set(i, 'starts_at', e.target.value)} />
+                <Input value={row.ends_at} h="44px" bg="white" fontSize="sm" flex="1"
+                  placeholder={t.clientDetail.placeEndPlaceholder}
+                  onChange={(e) => set(i, 'ends_at', e.target.value)} />
+              </Flex>
+              {row.address.trim() && (
+                <CTAButton href={directionsUrl(row.address)} newTab variant="ghost" size="sm"
+                  icon={FaMapMarkerAlt}>
+                  {t.clientDetail.openInMaps}
+                </CTAButton>
+              )}
+            </VStack>
+          </Box>
+        ))}
+      </VStack>
+
+      <Flex gap={2} mt={3} wrap="wrap">
+        {draft.length < MAX_LOCATIONS && (
+          <CTAButton variant="ghost" size="sm" onClick={add}>
+            {t.clientDetail.addPlace}
+          </CTAButton>
+        )}
+        {dirty && (
+          <CTAButton variant="solid" size="sm" isLoading={saving}
+            onClick={async () => { const ok = await onSave(parseLocations(draft)); if (ok !== false) setTouched(false); }}>
+            {t.common.save}
+          </CTAButton>
+        )}
+      </Flex>
+
+      <Text fontSize="xs" color="gray.500" mt={2} fontWeight="300">
+        {t.clientDetail.sessionLocationHelp}
+      </Text>
+    </Box>
+  );
+}
+
 function DirectionsSheet({
-  address,
+  locations,
   lang,
   isOpen,
   onClose,
 }: {
-  address: string;
+  locations: SessionLocation[];
   lang: AdminLang;
   isOpen: boolean;
   onClose: () => void;
@@ -1728,6 +1902,14 @@ function DirectionsSheet({
   // the context, so the footer Close reads the same string as every other one.
   const { t } = useAdminLang();
   const [copied, setCopied] = useState(false);
+  const withAddress = locations.filter((l) => l.address);
+  const [pickedIdx, setPickedIdx] = useState(0);
+  // Reopening must not leave last time's choice selected: she opens this
+  // twice on a wedding day and the second time is for the other venue.
+  useEffect(() => { if (isOpen) setPickedIdx(0); }, [isOpen]);
+  const picked = withAddress[Math.min(pickedIdx, Math.max(0, withAddress.length - 1))];
+  const address = picked?.address ?? '';
+  const choosing = withAddress.length > 1;
   const isTouch =
     typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
@@ -1774,6 +1956,40 @@ function DirectionsSheet({
       }
     >
       <VStack align="stretch" spacing={2} pb={2}>
+        {choosing && (
+          <VStack align="stretch" spacing={1.5} mb={1}>
+            {withAddress.map((l, i) => {
+              const on = i === pickedIdx;
+              return (
+                <Box
+                  key={i}
+                  as="button"
+                  type="button"
+                  onClick={() => setPickedIdx(i)}
+                  textAlign="left"
+                  w="100%"
+                  minH="52px"
+                  px={3}
+                  py={2}
+                  borderWidth="1px"
+                  borderColor={on ? 'brand.accent' : 'gray.200'}
+                  bg={on ? 'orange.50' : 'white'}
+                  borderRadius="md"
+                  sx={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <Text fontSize="sm" color="gray.800" fontWeight={on ? '500' : '400'} noOfLines={1}>
+                    {l.label || l.address}
+                  </Text>
+                  <Text fontSize="xs" color="gray.500" noOfLines={1}>
+                    {[l.starts_at && l.ends_at ? `${l.starts_at} to ${l.ends_at}` : l.starts_at || l.ends_at, l.label ? l.address : '']
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </Box>
+              );
+            })}
+          </VStack>
+        )}
         <Text fontSize="sm" color="gray.600" fontWeight="300" mb={1}>
           {address}
         </Text>
@@ -1919,6 +2135,19 @@ function ShootSummary({
   // on a signed booking those can legitimately differ. Gallery-only bookings
   // have no contract at all, so without the column they had no address.
   const address = effectiveAddress(portal);
+  /**
+   * What the Directions sheet is offered.
+   *
+   * The stored list when there is one. When there is not, a one-entry list
+   * built from whatever single address this booking does have, so every
+   * record written before the list existed goes on opening a navigator
+   * exactly as it did.
+   */
+  const sheetLocations = useMemo<SessionLocation[]>(() => {
+    const stored = parseLocations(portal.session_locations);
+    if (stored.length) return stored;
+    return address ? [{ ...EMPTY_LOCATION, address }] : [];
+  }, [portal.session_locations, address]);
   // The stored string is composed at creation as "2:00 PM to 10:00 PM
   // (approximately 8 hours)", which is right for a contract and wrong for a
   // glance: the duration is derivable from the two times she is already
@@ -2054,7 +2283,7 @@ function ShootSummary({
           which opened a byte for byte identical URL. Every app is still
           reachable; it is one tap further in and one place to look. */}
       <DirectionsSheet
-        address={address}
+        locations={sheetLocations}
         lang={lang}
         isOpen={directionsOpen}
         onClose={() => setDirectionsOpen(false)}
