@@ -911,11 +911,13 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const firstPlace: SessionLocation = {
     label: '',
     address: (variables.event_location ?? '').trim(),
-    // Only a specific-times booking has clock times to put on a line. A
-    // half-day package has no start to print, and printing the preset's
-    // placeholder pair would put a time on the contract nobody agreed to.
-    starts_at: coverage === 'specific' && eventStartTime ? fmtTime12h(eventStartTime) : '',
-    ends_at: coverage === 'specific' && eventEndTime ? fmtTime12h(eventEndTime) : '',
+    // NO TIME ON ANY PLACE, including this one. The per-place From and To
+    // were five fields for one question and they are gone; leaving them on
+    // the first place alone would put a clock time on line one of the
+    // schedule and none on the rest, which reads as a mistake. The session's
+    // own time is already on the contract as event_time.
+    starts_at: '',
+    ends_at: '',
   };
   const allPlaces = parseLocations([firstPlace, ...extraPlaces]);
   const multiPlace = isMultiLocation(allPlaces);
@@ -1907,8 +1909,6 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                   places={extraPlaces}
                   atMax={extraPlaces.length + 1 >= MAX_LOCATIONS}
                   firstAddress={firstPlace.address}
-                  firstStart={firstPlace.starts_at}
-                  firstEnd={firstPlace.ends_at}
                   schedule={scheduleText}
                   derivedSchedule={derivedSchedule}
                   edited={scheduleOverride !== null}
@@ -2616,8 +2616,6 @@ function PlacesBlock({
   places,
   atMax,
   firstAddress,
-  firstStart,
-  firstEnd,
   schedule,
   derivedSchedule,
   edited,
@@ -2632,8 +2630,6 @@ function PlacesBlock({
   places: PlaceRow[];
   atMax: boolean;
   firstAddress: string;
-  firstStart: string;
-  firstEnd: string;
   schedule: string;
   derivedSchedule: string;
   edited: boolean;
@@ -2681,7 +2677,6 @@ function PlacesBlock({
     );
   }
 
-  const when = firstStart && firstEnd ? `${firstStart} to ${firstEnd}` : firstStart || firstEnd;
 
   return (
     <Box mt={4} p={{ base: 3, md: 4 }} bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="sm">
@@ -2705,7 +2700,6 @@ function PlacesBlock({
             </Text>
             <Text fontSize="sm" color={firstAddress ? 'gray.800' : 'gray.400'} fontWeight="400" wordBreak="break-word">
               {firstAddress || t.newClient.placeAddressPlaceholder}
-              {when ? `, ${when}` : ''}
             </Text>
             <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
               {t.newClient.placeFirstNote}
@@ -2715,122 +2709,69 @@ function PlacesBlock({
 
         {places.map((row, i) => (
           <Box key={i} bg="white" border="1px solid" borderColor="gray.200" borderRadius="sm" px={3} py={2.5}>
-            <Flex align="center" gap={2} mb={2}>
+            {/* ONE LINE: the address, and the controls to reorder or drop it.
+                There used to be a name for the place and a From and a To time
+                as well, which made five fields for something that is one
+                question: where else does the day go. The times the contract
+                needs are the session's own, above. */}
+            <Flex align="center" gap={2}>
               <Text fontSize="sm" fontWeight="500" color="gray.400" w="18px" flexShrink={0}>{i + 2}</Text>
               <Input
-                value={row.label}
-                onChange={(e) => onSet(i, 'label', e.target.value)}
-                placeholder={t.newClient.placeLabelPlaceholder}
-                h="36px" bg="white" border="1px solid" borderColor="gray.300"
-                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm" maxW="220px"
+                value={row.address}
+                onChange={(e) => onSet(i, 'address', e.target.value)}
+                placeholder={t.newClient.placeAddressPlaceholder}
+                h="44px" bg="white" border="1px solid" borderColor="gray.300"
+                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm" flex="1" minW={0}
                 _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
               />
-              <Box flex="1" />
               {/* Real buttons, so the order can be changed from a keyboard */}
-              <Button
-                size="xs" variant="ghost" color="gray.500" aria-label={t.newClient.placeUpAria}
-                isDisabled={i === 0} onClick={() => onMove(i, -1)}
-              >
-                &uarr;
-              </Button>
-              <Button
-                size="xs" variant="ghost" color="gray.500" aria-label={t.newClient.placeDownAria}
-                isDisabled={i === places.length - 1} onClick={() => onMove(i, 1)}
-              >
-                &darr;
-              </Button>
-              <Button
-                size="xs" variant="ghost" color="red.400" aria-label={t.newClient.placeRemoveAria}
-                onClick={() => onRemove(i)}
-              >
-                &times;
-              </Button>
+              <Button size="xs" variant="ghost" color="gray.500" aria-label={t.newClient.placeUpAria}
+                isDisabled={i === 0} onClick={() => onMove(i, -1)}>&uarr;</Button>
+              <Button size="xs" variant="ghost" color="gray.500" aria-label={t.newClient.placeDownAria}
+                isDisabled={i === places.length - 1} onClick={() => onMove(i, 1)}>&darr;</Button>
+              <Button size="xs" variant="ghost" color="red.400" aria-label={t.newClient.placeRemoveAria}
+                onClick={() => onRemove(i)}>&times;</Button>
             </Flex>
-            <Input
-              value={row.address}
-              onChange={(e) => onSet(i, 'address', e.target.value)}
-              placeholder={t.newClient.placeAddressPlaceholder}
-              h="44px" bg="white" border="1px solid" borderColor="gray.300"
-              fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm" mb={2}
-              _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-            />
-            <Stack direction={{ base: 'column', sm: 'row' }} spacing={2}>
-              <Input
-                value={row.starts_at}
-                onChange={(e) => onSet(i, 'starts_at', e.target.value)}
-                placeholder={t.newClient.placeFrom}
-                aria-label={t.newClient.placeFrom}
-                h="44px" bg="white" border="1px solid" borderColor="gray.300"
-                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-              />
-              <Input
-                value={row.ends_at}
-                onChange={(e) => onSet(i, 'ends_at', e.target.value)}
-                placeholder={t.newClient.placeTo}
-                aria-label={t.newClient.placeTo}
-                h="44px" bg="white" border="1px solid" borderColor="gray.300"
-                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-              />
-            </Stack>
 
-            {/* "That is a place name, not an address."
-                Never blocks anything. It is here because the cost of the
-                mistake lands in the car on the morning of the shoot, when
-                the Directions button has nothing to navigate to. */}
+            {/* "That is a place name, not an address." Never blocks anything.
+                The cost of the mistake lands in the car on the morning of the
+                shoot, when the Directions button has nowhere to go. */}
             {row.address.trim() && !looksLikeStreetAddress(row.address) && (
-              <Text fontSize="xs" color="orange.600" fontWeight="300" mt={2} lineHeight="1.5">
+              <Text fontSize="xs" color="orange.600" fontWeight="300" mt={2} ml="26px" lineHeight="1.5">
                 {t.newClient.addressLooksIncomplete}
               </Text>
             )}
 
-            {/* The drive to THIS place. */}
-            <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.100">
-              <Stack direction={{ base: 'column', md: 'row' }} spacing={2} align={{ md: 'flex-end' }}>
-                <Box flex="1" minW={0}>
-                  <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.12em" color="gray.500" mb={1}>
-                    {t.newClient.placeFromLabel}
-                  </Text>
-                  <Select
-                    value={row.from}
-                    onChange={(e) => onSet(i, 'from', e.target.value)}
-                    h="44px" bg="white" border="1px solid" borderColor="gray.300"
-                    fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-                  >
-                    <option value="previous">{t.newClient.placeFromPrevious}</option>
-                    <option value="home">{t.newClient.placeFromHome}</option>
-                  </Select>
-                </Box>
-                <Box flex="1" minW={0}>
-                  <Text fontSize="2xs" textTransform="uppercase" letterSpacing="0.12em" color="gray.500" mb={1}>
-                    {t.newClient.placeMilesLabel}
-                  </Text>
-                  <Input
-                    value={row.miles}
-                    onChange={(e) => onSet(i, 'miles', e.target.value)}
-                    placeholder="0"
-                    inputMode="decimal"
-                    aria-label={t.newClient.placeMilesLabel}
-                    h="44px" bg="white" border="1px solid" borderColor="gray.300"
-                    fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-                    _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-                  />
-                </Box>
-                <Button
-                  size="sm" variant="outline" fontWeight="400" h="44px"
-                  borderColor="brand.accentBorder" color="brand.accentText"
-                  _hover={{ borderColor: 'brand.accent' }}
-                  onClick={() => onLookupLeg(i)}
-                >
-                  {t.newClient.placeLookItUp}
-                </Button>
-              </Stack>
-              <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1.5} lineHeight="1.5">
-                {t.newClient.placeMilesHelp}
-              </Text>
-            </Box>
+            {/* The drive to THIS place, on one row. */}
+            <Flex align="center" gap={2} mt={2} ml="26px" wrap="wrap">
+              <Text fontSize="xs" color="gray.500" flexShrink={0}>{t.newClient.placeFromLabel}</Text>
+              <Select
+                value={row.from}
+                onChange={(e) => onSet(i, 'from', e.target.value)}
+                h="36px" bg="white" border="1px solid" borderColor="gray.300" w="auto"
+                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+              >
+                <option value="previous">{t.newClient.placeFromPrevious}</option>
+                <option value="home">{t.newClient.placeFromHome}</option>
+              </Select>
+              <Button size="sm" variant="outline" fontWeight="400" h="36px" flexShrink={0}
+                borderColor="brand.accentBorder" color="brand.accentText"
+                _hover={{ borderColor: 'brand.accent' }}
+                onClick={() => onLookupLeg(i)}>
+                {t.newClient.placeLookItUp}
+              </Button>
+              <Input
+                value={row.miles}
+                onChange={(e) => onSet(i, 'miles', e.target.value)}
+                placeholder={t.newClient.placeMilesLabel}
+                aria-label={t.newClient.placeMilesLabel}
+                inputMode="decimal"
+                h="36px" bg="white" border="1px solid" borderColor="gray.300" w="130px"
+                fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+                _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+              />
+            </Flex>
           </Box>
         ))}
       </VStack>
