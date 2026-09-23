@@ -87,6 +87,29 @@ export interface DurationStatement {
   quote: string;
 }
 
+/**
+ * An amount, as a number the form can actually use.
+ *
+ * The prefill's money fields come from two places that disagree about shape.
+ * The summariser returns a bare "500"; a fact Vero recorded by hand carries
+ * whatever she and the model wrote between them, which for a price is almost
+ * always "$500". Handed on as it stood, that produced a card reading "$$500",
+ * because the card adds its own currency symbol, and a Total field that
+ * stayed at 0, because the input is type="number" and "$500" is not one. She
+ * got the value recorded after four attempts and then watched it not arrive.
+ *
+ * Strips the symbol, the thousands separators and any stray words, and keeps
+ * the first number it finds. Returns null rather than 0 for text with no
+ * number in it, because 0 is a price and "I could not read this" is not.
+ */
+export function moneyDigits(raw: string | null | undefined): string | null {
+  const v = String(raw ?? '').replace(/,/g, '');
+  const m = v.match(/-?\d+(?:\.\d+)?/);
+  if (!m) return null;
+  const n = Number(m[0]);
+  return Number.isFinite(n) && n >= 0 ? String(n) : null;
+}
+
 export interface ClientPrefill extends PrefillBooking {
   conversationId: string;
   /** Platform display name, used only as a last-resort label. */

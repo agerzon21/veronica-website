@@ -21,6 +21,7 @@ import {
   seededCoverageMode,
   isCoupleSession,
   toSessionType,
+  moneyDigits,
 } from './clientPrefill';
 import { fmtAdminDate } from '../utils/adminDate';
 import {
@@ -483,10 +484,17 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     ? trimSlug(customSessionLabel) || 'Session'
     : templateKey;
 
-  const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
+  /**
+   * BELT AND BRACES on the money. buildPrefill already sends these through
+   * moneyDigits, and doing it again here costs nothing and closes the gap
+   * for every other caller: these two inputs are type="number", and one
+   * dollar sign in the value makes them render empty with no error anywhere.
+   */
+  const [totalAmount, setTotalAmount] = useState(moneyDigits(prefill?.total_amount) ?? '');
   const [retainerAmount, setRetainerAmount] = useState(() => {
-    if (prefill?.retainer_amount) return prefill.retainer_amount;
-    return suggestedRetainer(parseFloat(prefill?.total_amount ?? ''));
+    const seeded = moneyDigits(prefill?.retainer_amount);
+    if (seeded) return seeded;
+    return suggestedRetainer(parseFloat(moneyDigits(prefill?.total_amount) ?? ''));
   });
   /**
    * The retainer follows the total (see suggestedRetainer) until it is typed
@@ -792,8 +800,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           : []),
         { label: t.newClient.pfClientEmail, value: prefill.client_email, required: true },
         ...typeScopedRow('wedding_date', t.newClient.pfWeddingDate, prefill.wedding_date ? fmtDate(prefill.wedding_date) : null),
-        { label: t.newClient.pfTotal, value: prefill.total_amount ? `$${prefill.total_amount}` : null, required: true, quote: prefill.total_amount_quote },
-        { label: t.newClient.pfRetainer, value: prefill.retainer_amount ? `$${prefill.retainer_amount}` : null, required: true },
+        { label: t.newClient.pfTotal, value: moneyDigits(prefill.total_amount) ? `$${moneyDigits(prefill.total_amount)}` : null, required: true, quote: prefill.total_amount_quote },
+        { label: t.newClient.pfRetainer, value: moneyDigits(prefill.retainer_amount) ? `$${moneyDigits(prefill.retainer_amount)}` : null, required: true },
       ] as Array<{ label: string; value: string | null; required: boolean; quote?: string | null }>)
     : [];
   const foundRows = prefillRows.filter((r) => r.value);

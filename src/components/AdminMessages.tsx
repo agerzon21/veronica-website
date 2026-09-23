@@ -63,7 +63,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
-import { type ClientPrefill, type PrefillBooking } from './clientPrefill';
+import { moneyDigits, type ClientPrefill, type PrefillBooking } from './clientPrefill';
 import { readWeddingPackage } from '../data/formMessage';
 import { findPhonesInText, formatPhone, formatWaId, type FoundPhone } from '../utils/phoneFromText';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
@@ -2844,8 +2844,12 @@ function ConversationView({
       client_full_name: fact('client_name') ?? b?.client_full_name ?? null,
       partner_full_name: fact('partner_name') ?? b?.partner_full_name ?? null,
       client_email: fact('client_email') ?? b?.client_email ?? null,
-      total_amount: fact('total_amount') ?? b?.total_amount ?? null,
-      retainer_amount: fact('retainer_amount') ?? b?.retainer_amount ?? null,
+      // Through moneyDigits, because these two are the only prefill fields
+      // that have to come out the other end as a NUMBER. A hand-recorded
+      // price reads "$500" and the Total input is type="number", which takes
+      // one look at the dollar sign and shows nothing.
+      total_amount: moneyDigits(fact('total_amount') ?? b?.total_amount ?? null),
+      retainer_amount: moneyDigits(fact('retainer_amount') ?? b?.retainer_amount ?? null),
       // Per-type details. The summariser drops each of these unless the
       // session type is the one whose contract has a field for it, so a
       // family booking arrives here with all three already null.
