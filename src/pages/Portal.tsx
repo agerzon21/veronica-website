@@ -1217,10 +1217,18 @@ const Portal = () => {
  * words instead of missing them. Changing one means changing it on the
  * canvas and reading it back, not reasoning about it here.
  *
- * Every opacity came back at 1, which settles a question this page could not
- * answer any other way: brand.accentText reaches 4.58:1 on SOLID cream and
- * less on anything else, so the gold eyebrow and the gold offramp link only
- * clear AA when what they sit on is opaque. At 1 they are.
+ * ── WHAT OPACITY COSTS, WHICH IS NOT THE SAME AS WHAT IT SHOULD BE ──────
+ *
+ * brand.accentText is 4.58:1 on SOLID cream, which is the ceiling: there is
+ * nothing above it for this gold. So the two gold lines, the eyebrow and the
+ * offramp link, clear 4.5:1 only while their patch is very close to opaque,
+ * and every step down from 1 is a step below AA for those two. The title and
+ * the rule have enormous headroom and do not care.
+ *
+ * That is a fact to state, not a decision to make on his behalf, and for one
+ * version it was made on his behalf by hard-coding the fill to 1. The result
+ * was a screen with no setting that made the patch any less white and a
+ * complaint that the look could not be got back. The knob is a knob.
  */
 const SPOT = {
   // base is the phone board, md is the desktop board. The phone wants far
@@ -1230,18 +1238,22 @@ const SPOT = {
   // `soft` is how far the cream fades OUTWARD past the shape. It carries the
   // blur number from each board, but it is no longer a filter; see SoftSpot.
   eyebrow: {
+    a: { base: 1, md: 1 },
     x: { base: '48px', md: '13px' }, y: { base: '14.5px', md: '4.5px' },
     soft: { base: 18, md: 4 },
   },
   rule: {
+    a: { base: 1, md: 1 },
     x: { base: '25px', md: '5px' }, y: { base: '14.5px', md: '4.5px' },
     soft: { base: 14, md: 4 },
   },
   title: {
+    a: { base: 1, md: 1 },
     x: { base: '45px', md: '38px' }, y: { base: '38px', md: '4.5px' },
     soft: { base: 26, md: 10 },
   },
   offramp: {
+    a: { base: 1, md: 1 },
     x: { base: '16.5px', md: '17px' }, y: { base: '9px', md: '6px' },
     soft: { base: 16, md: 10 },
   },
@@ -1279,6 +1291,16 @@ const roundness = (r: number) => {
 const SPOT_RADIUS = { base: roundness(55), md: roundness(35) };
 
 type Spot = {
+  /**
+   * How opaque the patch is, 0 to 1.
+   *
+   * A KNOB, not a constant, and it was a constant for exactly one version.
+   * Nailing it to 1 for the sake of the contrast figure left no setting
+   * anywhere that made the patch less white, which is not a design decision,
+   * it is a missing control. What it costs is measurable and stated where the
+   * numbers live; what to spend is not mine to decide.
+   */
+  a: { base: number; md: number };
   x: { base: string; md: string };
   y: { base: string; md: string };
   soft: { base: number; md: number };
@@ -1308,7 +1330,16 @@ type Spot = {
  * the shadow is still deep inside its own plateau: cream meets cream, and the
  * fade begins outside the shape rather than at it.
  */
-const falloff = (soft: number) => `0 0 ${soft * 2}px ${soft}px rgba(253, 249, 240, 1)`;
+const cream = (a: number) => `rgba(253, 249, 240, ${a})`;
+
+/**
+ * The falloff takes the SAME alpha as the fill.
+ *
+ * A shadow left at 1 under a fill that has come down paints a halo more solid
+ * than the middle it surrounds, which reads as an outline drawn around the
+ * words: the exact opposite of a patch of light.
+ */
+const falloff = (soft: number, a: number) => `0 0 ${soft * 2}px ${soft}px ${cream(a)}`;
 
 /**
  * One line, on its own patch of light.
@@ -1346,8 +1377,8 @@ const SoftSpot = ({ spot, children }: { spot: Spot; children: React.ReactNode })
         zIndex={-1}
         pointerEvents="none"
         borderRadius={SPOT_RADIUS}
-        bg="rgba(253, 249, 240, 1)"
-        boxShadow={{ base: falloff(spot.soft.base), md: falloff(spot.soft.md) }}
+        bg={{ base: cream(spot.a.base), md: cream(spot.a.md) }}
+        boxShadow={{ base: falloff(spot.soft.base, spot.a.base), md: falloff(spot.soft.md, spot.a.md) }}
       />
       {children}
     </Box>
