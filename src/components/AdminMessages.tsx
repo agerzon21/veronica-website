@@ -635,6 +635,17 @@ export const REFINE_SESSION_KEY = 'vero_refine_session';
 interface SearchResult {
   conversation: ConversationSummary;
   matches: Array<{ where: 'name' | 'date' | 'fact' | 'summary' | 'message' | 'assistant'; snippet: string }>;
+  /**
+   * Which pile it belongs in. The server decides it, using the same rule the
+   * conversation list uses, so the two can never disagree about what counts
+   * as promotional.
+   *
+   * Optional, and defaulted to 'primary' where it is read. A response from
+   * before this field existed must not make every result vanish into a
+   * collapsed section: this repo has the lesson written down about new UI
+   * reading an older handler's shape.
+   */
+  bucket?: 'primary' | 'personal' | 'promotional';
 }
 
 const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient, onOpenClient }: Props) => {
@@ -1461,42 +1472,104 @@ function SearchResultsList({
   onSelect: (id: string) => void;
   t: AdminT;
 }) {
+  const [showPersonal, setShowPersonal] = useState(false);
+  const [showPromotional, setShowPromotional] = useState(false);
+
   if (results.length === 0) return null;
+
+  /**
+   * THE SAME THREE PILES THE CONVERSATION LIST USES.
+   *
+   * Searching "450" used to return two Instagram strangers and a Chase
+   * Sapphire mailshot above the booking that actually quoted $450. Two
+   * separate causes: an opaque platform id was being substring-matched in the
+   * top tier, fixed in the handler, and marketing mail that matches on its
+   * own sender name is a name-tier hit, which on rank alone outranks a client
+   * thread that matched deeper in.
+   *
+   * Rank cannot fix the second one, because the marketing mail really does
+   * match on a name. The answer is that it is a different KIND of result: not
+   * one Vero is looking for, one she is willing to scroll to. So it lands
+   * below, behind the same disclosure the list already trains her on.
+   */
+  const bucketed = (b: SearchResult['bucket']) =>
+    results.filter((r) => (r.bucket ?? 'primary') === b);
+  const primary = bucketed('primary');
+  const personal = bucketed('personal');
+  const promotional = bucketed('promotional');
+
+  const row = ({ conversation, matches }: SearchResult) => (
+    <Box key={conversation.id}>
+      <ConversationListRow
+        conv={conversation}
+        isSelected={conversation.id === selectedId}
+        onClick={() => onSelect(conversation.id)}
+      />
+      {matches.length > 0 && (
+        <VStack align="stretch" spacing={1} px={4} pb={2.5} mt={-1}>
+          {matches.slice(0, 3).map((m, i) => (
+            <Flex key={i} gap={2} align="flex-start">
+              <Text
+                fontSize="2xs"
+                color="brand.accentText"
+                border="1px solid"
+                borderColor="brand.accentBorder"
+                borderRadius="sm"
+                px={1.5}
+                flexShrink={0}
+                lineHeight="1.6"
+                whiteSpace="nowrap"
+              >
+                {t.messages.searchWhere[m.where] ?? m.where}
+              </Text>
+              <Text fontSize="xs" color="gray.600" fontWeight="300" noOfLines={2} lineHeight="1.5">
+                {m.snippet}
+              </Text>
+            </Flex>
+          ))}
+        </VStack>
+      )}
+    </Box>
+  );
+
+  // Same chrome as the conversation list's own sections, deliberately: this
+  // is the second place Vero meets the idea and it should not be a new one.
+  const section = (label: string, onClick: () => void) => (
+    <Box
+      as="button"
+      onClick={onClick}
+      py={2.5}
+      px={4}
+      textAlign="left"
+      bg="gray.50"
+      _hover={{ bg: 'gray.100' }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Text fontSize="xs" color="gray.500" fontWeight="500">
+        {label}
+      </Text>
+    </Box>
+  );
+
   return (
     <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
-      {results.map(({ conversation, matches }) => (
-        <Box key={conversation.id}>
-          <ConversationListRow
-            conv={conversation}
-            isSelected={conversation.id === selectedId}
-            onClick={() => onSelect(conversation.id)}
-          />
-          {matches.length > 0 && (
-            <VStack align="stretch" spacing={1} px={4} pb={2.5} mt={-1}>
-              {matches.slice(0, 3).map((m, i) => (
-                <Flex key={i} gap={2} align="flex-start">
-                  <Text
-                    fontSize="2xs"
-                    color="brand.accentText"
-                    border="1px solid"
-                    borderColor="brand.accentBorder"
-                    borderRadius="sm"
-                    px={1.5}
-                    flexShrink={0}
-                    lineHeight="1.6"
-                    whiteSpace="nowrap"
-                  >
-                    {t.messages.searchWhere[m.where] ?? m.where}
-                  </Text>
-                  <Text fontSize="xs" color="gray.600" fontWeight="300" noOfLines={2} lineHeight="1.5">
-                    {m.snippet}
-                  </Text>
-                </Flex>
-              ))}
-            </VStack>
-          )}
-        </Box>
-      ))}
+      {primary.map(row)}
+
+      {personal.length > 0 &&
+        section(
+          showPersonal ? t.messages.hidePersonal : t.messages.showPersonal(personal.length),
+          () => setShowPersonal((v) => !v),
+        )}
+      {showPersonal && personal.map(row)}
+
+      {promotional.length > 0 &&
+        section(
+          showPromotional
+            ? t.messages.hidePromotional
+            : t.messages.showPromotional(promotional.length),
+          () => setShowPromotional((v) => !v),
+        )}
+      {showPromotional && promotional.map(row)}
     </VStack>
   );
 }

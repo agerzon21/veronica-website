@@ -52,6 +52,25 @@ const SNIPPET_PAD = 45;
 
 type Where = 'name' | 'date' | 'summary' | 'fact' | 'message' | 'assistant';
 
+/**
+ * Which pile a result belongs in, decided EXACTLY as the conversation list
+ * decides it, so the search and the list can never disagree about what
+ * counts as promotional.
+ *
+ * `??` and not `||`: is_promotional is nullable on purpose, and an explicit
+ * false, meaning Vero said "show this", has to beat a spam classification.
+ * Personal is checked first and wins, so a friend who also trips the spam
+ * classifier lands in Personal.
+ */
+type Bucket = 'primary' | 'personal' | 'promotional';
+const BUCKET_ORDER: Record<Bucket, number> = { primary: 0, personal: 1, promotional: 2 };
+
+const bucketOf = (r: Record<string, unknown>): Bucket => {
+  if (r.is_personal === true) return 'personal';
+  const promo = (r.is_promotional ?? r.classification === 'spam-or-unrelated') as boolean;
+  return promo ? 'promotional' : 'primary';
+};
+
 /** Name first, date second. See the ranking note at the top. */
 const TIER: Record<Where, number> = {
   name: 0,
@@ -143,7 +162,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           FROM conversations c
          WHERE lower(coalesce(c.contact_name, '')) LIKE lower(${like})
             OR lower(coalesce(c.contact_handle, '')) LIKE lower(${like})
-            OR lower(coalesce(c.external_user_id, '')) LIKE lower(${like})
+            -- EXACT, not LIKE. An IGSID is sixteen opaque digits and it used
+            -- to be matched as a substring in the NAME tier, which is the top
+            -- tier. Searching "450" therefore returned two strangers whose
+            -- Instagram ids happen to contain 450, ranked above the booking
+            -- actually being looked for. Nobody searches part of an id; they
+            -- paste the whole thing or they do not search it at all.
+            OR c.external_user_id = ${q}
 
         UNION ALL
         -- the client they are linked to, by name, email or number
@@ -229,6 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              COALESCE(c.contact_avatar_url, c.contact_profile_pic_url) AS contact_profile_pic_url,
              c.last_message_at, c.unread_count, c.ai_enabled,
              c.is_promotional, c.is_personal,
+             c.summary_json->>'classification' AS classification,
              p.id AS client_portal_id, p.client_display_name AS linked_client_display_name,
              json_agg(json_build_object('where', r.where_found, 'text', r.text)
                       ORDER BY r.where_found) AS matches
@@ -239,7 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        GROUP BY c.id, c.platform, c.external_user_id, c.contact_name, c.contact_handle,
                 c.contact_avatar_url, c.contact_profile_pic_url, c.last_message_at,
                 c.unread_count, c.ai_enabled, c.is_promotional, c.is_personal,
-                p.id, p.client_display_name
+                c.summary_json, p.id, p.client_display_name
        LIMIT 200
     `) as Array<Record<string, unknown>>;
 
@@ -253,9 +279,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // name and also in passing in a message is a name match.
         const best = Math.min(...raw.map((m) => TIER[m.where] ?? 9));
         const conversation = { ...r, matches: undefined } as Record<string, unknown>;
-        return { conversation, matches, rank: best };
+        return { conversation, matches, rank: best, bucket: bucketOf(r) };
       })
       .sort((a, b) => {
+        // BUCKET BEFORE RANK. A marketing mail that matches on its own sender
+        // name is a name-tier hit, so on rank alone it outranks the client
+        // thread that matched deeper in. Searching "450" returned two
+        // Instagram strangers and a Chase Sapphire mailshot above the booking
+        // quoting $450. Promotional and personal are not results Vero is
+        // looking for; they are results she is willing to scroll to.
+        if (BUCKET_ORDER[a.bucket] !== BUCKET_ORDER[b.bucket]) {
+          return BUCKET_ORDER[a.bucket] - BUCKET_ORDER[b.bucket];
+        }
         if (a.rank !== b.rank) return a.rank - b.rank;
         const at = new Date(String(a.conversation.last_message_at ?? 0)).getTime();
         const bt = new Date(String(b.conversation.last_message_at ?? 0)).getTime();
@@ -263,7 +298,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .slice(0, limit);
 
-    return res.status(200).json({ success: true, query: q, matchedDate: day, results });
+    return res.status(200).json({
+      success: true,
+      query: q,
+      matchedDate: day,
+      results,
+      // So the panel can say "and 3 promotional" without counting them again
+      // and disagreeing with this.
+      counts: {
+        primary: results.filter((r) => r.bucket === 'primary').length,
+        personal: results.filter((r) => r.bucket === 'personal').length,
+        promotional: results.filter((r) => r.bucket === 'promotional').length,
+      },
+    });
   } catch (err) {
     console.error('[admin/messages-search] failed:', err);
     return res.status(500).json({ success: false, error: 'Search failed' });
