@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-hooks.mjs && node scripts/check-send-gate.mjs && node scripts/check-phone-numbers.mjs && node scripts/check-contract-schedule.mjs && node scripts/check-whatsapp.mjs && node scripts/check-schedule-sync.mjs && node scripts/check-summary-overlay.mjs && node scripts/check-fact-quotes.mjs && node scripts/check-money-prefill.mjs && node scripts/check-time-prefill.mjs && rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && node scripts/build-hero-variants.mjs --check && node scripts/build-grid-variants.mjs && node scripts/build-grid-variants.mjs --check && node scripts/build-portal-mosaic.mjs && node scripts/build-portal-mosaic.mjs --check && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs && node scripts/build-gallery-statics.mjs --check",
+    "build": "node scripts/check-hooks.mjs && node scripts/check-send-gate.mjs && node scripts/check-phone-numbers.mjs && node scripts/check-contract-schedule.mjs && node scripts/check-price-review.mjs && node scripts/check-whatsapp.mjs && node scripts/check-schedule-sync.mjs && node scripts/check-summary-overlay.mjs && node scripts/check-fact-quotes.mjs && node scripts/check-money-prefill.mjs && node scripts/check-time-prefill.mjs && rm -rf dist && node scripts/fetch-instagram.mjs && node scripts/measure-photos.mjs && node scripts/build-gallery-statics.mjs && node scripts/build-hero-variants.mjs --check && node scripts/build-grid-variants.mjs && node scripts/build-grid-variants.mjs --check && node scripts/build-portal-mosaic.mjs && node scripts/build-portal-mosaic.mjs --check && tsc && tsc -p tsconfig.api.json && vite build && node scripts/prerender-photos.mjs && node scripts/build-gallery-statics.mjs --check",
     "lint": "eslint . --report-unused-disable-directives",
     "preview": "vite preview",
     "hero-variants": "node scripts/build-hero-variants.mjs",
@@ -27,6 +27,7 @@
     "portal-mosaic": "node scripts/build-portal-mosaic.mjs",
     "portal-mosaic:check": "node scripts/build-portal-mosaic.mjs --check",
     "check:contract": "node scripts/check-contract-schedule.mjs",
+    "check:price-review": "node scripts/check-price-review.mjs",
     "check:whatsapp": "node scripts/check-whatsapp.mjs",
     "check:schedule": "node scripts/check-schedule-sync.mjs",
     "check:overlay": "node scripts/check-summary-overlay.mjs",

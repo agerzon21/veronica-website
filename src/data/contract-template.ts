@@ -130,6 +130,18 @@ export interface WeddingContractVariables {
    * A MANUAL OVERRIDE block at the top of src/data/travel-fee.ts.
    */
   travel_custom_amount: string;
+  /**
+   * PRICE REVIEW, for a date booked more than 365 days ahead. Blank on every
+   * booking that is not, which prunes the clause away entirely.
+   *
+   * ONE FLAG, NO NUMBERS, deliberately. An earlier draft carried a CPI
+   * threshold, a percentage cap and a dollar ceiling. The owner removed all
+   * three: the review is a right to look again in January, not a formula.
+   * That makes the CLIENT EXIT the only thing bounding the right, which is
+   * why the clause spells out both halves of it, the cancellation and the
+   * deemed acceptance, rather than leaving silence undefined.
+   */
+  price_review_enabled: string;
 }
 
 export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
@@ -227,7 +239,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
             'Travel to the event location is included in the Total Payment above. Additional travel may be billed separately if discussed in advance.',
           ],
         },
-        { kind: 'text', text: 'The online gallery will remain hosted for {{retention_months}} months after delivery. After that, retention is at the Photographer’s discretion — the Client is responsible for downloading and backing up images during the hosting window.' },
+        { kind: 'text', text: 'The online gallery will remain hosted for {{retention_months}} months after delivery. After that, retention is at the Photographer’s discretion. The Client is responsible for downloading and backing up images during the hosting window.' },
       ],
     },
     // Optional, unnumbered. Included when two_camera_enabled is 'yes'.
@@ -411,6 +423,57 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         { kind: 'text', emphasis: 'italic', text: 'Full payment must be received before delivery of any images.' },
       ],
     },
+    // PRICE REVIEW. Unnumbered and optional, so a booking without it renders
+    // byte for byte as every wedding contract already on file does, and the
+    // I to XIII numbering never shifts.
+    //
+    // THE SHAPE, and why each limb is load bearing.
+    // 365 DAYS is the trigger: a June booking taken nine months out is simply
+    // fixed, which is what the owner wanted and what the market expects.
+    // JANUARY ONLY, because the price follows the season, not the signing date.
+    // A September 2028 wedding signed in 2026 is therefore reviewable twice,
+    // in January 2027 and January 2028, and at no other moment.
+    // SILENCE LOCKS IT. If a January passes with no notice, the price is fixed
+    // for that year. The default resolves in the Client's favour and needs no
+    // action from anyone, which is the only version that survives being
+    // forgotten.
+    // NINETY DAYS is a floor the owner did not ask for and should know about:
+    // without it a February wedding could be repriced in the January four
+    // weeks earlier, when no couple can rebook a photographer.
+    // DEEMED ACCEPTANCE is the sentence that makes this collectable. Balance is
+    // due AFTER the event, so without it a client can ignore the notice, let
+    // the window lapse, take the wedding and then refuse the increase, arguing
+    // no signed document ever changed the price. There is no addendum flow in
+    // this system and there should not be one; this sentence is what replaces it.
+    // NOTWITHSTANDING is what stops CANCELLATION / RESCHEDULING below, which
+    // forfeits the retainer on a Client cancellation, from eating the refund
+    // this clause promises. It is phrased as an override here rather than as an
+    // exception over there, so that Section VI never has to name a clause that
+    // may have been pruned out of the document.
+    {
+      title: 'PRICE REVIEW FOR DATES BOOKED MORE THAN A YEAR AHEAD',
+      optional: true,
+      requireVariables: ['price_review_enabled'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'This clause applies only because the Event Date falls more than three hundred and sixty five (365) days after the date this Agreement is signed.',
+        },
+        {
+          kind: 'text',
+          text: 'In January of each calendar year that begins after this Agreement is signed and ends before the Event Date, the Photographer may revise the Total Payment once, to reflect changes in the cost of providing the services. A revision is made by written notice given to the Client during that January, stating the revised Total Payment and the reason for it.',
+        },
+        {
+          kind: 'text',
+          text: 'If no such notice is given during a January, the Total Payment is fixed and may not be revised until the following January, if one falls before the Event Date. No revision may be made at any other time of year, and no revision may be made within ninety (90) days of the Event Date.',
+        },
+        {
+          kind: 'text',
+          emphasis: 'bold',
+          text: 'If notice of a revision is given, the Client may cancel this Agreement by telling the Photographer in writing within fourteen (14) days of that notice. On such a cancellation every payment made, including the retainer, is refunded in full within fourteen (14) days, notwithstanding CANCELLATION / RESCHEDULING below. If the Client does not cancel within those fourteen (14) days, the revised Total Payment takes effect and becomes the Total Payment under this Agreement.',
+        },
+      ],
+    },
     {
       number: 'V',
       title: 'PAYMENT METHODS',
@@ -426,21 +489,44 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         {
           kind: 'bullets',
           items: [
-            'The retainer is non-refundable.',
-            'If the Client cancels, all payments made are non-refundable.',
+            'The retainer is non-refundable, except as set out under IF THE PHOTOGRAPHER CANNOT PERFORM.',
+            'If the Client cancels, the retainer is forfeited. Any amount already paid above the retainer is returned.',
             'Rescheduling is allowed at the Photographer’s discretion based on availability.',
           ],
         },
       ],
     },
+    // WAS 'FORCE MAJEURE', and the rename is the point. The old trigger was
+    // "illness, emergency, or circumstances beyond control", which does not
+    // cover the Photographer moving away: relocating is a choice, and a client
+    // would rightly say so. A booking two years out needs that case named.
+    //
+    // Two other holes are closed here. "Attempt to find a replacement" never
+    // said what happens when the attempt fails, and the OR left the choice with
+    // the Photographer, so it was unclear whether a client could refuse a
+    // substitute they did not want. For a wedding that is the whole question.
+    // The notice period is longer for a far-future booking because ninety days
+    // is useless to someone rebooking a 2028 date and six months is not.
     {
       number: 'VII',
-      title: 'FORCE MAJEURE',
+      title: 'IF THE PHOTOGRAPHER CANNOT PERFORM',
       paragraphs: [
-        { kind: 'text', text: 'If Photographer is unable to perform due to illness, emergency, or circumstances beyond control, Photographer will:' },
+        {
+          kind: 'text',
+          text: 'If the Photographer is unable to perform, or withdraws for any reason including illness, emergency, a change of residence, or any circumstance beyond the Photographer’s control, the Photographer will notify the Client in writing as soon as she knows, and no later than ninety (90) days before the Event Date, or six (6) months before it where this Agreement was signed more than twelve months ahead of the Event Date.',
+        },
+        { kind: 'text', text: 'The Photographer will then either:' },
         {
           kind: 'bullets',
-          items: ['attempt to find a replacement photographer, OR', 'refund all payments received'],
+          items: [
+            'offer a replacement photographer of comparable experience for the Client’s approval, or',
+            'refund every payment made, including the retainer.',
+          ],
+        },
+        {
+          kind: 'text',
+          emphasis: 'bold',
+          text: 'The Client is never required to accept a replacement. If the Client does not approve the replacement offered, every payment made, including the retainer, is refunded in full within fourteen (14) days.',
         },
       ],
     },
@@ -603,7 +689,7 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     // stricter than necessary is the right setting, so the wording stays. The
     // session copy below says it instead.
     helpText:
-      'Full address, not just the venue name. Look it up in Google Maps or Waze first — confirm the street, city and state are right, and check the drive time so there are no surprises on the day.',
+      'Full address, not just the venue name. Look it up in Google Maps or Waze first. Confirm the street, city and state are right, and check the drive time so there are no surprises on the day.',
     required: true,
   },
   {
@@ -1131,7 +1217,7 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       {
         kind: 'bullets',
         items: [
-          'The retainer is non-refundable.',
+          'The retainer is non-refundable, except as set out under IF THE PHOTOGRAPHER CANNOT PERFORM.',
           'If the Client cancels, the retainer is forfeited. Any amount already paid above the retainer is returned.',
           'A session may be rescheduled once, subject to the Photographer’s availability. The retainer carries over to the new date.',
           'A rescheduled session must take place within {{reschedule_window}} of the original date, after which the retainer is forfeited.',
@@ -1139,18 +1225,31 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       },
     ],
   },
+  // Same rewrite as the wedding clause above, deliberately duplicated rather
+  // than shared: the five session types keep their own body, and a clause that
+  // exists in both arrays has to be changed in both, on purpose. This one keeps
+  // the reschedule limb, which a session has and a wedding does not.
   {
     number: 'VII',
-    title: 'FORCE MAJEURE',
+    title: 'IF THE PHOTOGRAPHER CANNOT PERFORM',
     paragraphs: [
-      { kind: 'text', text: 'If Photographer is unable to perform due to illness, emergency, or circumstances beyond control, Photographer will:' },
+      {
+        kind: 'text',
+        text: 'If the Photographer is unable to perform, or withdraws for any reason including illness, emergency, a change of residence, or any circumstance beyond the Photographer’s control, the Photographer will notify the Client in writing as soon as she knows.',
+      },
+      { kind: 'text', text: 'The Photographer will then either:' },
       {
         kind: 'bullets',
         items: [
-          'reschedule the session to a mutually agreed date, OR',
-          'attempt to find a replacement photographer, OR',
-          'refund all payments received',
+          'reschedule the session to a mutually agreed date, or',
+          'offer a replacement photographer of comparable experience for the Client’s approval, or',
+          'refund every payment made, including the retainer.',
         ],
+      },
+      {
+        kind: 'text',
+        emphasis: 'bold',
+        text: 'The Client is never required to accept a replacement or a new date. If the Client does not approve what is offered, every payment made, including the retainer, is refunded in full within fourteen (14) days.',
       },
     ],
   },
@@ -1346,6 +1445,11 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
 
 /** Every optional clause a type can offer, so the form can render checkboxes. */
 export const OPTIONAL_CLAUSES: Record<string, { label: string; helpText: string }> = {
+  price_review_enabled: {
+    label: 'Price review (booking more than a year out)',
+    helpText:
+      'Wedding only. Lets the price be revised once each January before the event, with written notice. If a January passes with no notice the price is fixed for that year. The client may cancel within 14 days of any notice and get everything back, retainer included.',
+  },
   two_camera_enabled: {
     label: 'Two-camera coverage',
     helpText:
@@ -1378,7 +1482,7 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
     fields: WEDDING_TEMPLATE_FIELDS,
     couple: true,
     coveragePresets: true,
-    optionalClauses: ['two_camera_enabled', 'additional_retouching_enabled'],
+    optionalClauses: ['price_review_enabled', 'two_camera_enabled', 'additional_retouching_enabled'],
   },
   portrait: {
     key: 'portrait',
@@ -1496,6 +1600,7 @@ export const TYPE_GATED_VARIABLES = [
   'permits_clause_enabled',
   'wedding_date',
   'session_scope',
+  'price_review_enabled',
 ] as const;
 
 /** The subset of TYPE_GATED_VARIABLES this type is allowed to carry. */
