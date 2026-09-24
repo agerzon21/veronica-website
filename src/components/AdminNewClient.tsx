@@ -883,6 +883,22 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * decides to invoke it, and copy on this form implying otherwise would
    * misrepresent her own contract back to her.
    */
+  /**
+   * The line under Start Time, when the half of the day was a guess.
+   *
+   * "4 o'clock" names an hour and not whether it is morning or afternoon, so
+   * resolveCoverage works it out and says that it did. The note goes away the
+   * moment Vero touches the field, because by then the value is hers.
+   *
+   * Worth a line of its own rather than folding into the end-time note: they
+   * answer different questions, and this one is the only value on the form
+   * that was inferred rather than read.
+   */
+  const startTimeNote = ((): string | null => {
+    if (!prefill || !seededTimes.start || !seededTimes.startMeridiemInferred) return null;
+    return eventStartTime === seededTimes.start ? COVERAGE_NOTES.guessedHalfOfDay[lang] : null;
+  })();
+
   const endTimeNote = ((): string | null => {
     if (!prefill || !seededTimes.start) return null;
     if (seededTimes.end) {
@@ -1916,6 +1932,13 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
                 <Field label={t.newClient.startTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.startTimeHelp} hasError={fieldErrors.has('startTime')}>
                   <FormInput type="time" value={eventStartTime} onChange={(e) => { setEventStartTime(e.target.value); clearFieldError('startTime'); }} />
+                  {/* Only ever shown when the thread named an hour without
+                      naming the half of the day. See startTimeNote. */}
+                  {startTimeNote && (
+                    <Text fontSize="2xs" color="orange.600" mt={1} lineHeight="1.5">
+                      {startTimeNote}
+                    </Text>
+                  )}
                 </Field>
                 <Field label={t.newClient.endTimeLabel} w={{ base: '100%', md: '50%' }} required helpText={t.newClient.endTimeHelp} hasError={fieldErrors.has('endTime')}>
                   <FormInput type="time" value={eventEndTime} onChange={(e) => { setEventEndTime(e.target.value); clearFieldError('endTime'); }} />

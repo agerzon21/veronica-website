@@ -200,6 +200,60 @@ expect('refuse', '👍', NO_OFFER, 'a thumbs up with no offer is still refused')
 expect('refuse', 'sure, go ahead', OFFERED,
   'two affirmatives joined by a comma match neither entry in the list');
 
+// ── Does Vero HEAR about a refusal? ─────────────────────────────────────────
+//
+// `sendish` decides that, and it is not the gate. The gate is `ok` and only
+// `ok`; every case below is refused either way. What this pins is the
+// difference between the two refusals as Vero experiences them.
+//
+// She typed "end it with an exclamation mark not a period and youre good to
+// send it". Refused, correctly, for being 78 characters of edit with an
+// approval welded on. She then had every reason to believe the mail had gone
+// out, and the panel said nothing she could act on: it printed six lines of
+// instructions meant for the model. That case has to produce a short note.
+//
+// The opposite case is the model reaching for send_reply on a turn where she
+// said nothing about sending. She is not waiting for anything, and a warning
+// about a send she never asked for is noise in a column she reads all day.
+// Logged, and nothing more.
+const sendish = (want, message, offer, note) => {
+  const got = looksLikeSendApproval(message, offer ?? '');
+  if (got.sendish === want) { pass++; return; }
+  failures.push({
+    want: `sendish=${want}`, got: `sendish=${got.sendish}`, why: got.why, note, message,
+  });
+};
+
+// Near misses. She is expecting a send and is not getting one.
+sendish(true, 'end it with an exclamation mark not a period and youre good to send it', OFFERED,
+  'THE ONE THAT BIT: a long edit with an approval on the end');
+sendish(true, 'ok looks good, change the last line and then send it to her please', OFFERED,
+  'an edit and a send in one breath');
+sendish(true, 'yes', NO_OFFER, 'a bare yes with nothing offered behind it');
+sendish(true, 'did you send it already?', OFFERED, 'asking whether it went is her looking for exactly this');
+
+// A negation sitting right on the verb. She knows nothing went.
+sendish(false, "don't send it yet", OFFERED, 'an explicit hold, with the verb right there');
+sendish(false, 'do not send that', OFFERED, 'the same, spelled out');
+sendish(false, 'не отправляй пока', OFFERED, 'the same in Russian');
+sendish(false, 'hold off on sending it', OFFERED, 'a hold phrased as a hold');
+// ...and a negation that is NOT on the verb must not suppress the note.
+sendish(true, 'wait, actually go ahead and send it', OFFERED,
+  'a false start followed by a real approval');
+sendish(true, 'no not that one, send the other draft', OFFERED,
+  'two negations, neither of them attached to the verb');
+
+// Not near misses. She said nothing about sending.
+sendish(false, "that's too formal, warm it up", OFFERED, 'a plain edit request');
+sendish(false, 'no not yet', OFFERED, 'an explicit do-not-send');
+sendish(false, 'what do you know about my pricing?', NO_OFFER, 'an unrelated question');
+sendish(false, '', NO_OFFER, 'an empty message');
+
+// And the accepting cases carry it too, so the field is never just "the
+// refusal reason in disguise".
+sendish(true, 'send it', OFFERED, 'a plain approval');
+sendish(true, 'отправляй', OFFERED, 'a plain approval in Russian');
+
 // ── Report ──────────────────────────────────────────────────────────────────
 if (failures.length) {
   console.error(`\ncheck-send-gate: ${failures.length} of ${pass + failures.length} FAILED\n`);

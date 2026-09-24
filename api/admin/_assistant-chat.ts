@@ -128,6 +128,14 @@ function lastAssistantTextOf(messages: StoredMessage[]): string {
 }
 
 /**
+ * The only send refusal Vero is ever shown, as a key rather than a string.
+ *
+ * The gate raising it runs inside the tool executor, which has no idea which
+ * language she is reading in, so the render loop is what turns it into words.
+ */
+const AWAITING_APPROVAL = 'awaiting-approval';
+
+/**
  * Prose that reads as "I wrote that down", in both languages the panel
  * speaks. Used only to decide whether to POINT OUT that nothing was written;
  * see the note where it is used for why over-matching is harmless.
@@ -434,7 +442,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * a note that was not saved and an email that was not sent are very
      * different pieces of news.
      */
-    const toolFailures: Array<{ tool: string; error: string }> = [];
+    /**
+     * `error` is written FOR THE MODEL and `veroNote` FOR VERO, and they are
+     * not the same text.
+     *
+     * They used to be. The panel printed "⚠️ Email NOT sent: " followed by
+     * the raw tool error, and that error is six lines of instruction aimed at
+     * the model: show her the text, tell her in her own language, do not call
+     * this again. She read all of it, after every draft, and called it
+     * clutter, which it is.
+     *
+     * A null veroNote means the failure is real, is logged, and is none of
+     * her business on this turn.
+     */
+    const toolFailures: Array<{ tool: string; error: string; veroNote: string | null }> = [];
     const dbWrites: DbWrite[] = [];
     /**
      * Sends completed during THIS request, shared with executeToolCall.
@@ -550,6 +571,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           toolFailures.push({
             tool: toolCall.function.name,
             error: String((toolResult as { error: unknown }).error),
+            veroNote:
+              toolResult && typeof toolResult === 'object' && 'vero_note' in toolResult
+                ? (String((toolResult as { vero_note: unknown }).vero_note) || null)
+                : String((toolResult as { error: unknown }).error),
           });
         }
         const toolResponseText = JSON.stringify(toolResult);
@@ -720,18 +745,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // to show as one.
     const sendBlocks = toolFailures.filter((f) => f.tool === 'send_reply');
     const writeBlocks = capturedRule ? [] : toolFailures.filter((f) => f.tool !== 'send_reply');
+    // veroNote, never `error`: see the toolFailures declaration. An empty or
+    // absent note is a deliberate silence, not a missing string.
     for (const f of sendBlocks) {
-      newlyPersistedMessages.push({
-        role: 'assistant',
-        content:
-          (language === 'ru' ? '⚠️ Письмо НЕ отправлено: ' : '⚠️ Email NOT sent: ') + f.error,
-      });
+      if (!f.veroNote) continue;
+      const text =
+        f.veroNote === AWAITING_APPROVAL
+          ? language === 'ru'
+            ? 'Не отправлено, жду твоего слова.'
+            : 'Not sent, still waiting on your go-ahead.'
+          : f.veroNote;
+      newlyPersistedMessages.push({ role: 'assistant', content: `⚠️ ${text}` });
     }
     for (const f of writeBlocks) {
+      if (!f.veroNote) continue;
       newlyPersistedMessages.push({
         role: 'assistant',
         content:
-          (language === 'ru' ? '⚠️ Заметка НЕ сохранена: ' : '⚠️ Note NOT saved: ') + f.error,
+          (language === 'ru' ? '⚠️ Заметка НЕ сохранена: ' : '⚠️ Note NOT saved: ') + f.veroNote,
       });
     }
 
@@ -1891,6 +1922,19 @@ async function executeToolCall(
           'or a plain "yes" / "да" right after you have asked whether to send it. ' +
           'Do NOT describe this as an error, a problem, or an issue with sending, because it is none of those. ' +
           'Do not claim anything was sent, and do not call this tool again until she says to.',
+        /**
+         * ONE LINE, AND ONLY WHEN SHE WAS EXPECTING A SEND.
+         *
+         * approval.sendish is the difference between two refusals that are
+         * identical to the code. If she typed something with a send verb in
+         * it, she is sitting there believing the mail has gone and has to be
+         * told it has not. If she said nothing of the kind and the model
+         * reached for the tool on its own, there is nothing she is waiting
+         * for, and a warning about a send she never asked for is noise in a
+         * column she reads all day. That one is logged above and goes no
+         * further, which is where it belongs.
+         */
+        vero_note: approval.sendish ? AWAITING_APPROVAL : '',
       };
     }
 
@@ -2247,9 +2291,10 @@ She can ask to reply to someone: "help me answer Sarah", "draft a reply to that 
 2. **If she DIDN'T name anyone**, call list_conversations with no query, then show her the most recent 4-5 in a short numbered list — name, channel, and a few words about what they last said — and ask which one. Keep it scannable; she's picking, not reading.
 3. Use read_thread to read what was actually said. NEVER draft from the name alone.
 4. Write the draft IN THE CHAT so she can read it in full. Write it in the language the CUSTOMER uses, even if you and Vero are talking in another language. Use what you know — her pricing ranges, her services, her tone — and ask her for anything you'd need that isn't in the thread.
-5. Then ASK: would you like me to send this, or do you want to change something? Do NOT call send_reply in the same turn you first show a draft, ever.
+5. Then ASK ONCE, on the FIRST draft only: would you like me to send this, or change something? Do NOT call send_reply in the same turn you first show a draft, ever.
 6. Only after she approves ("yes", "send it", "да, отправь") call send_reply with confirmed=true and the exact approved text.
-If she asks for changes, revise and show it again.
+7. **ON EVERY REVISION AFTER THAT, SHOW THE NEW TEXT AND STOP.** No preamble, no "here is the revised version", no summary of what you changed, and above all no asking again whether to send it. She asked for a change, you made it, she is reading it: she knows what it is and she knows she has not sent it yet. She already said this out loud, about this exact thing: "we dont need those follow up messages sent after every SINGLE message she sends, its just clutter."
+   A draft she is refining is a document, not a conversation. Ten revisions should read as ten versions of one reply, not as twenty messages.
 
 ## HOW A DRAFT TO A CUSTOMER IS WRITTEN
 These apply the moment you START writing a draft, which is while you are typing

@@ -196,9 +196,7 @@ const STRINGS: Record<AdminLang, Strings> = {
     toastLabels: { created: 'Записал', updated: 'Обновил', deleted: 'Удалил' },
     draftToastLabel: 'Черновик обновлён — вкладка «Ответ»',
     errorReply: (detail) => `(Что-то пошло не так: ${detail})`,
-    nothingRecorded:
-      '(Ничего не записано в карточку этого клиента. Если деталь нужно сохранить, ' +
-      'напишите её ещё раз, например: «запиши: сумма 500 долларов».)',
+    nothingRecorded: '(В карточку этого клиента ничего не записано.)',
     serverUnreachable: '(Не удалось связаться с сервером.)',
     serverError: 'ошибка сервера',
     looping: '(Ассистент продолжал вызывать инструменты без ответа. Попробуй перефразировать.)',
@@ -252,9 +250,10 @@ const STRINGS: Record<AdminLang, Strings> = {
     toastLabels: { created: 'Saved', updated: 'Updated', deleted: 'Deleted' },
     draftToastLabel: 'Draft updated — see the Reply tab',
     errorReply: (detail) => `(Something went wrong: ${detail})`,
-    nothingRecorded:
-      '(Nothing was written down against this client. If a detail needs saving, ' +
-      'say it again as an instruction, for example: "write down: total is $500".)',
+    // No worked example. This line shows up whenever the model claims a save
+    // it did not make, which is often, and a sample price repeated down the
+    // column reads as the panel malfunctioning rather than as help.
+    nothingRecorded: '(Nothing was saved against this client.)',
     serverUnreachable: '(Could not reach the server.)',
     serverError: 'server error',
     looping: '(The assistant kept calling tools without giving a final answer. Try rephrasing.)',

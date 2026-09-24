@@ -289,6 +289,50 @@ const NO_SEND = new RegExp(
 );
 
 /**
+ * Does the send verb in this message read as an instruction to send, rather
+ * than as a refusal to?
+ *
+ * ONLY EVER FEEDS `sendish`, never the gate. Nothing here can cause an email
+ * to go out; it decides whether Vero is told that one did not.
+ *
+ * NO_SEND cannot answer this. It is a broad veto list, correctly so, and it
+ * holds "not", "change", "first", "but" and "if" alongside the real
+ * negations, because for the GATE a message containing any of them is not a
+ * clean approval. But Vero wrote:
+ *
+ *     "end it with an exclamation mark not a period and youre good to send it"
+ *
+ * which trips NO_SEND on the "not" in "not a period", and she plainly did
+ * think she had said send it. Asking whether the word "not" appears anywhere
+ * in seventy characters is the wrong question.
+ *
+ * The right one is what sits IMMEDIATELY BEFORE the send verb. "don't send
+ * it" negates the verb. "and youre good to send it" does not, whatever else
+ * the sentence contains. A short window is enough, and a short window is also
+ * what keeps "not a period" from reaching across eight words to negate a verb
+ * it has nothing to do with.
+ */
+const NEGATED_SEND = new RegExp(
+  `(?:don'?t|dont|do\\s+not|never|not|no|stop|cancel|wait|hold(?:\\s+off)?|pause)` +
+    `\\s*(?:to\\s+|please\\s+)?$` +
+    `|(?:не|нет|не\\s+надо|пока\\s+не)\\s*$`,
+  'iu',
+);
+/** The window before the verb. Wide enough for "do not ", narrow enough that
+ *  an unrelated "not" eight words back cannot reach it. */
+const NEGATION_WINDOW = 14;
+
+function sendVerbReadsAsApproval(raw: string): boolean {
+  const text = withoutQuotedText(raw);
+  const scan = new RegExp(SEND_VERB.source, 'giu');
+  for (let m = scan.exec(text); m; m = scan.exec(text)) {
+    const before = text.slice(Math.max(0, m.index - NEGATION_WINDOW), m.index);
+    if (!NEGATED_SEND.test(before)) return true;
+  }
+  return false;
+}
+
+/**
  * A bare yes. These approve ONLY when the assistant's own previous message
  * asked whether to send, because "да" is the most common word in this chat and
  * answers a hundred other questions. See assistantOfferedToSend.
@@ -374,6 +418,25 @@ const MAX_APPROVAL_LENGTH = 120;
 export interface SendApproval {
   ok: boolean;
   why: string;
+  /**
+   * Did she say ANYTHING about sending?
+   *
+   * Nothing to do with the gate, which is `ok` and only `ok`. This exists so
+   * the panel can tell two refusals apart that are the same refusal to the
+   * code and nothing like each other to Vero.
+   *
+   * She typed "end it with an exclamation mark not a period and youre good to
+   * send it". That is 78 characters of edit with an approval welded onto the
+   * end, so the gate refused it, correctly, and she had every reason to think
+   * the mail had gone. She needs a line in the chat saying it has not.
+   *
+   * The other case is the model deciding on its own to mail a customer on a
+   * turn where she said nothing of the kind. She is not waiting for anything
+   * there, and a warning about a send she never asked for is noise in a
+   * column she reads all day. It is logged, always, and that is the right
+   * place for it.
+   */
+  sendish: boolean;
 }
 
 /**
@@ -408,7 +471,7 @@ export function looksLikeSendApproval(
   lastAssistantText = '',
 ): SendApproval {
   const raw = (userMessage ?? '').trim();
-  if (!raw) return { ok: false, why: 'empty-message' };
+  if (!raw) return { ok: false, why: 'empty-message', sendish: false };
 
   // Lowercase, and shave punctuation and emoji off both ends so "Yes!" and
   // "да," and "ok 👍" land on the same key as "yes".
@@ -424,32 +487,46 @@ export function looksLikeSendApproval(
   // trying to find out what happened, and enumerating every auxiliary verb
   // that can open a question, in two languages, is a losing game next to
   // reading the punctuation she actually typed.
-  if (/\?\s*$/u.test(raw)) return { ok: false, why: 'question-not-approval' };
+  // Sendish even so: "did you send it?" is her looking for exactly this.
+  if (/\?\s*$/u.test(raw)) {
+    return { ok: false, why: 'question-not-approval', sendish: sendVerbReadsAsApproval(raw) };
+  }
 
   // Anything that reads as "not yet", "not like that" or "why did you" is out
   // before any of the accepting branches get a look in.
-  if (NO_SEND.test(raw)) return { ok: false, why: 'negation-or-edit-request' };
+  // The GATE refuses all of these, and rightly. Whether VERO is told depends
+  // on something narrower: an edit request carrying "and then send it" is a
+  // message she expects to result in a send, and "don't send it yet" is not.
+  if (NO_SEND.test(raw)) {
+    return { ok: false, why: 'negation-or-edit-request', sendish: sendVerbReadsAsApproval(raw) };
+  }
 
   const loose = ACCEPT_LOOSE_AFFIRMATIVES && (LOOSE_AFFIRMATIVES.has(normalized) || LOOSE_AFFIRMATIVES.has(raw));
   if (BARE_AFFIRMATIVES.has(normalized) || loose) {
     return assistantOfferedToSend(lastAssistantText)
-      ? { ok: true, why: 'affirmative-after-send-offer' }
-      : { ok: false, why: 'bare-affirmative-without-send-offer' };
+      ? { ok: true, why: 'affirmative-after-send-offer', sendish: true }
+      // A bare "yes" with no offer behind it. She may well have meant a
+      // different question, but she said yes to something and deserves to
+      // know nothing went.
+      : { ok: false, why: 'bare-affirmative-without-send-offer', sendish: true };
   }
 
   if (raw.length > MAX_APPROVAL_LENGTH) {
-    return { ok: false, why: 'too-long-to-be-an-approval' };
+    // THE ONE THAT BIT. A long edit with "and youre good to send it" welded
+    // onto the end is refused here, and she is left believing it went.
+    return { ok: false, why: 'too-long-to-be-an-approval', sendish: sendVerbReadsAsApproval(raw) };
   }
 
   if (!SEND_VERB.test(withoutQuotedText(raw))) {
-    return { ok: false, why: 'no-send-verb' };
+    // She said nothing about sending. The model tried anyway.
+    return { ok: false, why: 'no-send-verb', sendish: false };
   }
 
   if (!ALLOW_DRAFT_AND_SEND_IN_ONE_MESSAGE && COMPOSE_VERB.test(raw)) {
-    return { ok: false, why: 'draft-and-send-in-one-message' };
+    return { ok: false, why: 'draft-and-send-in-one-message', sendish: true };
   }
 
-  return { ok: true, why: 'explicit-send-verb' };
+  return { ok: true, why: 'explicit-send-verb', sendish: true };
 }
 
 /**

@@ -138,6 +138,8 @@ interface ClockReading {
   mer: string | null;
   /** True for "11:30" and false for a bare "11". Decides how far we trust it. */
   hadColon: boolean;
+  /** "o'clock", "часа": this is a time of day, not a count. */
+  clockWord: boolean;
 }
 
 /**
@@ -148,16 +150,49 @@ interface ClockReading {
  */
 function readClockTimes(raw: string): ClockReading[] {
   const text = raw.toLowerCase();
-  const re = /(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/g;
+  // The trailing group is a CLOCK WORD: the thing that makes "4 o'clock" a
+  // time of day rather than the number four. Unicode flag because half of it
+  // is Cyrillic, and \b is defined over [A-Za-z0-9_] so it does not sit where
+  // you think it does against "часа". See the warning further down this file.
+  const re = /(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\s*(o['\u2019 ]?clock|час(?:а|ов|у)?|ч\.)?(?![\p{L}\p{N}])/gu;
   const hits: ClockReading[] = [];
   for (const m of text.matchAll(re)) {
     const h = Number(m[1]);
     const min = m[2] ? Number(m[2]) : 0;
     if (!Number.isFinite(h) || h > 23 || min > 59) continue;
-    hits.push({ h, m: min, mer: m[3] ? m[3][0] : null, hadColon: Boolean(m[2]) });
+    hits.push({ h, m: min, mer: m[3] ? m[3][0] : null, hadColon: Boolean(m[2]), clockWord: Boolean(m[4]) });
   }
   return hits;
 }
+
+/**
+ * Which half of the day a bare hour means, when nobody said.
+ *
+ * THIS IS AN INFERENCE AND IT IS LABELLED AS ONE. resolveCoverage reports it
+ * back as startMeridiemInferred so the form can say where the value came from
+ * and that the AM/PM half of it was not stated. Nothing here writes to a
+ * contract without Vero seeing it first.
+ *
+ * It is worth making at all because of what it replaces. "4 o'clock" used to
+ * parse to nothing, the thread then looked to the form like a thread with no
+ * time in it, and BOTH fallbacks applied: a real engagement session agreed
+ * for 4pm opened as 5:00 PM to 6:00 PM, two numbers nobody had ever said. A
+ * labelled inference off a number she typed beats an unlabelled default off
+ * nothing.
+ *
+ * The convention is the daylight one a photographer works to, not the
+ * clock's: sessions happen in the morning or in the late afternoon, and 4am
+ * is not a session. 7 through 11 read as morning, 1 through 6 as afternoon,
+ * 12 as noon. Seven is the genuinely ambiguous one, a sunrise shoot and a
+ * summer sunset shoot both being real, and it goes to morning because that is
+ * the reading Vero can correct from a visible note.
+ */
+const inferMeridiem = (h: number): number | null => {
+  if (h === 12) return 12;
+  if (h >= 1 && h <= 6) return h + 12;
+  if (h >= 7 && h <= 11) return h;
+  return null;
+};
 
 const to24 = (h: number, mer: string | null): number | null => {
   if (!mer) return h <= 23 ? h : null;
@@ -219,14 +254,40 @@ export function parseCoverageWindow(
  * "3pm", "15:00" and "11:30" all carry enough to read.
  */
 export function parseStartTime(raw: string | null): string | null {
-  if (!raw) return null;
-  const hits = readClockTimes(raw);
-  const first = hits[0];
-  if (!first) return null;
-  if (!first.mer && !first.hadColon) return null;
-  const h = to24(first.h, first.mer);
-  if (h === null) return null;
-  return fmtHhmm(h, first.m);
+  return readStartTime(raw).start;
+}
+
+/**
+ * The start time, and whether its AM/PM was read or guessed.
+ *
+ * parseStartTime stays as it was for every caller that only wants the string.
+ * This one exists because the difference matters on a form: a time read off
+ * "4:00 PM" needs no explaining and a time worked out from "around 4 o'clock"
+ * does.
+ */
+export function readStartTime(
+  raw: string | null,
+): { start: string | null; meridiemInferred: boolean } {
+  const miss = { start: null, meridiemInferred: false };
+  if (!raw) return miss;
+  const first = readClockTimes(raw)[0];
+  if (!first) return miss;
+
+  // A meridiem or a colon is somebody stating a clock time outright.
+  if (first.mer || first.hadColon) {
+    const h = to24(first.h, first.mer);
+    return h === null ? miss : { start: fmtHhmm(h, first.m), meridiemInferred: false };
+  }
+
+  // "4 o'clock" and "в 4 часа" are clock readings too. They name the hour and
+  // not the half of the day, so the hour is hers and only the half is guessed.
+  if (first.clockWord) {
+    const h = inferMeridiem(first.h);
+    return h === null ? miss : { start: fmtHhmm(h, first.m), meridiemInferred: true };
+  }
+
+  // A bare number is just a number. "sometime around 4" is not a time.
+  return miss;
 }
 
 /** Counts, spelled out, in both languages the inbox speaks. ё is folded to е. */
@@ -460,6 +521,13 @@ export interface CoverageSuggestion {
    * thread stated the window outright, and null when there is no end time.
    */
   endSource: DurationStatement | null;
+  /**
+   * True when the thread named an hour but not whether it was morning or
+   * afternoon, so the half of the day was worked out rather than read. See
+   * inferMeridiem. The form says so under the field; a value nobody stated
+   * has to be visible as one.
+   */
+  startMeridiemInferred: boolean;
 }
 
 /**
@@ -485,21 +553,24 @@ export function resolveCoverage(
 ): CoverageSuggestion {
   const stated = parseCoverageWindow(eventTime);
   if (stated.start && stated.end) {
-    return { start: stated.start, end: stated.end, endSource: null };
+    return { start: stated.start, end: stated.end, endSource: null, startMeridiemInferred: false };
   }
-  const start = parseStartTime(eventTime);
-  if (!start) return { start: null, end: null, endSource: null };
+  const { start, meridiemInferred } = readStartTime(eventTime);
+  if (!start) return { start: null, end: null, endSource: null, startMeridiemInferred: false };
 
   const picked = pickCoverageDuration(statements);
-  if (!picked) return { start, end: null, endSource: null };
+  if (!picked) return { start, end: null, endSource: null, startMeridiemInferred: meridiemInferred };
 
   const [h, m] = start.split(':').map(Number);
   const endMinutes = h * 60 + m + picked.minutes;
-  if (endMinutes >= 24 * 60) return { start, end: null, endSource: null };
+  if (endMinutes >= 24 * 60) {
+    return { start, end: null, endSource: null, startMeridiemInferred: meridiemInferred };
+  }
   return {
     start,
     end: fmtHhmm(Math.floor(endMinutes / 60), endMinutes % 60),
     endSource: picked.statement,
+    startMeridiemInferred: meridiemInferred,
   };
 }
 
@@ -616,6 +687,13 @@ export const COVERAGE_NOTES = {
   noDuration: {
     en: 'The conversation gives a start time but never says how long the session runs, so the end time is yours to set.',
     ru: 'В переписке есть время начала, но нет длительности, поэтому время окончания нужно поставить самой.',
+  },
+  // The hour is hers, the half of the day is not. Said plainly rather than
+  // hidden, because this is the one value on the form that was worked out
+  // instead of read, and it is the value that goes on the contract.
+  guessedHalfOfDay: {
+    en: 'The conversation says the hour but not morning or afternoon, so this is a guess. Check it.',
+    ru: 'В переписке назван час, но не утро или вечер, так что это догадка. Проверь.',
   },
 } as const;
 
