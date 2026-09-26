@@ -3,6 +3,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import FaInstagram from '../icons/fa/FaInstagram';
 import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
 import FaWhatsapp from '../icons/fa/FaWhatsapp';
+import { SITE_LOGO_H } from './siteHeader';
 
 /**
  * The footer is one sheet of paper, folded once.
@@ -37,7 +38,22 @@ import FaWhatsapp from '../icons/fa/FaWhatsapp';
 const FACE = { disc: '#f8f1e0', ring: '#d8c49c', p: '#e2d4b4', v: '#dccca4' };
 const UNDER = { disc: '#f9f4ea', ring: '#ffffff', p: '#fdfbf6', v: '#ffffff' };
 
-const MARK = 92; // px
+/**
+ * On a phone the footer has to fit the wordmark AND three 44px contacts, which
+ * the header does not (it carries a 48px hamburger). At 390px that leaves about
+ * 226px for the wordmark, and 34px of height is 223px of ink, so this is the
+ * largest it can be without flex squashing it. 34px is also the bottom of
+ * SITE_LOGO_H's own clamp, so header and footer read as the same size.
+ */
+const LOGO_H_MOBILE = '34px';
+
+/**
+ * The watermark is smaller on a phone. At header scale the wordmark and the
+ * three 44px contacts fill the width, leaving roughly 11px of gap, so a 92px
+ * mark would sit squarely behind the wordmark and cost it legibility. 68px
+ * still straddles the crease and still reads as a watermark.
+ */
+const MARK = { base: 68, md: 92 };
 const BAND = 56; // px, the face
 const FOLD = 1; // px, the crease
 
@@ -50,19 +66,22 @@ const FOLD = 1; // px, the crease
  * container centre, at every width. Hence the calc. Measured at 320 through
  * 1440px; only 320 drifts, by 2px, where the wordmark itself starts shrinking.
  */
-const FooterMark = ({ tone, top }: { tone: typeof FACE; top: string }) => (
+const FooterMark = ({ tone, face }: { tone: typeof FACE; face: boolean }) => (
   <Box
     as="span"
     aria-hidden="true"
     position="absolute"
     left="50%"
     transform="translateX(calc(-50% - 2px))"
-    top={top}
-    w={`${MARK}px`}
-    h={`${MARK}px`}
+    top={{
+      base: face ? `${BAND - MARK.base / 2}px` : `-${MARK.base / 2 + FOLD}px`,
+      md: face ? `${BAND - MARK.md / 2}px` : `-${MARK.md / 2 + FOLD}px`,
+    }}
+    w={{ base: `${MARK.base}px`, md: `${MARK.md}px` }}
+    h={{ base: `${MARK.base}px`, md: `${MARK.md}px` }}
     pointerEvents="none"
   >
-    <svg width={MARK} height={MARK} viewBox="109 5 60 60" fill="none" focusable="false" style={{ display: 'block' }}>
+    <svg width="100%" height="100%" viewBox="109 5 60 60" fill="none" focusable="false" style={{ display: 'block' }}>
       <path d="M169 35C169 51.5685 155.569 65 139 65C122.431 65 109 51.5685 109 35C109 18.4314 122.431 5 139 5C155.569 5 169 18.4314 169 35Z" fill={tone.disc} />
       <path d="M168.423 35C168.423 51.2499 155.25 64.4231 139 64.4231C122.75 64.4231 109.577 51.2499 109.577 35C109.577 18.7501 122.75 5.57692 139 5.57692C155.25 5.57692 168.423 18.7501 168.423 35Z" stroke={tone.ring} strokeWidth="1.15385" />
       <path d="M136.865 23.0692C140.881 22.7923 144.412 22.6538 147.458 22.6538C156.042 22.6538 160.335 25.6827 160.335 31.7404C160.335 34.5442 159.608 37.0019 158.154 39.1135C157.392 40.2558 156.215 41.1731 154.623 41.8654C153.031 42.5231 151.11 42.8519 148.86 42.8519H141.175V59H136.865V23.0692ZM147.51 23.1731C145.502 23.1731 143.39 23.2942 141.175 23.5365V42.3327H148.86C153.74 42.125 156.181 38.6288 156.181 31.8442C156.181 29.075 155.454 26.9462 154 25.4577C152.546 23.9346 150.383 23.1731 147.51 23.1731Z" fill={tone.p} />
@@ -105,13 +124,22 @@ const Footer = () => {
     <Box as="footer" bg="white">
       {/* The face */}
       <Band h={`${BAND}px`} bg="white">
-        <FooterMark tone={FACE} top={`${BAND - MARK / 2}px`} />
-        <Flex position="relative" align="flex-end" w="100%" h={`${BAND}px`} px={4} pb="5px">
+        <FooterMark tone={FACE} face />
+        <Flex position="relative" align="flex-end" w="100%" h={`${BAND}px`} px={{ base: 3, md: 4 }} pb="5px">
           <Link as={RouterLink} to="/" display="flex" alignItems="flex-end" flex="0 1 auto" minW={0} h="44px" _hover={{ opacity: 0.85 }} transition="opacity 0.3s">
-            <Image src="/assets/images/logo.svg" htmlWidth={460} htmlHeight={70} alt="Vero Photography" w="140px" maxW="100%" h="auto" />
+            <Image
+              src="/assets/images/logo.svg"
+              htmlWidth={460}
+              htmlHeight={70}
+              alt="Vero Photography"
+              width="auto"
+              objectFit="contain"
+              objectPosition="left bottom"
+              h={{ base: LOGO_H_MOBILE, lg: SITE_LOGO_H }}
+            />
           </Link>
           <Box aria-hidden="true" flex="1 1 auto" minW="8px" />
-          <Flex flex="0 0 auto" align="center" gap="6px">
+          <Flex flex="0 0 auto" align="center" gap={{ base: 0, md: "6px" }}>
             {SOCIALS.map((s) => (
               <Link
                 key={s.label}
@@ -151,8 +179,8 @@ const Footer = () => {
 
       {/* The underside. Legal left, copyright right: the reverse of the face. */}
       <Band bg="brand.surfaceFold">
-        <FooterMark tone={UNDER} top={`-${MARK / 2 + FOLD}px`} />
-        <Flex position="relative" align="center" justify="space-between" wrap="wrap" w="100%" minH="44px" px={4}>
+        <FooterMark tone={UNDER} face={false} />
+        <Flex position="relative" align="center" justify="space-between" wrap="wrap" w="100%" minH="44px" px={{ base: 3, md: 4 }}>
           <Flex flex="0 1 auto" minW={0} align="center">
             {LEGAL.map((l, i) => (
               <Flex key={l.to} align="center">
