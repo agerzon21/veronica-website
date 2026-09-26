@@ -41,6 +41,10 @@ const GOLD_SOFT = '#d4b87a'; //  1.92:1 — hover fill on dark
 const GOLD_BORDER = '#e8d9a8'; //  1.41:1 — borders on cream
 const CREAM = '#fdf9f0';
 const CREAM_SUNKEN = '#f5efe4';
+// The underside of the footer's fold. Deeper than CREAM_SUNKEN on purpose: the
+// footer prints a near-white watermark on it, and against #f5efe4 that mark is
+// too faint to read as the tonal inversion it is meant to be.
+const CREAM_FOLD = '#f1e8d7';
 const GOLD_FIELD = '#a58b58'; //  ~3.0:1 on cream — input borders, WCAG 1.4.11
 const STATUS_OK = '#2f7a4d'; //  ~4.6:1 on cream — validated / confirmation sent
 const STATUS_WARN = '#a9631a'; //  ~4.6:1 on cream — confirmation could not send
@@ -65,6 +69,8 @@ export const brand = {
   surface: CREAM,
   /** Recessed surface — inputs, wells. */
   surfaceSunken: CREAM_SUNKEN,
+  /** The footer's folded underside. The one surface a watermark is printed on. */
+  surfaceFold: CREAM_FOLD,
   /**
    * Input borders on cream. accentBorder is 1.41:1 and decorative, which is
    * below the 3:1 WCAG 1.4.11 asks of a control's boundary, so a field

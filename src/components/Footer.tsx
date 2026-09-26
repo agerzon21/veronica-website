@@ -1,19 +1,75 @@
-import { Box, VStack, Text, HStack, Icon, Link, Image } from '@chakra-ui/react';
+import { Box, Flex, Text, Icon, Link, Image } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import FaInstagram from '../icons/fa/FaInstagram';
 import FaRegEnvelope from '../icons/fa/FaRegEnvelope';
 import FaWhatsapp from '../icons/fa/FaWhatsapp';
 
-// Light footer using the same logo + gold accent palette as the rest of the
-// site. Four quiet bands — logo → connect → legal → meta — separated by
-// whitespace rather than dark color blocks, so the footer reads as a
-// natural extension of the page above instead of an abrupt dark slab.
-//
-// Every piece of text below is micro-metadata, so all of it is one token:
-// `metaCaption`. It used to be three near-identical treatments stacked
-// within fifteen lines (2xs/400/0.15em/uppercase, 2xs/500/0.25em/uppercase,
-// 2xs/300/0.1em/sentence case), which read as three accidents rather than
-// one deliberate register.
+/**
+ * The footer is one sheet of paper, folded once.
+ *
+ * Above the fold is the face: the wordmark and the three ways to reach her.
+ * Below it is the underside, carrying the small print that runs the other way
+ * round. A single hairline is the crease.
+ *
+ * THE MONOGRAM STRADDLES THE CREASE, and that is the whole idea. The same mark
+ * is drawn twice, at the same horizontal position, unmirrored, so the two halves
+ * form ONE continuous object interrupted only by the fold. What flips at the
+ * crease is not the shape but the POLARITY: above, the mark is warmer than the
+ * white it sits on; below, it is lighter than the cream. That is what "seen from
+ * behind" means here, and mirroring it (an earlier attempt) destroyed it, because
+ * the halves stopped lining up and the V read as a stray diagonal.
+ *
+ * WHY IT IS 101px. The previous footer stacked logo, then icons, then legal, then
+ * copyright, inside `layerStyle="sectionTight"` (64px of padding top and bottom on
+ * desktop), which came to roughly 340px of mostly empty vertical space. This runs
+ * side to side instead, and the height is set by the 44px tap targets and nothing
+ * else.
+ *
+ * WHY THE DISC IS SMALLER THAN THE TAP TARGET. Each contact link is a full 44px
+ * square, but the visible ring inside it is 30px and sits at the BOTTOM of that
+ * square. That is what lets the circles drop onto the crease and align with the
+ * wordmark's baseline without the touch area shrinking below 44px.
+ */
+
+// Watermark tints. Decorative only, aria-hidden, never text, so they are exempt
+// from the contrast floor and do not belong in the theme: they exist to be
+// almost invisible, which is the opposite of what every brand token is for.
+const FACE = { disc: '#f8f1e0', ring: '#d8c49c', p: '#e2d4b4', v: '#dccca4' };
+const UNDER = { disc: '#f9f4ea', ring: '#ffffff', p: '#fdfbf6', v: '#ffffff' };
+
+const MARK = 92; // px
+const BAND = 56; // px, the face
+const FOLD = 1; // px, the crease
+
+/**
+ * The real monogram from public/assets/images/logo-mark.svg, inlined rather than
+ * <img src> because each of its four paths has to be recoloured independently.
+ *
+ * It centres itself: the three 44px circles come to 144px against the wordmark's
+ * 140px, so the true centre of the gap between them sits exactly 2px left of the
+ * container centre, at every width. Hence the calc. Measured at 320 through
+ * 1440px; only 320 drifts, by 2px, where the wordmark itself starts shrinking.
+ */
+const FooterMark = ({ tone, top }: { tone: typeof FACE; top: string }) => (
+  <Box
+    as="span"
+    aria-hidden="true"
+    position="absolute"
+    left="50%"
+    transform="translateX(calc(-50% - 2px))"
+    top={top}
+    w={`${MARK}px`}
+    h={`${MARK}px`}
+    pointerEvents="none"
+  >
+    <svg width={MARK} height={MARK} viewBox="109 5 60 60" fill="none" focusable="false" style={{ display: 'block' }}>
+      <path d="M169 35C169 51.5685 155.569 65 139 65C122.431 65 109 51.5685 109 35C109 18.4314 122.431 5 139 5C155.569 5 169 18.4314 169 35Z" fill={tone.disc} />
+      <path d="M168.423 35C168.423 51.2499 155.25 64.4231 139 64.4231C122.75 64.4231 109.577 51.2499 109.577 35C109.577 18.7501 122.75 5.57692 139 5.57692C155.25 5.57692 168.423 18.7501 168.423 35Z" stroke={tone.ring} strokeWidth="1.15385" />
+      <path d="M136.865 23.0692C140.881 22.7923 144.412 22.6538 147.458 22.6538C156.042 22.6538 160.335 25.6827 160.335 31.7404C160.335 34.5442 159.608 37.0019 158.154 39.1135C157.392 40.2558 156.215 41.1731 154.623 41.8654C153.031 42.5231 151.11 42.8519 148.86 42.8519H141.175V59H136.865V23.0692ZM147.51 23.1731C145.502 23.1731 143.39 23.2942 141.175 23.5365V42.3327H148.86C153.74 42.125 156.181 38.6288 156.181 31.8442C156.181 29.075 155.454 26.9462 154 25.4577C152.546 23.9346 150.383 23.1731 147.51 23.1731Z" fill={tone.p} />
+      <path d="M143.321 9.73078C143.979 10.3885 144.308 11.2365 144.308 12.275C144.308 13.1404 144.117 14.0231 143.737 14.9231L130.444 46.0769L129.873 46.3366L116.788 9.73078H121.202L132.054 40.4692L143.113 14.9231C143.494 14.0577 143.685 13.1577 143.685 12.2231C143.685 11.2885 143.425 10.5615 142.906 10.0423L143.321 9.73078Z" fill={tone.v} />
+    </svg>
+  </Box>
+);
 
 const SOCIALS = [
   { label: 'Instagram', href: 'https://www.instagram.com/vero.art.photo', icon: FaInstagram, external: true },
@@ -21,112 +77,109 @@ const SOCIALS = [
   { label: 'Email', href: 'mailto:vero@vero.photography', icon: FaRegEnvelope, external: false },
 ] as const;
 
-// Legal / policy links. Small, quiet, but present — every real business
-// site has these and Meta's app registration requires them (Privacy
-// Policy URL + User Agreement URL fields).
-const LEGAL_LINKS = [
-  { label: 'Privacy Policy', to: '/privacy' },
-  { label: 'Terms of Service', to: '/terms' },
+// Portal is here deliberately. Of 21 peer photographers surveyed, not one links
+// a client gallery from the footer; returning clients get emailed a bare URL.
+const LEGAL = [
+  { label: 'Privacy', to: '/privacy' },
+  { label: 'Terms', to: '/terms' },
   { label: 'Contact', to: '/contact' },
+  { label: 'Portal', to: '/portal' },
 ] as const;
+
+// Both bands clip the monogram. The content inside each sits in the same
+// contentNarrow column the rest of the site uses, while the band backgrounds
+// bleed the full width — without that, a 1440px viewport strands the wordmark
+// and the icons at opposite edges with a void between them.
+const Band = ({ children, ...rest }: { children: React.ReactNode } & Record<string, unknown>) => (
+  <Box position="relative" overflow="hidden" w="100%" {...rest}>
+    <Box position="relative" maxW="contentNarrow" mx="auto">
+      {children}
+    </Box>
+  </Box>
+);
 
 const Footer = () => {
   const year = new Date().getFullYear();
 
   return (
-    <Box as="footer" bg="white" position="relative">
-      {/* Hairline separator from page content — single thin gray line.
-          Matches the visual weight of the other section dividers on the site. */}
-      <Box h="1px" bg="gray.100" />
-
-      {/* One rhythm token instead of a per-footer padding pair. */}
-      <Box layerStyle="sectionTight" px={6}>
-        {/* A single VStack spacing governs every gap in the footer. The old
-            version layered ad-hoc pt values on top of the stack spacing, so
-            no two bands were the same distance apart. */}
-        <VStack spacing={{ base: 6, md: 8 }} maxW="contentNarrow" mx="auto">
-          {/* Logo — same SVG mark as the navbar. It is the footer's only
-              focal point, so it carries the size rather than leaning on
-              extra whitespace around it. Clicking it returns to home. */}
-          <Link as={RouterLink} to="/" _hover={{ opacity: 0.85 }} transition="opacity 0.3s">
-            <Image
-              src="/assets/images/logo.svg"
-              htmlWidth={460}
-              htmlHeight={70}
-              alt="Vero Photography"
-              h={{ base: '40px', md: '48px' }}
-              objectFit="contain"
-            />
+    <Box as="footer" bg="white">
+      {/* The face */}
+      <Band h={`${BAND}px`} bg="white">
+        <FooterMark tone={FACE} top={`${BAND - MARK / 2}px`} />
+        <Flex position="relative" align="flex-end" w="100%" h={`${BAND}px`} px={4} pb="5px">
+          <Link as={RouterLink} to="/" display="flex" alignItems="flex-end" flex="0 1 auto" minW={0} h="44px" _hover={{ opacity: 0.85 }} transition="opacity 0.3s">
+            <Image src="/assets/images/logo.svg" htmlWidth={460} htmlHeight={70} alt="Vero Photography" w="140px" maxW="100%" h="auto" />
           </Link>
-
-          {/* Social icons — gold-bordered round buttons so the contact paths
-              read as the primary thing in the footer. Hover fills with gold. */}
-          <HStack spacing={{ base: 3, md: 4 }}>
+          <Box aria-hidden="true" flex="1 1 auto" minW="8px" />
+          <Flex flex="0 0 auto" align="center" gap="6px">
             {SOCIALS.map((s) => (
               <Link
                 key={s.label}
                 href={s.href}
                 isExternal={s.external}
                 aria-label={s.label}
-                w={{ base: '42px', md: '44px' }}
-                h={{ base: '42px', md: '44px' }}
-                border="1px solid"
-                borderColor="brand.accent"
-                borderRadius="full"
                 display="flex"
-                alignItems="center"
+                alignItems="flex-end"
                 justifyContent="center"
-                color="brand.accent"
-                transition="all 0.3s"
-                _hover={{ bg: 'brand.accent', color: 'white', textDecoration: 'none' }}
+                w="44px"
+                h="44px"
+                _hover={{ textDecoration: 'none', '& > span': { bg: 'brand.accent' }, '& svg': { color: 'white' } }}
               >
-                <Icon as={s.icon} boxSize={{ base: 4, md: '18px' }} />
+                <Box
+                  as="span"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  w="30px"
+                  h="30px"
+                  border="1px solid"
+                  borderColor="brand.accent"
+                  borderRadius="full"
+                  bg="white"
+                  transition="background 0.3s"
+                >
+                  <Icon as={s.icon} boxSize="15px" color="brand.accentText" transition="color 0.3s" />
+                </Box>
               </Link>
             ))}
-          </HStack>
+          </Flex>
+        </Flex>
+      </Band>
 
-          {/* Legal / policy links — quiet middle-gray text-only links,
-              separated by dots. Positioned above the copyright line so
-              the copyright reads as the final closing beat of the page. */}
-          <HStack
-            spacing={{ base: 3, md: 4 }}
-            wrap="wrap"
-            justify="center"
-            divider={
-              <Box
-                as="span"
-                w="3px"
-                h="3px"
-                borderRadius="full"
-                bg="gray.300"
-                border="none"
-                sx={{ alignSelf: 'center', mx: { base: 3, md: 4 } }}
-              />
-            }
-          >
-            {LEGAL_LINKS.map((l) => (
-              <Link
-                key={l.to}
-                as={RouterLink}
-                to={l.to}
-                textStyle="metaCaption"
-                _hover={{ color: 'brand.accentText', textDecoration: 'none' }}
-                transition="color 0.3s"
-              >
-                {l.label}
-              </Link>
+      {/* The crease */}
+      <Box aria-hidden="true" w="100%" h={`${FOLD}px`} bg="brand.accent" />
+
+      {/* The underside. Legal left, copyright right: the reverse of the face. */}
+      <Band bg="brand.surfaceFold">
+        <FooterMark tone={UNDER} top={`-${MARK / 2 + FOLD}px`} />
+        <Flex position="relative" align="center" justify="space-between" wrap="wrap" w="100%" minH="44px" px={4}>
+          <Flex flex="0 1 auto" minW={0} align="center">
+            {LEGAL.map((l, i) => (
+              <Flex key={l.to} align="center">
+                {i > 0 && <Box aria-hidden="true" w="1px" h="9px" bg="brand.accent" opacity={0.55} />}
+                <Link
+                  as={RouterLink}
+                  to={l.to}
+                  display="flex"
+                  alignItems="center"
+                  h="44px"
+                  px="5px"
+                  fontSize="10.5px"
+                  lineHeight={1}
+                  whiteSpace="nowrap"
+                  _hover={{ color: 'brand.accentText', textDecoration: 'none' }}
+                  transition="color 0.3s"
+                >
+                  {l.label}
+                </Link>
+              </Flex>
             ))}
-          </HStack>
-
-          {/* One line. The location was already stated in the FAQ, on About
-              and in the Instagram bio, and the second copyright was saying
-              the same thing twice: a photographer's site owning its own
-              photographs is the assumption, not news. */}
-          <Text textStyle="metaCaption" textAlign="center">
+          </Flex>
+          <Text flex="0 0 auto" fontSize="9px" lineHeight="14px" letterSpacing="0.06em" color="brand.mutedText" whiteSpace="nowrap">
             © {year} Vero Photography
           </Text>
-        </VStack>
-      </Box>
+        </Flex>
+      </Band>
     </Box>
   );
 };
