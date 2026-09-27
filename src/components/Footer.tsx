@@ -39,6 +39,19 @@ const FACE = 60; // px, the white band above the crease
 const FOLD = 1; // px, the crease itself
 const PAD_BOTTOM = 18; // px, what stops the seal looking snug against the edge
 
+/**
+ * Both footer sizes used to sit BELOW the type scale: links at 10.5px and the
+ * copyright at 9px, where the theme's smallest token is 0.6875rem (11px), used
+ * by eyebrow, metaCaption and formLabel.
+ *
+ * They now scale between the floor and the ctaLabel size rather than taking one
+ * value. Fixing them at 13px and 11px pushed the three columns to 350px, which
+ * hangs 15px off each side of a 320px phone, and Chakra has no breakpoint
+ * between 320 and 480 to switch at. The clamps give 320 the 11px floor and
+ * everything from about 390 up the full size, with the columns scaling to match
+ * the type they hold.
+ */
+
 // Seal tints. The ink is brand.accentText and the ring brand.accent in every
 // case; only the disc behind them changes across the crease, which is the whole
 // inversion. Kept local because they are one composition's decision, not a
@@ -76,8 +89,8 @@ const FootLink = ({ to, children }: { to: string; children: React.ReactNode }) =
     justifyContent="center"
     pt="6px"
     h="44px"
-    px="6px"
-    fontSize="10.5px"
+    px="clamp(4px, 1.55vw, 6px)"
+    fontSize="clamp(0.625rem, 3.33vw, 0.8125rem)"
     lineHeight="12px"
     letterSpacing="0.04em"
     whiteSpace="nowrap"
@@ -113,17 +126,17 @@ const Footer = () => {
       <Box position="relative" overflow="hidden" bg="brand.surfaceFold" pb={`${PAD_BOTTOM}px`}>
         <SealHalf face={false} />
         <Flex position="relative" align="flex-start" justify="center">
-          <Flex align="flex-start" justify="flex-end" gap="7px" w={{ base: '100px', sm: '110px' }}>
+          <Flex align="flex-start" justify="flex-end" gap="7px" w="clamp(99px, 29vw, 126px)">
             <FootLink to="/privacy">Privacy</FootLink>
             <Tick />
             <FootLink to="/terms">Terms</FootLink>
           </Flex>
-          <Flex direction="column" justify="flex-end" w={{ base: '112px', sm: '126px' }} h="44px">
-            <Text m={0} textAlign="center" whiteSpace="nowrap" fontSize="9px" lineHeight="12px" letterSpacing="0.06em" color="brand.mutedText">
+          <Flex direction="column" justify="flex-end" w="clamp(118px, 34vw, 146px)" h="44px">
+            <Text m={0} textAlign="center" whiteSpace="nowrap" fontSize="clamp(0.625rem, 2.9vw, 0.6875rem)" lineHeight="14px" letterSpacing="0.06em" color="brand.mutedText">
               © {year} Vero Photography
             </Text>
           </Flex>
-          <Flex align="flex-start" justify="flex-start" gap="7px" w={{ base: '100px', sm: '110px' }}>
+          <Flex align="flex-start" justify="flex-start" gap="7px" w="clamp(99px, 29vw, 126px)">
             <FootLink to="/contact">Contact</FootLink>
             <Tick />
             <FootLink to="/portal">Portal</FootLink>
