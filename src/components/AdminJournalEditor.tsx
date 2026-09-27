@@ -103,6 +103,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
     { value: 'wedding',    label: t.journalEditor.sessionOptionWedding },
     { value: 'portrait',   label: t.journalEditor.sessionOptionPortrait },
     { value: 'family',     label: t.journalEditor.sessionOptionFamily },
+    { value: 'engagement', label: t.journalEditor.sessionOptionEngagement },
     { value: 'maternity',  label: t.journalEditor.sessionOptionMaternity },
     { value: 'article',    label: t.journalEditor.sessionOptionArticle },
   ];

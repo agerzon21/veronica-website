@@ -2662,6 +2662,7 @@ const dict = {
     sessionOptionWedding: { en: 'Wedding', ru: 'Свадебная' },
     sessionOptionPortrait: { en: 'Portrait', ru: 'Портретная' },
     sessionOptionFamily: { en: 'Family', ru: 'Семейная' },
+    sessionOptionEngagement: { en: 'Engagement', ru: 'Помолвка' },
     sessionOptionMaternity: { en: 'Maternity', ru: 'Беременность' },
     sessionOptionArticle: { en: 'Article / Advice (blog post)', ru: 'Статья / советы (блог)' },
 
