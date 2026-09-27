@@ -1110,6 +1110,42 @@ interface GalleryActionBarProps {
 }
 
 function GalleryActionBar({ driveUrl }: GalleryActionBarProps) {
+  /**
+   * Lift the bar clear of the footer instead of letting it sit on top of it.
+   *
+   * The bar is position:fixed, so at the bottom of a long gallery it covered
+   * the footer completely. Hiding it there was the other option and it is
+   * worse: the footer only comes into view once someone has scrolled the whole
+   * set, which is exactly the moment they are most likely to want Download All.
+   *
+   * So it rides up by however much of the footer is on screen. Measured from
+   * the footer's own box rather than a hardcoded height, because the footer is
+   * 123px today and that is not a number this file should know. If there is no
+   * footer on the route (the bare /portal/pass branch renders its own chrome),
+   * the query returns null and the offset simply stays 0.
+   */
+  const [footerOverlap, setFooterOverlap] = useState(0);
+  useEffect(() => {
+    const footer = document.querySelector('footer');
+    if (!footer) return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const top = footer.getBoundingClientRect().top;
+      // How far the footer intrudes into the viewport, never negative.
+      setFooterOverlap(Math.max(0, window.innerHeight - top));
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   const handleShareClick = useCallback(() => {
     // The share target has id="gallery-share-section" on both routes:
     // /portal/pass renders GalleryShareSection below, the full portal
@@ -1123,7 +1159,8 @@ function GalleryActionBar({ driveUrl }: GalleryActionBarProps) {
       position="fixed"
       bottom={{ base: 3, md: 5 }}
       left="50%"
-      transform="translateX(-50%)"
+      transform={`translateX(-50%) translateY(-${footerOverlap}px)`}
+      willChange="transform"
       zIndex={40}
       bg="rgba(255, 255, 255, 0.92)"
       backdropFilter="blur(10px)"
