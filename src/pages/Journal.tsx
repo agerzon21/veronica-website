@@ -447,11 +447,20 @@ function TimelineCard({ post }: { post: PostSummary }) {
 
       {/* The words sit under the pictures, held to a readable measure rather
           than stretching the full width of the cluster. */}
-      {/* Aligned to the lead frame's 62%, not the 46ch reading measure. At
-          46ch the title wrapped with a large blank to its right while the
-          photographs above ran much wider, which read as an arbitrary cut. On
-          phones the cluster is full width, so this is too. */}
-      <Box maxW={{ base: '100%', md: '62%' }}>
+      {/* Full width of the cluster, and it has been narrowed twice before:
+          first to a 46ch reading measure, then to the lead frame's 62%. Both
+          still stopped short of the photographs above, which is what reads as
+          an arbitrary cut. Measured on the live page: the cluster is 924px at
+          every viewport from 1280 up, and at 62% the text ran 573px, which put
+          a long title onto two lines with an orphan while a third of the row
+          sat empty beside it.
+
+          The reading-measure objection is real but does not apply here. 924px
+          is about 116 characters per line, past the comfortable 45-75, EXCEPT
+          that every excerpt in the database is 160-166 characters, so it sets
+          as one or two lines rather than a paragraph. A teaser is scanned, not
+          read. If excerpts ever get long, this is the first thing to revisit. */}
+      <Box maxW="100%">
         {post.session_type && (
           <Text textStyle="metaCaption" color="brand.accentText" mb={1.5}>
             {post.session_type}
