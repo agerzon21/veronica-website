@@ -44,6 +44,7 @@ import { useAdminLang, type AdminLang } from '../i18n/admin';
 import { appleMapsLink, googleDirectionsLink, wazeLink } from '../data/travel-fee';
 import { travelCopy } from './travelCopy';
 import MobileSheetModal, { MobileSheetFooter } from './ui/MobileSheetModal';
+import AdminPortalPreview from './AdminPortalPreview';
 import { buildShareMessage, galleryDirectUrl } from './galleryShare';
 
 interface Props {
@@ -355,6 +356,7 @@ const daysUntil = (iso: string | null): number | null => {
 const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext }: Props) => {
   const { t } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
+  const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   const [charges, setCharges] = useState<ChargeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -934,6 +936,33 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               </Text>
             </Flex>
           )}
+
+          {/* Preview the client's own portal. Full-mode only: a gallery-only
+              portal has no client account, so there is nothing to preview. */}
+          {portal.mode === 'full' && (
+            <Flex align="center" gap={2} wrap="wrap">
+              <CTAButton
+                onClick={() => setPortalPreviewOpen(true)}
+                variant="outline"
+                size="sm"
+                fullWidth={{ base: true, md: false }}
+              >
+                <Icon as={FaExternalLinkAlt} boxSize={3} mr={2} />
+                {t.clientDetail.previewClientPortal}
+              </CTAButton>
+              <Text fontSize="xs" color="gray.500" fontWeight="300">
+                {t.clientDetail.previewClientPortalHint}
+              </Text>
+            </Flex>
+          )}
+
+          <AdminPortalPreview
+            isOpen={portalPreviewOpen}
+            onClose={() => setPortalPreviewOpen(false)}
+            portal={portal as unknown as Record<string, unknown>}
+            payments={payments as unknown as Array<Record<string, unknown>>}
+            charges={charges as unknown as Array<Record<string, unknown>>}
+          />
 
           {/* Status label + primary CTA — stacks on mobile so the CTA
               spans full-width instead of orphaning under a wrapped label. */}

@@ -11,6 +11,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { makeGalleryPreviewToken } from '../portal/_gallery-gate.js';
+import { isStripeTestMode } from '../_stripe.js';
 import { requireAdmin } from '../_admin-auth.js';
 
 type PortalRow = {
@@ -205,6 +206,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const chargesTotal = charges.reduce((sum, c) => sum + parseFloat(c.amount), 0);
 
+    /**
+     * Five fields the CLIENT portal view renders that this endpoint never
+     * needed, added so the admin panel can render that exact component in a
+     * read-only preview rather than a second copy of it that drifts.
+     *
+     * Nothing new is queried. contract_variables is already selected above,
+     * and tips come out of the payments list already loaded; a tip is a
+     * payment_entries row with kind='tip' and is deliberately NOT in
+     * paid_to_date (migration 043), which is why it has to be summed
+     * separately rather than read off a column.
+     *
+     * Purely additive: no existing key changes shape, so every current
+     * consumer of this response is untouched.
+     */
+    const previewVars = (r.contract_variables ?? {}) as Record<string, unknown>;
+    const previewStr = (k: string) =>
+      typeof previewVars[k] === 'string' ? (previewVars[k] as string) : null;
+    const tipsTotal = payments
+      .filter((p) => p.kind === 'tip')
+      .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
     return res.status(200).json({
       success: true,
       portal: {
@@ -234,6 +256,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // accounts already worked.
         client_has_password: !!r.client_password_hash,
         client_password_hash: undefined,
+        // For the read-only client preview. See the note above.
+        event_title: previewStr('event_title'),
+        event_location: previewStr('event_location'),
+        delivery_timeframe: previewStr('delivery_timeframe'),
+        tips_total: tipsTotal,
+        card_test_mode: isStripeTestMode(),
       },
       payments: payments.map((p) => ({
         id: p.id,
@@ -242,6 +270,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         note: p.note,
         paid_at: p.paid_at,
         created_at: p.created_at,
+        // Selected already (coalesce(kind,'payment') above) but never returned.
+        // The client view needs it: a tip is listed with the payments but is
+        // NOT in paid_to_date (migration 043), so anything summing this array
+        // without it reports the wrong balance.
+        kind: p.kind === 'tip' ? ('tip' as const) : ('payment' as const),
       })),
       charges: charges.map((c) => ({
         id: c.id,

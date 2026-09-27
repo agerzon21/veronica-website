@@ -2141,6 +2141,11 @@ const dict = {
       en: 'Opens what the client sees at /portal/pass.',
       ru: 'Откроется то же, что клиент увидит на /portal/pass.',
     },
+    previewClientPortal: { en: 'Preview Client Portal', ru: 'Просмотр портала клиента' },
+    previewClientPortalHint: {
+      en: 'Read only. Opens what the client sees, including their balance.',
+      ru: 'Только просмотр. Показывает то, что видит клиент, включая баланс.',
+    },
     deliveryStatus: { en: 'Delivery Status', ru: 'Статус отправки' },
     deliveredOn: {
       en: (date: string) => `Delivered ${date}`,
