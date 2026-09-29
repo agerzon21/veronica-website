@@ -134,7 +134,21 @@ const FOOTER_GAP_PORTRAIT = 56;
 //
 // Desktop has no toolbar, so this is purely the cue's own room: the 40px ring
 // at 28px from the bottom, plus air above it.
-const MOBILE_CHROME_RESERVE = 140;
+// MEASURED DOWN FROM 140 on 2026-09-29, against the owner's own phones.
+//
+// This reserve decides extractFooter as well as the camera's size:
+// fullAvailableH = vh - 528 - R, and below 120 the footer leaves the sticky
+// and Book a Session goes under the fold. At 140 the threshold sits at svh
+// 648, and a 13 mini in Chrome measures svh 634, so on that phone the call to
+// action was not on the screen at all. At 104 the threshold is 612 and all
+// five measured device and browser pairs land in the full layout with an
+// identical 33px above the eyebrow and 118px below the CTA.
+//
+// It is also no longer doing a job the composition does: the anchors and the
+// ring below are in the svh frame now, so the toolbar is already excluded and
+// this is just the cue's own room, which is what DESKTOP_CUE_RESERVE has
+// always been. The two numbers agreeing is the point.
+const MOBILE_CHROME_RESERVE = 104;
 const DESKTOP_CUE_RESERVE = 104;
 
 // The hero header is now the shared PageHeader (eyebrow → 40px rule →
@@ -551,28 +565,47 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
    * real device numbers rather than arithmetic.
    */
 
+  /**
+   * Half the browser's chrome, measured on real phones this time.
+   *
+   * MEASURED 2026-09-29 at /assets/viewport-probe.html, top level, on the
+   * owner's own devices:
+   *   13 mini Safari  svh 664  lvh 704  chrome  40
+   *   13 mini Chrome  svh 634  lvh 742  chrome 108
+   *   17 Pro Max Saf  svh 742  lvh 956  chrome 214
+   *   17 Pro Max Chr  svh 766  lvh 874  chrome 108
+   *   Pixel 8 Chrome  svh 784  lvh 840  chrome  56
+   *
+   * The sticky is 100lvh and its children hung off 50% of it, while every
+   * budget in computeCameraSize is measured against svh. On a 17 Pro Max in
+   * Safari that put 155px of air above the eyebrow against 29px under Book a
+   * Session, which is the complaint to the pixel. Anchored to svh, all four
+   * full-layout devices land on the same 48 above and 136 below.
+   *
+   * WORTH KNOWING about that 214: on a 17 Pro Max in Safari `lvh` reports 956,
+   * the whole screen, while the largest viewport the page is ever given is
+   * 847. `lvh` counts the strip under the Dynamic Island and the home
+   * indicator, which a page can never occupy, so the bottom 109px of the
+   * sticky is not merely hidden behind a toolbar, it is unreachable. Nothing
+   * may be positioned from that edge and expected to be seen.
+   */
+  const chromeHalf = vp.chrome / 2;
+
   // Motion-y at scroll end translates the camera body to the composition's
   // centre: DOWN by verticalShiftPx to clear the navbar on a short viewport,
-  // Expressed as a
+  // and UP by chromeHalf to land on svh/2 rather than lvh/2. Expressed as a
   // percentage of the natural element's height (framer-motion's % translation
   // is in unscaled CSS pixels, applied after scale, so this stays
   // geometrically correct at any finalScale).
   //
-  // The camera's BOX stays on `top: 50%` of the lvh sticky while the header
-  // and footer anchors move to svh, and the two still agree, because this
-  // box and the anchors both hang off 50% of the same lvh sticky, so they
-  // agree by construction.
-  //
-  // Doing it here rather than on the box is what keeps the START of the
-  // cinematic untouched. At scroll 0 the camera is at natural size with its
-  // LCD covering the screen, and every frame of that is measured byte-for-byte
-  // identical to what shipped before. Moving the box instead would have
-  // shifted the full-bleed opening too, for no gain: the opening is a
-  // full-screen photograph, and the frame it should fill is the whole sticky.
+  // The camera's BOX stays on `top: 50%` of the lvh sticky and this term
+  // carries it the rest of the way, which keeps the START of the cinematic
+  // untouched: at scroll 0 the LCD is at natural size covering the screen,
+  // and moving the box would have shifted that opening too.
   const naturalHeight =
     size.natural /
     (size.isPortrait ? CAMERA_IMG_H / CAMERA_IMG_W : CAMERA_IMG_W / CAMERA_IMG_H);
-  const verticalShiftPct = (size.verticalShiftPx * 100) / naturalHeight;
+  const verticalShiftPct = ((size.verticalShiftPx - chromeHalf) * 100) / naturalHeight;
 
   // ─── SCROLL CHOREOGRAPHY ───
   // Animation window stretched so the cinematic feels deliberate rather
@@ -842,7 +875,15 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
              anything that cannot read svh gets the old composition rather than
              a broken one. Safari before 15.4, Chrome before 108, Firefox
              before 101 and old WebViews. */
-          bottom={`calc(50% + ${headerBottomOffset}px)`}
+          /* `100%` IS `100lvh`, the sticky's own height, so this is the same
+             edge measured from the bottom. Guarded because a dropped `bottom`
+             is `auto`, which would stack the header under the navbar. */
+          sx={{
+            bottom: `calc(50% + ${headerBottomOffset}px)`,
+            '@supports (height: 100svh)': {
+              bottom: `calc(100% - 50svh + ${headerBottomOffset}px)`,
+            },
+          }}
           // Full-bleed, and centred by PageHeader itself rather than by
           // `left: 50%` + a translate. That combination looks equivalent but
           // is not: with `width: auto` the shrink-to-fit AVAILABLE width of an
@@ -922,7 +963,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             position="absolute"
             // Same svh frame as the header above, same reasoning, same
             // guard. On a desktop this is `calc(50% + offset)` exactly.
-            top={`calc(50% + ${footerTopOffset}px)`}
+            sx={{
+              top: `calc(50% + ${footerTopOffset}px)`,
+              '@supports (height: 100svh)': {
+                top: `calc(50svh + ${footerTopOffset}px)`,
+              },
+            }}
             // Same fix as the header above, and it was NOT merely latent here.
             // `left: 50%` + `width: auto` capped this box's layout width at
             // vw/2; shrink-to-fit floors at min-content so it did not collapse
@@ -979,10 +1025,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           // composition. It is visible from progress 0.04 to 0.94, so it is
           // on screen at the same time as the settled camera, and leaving it
           // centred on the lvh sticky would have put it up to half a toolbar
-          // below the middle of the strip the phone can see: level with Book
-          // a Session rather than with the camera. Identical on a desktop.
+          // below the middle of the strip the phone can see: measured 107px on
+          // a 17 Pro Max in Safari, which is level with Book a Session rather
+          // than with the camera. Identical on a desktop.
           marginTop="-86px"
-          top="50%"
+          sx={{ top: '50%', '@supports (height: 100svh)': { top: '50svh' } }}
           zIndex={5}
           pointerEvents="none"
           display="flex"
@@ -1085,7 +1132,19 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             cursor="pointer"
             transition="border-color 0.3s ease, background 0.3s ease"
             _hover={{ borderColor: 'brand.accent', bg: 'rgba(201, 169, 110, 0.08)' }}
-            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            sx={{
+              WebkitTapHighlightColor: 'transparent',
+              /* `100lvh - 100svh` IS the chrome, so the ring sits a fixed 28px
+                 above the part of the screen that is always visible. The flat
+                 84px above was a guess at a toolbar's height: measured, the
+                 chrome on a 17 Pro Max in Safari is 214px, so the ring sat
+                 130px below the visible bottom and the arrow the visitor is
+                 asked to tap was not on the screen at all. Falls back to the
+                 84/28 above wherever svh cannot be parsed. */
+              '@supports (height: 100svh)': {
+                bottom: 'calc(100lvh - 100svh + env(safe-area-inset-bottom, 0px) + 28px)',
+              },
+            }}
             // Same rule as the header and footer above: it is a real button,
             // so it must not be tappable during the stretch of the cinematic
             // where it is not on screen yet.
