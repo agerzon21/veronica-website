@@ -892,7 +892,17 @@ const Portal = () => {
   return (
     <>
     <Navbar />
-    <Box position="relative" minH="100vh" overflow="hidden" bg="brand.surfaceSunken">
+    {/* data-mosaic-hold is what stops the photographs drifting while anyone is
+        inside the form. The rule lives in PortalMosaic, which explains itself;
+        the attribute has to be here because the field and the form are
+        siblings and the form is the later of the two. */}
+    <Box
+      position="relative"
+      minH="100vh"
+      overflow="hidden"
+      bg="brand.surfaceSunken"
+      data-mosaic-hold=""
+    >
       <Helmet>
         <title>Portal | Vero Photography</title>
         <meta name="robots" content="noindex, nofollow" />
@@ -1011,7 +1021,16 @@ const Portal = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@example.com"
-                      autoFocus
+                      /* No autoFocus, and it had to go with the drift pause.
+                         The field holds still while focus is inside the form,
+                         so a page that steals focus on arrival arrives frozen
+                         and only STARTS moving when the visitor clicks away,
+                         which is worse than either steady state. It is worth
+                         losing on its own account too: focusing the second
+                         field of the first door drops a screen reader past
+                         the h1 and past both door descriptions, and it
+                         presumes every arrival is a client with an account
+                         when the page deliberately offers two ways in. */
                     />
                   
                     <FieldLabel htmlFor="client-password">Password</FieldLabel>
@@ -1094,7 +1113,9 @@ const Portal = () => {
                       placeholder="Enter the gallery password"
                       show={showGalleryPassword}
                       onToggleShow={() => setShowGalleryPassword((s) => !s)}
-                      autoFocus
+                      /* Gone for the same reason as the client email above:
+                         with the drift paused while focus is in the form, a
+                         page that focuses itself arrives still. */
                     />
                   
                     {error && <ErrorText>{error}</ErrorText>}
