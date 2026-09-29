@@ -925,7 +925,17 @@ const Portal = () => {
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
         <Navbar />
-        <Flex minH="60vh" align="center" justify="center" pt={{ base: 24, md: 20 }}>
+        <Flex
+          /* Tall enough to push the footer to the bottom of the screen. At
+             60vh this block ended two thirds up the page and the footer came
+             with it, which reads as a broken page rather than a loading one.
+             The subtraction is the fixed navbar plus the footer's own height,
+             so the footer lands ON the bottom edge. */
+          minH="calc(100vh - 72px - 123px)"
+          align="center"
+          justify="center"
+          pt={{ base: 24, md: 20 }}
+        >
           <Text fontSize="sm" color="gray.400" fontWeight="300" letterSpacing="0.1em">
             Opening your portal...
           </Text>

@@ -473,14 +473,24 @@ const IndividualPhoto: React.FC = () => {
 
         {/* Related photos */}
         {relatedPhotos.length > 0 && (
-          <Box bg="brand.surfaceSunken" layerStyle="sectionTight" px={{ base: 4, md: 8 }}>
+          <Box
+            /* THE FOLD CREAM, so the footer's white face reads as part of the
+               footer rather than as a stray band between two near-identical
+               off-whites. Same change and same reason as the About page's
+               closing band. The eyebrow below moves with it because the plain
+               gold is only 3.96:1 on this cream, which is also one of the
+               contrast failures Lighthouse reports on this page. */
+            bg="brand.surfaceFold"
+            layerStyle="sectionTight"
+            px={{ base: 4, md: 8 }}
+          >
             <Container maxW="content" px={0}>
               <VStack spacing={{ base: 8, md: 10 }}>
                 {/* Same eyebrow → rule → title arrangement as PageHeader, but
                     the heading here is an h2 at sectionTitle — PageHeader only
                     offers pageTitle/contentTitle, so it can't render this one. */}
                 <VStack spacing={{ base: 4, md: 5 }}>
-                  <Text textStyle="eyebrow">Related</Text>
+                  <Text textStyle="eyebrowOnFold">Related</Text>
                   <Box w="40px" h="1px" bg="brand.accent" />
                   <Text as="h2" textStyle="sectionTitle" m={0}>
                     More like this

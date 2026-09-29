@@ -112,6 +112,16 @@ export interface PortalNavItem {
   disabled?: boolean;
   /** See PortalNavRole. Absent on an ordinary section. */
   role?: PortalNavRole;
+  /**
+   * What KIND of row this is, passed straight through from the gallery.
+   *
+   * Only `section` rows are the client's own folders. Info and Favorites are
+   * rows the site adds, and numbering them pushed every folder's ordinal one
+   * ahead of the number in its own name: a folder called "1. Proposal Video"
+   * came out as "2  1. Proposal Video", because Veronika numbers the folders
+   * herself to force their order in Drive. See buildSectionRows.
+   */
+  kind?: 'info' | 'section' | 'favorites';
 }
 
 /**
@@ -841,13 +851,25 @@ const barCounterFor = (rows: MenuRow[]): string => {
 
 /** The gallery's sections. Numbered, in order, nothing removed. */
 function buildSectionRows(nav: PortalMenuNav): MenuRow[] {
-  return nav.items.map((item, i) => ({
-    id: item.id,
-    label: item.label,
-    n: i + 1,
-    active: item.id === nav.activeId,
-    disabled: item.disabled,
-  }));
+  // ONLY THE CLIENT'S OWN FOLDERS ARE NUMBERED, and they count from one.
+  //
+  // Info and Favorites are rows the site adds around them. Numbering those
+  // too shifted every folder's ordinal one past the number in its own name,
+  // so "1. Proposal Video" rendered as "2  1. Proposal Video". Skipping them
+  // makes the two agree. A nav whose items carry no `kind` at all (the
+  // account nav) is numbered straight through, exactly as before.
+  let n = 0;
+  return nav.items.map((item) => {
+    const numbered = item.kind === undefined || item.kind === 'section';
+    if (numbered) n += 1;
+    return {
+      id: item.id,
+      label: item.label,
+      n: numbered ? n : undefined,
+      active: item.id === nav.activeId,
+      disabled: item.disabled,
+    };
+  });
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

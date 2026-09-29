@@ -2216,7 +2216,17 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
   };
 
   return (
-    <Box bg="white" borderTop="1px solid" borderColor="gray.100" py={12} px={6}>
+    <Box
+      /* gray.50, matching the SAME section in ClientPortalView. It was white,
+         which is the page behind it, so the grey rule along its top had
+         nothing under it and read as a stray line rather than the edge of a
+         band. The two copies of this section had simply drifted apart. */
+      bg="gray.50"
+      borderTop="1px solid"
+      borderColor="gray.100"
+      py={12}
+      px={6}
+    >
       <VStack maxW="520px" mx="auto" spacing={6}>
         <VStack spacing={2}>
           <Text fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.25em" color="brand.accentText">
