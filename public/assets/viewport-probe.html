@@ -17,6 +17,13 @@
   answer. So this file is served from the site's own origin at the top level,
   and it asserts that it IS top level before reporting anything.
 
+  It lives under /assets/ ON PURPOSE. vercel.json's catch-all is
+  `/((?!assets/).*)` -> /index.html, so every other path is rewritten to the
+  SPA: the first attempt sat at /viewport-probe.html, returned 200, and served
+  the React app. `assets/` is the one prefix already excluded, so putting the
+  file there needs no routing change at all, which matters because a reasoned
+  change to that regex once 404'd /portal and /admin in production.
+
   No bundle, no router, no Helmet. Nothing about it can affect the app.
 -->
 <style>
@@ -62,7 +69,7 @@
 <div id="frameWarn" class="warn" hidden>
   This is running inside an iframe, so every number below is the iframe's and
   none of them answer the question. Open it directly at
-  vero.photography/viewport-probe.html instead.
+  vero.photography/assets/viewport-probe.html instead.
 </div>
 
 <div class="hero">
