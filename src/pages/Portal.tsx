@@ -349,11 +349,65 @@ function PaymentReturnBanner({
   );
 }
 
+/** Where the "hold the photographs still" choice is remembered. */
+const MOTION_HOLD_KEY = 'vero.portal.motionHold';
+
+/**
+ * The remembered choice, or false. Never throws: a private window and blocked
+ * site data both raise on read, and a decorative preference is not worth a
+ * blank page.
+ */
+const readMotionHold = (): boolean => {
+  try {
+    return window.localStorage.getItem(MOTION_HOLD_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
 const Portal = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => tabFromPath(location.pathname));
+
+  /**
+   * The photographs hold still because the visitor asked them to.
+   *
+   * WCAG 2.2.2 (Pause, Stop, Hide, level A): motion that starts on its own
+   * and runs for more than five seconds needs a mechanism ON THE PAGE to
+   * stop it. The field already stops for `prefers-reduced-motion` and while
+   * focus is inside the form, and neither satisfies the criterion: one is an
+   * operating system setting rather than a page control, and the other is
+   * not a control at all.
+   *
+   * The boolean lands on the page wrapper as `data-motion`, where a second
+   * selector in PortalMosaic's own rule picks it up. Nothing here knows how
+   * the rows move, and the rows keep their currentTime, so holding and
+   * releasing does not shift the field sideways by a pixel.
+   */
+  const [motionStill, setMotionStill] = useState(readMotionHold);
+  // REMEMBERED, per browser. The person this control exists for is the person
+  // for whom the motion is not a one-off annoyance, and making them find it
+  // again on every visit is most of the way back to not having it. It is a
+  // per-viewer convenience, so localStorage is the right home and its absence
+  // is not a failure: private windows and blocked site data both throw, which
+  // is why both sides are wrapped and the default is simply "drifting".
+  useEffect(() => {
+    try {
+      if (motionStill) window.localStorage.setItem(MOTION_HOLD_KEY, '1');
+      else window.localStorage.removeItem(MOTION_HOLD_KEY);
+    } catch {
+      /* Private window, or site data blocked. The choice still holds for this
+         visit, it just will not survive the next one. */
+    }
+  }, [motionStill]);
+  /**
+   * And is the field moving at all? PortalMosaic answers, because four of
+   * the reasons it might not be are invisible from here. A control offering
+   * to stop something already still is a button that does nothing.
+   */
+  const [drifting, setDrifting] = useState(false);
 
   // Keep the active tab in sync with the URL on browser back/forward so a
   // user navigating around with the address bar gets the expected view.
@@ -902,6 +956,7 @@ const Portal = () => {
       overflow="hidden"
       bg="brand.surfaceSunken"
       data-mosaic-hold=""
+      data-motion={motionStill ? 'still' : undefined}
     >
       <Helmet>
         <title>Portal | Vero Photography</title>
@@ -912,7 +967,7 @@ const Portal = () => {
           sprite sheet. It replaces a single 913 KB photograph and costs about
           220 KB, and it carries its own still fallback for a connection that
           cannot afford it. PortalMosaic has the whole argument. */}
-      <PortalMosaic veil={0.62} />
+      <PortalMosaic veil={0.62} onDrift={setDrifting} />
 
       <Flex
         position="relative"
@@ -1185,6 +1240,50 @@ const Portal = () => {
                   </Text>
                 </Box>
                 </SoftSpot>
+
+                {/* And the way to make the photographs stop (WCAG 2.2.2).
+
+                    A LINE OF ITS OWN, ON A SPOT OF ITS OWN, and that is the
+                    whole reason it is not tucked onto the sentence above it.
+                    A soft spot is PADDING AROUND A BOX, so lengthening that
+                    sentence does not slide the patch along, it stretches it:
+                    measured, the same control inline took the offramp's spot
+                    from 396x70 to 540x70 on a wide screen, a 36% widening of
+                    the one shape the owner has rejected as a slab twice. On a
+                    390px phone the line wraps instead, taking the spot 37%
+                    taller and leaving the divider stranded at the end of the
+                    first line. A second small patch leaves the tuned one at
+                    exactly 396x70 at both widths.
+
+                    It also keeps the gold link off the end of a line. The
+                    patch fades from the middle out, so the far end of any
+                    line sits where the cream has already gone: the link's
+                    arrow measures 2.66:1 against the photographs today, and
+                    an arrangement that puts the link further out (the control
+                    beside it, sharing one spot) took it to 2.08. That is a
+                    standing defect in the offramp rather than one this
+                    introduces, but it is not one to make worse. */}
+                {/* THE SPACE IS RESERVED WHETHER OR NOT THE CONTROL IS IN IT.
+                    `drifting` cannot be known until the 220 KB sprite has
+                    decoded, so on a first visit the control arrives late. It
+                    sits inside a vertically centred column, so appearing then
+                    moved the whole sign-in form: measured, the form re-centred
+                    on a window taller than the page and the container grew
+                    exactly 28px on one that was not, which on a 320x568 phone
+                    also added a whole row of photographs. Shifting a password
+                    field under someone's cursor to make room for an
+                    accessibility control is a poor trade, so the room is taken
+                    up front and the control fades into it. */}
+                <Box pt={2.5} minH="28px">
+                  {(drifting || motionStill) && (
+                    <SoftSpot spot={SPOT.motion}>
+                      <MotionToggle
+                        still={motionStill}
+                        onToggle={() => setMotionStill((v) => !v)}
+                      />
+                    </SoftSpot>
+                  )}
+                </Box>
               </Box>
             </VStack>
           </Reveal>
@@ -1276,6 +1375,17 @@ const SPOT = {
   rule:    { a: 0.93, x: '40px', y: '22px', soft: 58 },
   title:   { a: 0.93, x: '70px', y: '60px', soft: 58 },
   offramp: { a: 0.93, x: '50px', y: '26px', soft: 58 },
+  /**
+   * The motion control's own patch. The offramp's y, because it is the same
+   * type at the same size and the space around a line is what these numbers
+   * are. A narrower x because the line is half as long, and the gradient's
+   * plateau is a FRACTION of the box: the same padding on a shorter box is a
+   * larger share of it, and a patch that is mostly margin is a blob.
+   *
+   * Measured over seven phases of the mosaic, the control's worst glyph
+   * pixel reads 8.01:1 on a wide screen and 8.37:1 on a phone.
+   */
+  motion:  { a: 0.93, x: '40px', y: '24px', soft: 58 },
 } as const;
 
 /**
@@ -1380,6 +1490,123 @@ const baldSpot = (a: number, soft: number) => {
     `rgba(${CREAM_RGB}, 0) 100%)`
   );
 };
+
+/**
+ * Two hairline bars while the photographs are moving, a hairline triangle
+ * once they are held.
+ *
+ * Decorative, and aria-hidden: the label carries the meaning and the button
+ * carries the state. This only carries the eye, which is the whole of its
+ * job, because a line of quiet grey text at 12px is easy to read past on a
+ * page whose business is the form above it.
+ *
+ * `brand.accent` and not `accentText`: at 1px this is a rule, not type, and
+ * the decorative gold is the token for a rule.
+ */
+const MotionGlyph = ({ still }: { still: boolean }) => (
+  <Box
+    as="span"
+    aria-hidden="true"
+    display="inline-flex"
+    alignItems="center"
+    flexShrink={0}
+    color="brand.accent"
+  >
+    {still ? (
+      <svg width="9" height="11" viewBox="0 0 9 11" fill="none" stroke="currentColor" strokeWidth="1" strokeLinejoin="round">
+        <path d="M1.5 1 L8 5.5 L1.5 10 Z" />
+      </svg>
+    ) : (
+      // Half pixels, so a 1px stroke lands on the pixel grid rather than
+      // straddling two and painting itself grey.
+      <svg width="9" height="11" viewBox="0 0 9 11" stroke="currentColor" strokeWidth="1">
+        <line x1="2.5" y1="1" x2="2.5" y2="10" />
+        <line x1="6.5" y1="1" x2="6.5" y2="10" />
+      </svg>
+    )}
+  </Box>
+);
+
+/**
+ * The control that holds the photographs still. WCAG 2.2.2.
+ *
+ * ── WHY IT IS NOT A CTAButton ────────────────────────────────────────────
+ *
+ * The house rule is to reuse CTAButton rather than hand-roll a Box, and the
+ * treatment this reuses is the one six lines above it: the offramp's own
+ * `fontSize="xs" fontWeight="300" color="gray.700"`, which is a <Text> and
+ * has never been a CTAButton either. CTAButton's every variant is uppercase
+ * at 0.15em tracking on a plate, and this label in that treatment renders
+ * 254px wide on a 390px phone and reads as a SECOND call to action on a
+ * screen whose entire job is the first one. Measured beside it, the ghost
+ * variant's gray.600 also comes out at 4.58:1 over the photographs against
+ * this button's 8.37:1, because a plate that wide runs past the edge of any
+ * patch that is not a slab. If this control ever wants the button treatment
+ * it needs shorter copy, and that is a copy decision, not a markup one.
+ *
+ * ── data-motion-ctl ──────────────────────────────────────────────────────
+ *
+ * The hook PortalMosaic's rule uses to exempt this button from the focus
+ * pause. Clicking a button focuses it, and this button lives inside the hold,
+ * so without the exemption pressing "let them drift" would hold them still.
+ *
+ * ── aria-pressed, AND WHY THE LABEL CANNOT DO THAT JOB ───────────────────
+ *
+ * The words change, and to a screen reader a change of words is a change of
+ * ACCESSIBLE NAME, which is announced as a different control rather than as
+ * a state. aria-pressed is what says this is one control that is now on.
+ *
+ * ── THE 44px TOUCH TARGET WITHOUT A 44px BOX ─────────────────────────────
+ *
+ * A real 44px-tall button here would be a 44px-tall box, and the soft spot
+ * is padding around that box, so the patch would grow by 26px in a direction
+ * the line does not. An absolutely positioned ::before extends the HIT AREA
+ * past the box without touching layout. Measured: 146x45 CSS px of hit area
+ * around an 18px line, with the spot unchanged.
+ *
+ * It extends DOWNWARD rather than being centred, and that is not cosmetic.
+ * Centred, it reaches 22px up, over the bottom of the portfolio link one
+ * line above: measured 164 of 1422 sampled points inside that link resolving
+ * to this button instead. Below the control there is nothing but page.
+ */
+const MotionToggle = ({ still, onToggle }: { still: boolean; onToggle: () => void }) => (
+  <Box
+    as="button"
+    type="button"
+    data-motion-ctl=""
+    aria-pressed={still}
+    onClick={onToggle}
+    position="relative"
+    display="inline-flex"
+    alignItems="center"
+    gap={2}
+    bg="transparent"
+    border="none"
+    p={0}
+    fontSize="xs"
+    fontWeight="300"
+    lineHeight="1.5"
+    color="gray.700"
+    whiteSpace="nowrap"
+    cursor="pointer"
+    transition="color 0.3s"
+    _hover={{ color: 'gray.800', textDecoration: 'underline', textUnderlineOffset: '3px' }}
+    _focusVisible={{ outline: '1px solid', outlineColor: 'brand.accent', outlineOffset: '4px' }}
+    sx={{
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: '-2px',
+        height: '44px',
+      },
+    }}
+  >
+    <MotionGlyph still={still} />
+    <Box as="span">{still ? 'Let the photographs drift' : 'Hold the photographs still'}</Box>
+  </Box>
+);
 
 /**
  * One line, on its own patch of light.

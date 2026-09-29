@@ -2460,7 +2460,26 @@ function DesktopMenuPanel({
       role="menu"
       aria-label={heading}
       data-portal-dmenu={heading}
-      display={{ base: 'none', md: 'block' }}
+      /**
+       * THE SAME LINE AS ITS PHONE COUNTERPART, and it has to be.
+       *
+       * This appeared at Chakra's md (768) while PhoneMenuPanel and
+       * ProgressPanel only stop at DESKTOP_AT (1100), so from 768 to 1099
+       * BOTH panels were on screen and opening either menu showed the client
+       * two identical copies of it side by side: the full width list under
+       * the header and this popup on top of it. An iPad in portrait, and any
+       * desktop window dragged under 1100, got the pair.
+       *
+       * The phone panel is the one that is right in that band, because the
+       * header itself is still in its phone layout there (the desktop track
+       * does not fit until 1100, which is what DESKTOP_AT means) and this
+       * popup anchors itself to a desktop control that is not on screen yet.
+       *
+       * Written as the exact complement rather than as another breakpoint, so
+       * the two cannot drift apart again: below 1100 this is gone, at 1100 and
+       * up the phone panel is gone.
+       */
+      display="none"
       position="absolute"
       top="100%"
       left={left === null ? MENU_INSET : `${left}px`}
@@ -2478,7 +2497,7 @@ function DesktopMenuPanel({
       visibility={open ? 'visible' : 'hidden'}
       pointerEvents={open ? 'auto' : 'none'}
       transition={`opacity ${MENU_FADE} ease, visibility ${MENU_FADE} ease`}
-      sx={STILL}
+      sx={{ ...STILL, [DESKTOP_AT]: { display: 'block' } }}
     >
       <Text
         fontSize="2xs"

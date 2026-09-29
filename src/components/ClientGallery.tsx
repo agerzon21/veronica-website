@@ -1118,22 +1118,36 @@ function GalleryActionBar({ driveUrl }: GalleryActionBarProps) {
    * worse: the footer only comes into view once someone has scrolled the whole
    * set, which is exactly the moment they are most likely to want Download All.
    *
-   * So it rides up by however much of the footer is on screen. Measured from
-   * the footer's own box rather than a hardcoded height, because the footer is
-   * 123px today and that is not a number this file should know. If there is no
-   * footer on the route (the bare /portal/pass branch renders its own chrome),
-   * the query returns null and the offset simply stays 0.
+   * CLEARING THE WHOLE FOOTER WAS TOO MUCH. It parked the bar 20px above the
+   * footer's top edge, which is 13px over the bottom of the three controls
+   * that end the gallery pass section (Generate new, Pick my own, Turn off
+   * sharing), and 21px over Sign Out on /portal/pass. But the footer's top
+   * 32px are EMPTY: the face is a white band and the seal, the first thing
+   * drawn in it, starts 32px down. So the bar keeps that much of its lift back
+   * and hangs into the white instead. Measured after: it clears the controls
+   * by 19px and still stops 20px short of the seal.
+   *
+   * Neither number is written down here. The footer's box gives the overlap,
+   * exactly as before, and the seal's own box gives the slack, so a footer
+   * that changes height or moves its seal moves this with it. If the seal is
+   * not there the slack is 0, which is precisely the old clear-the-whole-footer
+   * behaviour. If there is no footer at all the query returns null and the bar
+   * never moves.
    */
-  const [footerOverlap, setFooterOverlap] = useState(0);
+  const [lift, setLift] = useState(0);
   useEffect(() => {
     const footer = document.querySelector('footer');
     if (!footer) return;
+    const seal = footer.querySelector('[data-footer-seal]');
     let raf = 0;
     const measure = () => {
       raf = 0;
       const top = footer.getBoundingClientRect().top;
       // How far the footer intrudes into the viewport, never negative.
-      setFooterOverlap(Math.max(0, window.innerHeight - top));
+      const overlap = Math.max(0, window.innerHeight - top);
+      // The empty white above the seal, which the bar may descend into.
+      const slack = seal ? Math.max(0, seal.getBoundingClientRect().top - top) : 0;
+      setLift(Math.max(0, overlap - slack));
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
     measure();
@@ -1159,7 +1173,7 @@ function GalleryActionBar({ driveUrl }: GalleryActionBarProps) {
       position="fixed"
       bottom={{ base: 3, md: 5 }}
       left="50%"
-      transform={`translateX(-50%) translateY(-${footerOverlap}px)`}
+      transform={`translateX(-50%) translateY(-${lift}px)`}
       willChange="transform"
       zIndex={40}
       bg="rgba(255, 255, 255, 0.92)"

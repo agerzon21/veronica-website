@@ -304,9 +304,16 @@ const PortraitPair = ({
 // down carries the same words, but the two are display:none of each other, so
 // only one is ever in the accessibility tree and the heading is never
 // announced twice.
-const TuckedEyebrow = ({ children }: { children: React.ReactNode }) => (
+const TuckedEyebrow = ({
+  children,
+  textStyle = 'eyebrow',
+}: {
+  children: React.ReactNode;
+  /** `eyebrowOnFold` where the band is brand.surfaceFold. Default unchanged. */
+  textStyle?: string;
+}) => (
   <VStack align="flex-start" spacing={4}>
-    <Text as="h2" textStyle="eyebrow" lineHeight="1.7">
+    <Text as="h2" textStyle={textStyle} lineHeight="1.7">
       {children}
     </Text>
     <Box w="35px" h="1px" bg="brand.accent" />
@@ -551,8 +558,17 @@ const About = () => {
           its old shape, the photographs on the left and both thoughts on the
           right, centred against them by the 1fr rows. The ceremony-lawn frame
           was added 2026-09-17 so the invitation has a photograph of its own. ─── */}
+      {/* THE FOLD CREAM, not brand.surface, and the reason is the footer.
+          The footer opens with a 60px WHITE face that exists to give the seal
+          room, then the gold crease, then this same cream. Against
+          brand.surface that face measured 1.05:1: visible but weightless, an
+          off-white strip on an off-white page, which reads as a printing fault
+          rather than as a band somebody drew. Matching the fold puts the same
+          colour above and below, so the face and the crease read as one inset
+          ribbon carrying the seal. The eyebrows in here move to eyebrowOnFold
+          because the plain gold is only 3.96:1 on this cream. */}
       <Box
-        bg="brand.surface"
+        bg="brand.surfaceFold"
         borderTop="1px solid"
         borderColor="brand.accentBorder"
         py={{ base: 16, md: 24 }}
@@ -569,7 +585,7 @@ const About = () => {
             <GridItem gridColumn={{ lg: 2 }} gridRow={{ base: 1, lg: 2 }}>
               <Reveal shown={angleShown} from={{ opacity: 0, y: 24 }} duration={FADE_IN_SEC}>
                 <VStack align="flex-start" spacing={5}>
-                  <Text as="h2" textStyle="eyebrow">Whatever the Angle Asks For</Text>
+                  <Text as="h2" textStyle="eyebrowOnFold">Whatever the Angle Asks For</Text>
                   <Box w="35px" h="1px" bg="brand.accent" />
                   <Text
                     fontFamily="heading"
@@ -623,7 +639,7 @@ const About = () => {
                 // 992px.
                 insetSide="left"
                 insetHang="-9%"
-                tuck={<TuckedEyebrow>Your Turn</TuckedEyebrow>}
+                tuck={<TuckedEyebrow textStyle="eyebrowOnFold">Your Turn</TuckedEyebrow>}
               />
             </GridItem>
 
@@ -640,7 +656,7 @@ const About = () => {
                     bg="brand.accentBorder"
                     my={3}
                   />
-                  <Text as="h2" textStyle="eyebrow" display={{ base: 'none', lg: 'block' }}>
+                  <Text as="h2" textStyle="eyebrowOnFold" display={{ base: 'none', lg: 'block' }}>
                     Your Turn
                   </Text>
                   <Text

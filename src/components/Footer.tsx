@@ -149,6 +149,13 @@ const Footer = () => {
         as={RouterLink}
         to="/"
         aria-label="Vero Photography, home"
+        /* The one hook anything outside this file needs: the top of this box is
+           where the footer starts DRAWING. Everything above it is the empty
+           white of the face, which the gallery's floating action bar is allowed
+           to hang into (see GalleryActionBar in ClientGallery). It reads the
+           attribute rather than "the footer's first anchor", so adding a band
+           or a link up here cannot silently move the limit. */
+        data-footer-seal=""
         position="absolute"
         left="50%"
         transform="translateX(-50%)"

@@ -52,6 +52,17 @@ interface Tile {
   gap: number;
 }
 
+/** The field as the render needs it: which tile, how many, and is it real yet. */
+interface Field {
+  tile: Tile;
+  rows: number;
+  perRow: number;
+  /** White band under the last row when the half-tile rule dropped one. */
+  skirt: number;
+  /** False until the field's own box has been measured. Gates the fade. */
+  measured: boolean;
+}
+
 /**
  * Tile sizes only. How MANY is measured from the FIELD'S OWN BOX, not guessed
  * and no longer read off the window, which is a different number the moment
@@ -147,46 +158,59 @@ function useAffordsMosaic(): boolean {
  * One field is built, not two behind a responsive `display`, because the
  * losing one's tiles would sit in the DOM doing nothing.
  */
-function useField(el: HTMLElement | null): {
-  tile: Tile;
-  rows: number;
-  perRow: number;
-  measured: boolean;
-} {
+function useField(el: HTMLElement | null): Field {
   const read = (boxH: number, boxW: number) => {
     const w = typeof window === 'undefined' ? 1280 : window.innerWidth;
-    const h = typeof window === 'undefined' ? 900 : window.innerHeight;
     const tile = w < 768 ? PHONE : DESKTOP;
     const pitch = tile.th + tile.gap;
-    // THE FIELD'S OWN HEIGHT, not the window's.
+    // THE FIELD'S OWN HEIGHT, and NOTHING ELSE. Not window.innerHeight, not
+    // even as a floor.
     //
-    // This used to read window.innerHeight, and the field is `inset: 0` inside
-    // a `minH="100vh"` box that GROWS with the form, so the moment the page
-    // was taller than the window the last rows were never built and the
+    // The field is `inset: 0` inside a `minH="100vh"` box that GROWS with the
+    // form, so reading the window meant the last rows were never built and the
     // photographs stopped partway down: measured 112px of bare cream at
-    // 1280x600 and 393px on a landscape phone. It also meant that on iOS,
-    // where scrolling collapses the URL bar and fires a resize, scrolling
-    // literally added a row, which is what looked like lazy loading. Nothing
-    // here was ever lazy: the whole field is one sprite sheet in one request,
-    // so covering the box costs no bytes at all, only DOM nodes.
-    const height = Math.max(boxH, h);
+    // 1280x600 and 393px on a landscape phone. Worse, window.innerHeight is
+    // not a constant on a phone. Scrolling collapses the URL bar, which fires
+    // a resize, which ADDED a row; scrolling back up took it away again. That
+    // is the "it only loads when you scroll down, then some of the top row
+    // de-loads" the owner reported, and it is why this must not consult the
+    // window even as a fallback.
+    //
+    // The box is the only thing that has to be covered, and it does not change
+    // when you scroll.
+    const height = boxH;
+    // Whole rows that fit before the edge, and how much of the NEXT one would
+    // show if it were rendered. `v` runs from -gap to just under a tile.
+    const whole = Math.max(0, Math.floor((height + tile.gap) / pitch));
+    const v = height - whole * pitch;
     return {
       tile,
-      // Exactly enough to cover the box, and no spare. `ceil` guarantees the
-      // rows are at least as tall as the box, so there is never bare cream
-      // under them; anything past the edge bleeds off the bottom under the
-      // footer, which is where the old spare row was going anyway.
+      // HALF A TILE OR NONE OF IT.
       //
-      // What this does NOT do is control how much of the last row shows: that
-      // is `height % pitch` and it can be a thin stripe. Fixing THAT means
-      // sizing the tiles so a whole number of rows divides the box, which
-      // makes the tile size a function of the viewport. It is a real option
-      // and a separate decision, not an oversight.
-      rows: Math.max(2, Math.ceil((height + tile.gap) / pitch)),
+      // Covering the box exactly would leave the last row cut at
+      // `height % pitch`, which is anything from 1px to a full tile. A 9px
+      // stripe of photograph tops is the thing the owner kept reading as a
+      // row that had failed to load, and on a desktop the footer is what
+      // gave it away: the footer's top face is white, so a sliver of
+      // photographs sitting on a white band looks exactly like a row that is
+      // still arriving.
+      //
+      // So the last row is taken only if at least HALF of it would show.
+      // Otherwise it is dropped and the leftover becomes a white skirt (see
+      // `skirt` below) that runs into the footer's own white face as one
+      // band. Either a row is a photograph or it is not there at all.
+      rows: Math.max(1, v >= tile.th / 2 ? whole + 1 : whole),
       // One COPY must cover the width; the row renders two of them.
       perRow: Math.ceil(Math.max(boxW, w) / (tile.tw + tile.gap)) + 2,
+      // What is left under the last row when the half-tile rule drops one.
+      // Zero whenever a row was taken, because then the rows overflow the box
+      // and bleed off the bottom instead.
+      skirt: Math.max(0, v >= tile.th / 2 ? 0 : v + tile.gap),
     };
   };
+
+  const same = (a: Field, b: Field) =>
+    a.tile === b.tile && a.rows === b.rows && a.perRow === b.perRow && a.skirt === b.skirt;
   const [field, setField] = useState(() => ({ ...read(0, 0), measured: false }));
   useLayoutEffect(() => {
     if (!el) return;
@@ -201,18 +225,17 @@ function useField(el: HTMLElement | null): {
     // the exact defect this change exists to remove, so it cannot be allowed
     // to flash on the way in.
     const first = el.getBoundingClientRect();
-    setField({ ...read(first.height, first.width), measured: true });
+    setField((prev) => {
+      const next = { ...read(first.height, first.width), measured: true };
+      return prev.measured && same(prev, next) ? prev : next;
+    });
     // The field's height comes from `inset: 0`, never from its children, and
     // the rows overflow rather than stretching it, so adding rows can never
     // re-fire this. Verified by attaching a real observer and appending rows:
     // zero additional fires.
     const ro = new ResizeObserver(([entry]) => {
-      const next = read(entry.contentRect.height, entry.contentRect.width);
-      setField((prev) =>
-        prev.rows === next.rows && prev.perRow === next.perRow && prev.tile === next.tile
-          ? prev
-          : { ...next, measured: true },
-      );
+      const next = { ...read(entry.contentRect.height, entry.contentRect.width), measured: true };
+      setField((prev) => (prev.measured && same(prev, next) ? prev : next));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -231,9 +254,25 @@ interface Props {
    * read off the tuner, one per board.
    */
   veil?: number | { base: number; md: number };
+  /**
+   * Is anything actually moving right now? Called whenever the answer changes.
+   *
+   * The page above owns the visible control that holds the field still (WCAG
+   * 2.2.2), and a control offering to stop something already stopped is worse
+   * than no control: it is a button that does nothing, on a sign-in screen.
+   * Four separate things settle this field with no help at all, and three of
+   * them are invisible from outside this file: the connection was too thin
+   * for the sheet, the sheet failed to decode, the field has not been
+   * measured and painted yet, and the visitor asked their operating system
+   * for reduced motion. So this file answers the question rather than making
+   * the caller guess at it.
+   *
+   * Optional. The field renders identically without it.
+   */
+  onDrift?: (drifting: boolean) => void;
 }
 
-const PortalMosaic = ({ veil = 0.62 }: Props) => {
+const PortalMosaic = ({ veil = 0.62, onDrift }: Props) => {
   // One cream value, or two. Written once here so the two places that paint
   // the veil cannot answer the question differently.
   const veilBg =
@@ -242,7 +281,7 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
       : { base: `rgba(253,249,240,${veil.base})`, md: `rgba(253,249,240,${veil.md})` };
   const affords = useAffordsMosaic();
   const [fieldEl, setFieldEl] = useState<HTMLDivElement | null>(null);
-  const { tile, rows: rowCount, perRow, measured } = useField(fieldEl);
+  const { tile, rows: rowCount, perRow, measured, skirt } = useField(fieldEl);
   const [sheetReady, setSheetReady] = useState(false);
   const [sheetFailed, setSheetFailed] = useState(false);
 
@@ -262,6 +301,35 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
   }, [affords]);
 
   const still = !affords || sheetFailed;
+
+  /**
+   * The reduced-motion answer, kept LIVE rather than read once.
+   *
+   * utils/motion's prefersReducedMotion is a single read, which is right for
+   * picking a scroll behaviour at the moment of a scroll and wrong for a
+   * control that stays on screen: macOS and iOS both let the setting change
+   * while the page is open, and a stale read leaves either a control with
+   * nothing to pause or a moving field with no way to stop it. The rows
+   * themselves answer the query in CSS, which is always live; this exists
+   * only to keep the CONTROL in step with them.
+   */
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const read = () => setReduced(mq.matches);
+    read();
+    mq.addEventListener('change', read);
+    return () => mq.removeEventListener('change', read);
+  }, []);
+
+  // Every reason the field might be holding still, in one boolean, reported
+  // up. `sheetReady && measured` because that pair is exactly what gates the
+  // fade: before it the rows sit at opacity 0 and there is nothing to stop.
+  const drifting = !still && sheetReady && measured && !reduced;
+  useEffect(() => {
+    onDrift?.(drifting);
+  }, [drifting, onDrift]);
 
   const rows = useMemo(
     () =>
@@ -389,14 +457,72 @@ const PortalMosaic = ({ veil = 0.62 }: Props) => {
 
           CSS and not React state: pausing this way re-renders nothing, and
           measured it leaks 0ms across a Tab from one field to the next, where
-          a handler deferred through rAF or a transition leaks a frame. */}
+          a handler deferred through rAF or a transition leaks a frame.
+
+          TWO RULES, AND THE CONTROL'S COMES FIRST. They were one selector
+          list, which looked tidier and is a silent single point of failure:
+          if ANY selector in a list fails to parse, the browser drops the
+          WHOLE rule. The focus half uses `:has()`, which Firefox only shipped
+          in 121, so on an older engine one list would have taken the visible
+          control down with it and left the page with no way to stop the
+          motion at all, which is the entire thing this exists to provide.
+          Split, the control keeps working and only the focus convenience is
+          lost.
+          They cannot disagree, because both set the SAME declaration and
+          neither ever sets `running`: either matching is enough, which is how
+          CSS composes. Measured: hold by the control, focus a field, blur it,
+          and the field is still at 0.000px of travel over 1300ms.
+
+          `prefers-reduced-motion` is honoured above and is NOT a substitute
+          for it. That is an operating system setting, and WCAG 2.2.2 asks for
+          a mechanism on the page.
+
+          AND THE CONTROL IS EXEMPT FROM THE FOCUS HALF, which is not a
+          refinement, it is what makes the control work with a mouse at all.
+          Clicking a <button> focuses it in Chromium and in Firefox, and the
+          control sits inside the hold, so without the `:not` the first
+          selector caught the button itself: pressing "Let the photographs
+          drift" cleared data-motion and then held the field still anyway,
+          until you happened to click somewhere else. Measured before the
+          exemption, 0.000px of travel over 1200ms after a resume. The button
+          looked broken.
+
+          `:focus-within` on the exempt element rather than `:focus`, so the
+          hook can sit either on the control or on a wrapper around it. */}
       <style>{`
 @keyframes veroMosaicLeft { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes veroMosaicRight { from { transform: translateX(-50%); } to { transform: translateX(0); } }
-[data-mosaic-hold]:focus-within [data-mosaic-row] { animation-play-state: paused; }
+[data-mosaic-hold][data-motion="still"] [data-mosaic-row] { animation-play-state: paused; }
+[data-mosaic-hold]:focus-within:not(:has([data-motion-ctl]:focus-within)) [data-mosaic-row] { animation-play-state: paused; }
 `}</style>
       {field(tile, rows)}
       <Box position="absolute" inset={0} bg={veilBg} aria-hidden="true" />
+      {/* THE SKIRT. White, and ABOVE the veil on purpose.
+          When the half-tile rule drops the last row, this is what takes its
+          place. It has to be the same white as the footer's top face
+          (Footer.tsx renders `bg="white"`), because the whole point is that
+          the two read as ONE band rather than as a gap where a row of
+          photographs failed to arrive. Under the veil it would come out a
+          couple of percent off white and the seam would show. */}
+      {sheetReady && measured && skirt > 0 && (
+        <Box
+          position="absolute"
+          left={0}
+          right={0}
+          bottom={0}
+          height={`${skirt}px`}
+          bg="white"
+          // It arrives WITH the photographs, on the same gate and the same
+          // fade. Gated on `measured` alone it painted at full opacity from
+          // the first layout, while the rows were still at opacity 0: a 70px
+          // white band butting the footer's own 60px white face, which is a
+          // 130px hole exactly where this change exists to remove one.
+          opacity={sheetReady && measured ? 1 : 0}
+          transition="opacity 0.6s ease"
+          sx={{ '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}
+          aria-hidden="true"
+        />
+      )}
     </>
   );
 };

@@ -36,6 +36,8 @@ import { extendTheme } from '@chakra-ui/react';
 // Measured contrast against white is noted for anything used as text.
 const GOLD = '#c9a96e'; //  2.24:1 — decorative only, never text
 const GOLD_TEXT = '#8a6e35'; //  4.81:1 — passes AA. Already used 39x in the codebase.
+// 4.87:1 on brand.surfaceFold, where GOLD_TEXT is 3.96:1 and fails AA at 11px.
+const GOLD_TEXT_DEEP = '#7a602f';
 const GOLD_STRONG = '#b8964f'; //  2.79:1 — hover/active FILLS only, never text
 const GOLD_SOFT = '#d4b87a'; //  1.92:1 — hover fill on dark
 const GOLD_BORDER = '#e8d9a8'; //  1.41:1 — borders on cream
@@ -59,6 +61,12 @@ export const brand = {
   accent: GOLD,
   /** Gold as readable text on a light background. 4.81:1. */
   accentText: GOLD_TEXT,
+  /**
+   * The same gold, deep enough for 11px text on the FOLD cream. `accentText`
+   * is 4.81:1 on white and 4.58:1 on `surface`, both passes, but only 3.96:1
+   * on `surfaceFold`, which fails AA. This is 4.87:1 there.
+   */
+  accentTextDeep: GOLD_TEXT_DEEP,
   /** Hover/active fill. Not for text. */
   accentStrong: GOLD_STRONG,
   /** Hover fill against dark backgrounds. */
@@ -244,6 +252,22 @@ const theme = extendTheme({
       textTransform: 'uppercase',
       lineHeight: 1,
       color: 'brand.accentText',
+      marginRight: '-0.32em',
+    },
+    /**
+     * The eyebrow on `brand.surfaceFold`. Colour is the ONLY difference from
+     * `eyebrow`, exactly as with `eyebrowOnDark`: at 11px the plain accentText
+     * gold measures 3.96:1 on that cream, under AA's 4.5:1 floor. Same reason
+     * `metaCaption` sits on gray.600 rather than gray.500.
+     */
+    eyebrowOnFold: {
+      fontFamily: 'body',
+      fontSize: '0.6875rem',
+      fontWeight: '500',
+      letterSpacing: '0.32em',
+      textTransform: 'uppercase',
+      lineHeight: 1,
+      color: 'brand.accentTextDeep',
       marginRight: '-0.32em',
     },
     eyebrowOnDark: {
