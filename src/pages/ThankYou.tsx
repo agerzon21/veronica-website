@@ -382,7 +382,12 @@ const AutoReplyStatusBlock = ({ status }: { status: AutoReplyStatus }) => {
 };
 
 const Gold = ({ children }: { children: React.ReactNode }) => (
-  <Text as="span" color="brand.accentText" fontWeight="400">
+  /* accentTextDeep, not accentText. These words sit inside a card whose own
+     background is brand.surfaceSunken, where the plain gold is 4.21:1 at
+     15px and AA wants 4.5. The deep gold is 5.18:1 there. It is the same
+     swap the contact form's muted CTA and the shared SectionHead needed, and
+     for the same reason: accentText was measured against white. */
+  <Text as="span" color="brand.accentTextDeep" fontWeight="400">
     {children}
   </Text>
 );

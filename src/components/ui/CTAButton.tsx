@@ -212,7 +212,12 @@ const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
   if (variant === 'solidMuted') {
     return {
       bg: SUNKEN,
-      color: GOLD_TEXT,
+      // DEEP gold, because this variant paints its own background. GOLD_TEXT
+      // is 4.81:1 on white, which is what it was measured against, but only
+      // 4.21:1 on SUNKEN, and this label runs at 14px where AA wants 4.5.
+      // Measured on the contact form, where "Add your name" was the last
+      // failing node on the page. The deep gold is 5.18:1 there.
+      color: GOLD_TEXT_DEEP,
       border: '1px solid',
       borderColor: GOLD_BORDER,
       // Does not go gold on hover. Gold is what the READY state looks like,

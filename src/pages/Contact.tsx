@@ -662,7 +662,18 @@ const Contact = () => {
   const describe = (field: FieldName) => ({ 'aria-describedby': `${field}-err` });
 
   return (
-    <Box position="relative" minH="100vh" bg="brand.surface">
+    <Box
+      /* THE FOLD CREAM, for the seam with the footer, the same change as the
+         About page and the photo pages. Unlike those two this page has no
+         separate closing band: the whole page is one tinted box, so it is the
+         whole page that meets the footer and the whole page that moves. The
+         footer opens with a 60px WHITE face, and against brand.surface that
+         face measured 1.05:1, visible but weightless, which reads as a
+         printing fault rather than as a band somebody drew. */
+      position="relative"
+      minH="100vh"
+      bg="brand.surfaceFold"
+    >
       <Helmet>
         <title>Book a Session | Vero Photography</title>
         <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />

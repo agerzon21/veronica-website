@@ -31,7 +31,12 @@ export const SectionHead = ({
       fontWeight="500"
       letterSpacing="0.18em"
       textTransform="uppercase"
-      color="brand.accentText"
+      /* accentTextDeep, not accentText. At 12px this is small text and needs
+         4.5:1, and the plain gold is only 3.96:1 on brand.surfaceFold, which
+         the contact page now uses. The deep gold clears it on all three
+         surfaces this rail renders on: 5.93 on white (ReviewModal), 5.18 on
+         brand.surface (the thank-you page) and 4.87 on the fold. */
+      color="brand.accentTextDeep"
       whiteSpace="nowrap"
       m={0}
     >
