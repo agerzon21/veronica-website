@@ -4,6 +4,13 @@ import { m, useScroll, useTransform, useSpring, MotionValue } from 'framer-motio
 import { Link as RouterLink } from 'react-router-dom';
 import ImageCarousel from './ImageCarousel';
 import PageHeader from './ui/PageHeader';
+// The fixed public navbar's height, from the file that is kept true. The local
+// NAVBAR_HEIGHT below agrees with it today and is used for the LAYOUT budget;
+// this one is used to offset a programmatic scroll, where being wrong is
+// visible. Measured across 691 widths: the rendered navbar is 68px at 320 and
+// 70px at exactly 992, never more than this.
+import { SITE_HEADER_H } from './siteHeader';
+import { scrollBehavior } from '../utils/motion';
 // The scroll-hint dot and its glow are plain framer-motion inline styles, not
 // Chakra props, so they can't resolve a theme token by name. Importing the raw
 // palette keeps them on the same source of truth as everything else.
@@ -142,7 +149,12 @@ const HEADER_CONTENT_MD = 162;
 const HEADER_CONTENT_LG = 195;
 
 /**
- * 100svh, measured.
+ * 100svh and 100lvh, measured off a probe.
+ *
+ * Almost everything that needs these uses the CSS units directly, in the
+ * render, where they stay live. This reads them in JS for the two jobs CSS
+ * cannot do: the layout BUDGETS below, which are arithmetic, and the camera's
+ * settled offset, which is a framer-motion transform in percent.
  *
  * svh is the viewport WITH the browser's chrome showing: the part of the
  * screen a phone can always see. It is a constant per device, which is the
@@ -156,13 +168,13 @@ const HEADER_CONTENT_LG = 195;
  * There is no JS property for svh, so it is measured off a probe. The rect of
  * a visibility:hidden element is still reported, so the probe never paints.
  */
-const measureSvh = (): number | null => {
+const measureViewportUnit = (unit: 'svh' | 'lvh'): number | null => {
   if (typeof document === 'undefined' || !document.body) return null;
   try {
-    if (!window.CSS?.supports?.('height', '100svh')) return null;
+    if (!window.CSS?.supports?.('height', `100${unit}`)) return null;
     const probe = document.createElement('div');
     probe.style.cssText =
-      'position:absolute;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none';
+      `position:absolute;top:0;left:0;width:0;height:100${unit};visibility:hidden;pointer-events:none`;
     document.body.appendChild(probe);
     const h = probe.getBoundingClientRect().height;
     probe.remove();
@@ -171,6 +183,27 @@ const measureSvh = (): number | null => {
     return null;
   }
 };
+
+/**
+ * The browser's chrome, which is `lvh - svh` by definition.
+ *
+ * The sticky below is sized in `lvh` and the composition is laid out in `svh`,
+ * so this is the distance between the two frames. Everything that CAN be
+ * expressed in CSS uses the units directly and never reads this; the one thing
+ * that cannot is the camera's settled offset, because that is a framer-motion
+ * transform in PERCENT of the camera's own natural height, and a CSS unit does
+ * not reach inside it.
+ *
+ * On a desktop, and anywhere the units are unsupported, this is zero and every
+ * expression downstream collapses to exactly what shipped before.
+ *
+ * It is computed here, from the two probes layoutViewport already takes,
+ * rather than in a helper of its own: a separate measureChrome() re-measured
+ * svh a second time, which made three forced layouts per resize where there
+ * used to be one, on the page that owns the site's LCP.
+ */
+const chromeOf = (svh: number | null, lvh: number | null): number =>
+  svh == null || lvh == null ? 0 : Math.max(0, lvh - svh);
 
 /**
  * The viewport the hero lays itself out against.
@@ -194,14 +227,20 @@ const measureSvh = (): number | null => {
  * This predates the number rail. The same measurements on 948c491, the commit
  * before any of that work, are identical to the digit.
  */
-const layoutViewport = (): { vw: number; vh: number } => {
+const layoutViewport = (): { vw: number; vh: number; chrome: number } => {
   const scale = (typeof window !== 'undefined' && window.visualViewport?.scale) || 1;
   // svh first, and innerHeight only where the unit is unsupported. On a
   // desktop the two are the same number, so nothing there changes.
-  const svh = measureSvh();
+  //
+  // Both probes are taken ONCE, here, and the chrome is derived from them, so
+  // this costs two forced layouts rather than three and svh cannot disagree
+  // with itself between two reads in the same tick.
+  const svh = measureViewportUnit('svh');
+  const lvh = measureViewportUnit('lvh');
   return {
     vw: Math.round(window.innerWidth * scale),
     vh: svh ?? Math.round(window.innerHeight * scale),
+    chrome: chromeOf(svh, lvh),
   };
 };
 
@@ -443,13 +482,16 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // page from re-laying out (and re-drawing the camera animation) every
   // time iOS Safari or Chrome decides to hide a URL bar.
   const [vp, setVp] = useState(() => {
-    if (typeof window === 'undefined') return { vw: 1200, vh: 800 };
+    if (typeof window === 'undefined') return { vw: 1200, vh: 800, chrome: 0 };
     return layoutViewport();
   });
   useEffect(() => {
     let last = layoutViewport();
     const update = () => {
-      const { vw: w, vh: h } = layoutViewport();
+      // Measured ONCE per event and reused, rather than read again after the
+      // guard: this handler runs on every chrome retract, so a second call
+      // here doubled the forced layouts for nothing.
+      const next = layoutViewport();
       // Real resize: width changed (window drag, orientation flip) OR the
       // height changed by more than 200px (only possible on orientation
       // flip — chrome bars are smaller than that). Below 200px = ignore.
@@ -457,9 +499,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
       // A pinch now produces no change in either number, so it cannot reach
       // this line at all, which is the point: the composition a visitor
       // pinched to look at is the composition that stays on screen.
-      if (w === last.vw && Math.abs(h - last.vh) < 200) return;
-      last = { vw: w, vh: h };
-      setVp({ vw: w, vh: h });
+      //
+      // `chrome` rides along with it. It only changes on an orientation flip
+      // (a landscape toolbar is not a portrait one), which always changes the
+      // width and so always gets past this guard.
+      if (next.vw === last.vw && Math.abs(next.vh - last.vh) < 200) return;
+      last = next;
+      setVp(next);
     };
     window.addEventListener('resize', update);
     // Safari fires resize on the VISUAL viewport too. Listening here as well
@@ -489,15 +535,47 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const headerBottomOffset = anchorOffset - size.verticalShiftPx;
   const footerTopOffset = size.finalHeight / 2 + size.footerGap + size.verticalShiftPx;
 
-  // Motion-y at scroll end translates the camera body down by verticalShiftPx
-  // so its center matches the header/footer anchor. Expressed as a percentage
-  // of the natural element's height (framer-motion's % translation is in
-  // unscaled CSS pixels, applied after scale, so this stays geometrically
-  // correct at any finalScale).
+  /**
+   * Half the browser's chrome. The whole of issue B in one number.
+   *
+   * The sticky below is `100lvh`, the CHROME-HIDDEN viewport, and its children
+   * used to hang off `50%` of it. But every budget in computeCameraSize is
+   * computed against the measured `svh`, the viewport with the chrome SHOWING.
+   * On a desktop the two are the same number and nothing ever showed. On iOS
+   * Safari with the toolbar up they differ by exactly the toolbar, so the
+   * composition rendered `(lvh - svh) / 2` below the middle of the strip the
+   * phone can actually see: measured 70px on a 17 Pro Max, which is 121px of
+   * air above the eyebrow against 66px under Book a Session.
+   *
+   * The three anchors are now written in `svh` directly (see the render), so
+   * they need nothing from here and stay live under a window resize. This
+   * number exists for the camera alone, whose settled position is a
+   * framer-motion transform in percent and so cannot be written in CSS units.
+   */
+  const chromeHalf = vp.chrome / 2;
+
+  // Motion-y at scroll end translates the camera body to the composition's
+  // centre: DOWN by verticalShiftPx to clear the navbar on a short viewport,
+  // and UP by chromeHalf to land on svh/2 rather than lvh/2. Expressed as a
+  // percentage of the natural element's height (framer-motion's % translation
+  // is in unscaled CSS pixels, applied after scale, so this stays
+  // geometrically correct at any finalScale).
+  //
+  // The camera's BOX stays on `top: 50%` of the lvh sticky while the header
+  // and footer anchors move to svh, and the two still agree, because this
+  // term carries the camera the rest of the way: lvh/2 + (shift - chromeHalf)
+  // is svh/2 + shift, which is exactly where the anchors put the edges.
+  //
+  // Doing it here rather than on the box is what keeps the START of the
+  // cinematic untouched. At scroll 0 the camera is at natural size with its
+  // LCD covering the screen, and every frame of that is measured byte-for-byte
+  // identical to what shipped before. Moving the box instead would have
+  // shifted the full-bleed opening too, for no gain: the opening is a
+  // full-screen photograph, and the frame it should fill is the whole sticky.
   const naturalHeight =
     size.natural /
     (size.isPortrait ? CAMERA_IMG_H / CAMERA_IMG_W : CAMERA_IMG_W / CAMERA_IMG_H);
-  const verticalShiftPct = (size.verticalShiftPx * 100) / naturalHeight;
+  const verticalShiftPct = ((size.verticalShiftPx - chromeHalf) * 100) / naturalHeight;
 
   // ─── SCROLL CHOREOGRAPHY ───
   // Animation window stretched so the cinematic feels deliberate rather
@@ -607,12 +685,32 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // This used to subtract a viewport height, which lands on the last frame of
   // the PINNED range — where the sticky is still showing the settled camera.
   // The arrow therefore appeared to do nothing, or to snap back to the hero.
-  // The section's bottom edge is the top of whatever comes next, which is
-  // where an arrow pointing down should take you.
+  //
+  // The section's bottom edge is the top edge of what comes next, and the
+  // navbar is FIXED over the top 72px of the screen, so landing on it exactly
+  // parks "Where to Begin" underneath the header. Measured: the heading's box
+  // lands at y=48 on a phone against a navbar that ends at 72, so all 11px of
+  // it are hidden, and 8 of 11 on a desktop.
+  //
+  // SITE_HEADER_H rather than the local NAVBAR_HEIGHT: the two agree today,
+  // but siteHeader.ts derives its number from the wordmark's own ceiling and
+  // is the file kept true. The extra 16 is SAFE_BUFFER, this file's existing
+  // name for the gap between fixed chrome and content, and it gives
+  // HomeChapters back a sliver of the trailing white its own padding comment
+  // says it means to share with the hero.
+  //
+  // scroll-margin-top on the section is the other way to do this, and it is
+  // the wrong one here: nothing reaches that section by a hash (measured, zero
+  // anchors on the homepage), this is a single programmatic call, and keeping
+  // the offset in the caller means HomeChapters never has to know the navbar
+  // exists.
   const scrollPastHero = () => {
     const el = sectionRef.current;
     if (!el) return;
-    window.scrollTo({ top: el.offsetTop + el.offsetHeight, behavior: 'smooth' });
+    window.scrollTo({
+      top: el.offsetTop + el.offsetHeight - SITE_HEADER_H - SAFE_BUFFER,
+      behavior: scrollBehavior(),
+    });
   };
 
   // The stats row moved to the About page's closing band: repeating
@@ -735,9 +833,29 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             left:0/right:0 and centre their own content. Whitespace between header and camera no longer
             balloons on tall viewports because the position tracks the camera's
             final size, not the viewport top. */}
+        {/* Anchored to the middle of `svh`, NOT to 50% of the lvh sticky.
+            `100%` here IS `100lvh`, because that is the parent's height, so
+            `calc(100% - 50svh + offset)` is the same edge measured from the
+            bottom. On every desktop svh and lvh are the same number and this
+            reduces to the `calc(50% + offset)` that shipped before, live at
+            any window size rather than frozen at the one it mounted in. See
+            chromeHalf above for the whole argument. */}
         <Box
           position="absolute"
-          bottom={`calc(50% + ${headerBottomOffset}px)`}
+          /* The svh value is guarded, and the guard is not ceremony. An
+             unparseable declaration is DROPPED, and a dropped `bottom` on an
+             absolutely positioned box is not "slightly wrong", it is `auto`:
+             the header collapses to the top of the sticky and stacks under the
+             navbar. The plain calc below is exactly what shipped before, so
+             anything that cannot read svh gets the old composition rather than
+             a broken one. Safari before 15.4, Chrome before 108, Firefox
+             before 101 and old WebViews. */
+          sx={{
+            bottom: `calc(50% + ${headerBottomOffset}px)`,
+            '@supports (height: 100svh)': {
+              bottom: `calc(100% - 50svh + ${headerBottomOffset}px)`,
+            },
+          }}
           // Full-bleed, and centred by PageHeader itself rather than by
           // `left: 50%` + a translate. That combination looks equivalent but
           // is not: with `width: auto` the shrink-to-fit AVAILABLE width of an
@@ -815,7 +933,14 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         {!size.extractFooter && (
           <Box
             position="absolute"
-            top={`calc(50% + ${footerTopOffset}px)`}
+            // Same svh frame as the header above, same reasoning, same
+            // guard. On a desktop this is `calc(50% + offset)` exactly.
+            sx={{
+              top: `calc(50% + ${footerTopOffset}px)`,
+              '@supports (height: 100svh)': {
+                top: `calc(50svh + ${footerTopOffset}px)`,
+              },
+            }}
             // Same fix as the header above, and it was NOT merely latent here.
             // `left: 50%` + `width: auto` capped this box's layout width at
             // vw/2; shrink-to-fit floors at min-content so it did not collapse
@@ -868,8 +993,17 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         <MotionBox
           position="absolute"
           right={{ base: '18px', md: '32px' }}
-          top="50%"
+          // The rail moves into the svh frame with the rest of the
+          // composition. It is visible from progress 0.04 to 0.94, so it is
+          // on screen at the same time as the settled camera, and leaving it
+          // centred on the lvh sticky would have put it up to half a toolbar
+          // below the middle of the strip the phone can see: level with Book
+          // a Session rather than with the camera. Identical on a desktop.
           marginTop="-86px"
+          sx={{
+            top: '50%',
+            '@supports (height: 100svh)': { top: '50svh' },
+          }}
           zIndex={5}
           pointerEvents="none"
           display="flex"
@@ -942,6 +1076,21 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             onClick={scrollPastHero}
             aria-label="Scroll to the rest of the page"
             position="absolute"
+            /**
+             * The same expression the scroll hint already uses, for the same
+             * reason and now for the same frame.
+             *
+             * This used to be a flat 84px off the bottom of a 100lvh sticky,
+             * which is a guess at how tall a toolbar is. Measured, it is not
+             * enough: with 140px of chrome the ring sits 56px BEHIND Safari's
+             * toolbar, so on the state Alex photographed the arrow he is being
+             * asked to tap is not on the screen at all. `100lvh - 100svh` IS
+             * the chrome by definition, so adding it back puts the ring a
+             * fixed 28px above the part of the screen that is always visible,
+             * on every device, with no measurement and no JavaScript.
+             *
+             * On a desktop the term is zero and this is the md value anyway.
+             */
             bottom={{ base: '84px', md: '28px' }}
             left="50%"
             zIndex={5}
@@ -957,7 +1106,16 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             cursor="pointer"
             transition="border-color 0.3s ease, background 0.3s ease"
             _hover={{ borderColor: 'brand.accent', bg: 'rgba(201, 169, 110, 0.08)' }}
-            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            sx={{
+              WebkitTapHighlightColor: 'transparent',
+              // Guarded like the two anchors above, and falling back to the
+              // flat 84px that shipped before, so a browser that cannot read
+              // svh keeps the old position instead of losing `bottom`
+              // altogether and pinning the ring to the top of the sticky.
+              '@supports (height: 100svh)': {
+                bottom: 'calc(100lvh - 100svh + env(safe-area-inset-bottom, 0px) + 28px)',
+              },
+            }}
             // Same rule as the header and footer above: it is a real button,
             // so it must not be tappable during the stretch of the cinematic
             // where it is not on screen yet.
