@@ -1,37 +1,78 @@
-import { Box, Text, Link as ChakraLink, VStack, Flex } from '@chakra-ui/react';
+import { Box, Text, Link as ChakraLink, VStack, Flex, Image } from '@chakra-ui/react';
 import { Link } from 'react-router-dom';
 import Reveal, { useReveal } from './ui/Reveal';
+import { gridSrcSet } from '../utils/gridSrcSet';
 
+/**
+ * `sourceWidth` is the file's own pixel width, copied from
+ * src/data/photo-dims.json (which scripts/measure-photos.mjs writes). It is
+ * the last srcset candidate, so a device that paints past the 1600 top rung
+ * keeps the original instead of dropping to it. Importing photo-dims.json
+ * here would be the drift-proof way to get it, but that file pulls
+ * src/data/photos.ts and its 18KB of dims plus the photos CSV into
+ * the /gallery chunk to read four numbers.
+ *
+ * If one of these four photographs is ever swapped, update the number with
+ * it. Getting it wrong only changes which candidate the browser prefers, and
+ * only for devices past 1600 device px; it cannot break the tile, because
+ * `src` is this same file.
+ */
 const categories = [
   {
     name: 'portraits',
     title: 'Portraits',
     image: '/assets/photos/portraits/shadow-play-portrait.webp',
+    sourceWidth: 3000,
     link: '/gallery/portraits',
-    backgroundPosition: 'center 50%'
+    objectPosition: 'center 50%'
   },
   {
     name: 'weddings',
     title: 'Weddings',
     image: '/assets/photos/weddings/newlyweds-running-sea.webp',
+    sourceWidth: 3500,
     link: '/gallery/weddings',
-    backgroundPosition: 'center 25%'
+    objectPosition: 'center 25%'
   },
   {
     name: 'family',
     title: 'Family',
     image: '/assets/photos/family/elegant-family-studio-portrait-black.webp',
+    sourceWidth: 3000,
     link: '/gallery/family',
-    backgroundPosition: 'center 40%'
+    objectPosition: 'center 40%'
   },
   {
     name: 'maternity',
     title: 'Maternity',
     image: '/assets/photos/maternity/couples-beach-baby-bump-moment.webp',
+    sourceWidth: 3000,
     link: '/gallery/maternity',
-    backgroundPosition: 'center 35%'
+    objectPosition: 'center 35%'
   }
 ];
+
+/**
+ * What one tile actually asks its source for.
+ *
+ * Below 48em the four tiles stack full width, so the tile IS the window and
+ * 100vw is the honest number (measured 380 CSS px painted in a 412 window).
+ *
+ * From 48em up they sit four-across, so each is about a quarter of the window
+ * wide, and 25vw would be badly wrong: the tile is 65vh tall, and object-fit:
+ * cover on a landscape source in a box that narrow scales it to match the
+ * HEIGHT and crops the sides off. The source width consumed is therefore
+ * 0.65 * vh * aspect, which for these four (1.32 to 1.50) is 0.86 to 0.98 of
+ * vh. 100vh covers the widest of them with 2% to spare, and only understates
+ * a tile when the window is more than 4x wider than it is tall.
+ *
+ * vh in `sizes` is measured, not assumed: Chrome picks the 3500px original on
+ * a 768x1024 iPad at DPR 2 (needs 1999) and the 1600 rung on a 1440x900
+ * laptop at DPR 1 (needs 1440). If a browser ever failed to parse it the whole
+ * attribute falls back to 100vw, which is generous everywhere except that iPad
+ * case, so the failure mode is a rung too small on a tablet, never a hole.
+ */
+const TILE_SIZES = '(min-width: 48em) 100vh, 100vw';
 
 const GalleryCategories = () => {
   // One observer for all five reveals, on the same Box it has always watched.
@@ -74,12 +115,38 @@ const GalleryCategories = () => {
                   cursor="pointer"
                   data-group
                 >
-                  <Box
+                  {/* A real <img>, not a backgroundImage Box.
+                      These four were the heaviest thing on /gallery and the
+                      only images on the site no audit had ever flagged:
+                      PageSpeed never reported them, because its image-delivery
+                      audit skips CSS backgrounds, whose painted size it cannot
+                      read. Measured at the Lighthouse mobile profile, 3000 to
+                      3500px originals were painted into a 380x250 tile, 1,534
+                      KiB for the four. An <img> can carry the srcset the grid
+                      already builds.
+
+                      image-set() would have kept the Box, and was rejected:
+                      an unsupported or mistyped value there means NO
+                      background at all, where a bad srcset candidate still
+                      leaves `src`.
+
+                      alt is empty on purpose. The photograph is behind the
+                      label, the link is already named by the "Portraits" and
+                      "View Gallery" text inside it, and a described background
+                      would prepend a second sentence to every one of those
+                      four link names. */}
+                  <Image
+                    src={category.image}
+                    srcSet={gridSrcSet(category.image, category.sourceWidth)}
+                    sizes={TILE_SIZES}
+                    alt=""
+                    loading="lazy"
                     position="absolute"
                     inset={0}
-                    backgroundImage={`url(${category.image})`}
-                    backgroundSize="cover"
-                    backgroundPosition={category.backgroundPosition}
+                    w="100%"
+                    h="100%"
+                    objectFit="cover"
+                    objectPosition={category.objectPosition}
                     transition="all 0.6s ease"
                     _groupHover={{ transform: 'scale(1.05)', filter: 'brightness(0.4)' }}
                     filter="brightness(0.6)"

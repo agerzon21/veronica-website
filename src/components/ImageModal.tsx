@@ -12,6 +12,7 @@ import {
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons';
 import FaDownload from '../icons/fa/FaDownload';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
+import FaFilm from '../icons/fa/FaFilm';
 import FaHeart from '../icons/fa/FaHeart';
 import FaRegHeart from '../icons/fa/FaRegHeart';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -77,6 +78,16 @@ interface ImageModalProps {
   // user gets a proper download button regardless of file size.
   fileSize?: number;
   driveViewUrl?: string;
+  // This file is a video, so the picture on screen is Drive's still frame and
+  // nothing here can play it. Two things change: the bottom bar drops its
+  // download control, because /api/photo pipes the bytes through sharp and
+  // sharp rejects mp4 and mov ("Input buffer contains unsupported image
+  // format", measured on both), so every download route on a video returned a
+  // 500 that the UI presented as a file; and a notice plate lands in the middle
+  // of the frame carrying the one action that does work, which is Drive.
+  //
+  // Needs driveViewUrl to be of any use, and the gallery always passes it.
+  isVideo?: boolean;
   // Hide the share icon in the top bar (client portal galleries don't share).
   hideShare?: boolean;
   // Optional: returns the display URL for the photo at any index. When
@@ -234,7 +245,7 @@ const DOUBLE_TAP_MS = 320;
  * screen it is about to draw on. Anything that does not match is returned
  * untouched, so a non-Drive url still works.
  */
-export function sizedViewUrl(url: string, width: number): string {
+function sizedViewUrl(url: string, width: number): string {
   return url.replace(/([?&]sz=)w\d+/i, `$1w${width}`);
 }
 
@@ -433,6 +444,7 @@ const ImageModal = ({
   mobileSaveUrl,
   fileSize,
   driveViewUrl,
+  isVideo,
   hideShare,
   getViewUrl,
   isFavorite,
@@ -1404,7 +1416,10 @@ const ImageModal = ({
               {isFavorite ? 'Favorited' : 'Favorite'}
             </CTAButton>
           )}
-          {downloadUrl || mobileSaveUrl || driveViewUrl ? (
+          {/* A video has no working save path of its own, and the notice plate
+              below carries the one action it does have, so this slot stays
+              empty rather than offering a second copy of the same link. */}
+          {isVideo ? null : downloadUrl || mobileSaveUrl || driveViewUrl ? (
             useMobileDriveFlow ? (
               // Large-file path on mobile: skip the in-app save flow
               // entirely. Pre-fetching a 100+ MB blob through our Vercel
@@ -1467,6 +1482,70 @@ const ImageModal = ({
             </CTAButton>
           )}
           </Flex>
+        </Flex>
+      )}
+
+      {/* THE VIDEO NOTICE, in the exact spot the play button used to sit.
+          Same glass plate as the grid's badge and the same whiteAlpha hairline
+          as the download menu, so it reads as part of the lightbox rather than
+          as a warning bolted onto it. Centred because that is where the eye
+          already is on a poster frame, and because the promise it replaces was
+          made in this spot.
+
+          Opacity-gated on showUI exactly like the two bars, so all three fade
+          in together once the open animation lands. */}
+      {isVideo && driveViewUrl && (
+        <Flex
+          position="absolute"
+          top="50%"
+          left="50%"
+          transform="translate(-50%, -50%)"
+          zIndex={1450}
+          direction="column"
+          align="center"
+          textAlign="center"
+          // Tight on a phone on purpose. A 16:9 clip letterboxed into a 390
+          // by 844 screen leaves a still only about 219px tall, and at the
+          // desktop padding the plate covered 170px of it: a notice ABOUT a
+          // picture had eaten the picture. These numbers keep it near 140px,
+          // so the frame still reads as a frame underneath.
+          gap={{ base: 2, md: 4 }}
+          px={{ base: 4, md: 7 }}
+          py={{ base: 4, md: 6 }}
+          maxW="min(320px, calc(100vw - 72px))"
+          bg="rgba(0, 0, 0, 0.55)"
+          backdropFilter="blur(8px)"
+          border="1px solid"
+          borderColor="whiteAlpha.200"
+          opacity={showUI ? 1 : 0}
+          transition="opacity 0.25s"
+          pointerEvents={showUI ? 'auto' : 'none'}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Flex align="center" gap={2}>
+            <Icon as={FaFilm} color="brand.accent" boxSize={3} />
+            <Text textStyle="eyebrowOnDark">Video</Text>
+          </Flex>
+          <Text textStyle="bodyCopy" fontSize="sm" color="whiteAlpha.900">
+            This clip plays on Google Drive, where you can also save the
+            original.
+          </Text>
+          {/* aria-label rather than a visually hidden span: it carries the
+              visible words plus the new-tab warning, so the accessible name
+              still matches what a sighted visitor reads. CTAButton renders an
+              anchor with an href, so Enter works and nothing here intercepts
+              it (the modal's keydown listener handles arrows and Escape only). */}
+          <CTAButton
+            href={driveViewUrl}
+            newTab
+            icon={FaExternalLinkAlt}
+            variant="outline"
+            tone="dark"
+            size="sm"
+            aria-label="Watch on Google Drive, opens in a new tab"
+          >
+            Watch on Google Drive
+          </CTAButton>
         </Flex>
       )}
 

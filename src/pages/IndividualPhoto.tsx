@@ -23,6 +23,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useSmartBack } from '../components/ui/useSmartBack';
 import { Helmet } from 'react-helmet-async';
 import { m, AnimatePresence } from 'framer-motion';
+import { gridSrcSet } from '../utils/gridSrcSet';
 
 // Photo shape mirrors what /api/gallery/post returns. Kept local so
 // this component doesn't need photos.ts at all (which used to
@@ -40,6 +41,119 @@ interface Photo {
   keywords: string[];
   width: number | null;
   height: number | null;
+}
+
+/**
+ * Chakra's md breakpoint and the width at which the related grid's Container
+ * stops growing, both as media conditions. In em, and the tile widths below in
+ * rem, so that a reader whose default font size is not 16px gets a `sizes`
+ * that moves with the layout instead of one that disagrees with it: Chakra
+ * writes its own breakpoints in em, and nothing sets an html font-size.
+ */
+const BELOW_MD = '(max-width: 47.99em)';
+const BELOW_CONTENT_CAP = '(max-width: 66.49em)';
+
+/**
+ * Ask for 8% more than the tile paints, so no thumbnail is rasterised 1:1.
+ *
+ * This is the same call scripts/build-grid-variants.mjs makes when it explains
+ * why the top rung is 1600 and not 1440: a candidate that merely MATCHES the
+ * device pixels loses the supersampling that made the page look the way it
+ * does. Measured here as mean absolute Laplacian of what Chrome painted into
+ * the 187x220 tile at DPR 2, as a share of what the original gives:
+ *
+ *   photograph                       g400   g800   g1600
+ *   bride-groom-sofa-quiet-bw         47%    71%     86%
+ *   bride-groom-under-veil-smiles     52%    73%     88%
+ *   cupcake-kiss-reception            28%    48%     68%
+ *   sunset-sunflower-field-joy        22%    45%     70%
+ *
+ * A 412px phone at DPR 2 paints a 187px tile into 374 device px, so without
+ * this it takes the 400 rung at a 1.07x margin, which is the first column.
+ * There is nothing between 400 and 800, so the only lever is to ask for more.
+ *
+ * 1.08 IS DELIBERATELY SMALL, and the window is narrow. Anything over 1.070
+ * moves that tile up a rung, which is the point. Anything over 1.096 ALSO
+ * drags every viewport from 734 to 767 CSS px at DPR 2 (the iPad mini among
+ * them) from the 800 rung to 1600, which buys nothing: those tiles are already
+ * at 1.10x. Swept over all 232 photographs at 18 real viewport widths and DPR
+ * 1, 2 and 3, per six tiles, averaged over the 198 with files in this checkout:
+ *
+ *   412 or 414 CSS px, DPR 2    190 KiB -> 349 KiB   margin 1.07x -> 2.14x
+ *   734 to 767 CSS px, DPR 2    349 KiB   unchanged  (1.15 would make it 1091)
+ *   every other width and DPR   within 10 KiB of unchanged
+ *
+ * against 3,252 KiB of full originals today. Worst margin anywhere goes from
+ * 1.011x to 1.081x, and nothing is ever served under 1.0x, which is the line
+ * that actually matters. If the 220px/300px tile heights or the px={4}/px={8}
+ * gutters change, that window moves: re-measure rather than assume.
+ */
+const TILE_SUPERSAMPLE = 1.08;
+const scalePx = (n: number) => `${Math.ceil(n * TILE_SUPERSAMPLE)}px`;
+const SMALL_TILE = `calc(${+(50 * TILE_SUPERSAMPLE).toFixed(4)}vw - ${+(1.1875 * TILE_SUPERSAMPLE).toFixed(4)}rem)`;
+const WIDE_TILE = `calc(${+((100 / 3) * TILE_SUPERSAMPLE).toFixed(4)}vw - ${+((5 / 3) * TILE_SUPERSAMPLE).toFixed(4)}rem)`;
+const CAPPED_TILE = `${+(20.5 * TILE_SUPERSAMPLE).toFixed(4)}rem`;
+
+/**
+ * The `sizes` for one related-photo tile, which is NOT the tile's width.
+ *
+ * These tiles are object-fit: cover in a FIXED-HEIGHT box, so the browser
+ * scales the photograph until it covers the box and then crops. The painted
+ * width is max(boxWidth, boxHeight * aspect), and for a landscape frame the
+ * second term wins by a lot: a 3:2 photograph in the 187x220 mobile tile is
+ * painted 330 CSS px wide, not 187. Handing the box width to `sizes` would
+ * have put that frame on the 400 rung at DPR 1.75 where it needs 578 device
+ * px, and a soft photograph on this site is worse than a slow page.
+ *
+ * The geometry, every number below read back off the built page in Chrome:
+ *
+ *   below md: 2 columns, 220px tall, wrapper px={4} (1rem a side),
+ *     SimpleGrid spacing={1.5} (0.375rem)
+ *     tile width = 50vw - 1.1875rem        ->  187px at a 412px viewport
+ *                                              365px at 767px
+ *   md up to the cap: 3 columns, 300px tall, wrapper px={8} (2rem a side),
+ *     spacing={2} (0.5rem)
+ *     tile width = 33.3333vw - 1.6667rem   ->  229px at 768px, 328px at 1063px
+ *   at the cap (Container maxW="content" = 62.5rem, from 66.5rem of viewport)
+ *     tile width = (62.5rem - 1rem) / 3 = 20.5rem = 328px
+ *
+ * In the first two ranges the fixed cover width and the viewport-relative tile
+ * width cross over, so each range gets the fixed px up to its crossover and the
+ * calc() above it. Only the crossovers are in px, and a crossover is by
+ * definition the point where the two candidates are equal, so a reader at a
+ * 20px default font size is served a value at most 3.5% under the true painted
+ * width there.
+ */
+function relatedTileSizes(width: number | null, height: number | null): string {
+  // No dims means no aspect to work from, so assume the widest frame in the
+  // published set (1.669:1) and over-fetch rather than under-sample. All 232
+  // published photographs carry dims today; this is the belt to that braces.
+  const aspect = width && height ? width / height : 1.669;
+  const parts: string[] = [];
+
+  // The crossovers stay on the UNSCALED geometry: both candidates carry the
+  // same factor, so the viewport at which they swap does not move.
+  const coverSmall = 220 * aspect;
+  const crossSmall = 2 * (Math.ceil(coverSmall) + 19);
+  if (crossSmall >= 767) {
+    parts.push(`${BELOW_MD} ${scalePx(coverSmall)}`);
+  } else {
+    parts.push(`(max-width: ${crossSmall}px) ${scalePx(coverSmall)}`);
+    parts.push(`${BELOW_MD} ${SMALL_TILE}`);
+  }
+
+  const coverWide = 300 * aspect;
+  const crossWide = 3 * Math.ceil(coverWide) + 80;
+  if (crossWide >= 1063) {
+    parts.push(`${BELOW_CONTENT_CAP} ${scalePx(coverWide)}`);
+  } else {
+    if (crossWide > 768) parts.push(`(max-width: ${crossWide}px) ${scalePx(coverWide)}`);
+    parts.push(`${BELOW_CONTENT_CAP} ${WIDE_TILE}`);
+  }
+
+  // Past the cap the tile is a flat 20.5rem, but a wide frame still covers wider.
+  parts.push(coverWide > 328 ? scalePx(coverWide) : CAPPED_TILE);
+  return parts.join(', ');
 }
 
 const IndividualPhoto: React.FC = () => {
@@ -286,6 +400,23 @@ const IndividualPhoto: React.FC = () => {
   const photoUrl = `https://vero.photography/photo/${category}/${photoId}`;
   const photoImage = `https://vero.photography${photo.url}`;
 
+  // The three grid rungs PLUS the untouched original, carrying its real width.
+  //
+  // The original has to stay in the candidate list. At 1440x900 DPR 2 this
+  // photograph is painted 1080 CSS px wide and wants 2160 device px, and the
+  // largest rung is 1600, so a desktop and a high-DPR phone still need the full
+  // file. The point of the srcset is only that a 412px phone at DPR 1.75 stops
+  // pulling a 3000x2000 original into a 412x275 box: it lands on the 800 rung,
+  // which measured 261.9 KiB -> 22.7 KiB on the page this was built against.
+  //
+  // No srcset at all if the width is unknown, rather than a set topping out at
+  // 1600: a candidate list whose largest rung is smaller than the desktop needs
+  // is exactly how you soften a photograph, and the original alone is correct.
+  const gridRungs = gridSrcSet(photo.url, photo.width);
+  // gridSrcSet already carries the original as the top candidate, because it
+  // was handed photo.width. Appending it here as well listed it twice.
+  const mainSrcSet = photo.width ? gridRungs : undefined;
+
   // BreadcrumbList schema — makes the page eligible for breadcrumb rich results
   // and tells Google how the photo fits in the site hierarchy. Helps with
   // indexing thin photo pages by establishing internal-link context.
@@ -373,6 +504,15 @@ const IndividualPhoto: React.FC = () => {
         >
           <LoadingImage
             src={photo.url}
+            srcSet={mainSrcSet}
+            // 100vw, not the true painted width. maxH="80vh" with
+            // object-fit: contain means the real figure is
+            // min(100vw, 80vh * aspect), 1080px on a 1440x900 desktop rather
+            // than 1440, but saying so needs a min() of a vw and a vh and the
+            // rungs are too coarse for it to matter: 1600 is short of the real
+            // 2160 either way, so both numbers pick the original. Overstating
+            // sizes costs bytes; understating it costs sharpness.
+            sizes="100vw"
             alt={photo.alt}
             title={photo.title}
             w="100%"
@@ -380,6 +520,9 @@ const IndividualPhoto: React.FC = () => {
             imgObjectFit="contain"
             spinnerSize="lg"
             loading="eager"
+            // The LCP element on this page, and it was competing with six
+            // lazy related thumbnails for the same connection.
+            fetchPriority="high"
             imgStyle={{ cursor: 'pointer' }}
             onClick={toggleFullscreen}
           />
@@ -416,7 +559,13 @@ const IndividualPhoto: React.FC = () => {
                           // gold border gave them more presence than the
                           // photograph's own caption.
                           bg="transparent"
-                          color="gray.500"
+                          // gray.500 is 4.02:1 on white and fails AA at 10px;
+                          // seven of this page's eight contrast failures were
+                          // these chips. brand.mutedText is 5.92:1 on white and
+                          // warm, which is why the footer's captions already
+                          // moved off the cool gray. Still display-only: no
+                          // hover, no link, nothing clickable.
+                          color="brand.mutedText"
                           fontSize="0.625rem"
                           letterSpacing="0.12em"
                           mr="-0.12em"
@@ -525,6 +674,8 @@ const IndividualPhoto: React.FC = () => {
                     >
                       <LoadingImage
                         src={rp.url}
+                        srcSet={gridSrcSet(rp.url)}
+                        sizes={relatedTileSizes(rp.width, rp.height)}
                         alt={rp.alt}
                         w="100%"
                         h={{ base: '220px', md: '300px' }}

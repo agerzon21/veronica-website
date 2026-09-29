@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
 
@@ -115,8 +116,63 @@ const SEO = () => {
   // For unrecognized paths (e.g. /photo/:category/:photoId, /pay, /404), fall
   // back to the home defaults. Per-page Helmet on those routes overrides this.
   const resolved = meta ?? ROUTE_META['/'];
-  const canonical = `${SITE_URL}${normalized === '/' ? '' : normalized}`;
+  // The trailing slash on the root is deliberate: index.html and every
+  // prerendered page write `${SITE}${path}`, and the homepage's path is '/'.
+  // Emitting the bare origin here made the one string that is supposed to be
+  // identical in three places the one string that was not.
+  const canonical = `${SITE_URL}${normalized === '/' ? '/' : normalized}`;
   const image = resolved.image ?? DEFAULT_IMAGE;
+
+  /**
+   * ONE CANONICAL PER PAGE, WHICH IS NOT WHAT THIS SITE HAS BEEN SHIPPING.
+   *
+   * index.html carries a static canonical pointing at the homepage, on purpose:
+   * a crawler that does not run JavaScript still gets one. Every prerendered
+   * page then strips it and writes its own (see the loops in
+   * scripts/prerender-photos.mjs, which all call
+   * `html.replace(/<link rel="canonical"[^>]*>/g, '')` first), so /about,
+   * /gallery/*, /photo/*, /journal/* and the policy pages each ship exactly one
+   * and Helmet's copy below agrees with it byte for byte.
+   *
+   * The routes that are NOT prerendered are served the raw index.html by the
+   * catch-all rewrite, and there the static homepage canonical survives. Helmet
+   * adds the route's own beside it and the page ends up claiming to be two
+   * different URLs. Measured on production, 2026-09-29: /portal, /portal/pass,
+   * /pay and /contact/thank-you each served
+   * `https://vero.photography/` plus their own, which is the
+   * "multiple conflicting URLs" Lighthouse reports on /portal.
+   *
+   * So: remove a canonical this document did not write, and only when it
+   * disagrees. On a prerendered page the static tag resolves to the same URL
+   * and is left exactly where it is, which matters, because that tag is the one
+   * a non-JS crawler reads.
+   *
+   * Compared as RESOLVED urls, not as strings. `https://vero.photography` and
+   * `https://vero.photography/` are the same document, and treating them as
+   * different would strip the homepage's static canonical for nothing.
+   *
+   * Timed to a frame, because react-helmet-async commits its own tags inside a
+   * requestAnimationFrame. Removing the static one first would leave the
+   * document with no canonical at all in between, and if rAF never runs (a
+   * background tab), nothing is removed and the page behaves exactly as it did
+   * before this existed.
+   */
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return undefined;
+    const target = new URL(canonical).href;
+    const id = window.requestAnimationFrame(() => {
+      document.querySelectorAll('link[rel="canonical"]:not([data-rh])').forEach((link) => {
+        let resolved = '';
+        try {
+          resolved = new URL(link.getAttribute('href') ?? '', window.location.origin).href;
+        } catch {
+          // An href this cannot parse is not one worth keeping either.
+        }
+        if (resolved !== target) link.remove();
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [canonical]);
 
   // Per-page WebPage + primaryImageOfPage. This is the missing signal
   // that lets Google pick the right SERP thumbnail per route — the

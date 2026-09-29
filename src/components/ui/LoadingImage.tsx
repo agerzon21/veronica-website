@@ -14,26 +14,42 @@ import { useState, type CSSProperties, type MouseEventHandler } from 'react';
  * sizing (w, h, aspectRatio, borderRadius, etc.) as normal.
  */
 
-interface LoadingImageProps extends Omit<BoxProps, 'onClick'> {
+interface LoadingImageProps extends Omit<BoxProps, 'onClick' | 'srcSet' | 'sizes'> {
   src: string;
   alt: string;
   title?: string;
+  /**
+   * Responsive candidates, passed straight through to the <img>.
+   *
+   * Deliberately NOT built in here. The right `sizes` is a property of the
+   * caller's layout, not of this wrapper: the individual photo page paints
+   * the same photograph at 100vw in one place and inside a 187x220
+   * object-fit: cover tile in another, and those want different numbers.
+   * src/utils/gridSrcSet.ts builds the srcset itself.
+   */
+  srcSet?: string;
+  sizes?: string;
   imgObjectFit?: CSSProperties['objectFit'];
   imgStyle?: CSSProperties;
   onClick?: MouseEventHandler<HTMLImageElement>;
   spinnerSize?: 'sm' | 'md' | 'lg';
   loading?: 'lazy' | 'eager';
+  /** React 18.3 renders this as the fetchpriority attribute. */
+  fetchPriority?: 'high' | 'low' | 'auto';
 }
 
 const LoadingImage = ({
   src,
   alt,
   title,
+  srcSet,
+  sizes,
   imgObjectFit = 'cover',
   imgStyle,
   onClick,
   spinnerSize = 'md',
   loading = 'lazy',
+  fetchPriority,
   ...boxProps
 }: LoadingImageProps) => {
   const [loaded, setLoaded] = useState(false);
@@ -55,6 +71,8 @@ const LoadingImage = ({
       />
       <img
         src={src}
+        srcSet={srcSet}
+        sizes={sizes}
         alt={alt}
         title={title}
         onClick={onClick}
@@ -65,6 +83,7 @@ const LoadingImage = ({
         // is reliable).
         onError={() => setLoaded(true)}
         loading={loading}
+        fetchPriority={fetchPriority}
         style={{
           width: '100%',
           height: '100%',

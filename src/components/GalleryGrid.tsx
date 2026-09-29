@@ -1,9 +1,49 @@
 import { Box, Spinner } from '@chakra-ui/react';
 import { m } from 'framer-motion';
-import ImageModal from './ImageModal';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { justifyLayout } from '../utils/justifyLayout';
 import { gridSrcSet } from '../utils/gridSrcSet';
+import { prefetchChunk } from './ChunkErrorBoundary';
+
+/**
+ * The lightbox, off the initial chain.
+ *
+ * It is 22KB gzipped and it pulls two more chunks in with it. Statically
+ * imported it sat in the modulepreload set of everything that reaches this
+ * file, INCLUDING /gallery itself, which renders the four category tiles and no
+ * grid at all: measured 34.2 KiB gzip and 3 requests that the index page could
+ * never use.
+ *
+ * The catch is that the lightbox animates open FROM the clicked tile, so a
+ * chunk that arrives late turns an instant expand into a pause with nothing on
+ * screen. Measured at the Lighthouse mobile link (1.6 Mbps, 150 ms RTT), tap to
+ * lightbox-in-the-DOM, median of three: 30 ms with the static import, 377 ms
+ * with a cold lazy one. So it is warmed rather than merely deferred, in two
+ * places:
+ *
+ *   - once the grid has tiles, at idle. By then /api/gallery/list has already
+ *     answered, so this is long past the hero's LCP and nowhere near the
+ *     critical chain. Only a category page reaches it; /gallery never does.
+ *   - on the first pointer over the grid, which covers a visitor who taps a
+ *     photograph before that idle callback has run.
+ *
+ * Warmed, first open is 30 ms, which is the static import's own number. The
+ * one case left is a tap in the same instant the first tile appears, before
+ * the idle callback has fired: 239 ms against 60 ms, once, and only then.
+ *
+ * ClientGallery still imports it statically. The portal IS the lightbox, and
+ * its chunk is behind a login either way.
+ */
+const ImageModal = lazy(() => import('./ImageModal'));
+
+/** Once per page. prefetchChunk swallows a miss and marks the load speculative,
+ *  so a stale-chunk failure while warming never triggers a reload. */
+let lightboxWarmed = false;
+const warmLightbox = () => {
+  if (lightboxWarmed) return;
+  lightboxWarmed = true;
+  prefetchChunk(() => import('./ImageModal'));
+};
 
 interface GalleryImage {
   id?: string;
@@ -73,6 +113,22 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
 
   useEffect(() => {
     imageRefs.current = imageRefs.current.slice(0, images.length);
+  }, [images.length]);
+
+  // Warm the lightbox once there is something to open. Safari has no
+  // requestIdleCallback, and a short timer is close enough for one 22KB chunk
+  // that nothing is waiting on.
+  useEffect(() => {
+    if (!images.length) return;
+    const ric = (window as any).requestIdleCallback as
+      | ((cb: () => void, opts?: { timeout: number }) => number)
+      | undefined;
+    if (ric) {
+      const id = ric(warmLightbox, { timeout: 2000 });
+      return () => (window as any).cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warmLightbox, 400);
+    return () => window.clearTimeout(id);
   }, [images.length]);
 
   const photoUrlFor = useCallback(
@@ -190,7 +246,13 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
   );
 
   return (
-    <Box ref={containerRef} py={8} px={0}>
+    <Box
+      ref={containerRef}
+      py={8}
+      px={0}
+      onPointerEnter={warmLightbox}
+      onPointerDown={warmLightbox}
+    >
       {rows.map((row, ri) => (
         <Box
           key={ri}
@@ -262,21 +324,26 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
       ))}
 
       {selectedImageIndex !== null && isModalOpen && (
-        <ImageModal
-          isOpen={isModalOpen}
-          onClose={handleModalClose}
-          imageUrl={images[selectedImageIndex].url}
-          placeholderUrl={placeholderUrl}
-          imageAlt={images[selectedImageIndex].alt}
-          onNext={handleNextImage}
-          onPrevious={handlePreviousImage}
-          currentIndex={selectedImageIndex}
-          totalImages={images.length}
-          photoData={images[selectedImageIndex]}
-          category={category}
-          originRect={originRect}
-          getImageRect={getImageRect}
-        />
+        // No fallback: the lightbox is an overlay, so there is nothing for a
+        // placeholder to hold open and nothing to shift. Warmed on pointer
+        // intent above, this window is normally a single frame.
+        <Suspense fallback={null}>
+          <ImageModal
+            isOpen={isModalOpen}
+            onClose={handleModalClose}
+            imageUrl={images[selectedImageIndex].url}
+            placeholderUrl={placeholderUrl}
+            imageAlt={images[selectedImageIndex].alt}
+            onNext={handleNextImage}
+            onPrevious={handlePreviousImage}
+            currentIndex={selectedImageIndex}
+            totalImages={images.length}
+            photoData={images[selectedImageIndex]}
+            category={category}
+            originRect={originRect}
+            getImageRect={getImageRect}
+          />
+        </Suspense>
       )}
     </Box>
   );

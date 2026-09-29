@@ -17,12 +17,12 @@ import FaDownload from '../icons/fa/FaDownload';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
+import FaFilm from '../icons/fa/FaFilm';
 import FaGoogle from '../icons/fa/FaGoogle';
 import FaHeart from '../icons/fa/FaHeart';
 import FaImage from '../icons/fa/FaImage';
 import FaInfoCircle from '../icons/fa/FaInfoCircle';
 import FaMobileAlt from '../icons/fa/FaMobileAlt';
-import FaPlay from '../icons/fa/FaPlay';
 import FaRegHeart from '../icons/fa/FaRegHeart';
 import FaShareAlt from '../icons/fa/FaShareAlt';
 import FaStar from '../icons/fa/FaStar';
@@ -33,6 +33,7 @@ import ImageModal from './ImageModal';
 // strip uses the same one rather than a second copy of it, so a phone reads
 // both navs identically.
 import { ScrollStrip, useNavSelectionLock } from './PortalHeader';
+import { driveThumbSrcSet, thumbAt } from '../utils/driveImage';
 import {
   AT_BOTTOM_THRESHOLD,
   HEADER_CLEARANCE,
@@ -163,28 +164,13 @@ interface GridTileProps {
  * a broken-image icon. Video files also get a play-icon overlay so it's
  * clear they're not photos before the user even clicks.
  */
-/**
- * Drive thumbnails are served straight from drive.google.com, and _drive.ts
- * hard-codes sz=w800 — about 300KB each. A 163-file gallery is therefore ~36MB
- * of thumbnails pulled from a third-party host, which is what was killing them
- * on phones: iOS Safari cancels image requests under memory and connection
- * pressure, the cancel surfaces as onError, and the tile went to a permanent
- * placeholder. Same measured file at sz=w400 is 83KB and at w600 is 179KB, so
- * letting the browser pick against `sizes` cuts a phone's payload 2-4x.
- */
-const thumbAt = (url: string, width: number): string => {
-  try {
-    const u = new URL(url);
-    u.searchParams.set('sz', `w${width}`);
-    return u.toString();
-  } catch {
-    // Not a URL we can parse — fall back to whatever the API gave us.
-    return url;
-  }
-};
+// thumbAt and driveThumbSrcSet moved to src/utils/driveImage.ts when the
+// journal's timeline needed the same rewrite. Same function, same widths.
 
 // Grid is 2 columns on phones, 3 at md, 4 at lg (see the SimpleGrid below).
 const THUMB_SIZES = '(min-width: 62em) 25vw, (min-width: 48em) 33vw, 50vw';
+/** Unchanged from when this srcset was written out by hand here. */
+const THUMB_WIDTHS = [400, 600, 800];
 
 // A failed thumbnail was permanent: one cancelled request and that tile showed
 // a placeholder for the rest of the session even though the file is fine. Retry
@@ -258,12 +244,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
               justify="center"
               mb={3}
             >
-              <Icon
-                as={isVideo ? FaPlay : FaImage}
-                color="brand.accent"
-                boxSize={5}
-                ml={isVideo ? 1 : 0}
-              />
+              <Icon as={isVideo ? FaFilm : FaImage} color="brand.accent" boxSize={5} />
             </Flex>
             <Text
               fontSize="2xs"
@@ -280,10 +261,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
             <Image
               key={attempt}
               src={thumbAt(file.thumbnailUrl, 800)}
-              srcSet={`${thumbAt(file.thumbnailUrl, 400)} 400w, ${thumbAt(
-                file.thumbnailUrl,
-                600,
-              )} 600w, ${thumbAt(file.thumbnailUrl, 800)} 800w`}
+              srcSet={driveThumbSrcSet(file.thumbnailUrl, THUMB_WIDTHS)}
               sizes={THUMB_SIZES}
               alt={file.name}
               onError={handleThumbError}
@@ -298,29 +276,44 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
               _groupHover={{ transform: 'scale(1.03)' }}
             />
             {isVideo && (
-              // Play icon overlay on video thumbnails — even when the
-              // thumbnail loads correctly, users should see immediately
-              // that this is a video. The lightbox CTA will then read
-              // "Open in Drive" instead of "Save to Photos" (since
-              // videos are almost always over our 40MB threshold).
+              // A TYPE LABEL, not a play control.
+              //
+              // This used to be a 52px play triangle in the middle of the tile,
+              // and a centred play triangle is the web's one universal "press
+              // this and it plays here" affordance. Nothing plays here: the
+              // lightbox shows Drive's still frame, and /api/photo cannot even
+              // transcode the file (sharp: "Input buffer contains unsupported
+              // image format" on both mp4 and mov, measured), so every download
+              // path on a video 500s. A corner label is the other universal
+              // marker, "this file is a different kind", which is the whole of
+              // what we can honestly say from a grid.
+              //
+              // Same glass plate the play circle wore, and the same
+              // rgba(0,0,0,0.55) as the two corner controls above, so the tile
+              // still reads as one set of chrome. Bottom left is the one free
+              // corner: download sits top right, the heart top left.
               <Flex
                 position="absolute"
-                inset={0}
+                bottom={2}
+                left={2}
                 align="center"
-                justify="center"
+                gap={1.5}
+                px={2}
+                py={1}
+                bg="rgba(0, 0, 0, 0.55)"
+                backdropFilter="blur(4px)"
                 pointerEvents="none"
               >
-                <Flex
-                  bg="rgba(0, 0, 0, 0.55)"
-                  borderRadius="full"
-                  w="52px"
-                  h="52px"
-                  align="center"
-                  justify="center"
-                  backdropFilter="blur(4px)"
+                <Icon as={FaFilm} color="white" boxSize={2.5} />
+                <Text
+                  fontSize="2xs"
+                  color="white"
+                  textTransform="uppercase"
+                  letterSpacing="0.14em"
+                  lineHeight={1}
                 >
-                  <Icon as={FaPlay} color="white" boxSize={4} ml={1} />
-                </Flex>
+                  Video
+                </Text>
               </Flex>
             )}
           </>
@@ -337,11 +330,20 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
       {/* Per-photo quick-download in the corner — desktop only. Hidden on
           touch via @media (hover: hover) since iOS Safari fires :hover on
           first tap, which would briefly flash this icon. Canonical mobile
-          save flow is the "Save to Photos" button inside the lightbox. */}
+          save flow is the "Save to Photos" button inside the lightbox.
+
+          On a VIDEO this is the Drive handoff instead. file.downloadUrl is
+          /api/photo, which runs the bytes through sharp, and sharp rejects
+          mp4 and mov outright, so the download attribute here saved a 500
+          JSON body under the video's name. Drive's own viewer plays the file
+          and carries a real Download control (measured signed out), so it is
+          both the honest destination and the only working one. */}
       <Box
         as="a"
-        href={file.downloadUrl}
-        download={file.name}
+        href={isVideo ? file.driveViewUrl : file.downloadUrl}
+        {...(isVideo
+          ? { target: '_blank', rel: 'noopener noreferrer' }
+          : { download: file.name })}
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
         position="absolute"
         top={2}
@@ -356,7 +358,11 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
         borderRadius="full"
         opacity={0}
         transition="opacity 0.3s ease, background 0.2s ease"
-        aria-label={`Download ${file.name}`}
+        aria-label={
+          isVideo
+            ? `Watch ${file.name} on Google Drive, opens in a new tab`
+            : `Download ${file.name}`
+        }
         sx={{
           WebkitTapHighlightColor: 'transparent',
           '@media (hover: hover)': {
@@ -365,7 +371,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
         }}
         _hover={{ bg: 'brand.accent' }}
       >
-        <Icon as={FaDownload} boxSize={3.5} />
+        <Icon as={isVideo ? FaExternalLinkAlt : FaDownload} boxSize={3.5} />
       </Box>
 
       {/* Favorite heart — top-left corner, opposite the download.
@@ -1031,6 +1037,9 @@ const ClientGallery = ({
           mobileSaveUrl={selected.originalUrl}
           fileSize={selected.size ?? undefined}
           driveViewUrl={selected.driveViewUrl}
+          // One predicate, same one the tile uses, so a file cannot be a video
+          // in the grid and a photograph in the lightbox.
+          isVideo={selected.mimeType.startsWith('video/')}
           hideShare
           // Lets the modal preload ±10 photos around the current one so
           // arrow-key nav in either direction lands on a warm browser

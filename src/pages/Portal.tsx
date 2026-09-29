@@ -7,30 +7,24 @@ import ToastHost from '../components/ui/ToastHost';
 // prop ever appears in this subtree, it silently does nothing until this goes
 // back to domMax.
 import { LazyMotion, domAnimation } from 'framer-motion';
-import { Box, Flex, VStack, Text, Input, HStack, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { Box, Flex, VStack, Text, Input, InputGroup, InputRightElement, Icon } from '@chakra-ui/react';
+import { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
-import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
 import CTAButton from '../components/ui/CTAButton';
-import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import PortalHeader from '../components/PortalHeader';
-import { HEADER_CLEARANCE, portalChrome } from '../components/portalLayout';
-import ReadingProgress from '../components/ReadingProgress';
-import ClientGallery, {
-  useGalleryNav,
-  type DriveFile,
-  type FolderSection,
-} from '../components/ClientGallery';
-import ClientPortalView, { type ClientPortalData } from '../components/ClientPortalView';
+import { HEADER_CLEARANCE } from '../components/portalLayout';
 import Reveal from '../components/ui/Reveal';
 import PortalMosaic from '../components/PortalMosaic';
 import { prefersReducedMotion } from '../utils/motion';
+// Type only, so the bundler erases both lines: neither adds a runtime edge
+// back to the lazy chunks declared below.
+import type { ClientPortalData } from '../components/ClientPortalView';
+import type { GalleryData } from '../components/PortalGalleryView';
 
 /**
  * The portal session, kept for the length of the browser tab.
@@ -56,6 +50,62 @@ const SESSION_KEY = 'vg:portalSession';
 type StoredSession =
   | { kind: 'client'; email: string; password: string }
   | { kind: 'gallery'; password: string };
+
+/**
+ * THE TWO SIGNED-IN VIEWS ARE LAZY, AND THIS PAGE IS MOSTLY A PASSWORD FORM.
+ *
+ * Both of these were static imports, so every visitor who opened /portal
+ * downloaded the whole signed-in portal before typing anything. Measured on
+ * production: ClientPortalView.js at 172 KiB and ImageModal.js at 61 KiB
+ * (54.2 and 22.3 KiB over the wire) arrived on the SIGN-IN page, where neither
+ * can run until somebody authenticates. Welcome.tsx already refuses the same
+ * trade in the same words, for the same 'password form' reason.
+ *
+ * The gallery-only view moved into a file of its own to get there: the branch
+ * called `useGalleryNav` at the top of this component, and a hook call cannot
+ * be conditional, so ClientGallery (and ImageModal behind it) stayed in the
+ * static graph no matter how the JSX below was loaded. See PortalGalleryView.
+ *
+ * The cost of lazy is a chunk fetch at the moment of arrival, which is why
+ * `warmSignedInChunk` below starts it in parallel with the auth round trip
+ * rather than waiting for the render that needs it. Both paths that can reach
+ * a signed-in view (a stored session on mount, a submitted form) warm it.
+ *
+ * Measured end to end against ba40069 without this change, on Lighthouse's
+ * mobile profile (1.6 Mbit/s, 150 ms RTT), median of five: a stored client
+ * session reaches the portal in 6170 ms rather than 6421, a stored gallery
+ * session in 5784 rather than 6390, and a delivery link carrying ?password= in
+ * 6425 rather than 6640. All three are faster, because the page the chunk is
+ * warmed from is now 77 KiB (gzipped) lighter.
+ *
+ * The one path that is slower is a TYPED login, where the sign-in form becomes
+ * usable at 4.33 s instead of 6.23 and the portal behind it then lands at
+ * 7.06 s instead of 6.98. Nearly two seconds earlier at the password box, and
+ * eighty milliseconds later behind it, is the right way round for a page
+ * somebody is standing in front of waiting to type.
+ *
+ * A chunk that genuinely fails to arrive is caught by the app-level
+ * ChunkErrorBoundary, same as every other lazy route, and the stored session
+ * means its recovery reload lands the client back inside the portal.
+ */
+const ClientPortalView = lazy(() => import('../components/ClientPortalView'));
+const PortalGalleryView = lazy(() => import('../components/PortalGalleryView'));
+
+/**
+ * Start the chunk downloading now, before anything renders that needs it.
+ *
+ * Deliberately fire-and-forget. A rejected import here is not an error to
+ * handle: the render below will import the same module again, and THAT failure
+ * is the one the boundary is for. Swallowing it only keeps an unhandled
+ * rejection out of the console.
+ */
+const warmSignedInChunk = (kind: StoredSession['kind']): void => {
+  const load =
+    kind === 'client'
+      ? () => import('../components/ClientPortalView')
+      : () => import('../components/PortalGalleryView');
+  void load().catch(() => {});
+};
 
 function storeSession(session: StoredSession): void {
   try {
@@ -94,18 +144,6 @@ function clearStoredSession(): void {
    through AnimatePresence. prefersReducedMotion is still used further down. */
 
 type Tab = 'client' | 'gallery';
-
-type GalleryData = {
-  clientName: string | null;
-  driveUrl: string;
-  rootFiles: DriveFile[];
-  sections: FolderSection[];
-  warning?: string;
-  // ISO timestamp for when the gallery access expires. Surfaced in the
-  // gallery-only route as an "available until" notice so guests know
-  // when the link will stop working (and to nudge them to save copies).
-  expiresAt: string | null;
-};
 
 // URL is the source of truth for the active tab — so Veronika can send
 // a guest a direct link to /portal/pass and they land on the right form
@@ -365,6 +403,79 @@ const readMotionHold = (): boolean => {
   }
 };
 
+/**
+ * The quiet screen between arriving and being inside.
+ *
+ * It shows while a stored session is being checked, and again while the chunk
+ * for whichever signed-in view that session opens is still arriving. One
+ * component for both, because they are consecutive moments on the same walk
+ * and two loading screens in a row would read as a page changing its mind.
+ *
+ * Carries the Navbar and Footer for the same reason the login form does: App
+ * hides the global chrome for the whole /portal route.
+ */
+const PortalOpening = () => (
+  <>
+    <Helmet>
+      <title>Client Portal | Vero Photography</title>
+      <meta name="robots" content="noindex, nofollow" />
+    </Helmet>
+    <Navbar />
+    <Flex
+      /* Tall enough to push the footer to the bottom of the screen. At
+         60vh this block ended two thirds up the page and the footer came
+         with it, which reads as a broken page rather than a loading one.
+         The subtraction is the FOOTER only, not the navbar: the navbar is
+         position:fixed and takes no room in the flow, so subtracting it
+         too left a measured 72px of page below the footer. */
+      minH="calc(100vh - 123px)"
+      align="center"
+      justify="center"
+      pt={{ base: 24, md: 20 }}
+    >
+      {/* The site's own vocabulary, not a grey sentence with an ellipsis:
+          the eyebrow and the gold hairline that open every section on
+          every other page. The rule is what carries the waiting, so the
+          words can stop pretending to with three dots. It holds still
+          under prefers-reduced-motion and keeps the same footprint, so
+          nothing moves when the portal arrives. */}
+      <VStack spacing={5}>
+        <Text textStyle="eyebrow">Opening your portal</Text>
+        <Box
+          w="120px"
+          h="1px"
+          bg="brand.accentBorder"
+          position="relative"
+          overflow="hidden"
+          aria-hidden="true"
+        >
+          <Box
+            position="absolute"
+            top={0}
+            bottom={0}
+            w="40%"
+            bg="brand.accent"
+            sx={{
+              animation: 'veroPortalSweep 1.5s ease-in-out infinite',
+              '@media (prefers-reduced-motion: reduce)': {
+                animation: 'none',
+                left: 0,
+                width: '100%',
+                opacity: 0.45,
+              },
+              '@keyframes veroPortalSweep': {
+                '0%': { transform: 'translateX(-100%)' },
+                '100%': { transform: 'translateX(250%)' },
+              },
+            }}
+          />
+        </Box>
+      </VStack>
+    </Flex>
+    <Footer />
+  </>
+);
+
 const Portal = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -482,8 +593,6 @@ const Portal = () => {
   const [restoring, setRestoring] = useState(
     () => restorableSession(location.pathname, location.search) !== null,
   );
-  /** The gallery only route's Sign Out confirmation, see handleGalleryLogout. */
-  const [gallerySignOutOpen, setGallerySignOutOpen] = useState(false);
 
   /**
    * Sign out.
@@ -511,6 +620,9 @@ const Portal = () => {
   useEffect(() => {
     const stored = restorableSession(location.pathname, location.search);
     if (!stored) return;
+    // Before the fetch, not after it. The chunk and the auth round trip then
+    // run side by side instead of end to end.
+    warmSignedInChunk(stored.kind);
     let cancelled = false;
     (async () => {
       try {
@@ -622,6 +734,9 @@ const Portal = () => {
     if (!email.trim() || !clientPassword.trim()) return;
     setIsSubmitting(true);
     setError('');
+    // Downloads alongside the password check, so a client who gets it right
+    // does not then wait for the view to arrive.
+    warmSignedInChunk('client');
 
     try {
       const res = await fetch('/api/portal/client', {
@@ -654,6 +769,8 @@ const Portal = () => {
     if (!galleryPassword.trim()) return;
     setIsSubmitting(true);
     setError('');
+    // Alongside the password check, as on the client door above.
+    warmSignedInChunk('gallery');
 
     const previewToken = (searchParams.get('preview') ?? '').trim();
 
@@ -733,33 +850,22 @@ const Portal = () => {
   // Pass the credentials through so child sections (e.g. Gallery Pass
   // management) can re-authenticate against the API without us having to
   // mint a session token in this MVP.
-  // The gallery's own nav, lifted so the header can carry it on the
-  // gallery-only route. Built here rather than inside ClientGallery because
-  // the header is a sibling, not a child. Safe to call unconditionally: with
-  // no sections it simply returns a one-item list and the header's own
-  // length check hides the strip.
-  const galleryNav = useGalleryNav({
-    sections: galleryData?.sections ?? [],
-    // One row of chrome here, not two: the nav is IN the header on this route,
-    // so there is nothing pinned under it. Passing the full portal's two-row
-    // chrome is what used to land every section heading a whole nav row too
-    // low, and left the scan calling a section current 48px before it was.
-    chrome: portalChrome(false),
-    enabled: !!galleryData,
-  });
-  const onGallerySelect = useCallback(
-    (id: string) => {
-      const item = galleryNav.items.find((i) => i.id === id);
-      if (!item || item.disabled) return;
-      galleryNav.setActiveId(id);
-      item.scrollTo();
-    },
-    [galleryNav],
-  );
-
   if (clientData) {
     return (
-      <>
+      /**
+       * The fallback is the stored-session placeholder, deliberately.
+       *
+       * A client arriving with a session goes restoring to signed in, and a
+       * different loading screen between those two would be a flash of a third
+       * state on a path that used to have none. Nothing inside this boundary
+       * renders while it is suspended, the Helmet included, so the tab title
+       * holds too.
+       *
+       * In practice it is rarely seen at all: the chunk was warmed when the
+       * session was found, or when the form was submitted, and the auth round
+       * trip it overlapped with is the slower of the two.
+       */
+      <Suspense fallback={<PortalOpening />}>
         <Helmet>
           <title>{clientData.client_name ? `${clientData.client_name}, Portal` : 'Client Portal'} | Vero Photography</title>
           <meta name="robots" content="noindex, nofollow" />
@@ -785,201 +891,31 @@ const Portal = () => {
             footer carries contact and privacy, which a client has more reason
             to want, not less, so it stays. */}
         <Footer />
-      </>
+      </Suspense>
     );
   }
 
-  // Logged in via Gallery Pass → render the read-only photo gallery
+  // Logged in via Gallery Pass -> render the read-only photo gallery.
+  // Everything that view needs (ClientGallery, the header it puts the nav in,
+  // the lightbox behind the thumbnails) rides in its own chunk, so none of it
+  // reaches somebody still standing at the password form. Same fallback as the
+  // full portal above, for the same reason.
   if (galleryData) {
     return (
-      <>
-        <Helmet>
-          <title>{galleryData.clientName ? `${galleryData.clientName}, Gallery` : 'Gallery'} | Vero Photography</title>
-          <meta name="robots" content="noindex, nofollow" />
-        </Helmet>
-        {/* A guest on a shared gallery link has no contract and no balance,
-            so the header shows no progress and no money. What it DOES carry is
-            the gallery's own navigation, because here that is the only
-            navigation there is: Info plus one item per folder. Favourites is
-            absent by construction, since this route passes no favourite
-            handler and useGalleryNav only includes it when one exists.
-
-            Passing sectionNavInHeader stops ClientGallery rendering its own
-            sticky strip, so the guest gets one bar rather than two. Nothing
-            passes portalNavRow either, and the two together are how the
-            gallery knows its headings have one row of chrome to clear here
-            rather than the full portal's two.
-
-            The padding clears that fixed header. ClientGallery does not pad
-            for it itself, so the same component can be embedded inside
-            ClientPortalView (where the portal wrapper already handles the
-            clearance) without doubling up. */}
-        {/* The same travelling coin the full portal and a journal post carry.
-            A shared gallery is the longest scroll on the site, so if anywhere
-            wants a way to jump half way down it by hand, it is here. */}
-        <ReadingProgress rail="always" bottomBar={false} autoHide scrub />
-        <PortalHeader
-          // The gallery's sections, which the header draws as the photo bar at
-          // every width. There is nothing to hand off to here, so the bar
-          // simply owns the slot: `inPhotos` is not passed because on this
-          // route the whole page IS the photos.
-          //
-          // No accountNav goes with it, and that is the whole reason a guest
-          // on a shared link gets no account bar and no burger: there is no
-          // account here to open a menu onto.
-          sectionNav={{
-            items: galleryNav.items,
-            activeId: galleryNav.activeId,
-            onSelect: onGallerySelect,
-          }}
+      <Suspense fallback={<PortalOpening />}>
+        <PortalGalleryView
+          data={galleryData}
+          galleryPassword={galleryPassword}
+          onSignOut={handleGalleryLogout}
         />
-        <Box pt={HEADER_CLEARANCE}>
-          <ClientGallery
-            clientName={galleryData.clientName}
-            driveUrl={galleryData.driveUrl}
-            rootFiles={galleryData.rootFiles}
-            sections={galleryData.sections}
-            warning={galleryData.warning}
-            galleryPassword={galleryPassword.trim()}
-            expiresAt={galleryData.expiresAt}
-            sectionNavInHeader
-          />
-          {/* The way out.
-              Placed at the very end of the gallery, under the share section
-              and above the footer, for two reasons. There is nowhere else: the
-              header on this route is the logo plus the photo bar and carries no
-              burger, by construction, because a guest on a shared link has no
-              account to open a menu onto. And anywhere higher would put an exit
-              beside the photos, which is the one thing a gallery page should
-              not do. Someone scrolling to the end of their photos reaches it
-              without hunting, and nobody else ever has to look at it.
-
-              The treatment is the full portal's Refresh and Sign Out pair,
-              lifted whole: the same centred CTAButton row, the same outlined
-              danger variant (a hairline that only fills on hover, the quiet end
-              of the scale), and the same ConfirmDialog behind it. One button
-              rather than two, because a guest has nothing here to refresh.
-              The line above it is doing the work the full portal's dialog copy
-              does: saying what signing out costs before anyone taps it. */}
-          <Box
-            as="section"
-            px={{ base: 4, md: 8 }}
-            pt={{ base: 8, md: 10 }}
-            pb={{ base: 10, md: 12 }}
-            textAlign="center"
-            borderTop="1px solid"
-            borderColor="brand.accentBorder"
-          >
-            <Text
-              fontSize="sm"
-              color="gray.600"
-              fontWeight="300"
-              lineHeight="1.7"
-              maxW="460px"
-              mx="auto"
-            >
-              Finished looking? Signing out closes these photos on this phone or
-              computer. You will need the link or the password to open them again.
-            </Text>
-            <HStack mt={6} spacing={3} justify="center" flexWrap="wrap">
-              <CTAButton
-                onClick={() => setGallerySignOutOpen(true)}
-                icon={FaSignOutAlt}
-                variant="danger"
-                size="sm"
-              >
-                Sign Out
-              </CTAButton>
-            </HStack>
-          </Box>
-        </Box>
-        {/* Asks first, exactly as the full portal's does. Nothing is lost by
-            signing out, but a guest who taps it by accident has to find the
-            link again, and on a phone that is a real errand. */}
-        <ConfirmDialog
-          isOpen={gallerySignOutOpen}
-          title="Sign out of this gallery?"
-          body="You will need the link or the password to open these photos again."
-          confirmLabel="Sign Out"
-          cancelLabel="Keep Looking"
-          danger
-          onConfirm={() => {
-            setGallerySignOutOpen(false);
-            handleGalleryLogout();
-          }}
-          onCancel={() => setGallerySignOutOpen(false)}
-        />
-        <Footer />
-      </>
+      </Suspense>
     );
   }
 
   // Trying a stored session. Showing the login form here would flash it at a
   // client who IS signed in, and worse, invite them to type a password they
   // did not need to, so hold a quiet placeholder until we know.
-  if (restoring) {
-    return (
-      <>
-        <Helmet>
-          <title>Client Portal | Vero Photography</title>
-          <meta name="robots" content="noindex, nofollow" />
-        </Helmet>
-        <Navbar />
-        <Flex
-          /* Tall enough to push the footer to the bottom of the screen. At
-             60vh this block ended two thirds up the page and the footer came
-             with it, which reads as a broken page rather than a loading one.
-             The subtraction is the FOOTER only, not the navbar: the navbar is
-             position:fixed and takes no room in the flow, so subtracting it
-             too left a measured 72px of page below the footer. */
-          minH="calc(100vh - 123px)"
-          align="center"
-          justify="center"
-          pt={{ base: 24, md: 20 }}
-        >
-          {/* The site's own vocabulary, not a grey sentence with an ellipsis:
-              the eyebrow and the gold hairline that open every section on
-              every other page. The rule is what carries the waiting, so the
-              words can stop pretending to with three dots. It holds still
-              under prefers-reduced-motion and keeps the same footprint, so
-              nothing moves when the portal arrives. */}
-          <VStack spacing={5}>
-            <Text textStyle="eyebrow">Opening your portal</Text>
-            <Box
-              w="120px"
-              h="1px"
-              bg="brand.accentBorder"
-              position="relative"
-              overflow="hidden"
-              aria-hidden="true"
-            >
-              <Box
-                position="absolute"
-                top={0}
-                bottom={0}
-                w="40%"
-                bg="brand.accent"
-                sx={{
-                  animation: 'veroPortalSweep 1.5s ease-in-out infinite',
-                  '@media (prefers-reduced-motion: reduce)': {
-                    animation: 'none',
-                    left: 0,
-                    width: '100%',
-                    opacity: 0.45,
-                  },
-                  '@keyframes veroPortalSweep': {
-                    '0%': { transform: 'translateX(-100%)' },
-                    '100%': { transform: 'translateX(250%)' },
-                  },
-                }}
-              />
-            </Box>
-          </VStack>
-        </Flex>
-        <Footer />
-      </>
-    );
-  }
+  if (restoring) return <PortalOpening />;
 
   // Not yet authenticated → tabbed login form.
   //

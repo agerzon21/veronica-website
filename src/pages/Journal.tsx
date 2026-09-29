@@ -4,12 +4,72 @@ import {
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import PageHeader from '../components/ui/PageHeader';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import FaBookOpen from '../icons/fa/FaBookOpen';
 import CTAButton from '../components/ui/CTAButton';
-import JournalPost from './JournalPost';
 import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
+import { prefetchChunk } from '../components/ChunkErrorBoundary';
+import { driveThumbSrcSet, thumbAt } from '../utils/driveImage';
+
+/**
+ * The post reader is react-markdown, the reading-progress coin and six icons,
+ * and /journal itself uses none of it. Statically imported it rode in on this
+ * chunk, so the timeline paid for the reader on every visit: 44.1 KiB gzip for
+ * this chunk against 3.5 KiB without it, and measured at the page, 65.1 KiB of
+ * script and four requests that the timeline never needed.
+ *
+ * The cost is one extra round trip on a COLD DIRECT LOAD of a /journal/:slug
+ * url, because the reader's own fetch cannot start until its chunk lands.
+ * Measured at the Lighthouse mobile link (1.6 Mbps, 150 ms RTT), median of
+ * three: 2,797 ms to the post's h1 before, 3,009 ms after. That is the price,
+ * and it is paid only by someone arriving on a post from outside.
+ *
+ * The common path gets FASTER, not slower. warmPostReader starts the fetch on
+ * the first scroll or touch of the timeline, which is seconds before any click,
+ * so the reader is already in memory when the card is tapped and only its API
+ * call is left: 789 ms to the h1 before, 441 ms after.
+ */
+const JournalPost = lazy(() => import('./JournalPost'));
+
+/** Once per page. prefetchChunk swallows a miss and marks the load speculative
+ *  so a stale-chunk failure here never triggers a reload. */
+let postReaderWarmed = false;
+const warmPostReader = () => {
+  if (postReaderWarmed) return;
+  postReaderWarmed = true;
+  prefetchChunk(() => import('./JournalPost'));
+};
+
+/**
+ * What the timeline's photographs actually ask Drive for.
+ *
+ * Every preview url arrives from api/_drive.ts at a fixed sz=w800, which is
+ * right for the lightbox and wrong for a strip cell painted 81px wide. Measured
+ * at the Lighthouse mobile profile: Chrome loads 15 of these before any
+ * scrolling, 2,825 KiB, and 12 of the 15 are strip cells at 81x121 CSS px.
+ * api/_drive.ts is left alone, because its w2000 viewUrl and the admin preview
+ * both depend on it. The ladder is chosen here instead, where the geometry is.
+ *
+ * w800 stays the top candidate on purpose. A lead frame at 573 CSS px on a DPR
+ * 2 laptop already needs 1569 device px and gets 800, so w800 is not generous,
+ * it is today's behaviour, and keeping it last means no frame on any device is
+ * served smaller than it is today. Everything below it is new headroom.
+ *
+ * THE STRIP NUMBERS ARE COVER OVERSCALE, not cell width. The cells have no
+ * fixed height: each grid row grows to the tallest frame in it, so a landscape
+ * frame sharing a row with portraits is cropped hard, and object-fit: cover
+ * then scales it by height. Measured worst cases: 191 CSS px of source for an
+ * 81px mobile cell, 515 for a 174px desktop one. Hence 220 and 560 rather than
+ * anything resembling the painted width.
+ */
+const THUMB_WIDTHS = [200, 400, 600, 800];
+const LEAD_SIZES = '(min-width: 48em) 800px, 100vw';
+// The middle range is not cosmetic. The strip cell scales continuously with
+// the viewport up to 48em, so a two-stop ladder served w400 where the frame
+// needs 443 to 763 device px between about 540 and 767 CSS px, which is a
+// softer photograph than today ships. Measured over 4,620 renders.
+const STRIP_SIZES = '(min-width: 48em) 560px, (min-width: 28em) 400px, 220px';
 
 /** Also the source for a 358x84 bar on the homepage, via CardBar. */
 const JOURNAL_HERO = '/assets/photos/site/journal-hero.webp';
@@ -58,7 +118,21 @@ const Journal = () => {
   // Single component, two behaviors. When a slug is in the URL, defer
   // entirely to JournalPost — it fetches its own data + owns its SEO.
   if (slug) {
-    return <JournalPost slug={slug} />;
+    // The fallback is character for character JournalPost's own `loading`
+    // state, so the handover from chunk-pending to data-pending paints
+    // nothing at all: same spinner, same 80vh box holding the footer down,
+    // no shift.
+    return (
+      <Suspense
+        fallback={(
+          <Flex minH="80vh" align="center" justify="center">
+            <Spinner color="brand.accent" />
+          </Flex>
+        )}
+      >
+        <JournalPost slug={slug} />
+      </Suspense>
+    );
   }
   return <JournalIndex />;
 };
@@ -66,6 +140,22 @@ const Journal = () => {
 function JournalIndex() {
   const [posts, setPosts] = useState<PostSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Reading the timeline at all means a post is plausible, and a scroll
+  // happens seconds before any click, where a pointer landing on a card
+  // happens milliseconds before it. Same trigger set App.tsx warms the public
+  // route chunks on, and for the same reason. Nothing here is unconditional:
+  // a visitor who opens no post fetches no reader.
+  useEffect(() => {
+    const events = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
+    events.forEach((e) => window.addEventListener(e, warmPostReader, { once: true, passive: true }));
+    // Scroll fires on the document rather than the window in some browsers.
+    document.addEventListener('scroll', warmPostReader, { once: true, passive: true });
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, warmPostReader));
+      document.removeEventListener('scroll', warmPostReader);
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -364,6 +454,11 @@ function TimelineCard({ post }: { post: PostSummary }) {
       // data-group just as well — the pattern already used elsewhere here.
       data-group
       _hover={{ textDecoration: 'none' }}
+      // The reader's chunk, started on intent rather than on click. A pointer
+      // arriving over a card (or a finger landing on one) precedes the
+      // navigation by long enough that the chunk is usually already there.
+      onPointerEnter={warmPostReader}
+      onPointerDown={warmPostReader}
     >
       {/* The cluster. 2px gutters on purpose: at this spacing the photographs
           read as one object, which is what stops the page feeling scattered. */}
@@ -386,7 +481,9 @@ function TimelineCard({ post }: { post: PostSummary }) {
             sx={{ aspectRatio: '4 / 3' }}
           >
             <Image
-              src={lead.url}
+              src={thumbAt(lead.url, 800, true)}
+              srcSet={driveThumbSrcSet(lead.url, THUMB_WIDTHS, true)}
+              sizes={LEAD_SIZES}
               alt={lead.alt ?? post.title}
               w="100%"
               h="100%"
@@ -428,7 +525,9 @@ function TimelineCard({ post }: { post: PostSummary }) {
                       empty one would outline all four cells with a hairline
                       border whenever Drive rate-limits the thumbnails. */}
                   <Image
-                    src={ph.url}
+                    src={thumbAt(ph.url, 800, true)}
+                    srcSet={driveThumbSrcSet(ph.url, THUMB_WIDTHS, true)}
+                    sizes={STRIP_SIZES}
                     alt={ph.alt ?? ''}
                     aria-hidden="true"
                     w="100%"

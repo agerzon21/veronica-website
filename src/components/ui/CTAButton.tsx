@@ -78,14 +78,13 @@ interface CTAButtonProps {
 }
 
 const GOLD = '#c9a96e';
-const GOLD_HOVER = '#d4b87a';
-const GOLD_ACTIVE = '#b8964f';
 // Same tokens as brand.accentBorder / brand.accentText / brand.surfaceSunken
 // in the theme. They are repeated as literals here for the same reason the
 // golds above are: this file's style objects are plain values, not Chakra
 // props resolved per key.
 const GOLD_BORDER = '#e8d9a8';
 const GOLD_TEXT = '#8a6e35';
+const GOLD_TEXT_DEEP = '#7a602f';
 const SUNKEN = '#f5efe4';
 const SPINE_MUTED = 'rgba(43, 39, 36, 0.3)';
 // photoTab's label. Warm, because the cool Chakra greys the tab pair used read
@@ -170,18 +169,40 @@ const sizeStyles: Record<Size, Record<string, any>> = {
 // Danger = red-tone destructive action (replaces hand-rolled red Boxes).
 const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
   if (variant === 'solid') {
+    // THE FILL IS THE DARK GOLD, NOT THE SIGNATURE ONE, AND THAT IS THE WHOLE
+    // POINT OF THE SPLIT THE THEME ALREADY MADE.
+    //
+    // This was `bg: GOLD` with white text: 2.24:1, against the 4.5:1 WCAG AA
+    // asks of text this size, on all 65 buttons that use this variant. The
+    // theme's own header says why in advance, about this exact pair: #c9a96e
+    // "FAILS for text and for white text on a gold fill, both of which need
+    // 4.5:1. Hence the split between `accent` (decorative, unchanged) and
+    // `accentText` (readable, darker)." Every other gold that carries words
+    // was moved over at the time. This variant was missed, and Lighthouse
+    // found it on /portal's SIGN IN.
+    //
+    // Measured, white on each: accent 2.24:1, accentText 4.81:1 (passes),
+    // accentTextDeep 5.93:1. So the resting fill is accentText and the hover
+    // is accentTextDeep.
+    //
+    // WHICH MEANS HOVER DARKENS RATHER THAN LIGHTENS. It used to lift to
+    // #d4b87a, which is 1.92:1 with white: a hover state is still text, and
+    // brightening a fill under white type is the one direction that cannot
+    // pass. Deepening also reads correctly with the 2px lift this shares with
+    // every other CTA. `_active` takes the same deep fill and drops the lift,
+    // so a phone (which never hovers) still gets the press feedback.
     return {
-      bg: GOLD,
+      bg: GOLD_TEXT,
       color: 'white',
       border: '1px solid',
-      borderColor: GOLD,
+      borderColor: GOLD_TEXT,
       _hover: {
-        bg: GOLD_HOVER,
-        borderColor: GOLD_HOVER,
+        bg: GOLD_TEXT_DEEP,
+        borderColor: GOLD_TEXT_DEEP,
         transform: 'translateY(-2px)',
         textDecoration: 'none',
       },
-      _active: { bg: GOLD_ACTIVE, transform: 'translateY(0)' },
+      _active: { bg: GOLD_TEXT_DEEP, borderColor: GOLD_TEXT_DEEP, transform: 'translateY(0)' },
     };
   }
   // The muted twin of `solid`: a primary action whose preconditions are not
@@ -331,18 +352,30 @@ const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
     };
   }
   // outline (default)
+  //
+  // AT REST NOTHING HERE CHANGED: the hairline is still the signature gold and
+  // the label is still dark on the page's own background, which is where a
+  // visitor sees this button 99% of the time.
+  //
+  // The FILLED states did change, and had to. Hover painted #c9a96e under
+  // white text (2.24:1) and press painted #b8964f (2.79:1), which is the same
+  // failure `solid` above carries and the same one the theme header calls out.
+  // They take `solid`'s resting and hover fills so the two variants cannot
+  // disagree: a hovered secondary that comes out LIGHTER than the primary
+  // beside it reverses the ranking the two shapes exist to express.
   return {
     bg: 'transparent',
     color: tone === 'dark' ? GOLD : 'gray.700',
     border: '1px solid',
     borderColor: GOLD,
     _hover: {
-      bg: GOLD,
+      bg: GOLD_TEXT,
+      borderColor: GOLD_TEXT,
       color: 'white',
       transform: 'translateY(-2px)',
       textDecoration: 'none',
     },
-    _active: { bg: GOLD_ACTIVE, borderColor: GOLD_ACTIVE, color: 'white', transform: 'translateY(0)' },
+    _active: { bg: GOLD_TEXT_DEEP, borderColor: GOLD_TEXT_DEEP, color: 'white', transform: 'translateY(0)' },
   };
 };
 
