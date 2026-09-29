@@ -929,16 +929,52 @@ const Portal = () => {
           /* Tall enough to push the footer to the bottom of the screen. At
              60vh this block ended two thirds up the page and the footer came
              with it, which reads as a broken page rather than a loading one.
-             The subtraction is the fixed navbar plus the footer's own height,
-             so the footer lands ON the bottom edge. */
-          minH="calc(100vh - 72px - 123px)"
+             The subtraction is the FOOTER only, not the navbar: the navbar is
+             position:fixed and takes no room in the flow, so subtracting it
+             too left a measured 72px of page below the footer. */
+          minH="calc(100vh - 123px)"
           align="center"
           justify="center"
           pt={{ base: 24, md: 20 }}
         >
-          <Text fontSize="sm" color="gray.400" fontWeight="300" letterSpacing="0.1em">
-            Opening your portal...
-          </Text>
+          {/* The site's own vocabulary, not a grey sentence with an ellipsis:
+              the eyebrow and the gold hairline that open every section on
+              every other page. The rule is what carries the waiting, so the
+              words can stop pretending to with three dots. It holds still
+              under prefers-reduced-motion and keeps the same footprint, so
+              nothing moves when the portal arrives. */}
+          <VStack spacing={5}>
+            <Text textStyle="eyebrow">Opening your portal</Text>
+            <Box
+              w="120px"
+              h="1px"
+              bg="brand.accentBorder"
+              position="relative"
+              overflow="hidden"
+              aria-hidden="true"
+            >
+              <Box
+                position="absolute"
+                top={0}
+                bottom={0}
+                w="40%"
+                bg="brand.accent"
+                sx={{
+                  animation: 'veroPortalSweep 1.5s ease-in-out infinite',
+                  '@media (prefers-reduced-motion: reduce)': {
+                    animation: 'none',
+                    left: 0,
+                    width: '100%',
+                    opacity: 0.45,
+                  },
+                  '@keyframes veroPortalSweep': {
+                    '0%': { transform: 'translateX(-100%)' },
+                    '100%': { transform: 'translateX(250%)' },
+                  },
+                }}
+              />
+            </Box>
+          </VStack>
         </Flex>
         <Footer />
       </>
