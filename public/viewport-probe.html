@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Viewport probe</title>
+<!--
+  A DELIBERATELY STATIC PAGE, not a React route.
+
+  It exists to answer one question that cannot be answered anywhere else: what
+  does this phone's browser actually report for svh, lvh and dvh. The first
+  attempt at this shipped as a hosted artifact and was worthless, because an
+  artifact renders inside an IFRAME and every viewport unit there collapses to
+  the iframe's own box: all three units came back identical on four different
+  devices, which is exactly the answer an iframe gives and exactly the wrong
+  answer. So this file is served from the site's own origin at the top level,
+  and it asserts that it IS top level before reporting anything.
+
+  No bundle, no router, no Helmet. Nothing about it can affect the app.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; padding: 24px 16px 48px; max-width: 560px;
+    font: 300 15px/1.55 "Jost", system-ui, -apple-system, sans-serif;
+    background: #faf8f4; color: #1c1a17;
+  }
+  @media (prefers-color-scheme: dark) { body { background:#171614; color:#f2efe9; } }
+  h1 { font-size: 1rem; font-weight: 500; letter-spacing: .2em; text-transform: uppercase;
+       color: #8a6e35; margin: 0 0 4px; }
+  @media (prefers-color-scheme: dark) { h1 { color:#cbac6d; } }
+  .rule { width: 40px; height: 1px; background: #c9a96e; margin: 14px 0 22px; }
+  .warn { background:#8a4b2a; color:#fff; padding:12px 14px; border-radius:3px; margin-bottom:18px; font-weight:400; }
+  .hero { border:1px solid #e4ded3; border-radius:3px; padding:18px; margin-bottom:22px; }
+  @media (prefers-color-scheme: dark) { .hero { border-color:#332f2a; } }
+  .row { display:flex; gap:14px; flex-wrap:wrap; }
+  .cell { flex:1 1 110px; }
+  .k { font-size:.66rem; letter-spacing:.18em; text-transform:uppercase; opacity:.62; font-weight:500; }
+  .v { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums;
+       font-size: 1.9rem; font-weight: 500; line-height: 1.15; }
+  h2 { font-size:.68rem; letter-spacing:.2em; text-transform:uppercase; font-weight:500;
+       opacity:.62; margin: 24px 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  td { padding:7px 0; border-bottom:1px solid #e4ded3; }
+  @media (prefers-color-scheme: dark) { td { border-color:#332f2a; } }
+  td:first-child { opacity:.68; padding-right:12px; }
+  td:last-child { text-align:right; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+                  font-variant-numeric: tabular-nums; font-weight:500; white-space:nowrap; }
+  button { font: 500 .72rem/1 inherit; letter-spacing:.18em; text-transform:uppercase;
+           color:#8a6e35; background:transparent; border:1px solid #c9a96e; border-radius:2px;
+           padding:14px 18px; width:100%; min-height:44px; margin-top:22px; cursor:pointer; }
+  @media (prefers-color-scheme: dark) { button { color:#cbac6d; } }
+  .hint { font-size:.82rem; opacity:.68; margin:10px 0 0; }
+</style>
+</head>
+<body>
+<h1>Viewport probe</h1>
+<p class="hint">vero.photography &middot; scroll down the page, then screenshot this.</p>
+<div class="rule"></div>
+
+<div id="frameWarn" class="warn" hidden>
+  This is running inside an iframe, so every number below is the iframe's and
+  none of them answer the question. Open it directly at
+  vero.photography/viewport-probe.html instead.
+</div>
+
+<div class="hero">
+  <div class="row">
+    <div class="cell"><div class="k">100 svh</div><div class="v" id="svh">-</div></div>
+    <div class="cell"><div class="k">100 lvh</div><div class="v" id="lvh">-</div></div>
+    <div class="cell"><div class="k">chrome</div><div class="v" id="chrome">-</div></div>
+  </div>
+  <p class="hint" id="verdict">Measuring...</p>
+</div>
+
+<h2>Live, changes as you scroll</h2>
+<table>
+  <tr><td>100 dvh</td><td id="dvh">-</td></tr>
+  <tr><td>window.innerHeight</td><td id="ih">-</td></tr>
+  <tr><td>smallest innerHeight seen</td><td id="minih">-</td></tr>
+  <tr><td>largest innerHeight seen</td><td id="maxih">-</td></tr>
+  <tr><td>visualViewport height</td><td id="vv">-</td></tr>
+</table>
+
+<h2>Fixed</h2>
+<table>
+  <tr><td>top level, not an iframe</td><td id="top">-</td></tr>
+  <tr><td>window.innerWidth</td><td id="iw">-</td></tr>
+  <tr><td>devicePixelRatio</td><td id="dpr">-</td></tr>
+  <tr><td>screen</td><td id="screen">-</td></tr>
+  <tr><td>safe-area top / bottom</td><td id="safe">-</td></tr>
+</table>
+
+<h2>What the hero computes here</h2>
+<table>
+  <tr><td>layout branch</td><td id="branch">-</td></tr>
+  <tr><td>camera, final size</td><td id="cam">-</td></tr>
+  <tr><td>verticalShiftPx</td><td id="shift">-</td></tr>
+  <tr><td>eyebrow top (navbar ends at 72)</td><td id="eyebrow">-</td></tr>
+  <tr><td>Book a Session, bottom</td><td id="cta">-</td></tr>
+  <tr><td>air above / below</td><td id="gaps">-</td></tr>
+</table>
+
+<button id="copy" type="button">Copy every value</button>
+<p class="hint">Scroll the page up and down first so the min and max innerHeight rows fill in. That range is the browser chrome.</p>
+
+<script>
+(function(){
+  var isTop = (function(){ try { return window.top === window.self; } catch (e) { return false; } })();
+  if (!isTop) document.getElementById('frameWarn').hidden = false;
+
+  function unit(u){
+    try{
+      if(!(window.CSS && CSS.supports && CSS.supports('height','100'+u))) return null;
+      var p = document.createElement('div');
+      p.style.cssText='position:absolute;top:0;left:0;width:0;height:100'+u+';visibility:hidden;pointer-events:none';
+      document.body.appendChild(p);
+      var h = p.getBoundingClientRect().height; p.remove();
+      return h>0 ? Math.round(h) : null;
+    }catch(e){ return null; }
+  }
+  function env(side){
+    try{
+      var p=document.createElement('div');
+      p.style.cssText='position:absolute;visibility:hidden;height:env(safe-area-inset-'+side+',0px)';
+      document.body.appendChild(p);
+      var h=p.getBoundingClientRect().height; p.remove(); return Math.round(h);
+    }catch(e){ return 0; }
+  }
+  var set=function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+
+  // The real constants from src/components/HeroSection.tsx.
+  var NAV=72, SAFE=16, GAP=24, FG=88, FGP=56, MRES=140, DRES=104,
+      FOOTRES=100, MINFULL=120, WPMAX=320, WLMAX=540, WMIN=200,
+      IW=1135, IH=833, CTAH=72;
+  function headerContent(vw){ return vw>=992?195:(vw>=768?162:120); }
+  function hero(vw,vh){
+    var portrait=vh>vw, phone=portrait&&vw<768;
+    var footGap=phone?FGP:FG, reserve=phone?MRES:DRES;
+    var bh = portrait?37:50;
+    var aspect=portrait?IH/IW:IW/IH;
+    var hPad=portrait?20:48, maxW=portrait?WPMAX:WLMAX;
+    var hr=NAV+SAFE+headerContent(vw);
+    var fullH=vh-hr-FOOTRES-GAP-footGap-reserve;
+    var extract=fullH<MINFULL;
+    var availH=extract?(vh-hr-GAP-SAFE):fullH;
+    var cap=availH*aspect;
+    var fitted=Math.min(vw-2*hPad,cap,maxW);
+    var fw=Math.max(Math.min(WMIN,cap),fitted), fh=fw/aspect;
+    var shift=Math.max(0,(hr+GAP+fh/2)-vh/2);
+    var centre=vh/2+shift;
+    return {extract:extract,fw:fw,fh:fh,shift:shift,
+            headerBottom:centre-fh/2-GAP,
+            ctaBottom:centre+fh/2+footGap+CTAH,
+            hc:headerContent(vw)};
+  }
+
+  var svh=unit('svh'), lvh=unit('lvh');
+  var minIH=window.innerHeight, maxIH=window.innerHeight;
+
+  set('top', isTop ? 'yes' : 'NO, numbers are invalid');
+  set('svh', svh===null?'n/a':svh+'px');
+  set('lvh', lvh===null?'n/a':lvh+'px');
+  var chrome=(svh!==null&&lvh!==null)?Math.max(0,lvh-svh):null;
+  set('chrome', chrome===null?'n/a':chrome+'px');
+  var v=document.getElementById('verdict');
+  if(!isTop) v.textContent='Invalid: this is inside an iframe.';
+  else if(chrome===null) v.textContent='This browser does not report svh or lvh.';
+  else if(chrome===0) v.textContent='svh and lvh are the same number here, so the browser keeps no chrome inside the viewport. Scroll and watch the min/max rows: if those differ while this stays 0, the units are not describing the chrome.';
+  else v.textContent='The browser keeps '+chrome+'px of chrome. The reverted build put the composition '+Math.round(chrome/2)+'px below the middle of the visible strip.';
+
+  set('iw', window.innerWidth+'px');
+  set('dpr', (window.devicePixelRatio||1).toFixed(2));
+  set('screen', screen.width+' x '+screen.height);
+  set('safe', env('top')+' / '+env('bottom')+'px');
+
+  var vw=window.innerWidth, basis=(svh!==null?svh:window.innerHeight);
+  var h=hero(vw,basis);
+  set('branch', h.extract?'extracted footer':'full layout');
+  set('cam', Math.round(h.fw)+' x '+Math.round(h.fh)+'px');
+  set('shift', Math.round(h.shift)+'px');
+  if(h.extract){ set('eyebrow','n/a'); set('cta','below the fold'); set('gaps','n/a'); }
+  else{
+    var et=h.headerBottom-h.hc;
+    set('eyebrow', Math.round(et)+'px');
+    set('cta', Math.round(h.ctaBottom)+'px');
+    set('gaps', Math.round(et-NAV)+' / '+Math.round(basis-h.ctaBottom)+'px');
+  }
+
+  function live(){
+    var ih=window.innerHeight;
+    if(ih<minIH) minIH=ih; if(ih>maxIH) maxIH=ih;
+    var d=unit('dvh');
+    set('dvh', d===null?'n/a':d+'px');
+    set('ih', ih+'px');
+    set('minih', minIH+'px');
+    set('maxih', maxIH+'px' + (maxIH>minIH ? '  (range '+(maxIH-minIH)+'px)' : ''));
+    set('vv', window.visualViewport?Math.round(visualViewport.height)+'px':'n/a');
+  }
+  live();
+  addEventListener('scroll', live, {passive:true});
+  addEventListener('resize', live);
+  if(window.visualViewport) visualViewport.addEventListener('resize', live);
+
+  // Enough page to actually scroll, so the chrome can collapse.
+  var filler=document.createElement('div');
+  filler.style.cssText='height:180vh';
+  filler.setAttribute('aria-hidden','true');
+  document.body.appendChild(filler);
+
+  document.getElementById('copy').addEventListener('click', function(){
+    var out=['Viewport probe','top level: '+isTop,'ua: '+navigator.userAgent];
+    document.querySelectorAll('table tr').forEach(function(tr){
+      var td=tr.querySelectorAll('td');
+      if(td.length===2) out.push(td[0].textContent.trim()+': '+td[1].textContent.trim());
+    });
+    out.push('svh: '+document.getElementById('svh').textContent);
+    out.push('lvh: '+document.getElementById('lvh').textContent);
+    out.push('chrome: '+document.getElementById('chrome').textContent);
+    var btn=this;
+    try{ navigator.clipboard.writeText(out.join('\n')).then(
+      function(){ btn.textContent='Copied'; setTimeout(function(){btn.textContent='Copy every value';},2000); },
+      function(){ btn.textContent='Select the text instead'; }); }
+    catch(e){ btn.textContent='Select the text instead'; }
+  });
+})();
+</script>
+</body>
+</html>
