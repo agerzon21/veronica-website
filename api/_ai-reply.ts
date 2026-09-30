@@ -874,12 +874,33 @@ export async function conversationSummaryBlock(
 ): Promise<string | null> {
   try {
     const rows = (await sql`
-      SELECT summary_json, summary_message_id
-      FROM conversations
-      WHERE id = ${conversationId}
+      SELECT c.summary_json,
+             c.summary_message_id,
+             (SELECT m.id::text FROM messages m
+               WHERE m.conversation_id = c.id AND m.status <> 'draft'
+               ORDER BY m.sent_at DESC LIMIT 1) AS newest_message_id
+      FROM conversations c
+      WHERE c.id = ${conversationId}
       LIMIT 1
-    `) as Array<{ summary_json: unknown; summary_message_id: string | null }>;
+    `) as Array<{
+      summary_json: unknown;
+      summary_message_id: string | null;
+      newest_message_id: string | null;
+    }>;
     if (rows.length === 0 || !rows[0].summary_json) return null;
+
+    /**
+     * Is this summary current?
+     *
+     * The summariser only runs when someone opens the Summary tab, so on a
+     * live inbox a good third of cached summaries predate the newest messages.
+     * Saying "trust the messages if they disagree" unconditionally was a
+     * guess dressed as a caveat; the row records exactly which message it was
+     * generated against, so this can simply be true.
+     */
+    const stale =
+      rows[0].newest_message_id !== null &&
+      rows[0].summary_message_id !== rows[0].newest_message_id;
 
     const raw = rows[0].summary_json;
     const s = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -977,7 +998,9 @@ export async function conversationSummaryBlock(
     // but the model should trust the raw history over it where they collide.
     lines.push(
       '',
-      'If the recent messages below contradict anything in this summary, the messages are newer and win.',
+      stale
+        ? 'THIS SUMMARY IS OUT OF DATE. Messages have arrived since it was written, and they are in the history below. Read those first: where they disagree with anything above, they are newer and they win, and anything they settle is no longer missing however this block describes it.'
+        : 'This summary is current as of the newest message in the thread. Where the messages below add detail, they win.',
     );
 
     return lines.join('\n');
