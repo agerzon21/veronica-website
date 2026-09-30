@@ -771,6 +771,24 @@ const dict = {
     resetFailed: { en: 'Reset failed', ru: 'Не удалось сбросить' },
     // Composer
     replyPlaceholder: { en: 'Type a reply as Vero...', ru: 'Напиши ответ от имени Веро...' },
+    // Enter sends, and Enter is one key away from Shift+Enter. A half
+    // finished sentence went to a real customer that way.
+    sendConfirmTitle: { en: 'Send this now?', ru: 'Отправить сейчас?' },
+    sendConfirmTo: {
+      en: (name: string) => `This goes to ${name} straight away. Read it back first:`,
+      ru: (name: string) => `Сообщение уйдёт ${name} сразу. Сначала перечитай:`,
+    },
+    sendConfirmUnfinished: {
+      en: 'This looks unfinished.',
+      ru: 'Похоже, сообщение не дописано.',
+    },
+    thisCustomer: { en: 'this customer', ru: 'этому клиенту' },
+    sendConfirmYes: { en: 'Send it', ru: 'Отправить' },
+    sendConfirmNo: { en: 'Keep writing', ru: 'Продолжить писать' },
+    sendConfirmHint: {
+      en: 'Shift+Enter for a new line. Cmd+Enter sends without asking.',
+      ru: 'Shift+Enter — новая строка. Cmd+Enter отправляет без вопроса.',
+    },
     send: { en: 'Send', ru: 'Отправить' },
     translating: { en: 'Translating…', ru: 'Перевожу…' },
     // NOTE: `translateBeforeSending` (a switch in the composer) and

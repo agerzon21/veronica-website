@@ -2326,6 +2326,25 @@ function ConversationView({
     }
   };
   const [sending, setSending] = useState(false);
+  /**
+   * Enter sends, and Enter is one key away from Shift+Enter.
+   *
+   * Alex reached for a new line mid-sentence, hit Enter, and a half written
+   * reply went to a real customer and was marked Delivered before he could
+   * read it back. There is no unsend.
+   *
+   * So plain Enter now asks. The dialog shows the actual text rather than a
+   * bare "are you sure", because a yes/no prompt with nothing in it gets
+   * clicked through inside a week and protects nobody: what would have saved
+   * him was SEEING the sentence stop halfway. Same reasoning as the reset
+   * dialog further down, which prints the contact name and message count for
+   * exactly that reason.
+   *
+   * Cmd/Ctrl+Enter still sends immediately. That is a deliberate two-key
+   * gesture nobody hits by accident, so it keeps a fast path for anyone who
+   * wants one.
+   */
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   // True only while the translate step of a send is in flight, so the button
   // can say "Translating…" rather than "Sending…" for the second or two the
   // extra call takes.
@@ -3952,7 +3971,8 @@ function ConversationView({
               // not screen size.
               if (hasHardwareKeyboard()) {
                 e.preventDefault();
-                handleSend();
+                // Ask, do not send. See sendConfirmOpen.
+                if (replyText.trim() && !sending) setSendConfirmOpen(true);
               }
             }}
           />
@@ -4020,6 +4040,55 @@ function ConversationView({
             that nobody needs told twice on a desktop. Both shortcuts still
             work, and plain Enter now does too. See the Textarea's onKeyDown. */}
       </Box>
+
+      {/* Enter asked before it sends. The body prints the message itself,
+          because a prompt with nothing in it gets clicked through and would
+          not have caught the sentence that stopped halfway. */}
+      <ConfirmDialog
+        isOpen={sendConfirmOpen}
+        title={t.messages.sendConfirmTitle}
+        body={
+          <Box>
+            <Text fontSize="sm" color="gray.600" mb={2}>
+              {t.messages.sendConfirmTo(
+                summary.contact_name || summary.contact_handle || t.messages.thisCustomer,
+              )}
+            </Text>
+            <Box
+              borderWidth="1px"
+              borderColor="gray.200"
+              borderRadius="md"
+              bg="gray.50"
+              p={3}
+              maxH="240px"
+              overflowY="auto"
+              whiteSpace="pre-wrap"
+              fontSize="sm"
+            >
+              {replyText}
+            </Box>
+            {/* A reply that ends mid-word or without terminal punctuation is
+                the exact shape of the accident this dialog exists for, so it
+                gets called out rather than left for her to notice. */}
+            {replyText.trim().length > 0 && !/[.!?…)"'\]]$/.test(replyText.trim()) && (
+              <Text fontSize="sm" color="orange.600" mt={2} fontWeight="500">
+                {t.messages.sendConfirmUnfinished}
+              </Text>
+            )}
+            <Text fontSize="xs" color="gray.500" mt={3}>
+              {t.messages.sendConfirmHint}
+            </Text>
+          </Box>
+        }
+        confirmLabel={t.messages.sendConfirmYes}
+        cancelLabel={t.messages.sendConfirmNo}
+        isLoading={sending}
+        onConfirm={() => {
+          setSendConfirmOpen(false);
+          handleSend();
+        }}
+        onCancel={() => setSendConfirmOpen(false)}
+      />
     </>
   );
 }
