@@ -1027,7 +1027,21 @@ function StatusDetail({ status }: { status: IgStatus }) {
 interface LicenseState {
   status: 'fresh' | 'aging' | 'overdue' | 'expired' | 'unknown';
   daysUntilExpiry?: number;
-  license: { number: string; issuedAt: string; expiresAt: string; state: string; note?: string } | null;
+  license: {
+    numberLast4: string;
+    issuedAt: string;
+    expiresAt: string;
+    state: string;
+    note?: string;
+    lastFiledPeriod?: string;
+  } | null;
+  filing?: {
+    lastFiled: string | null;
+    nextPeriod: string;
+    nextDueDate: string;
+    daysUntilFiling: number;
+    state: 'open' | 'due' | 'overdue';
+  };
 }
 
 function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
@@ -1051,7 +1065,9 @@ function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
       if (data.success) {
         setState(data);
         if (data.license) {
-          setNumber(data.license.number);
+          // Never prefilled from the server: only four digits exist there, and
+          // putting them in the edit box invites saving them as the whole number.
+          setNumber('');
           setIssuedAt(data.license.issuedAt);
           setNote(data.license.note ?? '');
         }
@@ -1087,6 +1103,25 @@ function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
       } else {
         setErr(data.error || 'Could not save');
       }
+    } catch {
+      setErr('Network error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markFiled(period: string) {
+    setErr('');
+    setBusy(true);
+    try {
+      const res = await fetch('/api/admin/license-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, action: 'mark-filed', period }),
+      });
+      const data = await res.json();
+      if (data.success) setState(data);
+      else setErr(data.error || 'Could not save');
     } catch {
       setErr('Network error');
     } finally {
@@ -1137,7 +1172,7 @@ function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
       {lic && !editing && (
         <VStack align="stretch" spacing={1} mb={4}>
           <Text fontSize="sm">
-            <strong>{t.integrations.licNumber}:</strong> {lic.number} ({lic.state})
+            <strong>{t.integrations.licNumber}:</strong> ••••{lic.numberLast4} ({lic.state})
           </Text>
           <Text fontSize="sm" color="gray.600">
             {t.integrations.licIssued} {lic.issuedAt} · {t.integrations.licExpires} {lic.expiresAt}
@@ -1157,6 +1192,9 @@ function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
               {t.integrations.licNumber}
             </Text>
             <Input size="sm" value={number} onChange={(e) => setNumber(e.target.value)} />
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              {t.integrations.licNumberHelp}
+            </Text>
           </Box>
           <Box>
             <Text fontSize="sm" mb={1}>
@@ -1189,6 +1227,48 @@ function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
             </Text>
           )}
         </VStack>
+      )}
+
+      {lic && state?.filing && !editing && (
+        <Box borderTopWidth="1px" borderColor="gray.200" pt={3} mb={3}>
+          <HStack justify="space-between" mb={2}>
+            <Text fontSize="sm" fontWeight="500">
+              {t.integrations.licFilingTitle}
+            </Text>
+            <Badge
+              colorScheme={
+                state.filing.state === 'overdue'
+                  ? 'red'
+                  : state.filing.state === 'due'
+                    ? 'orange'
+                    : 'green'
+              }
+            >
+              {state.filing.state === 'overdue'
+                ? t.integrations.licOverdue
+                : `${state.filing.daysUntilFiling} ${t.integrations.licDaysLeft}`}
+            </Badge>
+          </HStack>
+          <Text fontSize="sm" color="gray.700">
+            {t.integrations.licNextDue}: <strong>{state.filing.nextPeriod}</strong>,{' '}
+            {t.integrations.licDueOn} {state.filing.nextDueDate}
+          </Text>
+          <Text fontSize="sm" color="gray.500" mb={2}>
+            {t.integrations.licLastFiled}:{' '}
+            {state.filing.lastFiled ?? t.integrations.licNeverFiled}
+          </Text>
+          <CTAButton
+            size="sm"
+            variant="ghost"
+            isDisabled={busy}
+            onClick={() => markFiled(state.filing!.nextPeriod)}
+          >
+            {t.integrations.licMarkFiled} {state.filing.nextPeriod}
+          </CTAButton>
+          <Text fontSize="xs" color="gray.500" mt={2}>
+            {t.integrations.licQuartersNote}
+          </Text>
+        </Box>
       )}
 
       <Text fontSize="xs" color="gray.500" mb={3}>

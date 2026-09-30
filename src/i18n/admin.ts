@@ -2868,6 +2868,21 @@ const dict = {
       ru: 'Продление бесплатное и автоматическое раз в пять лет, но только если все декларации поданы и нет задолженности.',
     },
     licSuperOnly: { en: 'Super admin only', ru: 'Только для супер-администратора' },
+    licFilingTitle: { en: 'Quarterly return', ru: 'Квартальная декларация' },
+    licNextDue: { en: 'Next return', ru: 'Следующая декларация' },
+    licDueOn: { en: 'due', ru: 'к сдаче' },
+    licLastFiled: { en: 'Last filed', ru: 'Последняя подана' },
+    licNeverFiled: { en: 'Nothing filed yet', ru: 'Ещё ничего не подано' },
+    licMarkFiled: { en: 'Mark filed', ru: 'Отметить поданной' },
+    licOverdue: { en: 'OVERDUE', ru: 'ПРОСРОЧЕНО' },
+    licQuartersNote: {
+      en: 'Quarters are fixed: Jan to Mar, Apr to Jun, Jul to Sep, Oct to Dec, each due on the 20th of the month after it closes. They do not run from when you registered.',
+      ru: 'Кварталы фиксированные: янв-мар, апр-июн, июл-сен, окт-дек, срок сдачи 20 числа следующего месяца.',
+    },
+    licNumberHelp: {
+      en: 'Only the last four digits are stored. The full number never reaches the database.',
+      ru: 'Сохраняются только последние четыре цифры. Полный номер не попадает в базу.',
+    },
 
     // ─── Config health ────────────────────────────────
     configTitle: { en: 'Configuration', ru: 'Конфигурация' },

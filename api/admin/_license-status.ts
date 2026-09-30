@@ -40,8 +40,19 @@ const AGING_DAYS = 180;
 const OVERDUE_DAYS = 45;
 
 interface LicenseRecord {
-  /** The licence number as printed. */
-  number: string;
+  /**
+   * The LAST FOUR DIGITS only, never the whole number.
+   *
+   * A PA licence number is not really a secret: it is printed on the
+   * certificate, that certificate has to be displayed at the place of
+   * business, and the Department runs a public verification lookup. But it is
+   * also not needed here. The card exists to answer "is this current and when
+   * is the next return due", and four digits is enough to confirm you are
+   * looking at the right licence. Storing the whole thing would add a small
+   * amount of risk for no benefit at all, so it is truncated on the way in and
+   * the full number never reaches the database.
+   */
+  numberLast4: string;
   /** ISO date it was issued. */
   issuedAt: string;
   /** ISO date it expires. Derived on save, stored so a rule change cannot silently move it. */
@@ -50,6 +61,53 @@ interface LicenseRecord {
   state: string;
   /** Free text: the myPATH login it lives under, whether a VDA preceded it. */
   note?: string;
+  /**
+   * The most recent quarter whose return has been filed, as 'YYYY-Qn'.
+   *
+   * PA has no annual option and puts every new business on quarterly for its
+   * first year, so this is a recurring obligation with a fixed calendar and
+   * nothing else in the system that would mention it. Same idea as marking the
+   * Instagram token refreshed: one field, updated by hand, from which the next
+   * deadline is derived.
+   */
+  lastFiledPeriod?: string;
+}
+
+/**
+ * Quarterly, on PA's calendar rather than the business's.
+ *
+ * Quarters are fixed: Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec, each due on the
+ * 20th of the month after it closes. They do not run from whenever you
+ * registered, which is the assumption worth heading off: registering in
+ * October does not give you until January for work done in August.
+ */
+function quarterOf(d: Date): { period: string; dueDate: string } {
+  const y = d.getUTCFullYear();
+  const q = Math.floor(d.getUTCMonth() / 3) + 1;
+  // Q4 is due on 20 January of the following year.
+  const dueYear = q === 4 ? y + 1 : y;
+  const dueMonth = q === 4 ? 1 : q * 3 + 1;
+  return {
+    period: `${y}-Q${q}`,
+    dueDate: `${dueYear}-${String(dueMonth).padStart(2, '0')}-20`,
+  };
+}
+
+/** The quarter after the one given, as 'YYYY-Qn'. */
+function nextPeriod(period: string): string {
+  const [ys, qs] = period.split('-Q');
+  const y = Number(ys);
+  const q = Number(qs);
+  return q === 4 ? `${y + 1}-Q1` : `${y}-Q${q + 1}`;
+}
+
+function dueDateFor(period: string): string {
+  const [ys, qs] = period.split('-Q');
+  const y = Number(ys);
+  const q = Number(qs);
+  const dueYear = q === 4 ? y + 1 : y;
+  const dueMonth = q === 4 ? 1 : q * 3 + 1;
+  return `${dueYear}-${String(dueMonth).padStart(2, '0')}-20`;
 }
 
 function addYears(iso: string, years: number): string {
@@ -80,6 +138,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const number = String(req.body?.number ?? '').trim();
       const issuedAt = String(req.body?.issued_at ?? '').trim();
       if (!number) return res.status(400).json({ success: false, error: 'Licence number required' });
+      // Truncated HERE, on the way in, so the full number never reaches the
+      // database even once. Digits only, because people paste it with dashes.
+      const digits = number.replace(/\D/g, '');
+      const numberLast4 = digits.slice(-4);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(issuedAt)) {
         return res.status(400).json({ success: false, error: 'issued_at must be YYYY-MM-DD' });
       }
@@ -87,16 +149,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // exactly the arithmetic a tired person gets wrong, and an expiry that
       // is wrong in the optimistic direction is the one that bites.
       const record: LicenseRecord = {
-        number,
+        numberLast4,
         issuedAt,
         expiresAt: String(req.body?.expires_at ?? '').trim() || addYears(issuedAt, LICENSE_YEARS),
         state: String(req.body?.state ?? 'PA').trim().toUpperCase(),
         note: String(req.body?.note ?? '').trim() || undefined,
+        lastFiledPeriod: String(req.body?.last_filed_period ?? '').trim() || undefined,
       };
       await sql`
         insert into system_state (key, value, updated_at)
         values (${KEY}, ${JSON.stringify(record)}, now())
         on conflict (key) do update set value = excluded.value, updated_at = now()
+      `;
+      return res.status(200).json({ success: true, ...describe(record) });
+    }
+
+    if (action === 'mark-filed') {
+      if (auth.level !== 'super') {
+        return res.status(403).json({ success: false, error: 'Super admin only' });
+      }
+      const period = String(req.body?.period ?? '').trim();
+      if (!/^\d{4}-Q[1-4]$/.test(period)) {
+        return res.status(400).json({ success: false, error: 'period must look like 2026-Q3' });
+      }
+      const [existing] = (await sql`
+        select value from system_state where key = ${KEY} limit 1
+      `) as Array<{ value: string | null }>;
+      if (!existing?.value) {
+        return res.status(400).json({ success: false, error: 'Record the licence first' });
+      }
+      const record = JSON.parse(existing.value) as LicenseRecord;
+      record.lastFiledPeriod = period;
+      await sql`
+        update system_state set value = ${JSON.stringify(record)}, updated_at = now()
+        where key = ${KEY}
       `;
       return res.status(200).json({ success: true, ...describe(record) });
     }
@@ -142,5 +228,27 @@ function describe(record: LicenseRecord) {
         : daysUntilExpiry <= AGING_DAYS
           ? 'aging'
           : 'fresh';
-  return { status, daysUntilExpiry, license: record };
+  /**
+   * The next return owed. If nothing has been filed we do not guess a start
+   * point, we simply report the quarter we are in: a business that has never
+   * filed has back periods to sort out, and a confident "next due" would
+   * paper over exactly the thing it should be surfacing.
+   */
+  const current = quarterOf(new Date());
+  const due = record.lastFiledPeriod ? nextPeriod(record.lastFiledPeriod) : current.period;
+  const dueDate = dueDateFor(due);
+  const daysUntilFiling = Math.floor(
+    (new Date(`${dueDate}T00:00:00Z`).getTime() - now) / 86_400_000,
+  );
+  const filing = {
+    lastFiled: record.lastFiledPeriod ?? null,
+    nextPeriod: due,
+    nextDueDate: dueDate,
+    daysUntilFiling,
+    // Overdue means the deadline has passed. 'due' means the quarter has
+    // closed and the clock is running. 'open' means it has not closed yet.
+    state: daysUntilFiling < 0 ? 'overdue' : daysUntilFiling <= 30 ? 'due' : 'open',
+  };
+
+  return { status, daysUntilExpiry, filing, license: record };
 }
