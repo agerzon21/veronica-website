@@ -321,6 +321,51 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         },
       ],
     },
+    // Optional and gated on insurance_cap, the same mechanism ADDITIONAL TIME AND
+    // EXPENSES uses above and for the same reason: clearing the field prunes the
+    // clause, so nothing already rendered changes shape.
+    //
+    // WHY A CLAUSE AT ALL. Veronika carries no annual liability policy and on the
+    // economics may never want one, so cover is bought per event. That means the
+    // decision often lands AFTER a contract is signed, because that is when a
+    // venue finally sends its vendor packet, or when a client asks for drone
+    // footage they never mentioned. Without this clause the only options at that
+    // point are absorbing the cost or reopening a signed agreement over sixty
+    // dollars.
+    //
+    // THE CAP IS $150 and the figure is not arbitrary. A Full Frame event policy
+    // is $59 with $5 more for unlimited additional insureds, and drone liability
+    // for an afternoon runs about $60. The one case that stacks is a venue
+    // demanding a certificate for a wedding that also wants aerials, landing near
+    // $125. Anything above that is foreseeable and belongs in a quote.
+    //
+    // The last bullet is what makes this fair rather than a blank cheque: cover
+    // Vero buys for her own peace of mind, that neither the venue nor the Client
+    // asked for, is her cost and can never be passed on.
+    {
+      title: 'EVENT INSURANCE',
+      optional: true,
+      requireVariables: ['insurance_cap'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'Some venues require the Photographer to carry liability insurance naming the venue, and some additions to the session, such as aerial or drone coverage, require insurance beyond the Photographer\u2019s usual cover.',
+        },
+        {
+          kind: 'text',
+          text: 'Where the need for such insurance becomes known after this Agreement is signed, whether because the venue tells the Client or the Photographer, or because the Client requests something that requires it, the Photographer may obtain that insurance and add what it costs to the balance, up to {{insurance_cap}}.',
+        },
+        {
+          kind: 'bullets',
+          items: [
+            'The amount charged is what the Photographer actually paid, at cost, with nothing added.',
+            'It is itemised in the Client portal, with the reason and the policy details, before it is due.',
+            'Any amount above {{insurance_cap}} is quoted to the Client and bought only once they agree to it.',
+            'Insurance the Photographer chooses to carry for her own reasons, which neither the venue nor the Client has asked for, is her own cost and is never charged to the Client.',
+          ],
+        },
+      ],
+    },
     // Optional, unnumbered, and gated on BOTH travel variables, so a booking
     // inside the included radius prunes it away and every wedding contract
     // already signed re-renders byte for byte as it always has. That is the
@@ -764,6 +809,27 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     helpText:
       'Covers extra time the client causes, plus out-of-pocket costs such as parking. Clear it to drop the clause entirely.',
   },
+  /**
+   * The ceiling on insurance the Photographer may buy after signing and pass
+   * on at cost. $150 because a Full Frame event policy is $59, unlimited
+   * additional insureds are $5 more, and drone liability for an afternoon is
+   * about $60: the one realistic case that stacks is a venue demanding a
+   * certificate for a wedding that also wants aerials, near $125. Above that
+   * the cost is foreseeable and belongs in a quote, not in a clause.
+   *
+   * Defaulted rather than left blank, unlike overtime_rate, because this
+   * protects against a cost nobody can predict at signing and the safe
+   * direction is on. Clearing it prunes the whole clause, which is how a
+   * booking opts out.
+   */
+  {
+    key: 'insurance_cap',
+    label: 'Event Insurance Cap',
+    placeholder: 'e.g. $150',
+    defaultValue: '$150',
+    helpText:
+      'The most the client can be charged for insurance bought after signing, at cost, when a venue requires it or they ask for something that needs it. Clear it to drop the clause entirely.',
+  },
   {
     key: 'payment_methods',
     label: 'Payment Methods',
@@ -1108,6 +1174,51 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       },
     ],
   },
+  // Optional and gated on insurance_cap, the same mechanism ADDITIONAL TIME AND
+  // EXPENSES uses above and for the same reason: clearing the field prunes the
+  // clause, so nothing already rendered changes shape.
+  //
+  // WHY A CLAUSE AT ALL. Veronika carries no annual liability policy and on the
+  // economics may never want one, so cover is bought per event. That means the
+  // decision often lands AFTER a contract is signed, because that is when a
+  // venue finally sends its vendor packet, or when a client asks for drone
+  // footage they never mentioned. Without this clause the only options at that
+  // point are absorbing the cost or reopening a signed agreement over sixty
+  // dollars.
+  //
+  // THE CAP IS $150 and the figure is not arbitrary. A Full Frame event policy
+  // is $59 with $5 more for unlimited additional insureds, and drone liability
+  // for an afternoon runs about $60. The one case that stacks is a venue
+  // demanding a certificate for a wedding that also wants aerials, landing near
+  // $125. Anything above that is foreseeable and belongs in a quote.
+  //
+  // The last bullet is what makes this fair rather than a blank cheque: cover
+  // Vero buys for her own peace of mind, that neither the venue nor the Client
+  // asked for, is her cost and can never be passed on.
+  {
+    title: 'EVENT INSURANCE',
+    optional: true,
+    requireVariables: ['insurance_cap'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'Some venues require the Photographer to carry liability insurance naming the venue, and some additions to the session, such as aerial or drone coverage, require insurance beyond the Photographer\u2019s usual cover.',
+      },
+      {
+        kind: 'text',
+        text: 'Where the need for such insurance becomes known after this Agreement is signed, whether because the venue tells the Client or the Photographer, or because the Client requests something that requires it, the Photographer may obtain that insurance and add what it costs to the balance, up to {{insurance_cap}}.',
+      },
+      {
+        kind: 'bullets',
+        items: [
+          'The amount charged is what the Photographer actually paid, at cost, with nothing added.',
+          'It is itemised in the Client portal, with the reason and the policy details, before it is due.',
+          'Any amount above {{insurance_cap}} is quoted to the Client and bought only once they agree to it.',
+          'Insurance the Photographer chooses to carry for her own reasons, which neither the venue nor the Client has asked for, is her own cost and is never charged to the Client.',
+        ],
+      },
+    ],
+  },
   // Optional, unnumbered, gated on BOTH travel variables. A booking inside the
   // included radius prunes it away, so every session contract already out
   // there re-renders exactly as it did. The wedding copy of this section
@@ -1409,6 +1520,27 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
     defaultValue: '$150 per hour',
     helpText:
       'Billed only if the session runs long at the client\u2019s request. Clearing this removes the whole clause, including the one covering parking and entry fees.',
+  },
+  /**
+   * The ceiling on insurance the Photographer may buy after signing and pass
+   * on at cost. $150 because a Full Frame event policy is $59, unlimited
+   * additional insureds are $5 more, and drone liability for an afternoon is
+   * about $60: the one realistic case that stacks is a venue demanding a
+   * certificate for a wedding that also wants aerials, near $125. Above that
+   * the cost is foreseeable and belongs in a quote, not in a clause.
+   *
+   * Defaulted rather than left blank, unlike overtime_rate, because this
+   * protects against a cost nobody can predict at signing and the safe
+   * direction is on. Clearing it prunes the whole clause, which is how a
+   * booking opts out.
+   */
+  {
+    key: 'insurance_cap',
+    label: 'Event Insurance Cap',
+    labelRu: '\u041b\u0438\u043c\u0438\u0442 \u043d\u0430 \u0441\u0442\u0440\u0430\u0445\u043e\u0432\u043a\u0443',
+    defaultValue: '$150',
+    helpText:
+      'The most the client can be charged for insurance bought after signing, at cost, when a venue requires it or they ask for something that needs it. Clearing this removes the whole clause.',
   },
   {
     key: 'payment_methods',

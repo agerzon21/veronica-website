@@ -49,7 +49,7 @@ import { recomputePaidToDate } from '../_payments.js';
  * so a typo comes back as a 400 naming the valid values rather than a 500
  * from a constraint violation. Each one is a label the client reads.
  */
-const CHARGE_REASONS = new Set(['overtime', 'expense', 'other']);
+const CHARGE_REASONS = new Set(['overtime', 'expense', 'insurance', 'other']);
 
 /**
  * A date input sends 'YYYY-MM-DD', an API caller may send a full ISO string,

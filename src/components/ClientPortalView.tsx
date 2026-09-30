@@ -201,6 +201,10 @@ const formatDate = (iso: string) => {
 const CHARGE_REASON_LABELS: Record<string, string> = {
   overtime: 'Additional time',
   expense: 'Expense',
+  // Named rather than left to fall through to 'Additional charge'. The whole
+  // point of recording a policy is that the client can see what the money
+  // bought, and the note under this carries the venue and the policy number.
+  insurance: 'Event insurance',
   other: 'Additional charge',
 };
 

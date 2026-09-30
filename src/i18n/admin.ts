@@ -2360,6 +2360,61 @@ const dict = {
     // Every one of these lines is printed in the client's own portal, which
     // is why the note is guided and required rather than optional.
     statCharges: { en: 'Charges', ru: 'Доплаты' },
+
+    // Per-event insurance. There is no annual policy, so cover is bought for
+    // one event at a time and recorded against the booking it belongs to.
+    insTitle: { en: 'Event insurance', ru: 'Страховка на съёмку' },
+    insNone: { en: 'Not needed for this booking', ru: 'Не требуется для этой съёмки' },
+    insNeeded: { en: 'Needed, not bought yet', ru: 'Нужна, ещё не куплена' },
+    insPurchased: { en: 'Purchased', ru: 'Куплена' },
+    insDeclined: { en: 'Considered, not bought', ru: 'Рассмотрено, не куплена' },
+    insFlag: { en: 'This booking needs insurance', ru: 'Для этой съёмки нужна страховка' },
+    insTrigger: { en: 'Why', ru: 'Причина' },
+    insTriggerVenue: { en: 'The venue requires it', ru: 'Требует площадка' },
+    insTriggerDrone: { en: 'Drone is being flown', ru: 'Будет съёмка с дрона' },
+    insTriggerClient: { en: 'The client asked for something that needs it', ru: 'Клиент попросил то, что этого требует' },
+    insTriggerOwn: { en: "Vero's own decision", ru: 'Решение Веро' },
+    insNote: { en: 'Reason, in your words', ru: 'Причина своими словами' },
+    insNotePlaceholder: {
+      en: 'Who told you, and what they need. The client reads this on their invoice.',
+      ru: 'Кто сообщил и что требуется. Клиент увидит это в счёте.',
+    },
+    insNoteRequired: {
+      en: 'Add a reason. The client sees it on their invoice, and you will want it in six months.',
+      ru: 'Укажите причину. Клиент увидит её в счёте, и она понадобится вам позже.',
+    },
+    insAdditionalInsured: { en: 'Name on the certificate', ru: 'Имя в сертификате' },
+    insAdditionalInsuredHelp: {
+      en: "The venue's exact legal name. Getting it wrong is what gets a certificate rejected.",
+      ru: 'Точное юридическое название площадки. Ошибка здесь приводит к отказу.',
+    },
+    insEstimate: { en: 'Estimate shown to client', ru: 'Ориентировочная сумма для клиента' },
+    insBillable: { en: 'Charge this to the client', ru: 'Выставить клиенту' },
+    insBillableHelp: {
+      en: 'The contract only allows charging for cover the venue required or the client caused. Cover you chose to buy is yours.',
+      ru: 'Договор разрешает выставлять счёт только за страховку, которую потребовала площадка или вызвал клиент.',
+    },
+    insBuy: { en: 'Record the policy', ru: 'Записать полис' },
+    insActual: { en: 'What it actually cost', ru: 'Фактическая стоимость' },
+    insProvider: { en: 'Provider', ru: 'Страховщик' },
+    insPolicyRef: { en: 'Policy number', ru: 'Номер полиса' },
+    insDocumentUrl: { en: 'Link to the policy document', ru: 'Ссылка на документ' },
+    insDocumentHelp: {
+      en: 'Upload the PDF to Drive and paste the link, so you both know exactly what is covered.',
+      ru: 'Загрузите PDF на Drive и вставьте ссылку, чтобы всем было понятно, что покрыто.',
+    },
+    insSave: { en: 'Save', ru: 'Сохранить' },
+    insClear: { en: 'Remove insurance from this booking', ru: 'Убрать страховку с этой съёмки' },
+    insCharged: { en: 'Added to their balance', ru: 'Добавлено к сумме к оплате' },
+    insNotCharged: { en: 'Absorbed, not charged', ru: 'За свой счёт, не выставлено' },
+    insPrematureContract: {
+      en: 'The contract is not signed yet. Buying now risks paying for a booking that never happens.',
+      ru: 'Договор ещё не подписан. Покупка сейчас рискует оплатой несостоявшейся съёмки.',
+    },
+    insPrematureRetainer: {
+      en: 'The retainer has not been paid yet. Buying now risks paying for a booking that never happens.',
+      ru: 'Предоплата ещё не внесена. Покупка сейчас рискует оплатой несостоявшейся съёмки.',
+    },
     addACharge: { en: 'Add a Charge', ru: 'Добавить доплату' },
     addAChargeHelp: {
       en: 'Extra time, or a cost you paid on the day. The client sees every line with its reason.',
@@ -2369,6 +2424,7 @@ const dict = {
     reasonOvertime: { en: 'Extra time', ru: 'Переработка' },
     reasonExpense: { en: 'Expense', ru: 'Расход' },
     reasonOther: { en: 'Other', ru: 'Другое' },
+    reasonInsurance: { en: 'Event insurance', ru: 'Страховка съёмки' },
     chargeNoteLabel: { en: 'Note', ru: 'Заметка' },
     // One example per reason, so there is always the right shape of answer
     // on screen instead of an empty box.

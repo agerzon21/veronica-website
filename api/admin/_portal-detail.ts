@@ -50,6 +50,21 @@ type PortalRow = {
   delivery_email_sent_at: string | null;
   invite_sent_at: string | null;
   setup_token_expires_at: string | null;
+  // Per-event insurance. See migration 047 and api/admin/_portal-insurance.ts:
+  // cover is bought per event because there is no annual policy, so what was
+  // actually bought for THIS booking lives on the booking.
+  insurance_status: string;
+  insurance_trigger: string | null;
+  insurance_note: string | null;
+  insurance_billable: boolean;
+  insurance_estimate: string | null;
+  insurance_actual: string | null;
+  insurance_provider: string | null;
+  insurance_policy_ref: string | null;
+  insurance_document_url: string | null;
+  insurance_additional_insured: string | null;
+  insurance_purchased_at: string | null;
+  insurance_charge_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -113,6 +128,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              contract_total_amount, contract_retainer_amount, paid_to_date,
              payment_plan_enabled,
              setup_token, setup_token_expires_at,
+             insurance_status, insurance_trigger, insurance_note, insurance_billable,
+             insurance_estimate, insurance_actual, insurance_provider, insurance_policy_ref,
+             insurance_document_url, insurance_additional_insured, insurance_purchased_at,
+             insurance_charge_id,
              created_at, updated_at
       from client_portals
       where id = ${id}

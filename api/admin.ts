@@ -19,6 +19,7 @@ import portalUpdateHandler from './admin/_portal-update.js';
 import portalDeliverHandler from './admin/_portal-deliver.js';
 import portalDeleteHandler from './admin/_portal-delete.js';
 import paymentLogHandler from './admin/_payment-log.js';
+import portalInsuranceHandler from './admin/_portal-insurance.js';
 import resendInviteHandler from './admin/_resend-invite.js';
 import portalPdfHandler from './admin/_portal-pdf.js';
 import instagramStatusHandler from './admin/_instagram-status.js';
@@ -91,6 +92,7 @@ const HANDLERS: Record<
   'portal-deliver': portalDeliverHandler,
   'portal-delete': portalDeleteHandler,
   'payment-log': paymentLogHandler,
+  'portal-insurance': portalInsuranceHandler,
   'resend-invite': resendInviteHandler,
   'portal-pdf': portalPdfHandler,
   'instagram-status': instagramStatusHandler,

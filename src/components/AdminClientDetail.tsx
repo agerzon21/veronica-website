@@ -30,6 +30,7 @@ import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaTimes from '../icons/fa/FaTimes';
 import CTAButton from './ui/CTAButton';
+import AdminClientInsurance, { type InsuranceState } from './AdminClientInsurance';
 import AdminBackButton from './ui/AdminBackButton';
 import {
   CONTRACT_TEMPLATES,
@@ -114,6 +115,20 @@ interface PortalDetail {
   delivery_email_sent_at: string | null;
   invite_sent_at: string | null;
   client_has_password: boolean;
+  // Per-event insurance. There is no annual policy, so what was bought for
+  // THIS booking lives on the booking. See AdminClientInsurance.
+  insurance_status?: string;
+  insurance_trigger?: string | null;
+  insurance_note?: string | null;
+  insurance_billable?: boolean;
+  insurance_estimate?: string | number | null;
+  insurance_actual?: string | number | null;
+  insurance_provider?: string | null;
+  insurance_policy_ref?: string | null;
+  insurance_document_url?: string | null;
+  insurance_additional_insured?: string | null;
+  insurance_purchased_at?: string | null;
+  insurance_charge_id?: string | null;
 }
 
 interface PaymentEntry {
@@ -1320,6 +1335,23 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 payment log with its own form and its own list. Every line here
                 is printed in the client's portal with its reason and note. */}
             <AddChargeForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
+
+            {/* Event insurance. Sits with the charges because a billable
+                policy becomes one, and because the decision to buy is made
+                against the same numbers: what the booking is worth and what
+                has actually been paid. */}
+            <AdminClientInsurance
+              portalId={portalId}
+              adminPassword={adminPassword}
+              state={portal as unknown as InsuranceState}
+              contractSigned={portal?.contract_status === 'signed'}
+              retainerPaid={
+                Number(portal?.contract_retainer_amount ?? 0) > 0
+                  ? Number(portal?.paid_to_date ?? 0) >= Number(portal?.contract_retainer_amount ?? 0)
+                  : Number(portal?.paid_to_date ?? 0) > 0
+              }
+              onSaved={reload}
+            />
 
             {charges.length > 0 && (
               <Box>
@@ -3703,7 +3735,9 @@ function ChargeRow({
       ? t.clientDetail.reasonOvertime
       : entry.reason === 'expense'
         ? t.clientDetail.reasonExpense
-        : t.clientDetail.reasonOther;
+        : entry.reason === 'insurance'
+          ? t.clientDetail.reasonInsurance
+          : t.clientDetail.reasonOther;
 
   // Carried the identical silent-failure bug as PaymentRow above, for the
   // identical reason: it was written by copying that handler. Same treatment,
