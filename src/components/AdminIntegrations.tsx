@@ -1,5 +1,5 @@
-import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, useToast } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, Input, useToast } from '@chakra-ui/react';
+import { useCallback, useEffect, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaCopy from '../icons/fa/FaCopy';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
@@ -59,6 +59,7 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
         </Text>
       </VStack>
 
+      <SalesTaxLicenseCard adminPassword={adminPassword} />
       <InstagramCard adminPassword={adminPassword} />
       <WhatsAppCard adminPassword={adminPassword} />
       <RebuildCard adminPassword={adminPassword} />
@@ -1004,6 +1005,211 @@ function StatusDetail({ status }: { status: IgStatus }) {
         </Text>
       )}
     </VStack>
+  );
+}
+
+/**
+ * The PA sales tax licence.
+ *
+ * Photography is taxable in Pennsylvania whether the photographs arrive as
+ * prints or as a download link (61 Pa. Code 32.37), so selling shoots to PA
+ * clients requires a Sales, Use and Hotel Occupancy Tax licence. It costs
+ * nothing and it lapses after five years, which is precisely the interval
+ * that guarantees nobody remembers it: long enough that the confirmation
+ * email is unfindable, short enough to matter.
+ *
+ * Tracked here for the same reason the Instagram token is, and with the same
+ * status vocabulary, so one glance at this screen reads the same way for
+ * both. The renewal itself is automatic and free, but only while every return
+ * has been filed, which is the part worth saying out loud: a licence lapses
+ * because returns were missed, not because a renewal was.
+ */
+interface LicenseState {
+  status: 'fresh' | 'aging' | 'overdue' | 'expired' | 'unknown';
+  daysUntilExpiry?: number;
+  license: { number: string; issuedAt: string; expiresAt: string; state: string; note?: string } | null;
+}
+
+function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
+  const { t } = useAdminLang();
+  const [state, setState] = useState<LicenseState | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [number, setNumber] = useState('');
+  const [issuedAt, setIssuedAt] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/license-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setState(data);
+        if (data.license) {
+          setNumber(data.license.number);
+          setIssuedAt(data.license.issuedAt);
+          setNote(data.license.note ?? '');
+        }
+      }
+    } catch {
+      /* A card that cannot load is silent, not broken: the rest of the screen still works. */
+    }
+  }, [adminPassword]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function save() {
+    setErr('');
+    setBusy(true);
+    try {
+      const res = await fetch('/api/admin/license-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          action: 'save',
+          number,
+          issued_at: issuedAt,
+          note,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setState(data);
+        setEditing(false);
+      } else {
+        setErr(data.error || 'Could not save');
+      }
+    } catch {
+      setErr('Network error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const lic = state?.license;
+  const days = state?.daysUntilExpiry;
+  const scheme =
+    state?.status === 'fresh'
+      ? 'green'
+      : state?.status === 'aging'
+        ? 'orange'
+        : state?.status === 'unknown'
+          ? 'gray'
+          : 'red';
+
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderRadius="sm"
+      p={{ base: 5, md: 7 }}
+      maxW="720px"
+      mt={6}
+    >
+      <HStack justify="space-between" mb={4}>
+        <Text as="h2" fontSize="md" fontWeight="400" color="gray.800" m={0}>
+          {t.integrations.licTitle}
+        </Text>
+        {lic && (
+          <Badge colorScheme={scheme}>
+            {state?.status === 'expired'
+              ? t.integrations.licExpired
+              : `${days} ${t.integrations.licDaysLeft}`}
+          </Badge>
+        )}
+      </HStack>
+
+      {!lic && !editing && (
+        <Text fontSize="sm" color="gray.600" mb={4}>
+          {t.integrations.licNone}
+        </Text>
+      )}
+
+      {lic && !editing && (
+        <VStack align="stretch" spacing={1} mb={4}>
+          <Text fontSize="sm">
+            <strong>{t.integrations.licNumber}:</strong> {lic.number} ({lic.state})
+          </Text>
+          <Text fontSize="sm" color="gray.600">
+            {t.integrations.licIssued} {lic.issuedAt} · {t.integrations.licExpires} {lic.expiresAt}
+          </Text>
+          {lic.note && (
+            <Text fontSize="sm" color="gray.500">
+              {lic.note}
+            </Text>
+          )}
+        </VStack>
+      )}
+
+      {editing && (
+        <VStack align="stretch" spacing={3} mb={4}>
+          <Box>
+            <Text fontSize="sm" mb={1}>
+              {t.integrations.licNumber}
+            </Text>
+            <Input size="sm" value={number} onChange={(e) => setNumber(e.target.value)} />
+          </Box>
+          <Box>
+            <Text fontSize="sm" mb={1}>
+              {t.integrations.licIssued}
+            </Text>
+            <Input
+              size="sm"
+              type="date"
+              value={issuedAt}
+              onChange={(e) => setIssuedAt(e.target.value)}
+            />
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              {t.integrations.licExpires}: {issuedAt ? `${Number(issuedAt.slice(0, 4)) + 5}${issuedAt.slice(4)}` : '—'}
+            </Text>
+          </Box>
+          <Box>
+            <Text fontSize="sm" mb={1}>
+              {t.integrations.licNote}
+            </Text>
+            <Input
+              size="sm"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={t.integrations.licNotePlaceholder}
+            />
+          </Box>
+          {err && (
+            <Text fontSize="sm" color="red.600">
+              {err}
+            </Text>
+          )}
+        </VStack>
+      )}
+
+      <Text fontSize="xs" color="gray.500" mb={3}>
+        {t.integrations.licRenewNote}
+      </Text>
+
+      {editing ? (
+        <HStack spacing={3}>
+          <CTAButton size="sm" isDisabled={busy || !number || !issuedAt} onClick={save}>
+            {t.integrations.licSave}
+          </CTAButton>
+          <CTAButton size="sm" variant="ghost" isDisabled={busy} onClick={() => setEditing(false)}>
+            {t.common.cancel}
+          </CTAButton>
+        </HStack>
+      ) : (
+        <CTAButton size="sm" onClick={() => setEditing(true)}>
+          {lic ? t.common.edit : t.integrations.licSave}
+        </CTAButton>
+      )}
+    </Box>
   );
 }
 

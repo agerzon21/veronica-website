@@ -2843,6 +2843,32 @@ const dict = {
   },
 
   integrations: {
+    // ─── PA sales tax licence ─────────────────────────
+    // Photography is taxable in Pennsylvania however the photos are handed
+    // over, so selling to PA clients needs a licence. It runs five years,
+    // which is exactly long enough for everyone to forget it exists.
+    licTitle: { en: 'PA sales tax licence', ru: 'Лицензия на налог с продаж (PA)' },
+    licNone: {
+      en: 'No licence recorded. Photography is taxable in Pennsylvania, so selling to PA clients needs one.',
+      ru: 'Лицензия не указана. Фотоуслуги в Пенсильвании облагаются налогом с продаж.',
+    },
+    licNumber: { en: 'Licence number', ru: 'Номер лицензии' },
+    licIssued: { en: 'Issued', ru: 'Выдана' },
+    licExpires: { en: 'Expires', ru: 'Истекает' },
+    licNote: { en: 'Note', ru: 'Заметка' },
+    licNotePlaceholder: {
+      en: 'Which myPATH login it lives under, whether a voluntary disclosure came first.',
+      ru: 'Под каким входом myPATH, была ли добровольная декларация.',
+    },
+    licSave: { en: 'Save licence', ru: 'Сохранить' },
+    licDaysLeft: { en: 'days left', ru: 'дней осталось' },
+    licExpired: { en: 'EXPIRED', ru: 'ИСТЕКЛА' },
+    licRenewNote: {
+      en: 'Renewal is free and automatic every five years, but only while every return is filed and nothing is owed. A licence lapses because returns were missed, not because a renewal was.',
+      ru: 'Продление бесплатное и автоматическое раз в пять лет, но только если все декларации поданы и нет задолженности.',
+    },
+    licSuperOnly: { en: 'Super admin only', ru: 'Только для супер-администратора' },
+
     // ─── Config health ────────────────────────────────
     configTitle: { en: 'Configuration', ru: 'Конфигурация' },
     configSubtitle: {
