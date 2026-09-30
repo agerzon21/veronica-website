@@ -602,6 +602,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           toolCall.type === 'function' &&
           (toolCall.function.name === 'upsert_knowledge' ||
             toolCall.function.name === 'delete_knowledge' ||
+            // update_draft belongs here and was missing, which cost an
+            // evening. A refused draft update leaves the Reply tab holding
+            // the OLD text while the chat may be showing a new one, so Vero
+            // can read one reply and send a different one. And when the
+            // refusal is the only thing that happened in a turn, the model
+            // sometimes ends with no prose at all: she gets an empty bubble
+            // and no idea anything was rejected. That is exactly what she
+            // saw when the insurance gate started refusing the very wording
+            // she had asked for three times.
+            toolCall.function.name === 'update_draft' ||
             toolCall.function.name === 'send_reply') &&
           toolResult &&
           typeof toolResult === 'object' &&
@@ -862,6 +872,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ),
         ),
       );
+
+    /**
+     * A turn that said nothing at all.
+     *
+     * isDisplayableTurn drops empty content, so a round that ended in a
+     * refused tool call and no prose rendered as a blank bubble with nothing
+     * in it. Vero reasonably read that as the panel being broken. Any
+     * failures are now surfaced above; this is the backstop for the case
+     * where there is genuinely nothing to show.
+     */
+    if (!finalReply.trim() && assistantTurns.length === 0) {
+      const blank =
+        language === 'ru'
+          ? 'Ничего не получилось сформулировать. Попробуй переформулировать запрос.'
+          : 'That turn produced nothing. Try rephrasing what you want changed.';
+      assistantTurns.push({ role: 'assistant' as const, content: blank });
+      finalReply = blank;
+    }
 
     return res.status(200).json({
       success: true,

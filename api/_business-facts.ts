@@ -140,6 +140,29 @@ export function businessFactsForCustomerReplies(): string {
     sections.push(`DRONE\n- ${drone}`);
   }
 
+  /**
+   * INSURANCE, as actually decided on 2026-09-30.
+   *
+   * Not in wedding-page.json because it is not published on the site, and
+   * hard-coded rather than left to ai_context because it is a commitment made
+   * to customers that must not drift: a venue reads the certificate.
+   *
+   * The position is per-event rather than annual for a real reason. An annual
+   * policy costs roughly $530 and cannot cover gear abroad; an event policy is
+   * $59 plus $5 for unlimited additional insureds, and Veronika is out of the
+   * country from November to March. Buying per event also means the cover
+   * always exists when a venue asks and never sits idle when it does not.
+   */
+  sections.push(
+    [
+      'INSURANCE',
+      '- We arrange event liability insurance for a booking whenever it is needed, including whenever a venue requires it.',
+      '- We can provide a certificate of insurance naming the venue as an additional insured ahead of the date. If the venue has specific requirements, ask the client to send them and we match them.',
+      '- There is no standing annual policy, so never say we "have" or "carry" insurance as a present fact with no qualifier, and never say we do not have any. Both are wrong. It is arranged per event.',
+      '- Never quote what the insurance costs to a client unless Vero has confirmed that figure for that booking.',
+    ].join('\n'),
+  );
+
   // What Vero needs before a wedding, in her own published words. This is the
   // list the reply should be working through when it asks its one follow-up
   // question, rather than a list the model improvises.
@@ -213,33 +236,59 @@ export function forbiddenClaims(text: string): ForbiddenClaim[] {
   }
 
   /**
-   * Any claim about insurance, in EITHER direction.
+   * Insurance claims that are WRONG, in either direction.
    *
-   * The unknowns block already said to defer on insurance, and the model
-   * instead wrote "I currently do not have liability insurance" to a
-   * prospective couple. Nobody had told it that. It reasoned from the absence
-   * of insurance in its facts to the absence of insurance in the world, and
-   * stated the conclusion as fact. That is the photo-count failure with the
-   * sign flipped, and it is worse: an invented deliverable oversells, an
-   * invented denial loses the booking outright and is not even true.
+   * This started as a blanket ban and that was a mistake I made and watched
+   * cost an evening. The model had written "I currently do not have liability
+   * insurance" to a prospective couple, inferring it from the absence of
+   * insurance in its knowledge base, so I blocked every sentence containing
+   * the word. Then Alex settled the actual position, per-event cover bought
+   * as each booking needs it, and asked three times for the reply to say so.
+   * Every truthful phrasing was refused by this function, the only wording
+   * that passed was "I will follow up personally", and that is exactly what
+   * it kept producing. A gate that only permits silence teaches silence.
    *
-   * So neither direction passes. Coverage is a contractual commitment whose
-   * status changes with what has actually been bought, and it is Vero's to
-   * state, not a thing to infer from a knowledge base.
+   * So it now blocks the two things that are actually false, and gets out of
+   * the way of the one that is true:
+   *
+   *   DENIAL      - "we do not have insurance". Loses the booking, and is not
+   *                 even correct: cover is arranged per event.
+   *   STANDING    - "we carry liability insurance", unqualified, which reads
+   *                 as a policy sitting in a drawer right now. There isn't
+   *                 one, and a venue asking for a certificate today would get
+   *                 nothing.
+   *
+   * Anything framed per event passes, because that is the truth.
    */
-  const INSURANCE =
-    /\b(?:liability|general\s+liability|public\s+liability)?\s*insur(?:ance|ed)\b[^.!?]*|[^.!?]*\binsur(?:ance|ed)\b[^.!?]*/gi;
-  const seenInsurance = new Set<string>();
-  for (const m of text.matchAll(INSURANCE)) {
-    const frag = m[0].trim();
-    if (!frag || seenInsurance.has(frag)) continue;
-    seenInsurance.add(frag);
-    hits.push({
-      what: 'A claim about insurance cover',
-      found: frag.length > 120 ? `${frag.slice(0, 120)}…` : frag,
-      instead:
-        'Never state that this business does or does not carry insurance, and never infer it from what is missing here. Coverage depends on what has actually been bought for a given event and is Vero\'s to confirm. Say she will follow up personally on insurance and certificates.',
-    });
+  const PER_EVENT =
+    /\b(per[- ]event|each event|event liability|event insurance|as needed|as required|when (?:the |a )?venue|arrange|arranged|obtain|obtained|purchase|purchased|for (?:each|every|your) (?:event|wedding|booking|shoot))\b/i;
+  const DENIAL = /\b(do(?:es)?\s*n[o']t|don't|doesn't|no|not|never|unable|cannot|can't|won't|without|lack)\b/i;
+  const STANDING =
+    /\b(?:we|i|she|vero)\s+(?:currently\s+)?(?:have|has|carry|carries|hold|holds|maintain|maintains|am|is|are)\b/i;
+
+  // Sentence by sentence, so one clean sentence is not condemned by another.
+  for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+    if (!/\binsur(?:ance|ed|er)\b/i.test(sentence)) continue;
+    const frag = sentence.trim();
+    if (!frag) continue;
+
+    if (DENIAL.test(frag)) {
+      hits.push({
+        what: 'A statement that this business has no insurance',
+        found: frag.length > 140 ? `${frag.slice(0, 140)}…` : frag,
+        instead:
+          'That is not true and it loses the booking. Cover is arranged per event, as each venue or booking requires it. Say that we arrange event liability insurance as needed and can provide a certificate naming their venue ahead of the date.',
+      });
+      continue;
+    }
+    if (STANDING.test(frag) && !PER_EVENT.test(frag)) {
+      hits.push({
+        what: 'A claim to be carrying insurance right now',
+        found: frag.length > 140 ? `${frag.slice(0, 140)}…` : frag,
+        instead:
+          'There is no standing annual policy, so an unqualified "we carry liability insurance" would fail the moment a venue asked for a certificate today. Frame it per event: we arrange event liability insurance as each booking needs it, and provide a certificate naming the venue ahead of the date.',
+      });
+    }
   }
 
   /**
@@ -322,6 +371,6 @@ export function unknownsForCustomerReplies(): string {
     '- RAW FILES. They are not included, in any package. This is not negotiable by you.',
     '- DRONE COVERAGE AS A GUARANTEE. It depends on flight rules, airspace and weather, so it is a bonus and never a promise, including on full-day packages where it is normally included.',
     '- SECOND SHOOTER OR VIDEOGRAPHER AVAILABILITY. We do not currently offer videography. Do not imply video is available.',
-    '- ANYTHING ABOUT INSURANCE, CONTRACTS, CANCELLATION TERMS OR REFUNDS beyond what is written in the facts above. These are money and legal commitments. Say Vero will follow up personally.',
+    '- CONTRACT TERMS, CANCELLATION OR REFUNDS beyond what is written in the facts above. These are money and legal commitments. Say Vero will follow up personally. Insurance is NOT on this list any more: see INSURANCE in the facts above and say what it says.',
   ].join('\n');
 }

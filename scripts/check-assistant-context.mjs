@@ -111,9 +111,27 @@ check(
   /export function forbiddenClaims/.test(facts),
   'forbiddenClaims is gone from api/_business-facts.ts. Without it the only thing stopping an invented photo count is a prompt instruction, which has already failed twice in production.',
 );
+// Insurance: block the two WRONG directions, allow the true one.
+// A blanket ban was tried and had to be undone. It refused every truthful
+// phrasing of the per-event position, leaving "I will follow up personally"
+// as the only wording that passed, so that is what the assistant produced,
+// three times in a row, while being asked for something else. A gate that
+// only permits silence teaches silence.
 check(
-  /A claim about insurance cover/.test(facts),
-  'The insurance detector is gone. The model once told a prospective customer "I currently do not have liability insurance", inferred purely from the fact not being in its knowledge base. Neither direction may pass.',
+  /A statement that this business has no insurance/.test(facts),
+  'The insurance-denial check is gone. The model once told a prospective customer "I currently do not have liability insurance", inferred purely from the fact not being in its knowledge base.',
+);
+check(
+  /A claim to be carrying insurance right now/.test(facts),
+  'The standing-policy check is gone. There is no annual policy, so an unqualified "we carry liability insurance" fails the moment a venue asks for a certificate.',
+);
+check(
+  /const PER_EVENT\s*=/.test(facts),
+  'The PER_EVENT allowance is gone, which means the gate is blanket-blocking insurance again and the true wording cannot be written.',
+);
+check(
+  /INSURANCE\b[\s\S]{0,400}arrange event liability insurance/.test(facts),
+  'The decided insurance position is no longer in the published facts. Without it the assistant has a gate telling it what it cannot say and nothing telling it what it can.',
 );
 check(
   /The retainer alone described as booking the date/.test(facts),
