@@ -1,0 +1,129 @@
+#!/usr/bin/env node
+/**
+ * Guard: the assistant must never again reply from an empty context.
+ *
+ * WHY THIS EXISTS
+ * A draft went to a real prospective couple stating they would receive
+ * "500-700 professionally edited photos". That number appears nowhere on the
+ * site and nowhere in the contracts, which say the image count is agreed
+ * separately. The same assistant, asked what was still outstanding before a
+ * contract, asked the CUSTOMER for details settled earlier in the same thread.
+ *
+ * Neither was a missing rule. The system prompt already said "only cite these,
+ * never invent details". They happened because:
+ *
+ *   - KNOWN FACTS was a hand-maintained table that had drifted from the site,
+ *     so the model had a gap and filled it from its training data;
+ *   - the reply path read the last few messages and nothing else, while the
+ *     summariser's output sat unread in conversations.summary_json;
+ *   - read_thread paged the OLDEST 40 messages, hiding the recent ones.
+ *
+ * Each fix is one line away from being undone by a well-meaning edit, and none
+ * of them fails loudly: the assistant keeps answering, just worse. So this
+ * checks the wiring is still in place. Source-level on purpose, so it runs in
+ * plain node with no build step, same as check-api-imports.mjs.
+ *
+ * Run: node scripts/check-assistant-context.mjs
+ */
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const read = (p) => readFileSync(join(root, p), 'utf8');
+
+const reply = read('api/_ai-reply.ts');
+const assistant = read('api/admin/_assistant-chat.ts');
+const facts = read('api/_business-facts.ts');
+const wedding = JSON.parse(read('src/data/wedding-page.json'));
+
+const failures = [];
+const check = (ok, msg) => { if (!ok) failures.push(msg); };
+
+// ── The published facts reach both prompts ─────────────────────────────
+check(
+  reply.includes('businessFactsForCustomerReplies()'),
+  'api/_ai-reply.ts no longer renders businessFactsForCustomerReplies(). The customer reply prompt is back to a hand-maintained knowledge base that can drift from the website.',
+);
+check(
+  reply.includes('unknownsForCustomerReplies()'),
+  'api/_ai-reply.ts no longer renders unknownsForCustomerReplies(). This is the block that stops the model inventing a photo count.',
+);
+check(
+  assistant.includes('businessFactsForCustomerReplies()') &&
+    assistant.includes('unknownsForCustomerReplies()'),
+  'api/admin/_assistant-chat.ts no longer renders the published facts or the unknowns. Vero drafts customer replies through this prompt, so it needs both.',
+);
+
+// ── The unknowns still name the failure they exist for ─────────────────
+check(
+  /NUMBER OF PHOTOS DELIVERED/.test(facts),
+  'api/_business-facts.ts no longer declares the image-count gap. Without it a model answers "how many photos" from its training data, which is how 500-700 reached a customer.',
+);
+check(
+  /RAW FILES/.test(facts) && /AVAILABILITY ON A DATE/.test(facts),
+  'api/_business-facts.ts is missing one of the other never-state facts (RAW files, date availability).',
+);
+
+// ── The thread summary is wired into every generation path ─────────────
+check(
+  reply.includes('export async function conversationSummaryBlock'),
+  'conversationSummaryBlock is gone from api/_ai-reply.ts. Without it the model cannot see anything older than the history window and will re-ask settled questions.',
+);
+const summaryCalls = (reply.match(/conversationSummaryBlock\(/g) ?? []).length;
+check(
+  summaryCalls >= 3,
+  `conversationSummaryBlock is called ${summaryCalls - 1} time(s) but should be called on BOTH the on-demand draft path and the inbound auto-reply path (plus its declaration).`,
+);
+const generateCalls = (reply.match(/await generateReply\(\{/g) ?? []).length;
+const extraPassed = (reply.match(/extraSystemContext[,:]/g) ?? []).length;
+check(
+  extraPassed >= generateCalls,
+  `${generateCalls} generateReply() call site(s) but only ${extraPassed} pass extraSystemContext. A call site without it replies with no portal state and no summary.`,
+);
+
+// ── The history window stays wide enough to hold a negotiation ─────────
+const windowMatch = reply.match(/const HISTORY_CONTEXT_MESSAGES = (\d+)/);
+check(
+  windowMatch && Number(windowMatch[1]) >= 24,
+  `HISTORY_CONTEXT_MESSAGES is ${windowMatch ? windowMatch[1] : 'missing'}. It was 12, which is about six exchanges, and booking threads run far longer.`,
+);
+
+// ── read_thread pages the NEWEST messages, not the oldest ──────────────
+const readThread = assistant.slice(assistant.indexOf("if (name === 'read_thread')"));
+const body = readThread.slice(0, readThread.indexOf("if (name === 'update_draft')"));
+check(
+  /ORDER BY sent_at DESC LIMIT/.test(body),
+  'read_thread is paging with ORDER BY sent_at ASC again. On any thread longer than the limit that returns the OLDEST messages and hides the recent ones, including the message being asked about.',
+);
+check(
+  /established/.test(body) && /still_missing/.test(body),
+  'read_thread no longer returns `established` / `still_missing`. That is what stops the assistant asking a customer for details the thread already settled.',
+);
+
+// ── The generated facts still match the site ───────────────────────────
+const prices = (wedding.packages ?? []).map((p) => p.price).filter(Boolean);
+check(
+  prices.length >= 3,
+  `src/data/wedding-page.json has ${prices.length} package price(s). The facts block is generated from it, so a shape change here silently empties the assistant's pricing.`,
+);
+for (const q of [
+  'Do you require a deposit?',
+  'What exactly do we receive?',
+  'When and how do we get our photos?',
+]) {
+  check(
+    (wedding.faq ?? []).some((f) => f.q === q),
+    `FAQ entry "${q}" was renamed or removed. api/_business-facts.ts matches on its wording, so the assistant has quietly lost that fact. Update the needle in faqAnswer().`,
+  );
+}
+
+if (failures.length) {
+  console.error('assistant context check FAILED:\n');
+  for (const f of failures) console.error(`  - ${f}\n`);
+  process.exit(1);
+}
+console.log(
+  `assistant context check: published facts wired into both prompts, summary on all reply paths, history window ${windowMatch[1]}, read_thread paging newest-first.`,
+);

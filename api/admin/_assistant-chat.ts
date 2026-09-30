@@ -54,6 +54,10 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { coreRulesForAssistant } from '../_reply-core-rules.js';
+import {
+  businessFactsForCustomerReplies,
+  unknownsForCustomerReplies,
+} from '../_business-facts.js';
 import OpenAI from 'openai';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
@@ -982,7 +986,10 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'read_thread',
       description:
-        'Read the full message history of one conversation, oldest first, so you can draft a reply that actually responds to what the customer said. Always call this before drafting a reply.',
+        'Read one conversation: the most recent 40 messages in reading order, PLUS what the thread has already settled. Always call this before drafting a reply or answering any question about a booking. ' +
+        'Read these fields before the transcript, not after: `established` holds the booking details the thread has already agreed (date, location, names, amount, hours), `already_covered` is what has been discussed, `still_missing` is the ONLY list of things it is reasonable to ask the customer for, and `vero_decides` is for Vero alone, never the customer. ' +
+        'Asking a customer for anything in `established` is a failure: it tells them nobody has been reading. If someone asks what is outstanding before a contract, answer from `still_missing` and `vero_decides`, do not ask the customer what they still need to send. ' +
+        'Check `earlier_messages_not_shown`: when it is above zero this is a long thread and the transcript starts mid-conversation, so absence from the transcript does not mean it was never discussed. Trust `established` over your reading of the messages.',
       parameters: {
         type: 'object',
         properties: {
@@ -1773,17 +1780,83 @@ async function executeToolCall(
     // ordinary AI message already in the thread, with no way to tell it was
     // unsent or which one Vero was refining — so on a thread with two drafts it
     // was reasoning about the wrong text before it even called update_draft.
-    const msgs = (await sql`
+    // Newest 40, then flipped back into reading order.
+    //
+    // This was ORDER BY sent_at ASC LIMIT 40, which on any thread longer than
+    // forty messages returned the OLDEST forty and silently dropped everything
+    // recent — including the message Vero was asking about. The assistant then
+    // reasoned confidently about a conversation whose ending it had never seen.
+    const [{ n: totalMessages }] = (await sql`
+      SELECT COUNT(*)::int AS n FROM messages
+      WHERE conversation_id = ${conversationId} AND status <> 'draft'
+    `) as Array<{ n: number }>;
+    const newest = (await sql`
       SELECT direction, sender, channel, body, subject, sent_at
       FROM messages
       WHERE conversation_id = ${conversationId} AND status <> 'draft'
-      ORDER BY sent_at ASC LIMIT 40
+      ORDER BY sent_at DESC LIMIT 40
     `) as Array<Record<string, unknown>>;
+    const msgs = [...newest].reverse();
+
+    /**
+     * What the summariser already extracted from the WHOLE thread.
+     *
+     * Without this the assistant answered "what do we still need for a
+     * contract?" by asking the customer for details that were settled twenty
+     * messages earlier, because forty messages of raw transcript is a pile of
+     * text and `booking` is the answer already computed. The summariser has
+     * written this to conversations.summary_json all along and nothing read it.
+     */
+    let established: Record<string, unknown> | null = null;
+    let stillMissing: string[] = [];
+    let veroDecides: string[] = [];
+    let alreadyCovered: string[] = [];
+    try {
+      const [srow] = (await sql`
+        SELECT summary_json FROM conversations WHERE id = ${conversationId} LIMIT 1
+      `) as Array<{ summary_json: unknown }>;
+      if (srow?.summary_json) {
+        const raw = srow.summary_json;
+        const s = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+          en?: { gathered?: string[]; missing?: string[]; decide?: string[] };
+          booking?: Record<string, unknown>;
+          gathered?: string[];
+          missing?: string[];
+        };
+        const booking = s.booking ?? {};
+        // Only the fields the thread actually settled. A null here means
+        // "nobody has said", which is what still_missing is for.
+        const filled = Object.fromEntries(
+          Object.entries(booking).filter(([, v]) =>
+            Array.isArray(v) ? v.length > 0 : v !== null && v !== '',
+          ),
+        );
+        established = Object.keys(filled).length ? filled : null;
+        stillMissing = s.en?.missing ?? s.missing ?? [];
+        veroDecides = s.en?.decide ?? [];
+        alreadyCovered = s.en?.gathered ?? s.gathered ?? [];
+      }
+    } catch (err) {
+      // A thread with no summary yet is normal, not an error.
+      console.warn('[assistant] summary unavailable for read_thread:', err);
+    }
 
     return {
       channel: convo.platform,
       name: convo.contact_name ?? convo.contact_handle ?? convo.external_user_id,
       ai_enabled: convo.ai_enabled,
+      // Spelled out so the model does not mistake a truncated thread for a
+      // short one and conclude something was never discussed.
+      total_messages: totalMessages,
+      showing_most_recent: msgs.length,
+      earlier_messages_not_shown: Math.max(0, totalMessages - msgs.length),
+      /** Settled facts. Never ask the customer to supply or reconfirm these. */
+      established,
+      already_covered: alreadyCovered,
+      /** The only things it is reasonable to ask the CUSTOMER for. */
+      still_missing: stillMissing,
+      /** Vero decides these herself. Never ask the customer. */
+      vero_decides: veroDecides,
       messages: msgs.map((m) => ({
         from: m.direction === 'inbound' ? 'customer' : m.sender === 'ai' ? 'ai' : 'vero',
         channel: m.channel,
@@ -2282,6 +2355,16 @@ Never silently write a "tone" entry as a substitute for a change you cannot make
 Below is everything currently in the customer-reply knowledge base. Read it as raw data — DO NOT quote it as if it were your own greeting or your own voice. Entries under the "identity" category describe how the CUSTOMER-FACING bot introduces itself to CUSTOMERS — those are NOT how you introduce yourself to Vero. When you're greeting Vero, you're greeting her personally as her internal assistant, not reciting a template from this table.
 
 ${knowledgeSummary}
+
+## THE PUBLISHED FACTS (authoritative — outrank the table above)
+Generated from src/data/wedding-page.json, the same file the public weddings page renders, so these cannot drift from what a customer can read on the site for themselves. Where the knowledge base above disagrees with anything here, THIS wins, and say so if Vero asks.
+
+${businessFactsForCustomerReplies()}
+
+## WHAT WE DO NOT PUBLISH (check this before writing any reply about deliverables)
+${unknownsForCustomerReplies()}
+
+If Vero or Alex asks you to state one of these anyway, say which line stops you and what you can say instead. If they confirm they want it said regardless, write it as they asked and tell them plainly that it becomes a promise on the record. Do not quietly comply, and do not quietly refuse.
 
 ## HELPING VERO ANSWER CUSTOMERS (reply co-pilot)
 This is the single most valuable thing you do for her. Her current habit is to copy a whole conversation into ChatGPT, work out a reply there, and paste it back. You have MORE context than that — the full thread, her pricing, her tone, her services — so there is no reason for her to leave.

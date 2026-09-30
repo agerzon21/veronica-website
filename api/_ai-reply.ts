@@ -42,6 +42,10 @@ import OpenAI from 'openai';
 import { stripSubjectHeader } from './_subject-strip.js';
 import { applyHouseStyle, WRITING_RULES_CATEGORY } from './_house-style.js';
 import { paymentFactsForCustomerReplies } from '../src/data/payment-handles.js';
+import {
+  businessFactsForCustomerReplies,
+  unknownsForCustomerReplies,
+} from './_business-facts.js';
 import { getDb } from './_db.js';
 import { sendIgTextMessage } from './_ig-send.js';
 
@@ -61,8 +65,22 @@ const MAX_AI_MSGS_PER_CONVO = 6;
 const MIN_GAP_MS_BETWEEN_AI = 60_000; // 60 seconds
 
 // How many recent messages to feed the AI as conversation history.
-// Balances context (better replies) vs token cost.
-const HISTORY_CONTEXT_MESSAGES = 12;
+//
+// This was 12, which is roughly six exchanges, and a real booking thread
+// runs far longer than that. Anything older simply did not exist as far as
+// the model was concerned, so a draft would ask a customer for their date,
+// their hours and their guest count having been told all three twenty
+// messages earlier. That is the single thing Vero has complained about most.
+//
+// Two changes fix it together, and neither works alone. This window widens
+// to cover an ordinary negotiation outright, and conversationSummaryBlock
+// injects what the summariser already extracted from the ENTIRE thread, so
+// anything that still falls off the end arrives as established fact instead
+// of as a question to ask again. Thirty messages of an inbox thread is a few
+// thousand tokens against a model with a six-figure window: the token cost
+// this constant was protecting stopped being the binding constraint years
+// ago, and a re-asked question costs a booking.
+const HISTORY_CONTEXT_MESSAGES = 30;
 
 /**
  * COMMITMENT keywords only — the point where money or a firm date is
@@ -594,6 +612,19 @@ export async function processInboundMessage(args: {
       `) as Array<ContextRow>;
 
       // ── 12. Generate reply ───────────────────────────────────
+      // This path used to pass no system context at all, so an automatic
+      // reply knew LESS about the customer than an on-demand draft of the
+      // same thread: no portal state, and no summary of anything older than
+      // the last HISTORY_CONTEXT_MESSAGES messages. On Instagram that reply
+      // auto-sends unreviewed, which made it the worst place to be missing
+      // them. Both are best-effort and return null rather than throwing.
+      const [inboundPortalContext, inboundSummaryContext] = await Promise.all([
+        portalContextBlock(sql, convo.id),
+        conversationSummaryBlock(sql, convo.id),
+      ]);
+      const inboundExtraContext =
+        [inboundPortalContext, inboundSummaryContext].filter(Boolean).join('\n\n') || null;
+
       let replyText: string;
       try {
         replyText = await generateReply({
@@ -602,6 +633,7 @@ export async function processInboundMessage(args: {
           aiMessageCount: outboundAiMessages.length,
           mentionsDate: matchesDateIntent(latestInboundBody),
           reviewedBeforeSending: !autoSendsOnThisChannel,
+          extraSystemContext: inboundExtraContext,
         });
       } catch (err) {
         console.error('[ai-reply] generation failed:', err);
@@ -810,6 +842,151 @@ export async function portalContextBlock(
   }
 }
 
+/**
+ * Everything the thread established BEFORE the last few messages.
+ *
+ * WHY THIS EXISTS
+ * The reply engine reads the last HISTORY_CONTEXT_MESSAGES messages and
+ * nothing else. On a real sales thread that is nowhere near the whole
+ * conversation, so a draft would cheerfully ask a customer for their guest
+ * count, their hours and their date in message twenty, having been told all
+ * three in message four. Vero reported exactly this: asked to see what was
+ * still outstanding before a contract, the draft asked the CLIENT to supply
+ * details that were already settled earlier in the same thread.
+ *
+ * Meanwhile the summariser in api/admin/_messages-summary.ts had already
+ * extracted all of it, into conversations.summary_json, where the reply path
+ * read it precisely never. The data existed and was not plugged in.
+ *
+ * So this block injects the summary as SYSTEM knowledge: what they are
+ * asking, what is already established, what is genuinely still missing, and
+ * the structured booking fields behind it. The critical half is the
+ * established list, because a draft that re-asks a settled question reads as
+ * though nobody has been paying attention, which is worse than no reply.
+ *
+ * Best-effort, like portalContextBlock: returns null on any failure, on a
+ * database that predates migration 010, and on threads never summarised.
+ * A draft with a narrow window is useful; a draft that failed is not.
+ */
+export async function conversationSummaryBlock(
+  sql: ReturnType<typeof getDb>,
+  conversationId: string,
+): Promise<string | null> {
+  try {
+    const rows = (await sql`
+      SELECT summary_json, summary_message_id
+      FROM conversations
+      WHERE id = ${conversationId}
+      LIMIT 1
+    `) as Array<{ summary_json: unknown; summary_message_id: string | null }>;
+    if (rows.length === 0 || !rows[0].summary_json) return null;
+
+    const raw = rows[0].summary_json;
+    const s = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+      en?: { asking?: string; gathered?: string[]; missing?: string[]; decide?: string[]; nextStep?: string };
+      booking?: Record<string, unknown>;
+      // Rows written before the bilingual migration carry these flat.
+      asking?: string;
+      gathered?: string[];
+      missing?: string[];
+      nextStep?: string;
+    };
+
+    // New rows keep everything under `en`; old ones are flat. Falling back
+    // rather than ignoring means a thread summarised a year ago still helps.
+    const view = {
+      asking: s.en?.asking ?? s.asking ?? null,
+      gathered: s.en?.gathered ?? s.gathered ?? [],
+      missing: s.en?.missing ?? s.missing ?? [],
+      decide: s.en?.decide ?? [],
+      nextStep: s.en?.nextStep ?? s.nextStep ?? null,
+    };
+
+    /**
+     * The structured contract fields, which are the ones that actually get
+     * re-asked. Labels are phrased as statements so the model reads them as
+     * settled rather than as a form to fill in.
+     */
+    const FIELD_LABELS: Array<[string, string]> = [
+      ['session_type', 'Type of shoot'],
+      ['event_date', 'Event date'],
+      ['event_time', 'Start time'],
+      ['event_location', 'Location'],
+      ['client_full_name', 'Client name'],
+      ['partner_full_name', "Partner's name"],
+      ['client_email', 'Email'],
+      ['total_amount', 'Agreed total'],
+      ['retainer_amount', 'Retainer'],
+      ['due_date', 'Due date'],
+      ['wedding_date', 'Wedding date'],
+      ['session_scope', 'What is being photographed'],
+    ];
+    const booking = s.booking ?? {};
+    const known = FIELD_LABELS.filter(([k]) => booking[k]).map(
+      ([k, label]) => `- ${label}: ${String(booking[k])}`,
+    );
+
+    // Duration is the one field stored as a list of statements rather than a
+    // value, because threads renegotiate hours and picking between them is
+    // done in code, not by a prompt. Surface them all rather than guessing.
+    const durations = Array.isArray(booking.session_durations)
+      ? (booking.session_durations as Array<{ text?: string; speaker?: string }>)
+          .map((d) => (d?.text ? `- Coverage length discussed: "${d.text}"${d.speaker ? ` (${d.speaker})` : ''}` : null))
+          .filter(Boolean as unknown as (v: string | null) => v is string)
+      : [];
+
+    const lines: string[] = [
+      'THREAD SUMMARY (system-generated from the FULL conversation, including messages older than the ones shown below).',
+      'The message history you are given is only the most recent stretch of this thread. Everything in this block was established earlier and is still true.',
+    ];
+
+    if (view.asking) lines.push('', `What they are asking about: ${view.asking}`);
+
+    if (known.length || durations.length) {
+      lines.push(
+        '',
+        'ALREADY ESTABLISHED. Treat every line here as settled and known. Do NOT ask the customer for any of it again, and do not ask them to "confirm" it unless they themselves have just changed it:',
+        ...known,
+        ...durations,
+      );
+    }
+
+    if (view.gathered.length) {
+      lines.push('', 'Also already covered in this thread:', ...view.gathered.map((g) => `- ${g}`));
+    }
+
+    if (view.missing.length) {
+      lines.push(
+        '',
+        'GENUINELY STILL MISSING from the customer. These, and only these, are things it is reasonable to ask them for:',
+        ...view.missing.map((m) => `- ${m}`),
+      );
+    }
+
+    if (view.decide.length) {
+      lines.push(
+        '',
+        'Outstanding, but for VERO to decide, not the customer. Never ask the customer for these, and never invent them:',
+        ...view.decide.map((d) => `- ${d}`),
+      );
+    }
+
+    if (view.nextStep) lines.push('', `Suggested next step: ${view.nextStep}`);
+
+    // A summary generated before the newest message is still worth having,
+    // but the model should trust the raw history over it where they collide.
+    lines.push(
+      '',
+      'If the recent messages below contradict anything in this summary, the messages are newer and win.',
+    );
+
+    return lines.join('\n');
+  } catch (err) {
+    console.warn('[ai-reply] summary block unavailable:', err);
+    return null;
+  }
+}
+
 export async function draftOnDemand(
   conversationId: string,
 ): Promise<{ ok: true; body: string } | { ok: false; error: string }> {
@@ -849,7 +1026,12 @@ export async function draftOnDemand(
     ORDER BY category, sort_order
   `) as Array<ContextRow>;
 
-  const portalContext = await portalContextBlock(sql, conversationId);
+  // Both are best-effort and independent, so fetch them together rather than
+  // paying two round trips on a path Vero is sitting and waiting on.
+  const [portalContext, summaryContext] = await Promise.all([
+    portalContextBlock(sql, conversationId),
+    conversationSummaryBlock(sql, conversationId),
+  ]);
 
   /**
    * A quiet thread asks for a different kind of message. When the last word
@@ -874,7 +1056,10 @@ export async function draftOnDemand(
         ].join('\n')
       : null;
 
-  const extraSystemContext = [portalContext, followUpContext]
+  // Summary sits closest to the message history it describes, so the "these
+  // are already settled, do not re-ask" instruction is adjacent to the
+  // messages that would otherwise look like the whole conversation.
+  const extraSystemContext = [portalContext, summaryContext, followUpContext]
     .filter(Boolean)
     .join('\n\n') || null;
 
@@ -1352,7 +1537,7 @@ ${houseRulesBlock}
 1. **NEVER confirm availability on a specific date.** If a customer names a date, acknowledge it as noted — never "great!", "that works!", "she's free" or anything implying it's held. Only Vero confirms dates.${dateWarning}
 2. **Pricing: give RANGES, never a firm quote.** You MAY share the figures in KNOWN FACTS below, always framed as a starting point or a range, for example "sessions typically start around X", "wedding coverage runs roughly X to Y". Then explain that the exact number depends on the specifics and ask for what's missing: number of people, location and travel distance, and how many hours of coverage. NEVER state a final total, and never invent a figure that isn't in KNOWN FACTS. If you have no relevant figure, say ${speakAsVero ? "you'll follow up with a quote" : 'Vero will follow up with a quote'}.
 3. **You SHOULD be helpful and ask good questions.** Answer what you can from KNOWN FACTS, and gather what Vero will need — session type, guest count, rough location and travel, timeframe, the kind of look they're after. Suggesting options that appear in KNOWN FACTS is fine and encouraged. What you must NOT do is invent creative direction, promise a specific artistic outcome, or claim details that aren't written below.
-4. **NEVER commit to deliverables or timing** beyond what's in KNOWN FACTS.
+4. **NEVER commit to deliverables or timing** beyond what's in KNOWN FACTS. Before you answer any question about what a package includes, what they receive, how many photos, or when, read "WHAT WE DO NOT PUBLISH" below and use the replacement wording it gives you. A number you supply becomes a promise Vero has to keep. This rule has been broken in production: a draft told a real couple they would receive "500-700 professionally edited photos", a figure that exists nowhere in this business.
 5. When you genuinely don't know, say so — but only after answering what you DO know. ${
     speakAsVero
       ? '"I\'ll get back to you on that" as a reply to a question you have the facts for is a failure, not a safe default.'
@@ -1360,7 +1545,17 @@ ${houseRulesBlock}
   }
 
 ## KNOWN FACTS (only cite these — never invent details)
-${contextSections.join('\n\n')}
+
+### From the website (authoritative — these are the real published numbers)
+These are generated from src/data/wedding-page.json, the same file the public weddings page renders, so they cannot drift from what the customer can read for themselves. Where anything below contradicts a fact further down, THIS wins. Some of it is written in Vero's own first-person voice because it is lifted from her site copy; restate it in whatever voice this reply is using rather than quoting it raw.
+
+${businessFactsForCustomerReplies()}
+
+### Added by Vero in the Assistant tab
+${contextSections.join('\n\n') || '(none)'}
+
+## WHAT WE DO NOT PUBLISH (read this before answering any "what do we get" question)
+${unknownsForCustomerReplies()}
 
 ## PAYMENT
 ${paymentFactsForCustomerReplies()}
