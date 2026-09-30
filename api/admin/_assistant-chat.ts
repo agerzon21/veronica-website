@@ -57,6 +57,8 @@ import { coreRulesForAssistant } from '../_reply-core-rules.js';
 import {
   businessFactsForCustomerReplies,
   unknownsForCustomerReplies,
+  forbiddenClaims,
+  forbiddenClaimsError,
 } from '../_business-facts.js';
 import OpenAI from 'openai';
 import { getDb } from '../_db.js';
@@ -1023,6 +1025,11 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description:
               'ONLY set true when the text is deliberately not in the customer\'s language AND Vero explicitly approved that. Never set it to get past the language check.',
           },
+          forbidden_claims_confirmed: {
+            type: 'boolean',
+            description:
+              'ONLY set true when Vero or Alex has explicitly told you to state something the business does not publish (such as a number of delivered photos) AND you have said in the chat that it becomes a promise on the record. Never set it to get past the check, and never set it on your own initiative.',
+          },
         },
         required: ['conversation_id', 'text', 'content_summary'],
       },
@@ -1056,6 +1063,11 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             type: 'boolean',
             description:
               'ONLY set true when the text is deliberately not in the customer\'s language AND Vero explicitly approved that. Never set it to get past the language check.',
+          },
+          forbidden_claims_confirmed: {
+            type: 'boolean',
+            description:
+              'ONLY set true when Vero or Alex has explicitly told you to state something the business does not publish (such as a number of delivered photos) AND you have said in the chat that it becomes a promise on the record. Never set it to get past the check, and never set it on your own initiative.',
           },
         },
         required: ['conversation_id', 'text', 'confirmed', 'content_summary'],
@@ -1884,6 +1896,18 @@ async function executeToolCall(
     );
     if (mismatch) return { error: mismatch };
 
+    // Facts we do not publish, checked on the literal string about to be
+    // saved. The prompt already forbade this and the model shipped it twice,
+    // the second time with the rule, the facts and a worked example of the
+    // failure all in front of it: asked to "rewrite the whole reply" it
+    // revised its own previous turn, and the invented sentence survived
+    // because it was never reconsidered. A rule cannot catch what is not
+    // being decided. See forbiddenClaims in api/_business-facts.ts.
+    if (args.forbidden_claims_confirmed !== true) {
+      const claims = forbiddenClaims(text);
+      if (claims.length) return { error: forbiddenClaimsError(claims) };
+    }
+
     // Only the pending draft is replaceable. A sent message is a record of what
     // the customer actually received and must never be rewritten under it.
     const updated = (await sql`
@@ -2050,6 +2074,16 @@ async function executeToolCall(
       args.language_mismatch_confirmed === true,
     );
     if (sendMismatch) return { error: sendMismatch };
+
+    // Last check before it is actually delivered to a human being. A draft
+    // carrying an invented deliverable is recoverable because Vero reads it;
+    // a sent one is a promise. Same gate as update_draft, deliberately
+    // repeated rather than assumed, because text can reach this tool without
+    // ever having passed through the other one.
+    if (args.forbidden_claims_confirmed !== true) {
+      const sendClaims = forbiddenClaims(text);
+      if (sendClaims.length) return { error: forbiddenClaimsError(sendClaims) };
+    }
 
     // Goes through the SAME path as the Messages panel's Send button —
     // threading headers, signature, persist-before-send ordering and
@@ -2273,6 +2307,17 @@ need more than the digest shows).
 
 When you rewrite the draft for her, call update_draft with this id in the SAME
 turn you show her the new version. Do not ask first.
+
+REWRITE MEANS REWRITE. When she asks you to rewrite, redo, fix or correct a
+reply, build the new answer from THE PUBLISHED FACTS above, question by
+question, and check each sentence you keep against them. Do not start from the
+previous draft and patch the parts she named. An earlier draft of this reply
+may be sitting in your own chat history above, written out in full because
+these instructions require it. That text is NOT a source. It is the thing
+being replaced, it is where any error came from, and a sentence survives in it
+only because nobody reconsidered it. The failure this warns about is real: a
+reply went back to a customer with every sentence identical except the one
+line that had been queried, invented figure included.
 
 The message that calls update_draft MUST contain the full rewritten reply,
 written out in the chat, in the customer's language. Never call update_draft

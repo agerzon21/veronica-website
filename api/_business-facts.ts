@@ -153,6 +153,98 @@ export function businessFactsForCustomerReplies(): string {
   return sections.join('\n\n');
 }
 
+export interface ForbiddenClaim {
+  /** What rule the text breaks, in Vero's terms. */
+  what: string;
+  /** The offending fragment, quoted back so the model can find it. */
+  found: string;
+  /** True wording to use instead, so the model has somewhere to go. */
+  instead: string;
+}
+
+/**
+ * Catch a claim we do not publish BEFORE it reaches a customer.
+ *
+ * WHY A FUNCTION AND NOT A PROMPT RULE
+ * The prompt already forbade this and the assistant did it anyway, twice. The
+ * second time is the instructive one: the system prompt had the facts, the
+ * unknowns block and a worked example of this exact failure, and the model
+ * still shipped "500-700 professionally edited photos". It was not ignoring
+ * the rules. It was asked to "rewrite the whole reply", and its own previous
+ * turn in the chat contained a complete, plausible draft, so it revised that
+ * text instead of generating from the facts. Every sentence it did not
+ * deliberately reconsider survived, including the invented one.
+ *
+ * An instruction cannot beat that reliably, because the model is not choosing
+ * to disobey, it is anchoring. So this runs on the way OUT, on the literal
+ * string about to be saved, wherever that string came from: the model, an
+ * earlier draft, or Vero pasting something in. api/admin/_assistant-chat.ts
+ * already proves the pattern with languageMismatch, which blocks and hands
+ * back a retry instruction rather than trusting the prompt.
+ *
+ * Deliberately narrow. Every rule here has to survive an ordinary, correct
+ * draft untouched, because a guard that cries wolf gets bypassed and then
+ * protects nothing. It catches what has actually gone wrong, not everything
+ * that theoretically could.
+ */
+export function forbiddenClaims(text: string): ForbiddenClaim[] {
+  const hits: ForbiddenClaim[] = [];
+
+  /**
+   * A count of delivered images. The one that reached a real customer.
+   *
+   * Matches a bare number, or a range, standing within a few words of
+   * photos / images / pictures / shots. A leading "$" disqualifies it, so
+   * "the $1,300 package" is fine, and the trailing word boundary keeps
+   * "photographers" from reading as "photos". "5 weeks" never matches
+   * because "weeks" is not an image noun.
+   */
+  const COUNT =
+    /(\$?)\b(\d{1,3}(?:,\d{3})+|\d{2,5})\b(?:\s*(?:-|–|—|to|and)\s*(\d{2,5}))?((?:\s+\w+){0,4}?)\s+(photos?|images?|pictures?|shots?)\b/gi;
+  for (const m of text.matchAll(COUNT)) {
+    // A price is not an image count, and neither is "2 photographers".
+    if (m[1] === '$') continue;
+    hits.push({
+      what: 'A number of delivered photos',
+      found: m[0].trim(),
+      instead:
+        'We publish no image count for any package, and the contract says the number is agreed separately. Say it depends on how long the day runs and the guest count, and that the exact number is confirmed in the contract.',
+    });
+  }
+
+  // RAW files are excluded from every package, so any sentence offering them
+  // is wrong. "RAW files are not included" is correct and must pass, hence
+  // the negation check rather than a bare keyword match.
+  const RAW = /\braw\s+(?:files?|images?|photos?)\b([^.!?]*)/gi;
+  for (const m of text.matchAll(RAW)) {
+    if (/\b(not|aren'?t|never|excluded|without|no)\b/i.test(m[0])) continue;
+    hits.push({
+      what: 'RAW files being offered',
+      found: m[0].trim(),
+      instead: 'RAW files are not included in any package. Say so plainly if asked.',
+    });
+  }
+
+  return hits;
+}
+
+/**
+ * The blocked-tool message, shaped like languageMismatch's so the model gets
+ * a specific fix rather than a refusal it has to guess its way around.
+ */
+export function forbiddenClaimsError(hits: ForbiddenClaim[]): string {
+  const lines = hits.map(
+    (h) => `- ${h.what}: "${h.found}". Instead: ${h.instead}`,
+  );
+  return [
+    'BLOCKED: this text states something this business does not publish, so it would become a promise Vero has to keep.',
+    ...lines,
+    '',
+    'Rewrite the text with those removed and call again. Do NOT keep the surrounding sentence and edit around it: if you are revising an earlier draft, that draft is where this came from, so write the answer again from the published facts rather than patching it.',
+    'If Vero or Alex has explicitly told you to state it anyway, say plainly in the chat that it becomes a promise on the record, and call again with forbidden_claims_confirmed=true.',
+  ].join('\n');
+}
+
 /**
  * The facts we deliberately do not have, stated as facts.
  *

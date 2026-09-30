@@ -102,6 +102,25 @@ check(
   'read_thread no longer returns `established` / `still_missing`. That is what stops the assistant asking a customer for details the thread already settled.',
 );
 
+// ── The forbidden-claim gate is enforced in CODE, not just the prompt ──
+// The prompt forbade the photo count and the model shipped it twice, the
+// second time with the rule, the facts and a worked example all in context.
+// It was anchoring on its own previous draft, not disobeying. A rule cannot
+// catch what is not being decided, so this must stay a gate.
+check(
+  /export function forbiddenClaims/.test(facts),
+  'forbiddenClaims is gone from api/_business-facts.ts. Without it the only thing stopping an invented photo count is a prompt instruction, which has already failed twice in production.',
+);
+const gateCalls = (assistant.match(/forbiddenClaims\(text\)/g) ?? []).length;
+check(
+  gateCalls >= 2,
+  `forbiddenClaims(text) guards ${gateCalls} write path(s); both update_draft and send_reply must call it. Text can reach send_reply without passing through update_draft.`,
+);
+check(
+  (assistant.match(/forbidden_claims_confirmed/g) ?? []).length >= 4,
+  'forbidden_claims_confirmed is missing from a tool schema or a guard. Both update_draft and send_reply need the check and the declared override, or the model cannot comply when Vero genuinely overrides.',
+);
+
 // ── The generated facts still match the site ───────────────────────────
 const prices = (wedding.packages ?? []).map((p) => p.price).filter(Boolean);
 check(
