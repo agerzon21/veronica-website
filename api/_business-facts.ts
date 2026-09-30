@@ -212,6 +212,58 @@ export function forbiddenClaims(text: string): ForbiddenClaim[] {
     });
   }
 
+  /**
+   * Any claim about insurance, in EITHER direction.
+   *
+   * The unknowns block already said to defer on insurance, and the model
+   * instead wrote "I currently do not have liability insurance" to a
+   * prospective couple. Nobody had told it that. It reasoned from the absence
+   * of insurance in its facts to the absence of insurance in the world, and
+   * stated the conclusion as fact. That is the photo-count failure with the
+   * sign flipped, and it is worse: an invented deliverable oversells, an
+   * invented denial loses the booking outright and is not even true.
+   *
+   * So neither direction passes. Coverage is a contractual commitment whose
+   * status changes with what has actually been bought, and it is Vero's to
+   * state, not a thing to infer from a knowledge base.
+   */
+  const INSURANCE =
+    /\b(?:liability|general\s+liability|public\s+liability)?\s*insur(?:ance|ed)\b[^.!?]*|[^.!?]*\binsur(?:ance|ed)\b[^.!?]*/gi;
+  const seenInsurance = new Set<string>();
+  for (const m of text.matchAll(INSURANCE)) {
+    const frag = m[0].trim();
+    if (!frag || seenInsurance.has(frag)) continue;
+    seenInsurance.add(frag);
+    hits.push({
+      what: 'A claim about insurance cover',
+      found: frag.length > 120 ? `${frag.slice(0, 120)}…` : frag,
+      instead:
+        'Never state that this business does or does not carry insurance, and never infer it from what is missing here. Coverage depends on what has actually been bought for a given event and is Vero\'s to confirm. Say she will follow up personally on insurance and certificates.',
+    });
+  }
+
+  /**
+   * "The retainer books your date", without the contract.
+   *
+   * The site says it in three places and the contract template says it again:
+   * the date is not reserved until the contract is signed AND the retainer is
+   * paid. A reply that names only the money tells a couple they are booked
+   * when they are not, which is exactly the dispute the clause exists to
+   * prevent. The fact was loaded and the model simply dropped the conjunction.
+   */
+  const BOOKS_DATE =
+    /[^.!?]*\b(?:retainer|deposit)\b[^.!?]*\b(?:book|books|booking|reserve|reserves|secure|secures|hold|holds)\b[^.!?]*[.!?]?/gi;
+  for (const m of text.matchAll(BOOKS_DATE)) {
+    const sentence = m[0];
+    if (/\bcontract\b|\bsign(?:ed|ing)?\b|\bagreement\b/i.test(sentence)) continue;
+    hits.push({
+      what: 'The retainer alone described as booking the date',
+      found: sentence.trim(),
+      instead:
+        'A signed contract AND the retainer together reserve the date. Neither does it alone. Say both, in the same sentence.',
+    });
+  }
+
   // RAW files are excluded from every package, so any sentence offering them
   // is wrong. "RAW files are not included" is correct and must pass, hence
   // the negation check rather than a bare keyword match.

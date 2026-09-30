@@ -111,6 +111,14 @@ check(
   /export function forbiddenClaims/.test(facts),
   'forbiddenClaims is gone from api/_business-facts.ts. Without it the only thing stopping an invented photo count is a prompt instruction, which has already failed twice in production.',
 );
+check(
+  /A claim about insurance cover/.test(facts),
+  'The insurance detector is gone. The model once told a prospective customer "I currently do not have liability insurance", inferred purely from the fact not being in its knowledge base. Neither direction may pass.',
+);
+check(
+  /The retainer alone described as booking the date/.test(facts),
+  'The retainer/contract pairing check is gone. The site and the contract both say the date is reserved only when the contract is signed AND the retainer is paid; naming the money alone tells a couple they are booked when they are not.',
+);
 const gateCalls = (assistant.match(/forbiddenClaims\(text\)/g) ?? []).length;
 check(
   gateCalls >= 2,
