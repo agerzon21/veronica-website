@@ -1309,6 +1309,41 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       { kind: 'text', emphasis: 'italic', text: 'Full payment must be received before delivery of any images.' },
     ],
   },
+  // PRICE REVIEW. Optional, unnumbered, gated on price_review_enabled exactly
+  // as the wedding copy is, so a session contract without it renders byte for
+  // byte as every one already on file does and the numbering never shifts.
+  //
+  // WHY IT IS HERE AT ALL, when it started as wedding-only. Nothing about the
+  // exposure is specific to weddings: it is about the gap between signing and
+  // shooting, and a family session booked fourteen months out carries exactly
+  // the same risk of a price agreed in one year being honoured in another.
+  // Weddings are simply where long lead times are COMMON, which is a reason to
+  // default it on for them, not a reason to make it unavailable everywhere
+  // else. The wedding copy carries the full reasoning for each limb.
+  {
+    title: 'PRICE REVIEW FOR DATES BOOKED MORE THAN A YEAR AHEAD',
+    optional: true,
+    requireVariables: ['price_review_enabled'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'This clause applies only because the Session Date falls more than three hundred and sixty five (365) days after the date this Agreement is signed.',
+      },
+      {
+        kind: 'text',
+        text: 'In January of each calendar year that begins after this Agreement is signed and ends before the Session Date, the Photographer may revise the Total Payment once, to reflect changes in the cost of providing the services. A revision is made by written notice given to the Client during that January, stating the revised Total Payment and the reason for it.',
+      },
+      {
+        kind: 'text',
+        text: 'If no such notice is given during a January, the Total Payment is fixed and may not be revised until the following January, if one falls before the Session Date. No revision may be made at any other time of year, and no revision may be made within ninety (90) days of the Session Date.',
+      },
+      {
+        kind: 'text',
+        emphasis: 'bold',
+        text: 'If notice of a revision is given, the Client may cancel this Agreement by telling the Photographer in writing within fourteen (14) days of that notice. On such a cancellation every payment made, including the retainer, is refunded in full within fourteen (14) days, notwithstanding CANCELLATION / RESCHEDULING below. If the Client does not cancel within those fourteen (14) days, the revised Total Payment takes effect and becomes the Total Payment under this Agreement.',
+      },
+    ],
+  },
   {
     number: 'V',
     title: 'PAYMENT METHODS',
@@ -1578,9 +1613,9 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
 /** Every optional clause a type can offer, so the form can render checkboxes. */
 export const OPTIONAL_CLAUSES: Record<string, { label: string; helpText: string }> = {
   price_review_enabled: {
-    label: 'Price review (booking more than a year out)',
+    label: 'Price review (dates more than a year out)',
     helpText:
-      'Wedding only. Lets the price be revised once each January before the event, with written notice. If a January passes with no notice the price is fixed for that year. The client may cancel within 14 days of any notice and get everything back, retainer included.',
+      'Ticks itself when the date is more than a year out, and cannot be ticked when it is not, because the clause says in its own first line that it only applies beyond 365 days. Lets the price be revised once each January before the date, with written notice. If a January passes with no notice the price is fixed for that year. The client may cancel within 14 days of any notice and get everything back, retainer included.',
   },
   two_camera_enabled: {
     label: 'Two-camera coverage',
@@ -1622,6 +1657,7 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
     template: sessionTemplate('PORTRAIT PHOTOGRAPHY CONTRACT'),
     fields: SESSION_BASE_FIELDS,
     optionalClauses: [
+      'price_review_enabled',
       'additional_retouching_enabled',
       'minors_clause_enabled',
       'illness_clause_enabled',
@@ -1637,7 +1673,8 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
     // always includes a child, and these are the two clauses that would be
     // missed exactly when they matter.
     defaultVariables: { minors_clause_enabled: 'yes', illness_clause_enabled: 'yes' },
-    optionalClauses: ['additional_retouching_enabled', 'permits_clause_enabled'],
+    optionalClauses: [
+      'price_review_enabled','additional_retouching_enabled', 'permits_clause_enabled'],
   },
   engagement: {
     key: 'engagement',
@@ -1657,6 +1694,7 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
     couple: true,
     defaultVariables: { permits_clause_enabled: 'yes' },
     optionalClauses: [
+      'price_review_enabled',
       'additional_retouching_enabled',
       'illness_clause_enabled',
       'minors_clause_enabled',
@@ -1678,7 +1716,8 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
       },
     ],
     defaultVariables: { maternity_clauses_enabled: 'yes' },
-    optionalClauses: ['additional_retouching_enabled', 'illness_clause_enabled'],
+    optionalClauses: [
+      'price_review_enabled','additional_retouching_enabled', 'illness_clause_enabled'],
   },
   other: {
     key: 'other',
@@ -1699,6 +1738,7 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplateSpec> = {
     ],
     allowsCustomLabel: true,
     optionalClauses: [
+      'price_review_enabled',
       'additional_retouching_enabled',
       'minors_clause_enabled',
       'illness_clause_enabled',

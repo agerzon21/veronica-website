@@ -3,15 +3,17 @@
  *
  * Two clauses ship together and each has a way of going quietly wrong.
  *
- * PRICE REVIEW is optional, gated on three variables, and must be invisible on
- * every booking that is not more than a year out. That is almost every booking,
- * and it includes all nine signed contracts on file. If this check ever fails
- * with "section present on a blank booking", a default has been added to one of
- * the three fields and a template edit is now reaching contracts it must not.
+ * PRICE REVIEW is optional, gated on price_review_enabled, and must be
+ * invisible on every booking that is not more than a year out. That is almost
+ * every booking, and it includes all nine signed contracts on file. If this
+ * check ever fails with "section present on a blank booking", a default has
+ * been added and a template edit is now reaching contracts it must not.
  *
- * It gates on all THREE keys together for the reason TRAVEL gates on two: the
- * pruner can only ask whether a variable is filled, so a two-of-three fill has
- * to prune, or the contract prints a cap with no ceiling beside it.
+ * It is available on ALL SIX types, not just weddings. The exposure is the gap
+ * between signing and shooting, which no booking type has a monopoly on; the
+ * admin screens tick it automatically past 365 days and refuse to let it be
+ * ticked inside them, because the clause's own first sentence would be untrue
+ * there.
  *
  * IF THE PHOTOGRAPHER CANNOT PERFORM replaced FORCE MAJEURE on all six types.
  * It must stay numbered VII everywhere, because the numbering runs I to XIII and
@@ -125,13 +127,37 @@ for (const key of CONTRACT_TYPE_ORDER) {
   check('wedding: PRICE REVIEW names no percentage or index', !/%|CPI|Consumer Price Index/.test(body));
 }
 
-// 5. cross-type isolation, both directions.
-for (const key of CONTRACT_TYPE_ORDER.filter((k) => k !== 'wedding')) {
-  const t = pruneEmptyOptionalSections(CONTRACT_TEMPLATES[key].template, ON);
-  check(`${key}: must never print PRICE REVIEW`, !titles(t).includes(PR));
-  check(`${key}: ${GATE} is stripped`, !(GATE in stripForeignTypeVariables(key, { ...ON })));
+// 5. PRICE REVIEW on every type, gated by the flag rather than by the type.
+//
+// This block used to assert the opposite: that the clause could never appear
+// on anything but a wedding. That was never a policy, it was the shape the
+// clause happened to have, and the owner asked the obvious question about it.
+// Nothing in the exposure is wedding-specific. It is about the gap between
+// signing and shooting, and a family session booked fourteen months out
+// carries exactly the same risk of a price agreed in one year being honoured
+// in another. Weddings are just where long lead times are COMMON, which
+// argues for defaulting it on there, not for making it unreachable elsewhere.
+//
+// What still must hold, and is what these now check, is that the flag alone
+// decides. Absent flag prunes, present flag prints, on all six. That is the
+// property the nine signed contracts depend on: none of them carries the
+// variable, so none of them can grow the clause.
+for (const key of CONTRACT_TYPE_ORDER) {
+  const off = pruneEmptyOptionalSections(CONTRACT_TEMPLATES[key].template, {});
+  const on = pruneEmptyOptionalSections(CONTRACT_TEMPLATES[key].template, ON);
+  check(`${key}: PRICE REVIEW is absent without the flag`, !titles(off).includes(PR));
+  check(`${key}: PRICE REVIEW prints with the flag`, titles(on).includes(PR));
+  check(`${key}: keeps its own gate`, stripForeignTypeVariables(key, { ...ON })[GATE] === 'yes');
+  // The clause states its own trigger in its first line. If that sentence ever
+  // goes, the contract stops explaining why it is there and the UI rule that
+  // disables the box under 365 days loses the thing it is enforcing.
+  const body = on.sections.find((x) => x.title === PR)?.paragraphs
+    .map((x) => (x.kind === 'text' ? x.text : ''))
+    .join(' ') ?? '';
+  check(`${key}: PRICE REVIEW states the 365 day trigger`,
+    /more than three hundred and sixty five \(365\) days/.test(body));
+  check(`${key}: PRICE REVIEW names no percentage or index`, !/%|CPI|Consumer Price Index/.test(body));
 }
-check('wedding: keeps its own gate', stripForeignTypeVariables('wedding', { ...ON })[GATE] === 'yes');
 
 // 6. the withdrawal clause, on all six, still numbered VII, and Section VI
 //    must carve the retainer out for it or the two clauses contradict.

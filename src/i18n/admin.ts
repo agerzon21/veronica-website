@@ -2296,6 +2296,18 @@ const dict = {
       en: (type: string) => `Always on for a ${type} booking.`,
       ru: (type: string) => `Для типа «${type}» включается всегда.`,
     },
+    priceReviewOn: {
+      en: (d: number) => `On automatically: this date is ${d} days out, past the 365 the clause needs. Untick it to lock the price instead.`,
+      ru: (d: number) => `Включено автоматически: до даты ${d} дней, больше требуемых 365. Снимите галочку, чтобы зафиксировать цену.`,
+    },
+    priceReviewOff: {
+      en: (d: number) => `Not available: this date is ${d} days out. The clause states in its own first line that it only applies beyond 365 days, so on this booking it would contradict itself.`,
+      ru: (d: number) => `Недоступно: до даты ${d} дней. Пункт применяется только при сроке больше 365 дней.`,
+    },
+    priceReviewNoDate: {
+      en: 'Set the event date first, then this decides itself.',
+      ru: 'Сначала укажите дату съёмки, дальше решится само.',
+    },
     clauseStranded: {
       en: 'Left over from a type this booking used to be. Untick it to clear it out.',
       ru: 'Остался от типа, которым эта съёмка была раньше. Сними галочку, чтобы его убрать.',

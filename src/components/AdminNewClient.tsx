@@ -1,5 +1,6 @@
 import {
-  Box, VStack, Stack, SimpleGrid, Text, Input, Select, Textarea, Flex, Checkbox, Button, Icon,
+  Box, VStack, Stack, SimpleGrid, Text, Input, InputGroup, InputRightElement, Select, Textarea,
+  Flex, Checkbox, Button, Icon,
   Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverBody,
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
@@ -397,25 +398,45 @@ const TravelLeg = ({
       >
         {copy.lookItUp}
       </Button>
-      <Input
-        value={miles}
-        onChange={(e) => onMiles(e.target.value)}
-        placeholder={copy.milesLabel}
-        aria-label={copy.milesLabel}
-        inputMode="decimal"
-        h="38px" w="120px" bg="white" border="1px solid" borderColor="gray.300"
-        fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-        _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-      />
-      <Input
-        value={minutes}
-        onChange={(e) => onMinutes(e.target.value)}
-        placeholder={copy.minutesLabel}
-        aria-label={copy.minutesLabel}
-        h="38px" w="130px" bg="white" border="1px solid" borderColor="gray.300"
-        fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
-        _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
-      />
+      {/* The unit rides INSIDE each box and stays there once it has a value.
+          These two were labelled by placeholder alone, so the moment both held
+          a number nothing on screen said which was which, and the miles and
+          the minutes got entered the wrong way round. A placeholder is not a
+          label: it is a hint that leaves exactly when it stops being obvious.
+          The example values move into the placeholders, where they belong. */}
+      <InputGroup w="120px" h="38px">
+        <Input
+          value={miles}
+          onChange={(e) => onMiles(e.target.value)}
+          placeholder={copy.milesPlaceholder}
+          aria-label={copy.milesLabel}
+          inputMode="decimal"
+          h="38px" pr="2.6rem" bg="white" border="1px solid" borderColor="gray.300"
+          fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+        />
+        <InputRightElement h="38px" w="2.6rem" pointerEvents="none">
+          <Text fontSize="xs" color="gray.500" fontWeight="500">
+            {copy.milesUnit}
+          </Text>
+        </InputRightElement>
+      </InputGroup>
+      <InputGroup w="130px" h="38px">
+        <Input
+          value={minutes}
+          onChange={(e) => onMinutes(e.target.value)}
+          placeholder={copy.minutesPlaceholder}
+          aria-label={copy.minutesLabel}
+          h="38px" pr="2.9rem" bg="white" border="1px solid" borderColor="gray.300"
+          fontSize={{ base: 'md', md: 'sm' }} borderRadius="sm"
+          _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+        />
+        <InputRightElement h="38px" w="2.9rem" pointerEvents="none">
+          <Text fontSize="xs" color="gray.500" fontWeight="500">
+            {copy.minutesUnit}
+          </Text>
+        </InputRightElement>
+      </InputGroup>
       <InfoDot label={copy.heading}>
         {originHelp && <Text mb={2} fontWeight="500" color="gray.700">{originHelp}</Text>}
         <Text mb={2}>{copy.lookItUpHelp}</Text>
@@ -691,6 +712,35 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   // another type and coming back does not silently lose it.
   const [clauseFlags, setClauseFlags] = useState<Record<string, boolean>>({});
   const offeredClauses = spec?.optionalClauses ?? [];
+
+  /**
+   * PRICE REVIEW follows the date, not memory. Same rule as the clause editor
+   * on the client screen; the reasoning lives there.
+   *
+   * It matters more here. This is where a booking is created, and a two-year
+   * wedding whose box nobody ticked is a price locked for two years by
+   * omission. The clause also states in its own first line that it applies
+   * only beyond 365 days, so ticking it on a nearer date puts a false sentence
+   * into a signed contract.
+   */
+  const PRICE_REVIEW_KEY = 'price_review_enabled';
+  const priceReviewDaysOut = (() => {
+    if (!eventDateIso) return null;
+    const t = new Date(`${eventDateIso.slice(0, 10)}T00:00:00Z`).getTime();
+    return Number.isNaN(t) ? null : Math.round((t - Date.now()) / 86_400_000);
+  })();
+  const priceReviewApplies = priceReviewDaysOut !== null && priceReviewDaysOut > 365;
+  const priceReviewTouched = useRef(false);
+
+  useEffect(() => {
+    if (!offeredClauses.includes(PRICE_REVIEW_KEY)) return;
+    const on = Boolean(clauseFlags[PRICE_REVIEW_KEY]);
+    if (priceReviewApplies && !on && !priceReviewTouched.current) {
+      setClauseFlags((prev) => ({ ...prev, [PRICE_REVIEW_KEY]: true }));
+    } else if (!priceReviewApplies && on) {
+      setClauseFlags((prev) => ({ ...prev, [PRICE_REVIEW_KEY]: false }));
+    }
+  }, [priceReviewApplies, offeredClauses, clauseFlags]);
 
   const [variables, setVariables] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ''])),
@@ -2217,9 +2267,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                   <Box key={key} pt={i === 0 ? 2 : 0}>
                     <Checkbox
                       isChecked={Boolean(clauseFlags[key])}
-                      onChange={(e) =>
-                        setClauseFlags((prev) => ({ ...prev, [key]: e.target.checked }))
-                      }
+                      isDisabled={key === PRICE_REVIEW_KEY && !priceReviewApplies}
+                      onChange={(e) => {
+                        if (key === PRICE_REVIEW_KEY) priceReviewTouched.current = true;
+                        setClauseFlags((prev) => ({ ...prev, [key]: e.target.checked }));
+                      }}
                       colorScheme="yellow"
                       alignItems="flex-start"
                     >
@@ -2230,6 +2282,20 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                         <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} lineHeight="1.5">
                           {copy.help}
                         </Text>
+                        {key === PRICE_REVIEW_KEY && (
+                          <Text
+                            fontSize="xs"
+                            color={priceReviewApplies ? 'green.600' : 'gray.400'}
+                            fontWeight="300"
+                            mt={1}
+                          >
+                            {priceReviewDaysOut === null
+                              ? t.clientDetail.priceReviewNoDate
+                              : priceReviewApplies
+                                ? t.clientDetail.priceReviewOn(priceReviewDaysOut)
+                                : t.clientDetail.priceReviewOff(priceReviewDaysOut)}
+                          </Text>
+                        )}
                       </Box>
                     </Checkbox>
                   </Box>
@@ -2542,7 +2608,18 @@ function TravelSummary({
             {copy.implausibleHeading}
           </Text>
           <Text fontSize="xs" color="red.900" fontWeight="300" lineHeight="1.6">
-            {copy.implausibleBody}
+            {/* Names the speed rather than describing the shape of the error.
+                "past anything you would drive in a day" reads as a complaint
+                about the DISTANCE, and it was read that way: 74 miles is an
+                ordinary trip, so the message looked wrong and the actual
+                fault, 111 mph, went unnoticed. */}
+            {copy.implausibleBody(
+              Math.round((parseMiles(oneWayMiles) ?? 0) + extraLegMiles),
+              Math.round(totalMinutes ?? 0),
+              Math.round(
+                (((parseMiles(oneWayMiles) ?? 0) + extraLegMiles) / ((totalMinutes ?? 1) / 60)) || 0,
+              ),
+            )}
           </Text>
         </Box>
       )}

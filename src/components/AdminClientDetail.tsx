@@ -1,7 +1,7 @@
 import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
 import { cardFeeOn } from '../data/payment-handles';
 import { fmtAdminDateTime } from '../utils/adminDate';
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaTrash from '../icons/fa/FaTrash';
@@ -4086,6 +4086,8 @@ function EditContractVariables({
   const { t } = useAdminLang();
   const [open, setOpen] = useState(false);
   const [vars, setVars] = useState<Record<string, string>>(portal.contract_variables ?? {});
+  // She unticked it deliberately; do not tick it back on under her finger.
+  const priceReviewTouched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   // Second step of the save, see the panel at the bottom of this component.
@@ -4205,11 +4207,57 @@ function EditContractVariables({
   )
     .filter((k) => !ALL_CLAUSE_KEYS.has(k))
     .sort();
+  /**
+   * PRICE REVIEW ticks itself, or refuses to be ticked.
+   *
+   * The clause opens by stating, in the contract the client signs, that it
+   * "applies only because the Event Date falls more than three hundred and
+   * sixty five (365) days after the date this Agreement is signed". So on a
+   * booking inside a year the clause is not merely unnecessary, its first
+   * sentence is FALSE. A checkbox that lets it be ticked anyway lets a
+   * contract contradict itself.
+   *
+   * And the other way round it was pure memory: the box sat blank on a
+   * two-year booking and nothing anywhere said so. A price agreed in one year
+   * and honoured in another, because a checkbox was not noticed.
+   *
+   * So the date decides. Beyond 365 days it ticks itself and can still be
+   * turned off, because locking a price is a legitimate goodwill choice and
+   * this is the owner's call, not the form's. Inside 365 days it is shown and
+   * disabled, rather than hidden, so the reason is visible instead of the row
+   * silently not existing.
+   */
+  const PRICE_REVIEW_KEY = 'price_review_enabled';
+  const priceReviewDaysOut = (() => {
+    const raw = portal.event_date;
+    if (!raw) return null;
+    const iso = typeof raw === 'string' ? raw.slice(0, 10) : new Date(raw).toISOString().slice(0, 10);
+    const t = new Date(`${iso}T00:00:00Z`).getTime();
+    if (Number.isNaN(t)) return null;
+    return Math.round((t - Date.now()) / 86_400_000);
+  })();
+  const priceReviewApplies = priceReviewDaysOut !== null && priceReviewDaysOut > 365;
+
   const clauseRows = [
     ...forcedClauses.map((key) => ({ key, kind: 'forced' as const })),
     ...offeredClauses.map((key) => ({ key, kind: 'offered' as const })),
     ...strandedClauses.map((key) => ({ key, kind: 'stranded' as const })),
   ];
+
+  // Kept in step with the date rather than with memory. Only ever writes when
+  // the value is actually wrong for the date, so it never fights a deliberate
+  // choice made within the range where the clause is legitimate.
+  useEffect(() => {
+    if (!offeredClauses.includes(PRICE_REVIEW_KEY)) return;
+    const on = (vars[PRICE_REVIEW_KEY] ?? '').trim().length > 0;
+    if (priceReviewApplies && !on && !priceReviewTouched.current) {
+      setVars((v) => ({ ...v, [PRICE_REVIEW_KEY]: 'yes' }));
+    } else if (!priceReviewApplies && on) {
+      // Not a preference being overridden: the clause's own first sentence
+      // would be untrue on this date.
+      setVars((v) => ({ ...v, [PRICE_REVIEW_KEY]: '' }));
+    }
+  }, [priceReviewApplies, offeredClauses, vars]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -4349,7 +4397,9 @@ function EditContractVariables({
                       key={key}
                       isChecked={on}
                       isReadOnly={kind === 'forced'}
+                      isDisabled={key === PRICE_REVIEW_KEY && !priceReviewApplies}
                       onChange={(e) => {
+                        if (key === PRICE_REVIEW_KEY) priceReviewTouched.current = true;
                         // isReadOnly already swallows this for a forced clause.
                         // Belt and braces anyway: the two clauses that are
                         // forced on by default are the minor and illness ones
@@ -4373,6 +4423,20 @@ function EditContractVariables({
                             {t.clientDetail.clauseAlwaysOn(
                               typeLabel(portal.contract_template_key),
                             )}
+                          </Text>
+                        )}
+                        {key === PRICE_REVIEW_KEY && (
+                          <Text
+                            fontSize="xs"
+                            color={priceReviewApplies ? 'green.600' : 'gray.400'}
+                            fontWeight="300"
+                            mt={1}
+                          >
+                            {priceReviewDaysOut === null
+                              ? t.clientDetail.priceReviewNoDate
+                              : priceReviewApplies
+                                ? t.clientDetail.priceReviewOn(priceReviewDaysOut)
+                                : t.clientDetail.priceReviewOff(priceReviewDaysOut)}
                           </Text>
                         )}
                         {kind === 'stranded' && (
