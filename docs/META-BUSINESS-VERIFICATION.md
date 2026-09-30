@@ -9,7 +9,7 @@ anticipated, and what verification unlocks downstream.
 | Field | Value | Notes |
 |---|---|---|
 | Business type | Sole proprietor | No LLC/DBA registered. Meta accepts individual verification with photo ID + utility bill showing name + address. |
-| Legal name | Veronika Gerzon | Whatever the ID says — no marketing name. |
+| Legal name | Veronika Polbina | She has NOT taken Gerzon. Polbina is her legal name and the one on her ID, her contracts and her insurance policy. Not a marketing name. |
 | Facebook Page | ✓ Already exists, linked to vero.art.photo | Required by Meta's plumbing regardless of whether we ever post to it. |
 | Business email | `vero@vero.photography` | **Test first** — mailbox must actually *receive* mail (Resend is send-only). If it doesn't, use personal Gmail. |
 | Business address | Vero's home address | Must match the utility bill. |
