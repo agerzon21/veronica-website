@@ -980,6 +980,26 @@ const STATIC_PAGES = [
       '<h2>Image removal requests</h2>' +
       '<p>Email <a href="mailto:vero@vero.photography">vero@vero.photography</a> with the subject line "Image removal request" and a link to the photograph.</p>',
   },
+  // Prerendered for the same reason the policies are, plus one of its own:
+  // the people it is written for search for it. "Wedding videographer
+  // northeastern Pennsylvania" and "second shooter Scranton" are real queries
+  // with nobody local answering them, and this page is the answer. It is also
+  // the one page on the site whose wrong reader is a couple, so the summary
+  // says who it is for in its first line.
+  {
+    path: '/collaborate',
+    heading: 'Collaborate',
+    title: 'Collaborate | Vero Photography',
+    description:
+      'Wedding videographers and second shooters in northeastern Pennsylvania: what Vero Photography looks for in a collaborator, how the work is paid, and how to get in touch.',
+    image: `${SITE}/assets/photos/site/contact-bg.webp`,
+    extra:
+      '<p>For photographers and videographers, not for couples. Vero Photography works with videographers on wedding days and occasionally with second photographers on larger weddings, booked and paid per event as independent contractors.</p>' +
+      '<h2>What we ask for</h2>' +
+      '<p>Work we can look at, your own equipment including backups, your own liability insurance, and a base in or near northeastern Pennsylvania.</p>' +
+      '<h2>Getting in touch</h2>' +
+      '<p>Use the contact form at <a href="https://vero.photography/contact">vero.photography/contact</a> and choose Collaboration as the enquiry type.</p>',
+  },
 ];
 
 // Drift guard. If a title or description here stops matching SEO.tsx, the two
@@ -992,6 +1012,7 @@ const STATIC_PAGES = [
   const PAGE_SOURCES = {
     '/privacy': 'src/pages/Privacy.tsx',
     '/terms': 'src/pages/Terms.tsx',
+    '/collaborate': 'src/pages/Collaborate.tsx',
   };
   const ownSource = Object.fromEntries(
     Object.entries(PAGE_SOURCES).map(([path, file]) => [
@@ -1177,6 +1198,13 @@ const staticUrls = [
   // Surfaced by the reachability check below: /journal was linked from every
   // page's noscript nav but had never been listed here.
   { loc: '/journal', changefreq: 'weekly', priority: '0.7' },
+  // Listed, unlike /privacy and /terms, because being FOUND is the entire
+  // point of it. "wedding videographer northeastern pennsylvania" and "second
+  // shooter scranton" are real queries with nobody local answering them, and
+  // the videographer this page is trying to reach is the one hire the
+  // business actually needs. Low priority: it is a recruiting page, and it
+  // should never outrank the pages a couple is looking for.
+  { loc: '/collaborate', changefreq: 'yearly', priority: '0.3' },
   { loc: '/gallery', changefreq: 'weekly', priority: '0.9' },
   { loc: '/gallery/portraits', changefreq: 'weekly', priority: '0.85' },
   { loc: '/gallery/weddings', changefreq: 'weekly', priority: '0.85' },

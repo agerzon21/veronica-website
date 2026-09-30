@@ -43,6 +43,11 @@ const SHOOT_TYPES = [
   { value: 'Family Session', label: 'Family' },
   { value: 'Maternity Session', label: 'Maternity' },
   { value: 'Other', label: 'Other' },
+  // Not a session. Photographers and videographers applying to work with us
+  // were already arriving through this form and landing among the couples,
+  // which made them easy to lose and easy to answer as though they were
+  // clients. See src/pages/Collaborate.tsx.
+  { value: 'Collaboration', label: 'Collaboration (photographers & videographers)' },
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;

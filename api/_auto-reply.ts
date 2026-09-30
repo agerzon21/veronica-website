@@ -45,7 +45,10 @@ export function escapeHtml(s: string): string {
 
 /** Produces a natural English phrase from the dropdown's shoot_type value. */
 function getShootBlurb(shootType: string | undefined): string {
-  if (!shootType || shootType === 'Other') return '';
+  // 'Collaboration' is a photographer applying, not a booking. "Thank you for
+  // reaching out about your collaboration" reads like a reply to the wrong
+  // person, so it takes the same silence Other does.
+  if (!shootType || shootType === 'Other' || shootType === 'Collaboration') return '';
   // Special case: "Wedding Photography" doesn't pair with "a" + "session"
   if (shootType === 'Wedding Photography') return ' about your wedding';
   // The rest are "X Session" — read naturally with "your"

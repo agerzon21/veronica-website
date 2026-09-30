@@ -125,6 +125,18 @@ const Footer = () => {
           the row still fits a 320px phone. */}
       <Box position="relative" overflow="hidden" bg="brand.surfaceFold" pb={`${PAD_BOTTOM}px`}>
         <SealHalf face={false} />
+        {/* Collaborate sits on its own line above the trio rather than inside
+            one of the groups. Two reasons, and the second is the real one.
+            The row below is a three column layout with fixed widths tuned so
+            the seal stays centred between the groups and the whole thing still
+            fits a 320px phone; a third link in either group breaks that.
+            And it is addressed to a different audience. Privacy, Terms,
+            Contact and Portal are all for couples. This one is for
+            photographers and videographers, and reading slightly apart from
+            the client links is the honest place for it. */}
+        <Flex position="relative" justify="center" pt="2px">
+          <FootLink to="/collaborate">For photographers</FootLink>
+        </Flex>
         <Flex position="relative" align="flex-start" justify="center">
           <Flex align="flex-start" justify="flex-end" gap="7px" w="clamp(99px, 29vw, 126px)">
             <FootLink to="/privacy">Privacy</FootLink>

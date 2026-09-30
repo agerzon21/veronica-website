@@ -23,7 +23,10 @@ interface PolicyLayoutProps {
   // "TERMS OF SERVICE").
   kicker: string;
   // ISO date the policy went into effect (rendered as "Month Day, Year").
-  effectiveDate: string;
+  // Optional: this layout owns the prose typography for every long-form page
+  // on the site, and not every one of them is a policy. A Collaborate page has
+  // no effective date and should not invent one to satisfy a prop.
+  effectiveDate?: string;
   // Optional lead paragraph rendered right below the header. Kept as a
   // ReactNode so callers can style bold spans / links inline.
   intro?: React.ReactNode;
@@ -53,7 +56,9 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
         <Box ref={heroRef} mb={{ base: 10, md: 14 }}>
           <Reveal shown={shown} from={{ opacity: 0, y: 12 }} duration={0.6}>
             <PageHeader eyebrow={kicker} title={title} size="content">
-              <Text textStyle="metaCaption">Effective {formatDate(effectiveDate)}</Text>
+              {effectiveDate ? (
+                <Text textStyle="metaCaption">Effective {formatDate(effectiveDate)}</Text>
+              ) : null}
             </PageHeader>
           </Reveal>
         </Box>

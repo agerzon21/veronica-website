@@ -104,6 +104,14 @@ const ROUTE_META: Record<string, RouteMeta> = {
     description:
       'Terms of service for vero.photography: how the site may be used, photo copyright, and how to request image removal.',
   },
+  // Aimed at photographers and videographers rather than couples, so the
+  // description says so in its first clause: the wrong reader should be able
+  // to tell from a search result that this page is not for them.
+  '/collaborate': {
+    title: 'Collaborate | Vero Photography',
+    description:
+      'Wedding videographers and second shooters in northeastern Pennsylvania: what Vero Photography looks for in a collaborator, how the work is paid, and how to get in touch.',
+  },
 };
 
 const SEO = () => {

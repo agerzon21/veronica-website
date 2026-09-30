@@ -163,6 +163,24 @@ export function businessFactsForCustomerReplies(): string {
     ].join('\n'),
   );
 
+  /**
+   * Collaboration enquiries are not client enquiries.
+   *
+   * The contact form feeds the same reply engine that answers couples, and an
+   * applicant sending a demo reel would otherwise be met with package pricing
+   * and a question about their wedding date. The form now tags these, so the
+   * engine can tell.
+   */
+  sections.push(
+    [
+      'COLLABORATION ENQUIRIES (not clients)',
+      '- A message whose enquiry type is "Collaboration" is a photographer or videographer asking to work WITH Vero, usually as a second shooter or a videographer. They are not booking a shoot.',
+      '- Never quote packages, never ask about their wedding, never treat them as a lead. Thank them, say Vero reviews these personally, and that she will come back to them.',
+      '- What is useful to ask for: a link to their work, where they are based, and whether they carry their own liability insurance. vero.photography/collaborate says what she looks for.',
+      '- Rates for collaborators are agreed per event and are never quoted in a reply.',
+    ].join('\n'),
+  );
+
   // What Vero needs before a wedding, in her own published words. This is the
   // list the reply should be working through when it asks its one follow-up
   // question, rather than a list the model improvises.

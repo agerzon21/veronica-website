@@ -39,6 +39,7 @@ const Admin = lazy(() => import('./pages/Admin'));
 const Journal = lazy(() => import('./pages/Journal'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Terms = lazy(() => import('./pages/Terms'));
+const Collaborate = lazy(() => import('./pages/Collaborate'));
 
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -380,6 +381,7 @@ function PrefetchPublicRoutes() {
       // the idle cost is nil and they stop feeling laggy on a cold click.
       prefetchChunk(() => import('./pages/Privacy'));
       prefetchChunk(() => import('./pages/Terms'));
+      prefetchChunk(() => import('./pages/Collaborate'));
     };
     // ── Warm route chunks on INTENT, not on a timer ──
     //
@@ -537,6 +539,7 @@ function AppShell() {
         <Route path="/journal/:slug" element={<Journal />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/collaborate" element={<Collaborate />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       </Suspense>
