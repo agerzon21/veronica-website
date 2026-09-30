@@ -54,6 +54,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { coreRulesForAssistant } from '../_reply-core-rules.js';
+import { BOOKING_REQUIREMENTS } from './_messages-summary.js';
 import {
   businessFactsForCustomerReplies,
   unknownsForCustomerReplies,
@@ -146,12 +147,44 @@ const AWAITING_APPROVAL = 'awaiting-approval';
  * speaks. Used only to decide whether to POINT OUT that nothing was written;
  * see the note where it is used for why over-matching is harmless.
  */
-const CLAIM_PHRASES: RegExp[] = [
-  /\b(updated|recorded|saved|noted|logged|added)\b/i,
-  /\bhas been (updated|recorded|saved|added|changed)\b/i,
-  /\bI(?:'ve| have) (updated|recorded|saved|noted|added)\b/i,
+export const CLAIM_PHRASES: RegExp[] = [
+  /\bhas been (updated|recorded|saved|added|changed|noted)\b/i,
+  /\bI(?:'ve| have)? ?(updated|recorded|saved|noted|logged|added|written down)\b/i,
   /(обновил|записал|сохранил|добавил|внёс|внес)/i,
 ];
+
+/**
+ * The text the claim phrases are actually matched against.
+ *
+ * WHY THIS IS NOT JUST finalReply
+ * The co-pilot instructions require the assistant to write every rewritten
+ * draft out IN FULL in the chat, so finalReply routinely contains a
+ * customer-facing letter as well as whatever it said to Vero. That letter has
+ * its own "I've noted your preferred date" in it, addressed to the customer
+ * and meaning something entirely different, and "I've updated the draft for
+ * Goldy" is a TRUE statement about a draft write that did happen.
+ *
+ * Matching the whole reply therefore fired the correction on essentially every
+ * draft revision. Vero watched "(Nothing was saved against this client.)"
+ * appear under six consecutive rewrites and reasonably concluded the panel was
+ * broken, which is exactly the outcome the original note said it wanted to
+ * avoid. The assumption that over-matching is harmless held right up until it
+ * matched every turn.
+ *
+ * So: strip the draft bodies this turn actually wrote, then strip any sentence
+ * that is explicitly about the draft. What survives is prose addressed to Vero
+ * about her knowledge base, which is the only thing this check is about.
+ */
+export function claimSurface(finalReply: string, draftTexts: string[]): string {
+  let out = finalReply;
+  for (const d of draftTexts) {
+    if (d && d.length > 20) out = out.split(d).join(' ');
+  }
+  // Sentence-level, because "I've updated the draft" sits in its own sentence
+  // alongside prose that may legitimately need checking.
+  out = out.replace(/[^.!?\n]*\b(draft|черновик|черновике|черновиќ)\b[^.!?\n]*/gi, ' ');
+  return out;
+}
 
 const GENERAL_SLOT = 'general';
 /**
@@ -821,7 +854,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const claimedToRecord =
       slot !== GENERAL_SLOT &&
       !dbWrites.some((w) => w.category === 'client_facts') &&
-      CLAIM_PHRASES.some((re) => re.test(finalReply));
+      CLAIM_PHRASES.some((re) =>
+        re.test(
+          claimSurface(
+            finalReply,
+            dbWrites.filter((w) => w.category === 'draft').map((w) => w.draft_text ?? ''),
+          ),
+        ),
+      );
 
     return res.status(200).json({
       success: true,
@@ -2147,7 +2187,8 @@ function toOpenaiMessage(m: StoredMessage): OpenAI.Chat.Completions.ChatCompleti
   return { role: 'user', content: m.content ?? '' };
 }
 
-function buildSystemPrompt(
+/** Exported for testing: this is the entire instruction set the assistant runs on. */
+export function buildSystemPrompt(
   contextRows: Array<{
     id: string;
     category: string;
@@ -2269,6 +2310,75 @@ at all. Never invent an id: if you do not have one in front of you, omit it.`;
     return `- **${spec.name}**: ${tail}.`;
   }).join('\n');
 
+  /**
+   * TODAY'S DATE.
+   *
+   * The model had no idea what day it was, which is not a small gap for a
+   * booking business. A contact form arrived with "preferred date 2026-09-30"
+   * on 2026-09-30, and the assistant drafted a cheerful reply confirming the
+   * date without noticing it was that afternoon. It took Vero four rounds of
+   * increasingly annoyed correction to get the draft to say "that date is
+   * today, did you mean a different one", because the model was not being
+   * stubborn, it genuinely could not tell.
+   *
+   * Everything about this business is dated: whether a requested date has
+   * already passed, whether a wedding is next month or next year, how stale a
+   * thread is, whether "this weekend" is two days away. All of it was being
+   * guessed at.
+   */
+  const now = new Date();
+  const todayBlock = `## TODAY IS ${now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })} (${now.toISOString().slice(0, 10)})
+Check every date you see against that before you write about it. A date that has already passed, or is today, or is tomorrow, is the single most important thing in a message and the customer usually has not noticed. Say so plainly and early in the draft rather than confirming it back as though it were normal.`;
+
+  /**
+   * WHAT A BOOKING ACTUALLY NEEDS, generated from BOOKING_REQUIREMENTS, the
+   * same list the summariser uses to decide what is still outstanding and the
+   * new-client form refuses to submit without.
+   *
+   * Without this the assistant improvised. Asked to reply to a family enquiry
+   * that already stated the session type, the date, the location, the name and
+   * the email, it asked the customer for her preferred themes, her phone
+   * number, "any important details", and how many hours she wanted, then added
+   * another question every time it was asked to revise. Four asks, of which
+   * one was a real gap.
+   *
+   * Vero's instruction was "how can we get her to a contract asap, that should
+   * be the train of thought". This is that list, so the question the draft asks
+   * is the question the contract is waiting on.
+   */
+  const needsByType = new Map<string, string[]>();
+  const universal: string[] = [];
+  for (const f of BOOKING_REQUIREMENTS) {
+    if (f.optional || f.source !== 'client') continue;
+    if (!f.types) {
+      universal.push(f.en);
+      continue;
+    }
+    for (const t of f.types) {
+      if (!needsByType.has(t)) needsByType.set(t, []);
+      needsByType.get(t)!.push(f.en);
+    }
+  }
+  const veroDecides = BOOKING_REQUIREMENTS.filter((f) => f.source === 'vero').map((f) => f.en);
+  const bookingNeedsBlock = [
+    '## WHAT A BOOKING ACTUALLY NEEDS (ask for these and nothing else)',
+    'Generated from the same list the contract form validates against, so it cannot drift from what Vero will actually be asked for when she creates the booking.',
+    '',
+    `**Every session type:** ${universal.join(', ')}.`,
+    ...[...needsByType.entries()].map(([t, fields]) => `**${t} also needs:** ${fields.join(', ')}.`),
+    '',
+    `**Vero decides these herself, so never ask a customer for them:** ${veroDecides.join(', ')}.`,
+    '',
+    'Before you ask a customer ANYTHING, check the thread for it first. A question about something they already told you reads as nobody having read their message, and it is the fastest way to lose a booking that was ready to close.',
+    'Ask at most TWO things in one reply, and only things on the list above. Preferred themes, styling ideas, "any other details", and what they are hoping for are NOT on the list: they are not contract fields, they will come up naturally, and asking for them turns a reply into a form.',
+    'When the list above is satisfied, stop gathering. Say what happens next: Vero prepares the contract, they review and sign it online, the retainer reserves the date. That is the goal of every one of these threads.',
+  ].join('\n');
+
   const langName = LANGUAGE_NAMES[language];
   // Language-specific concrete examples so the model doesn't default
   // to the wrong tongue when the user's UI has been switched.
@@ -2344,6 +2454,8 @@ send_reply and to nothing else.`
 
 You have full context that your only audience is Vero herself (or another admin helping her). Never introduce yourself as if you were meeting a stranger. Never talk ABOUT Vero in the third person to Vero. If she greets you with "hi" or "привет", greet her back naturally and briefly ("Привет! Что нужно?" / "Hey — what can I help with?"). Ask what she wants to work on, or offer a quick pointer if you know she's mid-way through something.
 
+${todayBlock}
+
 ${houseRulesBlock}
 ${openConversationBlock}
 
@@ -2411,6 +2523,8 @@ ${unknownsForCustomerReplies()}
 
 If Vero or Alex asks you to state one of these anyway, say which line stops you and what you can say instead. If they confirm they want it said regardless, write it as they asked and tell them plainly that it becomes a promise on the record. Do not quietly comply, and do not quietly refuse.
 
+${bookingNeedsBlock}
+
 ## HELPING VERO ANSWER CUSTOMERS (reply co-pilot)
 This is the single most valuable thing you do for her. Her current habit is to copy a whole conversation into ChatGPT, work out a reply there, and paste it back. You have MORE context than that — the full thread, her pricing, her tone, her services — so there is no reason for her to leave.
 
@@ -2418,7 +2532,10 @@ She can ask to reply to someone: "help me answer Sarah", "draft a reply to that 
 1. **If she named a person**, use list_conversations with that name and go straight to step 2. Don't make her pick from a list when she already told you who.
 2. **If she DIDN'T name anyone**, call list_conversations with no query, then show her the most recent 4-5 in a short numbered list — name, channel, and a few words about what they last said — and ask which one. Keep it scannable; she's picking, not reading.
 3. Use read_thread to read what was actually said. NEVER draft from the name alone.
-4. Write the draft IN THE CHAT so she can read it in full. Write it in the language the CUSTOMER uses, even if you and Vero are talking in another language. Use what you know — her pricing ranges, her services, her tone — and ask her for anything you'd need that isn't in the thread.
+4. Write the draft IN THE CHAT so she can read it in full, in the language the CUSTOMER uses even if you and Vero are talking in another. Use what you know: her pricing, her services, her tone.
+   **Work out what is genuinely missing before you write a word of it.** Take WHAT A BOOKING ACTUALLY NEEDS above, cross off everything the thread already contains, and what remains is the only thing worth asking about. Usually that is one item, sometimes two, often none at all. If still_missing came back from read_thread, that IS the list and you do not need to derive it again.
+   **Every reply is aimed at a signed contract.** That is the point of the thread, not a pleasant exchange of messages. So each draft either closes a real gap or moves them to the next step, and when nothing is missing it says what happens next rather than finding something else to ask.
+   **A revision replaces the previous draft, it does not extend it.** If Vero asks you to change one thing, change that thing and leave the rest alone. Never answer a revision request by appending another question: a draft that grows a sentence every round ends up as a questionnaire, and she has watched that happen.
 5. Then ASK ONCE, on the FIRST draft only: would you like me to send this, or change something? Do NOT call send_reply in the same turn you first show a draft, ever.
 6. Only after she approves ("yes", "send it", "да, отправь") call send_reply with confirmed=true and the exact approved text.
 7. **ON EVERY REVISION AFTER THAT, SHOW THE NEW TEXT AND STOP.** No preamble, no "here is the revised version", no summary of what you changed, and above all no asking again whether to send it. She asked for a change, you made it, she is reading it: she knows what it is and she knows she has not sent it yet. She already said this out loud, about this exact thing: "we dont need those follow up messages sent after every SINGLE message she sends, its just clutter."

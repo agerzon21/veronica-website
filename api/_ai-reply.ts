@@ -1501,6 +1501,29 @@ Then, in the same message, briefly address whatever the customer actually asked.
     ? ' **The message you are replying to mentions a specific date — this rule is live right now.**'
     : '';
 
+  /**
+   * TODAY'S DATE.
+   *
+   * This prompt has always had a rail about never confirming availability, and
+   * no idea what day it was, so it could not tell a date next summer from a
+   * date that had already passed. A contact form arrived requesting a session
+   * for the same afternoon it was submitted and the reply treated it as an
+   * ordinary future booking.
+   *
+   * Knowing the date does not loosen the availability rail: the model still
+   * never says a date is free. It lets it notice the thing the customer has
+   * usually missed, which is that the date they typed is today, tomorrow, or
+   * behind us.
+   */
+  const now = new Date();
+  const todayBlock = `## TODAY IS ${now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })} (${now.toISOString().slice(0, 10)})
+Check any date the customer gives against that before you write about it. If the date they asked for is today, tomorrow, or already past, say so plainly and ask whether they meant a different one. Do not quietly repeat it back as though it were a normal future booking. This does NOT change rule 1: you still never say whether a date is free.`;
+
   // The two personas differ ONLY in voice. Every safety rail below applies
   // identically either way — see api/_reply-core-rules.ts for which of these
   // are adjustable (this one) and which are not (dates, pricing, invented
@@ -1530,6 +1553,8 @@ Then, in the same message, briefly address whatever the customer actually asked.
   ].join('\n');
 
   return `${whoYouAre}
+
+${todayBlock}
 
 ${houseRulesBlock}
 

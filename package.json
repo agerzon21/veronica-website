@@ -36,7 +36,8 @@
     "check:hooks": "node scripts/check-hooks.mjs",
     "check:portal-header": "node scripts/check-portal-header.mjs",
     "check:time": "node scripts/check-time-prefill.mjs",
-    "check:assistant": "node scripts/check-assistant-context.mjs"
+    "check:assistant": "node scripts/check-assistant-context.mjs",
+    "check:kb": "node scripts/check-kb-drift.mjs"
   },
   "dependencies": {
     "@chakra-ui/icons": "^2.2.4",

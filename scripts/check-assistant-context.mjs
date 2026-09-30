@@ -129,6 +129,42 @@ check(
   'forbidden_claims_confirmed is missing from a tool schema or a guard. Both update_draft and send_reply need the check and the declared override, or the model cannot comply when Vero genuinely overrides.',
 );
 
+// ── Both prompts know what day it is ───────────────────────────────────
+// A contact form asked for a session on the day it was submitted and neither
+// prompt could tell, because neither had ever been given the date. It took
+// four rounds of correction to get a draft to say "that is today".
+check(
+  /## TODAY IS/.test(reply),
+  'The customer reply prompt no longer states the current date. Without it the model cannot tell a date next summer from one that has already passed.',
+);
+check(
+  /## TODAY IS/.test(assistant),
+  'The assistant prompt no longer states the current date.',
+);
+
+// ── The assistant knows what a booking actually needs ──────────────────
+// Generated from BOOKING_REQUIREMENTS, the same list the contract form
+// validates against. Without it the assistant improvised, asking a family
+// enquiry for themes, a phone number and "any important details" when the
+// only real gap was coverage hours.
+check(
+  /BOOKING_REQUIREMENTS/.test(assistant),
+  'The assistant prompt no longer renders BOOKING_REQUIREMENTS, so what it asks customers for can drift from what the contract form demands.',
+);
+check(
+  /WHAT A BOOKING ACTUALLY NEEDS/.test(assistant),
+  'The "what a booking actually needs" block is gone from the assistant prompt.',
+);
+
+// ── "Nothing was saved" does not fire on ordinary draft rewrites ───────
+// It matched a bare "noted" or "updated" anywhere in the reply, including
+// inside the customer-facing draft the instructions require it to print in
+// full. It fired on essentially every revision and read as a broken panel.
+check(
+  /export function claimSurface/.test(assistant),
+  'claimSurface is gone. Claim detection is back to matching the whole reply, which includes the draft body, so "(Nothing was saved)" will fire on every rewrite again.',
+);
+
 // ── The generated facts still match the site ───────────────────────────
 const prices = (wedding.packages ?? []).map((p) => p.price).filter(Boolean);
 check(

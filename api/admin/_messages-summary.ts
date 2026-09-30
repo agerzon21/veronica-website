@@ -283,7 +283,7 @@ function readDurations(src: unknown): DurationStatement[] {
  * the client for answers the contract has nowhere to print. Absent means the
  * field belongs to all six.
  */
-const BOOKING_REQUIREMENTS: Array<{
+export const BOOKING_REQUIREMENTS: Array<{
   key: BookingStringKey;
   en: string;
   ru: string;
