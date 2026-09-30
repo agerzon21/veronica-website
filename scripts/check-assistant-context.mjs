@@ -165,6 +165,19 @@ check(
   'claimSurface is gone. Claim detection is back to matching the whole reply, which includes the draft body, so "(Nothing was saved)" will fire on every rewrite again.',
 );
 
+// ── Facts Vero recorded by hand reach the drafts ──────────────────────
+// record_client_facts wrote to conversations.client_facts and nothing ever
+// read it back. One thread held an agreed price of $500, two locations and
+// two time windows, all invisible to every draft written to that customer.
+check(
+  /vero_recorded/.test(assistant),
+  'read_thread no longer returns `vero_recorded`. Facts Vero deliberately stopped to record go back to being written and never read, which is how an agreed price stays invisible to the next draft.',
+);
+check(
+  /client_facts/.test(readThread ?? '') || /SELECT summary_json, client_facts/.test(assistant),
+  'read_thread no longer selects client_facts alongside the summary.',
+);
+
 // ── The generated facts still match the site ───────────────────────────
 const prices = (wedding.packages ?? []).map((p) => p.price).filter(Boolean);
 check(

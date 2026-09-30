@@ -1029,7 +1029,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       name: 'read_thread',
       description:
         'Read one conversation: the most recent 40 messages in reading order, PLUS what the thread has already settled. Always call this before drafting a reply or answering any question about a booking. ' +
-        'Read these fields before the transcript, not after: `established` holds the booking details the thread has already agreed (date, location, names, amount, hours), `already_covered` is what has been discussed, `still_missing` is the ONLY list of things it is reasonable to ask the customer for, and `vero_decides` is for Vero alone, never the customer. ' +
+        'Read these fields before the transcript, not after: `vero_recorded` holds facts Vero typed in herself and outranks everything including the messages, because she often records what was agreed on a phone call the thread does not contain; `established` holds the booking details the thread has already agreed (date, location, names, amount, hours), `already_covered` is what has been discussed, `still_missing` is the ONLY list of things it is reasonable to ask the customer for, and `vero_decides` is for Vero alone, never the customer. ' +
         'Asking a customer for anything in `established` is a failure: it tells them nobody has been reading. If someone asks what is outstanding before a contract, answer from `still_missing` and `vero_decides`, do not ask the customer what they still need to send. ' +
         'Check `earlier_messages_not_shown`: when it is above zero this is a long thread and the transcript starts mid-conversation, so absence from the transcript does not mean it was never discussed. Trust `established` over your reading of the messages.',
       parameters: {
@@ -1863,10 +1863,32 @@ async function executeToolCall(
     let stillMissing: string[] = [];
     let veroDecides: string[] = [];
     let alreadyCovered: string[] = [];
+    /**
+     * Facts Vero typed in herself, via record_client_facts.
+     *
+     * These were WRITTEN and never READ. The tool saved them to
+     * conversations.client_facts, the write path re-read them only to merge
+     * the next one in, and nothing else in the system ever looked at them
+     * again: not this tool, not the summary, not the reply engine. So Vero
+     * could say "note that this one is quoted at $500 now", watch it confirm,
+     * and the very next draft would know nothing about it.
+     *
+     * That is the third thing found written-but-unread in this codebase, after
+     * the thread summary and the portal state, and it is the worst of the
+     * three, because these are the facts a human deliberately stopped to
+     * record. They outrank the transcript: a price renegotiated by phone
+     * exists here and nowhere else.
+     */
+    let veroRecorded: Array<Record<string, unknown>> = [];
     try {
       const [srow] = (await sql`
-        SELECT summary_json FROM conversations WHERE id = ${conversationId} LIMIT 1
-      `) as Array<{ summary_json: unknown }>;
+        SELECT summary_json, client_facts FROM conversations WHERE id = ${conversationId} LIMIT 1
+      `) as Array<{ summary_json: unknown; client_facts: unknown }>;
+      if (Array.isArray(srow?.client_facts)) {
+        veroRecorded = (srow.client_facts as Array<Record<string, unknown>>).filter(
+          (f) => f && typeof f.field === 'string',
+        );
+      }
       if (srow?.summary_json) {
         const raw = srow.summary_json;
         const s = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -1902,6 +1924,17 @@ async function executeToolCall(
       total_messages: totalMessages,
       showing_most_recent: msgs.length,
       earlier_messages_not_shown: Math.max(0, totalMessages - msgs.length),
+      /**
+       * Facts VERO recorded by hand. Highest authority in this payload: she
+       * stopped and typed them, often after a phone call the transcript does
+       * not contain. Where these disagree with the messages, these win.
+       */
+      vero_recorded: veroRecorded.map((f) => ({
+        field: f.field,
+        value: f.value,
+        said: f.quote ?? undefined,
+        at: f.at ?? undefined,
+      })),
       /** Settled facts. Never ask the customer to supply or reconfirm these. */
       established,
       already_covered: alreadyCovered,
