@@ -128,20 +128,29 @@ const Footer = () => {
       <Box position="relative" overflow="hidden" bg="brand.surfaceFold" pb={`${PAD_BOTTOM}px`}>
         <SealHalf face={false} />
         <Flex position="relative" align="flex-start" justify="center">
-          {/* THREE A SIDE, and the columns have to wrap rather than clip.
-              Six links cannot sit on one row at 320px: at the 11px floor the
-              left group alone needs about 170px against the 99px it used to
-              have. So the groups keep EQUAL widths, which is what holds the
-              seal in the centre, and wrap inside them on a narrow phone. The
-              44px link height is a touch target and stays, so a wrapped
-              footer is simply taller, which is the right trade. */}
+          {/* THREE A SIDE, in EQUAL columns, which is what holds the seal in
+              the centre: the width cannot follow the words or the seal drifts
+              with them.
+
+              The cap is set by the LEFT group, which is the wider of the two.
+              Measured at the 13px end of the type clamp, Collaborate, Privacy
+              and Terms need 215px between them against 183px for Contact,
+              Portal and Gallery. It was first set to 210, five pixels short,
+              and the symptom was Terms alone dropping to a second line and
+              landing under the copyright. 240 leaves room for the real font
+              to disagree with the arithmetic.
+
+              Below about 750px the viewport cannot hold 240 + 146 + 240, so
+              the groups wrap inside their columns rather than overflowing.
+              That is deliberate: the 44px link height is a touch target and
+              stays, so a narrow footer is simply taller. */}
           <Flex
             align="flex-start"
             justify="flex-end"
             wrap="wrap"
             rowGap="0px"
             gap="7px"
-            w="clamp(100px, 31vw, 210px)"
+            w="clamp(100px, 31vw, 240px)"
           >
             <FootLink to="/collaborate">Collaborate</FootLink>
             <Tick />
@@ -160,13 +169,13 @@ const Footer = () => {
             wrap="wrap"
             rowGap="0px"
             gap="7px"
-            w="clamp(100px, 31vw, 210px)"
+            w="clamp(100px, 31vw, 240px)"
           >
             <FootLink to="/contact">Contact</FootLink>
             <Tick />
             <FootLink to="/portal">Portal</FootLink>
             <Tick />
-            <FootLink to="/about">About</FootLink>
+            <FootLink to="/gallery">Gallery</FootLink>
           </Flex>
         </Flex>
       </Box>
