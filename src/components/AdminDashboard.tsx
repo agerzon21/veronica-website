@@ -76,7 +76,7 @@ const SORT_STORAGE_KEY = 'vg:clientsSort';
 const FILTER_STORAGE_KEY = 'vg:clientsFilter';
 
 const FILTER_KEYS: ClientFilter[] = ['all', 'upcoming', 'owes', 'overpaid', 'unsigned', 'deliver'];
-const SORT_KEYS: ClientSortKey[] = ['date', 'name', 'money'];
+const SORT_KEYS: ClientSortKey[] = ['agenda', 'date', 'name', 'money'];
 
 /**
  * One definition of the five columns, spread into the header and into every
@@ -107,7 +107,8 @@ const readStoredFilter = (): ClientFilter => {
 };
 
 const readStoredSort = (): ClientSort => {
-  const fallback: ClientSort = { key: 'date', dir: 'asc' };
+  // The agenda, so the screen still opens on the next shoot.
+  const fallback: ClientSort = { key: 'agenda', dir: 'asc' };
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(SORT_STORAGE_KEY);
@@ -160,8 +161,8 @@ const AdminDashboard = ({
 
   // Clicking the column she is already sorted by flips the direction.
   // Clicking a different one starts that column at the direction it is most
-  // useful in: the next shoot first for dates, A first for names, and the
-  // largest debt first for money.
+  // useful in: the next shoot first for the agenda, the earliest first for
+  // dates, A first for names, and the largest debt first for money.
   const toggleSort = (key: ClientSortKey) => {
     if (sort.key === key) setSort({ key, dir: sort.dir === 'asc' ? 'desc' : 'asc' });
     else setSort({ key, dir: key === 'money' ? 'desc' : 'asc' });
@@ -860,7 +861,7 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
             </SubLine>
           </VStack>
         </SimpleGrid>
-        {portal.contract_total_amount !== null && (
+        {(portal.contract_total_amount !== null || portal.complimentary) && (
           <Box>
             {/* Label and figure on ONE line. Stacked, the money block was
                 three lines on a card that is already the tallest thing in a
@@ -871,7 +872,8 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
               </Text>
               <MoneyCell portal={portal} align="right" hideBar />
             </Flex>
-            <PaidBar {...barPropsFor(portal)} />
+            {/* A free booking has nothing to fill a bar towards. */}
+            {!portal.complimentary && <PaidBar {...barPropsFor(portal)} />}
           </Box>
         )}
       </VStack>
@@ -947,6 +949,17 @@ function MoneyCell({
   hideBar?: boolean;
 }) {
   const { t } = useAdminLang();
+  // Before the total check, because a free booking usually has no total, and
+  // an empty cell (or "$0 of $0") is exactly what read as unpaid.
+  if (portal.complimentary) {
+    return (
+      <Box textAlign={align} minW={0}>
+        <Badge colorScheme="purple" variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
+          {t.clients.complimentary}
+        </Badge>
+      </Box>
+    );
+  }
   const owed = bookingTotal(portal);
   if (owed === null) return null;
   const remaining = balanceOf(portal) as number;

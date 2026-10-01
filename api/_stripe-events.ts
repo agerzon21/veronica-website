@@ -22,9 +22,17 @@ export const HANDLED_EVENTS = [
   // on a modern API version; refund.created carries them itself.
   'charge.refunded',
   'refund.created',
+  // A refund that FAILED (a closed card) puts the money back in the balance,
+  // so the negative row has to be undone. refund.failed and
+  // charge.refund.updated are handled too, but this one is enough.
+  'refund.updated',
   // A dispute takes the money immediately and may give it back months later.
   'charge.dispute.created',
   'charge.dispute.closed',
+  // The money movements themselves. An inquiry opens a dispute WITHOUT taking
+  // the money, and if it escalates, this is the only event that says so.
+  'charge.dispute.funds_withdrawn',
+  'charge.dispute.funds_reinstated',
 ] as const;
 
 export type HandledEvent = (typeof HANDLED_EVENTS)[number];

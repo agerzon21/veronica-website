@@ -47,7 +47,8 @@ import {
 } from '../_drive.js';
 import { describePhoto, type VisionResult } from '../_ai-vision.js';
 import { runGuarded, type CronTrigger } from './_guard.js';
-import { backfillStripeFees } from './_stripe-fee-backfill.js';
+import { backfillStripeFees, CRON_META as STRIPE_FEE_META } from './_stripe-fee-backfill.js';
+import { reconcileStripe, CRON_META as STRIPE_RECONCILE_META } from './_stripe-reconcile.js';
 
 // Cron metadata registered into cron_jobs on the first run. Kept as a
 // const so a grep for "gallery-sync" lands on the truth (schedule
@@ -138,14 +139,29 @@ async function doGallerySync() {
   // hiccup can never suppress the gallery sync, which is this job's actual
   // purpose, and because a missing fee is a number in a report while a missed
   // sync is photos a client cannot see.
+  //
+  // Both Stripe jobs go through runGuarded, so each keeps its own row in the
+  // Crons panel: its own on/off switch, its own run history, and a result
+  // somebody can read. Called bare, the fee backfill's switch did nothing and
+  // its outcome was recorded nowhere.
   try {
-    const fees = await backfillStripeFees();
-    console.log(
-      `[cron/gallery-sync] stripe fee backfill: considered=${fees.considered} filled=${fees.filled}`,
-    );
+    const fees = await runGuarded({ ...STRIPE_FEE_META, trigger: 'schedule' }, backfillStripeFees);
+    console.log(`[cron/gallery-sync] stripe fee backfill: ${JSON.stringify(fees.ok ?? fees.error ?? 'skipped')}`);
   } catch (err) {
     console.error(
       '[cron/gallery-sync] stripe fee backfill failed (continuing):',
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
+  // The daily check of Stripe against the ledger: the net under every other
+  // payment fix. Its own try/catch for the same reason as the backfill.
+  try {
+    const rec = await runGuarded({ ...STRIPE_RECONCILE_META, trigger: 'schedule' }, reconcileStripe);
+    console.log(`[cron/gallery-sync] stripe reconcile: ${JSON.stringify(rec.ok ?? rec.error ?? 'skipped')}`);
+  } catch (err) {
+    console.error(
+      '[cron/gallery-sync] stripe reconcile failed (continuing):',
       err instanceof Error ? err.message : String(err),
     );
   }

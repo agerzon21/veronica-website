@@ -146,6 +146,37 @@ export function cardPriceFor(direct: number): number {
   return cents / 100;
 }
 
+/**
+ * The card fee a booking's DIRECT payments have earned the right to have
+ * waived, minus what has already been waived.
+ *
+ * Each Zelle, Venmo, cash or Cash App payment of X stands in for a card
+ * payment of cardPriceFor(X), so it earns exactly the difference: a $485.20
+ * retainer sent by Zelle earns $14.80, which is what turns it back into the
+ * $500 the contract asked for.
+ *
+ * WHY PER PAYMENT. The waiver used to be capped at the card fee on the WHOLE
+ * booking and offered only once the remainder was under it, which went wrong
+ * both ways: a retainer paid directly could not be squared until the very end
+ * (and with two direct payments, never), while a booking paid entirely BY
+ * CARD could have a later overtime charge "waived" as a fee nobody avoided.
+ * Earned this way, a card-only booking earns nothing and every direct payment
+ * earns exactly its own discount.
+ *
+ * Shared by the server, which enforces it, and the admin screen, which offers
+ * it, so the two can never disagree about the number.
+ */
+export function earnedDirectDiscount(directPayments: number[], alreadyWaived: number): number {
+  let cents = 0;
+  for (const x of directPayments) {
+    if (Number.isFinite(x) && x > 0) cents += toCents(cardPriceFor(x)) - toCents(x);
+  }
+  return Math.max(cents - toCents(alreadyWaived), 0) / 100;
+}
+
+/** The method label a waiver row carries, which is how it is recognised. */
+export const CARD_FEE_DISCOUNT_METHOD = 'Card fee discount';
+
 /** True when cards are real for ordinary clients. */
 export const CARD_PAYMENTS_ENABLED = (CARD_PAYMENTS_MODE as CardPaymentsMode) === 'on';
 

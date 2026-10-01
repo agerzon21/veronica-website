@@ -278,25 +278,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      */
     let chargesTotal = 0;
     try {
+      // Summed from the ROWS, not read off the stored total, because this is
+      // the gate that releases photos, and the stored total has drifted
+      // before (insurance once wrote charges without re-summing it).
       const chargeRows = (await sql`
-        select charges_total from client_portals where id = ${id} limit 1
-      `) as Array<{ charges_total: string | null }>;
-      chargesTotal = parseFloat(chargeRows[0]?.charges_total ?? '0') || 0;
+        select coalesce(sum(amount), 0)::text as total from portal_charges where client_portal_id = ${id}
+      `) as Array<{ total: string | null }>;
+      chargesTotal = parseFloat(chargeRows[0]?.total ?? '0') || 0;
     } catch {
       /* pre-migration-035 database: nothing has been charged */
     }
-    const owed = totalAmount !== null ? totalAmount + chargesTotal : null;
+    /**
+     * Shot for free (migration 048): nothing is owed, so there is nothing for
+     * the guard rail to hold the photos against. Allowed to fail like the
+     * charges read above, for a database the migration has not reached.
+     */
+    let complimentary = false;
+    try {
+      const c = (await sql`
+        select complimentary from client_portals where id = ${id}
+      `) as Array<{ complimentary: boolean }>;
+      complimentary = c[0]?.complimentary === true;
+    } catch {
+      /* migration 048 not applied: nothing is marked free yet */
+    }
+    const owed = totalAmount !== null && !complimentary ? totalAmount + chargesTotal : null;
+
+    /**
+     * Compared in WHOLE CENTS. As floats, 2500 + 256.22 comes out larger than
+     * 2756.22, so a booking paid to the cent could be refused here as owing
+     * $0, which is about one in a hundred real total-plus-charge pairs.
+     */
+    const owedCents = owed !== null ? Math.round(totalAmount! * 100) + Math.round(chargesTotal * 100) : null;
+    const paidCents = Math.round(paidToDate * 100);
 
     if (
       !confirmUnpaid &&
       portal.contract_status === 'signed' &&
-      owed !== null &&
-      paidToDate < owed
+      owedCents !== null &&
+      paidCents < owedCents
     ) {
-      const outstanding = owed - paidToDate;
+      const outstanding = (owedCents - paidCents) / 100;
+      // Whole dollars print whole; anything with cents prints the cents, so
+      // $12.63 is not shown as $13.
+      const usd = (c: number) => (c % 100 === 0 ? (c / 100).toFixed(0) : (c / 100).toFixed(2));
       return res.status(409).json({
         success: false,
-        error: `Cannot deliver yet: $${outstanding.toFixed(0)} of $${owed.toFixed(0)} is still outstanding. Log the payment, or confirm to deliver anyway.`,
+        error: `Cannot deliver yet: $${usd(owedCents - paidCents)} of $${usd(owedCents)} is still outstanding. Log the payment, or confirm to deliver anyway.`,
         unpaid_balance: outstanding,
         paid_to_date: paidToDate,
         contract_total_amount: totalAmount,

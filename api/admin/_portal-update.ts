@@ -419,9 +419,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * a booking that never had these variables: a gallery-only row has no
      * total_amount key and must not gain one.
      */
+    /*
+     * And EVERY re-render, not only an amount edit: the three money fields are
+     * derived, never typed. "Edit contract fields" used to offer them as free
+     * text, and foldDerivedVariables lets a key the caller names win, which is
+     * right for a name and wrong for money. Vero could type $2,800 there as a
+     * discount, the client signed for $2,800, and the balance, the card
+     * checkout and the delivery gate went on billing the $3,000 column, all
+     * frozen at signing. So whenever this contract is about to be rendered,
+     * the billed columns overwrite whatever was posted for these three keys.
+     */
     if (
       !contractFrozen &&
-      ('contract_total_amount' in patch || 'contract_retainer_amount' in patch)
+      (patchedVariables !== null ||
+        templateKeyChanged ||
+        'contract_total_amount' in patch ||
+        'contract_retainer_amount' in patch)
     ) {
       const existingVars = existing[0].contract_variables ?? {};
       if ('total_amount' in existingVars) {
@@ -451,13 +464,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Both are needed: remaining_balance is a stored string, not something
         // the template derives, so it cannot be left to drift on its own.
         if (total !== null && retainer !== null) {
-          patchedVariables = foldDerivedVariables(patchedVariables, existingVars, {
+          // A plain spread, NOT foldDerivedVariables: here the column wins
+          // over a value the caller posted, which is the point (see above).
+          patchedVariables = {
+            ...(patchedVariables ?? existingVars),
             total_amount: formatContractMoney(total),
             retainer_amount: formatContractMoney(retainer),
             // Floored, so a retainer larger than the total renders "$0"
             // rather than a negative balance in a signed document.
             remaining_balance: formatContractMoney(Math.max(total - retainer, 0)),
-          });
+          };
         }
       }
     }
@@ -600,6 +616,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (typeof patch.gallery_enabled === 'boolean') {
       await sql`update client_portals set gallery_enabled = ${patch.gallery_enabled}, updated_at = now() where id = ${id}`;
+    }
+    // Shot for free, for family or friends (migration 048). A marker for the
+    // admin and for tax, not a price: it changes no balance, so nothing else
+    // here needs to know about it.
+    if (typeof patch.complimentary === 'boolean') {
+      await sql`update client_portals set complimentary = ${patch.complimentary}, updated_at = now() where id = ${id}`;
     }
     // Extending a gallery that is about to expire.
     //

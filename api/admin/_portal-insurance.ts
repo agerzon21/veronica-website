@@ -28,6 +28,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
+import { randomUUID } from 'node:crypto';
+import { writeWithRecompute } from '../_payments.js';
 import { requireAdmin } from '../_admin-auth.js';
 
 /** Mirrors the CHECK in migration 047, so a typo is a 400 and not a 500. */
@@ -111,17 +113,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const billable =
         typeof req.body?.billable === 'boolean' ? req.body.billable : defaultBillable(trigger);
 
-      await sql`
-        update client_portals set
-          insurance_status = ${status},
-          insurance_trigger = ${trigger},
-          insurance_note = ${note},
-          insurance_billable = ${billable},
-          insurance_estimate = ${money(req.body?.estimate)},
-          insurance_additional_insured = ${str(req.body?.additional_insured)},
-          updated_at = now()
-        where id = ${id}
-      `;
+      /**
+       * Saving the reasons never UN-buys a policy. The form's Save sends the
+       * status it opened with, and on a purchased policy that used to drop it
+       * back to "needed" while the cover was real and paid for. Only 'clear'
+       * or an explicit 'declined' or 'none' move it off purchased.
+       */
+      const statusToWrite = portal.insurance_status === 'purchased' && status === 'needed' ? 'purchased' : status;
+      const writes = [
+        sql`
+          update client_portals set
+            insurance_status = ${statusToWrite},
+            insurance_trigger = ${trigger},
+            insurance_note = ${note},
+            insurance_billable = ${billable},
+            insurance_estimate = ${money(req.body?.estimate)},
+            insurance_additional_insured = ${str(req.body?.additional_insured)},
+            updated_at = now()
+          where id = ${id}
+        `,
+      ];
+      /**
+       * "Charge this to the client" switched OFF must take the charge off their
+       * balance, here as well as in purchase. It used to stay, so the client
+       * kept owing for cover Vero had decided to absorb. Switching it back ON
+       * does not re-bill from here: recording the purchase does, because only
+       * that knows the actual cost.
+       */
+      if (!billable && portal.insurance_charge_id) {
+        writes.push(sql`delete from portal_charges where id = ${portal.insurance_charge_id} and client_portal_id = ${id}`);
+        writes.push(sql`update client_portals set insurance_charge_id = null where id = ${id}`);
+      }
+      await writeWithRecompute(sql, id, writes, { charges: true });
       return finish(sql, id, res, portal);
     }
 
@@ -137,19 +160,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const billable =
         typeof req.body?.billable === 'boolean' ? req.body.billable : defaultBillable(portal.insurance_trigger);
 
-      await sql`
-        update client_portals set
-          insurance_status = 'purchased',
-          insurance_actual = ${actual},
-          insurance_provider = ${provider},
-          insurance_policy_ref = ${policyRef},
-          insurance_document_url = ${documentUrl},
-          insurance_billable = ${billable},
-          insurance_purchased_at = now(),
-          insurance_note = coalesce(${note}, insurance_note),
-          updated_at = now()
-        where id = ${id}
-      `;
+      const writes = [
+        sql`
+          update client_portals set
+            insurance_status = 'purchased',
+            insurance_actual = ${actual},
+            insurance_provider = ${provider},
+            insurance_policy_ref = ${policyRef},
+            insurance_document_url = ${documentUrl},
+            insurance_billable = ${billable},
+            insurance_purchased_at = now(),
+            insurance_note = coalesce(${note}, insurance_note),
+            updated_at = now()
+          where id = ${id}
+        `,
+      ];
 
       if (billable) {
         // What the client reads on their own invoice. Names the policy and the
@@ -164,45 +189,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .filter(Boolean)
           .join(' ');
 
-        if (portal.insurance_charge_id) {
-          // Already charged once. Correct the existing row rather than adding
-          // a second: re-saving a record must never bill a client twice.
-          await sql`
-            update portal_charges
-            set amount = ${actual}, note = ${label}, reason = 'insurance'
-            where id = ${portal.insurance_charge_id} and client_portal_id = ${id}
-          `;
-        } else {
-          const [charge] = (await sql`
-            insert into portal_charges (client_portal_id, amount, reason, note, charged_at)
-            values (${id}, ${actual}, 'insurance', ${label}, now())
-            returning id
-          `) as Array<{ id: string }>;
-          await sql`
-            update client_portals set insurance_charge_id = ${charge.id} where id = ${id}
-          `;
-        }
+        /**
+         * BILLED ONCE, by a stable id. Re-recording corrects the existing
+         * charge rather than adding a second, and the id is chosen here so
+         * the charge and the pointer to it are written in the same
+         * transaction. An UPSERT rather than an UPDATE, because the charge row
+         * can have been deleted from under its pointer, and an UPDATE then
+         * changed nothing while the panel reported the client billed.
+         */
+        const chargeId = portal.insurance_charge_id ?? randomUUID();
+        writes.push(sql`
+          insert into portal_charges (id, client_portal_id, amount, reason, note, charged_at)
+          values (${chargeId}, ${id}, ${actual}, 'insurance', ${label}, now())
+          on conflict (id) do update
+            set amount = excluded.amount, note = excluded.note, reason = 'insurance'
+            where portal_charges.client_portal_id = ${id}
+        `);
+        writes.push(sql`update client_portals set insurance_charge_id = ${chargeId} where id = ${id}`);
       } else if (portal.insurance_charge_id) {
         // Flipped to non-billable after a charge existed. Remove it, or the
         // client keeps paying for cover Vero has decided to absorb.
-        await sql`
-          delete from portal_charges
-          where id = ${portal.insurance_charge_id} and client_portal_id = ${id}
-        `;
-        await sql`update client_portals set insurance_charge_id = null where id = ${id}`;
+        writes.push(sql`delete from portal_charges where id = ${portal.insurance_charge_id} and client_portal_id = ${id}`);
+        writes.push(sql`update client_portals set insurance_charge_id = null where id = ${id}`);
       }
+
+      // One transaction, with charges_total re-summed inside it. Without that
+      // re-sum, card checkout and the delivery gate read a stale total.
+      await writeWithRecompute(sql, id, writes, { charges: true });
 
       return finish(sql, id, res, portal);
     }
 
     if (action === 'clear') {
+      const writes = [];
       if (portal.insurance_charge_id) {
-        await sql`
+        writes.push(sql`
           delete from portal_charges
           where id = ${portal.insurance_charge_id} and client_portal_id = ${id}
-        `;
+        `);
       }
-      await sql`
+      writes.push(sql`
         update client_portals set
           insurance_status = 'none', insurance_trigger = null, insurance_note = null,
           insurance_estimate = null, insurance_actual = null, insurance_provider = null,
@@ -210,7 +236,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           insurance_additional_insured = null, insurance_purchased_at = null,
           insurance_charge_id = null, updated_at = now()
         where id = ${id}
-      `;
+      `);
+      await writeWithRecompute(sql, id, writes, { charges: true });
       return finish(sql, id, res, portal);
     }
 

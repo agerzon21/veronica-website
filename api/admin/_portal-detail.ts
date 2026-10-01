@@ -82,6 +82,9 @@ type PaymentRow = {
    * Paid stat it shows comes off the portal row rather than from here.
    */
   kind: 'payment' | 'tip';
+  /** How it arrived and whether it cleared: what decides which payments were DIRECT. */
+  source: 'manual' | 'stripe';
+  status: string;
 };
 
 type ChargeRow = {
@@ -195,7 +198,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const payments = (await sql`
       select id, amount, method, note, paid_at, created_at,
-             coalesce(kind, 'payment') as kind
+             coalesce(kind, 'payment') as kind,
+             coalesce(source, 'manual') as source, status
       from payment_entries
       where client_portal_id = ${id}
       order by paid_at desc, created_at desc
@@ -224,6 +228,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-035 database: no charges exist, so none are shown */
     }
     const chargesTotal = charges.reduce((sum, c) => sum + parseFloat(c.amount), 0);
+
+    /**
+     * Shot for free, for family or friends (migration 048). Fetched on its own
+     * and allowed to fail like the charges above, so a deploy that lands before
+     * the column exists shows nothing marked free instead of an error screen.
+     */
+    let complimentary = false;
+    try {
+      const freeRows = (await sql`
+        select complimentary from client_portals where id = ${id}
+      `) as Array<{ complimentary: boolean }>;
+      complimentary = freeRows[0]?.complimentary === true;
+    } catch {
+      /* pre-migration-048 database: nothing is marked free */
+    }
 
     /**
      * Five fields the CLIENT portal view renders that this endpoint never
@@ -262,6 +281,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Owed = contract_total_amount + charges_total - paid_to_date. Every
         // screen that prints a remaining balance needs this third number.
         charges_total: chargesTotal,
+        complimentary,
         // We never return the raw blob URL — only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,
@@ -294,6 +314,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // NOT in paid_to_date (migration 043), so anything summing this array
         // without it reports the wrong balance.
         kind: p.kind === 'tip' ? ('tip' as const) : ('payment' as const),
+        // Selected for the same reason and dropped here the same way, so the
+        // screen took every card payment for one made directly and offered to
+        // waive a card fee on money that came BY card. It also hides the
+        // delete control the server refuses on a card row.
+        source: p.source === 'stripe' ? ('stripe' as const) : ('manual' as const),
+        status: p.status ?? null,
       })),
       charges: charges.map((c) => ({
         id: c.id,

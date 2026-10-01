@@ -30,6 +30,7 @@ import instagramCheckHandler from './cron/_instagram-check.js';
 import gallerySyncHandler from './cron/_gallery-sync.js';
 import igAvatarRefreshHandler, { CRON_META as IG_AVATAR_META } from './cron/_ig-avatar-refresh.js';
 import stripeFeeBackfillHandler, { CRON_META as STRIPE_FEE_META } from './cron/_stripe-fee-backfill.js';
+import stripeReconcileHandler, { CRON_META as STRIPE_RECONCILE_META } from './cron/_stripe-reconcile.js';
 
 // Exported so the admin "Run now" endpoint (api/admin/_crons-run-now.ts)
 // can look a handler up by name and invoke it in-process, instead of
@@ -49,6 +50,9 @@ export const HANDLERS: Record<
   // Also no vercel.json entry, for the same reason: both Hobby slots are
   // taken. Chained from gallery-sync, which already runs daily.
   'stripe-fee-backfill': stripeFeeBackfillHandler,
+  // The daily check of Stripe against the ledger. No vercel.json entry for
+  // the same reason; chained from gallery-sync, and runnable from the panel.
+  'stripe-reconcile': stripeReconcileHandler,
 };
 
 /**
@@ -64,7 +68,7 @@ export const HANDLERS: Record<
  * _crons-list.ts seeds from this so any such job shows up immediately, with its
  * real enable toggle, Run-now button and run history.
  */
-export const UNSCHEDULED_CRON_META = [IG_AVATAR_META, STRIPE_FEE_META] as const;
+export const UNSCHEDULED_CRON_META = [IG_AVATAR_META, STRIPE_FEE_META, STRIPE_RECONCILE_META] as const;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expected = process.env.CRON_SECRET;

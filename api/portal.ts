@@ -35,6 +35,7 @@ import favoriteHandler from './portal/_favorite.js';
 import requestResetHandler from './portal/_request-reset.js';
 import resetPasswordHandler from './portal/_reset-password.js';
 import payStartHandler from './portal/_pay-start.js';
+import payConfirmHandler from './portal/_pay-confirm.js';
 
 const HANDLERS: Record<
   string,
@@ -56,6 +57,7 @@ const HANDLERS: Record<
   // booking, never read from the request, so a client cannot settle a wedding
   // for a dollar.
   'pay-start': payStartHandler,
+  'pay-confirm': payConfirmHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

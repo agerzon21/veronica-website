@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
 import { listWebhookEndpoints } from '../_stripe.js';
 import { HANDLED_EVENTS } from '../_stripe-events.js';
+import { openPaymentIssues } from '../_payment-alerts.js';
 
 /**
  * Config health — which environment variables are actually set in the running
@@ -385,7 +386,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
    * cries wolf about a working site is worse than one that says it cannot tell.
    */
   let stripeWebhook: {
-    state: 'ok' | 'incomplete' | 'unknown' | 'no-endpoint';
+    state: 'ok' | 'incomplete' | 'unknown' | 'no-endpoint' | 'disabled' | 'wrong-url';
     missing: string[];
     subscribed: number;
     url: string | null;
@@ -395,8 +396,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (stripeKey) {
     try {
       const endpoints = await listWebhookEndpoints();
-      const ours = endpoints.filter((e) => (e.url ?? '').includes('/api/inbox/stripe-webhook'));
-      if (ours.length === 0) {
+      /**
+       * THIS site's exact address, and ENABLED. The check used to accept any
+       * endpoint whose URL merely contained the path and never read its
+       * status, so a webhook Stripe had DISABLED after days of failed
+       * deliveries, or one pointed at an old host that only redirects (Stripe
+       * counts a redirect as a failure), both showed green while no payment
+       * event was arriving at all.
+       */
+      const origin = (process.env.SITE_ORIGIN || 'https://vero.photography').replace(/\/$/, '');
+      const expected = `${origin}/api/inbox/stripe-webhook`;
+      const norm = (u: string | undefined) => (u ?? '').replace(/\/$/, '');
+      const exact = endpoints.filter((e) => norm(e.url) === expected);
+      const elsewhere = endpoints.filter(
+        (e) => norm(e.url) !== expected && (e.url ?? '').includes('/api/inbox/stripe-webhook'),
+      );
+      const ours = exact.filter((e) => e.status === 'enabled');
+      if (exact.length > 0 && ours.length === 0) {
+        stripeWebhook = {
+          state: 'disabled',
+          missing: [],
+          subscribed: 0,
+          url: exact[0].url ?? null,
+          note: 'Stripe has turned this webhook OFF, usually after days of failed deliveries, so no payment events are arriving. Re-enable it in the Stripe dashboard, then check that the signing secret in Vercel matches.',
+        };
+      } else if (exact.length === 0 && elsewhere.length > 0) {
+        stripeWebhook = {
+          state: 'wrong-url',
+          missing: [...HANDLED_EVENTS],
+          subscribed: 0,
+          url: elsewhere[0].url ?? null,
+          note: `A Stripe webhook points at ${elsewhere[0].url}, not at ${expected}. Stripe counts a redirect as a failed delivery, so change the endpoint URL in Stripe to exactly this site's address.`,
+        };
+      } else if (ours.length === 0) {
         stripeWebhook = {
           state: 'no-endpoint',
           missing: [...HANDLED_EVENTS],
@@ -431,16 +463,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         missing: [],
         subscribed: 0,
         url: null,
-        note: 'Could not ask Stripe. The key may not carry the webhook read permission.',
+        note: 'Could not ask Stripe. The key may not carry the webhook read permission, or it may have been revoked; if card payments also fail to start, it is the key.',
       };
     }
   }
+
+  // Problems the payment path could not handle on its own (api/_payment-alerts.ts).
+  const paymentIssues = await openPaymentIssues();
 
   return res.status(200).json({
     success: true,
     environment: process.env.VERCEL_ENV ?? 'development',
     stripeMode,
     stripeWebhook,
+    paymentIssues,
     checks: resolved,
     broken: broken.length,
     coveredByFallback: missing.length - broken.length,

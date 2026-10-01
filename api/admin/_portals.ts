@@ -112,6 +112,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-035 database: nothing has been charged */
     }
 
+    /**
+     * Bookings shot for free, for family or friends (migration 048). Its own
+     * query and allowed to fail for the same reason as charges, and NOT folded
+     * into that one: a missing column there would take the charges down with
+     * it. On a database without the column nothing is marked free, which is
+     * exactly what this list showed before the marker existed.
+     */
+    const complimentaryIds = new Set<string>();
+    try {
+      const freeRows = (await sql`
+        select id from client_portals where complimentary
+      `) as Array<{ id: string }>;
+      for (const f of freeRows) complimentaryIds.add(f.id);
+    } catch {
+      /* pre-migration-048 database: nothing is marked free */
+    }
+
     return res.status(200).json({
       success: true,
       level: auth.level,
@@ -129,6 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         contract_total_amount: r.contract_total_amount ? parseFloat(r.contract_total_amount) : null,
         paid_to_date: parseFloat(r.paid_to_date),
         charges_total: chargesById.get(r.id) ?? 0,
+        complimentary: complimentaryIds.has(r.id),
         drive_url: r.drive_url,
         gallery_delivered_at: r.gallery_delivered_at,
         gallery_expires_at: r.gallery_expires_at,

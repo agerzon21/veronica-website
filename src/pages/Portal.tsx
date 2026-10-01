@@ -208,12 +208,18 @@ function restorableSession(pathname: string, search: string): StoredSession | nu
  * just sent. The only reasonable reading is that the payment failed, and the
  * next thing anyone does is pay again.
  *
- * The webhook is still the only thing that records money. This polls the
- * portal until the ledger moves, so the page tells the truth on its own rather
- * than depending on the client thinking to press Refresh Portal.
+ * FIRST it asks STRIPE, through api/portal/_pay-confirm.ts, using the session
+ * id Stripe put on the return link. That endpoint records the payment if
+ * Stripe says it is paid, so a webhook that never arrives no longer leaves a
+ * paying client looking at an unchanged balance. It also answers the case the
+ * old poll got wrong: when the webhook had ALREADY landed before this page
+ * loaded, the baseline below was taken after the money moved, the poll never
+ * saw it move, and a successful payment ended on "it can take a minute".
  *
- * Give up after five tries and say so plainly. A banner that spins forever is
- * a worse lie than the silence it replaced.
+ * Only if that cannot answer does it poll the portal until the ledger moves,
+ * and after five tries it says so plainly, and says not to pay again. A banner
+ * that spins forever, or claims success it has not checked, is a worse lie
+ * than the silence it replaced.
  */
 function PaymentReturnBanner({
   credentials,
@@ -233,6 +239,11 @@ function PaymentReturnBanner({
       ? false
       : new URLSearchParams(window.location.search).get('tip') === '1',
   );
+  // Stripe fills this in on the return link. It only names which session to
+  // ask about; everything else comes from Stripe, on the server.
+  const [sessionId] = useState(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('session_id'),
+  );
 
   // The numbers as they stood the moment we landed. A ref, because `data`
   // changes under us the instant the poll succeeds and a state copy would
@@ -242,7 +253,7 @@ function PaymentReturnBanner({
     baseline.current = { paid: data.paid_to_date ?? 0, tips: data.tips_total ?? 0 };
   }
 
-  const [phase, setPhase] = useState<'checking' | 'confirmed' | 'slow' | 'cancelled' | 'none'>(
+  const [phase, setPhase] = useState<'checking' | 'confirmed' | 'processing' | 'slow' | 'cancelled' | 'none'>(
     flag === '1' ? 'checking' : flag === '0' ? 'cancelled' : 'none',
   );
 
@@ -253,6 +264,7 @@ function PaymentReturnBanner({
     const url = new URL(window.location.href);
     url.searchParams.delete('paid');
     url.searchParams.delete('tip');
+    url.searchParams.delete('session_id');
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
   }, [flag]);
 
@@ -295,18 +307,55 @@ function PaymentReturnBanner({
         ? (d.tips_total ?? 0) > (baseline.current?.tips ?? 0)
         : (d.paid_to_date ?? 0) > (baseline.current?.paid ?? 0);
 
+    const fetchPortal = async (): Promise<ClientPortalData | null> => {
+      const res = await fetch('/api/portal/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+      });
+      const next = await res.json();
+      return res.ok && next.success ? (next as ClientPortalData) : null;
+    };
+
+    /** Ask Stripe, via our server, and record the payment if it is paid. */
+    const confirmWithStripe = async (): Promise<boolean> => {
+      if (!sessionId) return false;
+      try {
+        const res = await fetch('/api/portal/pay-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: credentials.email,
+            password: credentials.password,
+            session_id: sessionId,
+          }),
+        });
+        const out = await res.json();
+        if (cancelled) return true;
+        if (res.ok && out.success && (out.status === 'recorded' || out.status === 'already')) {
+          const next = await fetchPortal();
+          if (cancelled) return true;
+          if (next) onDataUpdate(next);
+          setPhase('confirmed');
+          return true;
+        }
+        if (res.ok && out.success && out.status === 'not-paid') {
+          setPhase('processing');
+          return true;
+        }
+      } catch {
+        // Could not ask. Not a failed payment: fall back to watching the ledger.
+      }
+      return false;
+    };
+
     const tick = async () => {
       tries += 1;
       try {
-        const res = await fetch('/api/portal/client', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: credentials.email, password: credentials.password }),
-        });
-        const next = await res.json();
+        const next = await fetchPortal();
         if (cancelled) return;
-        if (res.ok && next.success && moved(next as ClientPortalData)) {
-          onDataUpdate(next as ClientPortalData);
+        if (next && moved(next)) {
+          onDataUpdate(next);
           setPhase('confirmed');
           return;
         }
@@ -321,12 +370,15 @@ function PaymentReturnBanner({
       timer = window.setTimeout(tick, 2000);
     };
 
-    timer = window.setTimeout(tick, 1200);
+    void (async () => {
+      const answered = await confirmWithStripe();
+      if (!answered && !cancelled) timer = window.setTimeout(tick, 1200);
+    })();
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [phase, isTip, credentials.email, credentials.password, onDataUpdate]);
+  }, [phase, sessionId, isTip, credentials.email, credentials.password, onDataUpdate]);
 
   if (phase === 'none') return null;
 
@@ -345,9 +397,11 @@ function PaymentReturnBanner({
         : 'Payment received. Your booking is up to date.'
       : phase === 'cancelled'
         ? `No ${noun} was taken. Nothing has been charged.`
-        : phase === 'slow'
-          ? `Your ${noun} went through at Stripe. It can take a minute to show here, so tap Refresh Portal below if the figures still look old.`
-          : `${isTip ? 'Tip' : 'Payment'} received. Updating your booking...`;
+        : phase === 'processing'
+          ? `Your ${noun} is still processing at the bank. It will show here once it clears, usually within a few days. There is nothing more you need to do.`
+          : phase === 'slow'
+            ? `We could not confirm your ${noun} just yet. If you were charged, it will show here shortly, so please do not pay again. Tap Refresh Portal below to check.`
+            : `Checking your ${noun} with Stripe...`;
 
   return (
     /**

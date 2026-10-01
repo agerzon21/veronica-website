@@ -69,30 +69,36 @@ export type RecordPaymentResult = {
 };
 
 /**
+ * The row lock every money write takes first.
+ *
+ * WHY A LOCK, and why a plain transaction is not enough. The re-sums below are
+ * single UPDATEs with a subquery, and under Postgres' default READ COMMITTED a
+ * second UPDATE that waited on the first keeps its OLD snapshot for the
+ * subquery: two payments landing on one booking at the same moment could each
+ * sum without the other, and one would be missing from paid_to_date until the
+ * next write healed it. Taking the booking's row lock as the transaction's
+ * FIRST statement means everything after it runs on a snapshot taken once the
+ * other writer has committed.
+ */
+function lockPortal(sql: ReturnType<typeof getDb>, portalId: string) {
+  return sql`select id from client_portals where id = ${portalId} for update`;
+}
+
+/**
  * Recompute what a booking has been paid, from the rows.
  *
- * One statement, so the sum and the write cannot be separated by another
- * writer landing between them. Exported because deleting a payment needs the
- * same recompute and must not grow a second copy of this logic.
- *
- * Counts CLEARED money only. Everything is 'succeeded' today, so this changes
- * nothing now; it is what stops an unsettled bank debit from opening the
- * delivery gate once ACH exists.
- *
- * Counts CONTRACT money only. A tip is a payment_entries row like any other,
- * but it settles nothing, so it is filtered out here. This subquery is the
- * only writer of paid_to_date in the codebase, which is why one filter in one
- * place is enough to keep tips out of all eight balance readers.
+ * Counts CLEARED money only, so an unsettled bank debit can never open the
+ * delivery gate. Counts CONTRACT money only: a tip is a payment_entries row
+ * like any other, but it settles nothing (migration 043). This subquery is the
+ * only writer of paid_to_date in the codebase, which is why one filter here
+ * keeps tips out of all eight balance readers.
  *
  * A full re-sum rather than an increment, deliberately. Re-summing heals
  * itself the moment a bad row is deleted. An increment carries its error
  * forever, and the error is somebody's money.
  */
-export async function recomputePaidToDate(
-  sql: ReturnType<typeof getDb>,
-  portalId: string,
-): Promise<number> {
-  const rows = (await sql`
+export function paidToDateUpdate(sql: ReturnType<typeof getDb>, portalId: string) {
+  return sql`
     update client_portals
     set paid_to_date = (
           select coalesce(sum(amount), 0)
@@ -104,8 +110,77 @@ export async function recomputePaidToDate(
         updated_at = now()
     where id = ${portalId}
     returning paid_to_date
-  `) as Array<{ paid_to_date: string }>;
+  `;
+}
+
+/**
+ * The same, for charges added after the booking (portal_charges, migration
+ * 035). THE ONLY WRITER of client_portals.charges_total. It used to live in
+ * _payment-log.ts alone, and the insurance endpoint wrote charge rows without
+ * calling it, so card checkout, the delivery gate and the Clients list kept
+ * reading a stale total: a $64 policy could be left off what Stripe charged,
+ * or stay on it after the policy was removed. Every charge write calls this.
+ */
+export function chargesTotalUpdate(sql: ReturnType<typeof getDb>, portalId: string) {
+  return sql`
+    update client_portals
+    set charges_total = (
+          select coalesce(sum(amount), 0)
+          from portal_charges
+          where client_portal_id = ${portalId}
+        ),
+        updated_at = now()
+    where id = ${portalId}
+    returning charges_total
+  `;
+}
+
+/** Re-sum paid_to_date on its own, under the lock. Exported for deletes and repairs. */
+export async function recomputePaidToDate(
+  sql: ReturnType<typeof getDb>,
+  portalId: string,
+): Promise<number> {
+  const results = (await sql.transaction([lockPortal(sql, portalId), paidToDateUpdate(sql, portalId)])) as unknown[][];
+  const rows = results[1] as Array<{ paid_to_date: string }>;
   return parseFloat(rows[0]?.paid_to_date ?? '0');
+}
+
+/** Re-sum charges_total on its own, under the lock. */
+export async function recomputeChargesTotal(
+  sql: ReturnType<typeof getDb>,
+  portalId: string,
+): Promise<number> {
+  const results = (await sql.transaction([lockPortal(sql, portalId), chargesTotalUpdate(sql, portalId)])) as unknown[][];
+  const rows = results[1] as Array<{ charges_total: string }>;
+  return parseFloat(rows[0]?.charges_total ?? '0');
+}
+
+/**
+ * Lock, write, re-sum: one transaction, in that order.
+ *
+ * For every write to payment_entries or portal_charges outside recordPayment
+ * (a manual delete, a charge, a fee waiver, insurance). Either all of it
+ * happens or none of it does, so a failure can no longer leave a row written
+ * and its total stale, which is what made a retried click double count.
+ *
+ * Returns the write's own rows and the new total.
+ */
+export async function writeWithRecompute(
+  sql: ReturnType<typeof getDb>,
+  portalId: string,
+  // The neon query objects are lazy, so these run inside the transaction.
+  writes: ReturnType<ReturnType<typeof getDb>>[],
+  totals: { paid?: boolean; charges?: boolean },
+): Promise<{ writeRows: unknown[][]; paidToDate: number | null; chargesTotal: number | null }> {
+  const queries = [lockPortal(sql, portalId), ...writes];
+  if (totals.paid) queries.push(paidToDateUpdate(sql, portalId));
+  if (totals.charges) queries.push(chargesTotalUpdate(sql, portalId));
+  const results = (await sql.transaction(queries)) as unknown[][];
+  const writeRows = results.slice(1, 1 + writes.length);
+  let i = 1 + writes.length;
+  const paidToDate = totals.paid ? parseFloat((results[i++] as Array<{ paid_to_date: string }>)[0]?.paid_to_date ?? '0') : null;
+  const chargesTotal = totals.charges ? parseFloat((results[i] as Array<{ charges_total: string }>)[0]?.charges_total ?? '0') : null;
+  return { writeRows, paidToDate, chargesTotal };
 }
 
 /**
@@ -156,27 +231,34 @@ export async function recordPayment(
 
   const when = paidAt ?? new Date().toISOString();
 
-  const inserted = (await sql`
-    insert into payment_entries (
-      client_portal_id, amount, method, note, paid_at,
-      source, status, kind, processor_payment_id, processor_account_id,
-      fee_amount, card_brand, card_last4
-    )
-    values (
-      ${portalId}, ${amount}, ${method}, ${note}, ${when},
-      ${source}, ${status}, ${kind}, ${processorPaymentId}, ${processorAccountId},
-      ${feeAmount}, ${cardBrand}, ${cardLast4}
-    )
-    on conflict (processor_payment_id) where processor_payment_id is not null
-    do nothing
-    returning id
-  `) as Array<{ id: string }>;
-
-  // Recompute UNCONDITIONALLY, even when the insert was a no-op. A duplicate
-  // webhook is the cheapest possible moment to re-derive the balance, and if an
-  // earlier attempt inserted the row but died before recomputing, this is what
-  // repairs it.
-  const paidToDate = await recomputePaidToDate(sql, portalId);
+  /**
+   * Lock, insert, re-sum, as ONE transaction. The insert is still
+   * ON CONFLICT DO NOTHING on the payment id, and the re-sum still runs
+   * unconditionally, so a duplicate webhook is the cheapest possible moment to
+   * re-derive the balance. What changed is that the three can no longer be
+   * separated: the row and its total land together or not at all.
+   */
+  const results = (await sql.transaction([
+    lockPortal(sql, portalId),
+    sql`
+      insert into payment_entries (
+        client_portal_id, amount, method, note, paid_at,
+        source, status, kind, processor_payment_id, processor_account_id,
+        fee_amount, card_brand, card_last4
+      )
+      values (
+        ${portalId}, ${amount}, ${method}, ${note}, ${when},
+        ${source}, ${status}, ${kind}, ${processorPaymentId}, ${processorAccountId},
+        ${feeAmount}, ${cardBrand}, ${cardLast4}
+      )
+      on conflict (processor_payment_id) where processor_payment_id is not null
+      do nothing
+      returning id
+    `,
+    paidToDateUpdate(sql, portalId),
+  ])) as unknown[][];
+  const inserted = results[1] as Array<{ id: string }>;
+  const paidToDate = parseFloat((results[2] as Array<{ paid_to_date: string }>)[0]?.paid_to_date ?? '0');
 
   return { inserted: inserted.length > 0, paidToDate };
 }

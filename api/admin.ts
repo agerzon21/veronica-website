@@ -78,6 +78,7 @@ import cronsToggleHandler from './admin/_crons-toggle.js';
 import cronsRunNowHandler from './admin/_crons-run-now.js';
 import cronsHistoryHandler from './admin/_crons-history.js';
 import configHealthHandler from './admin/_config-health.js';
+import paymentIssuesHandler from './admin/_payment-issues.js';
 import rebuildHandler from './admin/_rebuild.js';
 import rebuildStatusHandler from './admin/_rebuild-status.js';
 import travelLinkHandler from './admin/_travel-link.js';
@@ -152,6 +153,7 @@ const HANDLERS: Record<
   'crons-run-now': cronsRunNowHandler,
   'crons-history': cronsHistoryHandler,
   'config-health': configHealthHandler,
+  'payment-issues': paymentIssuesHandler,
   rebuild: rebuildHandler,
   'rebuild-status': rebuildStatusHandler,
   // Builds the Google Maps directions link from Veronika's base to a session

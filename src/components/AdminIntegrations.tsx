@@ -380,8 +380,17 @@ interface ConfigCheck {
  * Shape mirrors api/admin/_config-health.ts. 'unknown' is not a fault: a
  * restricted key may simply not carry the webhook read permission.
  */
+/** A money problem the system could not handle itself (api/_payment-alerts.ts). */
+interface PaymentIssue {
+  key: string;
+  summary: string;
+  action?: string;
+  source: 'webhook' | 'reconcile' | 'return';
+  at?: string;
+}
+
 interface WebhookHealth {
-  state: 'ok' | 'incomplete' | 'unknown' | 'no-endpoint';
+  state: 'ok' | 'incomplete' | 'unknown' | 'no-endpoint' | 'disabled' | 'wrong-url';
   missing: string[];
   subscribed: number;
   url: string | null;
@@ -405,6 +414,8 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
   const [checks, setChecks] = useState<ConfigCheck[] | null>(null);
   const [environment, setEnvironment] = useState<string>('');
   const [webhook, setWebhook] = useState<WebhookHealth | null>(null);
+  const [issues, setIssues] = useState<PaymentIssue[]>([]);
+  const [resolving, setResolving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
@@ -423,6 +434,7 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
         setChecks(data.checks);
         setEnvironment(data.environment);
         setWebhook(data.stripeWebhook ?? null);
+        setIssues(Array.isArray(data.paymentIssues) ? data.paymentIssues : []);
       } else {
         setError(data.error || t.integrations.configLoadFailed);
       }
@@ -430,6 +442,24 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
       setError(t.common.couldNotReach);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** A person has dealt with it: take it off the list. */
+  const resolveIssue = async (key: string) => {
+    setResolving(key);
+    try {
+      const res = await fetch('/api/admin/payment-issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, resolve: key }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) setIssues(Array.isArray(data.issues) ? data.issues : []);
+    } catch {
+      /* the list simply stays as it was; refresh tries again */
+    } finally {
+      setResolving(null);
     }
   };
 
@@ -500,12 +530,47 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
               A missed checkbox in Stripe's event picker means money moves and
               nothing arrives, and the only symptom is silence, which reads
               exactly like "it has not happened yet". */}
-          {webhook && webhook.state !== 'unknown' && (
+          {/* Payments that need a person. Each was emailed when it first
+              appeared; this is where it stays until somebody marks it done. */}
+          {issues.length > 0 && (
+            <Box mt={3} bg="red.50" border="1px solid" borderColor="red.200" borderRadius="sm" px={3} py={2.5}>
+              <Text fontSize="xs" fontWeight="600" color="red.800" mb={2}>
+                {t.integrations.paymentIssuesTitle(issues.length)}
+              </Text>
+              <VStack align="stretch" spacing={2.5}>
+                {issues.map((issue) => (
+                  <Box key={issue.key}>
+                    <Text fontSize="sm" color="gray.800" lineHeight="1.45">{issue.summary}</Text>
+                    {issue.action && (
+                      <Text fontSize="xs" color="gray.600" mt={0.5} lineHeight="1.45">{issue.action}</Text>
+                    )}
+                    <Flex align="center" justify="space-between" mt={1.5} gap={2} flexWrap="wrap">
+                      <Text fontSize="2xs" color="gray.500">
+                        {issue.at ? new Date(issue.at).toLocaleString() : ''}
+                      </Text>
+                      <CTAButton
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void resolveIssue(issue.key)}
+                        isLoading={resolving === issue.key}
+                      >
+                        {t.integrations.paymentIssueResolve}
+                      </CTAButton>
+                    </Flex>
+                  </Box>
+                ))}
+              </VStack>
+            </Box>
+          )}
+
+          {/* 'unknown' is shown too. Hiding it hid the one case that matters
+              most: a revoked key, which also stops every card payment. */}
+          {webhook && (
             <Box
               mt={3}
-              bg={webhook.state === 'ok' ? 'green.50' : 'orange.50'}
+              bg={webhook.state === 'ok' ? 'green.50' : webhook.state === 'unknown' ? 'gray.50' : 'orange.50'}
               border="1px solid"
-              borderColor={webhook.state === 'ok' ? 'green.200' : 'orange.200'}
+              borderColor={webhook.state === 'ok' ? 'green.200' : webhook.state === 'unknown' ? 'gray.200' : 'orange.200'}
               borderRadius="sm"
               px={3}
               py={2.5}
@@ -518,15 +583,26 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
                   fontSize="0.65rem"
                   textTransform="none"
                   fontWeight="500"
-                  colorScheme={webhook.state === 'ok' ? 'green' : 'orange'}
+                  colorScheme={webhook.state === 'ok' ? 'green' : webhook.state === 'unknown' ? 'gray' : 'orange'}
                 >
                   {webhook.state === 'ok'
                     ? t.integrations.webhookOk
                     : webhook.state === 'no-endpoint'
                       ? t.integrations.webhookNone
-                      : t.integrations.webhookIncomplete(webhook.missing.length)}
+                      : webhook.state === 'disabled'
+                        ? t.integrations.webhookDisabled
+                        : webhook.state === 'wrong-url'
+                          ? t.integrations.webhookWrongUrl
+                          : webhook.state === 'unknown'
+                            ? t.integrations.webhookUnknown
+                            : t.integrations.webhookIncomplete(webhook.missing.length)}
                 </Badge>
               </HStack>
+              {webhook.note && webhook.state !== 'ok' && (
+                <Text fontSize="xs" color="gray.700" fontWeight="300" lineHeight="1.5" mb={webhook.missing.length > 0 ? 2 : 0}>
+                  {webhook.note}
+                </Text>
+              )}
               {webhook.missing.length > 0 && (
                 <>
                   <VStack align="stretch" spacing={0.5} mb={2}>

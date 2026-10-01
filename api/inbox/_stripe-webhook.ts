@@ -31,8 +31,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import getRawBody from 'raw-body';
 import { getDb } from '../_db.js';
-import { verifyStripeEvent, listRefundsForCharge, type StripeEvent, type StripeRefund } from '../_stripe.js';
+import {
+  verifyStripeEvent,
+  listRefundsForCharge,
+  isStripeTestMode,
+  portalIdForPaymentIntent,
+  type StripeEvent,
+  type StripeRefund,
+  type StripeCheckoutSession,
+} from '../_stripe.js';
 import { recordPayment, type PaymentKind } from '../_payments.js';
+import { recordPaidCheckoutSession } from '../_checkout-record.js';
+import { reportPaymentIssue } from '../_payment-alerts.js';
 
 /** Inert here (Vercel reads it from api/inbox.ts), kept as documentation. */
 export const config = { api: { bodyParser: false } };
@@ -48,9 +58,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const verified = verifyStripeEvent(rawBody, signature);
   if (!verified.ok) {
-    // 400, deliberately, not 500. A bad signature is a client error and
-    // Stripe should not retry it. Logged because a sudden run of these means
-    // the signing secret was rotated in the dashboard and not in the env.
+    // 400 rather than 500, because it is the honest answer. Stripe retries a
+    // 400 like any other non-2xx, for about three days, which is what makes a
+    // rotated secret recoverable: put the new one in the env and the queued
+    // deliveries arrive. A sudden run of these means exactly that happened,
+    // and the daily reconciliation against Stripe is what notices it.
     console.warn('[inbox/stripe-webhook] rejected:', verified.reason);
     return res.status(400).json({ success: false, error: 'Invalid signature' });
   }
@@ -98,6 +110,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `Money is in Stripe with nothing to credit it to. Record it by hand:`,
         err,
       );
+      await reportPaymentIssue({
+        key: `event:${event.id}`,
+        summary: `A Stripe ${event.type} event could not be recorded: the booking it names no longer exists or its id is malformed.`,
+        action: 'Find the payment in Stripe, decide which booking it belongs to, and log it there by hand.',
+        source: 'webhook',
+      });
       return res.status(200).json({ received: true, recorded: false });
     }
     console.error(
@@ -143,6 +161,23 @@ function isPermanentFailure(err: unknown): boolean {
  * must be kept in step.
  */
 export async function processEvent(event: StripeEvent): Promise<void> {
+  /**
+   * A test-mode event never touches the live ledger, and the reverse.
+   *
+   * Test-mode payment rows used to be indistinguishable from real money once
+   * they were in: there is no column saying which mode a row came from. The
+   * signing secrets differ per mode, so this should never fire, which is the
+   * point of checking: if a test endpoint and the live one are ever wired to
+   * the same secret, a test refund must not reverse a real client's payment.
+   * An event that does not say (older payloads) is let through.
+   */
+  if (typeof event.livemode === 'boolean' && event.livemode === isStripeTestMode()) {
+    console.warn(
+      `[inbox/stripe-webhook] ${event.type} (${event.id}) is ${event.livemode ? 'live' : 'test'} mode, which does not match the key this site runs on. Ignored.`,
+    );
+    return;
+  }
+
   // Ignored types are a no-op, NOT an error. Stripe sends whatever the
   // endpoint is subscribed to, and a dashboard change should never be able to
   // start a retry storm here.
@@ -162,6 +197,8 @@ export async function processEvent(event: StripeEvent): Promise<void> {
      * Nothing else has to change: the handler already gates on payment_status
      * rather than on the event type, and the ledger is keyed on the payment
      * intent, so a session that somehow delivered both events records once.
+     *
+     * So 'completed' falls through to here on purpose.
      */
     case 'checkout.session.async_payment_succeeded':
       return handleCheckoutCompleted(event);
@@ -177,20 +214,83 @@ export async function processEvent(event: StripeEvent): Promise<void> {
       console.error(
         `[inbox/stripe-webhook] delayed payment FAILED for session ${s.id} on portal ${s.metadata?.portal_id ?? 'unknown'}. The client may believe they have paid.`,
       );
+      await reportPaymentIssue({
+        key: `async-failed:${s.id ?? event.id}`,
+        summary: `A delayed card or bank payment FAILED after the client finished checkout (booking ${s.metadata?.portal_id ?? 'unknown'}). They may believe they have paid.`,
+        action: 'Let the client know the payment did not go through and ask them to pay again.',
+        source: 'webhook',
+      });
       return;
     }
     case 'charge.refunded':
       return handleChargeRefunded(event);
     case 'refund.created':
       return handleRefundCreated(event);
+    /**
+     * A refund that changed state after it was created. The one that matters
+     * is a refund that FAILED (a closed card, an expired one): Stripe puts the
+     * money back in the balance, so the negative row written when it was
+     * created has to be undone. Three event names reach the same object.
+     */
+    case 'refund.updated':
+    case 'refund.failed':
+    case 'charge.refund.updated':
+      return handleRefundUpdated(event);
     case 'charge.dispute.created':
       return handleDisputeOpened(event);
+    /**
+     * The money movements of a dispute, which are what the ledger records.
+     * Created is not always one: an inquiry opens a dispute WITHOUT taking
+     * the money, and is either closed (nothing moved) or escalated, and the
+     * escalation arrives as funds_withdrawn, not as a second created.
+     */
+    case 'charge.dispute.funds_withdrawn':
+      return handleDisputeFundsWithdrawn(event);
+    case 'charge.dispute.funds_reinstated':
+      return handleDisputeFundsReinstated(event);
     case 'charge.dispute.closed':
       return handleDisputeClosed(event);
     default:
       return;
   }
 }
+
+/**
+ * The ledger row a refund or dispute reverses, or a decision about its absence.
+ *
+ * Stripe does not deliver in order. After an outage the newer refund event can
+ * come back BEFORE the older payment it refunds, and answering that refund
+ * with a 200 because "we never recorded the payment" used to lose it for good:
+ * the payment then landed as +$900 with no matching -$900, the booking read as
+ * paid, and the delivery gate opened on money that had gone back.
+ *
+ * So an absent original is a question for Stripe. The PaymentIntent carries
+ * the portal_id our checkout put on it: if it is ours, the payment simply has
+ * not been recorded YET, and throwing makes this a 500 that Stripe retries
+ * until it has. If it is not ours (a payment taken some other way), there is
+ * nothing to reverse and a 200 is right. A failed lookup also throws, because
+ * "could not ask" is not "not ours".
+ */
+async function originalOrRetry(
+  sql: ReturnType<typeof getDb>,
+  paymentIntentId: string,
+  event: StripeEvent,
+  what: string,
+): Promise<{ portalId: string; kind: PaymentKind } | null> {
+  const original = await originalForPaymentIntent(sql, paymentIntentId);
+  if (original) return original;
+  const portalId = await portalIdForPaymentIntent(paymentIntentId, event.account ?? null);
+  if (portalId) {
+    throw new Error(
+      `${what} on ${paymentIntentId} arrived before its payment was recorded (booking ${portalId}). Asking Stripe to retry.`,
+    );
+  }
+  console.log(`[inbox/stripe-webhook] ${what} on ${paymentIntentId} is not a payment from this site's checkout, nothing to reverse`);
+  return null;
+}
+
+/** Stripe refunds that moved no money, or gave it back. Never recorded as returned. */
+const DEAD_REFUND = new Set(['failed', 'canceled']);
 
 /**
  * Which booking a Stripe payment intent belongs to.
@@ -259,7 +359,7 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
   const charge = event.data.object as {
     id?: string;
     payment_intent?: unknown;
-    refunds?: { data?: Array<{ id?: string; amount?: number; created?: number; reason?: string | null }>; has_more?: boolean };
+    refunds?: { data?: Array<{ id?: string; amount?: number; created?: number; reason?: string | null; status?: string }>; has_more?: boolean };
   };
 
   const paymentIntentId = idOf(charge.payment_intent);
@@ -269,16 +369,8 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
   }
 
   const sql = getDb();
-  const original = await originalForPaymentIntent(sql, paymentIntentId);
-  if (!original) {
-    // Not an error worth retrying: we never recorded the payment, so there is
-    // nothing to reverse. Loud anyway, because it means the ledger and Stripe
-    // disagree about a charge that existed.
-    console.error(
-      `[inbox/stripe-webhook] refund on ${paymentIntentId} has no original row in the ledger. Nothing reversed.`,
-    );
-    return;
-  }
+  const original = await originalOrRetry(sql, paymentIntentId, event, `refund on charge ${charge.id}`);
+  if (!original) return;
   const { portalId, kind: originalKind } = original;
 
   const refunds = charge.refunds?.data ?? [];
@@ -315,15 +407,25 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
 
   let recorded = 0;
   let seen = 0;
+  let dead = 0;
   for (const refund of list) {
     if (!refund.id || typeof refund.amount !== 'number' || refund.amount <= 0) continue;
+    // A refund that failed or was canceled returned nothing. Listing a
+    // charge's refunds returns those too, and recording one would tell the
+    // client they owe money Vero in fact kept.
+    if (refund.status && DEAD_REFUND.has(refund.status)) {
+      dead++;
+      continue;
+    }
     seen++;
     const result = await recordRefundRow(sql, {
       portalId, originalKind, refund, accountId: event.account ?? null,
     });
     if (result.inserted) recorded++;
   }
-  if (seen === 0) {
+  if (seen === 0 && dead > 0) {
+    console.log(`[inbox/stripe-webhook] charge ${charge.id}: its ${dead} refund(s) failed or were canceled, nothing went back`);
+  } else if (seen === 0) {
     // NOT a console.log. charge.refunded firing for a charge with no readable
     // refund on it is a contradiction, and the old reassuring wording is
     // precisely what hid this for as long as it was hidden.
@@ -353,14 +455,75 @@ async function handleRefundCreated(event: StripeEvent): Promise<void> {
     console.error(`[inbox/stripe-webhook] refund ${refund.id} is missing a payment_intent or amount, nothing recorded`);
     return;
   }
+  if (refund.status && DEAD_REFUND.has(refund.status)) {
+    console.log(`[inbox/stripe-webhook] refund ${refund.id} is ${refund.status}, nothing went back`);
+    return;
+  }
   const sql = getDb();
-  const original = await originalForPaymentIntent(sql, paymentIntentId);
-  if (!original) {
-    console.error(
-      `[inbox/stripe-webhook] refund ${refund.id} on ${paymentIntentId} has no original row in the ledger. Nothing reversed.`,
+  const original = await originalOrRetry(sql, paymentIntentId, event, `refund ${refund.id}`);
+  if (!original) return;
+  await recordRefundRow(sql, {
+    portalId: original.portalId,
+    originalKind: original.kind,
+    refund,
+    accountId: event.account ?? null,
+  });
+}
+
+/**
+ * A refund that changed after it was created.
+ *
+ * FAILED or CANCELED is the case that moves money: a refund to a closed card
+ * fails, Stripe puts the amount back in the balance, and the negative row
+ * written when the refund was created has to be undone, or the client is shown
+ * owing money Vero in fact kept. Undone with a POSITIVE row keyed on the refund
+ * id plus ':failed', never by deleting the negative, because the ledger is a
+ * history and the client already saw the refund.
+ *
+ * Any other state just makes sure the refund is on the books, which covers a
+ * refund.created that was never delivered.
+ */
+async function handleRefundUpdated(event: StripeEvent): Promise<void> {
+  const refund = event.data.object as StripeRefund;
+  const paymentIntentId = idOf(refund.payment_intent);
+  if (!refund.id || typeof refund.amount !== 'number' || refund.amount <= 0 || !paymentIntentId) return;
+  const sql = getDb();
+
+  if (refund.status && DEAD_REFUND.has(refund.status)) {
+    const rows = (await sql`
+      select client_portal_id, kind from payment_entries
+      where processor_payment_id = ${refund.id}
+      limit 1
+    `) as Array<{ client_portal_id: string; kind: PaymentKind }>;
+    const negative = rows[0];
+    if (!negative) {
+      console.log(`[inbox/stripe-webhook] refund ${refund.id} ${refund.status} and was never recorded, nothing to undo`);
+      return;
+    }
+    const kind: PaymentKind = negative.kind === 'tip' ? 'tip' : 'payment';
+    const result = await recordPayment(sql, {
+      portalId: negative.client_portal_id,
+      amount: refund.amount / 100,
+      method: kind === 'tip' ? 'Tip refund reversed' : 'Card refund reversed',
+      note: `The refund ${refund.status} at Stripe, so the money stayed with us`,
+      paidAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+      source: 'stripe',
+      status: 'succeeded',
+      kind,
+      processorPaymentId: `${refund.id}:failed`,
+      processorAccountId: event.account ?? null,
+      feeAmount: null,
+    });
+    console.log(
+      result.inserted
+        ? `[inbox/stripe-webhook] refund ${refund.id} ${refund.status}, reversed it, paid_to_date now ${result.paidToDate}`
+        : `[inbox/stripe-webhook] refund ${refund.id} ${refund.status} was already reversed`,
     );
     return;
   }
+
+  const original = await originalOrRetry(sql, paymentIntentId, event, `refund ${refund.id}`);
+  if (!original) return;
   await recordRefundRow(sql, {
     portalId: original.portalId,
     originalKind: original.kind,
@@ -375,6 +538,9 @@ async function recordRefundRow(
   input: { portalId: string; originalKind: PaymentKind; refund: StripeRefund; accountId: string | null },
 ): Promise<{ inserted: boolean }> {
   const { portalId, originalKind, refund, accountId } = input;
+  // Belt and braces: every caller already skips these, and this is the last
+  // place a failed refund could still become money that went back.
+  if (refund.status && DEAD_REFUND.has(refund.status)) return { inserted: false };
   const amount = refund.amount as number;
   const result = await recordPayment(sql, {
     portalId,
@@ -397,25 +563,48 @@ async function recordRefundRow(
   return result;
 }
 
+type DisputeObject = {
+  id?: string;
+  amount?: number;
+  reason?: string | null;
+  created?: number;
+  status?: string;
+  payment_intent?: unknown;
+  charge?: unknown;
+};
+
 /**
- * A dispute opened: the money is gone NOW, so the ledger says so now.
+ * A dispute opened. For a chargeback the money is gone NOW, so the ledger says
+ * so now; Stripe withdraws it the moment the dispute is created, months before
+ * it is resolved.
  *
- * Stripe withdraws the disputed amount from the balance the moment a dispute
- * is created, months before it is resolved. Waiting for the outcome would
- * leave a booking reading "paid in full" while the money is not there, which
- * is the same lie a missing refund told.
- *
- * Keyed on the dispute id, so Stripe replaying the event changes nothing.
+ * AN INQUIRY IS NOT ONE. A card network can open a dispute that only asks
+ * questions (status warning_needs_response, Amex sends these), and no money
+ * moves. Recording it as gone told the client they owed the full payment again
+ * and blocked delivery, and when the inquiry closed as warning_closed nothing
+ * ever undid it. If an inquiry escalates, Stripe takes the money then, and
+ * that arrives as charge.dispute.funds_withdrawn, handled below.
  */
 async function handleDisputeOpened(event: StripeEvent): Promise<void> {
-  const dispute = event.data.object as {
-    id?: string;
-    amount?: number;
-    reason?: string | null;
-    created?: number;
-    payment_intent?: unknown;
-    charge?: unknown;
-  };
+  const dispute = event.data.object as DisputeObject;
+  if (typeof dispute.status === 'string' && dispute.status.startsWith('warning_')) {
+    console.log(`[inbox/stripe-webhook] dispute ${dispute.id} is an inquiry (${dispute.status}), no money has moved`);
+    return;
+  }
+  return recordDisputeWithdrawal(event, dispute);
+}
+
+/** The bank took the money: a chargeback, or an inquiry that escalated. */
+async function handleDisputeFundsWithdrawn(event: StripeEvent): Promise<void> {
+  return recordDisputeWithdrawal(event, event.data.object as DisputeObject);
+}
+
+/**
+ * The money leaving, as a negative row KEYED ON THE DISPUTE ID. Both
+ * charge.dispute.created and funds_withdrawn can deliver it for one dispute,
+ * and the key is what makes that one row, not two.
+ */
+async function recordDisputeWithdrawal(event: StripeEvent, dispute: DisputeObject): Promise<void> {
   const paymentIntentId = idOf(dispute.payment_intent);
   if (!dispute.id || typeof dispute.amount !== 'number' || !paymentIntentId) {
     console.error(
@@ -425,11 +614,8 @@ async function handleDisputeOpened(event: StripeEvent): Promise<void> {
   }
 
   const sql = getDb();
-  const original = await originalForPaymentIntent(sql, paymentIntentId);
-  if (!original) {
-    console.error(`[inbox/stripe-webhook] dispute ${dispute.id} has no original row in the ledger. Nothing recorded.`);
-    return;
-  }
+  const original = await originalOrRetry(sql, paymentIntentId, event, `dispute ${dispute.id}`);
+  if (!original) return;
   const { portalId, kind: originalKind } = original;
 
   const result = await recordPayment(sql, {
@@ -454,149 +640,100 @@ async function handleDisputeOpened(event: StripeEvent): Promise<void> {
   );
 }
 
+/** The bank gave the money back. */
+async function handleDisputeFundsReinstated(event: StripeEvent): Promise<void> {
+  return recordDisputeReinstated(event, event.data.object as DisputeObject);
+}
+
 /**
- * A dispute closed. Only a WIN moves money, and only a win writes a row.
+ * A dispute closed. Only a WIN moves money, and it is the same money
+ * funds_reinstated reports, so both write one row under one key.
  *
- * lost, or withdrawn by the customer after the funds already went: the
- * negative row written when it opened is already correct, so there is nothing
- * to do and writing anything would double count. won: Stripe returns the
- * amount, so the negative is reversed with a positive keyed on a DIFFERENT id
- * (the dispute id with a suffix), because the dispute id itself is already
- * taken by the opening row and the partial unique index would silently drop
- * the reversal.
+ * lost, or an inquiry closed as warning_closed: nothing to do. A lost
+ * chargeback's negative row is already right, and an inquiry never wrote one.
  */
 async function handleDisputeClosed(event: StripeEvent): Promise<void> {
-  const dispute = event.data.object as {
-    id?: string;
-    amount?: number;
-    status?: string;
-    payment_intent?: unknown;
-  };
+  const dispute = event.data.object as DisputeObject;
   if (dispute.status !== 'won') {
-    console.log(`[inbox/stripe-webhook] dispute ${dispute.id} closed as ${dispute.status}, the opening row already reflects it`);
+    console.log(`[inbox/stripe-webhook] dispute ${dispute.id} closed as ${dispute.status}, nothing further moves`);
     return;
   }
-  const paymentIntentId = idOf(dispute.payment_intent);
-  if (!dispute.id || typeof dispute.amount !== 'number' || !paymentIntentId) return;
+  return recordDisputeReinstated(event, dispute);
+}
 
+/**
+ * The money returning, keyed on the dispute id plus ':reinstated', which both
+ * funds_reinstated and closed-as-won use, so a won dispute adds it back once.
+ *
+ * Only undoes a withdrawal that WAS recorded. With nothing to undo, adding the
+ * amount would credit money that never left.
+ */
+async function recordDisputeReinstated(event: StripeEvent, dispute: DisputeObject): Promise<void> {
+  if (!dispute.id || typeof dispute.amount !== 'number') return;
   const sql = getDb();
-  const original = await originalForPaymentIntent(sql, paymentIntentId);
-  if (!original) return;
-  const { portalId, kind: originalKind } = original;
-
+  const rows = (await sql`
+    select client_portal_id, kind from payment_entries
+    where processor_payment_id = ${dispute.id}
+    limit 1
+  `) as Array<{ client_portal_id: string; kind: PaymentKind }>;
+  const withdrawal = rows[0];
+  if (!withdrawal) {
+    console.warn(`[inbox/stripe-webhook] dispute ${dispute.id} returned funds that were never recorded as taken, nothing added back`);
+    await reportPaymentIssue({
+      key: `dispute-return:${dispute.id}`,
+      summary: `Stripe returned ${(dispute.amount / 100).toFixed(2)} from dispute ${dispute.id}, but the ledger never recorded the money leaving.`,
+      action: 'Check the dispute in Stripe and the booking it belongs to; the balance may need a correction by hand.',
+      source: 'webhook',
+    });
+    return;
+  }
+  const kind: PaymentKind = withdrawal.kind === 'tip' ? 'tip' : 'payment';
   const result = await recordPayment(sql, {
-    portalId,
+    portalId: withdrawal.client_portal_id,
     amount: dispute.amount / 100,
     method: 'Chargeback reversed',
     note: 'Dispute won, funds returned by Stripe',
+    paidAt: event.created ? new Date(event.created * 1000).toISOString() : null,
     source: 'stripe',
     status: 'succeeded',
-    kind: originalKind,
-    processorPaymentId: `${dispute.id}:won`,
+    kind,
+    processorPaymentId: `${dispute.id}:reinstated`,
     processorAccountId: event.account ?? null,
     feeAmount: null,
   });
   console.log(
     result.inserted
-      ? `[inbox/stripe-webhook] dispute ${dispute.id} WON, returned ${(dispute.amount / 100).toFixed(2)} to portal ${portalId}, paid_to_date now ${result.paidToDate}`
-      : `[inbox/stripe-webhook] dispute ${dispute.id} win was already recorded`,
+      ? `[inbox/stripe-webhook] dispute ${dispute.id} funds returned, ${(dispute.amount / 100).toFixed(2)} back on portal ${withdrawal.client_portal_id}, paid_to_date now ${result.paidToDate}`
+      : `[inbox/stripe-webhook] dispute ${dispute.id} return was already recorded`,
   );
 }
 
+/**
+ * Money in. The decisions (paid or not, whose, how much, which kind, dated
+ * when) live in api/_checkout-record.ts, shared with the return path the
+ * client's browser takes, so the two roads into the ledger cannot disagree.
+ */
 async function handleCheckoutCompleted(event: StripeEvent): Promise<void> {
-  const session = event.data.object as {
-    id?: string;
-    payment_status?: string;
-    status?: string;
-    amount_total?: number;
-    payment_intent?: string | { id?: string };
-    metadata?: Record<string, string>;
-    customer_details?: { email?: string | null };
-  };
-
-  // "Completed" and "paid" are different facts. A session can complete while
-  // payment is still processing, and recording that as money in hand would
-  // open the delivery gate on photos nobody has paid for.
-  if (session.payment_status !== 'paid') {
-    console.warn(
-      `[inbox/stripe-webhook] session ${session.id} completed with payment_status=${session.payment_status}, nothing recorded`,
-    );
-    return;
-  }
-
-  const portalId = session.metadata?.portal_id;
-  if (!portalId) {
-    // Unrecoverable: without this there is no way to know whose money it is.
-    // Loud, because it means a payment is sitting in Stripe unattached.
-    console.error(
-      `[inbox/stripe-webhook] session ${session.id} has no portal_id in metadata. Money received with no booking to credit.`,
-    );
-    return;
-  }
-
-  const paymentIntentId =
-    typeof session.payment_intent === 'string'
-      ? session.payment_intent
-      : session.payment_intent?.id;
-  if (!paymentIntentId) {
-    console.error(`[inbox/stripe-webhook] session ${session.id} has no payment_intent`);
-    return;
-  }
-
-  // From Stripe, never from metadata. Metadata is what the browser asked for;
-  // amount_total is what was actually collected.
-  const amount = typeof session.amount_total === 'number' ? session.amount_total / 100 : null;
-  if (amount === null || amount <= 0) {
-    console.error(`[inbox/stripe-webhook] session ${session.id} has no usable amount_total`);
-    return;
-  }
-
-  const asked = session.metadata?.kind;
-  const kind: 'retainer' | 'balance' | 'tip' =
-    asked === 'retainer' ? 'retainer' : asked === 'tip' ? 'tip' : 'balance';
-
-  /**
-   * The fee is NOT read here, and is left to api/cron/_stripe-fee-backfill.ts.
-   *
-   * It used to be fetched first, before anything was written. That was a
-   * Stripe API round trip, with no timeout, sitting in front of the only write
-   * that matters, on a path Stripe expects to answer in about twenty seconds.
-   *
-   * And it never worked. Payments are created with capture_method
-   * automatic_async, so the fee lives on a balance transaction that does not
-   * exist until the charge settles, which is after this event fires. Both real
-   * test payments came back null, every time. So the cost was a slower, more
-   * fragile critical path in exchange for a value that is always null.
-   *
-   * fee_amount is bookkeeping and never affects what anyone owes, so arriving
-   * within a day via the backfill is exactly as good.
-   */
-  const sql = getDb();
-  const result = await recordPayment(sql, {
-    portalId,
-    amount,
-    method: 'Card',
-    note:
-      kind === 'retainer'
-        ? 'Retainer paid by card'
-        : kind === 'tip'
-          ? 'Tip paid by card'
-          : 'Balance paid by card',
-    source: 'stripe',
-    status: 'succeeded',
-    // The ONE place a tip becomes a tip in the ledger. Everything downstream,
-    // including the two reversal paths above, reads it back from here.
-    kind: kind === 'tip' ? 'tip' : 'payment',
-    processorPaymentId: paymentIntentId,
-    processorAccountId: event.account ?? null,
-    feeAmount: null,
+  const session = event.data.object as StripeCheckoutSession;
+  const result = await recordPaidCheckoutSession(session, {
+    source: 'webhook',
+    paidAtSeconds: event.created ?? null,
+    accountId: event.account ?? null,
   });
-
-  console.log(
-    result.inserted
-      ? `[inbox/stripe-webhook] recorded $${amount} ${kind} for portal ${portalId}, paid_to_date now ${result.paidToDate}`
-      : `[inbox/stripe-webhook] ${paymentIntentId} was already recorded, nothing to do`,
-  );
+  switch (result.status) {
+    case 'recorded':
+      console.log(`[inbox/stripe-webhook] recorded $${result.amount} for portal ${result.portalId}, paid_to_date now ${result.paidToDate}`);
+      return;
+    case 'already':
+      console.log(`[inbox/stripe-webhook] session ${session.id} was already recorded, nothing to do`);
+      return;
+    case 'not-paid':
+      console.warn(`[inbox/stripe-webhook] session ${session.id} completed with ${result.reason}, nothing recorded`);
+      return;
+    case 'unusable':
+      console.error(`[inbox/stripe-webhook] session ${session.id} not recorded: ${result.reason}`);
+      return;
+  }
 }
 
 /** Same helper as the two webhooks next door, and for the same reason. */

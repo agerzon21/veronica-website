@@ -277,6 +277,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // the client just doesn't render that line.
     const vars = row.contract_variables ?? {};
 
+        /**
+     * Shot for free (migration 048). "Nothing is owed" has to be true on the
+     * client's screen too, not only on Vero's, so a free booking reaches the
+     * portal with no total, no retainer and no charges, exactly like a booking
+     * that was never priced: no balance line and no Pay button. Payments
+     * already made still list. Its own statement, allowed to fail, for a
+     * database the migration has not reached.
+     */
+    let complimentary = false;
+    try {
+      const c = (await sql`
+        select complimentary from client_portals where id = ${row.id}
+      `) as Array<{ complimentary: boolean }>;
+      complimentary = c[0]?.complimentary === true;
+    } catch {
+      /* migration 048 not applied: nothing is marked free yet */
+    }
+
     return res.status(200).json({
       success: true,
       mode: 'full',
@@ -325,15 +343,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contract_signed_pdf_available: !!row.contract_signed_pdf_url,
 
       // Payment
-      contract_total_amount: row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
-      contract_retainer_amount: row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,
+      contract_total_amount:
+        !complimentary && row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
+      contract_retainer_amount:
+        !complimentary && row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,
       paid_to_date: parseFloat(row.paid_to_date),
       // Owed = contract_total_amount + charges_total - paid_to_date.
-      charges_total: chargesTotal,
-      payment_plan_enabled: row.payment_plan_enabled,
-      installments,
+      charges_total: complimentary ? 0 : chargesTotal,
+      payment_plan_enabled: complimentary ? false : row.payment_plan_enabled,
+      installments: complimentary ? [] : installments,
       payments,
-      charges,
+      charges: complimentary ? [] : charges,
       // What the client has tipped, already excluded from paid_to_date. Sent
       // so the portal can thank them for it without the number having to be
       // re-derived in the browser.

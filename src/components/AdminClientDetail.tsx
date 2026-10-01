@@ -1,8 +1,9 @@
 import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
-import { cardFeeOn } from '../data/payment-handles';
+import { earnedDirectDiscount, CARD_FEE_DISCOUNT_METHOD } from '../data/payment-handles';
 import { fmtAdminDateTime } from '../utils/adminDate';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
+import FaUndo from '../icons/fa/FaUndo';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaTrash from '../icons/fa/FaTrash';
 import FaMapMarkerAlt from '../icons/fa/FaMapMarkerAlt';
@@ -92,6 +93,8 @@ interface PortalDetail {
    */
   gallery_preview_token?: string | null;
   gallery_enabled: boolean;
+  /** Shot for free, for family or friends (migration 048). Changes no balance. */
+  complimentary?: boolean;
   drive_url: string | null;
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
@@ -143,6 +146,9 @@ interface PaymentEntry {
    * Migration 043.
    */
   kind: 'payment' | 'tip';
+  /** 'manual' is money Vero logged (Zelle, cash); 'stripe' came by card. */
+  source?: 'manual' | 'stripe';
+  status?: string;
 }
 
 /** A charge reason, as stored. The table CHECKs these same three values. */
@@ -221,11 +227,27 @@ function effectiveAddress(p: {
   return fromList || (p.session_location ?? '').trim() || (p.contract_variables?.event_location ?? '').trim();
 }
 
+/** Contract variables the server derives from the amount columns. Never typed. */
+const DERIVED_MONEY_KEYS = new Set(['total_amount', 'retainer_amount', 'remaining_balance']);
+
 const formatMoney = (amount: number | null): string => {
   // Matches formatDate above: nothing, not a dash. Every call site here is
   // guarded today, but the same helper on the Clients list was not.
   if (amount === null || amount === undefined) return '';
-  return `$${amount.toFixed(0)}`;
+  /*
+   * To the cent whenever there are cents. This rounded to whole dollars, and
+   * once direct payments arrived at the card-free price that stopped being
+   * cosmetic: a $485.20 Zelle retainer read "$485", the waiver button offered
+   * "$15" and waived $14.80, and a booking owing 40 cents read "Owes $0".
+   * The client's own portal always showed cents, so the two screens disagreed
+   * about the same payment.
+   */
+  const cents = Math.round(amount * 100);
+  return (cents / 100).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  });
 };
 
 /**
@@ -616,8 +638,12 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
     if (
       !confirmUnpaid &&
       portal &&
+      // A free booking owes nothing, so there is nothing to confirm.
+      !portal.complimentary &&
       portal.contract_total_amount !== null &&
-      portal.paid_to_date < portal.contract_total_amount + (portal.charges_total ?? 0)
+      // Whole cents, the same arithmetic the server's gate uses.
+      Math.round(portal.paid_to_date * 100) <
+        Math.round(portal.contract_total_amount * 100) + Math.round((portal.charges_total ?? 0) * 100)
     ) {
       setUnpaidConfirm(true);
       return;
@@ -688,6 +714,42 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
     portal.contract_total_amount !== null ? portal.contract_total_amount + chargesTotal : null;
   const balanceRemaining =
     amountOwed !== null ? Math.max(amountOwed - portal.paid_to_date, 0) : null;
+
+  /**
+   * Shot for free, for family or friends. A marker, not a price: it changes no
+   * balance. Offered at the foot of Payments on every booking, and once it is
+   * on it IS the Payments section, because a free booking has nothing to log
+   * and a row of $0 figures is exactly what read as unpaid. Same shape as the
+   * gallery access row, so the two switches on this screen look alike.
+   */
+  const complimentaryRow = (
+    <Stack
+      direction={{ base: 'column', md: 'row' }}
+      align={{ base: 'stretch', md: 'center' }}
+      justify={{ base: 'flex-start', md: 'space-between' }}
+      spacing={{ base: 3, md: 4 }}
+    >
+      <Box>
+        <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+          {t.clientDetail.complimentaryLabel}
+        </Text>
+        <Text fontSize="sm" color={portal.complimentary ? 'purple.600' : 'gray.500'}>
+          {portal.complimentary ? t.clientDetail.complimentaryOn : t.clientDetail.complimentaryOff}
+        </Text>
+      </Box>
+      <Box w={{ base: '100%', md: 'auto' }} flexShrink={0}>
+        <CTAButton
+          onClick={() => patch({ complimentary: !portal.complimentary }, 'complimentary')}
+          variant="outline"
+          size="sm"
+          isLoading={savingField === 'complimentary'}
+          fullWidth={{ base: true, md: false }}
+        >
+          {portal.complimentary ? t.clientDetail.complimentaryUndo : t.clientDetail.complimentaryMark}
+        </CTAButton>
+      </Box>
+    </Stack>
+  );
   /**
    * Money owed BACK, which no screen on this system has ever shown.
    *
@@ -708,6 +770,25 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   const tipsTotal = payments
     .filter((p) => p.kind === 'tip')
     .reduce((sum, p) => sum + p.amount, 0);
+  /**
+   * The card fee this booking's DIRECT payments have earned the right to have
+   * waived, net of what already was (payment-handles.ts, earnedDirectDiscount).
+   * The server enforces this same number; here it only decides whether to
+   * OFFER the waiver, and how much to show on the button.
+   */
+  const waivableDiscount = earnedDirectDiscount(
+    payments
+      .filter(
+        (p) =>
+          p.kind === 'payment' &&
+          (p.source ?? 'manual') === 'manual' &&
+          (p.status ?? 'succeeded') === 'succeeded' &&
+          p.method !== CARD_FEE_DISCOUNT_METHOD &&
+          p.amount > 0,
+      )
+      .map((p) => p.amount),
+    payments.filter((p) => p.method === CARD_FEE_DISCOUNT_METHOD).reduce((sum, p) => sum + p.amount, 0),
+  );
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
 
   return (
@@ -809,7 +890,8 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           {/* Money, in the one arithmetic this system allows: total plus
               charges minus paid. It can be negative, and when it is, the chip
               says so rather than rounding a real overpayment away to nothing. */}
-          {balanceRemaining !== null && amountOwed !== null && (
+          {portal.complimentary && <StripChip tone="info">{t.clientDetail.chipComplimentary}</StripChip>}
+          {!portal.complimentary && balanceRemaining !== null && amountOwed !== null && (
             <StripChip tone={overpaidBy > 0 ? 'info' : balanceRemaining > 0 ? 'warn' : 'good'}>
               {overpaidBy > 0
                 ? t.clientDetail.chipOverpaid(formatMoney(overpaidBy))
@@ -854,7 +936,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
 
             Gated on contract_total_amount, the same value the chip is gated
             on, so a gallery-only portal with no contract shows neither. */}
-        {amountOwed !== null && (
+        {amountOwed !== null && !portal.complimentary && (
           <Flex flexWrap="wrap" columnGap={3} rowGap={0} mt={1.5}>
             <StripFact
               label={t.clientDetail.stripTotal}
@@ -1231,7 +1313,13 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           up to a section that had only just appeared. Ten of eighteen real
           bookings are gallery-only and four of those carry no total at all, so
           this is the common case, not an edge one. Set it from here instead. */}
-      {portal.contract_total_amount === null && (
+      {portal.complimentary && (
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
+          {complimentaryRow}
+        </Section>
+      )}
+
+      {!portal.complimentary && portal.contract_total_amount === null && (
         <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
           <VStack align="stretch" spacing={3}>
             <Text fontSize="sm" color="gray.600">
@@ -1258,11 +1346,12 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 return patch({ contract_total_amount: amount }, 'contract_total_amount');
               }}
             />
+            {complimentaryRow}
           </VStack>
         </Section>
       )}
 
-      {portal.contract_total_amount !== null && (
+      {!portal.complimentary && portal.contract_total_amount !== null && (
         <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
           <VStack align="stretch" spacing={5}>
             {/* 3-up stat row, 4-up once something has been charged. On mobile
@@ -1287,23 +1376,22 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               )}
             </SimpleGrid>
 
-            {/* Only when the leftover IS the card fee. A client who sent Zelle
-                paid the discounted price, so the booking looks a few dollars
-                short by design; anything larger is a real unpaid balance and
-                must not be waivable with one tap. */}
-            {balanceRemaining !== null &&
-              balanceRemaining > 0 &&
-              amountOwed !== null &&
-              balanceRemaining <= cardFeeOn(amountOwed) && (
-                <SettleDiscountCallout
-                  portalId={portalId}
-                  adminPassword={adminPassword}
-                  amount={balanceRemaining}
-                  onSettled={reload}
-                />
-              )}
+            {/* Offered when a DIRECT payment earned a discount that has not been
+                applied yet, for exactly that much and never more than is owed.
+                A client who sent Zelle paid the discounted price, so the
+                booking reads a few dollars short by design. A booking paid only
+                by card earns nothing, so a later overtime charge can never be
+                waived as a "card fee" nobody avoided. */}
+            {balanceRemaining !== null && balanceRemaining > 0 && waivableDiscount > 0 && (
+              <SettleDiscountCallout
+                portalId={portalId}
+                adminPassword={adminPassword}
+                amount={Math.min(balanceRemaining, waivableDiscount)}
+                onSettled={reload}
+              />
+            )}
 
-            <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
+            <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} remaining={balanceRemaining} />
 
             {/* Said once, near the number it explains, rather than on every
                 tip row. The stat above already separates the two totals; this
@@ -1371,6 +1459,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 </VStack>
               </Box>
             )}
+            {complimentaryRow}
           </VStack>
         </Section>
       )}
@@ -2325,8 +2414,14 @@ function ShootSummary({
         <SummaryFact
           icon={FaClipboardList}
           label={t.clientDetail.summaryBalance}
-          value={balanceRemaining === null ? t.clientDetail.summaryNoTotal : formatMoney(balanceRemaining)}
-          emphasize={balanceRemaining !== null && balanceRemaining > 0}
+          value={
+            portal.complimentary
+              ? t.clientDetail.summaryFree
+              : balanceRemaining === null
+                ? t.clientDetail.summaryNoTotal
+                : formatMoney(balanceRemaining)
+          }
+          emphasize={!portal.complimentary && balanceRemaining !== null && balanceRemaining > 0}
         />
         <SummaryFact
           icon={FaImages}
@@ -3185,9 +3280,9 @@ function SessionTypeField({
 /**
  * Settle the few dollars a direct payer was discounted.
  *
- * The server recomputes the amount and refuses anything above the card fee, so
- * this button cannot waive a real balance even if it renders when it should
- * not. It shows its own error inline rather than at the top of the page,
+ * The server recomputes the amount from the direct payments and refuses
+ * anything they did not earn, so this button cannot waive a real balance even
+ * if it renders when it should not. It shows its own error inline rather than at the top of the page,
  * because on a phone the top of the page is three screens away.
  */
 function SettleDiscountCallout({
@@ -3249,16 +3344,37 @@ function AddPaymentForm({
   portalId,
   adminPassword,
   onAdded,
+  remaining,
 }: {
   portalId: string;
   adminPassword: string;
   onAdded: () => void;
+  /** What is still owed (contract plus charges, minus paid), or null with no total. */
+  remaining: number | null;
 }) {
   const { t } = useAdminLang();
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('');
   const [note, setNote] = useState('');
   const [paidAt, setPaidAt] = useState('');
+  /**
+   * A tip settles nothing (migration 043). Logging a cash or Zelle tip used to
+   * mean logging it as a payment, which counted it toward the balance and
+   * could release photos that had not been paid for.
+   */
+  const [isTip, setIsTip] = useState(false);
+  /**
+   * The owner's rule: anything paid above the contract plus its charges is a
+   * tip, unless it is a fee added separately. On by default whenever an
+   * amount comes in above what is owed, so the split is the easy path and
+   * recording the whole sum as payment is the deliberate one.
+   */
+  const [splitExcess, setSplitExcess] = useState(true);
+  const typed = parseFloat(amount);
+  const excess =
+    !isTip && remaining !== null && Number.isFinite(typed) && typed > remaining
+      ? Math.round((typed - remaining) * 100) / 100
+      : 0;
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
 
@@ -3275,6 +3391,8 @@ function AddPaymentForm({
     setMethod('');
     setNote('');
     setPaidAt('');
+    setIsTip(false);
+    setSplitExcess(true);
   };
 
   const submit = async () => {
@@ -3297,6 +3415,8 @@ function AddPaymentForm({
           method: method.trim() || null,
           note: note.trim() || null,
           paid_at: paidAt || null,
+          kind: isTip ? 'tip' : 'payment',
+          split_excess_as_tip: excess > 0 && splitExcess,
         }),
       });
       const data = await res.json();
@@ -3377,6 +3497,20 @@ function AddPaymentForm({
             focusBorderColor="brand.accent"
           />
         </Box>
+        <Box>
+          <Checkbox isChecked={isTip} onChange={(e) => setIsTip(e.target.checked)} colorScheme="purple" size="md">
+            <Text as="span" fontSize="sm" color="gray.700">{t.clientDetail.paymentIsTip}</Text>
+          </Checkbox>
+          <Text fontSize="xs" color="gray.500" mt={1} ml={6}>{t.clientDetail.paymentIsTipHelp}</Text>
+        </Box>
+        {excess > 0 && (
+          <Box bg="purple.50" border="1px solid" borderColor="purple.100" borderRadius="sm" p={3}>
+            <Checkbox isChecked={splitExcess} onChange={(e) => setSplitExcess(e.target.checked)} colorScheme="purple" size="md">
+              <Text as="span" fontSize="sm" color="gray.800">{t.clientDetail.paymentSplitExcess(formatMoney(excess))}</Text>
+            </Checkbox>
+            <Text fontSize="xs" color="gray.600" mt={1} ml={6}>{t.clientDetail.paymentSplitExcessHelp}</Text>
+          </Box>
+        )}
         {err && <Text fontSize="sm" color="red.500">{err}</Text>}
         <CTAButton onClick={submit} variant="solid" size="sm" isLoading={submitting} loadingText={t.clientDetail.saving}>
           {t.clientDetail.addPayment}
@@ -3462,9 +3596,15 @@ function PaymentRow({
       <Flex justify="space-between" align="center" gap={3} flexWrap="wrap">
         <Box flex="1" minW={0}>
           <HStack spacing={2}>
-            <Icon as={FaCheck} color="green.500" boxSize={2.5} />
-            <Text fontSize="sm" fontWeight="500" color="gray.800">
-              ${entry.amount.toFixed(0)}
+            {/* A refund or chargeback is money that went back out. It used to
+                wear the same green check as a payment, reading "$-100". */}
+            <Icon
+              as={entry.amount < 0 ? FaUndo : FaCheck}
+              color={entry.amount < 0 ? 'orange.500' : entry.method === CARD_FEE_DISCOUNT_METHOD ? 'gray.400' : 'green.500'}
+              boxSize={2.5}
+            />
+            <Text fontSize="sm" fontWeight="500" color={entry.amount < 0 ? 'orange.600' : 'gray.800'}>
+              {formatMoney(entry.amount)}
             </Text>
             {entry.kind === 'tip' && (
               <Box
@@ -3536,6 +3676,12 @@ function PaymentRow({
             {submitting ? t.clientDetail.deleting : t.clientDetail.confirmDelete}
           </Box>
         </HStack>
+      ) : entry.source === 'stripe' ? (
+        // A card payment is Stripe's record of money that moved, and the
+        // server refuses to delete one (a refund is made in Stripe and arrives
+        // as its own row). A button that can only end in an error is worse
+        // than none.
+        null
       ) : (
         // Delete icon needs a real 44x44 tap target on mobile. A bare 12px
         // icon inside a hair-thin Box was impossible to hit reliably.
@@ -3784,7 +3930,7 @@ function ChargeRow({
         <Box flex="1" minW={0}>
           <HStack spacing={2} flexWrap="wrap">
             <Text fontSize="sm" fontWeight="500" color="gray.800">
-              +${entry.amount.toFixed(0)}
+              +{formatMoney(entry.amount)}
             </Text>
             <Text fontSize="sm" color="gray.500">· {reasonLabel}</Text>
             <Text fontSize="sm" color="gray.400">· {formatDate(entry.charged_at)}</Text>
@@ -4201,11 +4347,15 @@ function EditContractVariables({
   // exposes due_date and session_scope here, and wedding to portrait to
   // maternity gets there without re-creating the client.
   const ownRequiredKeys = requiredVariablesFor(portal.contract_template_key);
-  // Clause flags are never free text, whichever list they came from.
+  // Clause flags are never free text, whichever list they came from. Nor is
+  // the money: total_amount, retainer_amount and remaining_balance are written
+  // from the Total and Retainer fields on every save (_portal-update.ts), so a
+  // box here could only show a figure the server will overwrite, and before
+  // that it let the contract say one price while checkout charged another.
   const valueKeys = Array.from(
     new Set([...Object.keys(vars), ...templateKeys, ...ownRequiredKeys]),
   )
-    .filter((k) => !ALL_CLAUSE_KEYS.has(k))
+    .filter((k) => !ALL_CLAUSE_KEYS.has(k) && !DERIVED_MONEY_KEYS.has(k))
     .sort();
   /**
    * PRICE REVIEW ticks itself, or refuses to be ticked.

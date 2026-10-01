@@ -95,6 +95,10 @@ export default function AdminPortalPreview({
     }
   }, [portal]);
 
+  // A free booking reaches the client with no total, retainer or charges
+  // (api/portal/_client.ts), so the preview has to drop them the same way or
+  // it shows Vero a balance her client never sees.
+  const free = portal.complimentary === true;
   const data: ClientPortalData = {
     mode: 'full',
     client_name: str(portal.client_display_name),
@@ -115,10 +119,10 @@ export default function AdminPortalPreview({
     contract_signed_at: str(portal.contract_signed_at),
     contract_body: str(portal.contract_body),
     contract_signed_pdf_available: portal.contract_signed_pdf_available === true,
-    contract_total_amount: portal.contract_total_amount == null ? null : num(portal.contract_total_amount),
-    contract_retainer_amount: portal.contract_retainer_amount == null ? null : num(portal.contract_retainer_amount),
+    contract_total_amount: free || portal.contract_total_amount == null ? null : num(portal.contract_total_amount),
+    contract_retainer_amount: free || portal.contract_retainer_amount == null ? null : num(portal.contract_retainer_amount),
     paid_to_date: num(portal.paid_to_date),
-    payment_plan_enabled: portal.payment_plan_enabled === true,
+    payment_plan_enabled: !free && portal.payment_plan_enabled === true,
     // Nothing in api/ writes payment_installments yet, so the admin endpoint
     // has none to return. Empty is the truthful value, not a placeholder.
     installments: [],
@@ -131,8 +135,8 @@ export default function AdminPortalPreview({
       kind: p.kind === 'tip' ? 'tip' : 'payment',
     })),
     tips_total: num(portal.tips_total),
-    charges_total: num(portal.charges_total),
-    charges: charges.map((c) => ({
+    charges_total: free ? 0 : num(portal.charges_total),
+    charges: (free ? [] : charges).map((c) => ({
       id: String(c.id),
       amount: num(c.amount),
       reason: String(c.reason ?? 'other'),

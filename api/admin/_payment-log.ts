@@ -7,7 +7,9 @@
  *   action: 'add' | 'delete' | 'add-charge' | 'delete-charge',
  *
  *   // add:
- *   amount?, method?, note?, paid_at?
+ *   amount?, method?, note?, paid_at?,
+ *   kind? ('payment' | 'tip'),            a cash or Zelle tip is a tip
+ *   split_excess_as_tip? (boolean)        the part above the balance becomes a tip
  *
  *   // delete:
  *   entry_id?
@@ -41,15 +43,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
-import { cardFeeOn } from '../../src/data/payment-handles.js';
-import { recomputePaidToDate } from '../_payments.js';
+import { earnedDirectDiscount, CARD_FEE_DISCOUNT_METHOD } from '../../src/data/payment-handles.js';
+import { writeWithRecompute } from '../_payments.js';
 
 /**
  * The reasons a charge can carry. Same three the table CHECKs, repeated here
  * so a typo comes back as a 400 naming the valid values rather than a 500
  * from a constraint violation. Each one is a label the client reads.
  */
-const CHARGE_REASONS = new Set(['overtime', 'expense', 'insurance', 'other']);
+const CHARGE_REASONS = new Set(['overtime', 'expense', 'other']);
+
+/**
+ * Bigger than any booking this business takes. A manual amount above it is a
+ * typo (an extra zero turns a $3,000 booking "paid" at $30,000), so it is
+ * refused rather than recorded.
+ */
+const MAX_MANUAL_AMOUNT = 50_000;
 
 /**
  * A date input sends 'YYYY-MM-DD', an API caller may send a full ISO string,
@@ -66,28 +75,25 @@ function parseWhen(raw: unknown): string {
   return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 }
 
-async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: string, res: VercelResponse) {
-  /**
-   * Delegated, not duplicated.
-   *
-   * This used to hold its own copy of the re-sum, identical to the one in
-   * api/_payments.ts. Two copies of an arithmetic rule is a bug with a delay
-   * on it, and the delay ran out with migration 043: the canonical sum learned
-   * to exclude tips and this copy did not, so a tip landed outside the balance
-   * where it belongs, and then silently folded INTO the balance the next time
-   * Vero added or deleted any payment on that booking. The client would be
-   * told the tip they had given was money they were owed.
-   *
-   * recomputePaidToDate is the same single statement for the same reason the
-   * copy was: the sum and the write cannot be separated by another writer
-   * landing between them, which matters now that a card webhook can write at
-   * the same moment Vero is logging cash. It is still a full re-sum rather
-   * than an increment, so deleting a bad row heals the total.
-   */
-  const newTotal = await recomputePaidToDate(sql, portalId);
-
+/**
+ * The booking's payments, after a write, with the total that write produced.
+ *
+ * The total comes IN rather than being recomputed here: every write now runs
+ * as one transaction (lock, write, re-sum) through writeWithRecompute in
+ * api/_payments.ts, which is the only place paid_to_date is derived. This used
+ * to hold its own copy of that sum, and two copies of an arithmetic rule is a
+ * bug with a delay on it: the canonical sum learned to exclude tips and this
+ * copy did not.
+ */
+async function respondWithPayments(
+  sql: ReturnType<typeof getDb>,
+  portalId: string,
+  res: VercelResponse,
+  paidToDate: number | null,
+  extra: Record<string, unknown> = {},
+) {
   const payments = (await sql`
-    select id, amount, method, note, paid_at, created_at
+    select id, amount, method, note, paid_at, created_at, kind, source, status
     from payment_entries
     where client_portal_id = ${portalId}
     order by paid_at desc, created_at desc
@@ -98,11 +104,14 @@ async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: strin
     note: string | null;
     paid_at: string;
     created_at: string;
+    kind: string;
+    source: string;
+    status: string;
   }>;
 
   return res.status(200).json({
     success: true,
-    paid_to_date: newTotal,
+    paid_to_date: paidToDate,
     payments: payments.map((p) => ({
       id: p.id,
       amount: parseFloat(p.amount),
@@ -110,31 +119,21 @@ async function recomputeAndReturn(sql: ReturnType<typeof getDb>, portalId: strin
       note: p.note,
       paid_at: p.paid_at,
       created_at: p.created_at,
+      kind: p.kind,
+      source: p.source,
+      status: p.status,
     })),
+    ...extra,
   });
 }
 
-/** The charges half of the same bookkeeping. Deliberately shaped like recomputeAndReturn above. */
-async function recomputeChargesAndReturn(
+/** The charges half of the same bookkeeping. */
+async function respondWithCharges(
   sql: ReturnType<typeof getDb>,
   portalId: string,
   res: VercelResponse,
+  chargesTotal: number | null,
 ) {
-  // Same single-statement re-sum as recomputeAndReturn above, and for the same
-  // reason: a charge added while a payment lands must not lose either one.
-  const updated = (await sql`
-    update client_portals
-    set charges_total = (
-          select coalesce(sum(amount), 0)
-          from portal_charges
-          where client_portal_id = ${portalId}
-        ),
-        updated_at = now()
-    where id = ${portalId}
-    returning charges_total
-  `) as Array<{ charges_total: string }>;
-  const newTotal = parseFloat(updated[0]?.charges_total ?? '0');
-
   const charges = (await sql`
     select id, amount, reason, note, charged_at, created_at
     from portal_charges
@@ -151,7 +150,7 @@ async function recomputeChargesAndReturn(
 
   return res.status(200).json({
     success: true,
-    charges_total: newTotal,
+    charges_total: chargesTotal,
     charges: charges.map((c) => ({
       id: c.id,
       amount: parseFloat(c.amount),
@@ -200,13 +199,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        * movement of money in the other direction, not the quiet removal of the
        * evidence that the first one happened.
        */
-      const removed = (await sql`
-        delete from payment_entries
-        where id = ${entryId}
-          and client_portal_id = ${id}
-          and coalesce(source, 'manual') <> 'stripe'
-        returning id
-      `) as Array<{ id: string }>;
+      const { writeRows, paidToDate } = await writeWithRecompute(
+        sql,
+        id,
+        [
+          sql`
+            delete from payment_entries
+            where id = ${entryId}
+              and client_portal_id = ${id}
+              and coalesce(source, 'manual') <> 'stripe'
+            returning id
+          `,
+        ],
+        { paid: true },
+      );
+      const removed = writeRows[0] as Array<{ id: string }>;
 
       if (removed.length === 0) {
         // Either it was a card payment, or it was already gone. Say which,
@@ -226,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
       }
-      return recomputeAndReturn(sql, id, res);
+      return respondWithPayments(sql, id, res, paidToDate);
     }
 
     if (action === 'add') {
@@ -234,16 +241,82 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({ success: false, error: 'amount must be a positive number' });
       }
+      if (amount > MAX_MANUAL_AMOUNT) {
+        return res.status(400).json({
+          success: false,
+          error: `That is more than any booking here (${amount.toLocaleString('en-US')}). Check the amount for an extra zero.`,
+        });
+      }
       const method = typeof req.body?.method === 'string' ? req.body.method.trim() : null;
       const note = typeof req.body?.note === 'string' ? req.body.note.trim() : null;
       // Accept either an ISO timestamp or YYYY-MM-DD (from a date input).
       const paidAt = parseWhen(req.body?.paid_at);
+      // Two days of slack for timezones and a payment logged the night before
+      // it clears. Anything later is a typo, and a future date files the money
+      // in the wrong sales-tax quarter.
+      if (new Date(paidAt).getTime() > Date.now() + 2 * 86_400_000) {
+        return res.status(400).json({ success: false, error: 'That date is in the future. Use the day the money arrived.' });
+      }
 
-      await sql`
-        insert into payment_entries (client_portal_id, amount, method, note, paid_at)
-        values (${id}, ${amount}, ${method || null}, ${note || null}, ${paidAt})
-      `;
-      return recomputeAndReturn(sql, id, res);
+      /**
+       * A TIP IS A TIP, however it arrived (migration 043). The card path has
+       * always recorded tips separately; a Zelle or cash tip could only be
+       * logged as a payment, which counted it toward the balance and could
+       * open the delivery gate on work that had not been paid for.
+       *
+       * AND THE PART ABOVE THE BALANCE IS A TIP, when Vero says so. A client
+       * who sends one sum for the balance and a thank-you together leaves the
+       * booking reading "overpaid"; the owner's rule is that whatever is above
+       * the contract plus its charges is a tip, unless it is a fee they added
+       * separately. split_excess_as_tip applies that rule in one step.
+       */
+      const kind: 'payment' | 'tip' = req.body?.kind === 'tip' ? 'tip' : 'payment';
+      const splitExcess = req.body?.split_excess_as_tip === true;
+      const cents = Math.round(amount * 100);
+      let paymentCents = kind === 'payment' ? cents : 0;
+      let tipCents = kind === 'tip' ? cents : 0;
+      if (kind === 'payment' && splitExcess) {
+        // Charges from the ROWS, so this cannot read a stale stored total.
+        const b = (await sql`
+          select contract_total_amount::text t, paid_to_date::text p,
+                 (select coalesce(sum(amount), 0) from portal_charges where client_portal_id = ${id})::text c
+          from client_portals where id = ${id} limit 1
+        `) as Array<{ t: string | null; p: string | null; c: string }>;
+        if (b[0]?.t != null) {
+          const owedCents = Math.max(
+            Math.round(parseFloat(b[0].t) * 100) + Math.round(parseFloat(b[0].c) * 100) - Math.round(parseFloat(b[0].p ?? '0') * 100),
+            0,
+          );
+          if (cents > owedCents) {
+            paymentCents = owedCents;
+            tipCents = cents - owedCents;
+          }
+        }
+      }
+
+      const writes = [];
+      if (paymentCents > 0) {
+        writes.push(sql`
+          insert into payment_entries (client_portal_id, amount, method, note, paid_at, kind)
+          values (${id}, ${paymentCents / 100}, ${method || null}, ${note || null}, ${paidAt}, 'payment')
+        `);
+      }
+      if (tipCents > 0) {
+        const tipNote =
+          kind === 'tip'
+            ? note || null
+            : note
+              ? `${note} (the part above the balance, recorded as a tip)`
+              : 'The part above the balance, recorded as a tip';
+        writes.push(sql`
+          insert into payment_entries (client_portal_id, amount, method, note, paid_at, kind)
+          values (${id}, ${tipCents / 100}, ${method || null}, ${tipNote}, ${paidAt}, 'tip')
+        `);
+      }
+      const { paidToDate } = await writeWithRecompute(sql, id, writes, { paid: true });
+      return respondWithPayments(sql, id, res, paidToDate, {
+        recorded: { payment: paymentCents / 100, tip: tipCents / 100 },
+      });
     }
 
     /**
@@ -259,23 +332,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * the obligation. Labelled so the ledger never pretends cash arrived: the
      * line says exactly what it is.
      *
-     * THE AMOUNT IS COMPUTED HERE, never accepted from the caller, and capped
-     * at the card fee on the full price. A waiver larger than the fee it stands
-     * in for is a typo or a mistake, and neither should be writable by calling
-     * this endpoint.
+     * THE AMOUNT IS COMPUTED HERE, never accepted from the caller, and it is
+     * the discount the booking's DIRECT payments actually earned
+     * (earnedDirectDiscount), not the fee on the whole price. The old cap went
+     * wrong both ways: a booking paid entirely by card could have a later
+     * overtime charge waived as a "card fee" nobody avoided, and a retainer
+     * paid directly could not be squared until the very end, and with two
+     * direct payments, never.
      */
     if (action === 'settle-discount') {
       const rows = (await sql`
-        select contract_total_amount::text t, charges_total::text c, paid_to_date::text p
+        select contract_total_amount::text t, paid_to_date::text p,
+               (select coalesce(sum(amount), 0) from portal_charges where client_portal_id = ${id})::text c
         from client_portals where id = ${id} limit 1
-      `) as Array<{ t: string | null; c: string | null; p: string | null }>;
+      `) as Array<{ t: string | null; c: string; p: string | null }>;
       if (rows.length === 0) {
         return res.status(404).json({ success: false, error: 'No such booking' });
       }
-      const total = parseFloat(rows[0].t ?? '0');
-      const charges = parseFloat(rows[0].c ?? '0');
-      const paid = parseFloat(rows[0].p ?? '0');
-      const outstandingCents = Math.round((total + charges - paid) * 100);
+      const totalCents = Math.round(parseFloat(rows[0].t ?? '0') * 100);
+      const chargesCents = Math.round(parseFloat(rows[0].c ?? '0') * 100);
+      const paidCents = Math.round(parseFloat(rows[0].p ?? '0') * 100);
+      const outstandingCents = totalCents + chargesCents - paidCents;
 
       if (outstandingCents <= 0) {
         return res.status(409).json({
@@ -283,29 +360,73 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: 'This booking is already settled, there is nothing to waive.',
         });
       }
-      const maxCents = Math.round(cardFeeOn(total + charges) * 100);
-      if (outstandingCents > maxCents) {
+
+      const entries = (await sql`
+        select amount::text a, method
+        from payment_entries
+        where client_portal_id = ${id}
+          and coalesce(source, 'manual') = 'manual'
+          and status = 'succeeded'
+          and kind = 'payment'
+      `) as Array<{ a: string; method: string | null }>;
+      const direct = entries
+        .filter((e) => e.method !== CARD_FEE_DISCOUNT_METHOD && parseFloat(e.a) > 0)
+        .map((e) => parseFloat(e.a));
+      const waived = entries
+        .filter((e) => e.method === CARD_FEE_DISCOUNT_METHOD)
+        .reduce((sum, e) => sum + parseFloat(e.a), 0);
+      const earnedCents = Math.round(earnedDirectDiscount(direct, waived) * 100);
+
+      if (earnedCents <= 0) {
         return res.status(409).json({
           success: false,
           error:
-            `Still owing ${(outstandingCents / 100).toFixed(2)}, which is more than the ` +
-            `${(maxCents / 100).toFixed(2)} card fee on this booking. Record the payment they sent first.`,
+            'Nothing on this booking was paid directly, so there is no card fee to waive. ' +
+            'What is still owed is owed.',
         });
       }
+      const waiverCents = Math.min(outstandingCents, earnedCents);
 
-      await sql`
-        insert into payment_entries (client_portal_id, amount, method, note, paid_at)
-        values (${id}, ${outstandingCents / 100}, 'Card fee discount',
-                'Paid directly, so the card processing fee was waived', now())
-      `;
-      return recomputeAndReturn(sql, id, res);
+      const { paidToDate } = await writeWithRecompute(
+        sql,
+        id,
+        [
+          sql`
+            insert into payment_entries (client_portal_id, amount, method, note, paid_at)
+            values (${id}, ${waiverCents / 100}, ${CARD_FEE_DISCOUNT_METHOD},
+                    'Paid directly, so the card processing fee was waived', now())
+          `,
+        ],
+        { paid: true },
+      );
+      return respondWithPayments(sql, id, res, paidToDate, { waived: waiverCents / 100 });
     }
 
     if (action === 'delete-charge') {
       const chargeId = typeof req.body?.charge_id === 'string' ? req.body.charge_id.trim() : '';
       if (!chargeId) return res.status(400).json({ success: false, error: 'charge_id required' });
-      await sql`delete from portal_charges where id = ${chargeId} and client_portal_id = ${id}`;
-      return recomputeChargesAndReturn(sql, id, res);
+      /**
+       * The insurance charge belongs to the insurance record, which points at
+       * it. Deleting it from here left that pointer dangling, and the next
+       * change to the policy then updated nothing, so the policy was never
+       * billed again while the panel said it had been.
+       */
+      const linked = (await sql`
+        select insurance_charge_id from client_portals where id = ${id} limit 1
+      `) as Array<{ insurance_charge_id: string | null }>;
+      if (linked[0]?.insurance_charge_id === chargeId) {
+        return res.status(409).json({
+          success: false,
+          error: 'This is the event insurance charge. Change or remove it from the Insurance panel, so the policy and the charge stay together.',
+        });
+      }
+      const { chargesTotal } = await writeWithRecompute(
+        sql,
+        id,
+        [sql`delete from portal_charges where id = ${chargeId} and client_portal_id = ${id}`],
+        { charges: true },
+      );
+      return respondWithCharges(sql, id, res, chargesTotal);
     }
 
     if (action === 'add-charge') {
@@ -313,7 +434,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({ success: false, error: 'amount must be a positive number' });
       }
+      if (amount > MAX_MANUAL_AMOUNT) {
+        return res.status(400).json({ success: false, error: 'That charge is larger than any booking here. Check the amount.' });
+      }
       const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+      if (reason === 'insurance') {
+        return res.status(400).json({
+          success: false,
+          error: 'Insurance is charged from the Insurance panel, so the policy and its charge stay linked.',
+        });
+      }
       if (!CHARGE_REASONS.has(reason)) {
         return res
           .status(400)
@@ -322,16 +452,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const note = typeof req.body?.note === 'string' ? req.body.note.trim() : null;
       const chargedAt = parseWhen(req.body?.charged_at);
 
-      await sql`
-        insert into portal_charges (client_portal_id, amount, reason, note, charged_at)
-        values (${id}, ${amount}, ${reason}, ${note || null}, ${chargedAt})
-      `;
-      return recomputeChargesAndReturn(sql, id, res);
+      const { chargesTotal } = await writeWithRecompute(
+        sql,
+        id,
+        [sql`
+          insert into portal_charges (client_portal_id, amount, reason, note, charged_at)
+          values (${id}, ${amount}, ${reason}, ${note || null}, ${chargedAt})
+        `],
+        { charges: true },
+      );
+      return respondWithCharges(sql, id, res, chargesTotal);
     }
 
     return res
       .status(400)
-      .json({ success: false, error: 'action must be add, delete, add-charge or delete-charge' });
+      .json({ success: false, error: 'action must be add, delete, settle-discount, add-charge or delete-charge' });
   } catch (err) {
     console.error('[admin/payment-log] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

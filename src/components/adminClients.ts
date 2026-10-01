@@ -35,6 +35,12 @@ export interface AdminPortalSummary {
   // Extra time and costs added after the booking. Owed on top of the
   // contract total, so the balance line has to add it in.
   charges_total: number;
+  /**
+   * Shot for free, for family or friends (migration 048). Such a booking has
+   * no balance at all, rather than a balance of 0: it never owes, is never
+   * overpaid, and shows "Free" where the money would be.
+   */
+  complimentary?: boolean;
   drive_url: string | null;
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
@@ -45,7 +51,14 @@ export interface AdminPortalSummary {
 }
 
 export type ClientFilter = 'all' | 'upcoming' | 'owes' | 'overpaid' | 'unsigned' | 'deliver';
-export type ClientSortKey = 'date' | 'name' | 'money';
+/**
+ * 'date' is the event date and nothing else: earliest to latest, or the
+ * reverse. 'agenda' is the working view (the next shoot first, then the past
+ * with the most recent on top). They were one key once, named Date, and a
+ * screen that put 2027 weddings above shoots from earlier in 2026 under the
+ * word "Date" read as a broken sort.
+ */
+export type ClientSortKey = 'agenda' | 'date' | 'name' | 'money';
 export type ClientSortDir = 'asc' | 'desc';
 export interface ClientSort {
   key: ClientSortKey;
@@ -136,14 +149,14 @@ export const todayDayUtc = (): number => {
  * land on 0.00000001 and report a debt.
  */
 export const balanceOf = (p: AdminPortalSummary): number | null => {
-  if (p.contract_total_amount === null) return null;
+  if (p.complimentary || p.contract_total_amount === null) return null;
   const owed = Math.round(p.contract_total_amount * 100) + Math.round((p.charges_total ?? 0) * 100);
   return (owed - Math.round(p.paid_to_date * 100)) / 100;
 };
 
 /** What the booking asks for in total: contract plus later charges. */
 export const bookingTotal = (p: AdminPortalSummary): number | null =>
-  p.contract_total_amount === null
+  p.complimentary || p.contract_total_amount === null
     ? null
     : (Math.round(p.contract_total_amount * 100) + Math.round((p.charges_total ?? 0) * 100)) / 100;
 
@@ -264,7 +277,7 @@ export const selectVisible = (
   const unplaced: AdminPortalSummary[] = [];
   for (const p of rows) {
     const has =
-      sort.key === 'date' ? eventDayUtc(p.event_date) !== null
+      sort.key === 'date' || sort.key === 'agenda' ? eventDayUtc(p.event_date) !== null
       : sort.key === 'money' ? balanceOf(p) !== null
       : nameOf(p) !== '';
     (has ? placed : unplaced).push(p);
@@ -280,12 +293,14 @@ export const selectVisible = (
       // what a click on Money gives you, puts the largest debt at the top.
       return (balanceOf(a) as number) - (balanceOf(b) as number);
     }
-    // Date, ascending, is the agenda order: the next shoot first, then the
-    // rest of the future in order, then the past with the most recent shoot
-    // directly under today's line. Not a plain ascending sort, because a plain
-    // one opens the screen on a wedding from two years ago.
     const av = eventDayUtc(a.event_date) as number;
     const bv = eventDayUtc(b.event_date) as number;
+    // Date is the calendar, plainly: the earliest event first.
+    if (sort.key === 'date') return av - bv;
+    // Agenda, ascending: the next shoot first, then the rest of the future in
+    // order, then the past with the most recent shoot directly under today's
+    // line. Not a plain ascending sort, because a plain one opens the screen on
+    // a wedding from two years ago, which is why this is the default view.
     const aFuture = av >= today;
     const bFuture = bv >= today;
     if (aFuture !== bFuture) return aFuture ? -1 : 1;

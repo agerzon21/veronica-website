@@ -28,7 +28,7 @@
  * Underscore-prefixed so Vercel does not expose it as an HTTP route.
  */
 
-import { createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto';
 
 const API = 'https://api.stripe.com/v1';
 
@@ -100,10 +100,18 @@ async function stripeRequest<T>(
   if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
 
+  /**
+   * Bounded. Without a timeout a hung Stripe call holds the whole function
+   * until Vercel kills it at 60 seconds, and on the webhook that turns one slow
+   * dependency into a 504 for an event that would otherwise have been fine.
+   * Fifteen seconds is far above Stripe's normal latency; a throw here is
+   * handled exactly like any other failed request by every caller.
+   */
   const res = await fetch(`${API}${path}`, {
     method,
     headers,
     body: body ? encodeForm(body) : undefined,
+    signal: AbortSignal.timeout(15_000),
   });
 
   const text = await res.text();
@@ -187,9 +195,9 @@ export type CheckoutSession = { id: string; url: string };
  * an email, Stripe's page brings Apple Pay and Google Pay with no work, and no
  * card data touches vero.photography, which keeps PCI scope at SAQ-A.
  *
- * Created on CLICK, never pre-generated into an email. Sessions expire 24
- * hours after creation, so a link baked into a delivery email is dead by the
- * time most people read it.
+ * Created on CLICK, never pre-generated into an email. A session now lives
+ * under an hour (see expires_at below), so a link baked into a delivery email
+ * would be dead long before anyone read it.
  */
 export async function createCheckoutSession(input: CreateCheckoutInput): Promise<CheckoutSession> {
   const {
@@ -206,9 +214,26 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
   // number of cents.
   const unitAmount = Math.round(amount * 100);
 
-  return stripeRequest<CheckoutSession>('/checkout/sessions', {
-    body: {
+  /**
+   * A SHORT-LIVED session, inside a thirty minute window.
+   *
+   * Stripe's default is 24 hours, and an abandoned checkout tab stayed payable
+   * for all of it: one partner opens "Pay balance" and wanders off, the other
+   * pays by Zelle, and the forgotten tab can still take the same balance again
+   * that evening. Now a session lives 40 to 70 minutes.
+   *
+   * expires_at is derived from the WINDOW, not from the clock, so two clicks in
+   * the same window send byte-identical bodies and the idempotency key below
+   * still returns the one session. A click in the next window opens a new one,
+   * which is what a client coming back after the old one died needs.
+   */
+  const WINDOW_SECONDS = 1800;
+  const slot = Math.floor(Date.now() / 1000 / WINDOW_SECONDS);
+  const expiresAt = (slot + 1) * WINDOW_SECONDS + 2400;
+
+  const body: Record<string, unknown> = {
       mode: 'payment',
+      expires_at: expiresAt,
       success_url: successUrl,
       cancel_url: cancelUrl,
       customer_email: clientEmail || undefined,
@@ -235,7 +260,23 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
         metadata: { portal_id: portalId, kind },
         description,
       },
-    },
+  };
+
+  /**
+   * The key also carries a hash of the exact request, and the window.
+   *
+   * Stripe answers a reused key carrying a DIFFERENT body with an
+   * idempotency_error, not with a new session. The key used to name only the
+   * portal, kind, amount and what was paid, while the body also carries the
+   * client's email, the description and the return URLs, so Vero correcting a
+   * client's name after they had opened checkout left that client unable to
+   * pay for the rest of the day, behind a generic "could not start" message.
+   * Same request, same key, same session; anything changed, a new one.
+   */
+  const bodyHash = createHash('sha256').update(encodeForm(body)).digest('hex').slice(0, 16);
+
+  return stripeRequest<CheckoutSession>('/checkout/sessions', {
+    body,
     stripeAccount,
     /**
      * Two clicks on a slow phone must not open two sessions for one payment,
@@ -253,7 +294,7 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
      * correct. An attempt that was never completed keeps its key and resumes
      * the same session, which is the behaviour you want.
      */
-    idempotencyKey: `checkout:${portalId}:${kind}:${unitAmount}:${paidToDateCents}`,
+    idempotencyKey: `checkout:${portalId}:${kind}:${unitAmount}:${paidToDateCents}:${slot}:${bodyHash}`,
   });
 }
 
@@ -329,7 +370,98 @@ export type StripeEvent = {
   type: string;
   data: { object: Record<string, unknown> };
   account?: string;
+  /** Unix seconds: when the thing the event describes happened. */
+  created?: number;
+  /** False for a test-mode event. Compared against the key we run on. */
+  livemode?: boolean;
 };
+
+/* ------------------------------------------------------------- lookups ---- */
+
+/**
+ * Every item of a Stripe list, following has_more, for the reconciliation.
+ *
+ * Bounded twice: by a deadline, because this shares a cron invocation with the
+ * gallery sync, and by a page cap, because a runaway list should never be the
+ * reason that sync times out. `complete` says whether the whole list was read,
+ * which is what decides whether "not found in Stripe" can be trusted.
+ */
+export async function listAllStripe<T extends { id?: string }>(
+  path: string,
+  params: Record<string, string | number | string[]>,
+  opts: { deadline?: number; stripeAccount?: string | null } = {},
+): Promise<{ items: T[]; complete: boolean }> {
+  const out: T[] = [];
+  let startingAfter: string | null = null;
+  for (let page = 0; page < 20; page++) {
+    if (opts.deadline && Date.now() > opts.deadline) return { items: out, complete: false };
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (Array.isArray(v)) v.forEach((x) => q.append(`${k}[]`, String(x)));
+      else q.append(k, String(v));
+    }
+    q.set('limit', '100');
+    if (startingAfter) q.set('starting_after', startingAfter);
+    const res = await stripeRequest<{ data?: T[]; has_more?: boolean }>(`${path}?${q.toString()}`, {
+      method: 'GET',
+      stripeAccount: opts.stripeAccount ?? null,
+    });
+    const data = res.data ?? [];
+    out.push(...data);
+    if (!res.has_more || data.length === 0) return { items: out, complete: true };
+    startingAfter = data[data.length - 1].id ?? null;
+    if (!startingAfter) return { items: out, complete: true };
+  }
+  return { items: out, complete: false };
+}
+
+/**
+ * The booking a PaymentIntent belongs to, read from Stripe itself.
+ *
+ * For an event that arrives before its payment has reached the ledger: a
+ * refund or a dispute knows its payment intent, and the intent carries the
+ * portal_id we put on it at checkout. That is what tells "a payment of ours we
+ * have not recorded YET" (retry later) apart from "not our payment" (ignore).
+ */
+export async function portalIdForPaymentIntent(
+  paymentIntentId: string,
+  stripeAccount: string | null = null,
+): Promise<string | null> {
+  const intent = await stripeRequest<{ metadata?: Record<string, string> }>(
+    `/payment_intents/${encodeURIComponent(paymentIntentId)}`,
+    { method: 'GET', stripeAccount },
+  );
+  const id = intent?.metadata?.portal_id;
+  return typeof id === 'string' && id ? id : null;
+}
+
+export type StripeCheckoutSession = {
+  id?: string;
+  status?: string;
+  payment_status?: string;
+  amount_total?: number;
+  currency?: string;
+  created?: number;
+  payment_intent?: string | { id?: string } | null;
+  metadata?: Record<string, string>;
+  livemode?: boolean;
+};
+
+/**
+ * One Checkout session, as Stripe has it now.
+ *
+ * Used when the client's browser comes back from paying, so a payment is
+ * recorded even if the webhook that should have recorded it never arrives.
+ */
+export async function retrieveCheckoutSession(
+  sessionId: string,
+  stripeAccount: string | null = null,
+): Promise<StripeCheckoutSession> {
+  return stripeRequest<StripeCheckoutSession>(
+    `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'GET', stripeAccount },
+  );
+}
 
 /**
  * Verify that a webhook really came from Stripe, and parse it.

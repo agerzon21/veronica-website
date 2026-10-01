@@ -84,6 +84,11 @@ export async function backfillStripeFees(): Promise<{
     where source = 'stripe'
       and fee_amount is null
       and processor_payment_id is not null
+      -- Payments only. Refund (re_), chargeback (du_) and reversal rows carry
+      -- no fee of their own, and asking Stripe for /payment_intents/re_...
+      -- 404s and logs a Stripe error every day for a week, which teaches
+      -- everyone reading the log to ignore Stripe errors.
+      and processor_payment_id like 'pi\_%'
       and created_at > now() - make_interval(days => ${LOOKBACK_DAYS})
     order by created_at desc
     limit ${MAX_PER_RUN}

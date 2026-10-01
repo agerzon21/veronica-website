@@ -391,10 +391,12 @@ const ClientPortalView = ({
   // it uses internally, mirrored here so PortalTopNav can decide
   // whether to add a "Next Steps" pill AND so we know where to
   // auto-scroll after signing.
+  // In whole cents: as floats, 2500 + 256.22 exceeds 2756.22, and a booking
+  // paid to the cent kept a "Next Steps" pill asking for $0.
   const hasNextStep =
     data.contract_status === 'signed' &&
     amountOwed !== null &&
-    data.paid_to_date < amountOwed;
+    Math.round(data.paid_to_date * 100) < Math.round(amountOwed * 100);
 
   // Photos exist and have been released. Used in four places (the header's
   // progress, the Next Steps panel, the nav handoff, and the Photos section
@@ -1370,14 +1372,16 @@ const ClientPortalView = ({
                   Payments Received
                 </Text>
                 <VStack spacing={2} align="stretch">
-                  {data.payments.map((p) => (
+                  {data.payments.map((p) => {
+                    const look = paymentRowLook(p);
+                    return (
                     <Flex
                       key={p.id}
                       align="center"
                       justify="space-between"
                       bg="white"
                       border="1px solid"
-                      borderColor="green.100"
+                      borderColor={look.border}
                       borderRadius="sm"
                       px={4}
                       py={3}
@@ -1432,12 +1436,13 @@ const ClientPortalView = ({
                         fontWeight="500"
                         textTransform="uppercase"
                         letterSpacing="0.15em"
-                        color="green.500"
+                        color={look.color}
                       >
-                        Received
+                        {look.label}
                       </Text>
                     </Flex>
-                  ))}
+                    );
+                  })}
                 </VStack>
               </Box>
             )}
@@ -3708,5 +3713,28 @@ function useActiveSection(
  * against the left edge. Centring is only safe inside a horizontal scroller
  * because the row is minW="max-content": see the note in ScrollStrip.
  */
+
+/**
+ * What a payment row says it is.
+ *
+ * Every row used to say "Received" in green, including a refund (a negative
+ * row the webhook writes) and a chargeback, so a client who had been refunded
+ * read their refund as another payment received. The amount is negative on
+ * those rows, which is what this keys on. A card-fee waiver is money nobody
+ * sent, so it says Discount rather than claiming it arrived.
+ */
+function paymentRowLook(p: { amount: number; method?: string | null }): {
+  label: string;
+  color: string;
+  border: string;
+} {
+  if (p.amount < 0) {
+    return p.method === 'Chargeback'
+      ? { label: 'Disputed', color: 'orange.600', border: 'orange.100' }
+      : { label: 'Refunded', color: 'orange.600', border: 'orange.100' };
+  }
+  if (p.method === 'Card fee discount') return { label: 'Discount', color: 'gray.500', border: 'gray.200' };
+  return { label: 'Received', color: 'green.500', border: 'green.100' };
+}
 
 export default ClientPortalView;

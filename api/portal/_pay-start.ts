@@ -62,6 +62,7 @@ type Row = {
   client_email: string | null;
   client_password_hash: string | null;
   session_type: string | null;
+  contract_status: string;
   contract_total_amount: string | null;
   contract_retainer_amount: string | null;
   paid_to_date: string;
@@ -140,8 +141,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const rows = (await sql`
       select id, client_display_name, client_email, client_password_hash,
-             session_type, contract_total_amount, contract_retainer_amount,
-             paid_to_date, charges_total,
+             session_type, contract_status, contract_total_amount, contract_retainer_amount,
+             paid_to_date,
+             -- Charges from the ROWS, not the stored total. This number becomes
+             -- what Stripe charges, and the stored total has drifted before
+             -- (insurance once wrote charges without re-summing it).
+             coalesce((
+               select sum(amount) from portal_charges
+               where client_portal_id = client_portals.id
+             ), 0) as charges_total,
              coalesce((
                select sum(amount) from payment_entries
                where client_portal_id = client_portals.id
@@ -161,8 +169,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }
 
+    /**
+     * A voided contract takes no more money. The portal hides the button, but
+     * this endpoint is what actually opens a checkout, and a hand-built
+     * request should get the same answer the screen gives.
+     */
+    if (row.contract_status === 'void') {
+      return res.status(409).json({
+        success: false,
+        error: 'This booking was cancelled, so there is nothing to pay. Reach out to Vero if that is a surprise.',
+      });
+    }
+
+    /**
+     * Shot for free (migration 048): nothing is owed, whatever total the
+     * booking carries, so nothing but a tip can be paid. The portal shows no
+     * balance for it; this is the same answer for a hand-built request. Its
+     * own statement, allowed to fail, for a database 048 has not reached.
+     */
+    if (kind !== 'tip') {
+      let complimentary = false;
+      try {
+        const c = (await sql`
+          select complimentary from client_portals where id = ${row.id}
+        `) as Array<{ complimentary: boolean }>;
+        complimentary = c[0]?.complimentary === true;
+      } catch {
+        /* migration 048 not applied: nothing is marked free yet */
+      }
+      if (complimentary) {
+        return res.status(409).json({
+          success: false,
+          error: 'There is nothing to pay on this booking.',
+        });
+      }
+    }
+
     const total = row.contract_total_amount !== null ? parseFloat(row.contract_total_amount) : null;
-    if (total === null) {
+    // A tip needs no total (a gallery shared before the contract was priced
+    // can still be tipped for). Everything else does.
+    if (total === null && kind !== 'tip') {
       return res.status(400).json({
         success: false,
         error: 'There is no amount set on this booking yet.',
@@ -185,7 +231,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * the whole thing again. Capped at the outstanding balance so a retainer
      * larger than what is left can never overcharge.
      */
-    const outstanding = Math.max(total + charges - paid, 0);
+    // In whole cents, because this is what Stripe will charge, and dollars as
+    // floats are exactly how 2500 + 256.22 comes out larger than 2756.22.
+    const cents = (d: number) => Math.round(d * 100);
+    const outstandingCents = Math.max(cents(total ?? 0) + cents(charges) - cents(paid), 0);
+    const outstanding = outstandingCents / 100;
     const tipsTotal = parseFloat(row.tips_total ?? '0') || 0;
 
     let amount: number;
@@ -210,7 +260,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: `The smallest tip we can take by card is $${TIP_MIN}.`,
         });
       }
-      const ceiling = Math.max(total + charges, TIP_CEILING_FLOOR);
+      const ceiling = Math.max((total ?? 0) + charges, TIP_CEILING_FLOOR);
       if (amount > ceiling) {
         return res.status(400).json({
           success: false,
@@ -218,7 +268,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
     } else if (kind === 'retainer') {
-      amount = Math.min(Math.max(retainer - paid, 0), outstanding);
+      amount = Math.min(Math.max(cents(retainer) - cents(paid), 0), outstandingCents) / 100;
     } else {
       amount = outstanding;
     }
@@ -276,7 +326,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Harmless once the mode is 'on', where the flag is ignored anyway.
       // The hash brings a tipper back to the tip, not to the top of a long
       // page they then have to find their place in again.
-      successUrl: `${origin}/portal?paid=1${kind === 'tip' ? '&tip=1#thanks' : ''}${preview}`,
+      // session_id is Stripe's placeholder, filled in on the way back. It is
+      // how the portal records the payment itself, checked against Stripe,
+      // if the webhook that should have recorded it never arrives
+      // (api/portal/_pay-confirm.ts). Query first and the #thanks hash LAST:
+      // the preview flag used to follow the hash and never reached the page.
+      successUrl: `${origin}/portal?paid=1&session_id={CHECKOUT_SESSION_ID}${kind === 'tip' ? '&tip=1' : ''}${preview}${kind === 'tip' ? '#thanks' : ''}`,
       cancelUrl: `${origin}/portal?paid=0${preview}`,
     });
 
