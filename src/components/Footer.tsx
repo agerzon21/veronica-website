@@ -120,25 +120,31 @@ const Footer = () => {
       <Box aria-hidden="true" h={`${FOLD}px`} bg="brand.accent" />
 
       {/* The underside. The links flank the seal and the copyright sits under it.
-          Column widths are fixed so the seal stays centred BETWEEN the two link
-          groups rather than drifting with their text; they narrow below sm so
-          the row still fits a 320px phone. */}
+          Column widths are EQUAL and independent of their contents, which is
+          the whole trick: the seal stays centred between the groups rather
+          than drifting with the length of the words in them. Below about
+          390px the groups wrap inside those widths instead of overflowing,
+          which is what lets six links live here at all. */}
       <Box position="relative" overflow="hidden" bg="brand.surfaceFold" pb={`${PAD_BOTTOM}px`}>
         <SealHalf face={false} />
-        {/* Collaborate sits on its own line above the trio rather than inside
-            one of the groups. Two reasons, and the second is the real one.
-            The row below is a three column layout with fixed widths tuned so
-            the seal stays centred between the groups and the whole thing still
-            fits a 320px phone; a third link in either group breaks that.
-            And it is addressed to a different audience. Privacy, Terms,
-            Contact and Portal are all for couples. This one is for
-            photographers and videographers, and reading slightly apart from
-            the client links is the honest place for it. */}
-        <Flex position="relative" justify="center" pt="2px">
-          <FootLink to="/collaborate">For photographers</FootLink>
-        </Flex>
         <Flex position="relative" align="flex-start" justify="center">
-          <Flex align="flex-start" justify="flex-end" gap="7px" w="clamp(99px, 29vw, 126px)">
+          {/* THREE A SIDE, and the columns have to wrap rather than clip.
+              Six links cannot sit on one row at 320px: at the 11px floor the
+              left group alone needs about 170px against the 99px it used to
+              have. So the groups keep EQUAL widths, which is what holds the
+              seal in the centre, and wrap inside them on a narrow phone. The
+              44px link height is a touch target and stays, so a wrapped
+              footer is simply taller, which is the right trade. */}
+          <Flex
+            align="flex-start"
+            justify="flex-end"
+            wrap="wrap"
+            rowGap="0px"
+            gap="7px"
+            w="clamp(100px, 31vw, 210px)"
+          >
+            <FootLink to="/collaborate">Collaborate</FootLink>
+            <Tick />
             <FootLink to="/privacy">Privacy</FootLink>
             <Tick />
             <FootLink to="/terms">Terms</FootLink>
@@ -148,10 +154,19 @@ const Footer = () => {
               © {year} Vero Photography
             </Text>
           </Flex>
-          <Flex align="flex-start" justify="flex-start" gap="7px" w="clamp(99px, 29vw, 126px)">
+          <Flex
+            align="flex-start"
+            justify="flex-start"
+            wrap="wrap"
+            rowGap="0px"
+            gap="7px"
+            w="clamp(100px, 31vw, 210px)"
+          >
             <FootLink to="/contact">Contact</FootLink>
             <Tick />
             <FootLink to="/portal">Portal</FootLink>
+            <Tick />
+            <FootLink to="/about">About</FootLink>
           </Flex>
         </Flex>
       </Box>
