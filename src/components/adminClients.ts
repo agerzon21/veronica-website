@@ -21,6 +21,8 @@
  * other at runtime.
  */
 
+import { bookingOwedTotal, salesTaxModeOf, type SalesTaxMode } from '../data/sales-tax';
+
 export interface AdminPortalSummary {
   id: string;
   mode: 'simple' | 'full';
@@ -41,6 +43,12 @@ export interface AdminPortalSummary {
    * overpaid, and shows "Free" where the money would be.
    */
   complimentary?: boolean;
+  /**
+   * Pennsylvania sales tax (migration 049, src/data/sales-tax.ts). 'added'
+   * puts 6% on top, so every balance on this screen includes it. Absent reads
+   * as 'absorbed', which adds nothing.
+   */
+  sales_tax?: SalesTaxMode;
   drive_url: string | null;
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
@@ -149,16 +157,19 @@ export const todayDayUtc = (): number => {
  * land on 0.00000001 and report a debt.
  */
 export const balanceOf = (p: AdminPortalSummary): number | null => {
-  if (p.complimentary || p.contract_total_amount === null) return null;
-  const owed = Math.round(p.contract_total_amount * 100) + Math.round((p.charges_total ?? 0) * 100);
-  return (owed - Math.round(p.paid_to_date * 100)) / 100;
+  const total = bookingTotal(p);
+  if (total === null) return null;
+  return (Math.round(total * 100) - Math.round(p.paid_to_date * 100)) / 100;
 };
 
-/** What the booking asks for in total: contract plus later charges. */
+/**
+ * What the booking asks for in total: contract plus later charges, plus
+ * Pennsylvania sales tax when the booking adds it. The one figure every
+ * balance here is measured against, so a taxed booking paid to the cent reads
+ * as paid, not as owing its tax.
+ */
 export const bookingTotal = (p: AdminPortalSummary): number | null =>
-  p.complimentary || p.contract_total_amount === null
-    ? null
-    : (Math.round(p.contract_total_amount * 100) + Math.round((p.charges_total ?? 0) * 100)) / 100;
+  p.complimentary ? null : bookingOwedTotal(p.contract_total_amount, p.charges_total ?? 0, salesTaxModeOf(p.sales_tax));
 
 /**
  * Days until the delivered gallery's link expires. Negative once it has.

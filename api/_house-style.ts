@@ -11,6 +11,8 @@
  * Applies to drafts, to the assistant's own chat replies, and to translations.
  * The rules live in the database too (ai_context, category 'writing_rules') so
  * the model is told about them, but nothing downstream depends on it obeying.
+ * That includes the model finding its own way round a rule: told never to use
+ * a long dash, it drew separator lines out of hyphens (stripSeparatorLines).
  *
  * It also holds the pure, database-free guards the assistant chat needs but
  * must not be allowed to talk itself past: looksLikeSendApproval below is the
@@ -139,9 +141,75 @@ export function stripLongDashes(text: string): string {
   return out;
 }
 
+/**
+ * A line that is nothing but a rule: "---", "-- ", "***", "___".
+ *
+ * Two or more hyphens, or three or more of * or _, and nothing else on the
+ * line. One hyphen alone is a bullet waiting for its words and is left alone,
+ * and so is any line with a word on it: "--" inside a sentence is not a rule.
+ */
+const RULE_LINE = /^[ \t]*(?:(?:-[ \t]*){2,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})\r?$/;
+
+/**
+ * Drop separator lines, which read as a long dash however they were typed.
+ *
+ * The model fences every draft it shows in the chat between two "---" lines,
+ * a markdown habit, and the panel prints text as written, so each fence is a
+ * dash on a line of its own. Alex reported it on 2026-10-01 with the dash rule
+ * already enforced: stripLongDashes looks for the dash CHARACTERS, and these
+ * are plain hyphens. The stored chats held 509 of them across 398 replies
+ * (494 "---", 15 "-- "), and no draft or send held any.
+ *
+ * "-- " is the email signature divider, and in anything the model writes it
+ * goes too, since to a reader it is the same mark. It is also where the model
+ * learned it: _email-signature.ts puts one above the signature in the plain
+ * text of every email the site sends (104 stored so far), so mail apps can
+ * fold the signature away. That one is untouched. deliverReply cleans the
+ * text FIRST and signs it after, so the divider is added once this has run.
+ *
+ * The rule's line closes up with what is around it, so the gap it marked
+ * stays one blank line wide:
+ *
+ *   "Draft:\n\n---\n\nHi Anna"  ->  "Draft:\n\nHi Anna"
+ *   "Draft:\n---\nHi Anna"      ->  "Draft:\n\nHi Anna"   (a break, not a join)
+ */
+export function stripSeparatorLines(text: string): string {
+  if (!text) return text;
+  const lines = text.split('\n');
+  // Same promise as stripLongDashes: text with no rule in it comes back
+  // byte for byte.
+  if (!lines.some((l) => RULE_LINE.test(l))) return text;
+
+  const isBlank = (l: string | undefined) => l !== undefined && l.trim() === '';
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!RULE_LINE.test(line)) {
+      out.push(line);
+      continue;
+    }
+    const prev = out.at(-1);
+    const next = lines[i + 1];
+    const prevOpen = prev === undefined || isBlank(prev);
+    if (!prevOpen && next !== undefined && !isBlank(next)) {
+      // Words on both sides: keep the break the rule made, lose the mark.
+      out.push(line.endsWith('\r') ? '\r' : '');
+    } else if (prevOpen && isBlank(next)) {
+      // Blank on both sides: one blank line, not two.
+      i++;
+    }
+  }
+  // A rule that ended the text leaves the blank line above it hanging.
+  const lastWords = lines.filter((l) => !isBlank(l)).at(-1);
+  if (lastWords !== undefined && RULE_LINE.test(lastWords)) {
+    while (out.length > 0 && isBlank(out.at(-1))) out.pop();
+  }
+  return out.join('\n');
+}
+
 /** Every rule this module enforces. One call site for generated text. */
 export function applyHouseStyle(text: string): string {
-  return stripLongDashes(text);
+  return stripSeparatorLines(stripLongDashes(text));
 }
 
 /**
@@ -174,6 +242,20 @@ const WRITING_TOPIC_RU =
  * negative costs Vero the same correction tomorrow, which is the failure she
  * actually reported, so the balance leans slightly toward catching.
  */
+/**
+ * "save that as a draft", "put it in the reply tab", "сохрани как черновик".
+ *
+ * A request about the Reply tab, not a rule to keep. It reads as "save that",
+ * which is on the explicit-memory list below, so the backstop stored "save
+ * that as a draft" word for word as a writing rule, a line loaded into the
+ * prompt for every customer from then on. Found by test on 2026-10-01, the
+ * day the assistant started saving a draft when none was pending, which is
+ * what makes it a thing Vero says. Nothing like it had reached production.
+ */
+const SAVE_AS_DRAFT =
+  /\b(save|put|keep|store|add)\b[^.!?\n]{0,24}\b(as|to|in|into)\s+(?:(?:a|the|my|her)\s+)?(draft|reply)\b/i;
+const SAVE_AS_DRAFT_RU = /(сохрани|запиши|положи|добавь)[^.!?\n]{0,24}(как|в)\s+(черновик|ответ)/i;
+
 export function looksLikeStandingRule(message: string): boolean {
   const m = message.trim();
   if (m.length < 6 || m.length > 500) return false;
@@ -185,7 +267,10 @@ export function looksLikeStandingRule(message: string): boolean {
     /\b(remember (this|that)|write (that|this) down|save (that|this)|note (that|this) down|add (that|this) to (your|the) (database|knowledge|rules))\b/i.test(
       m,
     ) || /(запомни|запиши (это|себе)|сохрани (это|правило)|заруби себе)/i.test(m);
-  if (explicitMemory) return true;
+  // Not a memory request when what is being saved is the draft. A real rule
+  // in the same message ("save that as a draft, and never use long dashes")
+  // still gets through on the writing test below.
+  if (explicitMemory && !SAVE_AS_DRAFT.test(m) && !SAVE_AS_DRAFT_RU.test(m)) return true;
 
   if (!aboutWriting) return false;
 

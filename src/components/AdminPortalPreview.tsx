@@ -4,6 +4,7 @@ import {
   Modal, ModalOverlay, ModalContent, ModalBody, ModalCloseButton,
 } from '@chakra-ui/react';
 import ClientPortalView, { type ClientPortalData } from './ClientPortalView';
+import { salesTaxModeOf } from '../data/sales-tax';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
 
 /**
@@ -123,6 +124,9 @@ export default function AdminPortalPreview({
     contract_retainer_amount: free || portal.contract_retainer_amount == null ? null : num(portal.contract_retainer_amount),
     paid_to_date: num(portal.paid_to_date),
     payment_plan_enabled: !free && portal.payment_plan_enabled === true,
+    // Pennsylvania sales tax, so the preview asks for the taxed figures the
+    // client's own portal does.
+    sales_tax: salesTaxModeOf(portal.sales_tax),
     // Nothing in api/ writes payment_installments yet, so the admin endpoint
     // has none to return. Empty is the truthful value, not a placeholder.
     installments: [],

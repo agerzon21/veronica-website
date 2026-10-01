@@ -1010,6 +1010,57 @@ export async function conversationSummaryBlock(
   }
 }
 
+/**
+ * A quiet thread asks for a different kind of message. Exported so the rules
+ * can be checked without a model (scripts and tests), and kept free of I/O.
+ *
+ *   quiet       the last word was OURS, a week or more ago. The short, warm
+ *               nudge that revives an inquiry stalled at "I'll talk to my
+ *               fiance": brief, specific enough to prove Vero remembers them,
+ *               free of pressure.
+ *   unanswered  the last word was THEIRS, two weeks or more ago, and nothing
+ *               in this inbox answers it. A follow-up, not a fresh reply. It
+ *               must never say Vero did not reply: before 2026-08-20 replies
+ *               went out from her own email and are not recorded here, so a
+ *               thread can look unanswered and not be.
+ *
+ * A lead whose date has passed gets no follow-up at all: asking "are you still
+ * looking?" about a wedding that already happened is worse than silence. The
+ * note tells the model the date is gone so it does not offer to hold it.
+ */
+export function followUpContextFor(input: {
+  lastDirection: string;
+  lastSentAt: string | Date;
+  /** YYYY-MM-DD, when the thread or the contact form names one. */
+  leadDate: string | null;
+  now: Date;
+}): string | null {
+  const days = Math.floor((input.now.getTime() - new Date(input.lastSentAt).getTime()) / 86_400_000);
+  const today = input.now.toISOString().slice(0, 10);
+  if (input.leadDate && input.leadDate < today) {
+    return `DATE PASSED: the date this customer asked about (${input.leadDate}) has already gone. Do not ask whether they are still looking, and do not offer to hold or check that date.`;
+  }
+  const dated = input.leadDate ? ` Their date is ${input.leadDate}.` : '';
+  if (input.lastDirection === 'outbound' && days >= 7) {
+    return [
+      `FOLLOW-UP SITUATION: the last message in this thread is ours, sent ${days} days ago, and the customer has not replied since.${dated}`,
+      'Write a short follow-up (2-4 sentences), not an answer to a question: nobody asked one.',
+      'Reference one or two concrete specifics from the thread (their date, venue, the thing they were deciding on) so they can tell Vero remembers them personally.',
+      'Zero pressure: no deadlines, no discounts invented for urgency, no guilt. One warm open door: happy to answer anything, or the date is still open ONLY if the thread supports that.',
+      'Do not repeat the full pitch or the full pricing. Do not apologize for following up.',
+    ].join('\n');
+  }
+  if (input.lastDirection === 'inbound' && days >= 14) {
+    return [
+      `FOLLOW-UP SITUATION: the customer's last message is ${days} days old and nothing in this thread answers it.${dated}`,
+      'Vero may well have replied by email outside this thread, so never say or imply she did not reply, and do not apologize for silence.',
+      'Write a short follow-up (2-4 sentences) as Vero: say she is following up on their inquiry, name one or two specifics they gave (their date, venue, the kind of session), and ask whether they are still looking for a photographer.',
+      'If they asked about prices, give only the starting figure in one line, plus 6% Pennsylvania sales tax. Zero pressure: no deadlines, no invented urgency, no guilt.',
+    ].join('\n');
+  }
+  return null;
+}
+
 export async function draftOnDemand(
   conversationId: string,
 ): Promise<{ ok: true; body: string } | { ok: false; error: string }> {
@@ -1056,28 +1107,28 @@ export async function draftOnDemand(
     conversationSummaryBlock(sql, conversationId),
   ]);
 
-  /**
-   * A quiet thread asks for a different kind of message. When the last word
-   * was OURS and a week has passed, the draft should not answer a question
-   * nobody asked — it should be the short, warm nudge that revives an
-   * inquiry that stalled at "I'll talk to my fiance". The rules mirror what
-   * makes these work from a human: brief, specific enough to prove Vero
-   * remembers THEM, and completely free of pressure.
-   */
   const last = history[history.length - 1];
-  const quietDays = Math.floor(
-    (Date.now() - new Date(last.sent_at).getTime()) / 86_400_000,
-  );
-  const followUpContext =
-    last.direction === 'outbound' && quietDays >= 7
-      ? [
-          `FOLLOW-UP SITUATION: the last message in this thread is ours, sent ${quietDays} days ago, and the customer has not replied since.`,
-          'Write a short follow-up (2-4 sentences), not an answer to a question — nobody asked one.',
-          'Reference one or two concrete specifics from the thread (their date, venue, the thing they were deciding on) so they can tell Vero remembers them personally.',
-          'Zero pressure: no deadlines, no discounts invented for urgency, no guilt. One warm open door — happy to answer anything, or the date is still open ONLY if the thread supports that.',
-          'Do not repeat the full pitch or the full pricing. Do not apologize for following up.',
-        ].join('\n')
-      : null;
+  // The lead's date, from the summary or the contact form, so a follow-up is
+  // never written for a date that has already gone.
+  let leadDate: string | null = null;
+  try {
+    const d = (await sql`
+      SELECT c.summary_json->'booking'->>'event_date' AS event_date,
+             (SELECT s.preferred_date FROM contact_submissions s
+               WHERE s.conversation_id = c.id ORDER BY s.created_at DESC LIMIT 1) AS preferred_date
+      FROM conversations c WHERE c.id = ${conversationId}
+    `) as Array<{ event_date: string | null; preferred_date: string | null }>;
+    const iso = (v: string | null | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    leadDate = iso(d[0]?.event_date) ?? iso(d[0]?.preferred_date);
+  } catch {
+    /* without it the draft is written as before */
+  }
+  const followUpContext = followUpContextFor({
+    lastDirection: last.direction,
+    lastSentAt: last.sent_at,
+    leadDate,
+    now: new Date(),
+  });
 
   // Summary sits closest to the message history it describes, so the "these
   // are already settled, do not re-ask" instruction is adjacent to the

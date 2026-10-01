@@ -6,6 +6,7 @@ import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
 import Reveal from '../components/ui/Reveal';
+import { PA_SALES_TAX_LABEL, salesTaxModeOf, withSalesTax, type SalesTaxMode } from '../data/sales-tax';
 
 interface WelcomeSummary {
   client_display_name: string | null;
@@ -21,7 +22,13 @@ interface WelcomeSummary {
   event_date: string | null;
   contract_total_amount: number | null;
   contract_retainer_amount: number | null;
+  /** Pennsylvania sales tax for this booking (src/data/sales-tax.ts). */
+  sales_tax?: SalesTaxMode;
 }
+
+/** Cents only when there are some: "$530", "$121.90". */
+const money = (n: number): string =>
+  `$${n.toLocaleString('en-US', { minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
 
 const Welcome = () => {
   const [searchParams] = useSearchParams();
@@ -217,13 +224,28 @@ const Welcome = () => {
                         ) : null}
                         {summary.event_date && <SummaryLine label="Date" value={fmtDate(summary.event_date)} />}
                         {summary.contract_total_amount !== null && (
-                          <SummaryLine label="Total" value={`$${summary.contract_total_amount.toFixed(0)}`} />
+                          // With tax, the figure they will actually pay, and
+                          // the price and tax it is made of underneath, so
+                          // the contract below reads as the same numbers.
+                          <SummaryLine
+                            label="Total"
+                            value={money(withSalesTax(summary.contract_total_amount, salesTaxModeOf(summary.sales_tax)))}
+                            note={
+                              summary.sales_tax === 'added'
+                                ? `${money(summary.contract_total_amount)} plus ${PA_SALES_TAX_LABEL} Pennsylvania sales tax`
+                                : undefined
+                            }
+                          />
                         )}
                         {summary.contract_retainer_amount !== null && (
                           <SummaryLine
                             label="Retainer"
-                            value={`$${summary.contract_retainer_amount.toFixed(0)}`}
-                            note="Paid up front · part of the total above"
+                            value={money(withSalesTax(summary.contract_retainer_amount, salesTaxModeOf(summary.sales_tax)))}
+                            note={
+                              summary.sales_tax === 'added'
+                                ? 'Paid up front, tax included · part of the total above'
+                                : 'Paid up front · part of the total above'
+                            }
                           />
                         )}
                       </VStack>

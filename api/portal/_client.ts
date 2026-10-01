@@ -27,6 +27,7 @@ import { checkPortalPassword } from './_password.js';
 import { isGalleryReleased } from './_gallery-gate.js';
 import { getDb } from '../_db.js';
 import { isStripeTestMode } from '../_stripe.js';
+import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -294,6 +295,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       /* migration 048 not applied: nothing is marked free yet */
     }
+    /**
+     * Pennsylvania sales tax (migration 049). The portal works the balance out
+     * itself, so it needs to know whether this booking adds tax. Allowed to
+     * fail the same way; without the column nothing is taxed.
+     */
+    let salesTax: SalesTaxMode = 'absorbed';
+    try {
+      const t = (await sql`
+        select sales_tax from client_portals where id = ${row.id}
+      `) as Array<{ sales_tax: string }>;
+      salesTax = salesTaxModeOf(t[0]?.sales_tax);
+    } catch {
+      /* migration 049 not applied: no booking adds tax */
+    }
 
     return res.status(200).json({
       success: true,
@@ -354,6 +369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       installments: complimentary ? [] : installments,
       payments,
       charges: complimentary ? [] : charges,
+      sales_tax: salesTax,
       // What the client has tipped, already excluded from paid_to_date. Sent
       // so the portal can thank them for it without the number having to be
       // re-derived in the browser.

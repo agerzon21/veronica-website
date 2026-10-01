@@ -1,5 +1,14 @@
 import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
-import { earnedDirectDiscount, CARD_FEE_DISCOUNT_METHOD } from '../data/payment-handles';
+import { CARD_FEE_DISCOUNT_METHOD } from '../data/payment-handles';
+import {
+  SALES_TAX_CONTRACT_KEYS,
+  SALES_TAX_MODES,
+  bookingOwedTotal,
+  earnedDirectDiscountTaxed,
+  isSalesTaxMode,
+  salesTaxModeOf,
+  type SalesTaxMode,
+} from '../data/sales-tax';
 import { fmtAdminDateTime } from '../utils/adminDate';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
@@ -93,8 +102,10 @@ interface PortalDetail {
    */
   gallery_preview_token?: string | null;
   gallery_enabled: boolean;
-  /** Shot for free, for family or friends (migration 048). Changes no balance. */
+  /** Shot for free, for family or friends (migration 048). Owes nothing, whatever the total. */
   complimentary?: boolean;
+  /** Pennsylvania sales tax for this booking (migration 049, src/data/sales-tax.ts). */
+  sales_tax?: SalesTaxMode;
   drive_url: string | null;
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
@@ -227,8 +238,16 @@ function effectiveAddress(p: {
   return fromList || (p.session_location ?? '').trim() || (p.contract_variables?.event_location ?? '').trim();
 }
 
-/** Contract variables the server derives from the amount columns. Never typed. */
-const DERIVED_MONEY_KEYS = new Set(['total_amount', 'retainer_amount', 'remaining_balance']);
+/**
+ * Contract variables the server derives from the amount columns and the
+ * booking's sales tax setting. Never typed.
+ */
+const DERIVED_MONEY_KEYS = new Set<string>([
+  'total_amount',
+  'retainer_amount',
+  'remaining_balance',
+  ...SALES_TAX_CONTRACT_KEYS,
+]);
 
 const formatMoney = (amount: number | null): string => {
   // Matches formatDate above: nothing, not a dash. Every call site here is
@@ -641,9 +660,12 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       // A free booking owes nothing, so there is nothing to confirm.
       !portal.complimentary &&
       portal.contract_total_amount !== null &&
-      // Whole cents, the same arithmetic the server's gate uses.
+      // Whole cents, the same arithmetic the server's gate uses, tax included
+      // when the booking adds it.
       Math.round(portal.paid_to_date * 100) <
-        Math.round(portal.contract_total_amount * 100) + Math.round((portal.charges_total ?? 0) * 100)
+        Math.round(
+          (bookingOwedTotal(portal.contract_total_amount, portal.charges_total ?? 0, salesTaxModeOf(portal.sales_tax)) ?? 0) * 100,
+        )
     ) {
       setUnpaidConfirm(true);
       return;
@@ -708,12 +730,23 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   }
 
   // The one place this screen decides what is owed:
-  //   contract total + charges added after the booking - paid to date.
+  //   contract total + charges added after the booking
+  //   + Pennsylvania sales tax when the booking adds it
+  //   - paid to date.
+  // In cents through src/data/sales-tax.ts, like the server's copies.
+  const salesTax = salesTaxModeOf(portal.sales_tax);
   const chargesTotal = portal.charges_total ?? 0;
-  const amountOwed =
-    portal.contract_total_amount !== null ? portal.contract_total_amount + chargesTotal : null;
+  const amountOwed = bookingOwedTotal(portal.contract_total_amount, chargesTotal, salesTax);
+  const salesTaxAmount =
+    amountOwed !== null && portal.contract_total_amount !== null
+      ? (Math.round(amountOwed * 100) -
+          Math.round(portal.contract_total_amount * 100) -
+          Math.round(chargesTotal * 100)) / 100
+      : 0;
   const balanceRemaining =
-    amountOwed !== null ? Math.max(amountOwed - portal.paid_to_date, 0) : null;
+    amountOwed !== null
+      ? Math.max(Math.round(amountOwed * 100) - Math.round(portal.paid_to_date * 100), 0) / 100
+      : null;
 
   /**
    * Shot for free, for family or friends. A marker, not a price: it changes no
@@ -776,7 +809,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
    * The server enforces this same number; here it only decides whether to
    * OFFER the waiver, and how much to show on the button.
    */
-  const waivableDiscount = earnedDirectDiscount(
+  const waivableDiscount = earnedDirectDiscountTaxed(
     payments
       .filter(
         (p) =>
@@ -788,8 +821,50 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       )
       .map((p) => p.amount),
     payments.filter((p) => p.method === CARD_FEE_DISCOUNT_METHOD).reduce((sum, p) => sum + p.amount, 0),
+    salesTax,
   );
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
+
+  /**
+   * Pennsylvania sales tax for this booking: added on top, included in a
+   * grandfathered price, or not a PA sale at all (src/data/sales-tax.ts).
+   *
+   * Once the contract is signed, tax can no longer be added or taken off,
+   * because it is part of the price the client agreed to, and the server
+   * refuses it the same way. Moving between the other two stays open: that
+   * only decides whether the sale is reported to Pennsylvania.
+   */
+  const salesTaxLocked = portal.contract_status === 'signed';
+  const salesTaxRow = (
+    <Box>
+      <Text as="label" htmlFor="sales-tax-mode" display="block" fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+        {t.clientDetail.salesTaxLabel}
+      </Text>
+      <Select
+        id="sales-tax-mode"
+        value={salesTax}
+        size="sm"
+        bg="white"
+        maxW={{ base: '100%', md: '440px' }}
+        isDisabled={savingField === 'sales_tax'}
+        focusBorderColor="brand.accent"
+        onChange={(e) => {
+          const next = e.target.value;
+          if (isSalesTaxMode(next) && next !== salesTax) void patch({ sales_tax: next }, 'sales_tax');
+        }}
+      >
+        {SALES_TAX_MODES.map((m) => (
+          <option key={m} value={m} disabled={salesTaxLocked && (m === 'added') !== (salesTax === 'added')}>
+            {t.clientDetail.salesTaxModes[m]}
+          </option>
+        ))}
+      </Select>
+      <Text fontSize="xs" color="gray.500" mt={1.5}>
+        {t.clientDetail.salesTaxHelp[salesTax]}
+        {salesTaxLocked ? ` ${t.clientDetail.salesTaxLocked}` : ''}
+      </Text>
+    </Box>
+  );
 
   return (
     <DirtyCtx.Provider value={markDirty}>
@@ -944,6 +1019,9 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             />
             {chargesTotal > 0 && (
               <StripFact label={t.clientDetail.stripCharges} value={formatMoney(chargesTotal)} />
+            )}
+            {salesTaxAmount > 0 && (
+              <StripFact label={t.clientDetail.stripTax} value={formatMoney(salesTaxAmount)} />
             )}
             {portal.contract_retainer_amount !== null && (
               <StripFact
@@ -1346,6 +1424,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 return patch({ contract_total_amount: amount }, 'contract_total_amount');
               }}
             />
+            {salesTaxRow}
             {complimentaryRow}
           </VStack>
         </Section>
@@ -1359,13 +1438,19 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 numbers fit without wrapping, which is why a fourth one drops
                 to a 2x2 there rather than squeezing onto one row. */}
             <SimpleGrid
-              columns={{ base: chargesTotal > 0 ? 2 : 3, md: chargesTotal > 0 ? 4 : 3 }}
+              columns={{
+                base: chargesTotal > 0 || salesTaxAmount > 0 ? 2 : 3,
+                md: 3 + (chargesTotal > 0 ? 1 : 0) + (salesTaxAmount > 0 ? 1 : 0),
+              }}
               spacing={{ base: 3, md: 6 }}
               fontSize="sm"
             >
               <Stat label={t.clientDetail.statTotal} value={formatMoney(portal.contract_total_amount)} />
               {chargesTotal > 0 && (
                 <Stat label={t.clientDetail.statCharges} value={formatMoney(chargesTotal)} />
+              )}
+              {salesTaxAmount > 0 && (
+                <Stat label={t.clientDetail.statTax} value={formatMoney(salesTaxAmount)} />
               )}
               <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
               <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
@@ -1459,6 +1544,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 </VStack>
               </Box>
             )}
+            {salesTaxRow}
             {complimentaryRow}
           </VStack>
         </Section>

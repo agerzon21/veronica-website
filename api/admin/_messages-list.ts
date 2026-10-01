@@ -19,6 +19,164 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 
+/**
+ * What the inbox should do with each LEAD: suggest a follow-up, fold it away
+ * as closed, or leave it alone. One pass, by conversation id.
+ *
+ * A lead: they wrote at least once, the thread is a booking inquiry (or came
+ * in through the contact form and has never been summarised), it is not
+ * personal or promotional (by the same reading the list itself uses: Vero's
+ * flag wins, otherwise a spam classification), and it is NOT a client: no
+ * portal linked to the thread and none whose email is the thread's address.
+ * The link alone covers 4 of 19 portals, so it cannot be the test (see
+ * _messages-detail.ts on the email fallback).
+ *
+ * CLOSED (folded into "Closed leads" at the bottom, like personal and
+ * promotional), once nobody has written for 14 days and any of:
+ *   - their date has passed: nobody books a wedding that already happened;
+ *   - we wrote on two or more separate DAYS after their last message and got
+ *     nothing back (Alex, 2026-10-01: "we don't want to spam them"). Days,
+ *     not messages, so a reply sent in two parts a minute apart is one try;
+ *   - Vero closed it herself (migration 050), and nothing was said since.
+ * A new message from either side reopens it, because every rule needs the
+ * silence.
+ *
+ * FOLLOW UP (Alex: "older leads, older than a few weeks"): silent 14 days or
+ * more, not closed, fewer than two tries, and a date (when one is known) at
+ * least a week away. Under a week there is nothing left to arrange.
+ *
+ * WHY ITS OWN QUERY. The first follow-up flag lived inside the list query as
+ * `NOT c.is_promotional`, and is_promotional is NULL on almost every thread,
+ * so the expression came out NULL and the flag was false on all 114 threads:
+ * it never fired once. Kept apart now, and allowed to fail, so a mistake here
+ * (or a database migration 050 has not reached) costs the badges, never the
+ * inbox.
+ */
+/** The list row's lead fields, from its state (absent: an ordinary thread). */
+function leadFields(l: LeadState | undefined) {
+  return {
+    needs_follow_up: l?.state === 'follow_up',
+    // 'quiet': our message was the last word. 'unanswered': theirs was, and
+    // nothing in this inbox answers it (Vero may have replied by email before
+    // replies were recorded here, so the UI never says she didn't).
+    follow_up_kind: l?.state === 'follow_up' ? l.kind : null,
+    follow_up_days: l?.state === 'follow_up' ? l.days : null,
+    closed_lead: l?.state === 'closed',
+    closed_reason: l?.state === 'closed' ? l.reason : null,
+  };
+}
+
+type LeadState =
+  | { state: 'follow_up'; kind: 'quiet' | 'unanswered'; days: number }
+  | { state: 'closed'; reason: 'date_passed' | 'no_reply' | 'closed' };
+
+/**
+ * When Vero closed each lead herself, from migration 050's column.
+ *
+ * Read on its own, and allowed to fail on its own, for the reason leadStates
+ * is: it was part of the main query, so on a database the migration had not
+ * reached that whole query failed and the inbox showed no follow-ups and no
+ * closed leads at all, which is exactly how the old flag went unnoticed for
+ * weeks. Found by running this handler against production before 050 was
+ * applied there (2026-10-01). Now a missing column costs only her own closes.
+ */
+async function closedByVeroAt(sql: ReturnType<typeof getDb>): Promise<Map<string, number>> {
+  try {
+    const rows = (await sql`
+      SELECT id, closed_at FROM conversations WHERE closed_at IS NOT NULL
+    `) as Array<{ id: string; closed_at: string | Date }>;
+    return new Map(rows.map((r) => [r.id, new Date(r.closed_at).getTime()]));
+  } catch (err) {
+    console.warn('[messages-list] closed_at unavailable (migration 050?):', err);
+    return new Map();
+  }
+}
+
+async function leadStates(sql: ReturnType<typeof getDb>): Promise<Map<string, LeadState>> {
+  const out = new Map<string, LeadState>();
+  const closedAt = await closedByVeroAt(sql);
+  try {
+    const rows = (await sql`
+      WITH last AS (
+        SELECT DISTINCT ON (m.conversation_id) m.conversation_id, m.direction, m.sent_at
+        FROM messages m
+        WHERE m.status <> 'draft'
+        ORDER BY m.conversation_id, m.sent_at DESC
+      )
+      SELECT c.id, last.direction, last.sent_at AS last_at,
+             (CURRENT_DATE - (last.sent_at AT TIME ZONE 'America/New_York')::date) AS days,
+             COALESCE(
+               CASE WHEN c.summary_json->'booking'->>'event_date' ~ '^\\d{4}-\\d{2}-\\d{2}$'
+                    THEN (c.summary_json->'booking'->>'event_date')::date END,
+               CASE WHEN sub.preferred_date ~ '^\\d{4}-\\d{2}-\\d{2}$'
+                    THEN sub.preferred_date::date END
+             ) - CURRENT_DATE AS days_to_date,
+             (
+               SELECT COUNT(DISTINCT (o.sent_at AT TIME ZONE 'America/New_York')::date)
+               FROM messages o
+               WHERE o.conversation_id = c.id
+                 AND o.direction = 'outbound'
+                 AND o.status <> 'draft'
+                 AND o.sent_at > COALESCE(
+                   (SELECT MAX(i2.sent_at) FROM messages i2
+                     WHERE i2.conversation_id = c.id AND i2.direction = 'inbound'),
+                   'epoch'::timestamptz)
+             ) AS tries
+      FROM conversations c
+      JOIN last ON last.conversation_id = c.id
+      LEFT JOIN client_portals cp ON cp.id = c.linked_client_portal_id
+      LEFT JOIN client_portals cpe
+        ON cp.id IS NULL
+       AND c.platform = 'email'
+       AND LOWER(cpe.client_email) = LOWER(c.external_user_id)
+      LEFT JOIN LATERAL (
+        SELECT s.preferred_date FROM contact_submissions s
+        WHERE s.conversation_id = c.id
+        ORDER BY s.created_at DESC
+        LIMIT 1
+      ) sub ON TRUE
+      WHERE cp.id IS NULL AND cpe.id IS NULL
+        AND COALESCE(c.is_promotional, COALESCE(c.summary_json->>'classification', '') = 'spam-or-unrelated') = FALSE
+        AND c.is_personal = FALSE
+        AND EXISTS (SELECT 1 FROM messages i WHERE i.conversation_id = c.id AND i.direction = 'inbound')
+        AND (
+          c.summary_json->>'classification' = 'booking-inquiry'
+          OR (
+            c.summary_json->>'classification' IS NULL
+            AND EXISTS (SELECT 1 FROM contact_submissions s2 WHERE s2.conversation_id = c.id)
+          )
+        )
+    `) as Array<{
+      id: string;
+      direction: string;
+      last_at: string | Date;
+      days: number | string;
+      days_to_date: number | string | null;
+      tries: number | string;
+    }>;
+    for (const r of rows) {
+      const days = Number(r.days);
+      const toDate = r.days_to_date === null ? null : Number(r.days_to_date);
+      const tries = Number(r.tries);
+      if (days < 14) continue; // anything said in the last two weeks is live
+      // Her close stands until someone says something after it.
+      const closed = closedAt.get(r.id);
+      if (closed !== undefined && closed >= new Date(r.last_at).getTime()) {
+        out.set(r.id, { state: 'closed', reason: 'closed' });
+      } else if (toDate !== null && toDate < 0) {
+        out.set(r.id, { state: 'closed', reason: 'date_passed' });
+      } else if (tries >= 2) {
+        out.set(r.id, { state: 'closed', reason: 'no_reply' });
+      } else if (toDate === null || toDate >= 7) {
+        out.set(r.id, { state: 'follow_up', kind: r.direction === 'outbound' ? 'quiet' : 'unanswered', days });
+      }
+    }
+  } catch (err) {
+    console.warn('[messages-list] lead states unavailable:', err);
+  }
+  return out;
+}
+
 interface ConversationRow {
   id: string;
   platform: string;
@@ -41,7 +199,6 @@ interface ConversationRow {
   is_promotional: boolean;
   is_personal: boolean;
   has_draft: boolean;
-  needs_follow_up: boolean | null;
 }
 
 const PREVIEW_MAX_CHARS = 120;
@@ -90,25 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         EXISTS (
           SELECT 1 FROM messages d
           WHERE d.conversation_id = c.id AND d.status = 'draft'
-        ) AS has_draft,
-        -- A real inquiry that went quiet on OUR message: the customer spoke
-        -- at some point, we replied, and nothing has come back for a week.
-        -- These are the "I'll talk to my fiance" threads that quietly die
-        -- unless someone follows up, so the inbox marks them. Clients,
-        -- promotional mail, personal threads and spam are all excluded —
-        -- there is nobody to win back in any of those.
-        (
-          last_msg.direction = 'outbound'
-          AND last_msg.sent_at < NOW() - INTERVAL '7 days'
-          AND c.linked_client_portal_id IS NULL
-          AND NOT c.is_promotional
-          AND NOT c.is_personal
-          AND COALESCE(c.summary_json->>'classification', '') NOT IN ('spam-or-unrelated', 'personal')
-          AND EXISTS (
-            SELECT 1 FROM messages i
-            WHERE i.conversation_id = c.id AND i.direction = 'inbound'
-          )
-        ) AS needs_follow_up
+        ) AS has_draft
       FROM conversations c
       LEFT JOIN client_portals cp ON cp.id = c.linked_client_portal_id
       LEFT JOIN LATERAL (
@@ -125,6 +264,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ) last_msg ON TRUE
       ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC
     `) as ConversationRow[];
+
+    const leads = await leadStates(sql);
+
+    /**
+     * Starred threads (migration 050). Its own read and allowed to fail, for
+     * the same reason as the follow-ups: the inbox must never go down over a
+     * column a deploy expected and the database does not have yet.
+     */
+    const starred = new Set<string>();
+    try {
+      const starRows = (await sql`
+        SELECT id FROM conversations WHERE starred_at IS NOT NULL
+      `) as Array<{ id: string }>;
+      for (const r of starRows) starred.add(r.id);
+    } catch {
+      /* pre-migration-050 database: nothing is starred */
+    }
 
     return res.status(200).json({
       success: true,
@@ -149,8 +305,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         is_promotional: r.is_promotional,
       is_personal: r.is_personal,
         has_draft: r.has_draft,
-        // NULL when the thread has no messages at all — normalize to false.
-        needs_follow_up: Boolean(r.needs_follow_up),
+        starred: starred.has(r.id),
+        ...leadFields(leads.get(r.id)),
         // Truncate the preview so the inbox rail stays tidy. Full
         // body is fetched via messages-detail when Vero opens the
         // conversation.

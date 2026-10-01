@@ -22,6 +22,15 @@ import { recordPayment } from './_payments.js';
 import { reportPaymentIssue } from './_payment-alerts.js';
 import type { StripeCheckoutSession } from './_stripe.js';
 
+/**
+ * Cents as "$5.00", or "card" wording without a figure when Stripe sent none.
+ * Alert sentences lead with this, not with an id: the summary is also the
+ * email's subject, and a subject that opens with a 66-character checkout id
+ * reads the same as every other one in the inbox.
+ */
+const usdOf = (cents: number | null | undefined): string =>
+  typeof cents === 'number' ? `$${(cents / 100).toFixed(2)}` : 'card';
+
 export type CheckoutRecordResult =
   | { status: 'recorded' | 'already'; portalId: string; amount: number; paidToDate: number }
   | { status: 'not-paid' | 'unusable'; reason: string };
@@ -48,7 +57,7 @@ export async function recordPaidCheckoutSession(
     // it is. A person has to attach it.
     await reportPaymentIssue({
       key: `no-portal:${session.id}`,
-      summary: `A card payment (checkout ${session.id}) arrived with no booking attached, so it was not recorded.`,
+      summary: `A ${usdOf(session.amount_total)} card payment arrived with no booking attached, so it was not recorded (checkout ${session.id}).`,
       action: 'Find it in Stripe, work out whose payment it is, and log it on their booking by hand.',
       source: ctx.source,
     });
@@ -60,7 +69,7 @@ export async function recordPaidCheckoutSession(
   if (!paymentIntentId) {
     await reportPaymentIssue({
       key: `no-intent:${session.id}`,
-      summary: `A paid checkout (${session.id}) for booking ${portalId} carried no payment id, so it was not recorded.`,
+      summary: `A ${usdOf(session.amount_total)} card payment carried no payment id, so it was not recorded (booking ${portalId}, checkout ${session.id}).`,
       action: 'Check the payment in Stripe and log it on the booking by hand.',
       source: ctx.source,
     });
@@ -76,7 +85,7 @@ export async function recordPaidCheckoutSession(
   if (session.currency && session.currency.toLowerCase() !== 'usd') {
     await reportPaymentIssue({
       key: `currency:${session.id}`,
-      summary: `A card payment for booking ${portalId} was taken in ${session.currency.toUpperCase()}, not dollars, so it was not recorded.`,
+      summary: `A card payment was taken in ${session.currency.toUpperCase()}, not dollars, so it was not recorded (booking ${portalId}, checkout ${session.id}).`,
       action: 'Check the dollar amount in Stripe and log it on the booking by hand.',
       source: ctx.source,
     });

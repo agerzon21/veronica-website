@@ -43,8 +43,30 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
-import { earnedDirectDiscount, CARD_FEE_DISCOUNT_METHOD } from '../../src/data/payment-handles.js';
+import { CARD_FEE_DISCOUNT_METHOD } from '../../src/data/payment-handles.js';
 import { writeWithRecompute } from '../_payments.js';
+import {
+  bookingOwedTotal,
+  earnedDirectDiscountTaxed,
+  salesTaxModeOf,
+  type SalesTaxMode,
+} from '../../src/data/sales-tax.js';
+
+/**
+ * The booking's Pennsylvania sales tax setting (migration 049). Its own read,
+ * allowed to fail: a database without the column taxes nothing, which is how
+ * every booking worked before it existed.
+ */
+async function salesTaxFor(sql: ReturnType<typeof getDb>, id: string): Promise<SalesTaxMode> {
+  try {
+    const rows = (await sql`
+      select sales_tax from client_portals where id = ${id}
+    `) as Array<{ sales_tax: string }>;
+    return salesTaxModeOf(rows[0]?.sales_tax);
+  } catch {
+    return 'absorbed';
+  }
+}
 
 /**
  * The reasons a charge can carry. Same three the table CHECKs, repeated here
@@ -283,8 +305,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           from client_portals where id = ${id} limit 1
         `) as Array<{ t: string | null; p: string | null; c: string }>;
         if (b[0]?.t != null) {
+          // Tax included when the booking adds it: on a taxed booking the
+          // first $30 above a $500 price is the tax, not a tip.
+          const owedTotal = bookingOwedTotal(parseFloat(b[0].t), parseFloat(b[0].c), await salesTaxFor(sql, id)) ?? 0;
           const owedCents = Math.max(
-            Math.round(parseFloat(b[0].t) * 100) + Math.round(parseFloat(b[0].c) * 100) - Math.round(parseFloat(b[0].p ?? '0') * 100),
+            Math.round(owedTotal * 100) - Math.round(parseFloat(b[0].p ?? '0') * 100),
             0,
           );
           if (cents > owedCents) {
@@ -349,10 +374,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (rows.length === 0) {
         return res.status(404).json({ success: false, error: 'No such booking' });
       }
-      const totalCents = Math.round(parseFloat(rows[0].t ?? '0') * 100);
-      const chargesCents = Math.round(parseFloat(rows[0].c ?? '0') * 100);
+      const salesTax = await salesTaxFor(sql, id);
+      const owedTotal = bookingOwedTotal(parseFloat(rows[0].t ?? '0'), parseFloat(rows[0].c ?? '0'), salesTax) ?? 0;
       const paidCents = Math.round(parseFloat(rows[0].p ?? '0') * 100);
-      const outstandingCents = totalCents + chargesCents - paidCents;
+      const outstandingCents = Math.round(owedTotal * 100) - paidCents;
 
       if (outstandingCents <= 0) {
         return res.status(409).json({
@@ -375,7 +400,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const waived = entries
         .filter((e) => e.method === CARD_FEE_DISCOUNT_METHOD)
         .reduce((sum, e) => sum + parseFloat(e.a), 0);
-      const earnedCents = Math.round(earnedDirectDiscount(direct, waived) * 100);
+      // On a taxed booking each direct payment is read back as price plus tax
+      // (src/data/sales-tax.ts), so the waiver lands it on the taxed total.
+      const earnedCents = Math.round(earnedDirectDiscountTaxed(direct, waived, salesTax) * 100);
 
       if (earnedCents <= 0) {
         return res.status(409).json({

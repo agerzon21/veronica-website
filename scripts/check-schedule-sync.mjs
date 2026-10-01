@@ -54,6 +54,9 @@ try {
     'api/portal/_password.ts',
     'src/data/contract-template.ts',
     'src/data/sessionLocations.ts',
+    // The contract's sales tax lines are derived in the same edit (migration 049).
+    'src/data/sales-tax.ts',
+    'src/data/payment-handles.ts',
   ]) port(f);
 
   // Auth is not what this file is about; replaced so the cases read as edits

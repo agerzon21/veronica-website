@@ -16,6 +16,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
+import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 
 type Row = {
   id: string;
@@ -82,6 +83,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "wedding".
     const eventTitle = row.contract_variables?.event_title ?? null;
 
+    /**
+     * Two later columns, each read on its own and allowed to fail like
+     * everywhere else they are read. A free booking (migration 048) shows no
+     * money at all, as in the portal; sales tax (migration 049) lets the page
+     * show the taxed total the contract below it states.
+     */
+    let complimentary = false;
+    try {
+      const c = (await sql`select complimentary from client_portals where id = ${row.id}`) as Array<{ complimentary: boolean }>;
+      complimentary = c[0]?.complimentary === true;
+    } catch {
+      /* migration 048 not applied */
+    }
+    let salesTax: SalesTaxMode = 'absorbed';
+    try {
+      const t = (await sql`select sales_tax from client_portals where id = ${row.id}`) as Array<{ sales_tax: string }>;
+      salesTax = salesTaxModeOf(t[0]?.sales_tax);
+    } catch {
+      /* migration 049 not applied */
+    }
+
     return res.status(200).json({
       success: true,
       client_display_name: row.client_display_name,
@@ -92,8 +114,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contract_template_key: row.contract_template_key ?? 'wedding',
       event_title: eventTitle,
       event_date: row.event_date,
-      contract_total_amount: row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
-      contract_retainer_amount: row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,
+      contract_total_amount: !complimentary && row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
+      contract_retainer_amount: !complimentary && row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,
+      sales_tax: salesTax,
     });
   } catch (err) {
     console.error('[portal/welcome] handler failed:', err);

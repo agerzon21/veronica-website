@@ -53,6 +53,8 @@ import messagesSummaryHandler from './admin/_messages-summary.js';
 import messagesSearchHandler from './admin/_messages-search.js';
 import messagesMarkPromotionalHandler from './admin/_messages-mark-promotional.js';
 import messagesMarkPersonalHandler from './admin/_messages-mark-personal.js';
+import messagesCloseLeadHandler from './admin/_messages-close-lead.js';
+import messagesStarHandler from './admin/_messages-star.js';
 import logoutHandler from './admin/_logout.js';
 import usersHandler from './admin/_users.js';
 import messagesDeleteHandler from './admin/_messages-delete.js';
@@ -79,6 +81,7 @@ import cronsRunNowHandler from './admin/_crons-run-now.js';
 import cronsHistoryHandler from './admin/_crons-history.js';
 import configHealthHandler from './admin/_config-health.js';
 import paymentIssuesHandler from './admin/_payment-issues.js';
+import salesTaxReportHandler from './admin/_sales-tax-report.js';
 import rebuildHandler from './admin/_rebuild.js';
 import rebuildStatusHandler from './admin/_rebuild-status.js';
 import travelLinkHandler from './admin/_travel-link.js';
@@ -134,6 +137,8 @@ const HANDLERS: Record<
   'messages-delete': messagesDeleteHandler,
   'messages-mark-promotional': messagesMarkPromotionalHandler,
   'messages-mark-personal': messagesMarkPersonalHandler,
+  'messages-close-lead': messagesCloseLeadHandler,
+  'messages-star': messagesStarHandler,
   logout: logoutHandler,
   users: usersHandler,
   'context-list': contextListHandler,
@@ -154,6 +159,7 @@ const HANDLERS: Record<
   'crons-history': cronsHistoryHandler,
   'config-health': configHealthHandler,
   'payment-issues': paymentIssuesHandler,
+  'sales-tax-report': salesTaxReportHandler,
   rebuild: rebuildHandler,
   'rebuild-status': rebuildStatusHandler,
   // Builds the Google Maps directions link from Veronika's base to a session

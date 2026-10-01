@@ -30,6 +30,7 @@ import {
   Input,
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
+import FaCheck from '../icons/fa/FaCheck';
 import FaCheckCircle from '../icons/fa/FaCheckCircle';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
@@ -37,6 +38,7 @@ import FaChevronRight from '../icons/fa/FaChevronRight';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaClipboardList from '../icons/fa/FaClipboardList';
 import FaCommentDots from '../icons/fa/FaCommentDots';
+import FaCopy from '../icons/fa/FaCopy';
 import FaEnvelope from '../icons/fa/FaEnvelope';
 import FaEraser from '../icons/fa/FaEraser';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
@@ -54,12 +56,15 @@ import FaPowerOff from '../icons/fa/FaPowerOff';
 import FaRobot from '../icons/fa/FaRobot';
 import FaSync from '../icons/fa/FaSync';
 import FaTimes from '../icons/fa/FaTimes';
+import FaStar from '../icons/fa/FaStar';
+import FaUndo from '../icons/fa/FaUndo';
 import FaTrash from '../icons/fa/FaTrash';
 import FaUser from '../icons/fa/FaUser';
 import FaUserFriends from '../icons/fa/FaUserFriends';
 import FaUserPlus from '../icons/fa/FaUserPlus';
 import AdminAssistantChat from './AdminAssistantChat';
 import CTAButton from './ui/CTAButton';
+import PillButton from './ui/PillButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
@@ -305,8 +310,19 @@ export interface ConversationSummary {
   is_promotional?: boolean | null;
   is_personal?: boolean;
   has_draft?: boolean;
-  /** Real inquiry, our message last, quiet for 7+ days. See _messages-list. */
+  /**
+   * A lead silent 14 days or more that never booked and is worth a check-in.
+   * Decided on the server (_messages-list.ts, leadStates), with the kind of
+   * silence and how long it has lasted.
+   */
   needs_follow_up?: boolean;
+  follow_up_kind?: 'quiet' | 'unanswered' | null;
+  follow_up_days?: number | null;
+  /** Folded into Closed leads: date passed, two unanswered tries, or closed by Vero. */
+  closed_lead?: boolean;
+  closed_reason?: 'date_passed' | 'no_reply' | 'closed' | null;
+  /** Starred by Vero to work on (migration 050). */
+  starred?: boolean;
   last_message_preview: string | null;
 }
 
@@ -1589,6 +1605,29 @@ function ConversationList({
   const { t } = useAdminLang();
   const [showPromotional, setShowPromotional] = useState(false);
   const [showPersonal, setShowPersonal] = useState(false);
+  const [showClosed, setShowClosed] = useState(false);
+  /**
+   * All, Starred or Follow up. Starred is Alex's own working list (star the
+   * threads to work on, then show only those); Follow up is the server's list
+   * of leads worth a check-in. Remembered per viewer, a convenience only, so a
+   * blocked storage read just opens on All.
+   */
+  const [filter, setFilter] = useState<'all' | 'starred' | 'follow_up'>(() => {
+    try {
+      const v = localStorage.getItem('vg:messagesFilter');
+      return v === 'starred' || v === 'follow_up' ? v : 'all';
+    } catch {
+      return 'all';
+    }
+  });
+  const pickFilter = (f: 'all' | 'starred' | 'follow_up') => {
+    setFilter(f);
+    try {
+      localStorage.setItem('vg:messagesFilter', f);
+    } catch {
+      /* private browsing: the choice lasts for this page view */
+    }
+  };
 
   // Marketing mail, cold pitches and review notifications all land in
   // the same inbox as real clients, because filtering them at ingest
@@ -1616,14 +1655,32 @@ function ConversationList({
   // trips the spam classifier still lands in Personal rather than Promotional.
   const isPersonal = (c: ConversationSummary) => !!c.is_personal && c.id !== selectedId;
 
+  // A lead that has run its course: its date has passed, it was written to
+  // twice with no answer, or Vero closed it. Folded like the two above so it
+  // stops sitting in the list where it falls by date; the server decides
+  // (_messages-list.ts, leadStates) and any new message reopens it.
+  const isClosed = (c: ConversationSummary) => !!c.closed_lead && c.id !== selectedId;
+
   const personal = conversations.filter(isPersonal);
-  const primary = conversations.filter((c) => !isPersonal(c) && !isPromotional(c));
+  const primary = conversations.filter((c) => !isPersonal(c) && !isPromotional(c) && !isClosed(c));
+  const closed = conversations.filter((c) => !isPersonal(c) && !isPromotional(c) && isClosed(c));
   const promotional = conversations.filter((c) => !isPersonal(c) && isPromotional(c));
+
+  const starredCount = conversations.filter((c) => c.starred).length;
+  const followUpCount = conversations.filter((c) => c.needs_follow_up).length;
+  // The thread she has open stays in the list whatever the filter says, so
+  // unstarring it does not yank it out from under her.
+  const filtered =
+    filter === 'starred'
+      ? conversations.filter((c) => c.starred || c.id === selectedId)
+      : filter === 'follow_up'
+        ? conversations.filter((c) => c.needs_follow_up || c.id === selectedId)
+        : null;
 
   if (collapsed) {
     // Personal and promotional stay reachable — they are just not separated
     // by headers, because a 76px rail has nowhere to put them.
-    const all = [...primary, ...personal, ...promotional];
+    const all = [...primary, ...personal, ...closed, ...promotional];
     return (
       <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
         {all.map((c) => (
@@ -1639,8 +1696,49 @@ function ConversationList({
     );
   }
 
+  const filterRow = (
+    <Flex gap={2} px={3} py={2.5} wrap="wrap" bg="white">
+      <PillButton label={t.messages.filterAll} isActive={filter === 'all'} onClick={() => pickFilter('all')} fullWidth={false} />
+      <PillButton
+        label={t.messages.filterStarred(starredCount)}
+        icon={FaStar}
+        isActive={filter === 'starred'}
+        onClick={() => pickFilter('starred')}
+        fullWidth={false}
+      />
+      <PillButton
+        label={t.messages.filterFollowUp(followUpCount)}
+        isActive={filter === 'follow_up'}
+        onClick={() => pickFilter('follow_up')}
+        fullWidth={false}
+      />
+    </Flex>
+  );
+
+  if (filtered) {
+    return (
+      <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
+        {filterRow}
+        {filtered.length === 0 && (
+          <Text fontSize="sm" color="gray.500" px={4} py={6} lineHeight="1.6">
+            {filter === 'starred' ? t.messages.filterEmptyStarred : t.messages.filterEmptyFollowUp}
+          </Text>
+        )}
+        {filtered.map((c) => (
+          <ConversationListRow
+            key={c.id}
+            conv={c}
+            isSelected={c.id === selectedId}
+            onClick={() => onSelect(c.id)}
+          />
+        ))}
+      </VStack>
+    );
+  }
+
   return (
     <VStack spacing={0} align="stretch" divider={<Box h="1px" bg="gray.100" />}>
+      {filterRow}
       {primary.map((c) => (
         <ConversationListRow
           key={c.id}
@@ -1669,6 +1767,33 @@ function ConversationList({
 
       {showPersonal &&
         personal.map((c) => (
+          <ConversationListRow
+            key={c.id}
+            conv={c}
+            isSelected={c.id === selectedId}
+            onClick={() => onSelect(c.id)}
+          />
+        ))}
+
+      {closed.length > 0 && (
+        <Box
+          as="button"
+          onClick={() => setShowClosed((v) => !v)}
+          py={2.5}
+          px={4}
+          textAlign="left"
+          bg="gray.50"
+          _hover={{ bg: 'gray.100' }}
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Text fontSize="xs" color="gray.500" fontWeight="500">
+            {showClosed ? t.messages.hideClosed : t.messages.showClosed(closed.length)}
+          </Text>
+        </Box>
+      )}
+
+      {showClosed &&
+        closed.map((c) => (
           <ConversationListRow
             key={c.id}
             conv={c}
@@ -1810,6 +1935,9 @@ function ConversationListRow({
             >
               {displayName}
             </Text>
+            {conv.starred && (
+              <Icon as={FaStar} boxSize={3} color="brand.accent" flexShrink={0} aria-label={t.messages.starredLabel} />
+            )}
             {conv.last_message_at && (
               <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" fontWeight="300" flexShrink={0}>
                 {formatRelative(conv.last_message_at, t)}
@@ -1850,6 +1978,21 @@ function ConversationListRow({
             {/* Quiet-thread marker. Hidden while a draft is waiting — the
                 draft IS the next action then, and two badges shouting about
                 the same thread is noise. */}
+            {conv.closed_lead && conv.closed_reason && (
+              <Badge
+                bg="gray.100"
+                color="gray.600"
+                fontSize={{ base: 'xs', md: '2xs' }}
+                fontWeight="500"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+                px={1.5}
+                py={0}
+                borderRadius="sm"
+              >
+                {t.messages.closedReason[conv.closed_reason]}
+              </Badge>
+            )}
             {conv.needs_follow_up && !conv.has_draft && (
               <Badge
                 bg="blue.50"
@@ -2043,6 +2186,7 @@ function ConversationView({
   panelTab = 'summary',
   panelBodyEl = null,
   onPanelDraftChange,
+  onPanelTabChange,
   onSeedAssistant,
   refreshToken = 0,
 }: {
@@ -2116,6 +2260,14 @@ function ConversationView({
   // `direction` is checked too, so both sides use the same predicate.
   const pendingDraft =
     messages.filter((m) => m.status === 'draft' && m.direction === 'outbound').at(-1) ?? null;
+  // Instagram lets the site reply only within 24 hours of the customer's last
+  // message. Past that every send fails (api/_reply-delivery.ts turns Meta's
+  // refusal into a 422), so the draft panel offers the text to copy into the
+  // app instead of a Send that cannot work. Read off the thread on screen.
+  const lastInboundAt = messages.filter((m) => m.direction === 'inbound').at(-1)?.sent_at ?? null;
+  const instagramWindowClosed =
+    detail?.platform === 'instagram' &&
+    (lastInboundAt === null || Date.now() - new Date(lastInboundAt).getTime() > 24 * 60 * 60 * 1000);
   // Keyed on the draft body via the hook's own state: a new draft arrives as a
   // different ConversationView render, and discarding clears the card entirely.
   const {
@@ -2301,7 +2453,8 @@ function ConversationView({
     }
   };
   const [generatingDraft, setGeneratingDraft] = useState(false);
-  const handleGenerateDraft = async () => {
+  /** True when a draft now exists, so a caller can move to the Reply tab. */
+  const handleGenerateDraft = async (): Promise<boolean> => {
     setGeneratingDraft(true);
     try {
       const res = await fetch('/api/admin/messages-draft-generate', {
@@ -2312,18 +2465,99 @@ function ConversationView({
       const data = await res.json();
       if (res.ok && data.success) {
         await loadDetail();
+        return true;
+      }
+      toast({
+        title: data.error || t.messages.draftGenerateFailed,
+        status: 'error',
+        duration: 4000,
+      });
+      return false;
+    } catch {
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+      return false;
+    } finally {
+      setGeneratingDraft(false);
+    }
+  };
+
+  /**
+   * Following up a quiet lead (the Summary card): the drafter sees the silence
+   * on its own (api/_ai-reply.ts, followUpContextFor) and writes a check-in
+   * rather than a reply, and the panel moves to Reply where the draft is.
+   */
+  const [followUpBusy, setFollowUpBusy] = useState<'draft' | 'close' | null>(null);
+  const handleDraftFollowUp = async () => {
+    setFollowUpBusy('draft');
+    const ok = await handleGenerateDraft();
+    setFollowUpBusy(null);
+    if (ok) onPanelTabChange?.('reply');
+  };
+
+  /** Close or reopen this lead by hand (migration 050). */
+  const handleCloseLead = async (closed: boolean) => {
+    setFollowUpBusy('close');
+    try {
+      const res = await fetch('/api/admin/messages-close-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, conversationId: summary.id, closed }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast({ title: closed ? t.messages.leadClosed : t.messages.leadReopened, status: 'success', duration: 3000 });
+        onRefreshList();
       } else {
-        toast({
-          title: data.error || t.messages.draftGenerateFailed,
-          status: 'error',
-          duration: 4000,
-        });
+        toast({ title: data.error || t.common.couldNotReach, status: 'error', duration: 4000 });
       }
     } catch {
       toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
     } finally {
-      setGeneratingDraft(false);
+      setFollowUpBusy(null);
     }
+  };
+
+  /**
+   * The star (migration 050). Read off the list row and shown flipped the
+   * moment it is pressed; a refused save puts it back and says so.
+   */
+  const [starredLocal, setStarredLocal] = useState<boolean | null>(null);
+  useEffect(() => setStarredLocal(null), [summary.id, summary.starred]);
+  const isStarred = starredLocal ?? !!summary.starred;
+  const handleToggleStar = async () => {
+    const next = !isStarred;
+    setStarredLocal(next);
+    try {
+      const res = await fetch('/api/admin/messages-star', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, conversationId: summary.id, starred: next }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        onRefreshList();
+      } else {
+        setStarredLocal(!next);
+        toast({ title: data.error || t.common.couldNotReach, status: 'error', duration: 4000 });
+      }
+    } catch {
+      setStarredLocal(!next);
+      toast({ title: t.common.couldNotReach, status: 'error', duration: 3000 });
+    }
+  };
+
+  /**
+   * "Edit before sending": the draft goes into the reply box, where it can be
+   * changed and sent like anything she types. The draft row stays until a
+   * send succeeds, which clears it (api/_reply-delivery.ts), so backing out
+   * loses nothing.
+   */
+  const replyBoxRef = useRef<HTMLTextAreaElement | null>(null);
+  const handleEditDraft = () => {
+    if (!pendingDraft) return;
+    setReplyText(pendingDraft.body);
+    onReplySent?.(); // closes the panel, so the reply box is in view on a phone
+    window.setTimeout(() => replyBoxRef.current?.focus(), 80);
   };
   const [sending, setSending] = useState(false);
   /**
@@ -3354,6 +3588,28 @@ function ConversationView({
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               />
             )}
+            {/* The star: threads to work on, listed by the Starred filter
+                above the inbox. Between the client button and filing, where
+                Alex asked for it. Gold when on, like the filing menu when a
+                thread is filed. */}
+            <IconButton
+              aria-label={isStarred ? t.messages.unstar : t.messages.star}
+              title={isStarred ? t.messages.unstar : t.messages.star}
+              aria-pressed={isStarred}
+              icon={<Icon as={FaStar} boxSize={3.5} />}
+              onClick={handleToggleStar}
+              size="sm"
+              variant="ghost"
+              color={isStarred ? 'brand.accent' : 'gray.400'}
+              bg={isStarred ? 'brand.surface' : 'transparent'}
+              _hover={{ color: 'brand.accent' }}
+              w="36px"
+              h="36px"
+              minW="36px"
+              borderRadius="full"
+              flexShrink={0}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            />
             {/* Four loose icon buttons used to sit here on desktop, with a
                 mobile-only overflow menu carrying the same four actions below
                 them. Two implementations of one thing, and on desktop the row
@@ -3412,6 +3668,18 @@ function ConversationView({
                 >
                   {isHidden ? t.messages.unmarkPromotional : t.messages.markPromotional}
                 </MenuItem>
+                {/* Leads only: a client is never a closed lead. One closed
+                    automatically (date passed, no reply to two tries) has no
+                    reopen here; any new message reopens it. */}
+                {summary.closed_reason === 'closed' ? (
+                  <MenuItem icon={<Icon as={FaUndo} boxSize={3.5} />} onClick={() => handleCloseLead(false)}>
+                    {t.messages.reopenLead}
+                  </MenuItem>
+                ) : !summary.closed_lead && !detail?.client_portal_id && !detail?.linked_client_portal_id && !isPersonalThread && !isHidden ? (
+                  <MenuItem icon={<Icon as={FaTimes} boxSize={3.5} />} onClick={() => handleCloseLead(true)}>
+                    {t.messages.closeLead}
+                  </MenuItem>
+                ) : null}
               </MenuList>
             </Menu>
 
@@ -3753,6 +4021,18 @@ function ConversationView({
               onAddPhone={addPhoneToClient}
               onDismissPhone={dismissPhone}
               recordedFacts={recordedFacts}
+              followUp={
+                summary.needs_follow_up && !pendingDraft
+                  ? {
+                      kind: summary.follow_up_kind ?? 'quiet',
+                      days: summary.follow_up_days ?? 14,
+                      instagram: detail?.platform === 'instagram',
+                    }
+                  : null
+              }
+              onDraftFollowUp={handleDraftFollowUp}
+              onNotInterested={() => handleCloseLead(true)}
+              followUpBusy={followUpBusy}
             />
           ) : (
             <DraftPanel
@@ -3763,6 +4043,8 @@ function ConversationView({
               translateError={draftTranslateError}
               onTranslate={translateDraft}
               onUse={() => setUseDraftOpen(true)}
+              onEdit={handleEditDraft}
+              instagramClosed={instagramWindowClosed}
               onRefine={handleRefineWithAssistant}
               onDiscard={handleDiscardDraft}
               discarding={discardingDraft}
@@ -3949,6 +4231,7 @@ function ConversationView({
             right, with send as a full-width thumb target. */}
         <Stack direction={{ base: 'column', md: 'row' }} spacing={2} align="stretch">
           <Textarea
+            ref={replyBoxRef}
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             placeholder={t.messages.replyPlaceholder}
@@ -4419,6 +4702,8 @@ function DraftPanel({
   translateError,
   onTranslate,
   onUse,
+  onEdit,
+  instagramClosed = false,
   onRefine,
   onDiscard,
   discarding,
@@ -4432,12 +4717,38 @@ function DraftPanel({
   translateError: string | null;
   onTranslate: () => void;
   onUse: () => void;
+  /** Puts the draft in the reply box to change it before it goes. */
+  onEdit: () => void;
+  /**
+   * An Instagram thread more than 24 hours past the customer's last message.
+   * Instagram refuses anything the site sends then, so Copy takes the place of
+   * Send, and "Edit before sending" goes too: the reply box would fail the
+   * same way. Improving and discarding still work.
+   */
+  instagramClosed?: boolean;
   onRefine: () => void;
   onDiscard: () => void;
   discarding: boolean;
   onGenerate: () => void;
   generating: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  // The same copy as the client page's share buttons (AdminClientDetail).
+  const copy = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(draft?.body ?? '');
+      setCopyFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Said rather than appearing to work. The draft text is selectable,
+      // which is the fallback.
+      setCopyFailed(true);
+    }
+  };
+
   if (!draft) {
     return (
       <Flex direction="column" align="center" justify="center" h="100%" px={6} py={10}>
@@ -4493,16 +4804,56 @@ function DraftPanel({
         </Box>
       )}
 
-      <Text fontSize="2xs" color="gray.500" mb={3}>
-        {t.messages.draftHelp}
-      </Text>
+      {instagramClosed ? (
+        <Flex align="flex-start" gap={1.5} mb={3}>
+          <Icon as={FaInstagram} boxSize={3} color="gray.500" mt="3px" flexShrink={0} />
+          <Text fontSize="xs" color="gray.600" lineHeight="1.45">
+            {t.messages.draftInstagramClosed}
+          </Text>
+        </Flex>
+      ) : (
+        <Text fontSize="2xs" color="gray.500" mb={3}>
+          {t.messages.draftHelp}
+        </Text>
+      )}
 
       {/* Stacked: the panel column is ~420px on desktop and full width on a
           phone, so one action per row reads cleanly at both. */}
       <Stack direction="column" spacing={2} align="stretch">
-        <CTAButton onClick={onUse} variant="solid" size="sm" icon={FaPaperPlane} fullWidth>
-          {t.messages.draftUse}
-        </CTAButton>
+        {instagramClosed ? (
+          <CTAButton
+            onClick={copy}
+            variant="solid"
+            size="sm"
+            icon={copied ? FaCheck : FaCopy}
+            fullWidth
+          >
+            {copied ? t.messages.draftCopied : t.messages.draftCopy}
+          </CTAButton>
+        ) : (
+          <>
+            <CTAButton onClick={onUse} variant="solid" size="sm" icon={FaPaperPlane} fullWidth>
+              {t.messages.draftUse}
+            </CTAButton>
+            <Button
+              variant="outline"
+              size="sm"
+              minH="40px"
+              borderColor="#e8d9b8"
+              color="brand.accentText"
+              bg="white"
+              _hover={{ bg: 'brand.surface', borderColor: 'brand.accent' }}
+              onClick={onEdit}
+            >
+              {t.messages.draftEdit}
+            </Button>
+          </>
+        )}
+        {copyFailed && (
+          <Text fontSize="xs" color="red.500">
+            {t.messages.draftCopyFailed}
+          </Text>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -4648,6 +4999,10 @@ function SummaryCard({
   onAddPhone,
   onDismissPhone,
   recordedFacts = EMPTY_FACTS,
+  followUp = null,
+  onDraftFollowUp,
+  onNotInterested,
+  followUpBusy = null,
 }: {
   summary: AiSummary | null;
   loading: boolean;
@@ -4679,6 +5034,17 @@ function SummaryCard({
    * it, because the two have different standing: these are hers.
    */
   recordedFacts?: Array<{ field: string; value: string; quote: string }>;
+  /**
+   * A lead gone quiet two weeks or more (the server's Follow up list). The
+   * suggestion offers a drafted check-in or "not interested", which closes
+   * the lead. Like every suggestion here, acting on it either way removes it:
+   * a draft hides it, a close takes the thread out of Follow up.
+   * `instagram` adds the line saying it has to go from the Instagram app.
+   */
+  followUp?: { kind: 'quiet' | 'unanswered'; days: number; instagram?: boolean } | null;
+  onDraftFollowUp?: () => void;
+  onNotInterested?: () => void;
+  followUpBusy?: 'draft' | 'close' | null;
 }) {
   // Content and chrome both read the ONE language control now. The card used to
   // take a `language` prop fed by its own RU|EN toggle, which meant the summary
@@ -4865,6 +5231,66 @@ function SummaryCard({
           {/* Above the model's own output on purpose: this is read straight
               out of the thread, so it is the one thing here that is not a
               guess, and it is actionable in one tap. */}
+          {followUp && (
+            <Box
+              borderWidth="1px"
+              borderColor="brand.accent"
+              borderRadius="md"
+              bg="orange.50"
+              px={3}
+              py={2.5}
+              mb={3}
+            >
+              <Text
+                fontSize={{ base: 'xs', md: '2xs' }}
+                color="gray.500"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+                mb={1}
+              >
+                {t.messages.followUpHeading}
+              </Text>
+              <Text fontSize="md" color="gray.800" fontWeight="600" lineHeight="1.3">
+                {followUp.kind === 'quiet'
+                  ? t.messages.followUpQuiet(Math.max(2, Math.round(followUp.days / 7)))
+                  : t.messages.followUpUnanswered(Math.max(2, Math.round(followUp.days / 7)))}
+              </Text>
+              <Text fontSize="xs" color="gray.600" mt={0.5} lineHeight="1.45">
+                {t.messages.followUpBody}
+              </Text>
+              {followUp.instagram && (
+                <Flex align="flex-start" gap={1.5} mt={1.5}>
+                  <Icon as={FaInstagram} boxSize={3} color="gray.500" mt="3px" flexShrink={0} />
+                  <Text fontSize="xs" color="gray.600" lineHeight="1.45">
+                    {t.messages.followUpInstagram}
+                  </Text>
+                </Flex>
+              )}
+              <Flex gap={2} mt={2} wrap="wrap">
+                <Button
+                  size="sm"
+                  minH="36px"
+                  bg="brand.accent"
+                  color="gray.900"
+                  _hover={{ bg: 'brand.accentStrong' }}
+                  onClick={() => onDraftFollowUp?.()}
+                  isLoading={followUpBusy === 'draft'}
+                >
+                  {t.messages.followUpDraft}
+                </Button>
+                <Button
+                  size="sm"
+                  minH="36px"
+                  variant="ghost"
+                  color="gray.500"
+                  onClick={() => onNotInterested?.()}
+                  isLoading={followUpBusy === 'close'}
+                >
+                  {t.messages.followUpNotInterested}
+                </Button>
+              </Flex>
+            </Box>
+          )}
           {phoneSuggestions.length > 0 && (
             <VStack align="stretch" spacing={2} mb={3}>
               {phoneSuggestions.map((found) => (

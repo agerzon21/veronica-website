@@ -11,6 +11,7 @@ import FaTerminal from '../icons/fa/FaTerminal';
 import CTAButton from './ui/CTAButton';
 import RebuildSiteButton from './ui/RebuildSiteButton';
 import { useAdminLang } from '../i18n/admin';
+import type { SalesTaxMode } from '../data/sales-tax';
 
 /**
  * The "Integrations" tab in /admin: Instagram, WhatsApp, rebuilds and the
@@ -60,6 +61,7 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
       </VStack>
 
       <SalesTaxLicenseCard adminPassword={adminPassword} />
+      <SalesTaxReportCard adminPassword={adminPassword} />
       <InstagramCard adminPassword={adminPassword} />
       <WhatsAppCard adminPassword={adminPassword} />
       <RebuildCard adminPassword={adminPassword} />
@@ -1120,6 +1122,155 @@ interface LicenseState {
   };
 }
 
+interface TaxQuarter {
+  key: string;
+  year: number;
+  quarter: 1 | 2 | 3 | 4;
+  dueDate: string;
+  grossSales: number;
+  taxableSales: number;
+  tax: number;
+  lines: Array<{ date: string; booking: string; amount: number; mode: SalesTaxMode; sale: number; tax: number }>;
+}
+
+/** Cents only when there are some: "$3,855", "$165.30". */
+const usd = (n: number): string =>
+  `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', {
+    minimumFractionDigits: Math.round(Math.abs(n) * 100) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+/**
+ * Pennsylvania sales tax by quarter: the three numbers each myPATH return
+ * asks for, and the payments behind them (api/admin/_sales-tax-report.ts).
+ *
+ * Below the licence card on purpose. That card says WHEN the next return is
+ * due; this one says WHAT goes on it. Each quarter opens up into its payments,
+ * because a tax figure nobody can check line by line is not one to file.
+ */
+function SalesTaxReportCard({ adminPassword }: { adminPassword: string }) {
+  const { t, lang } = useAdminLang();
+  const [quarters, setQuarters] = useState<TaxQuarter[] | null>(null);
+  const [err, setErr] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/sales-tax-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.success) setQuarters(data.quarters as TaxQuarter[]);
+        else setErr(data.error || t.integrations.taxReportFailed);
+      } catch {
+        if (!cancelled) setErr(t.integrations.taxReportFailed);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [adminPassword, t.integrations.taxReportFailed]);
+
+  const dueLabel = (iso: string) =>
+    new Date(`${iso}T12:00:00Z`).toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderRadius="sm"
+      p={{ base: 5, md: 7 }}
+      maxW="720px"
+      mt={6}
+    >
+      <Text as="h2" fontSize="md" fontWeight="400" color="gray.800" m={0} mb={2}>
+        {t.integrations.taxReportTitle}
+      </Text>
+      <Text fontSize="sm" color="gray.600" mb={4}>
+        {t.integrations.taxReportIntro}
+      </Text>
+      {err && (
+        <Text fontSize="sm" color="red.600">
+          {err}
+        </Text>
+      )}
+      {quarters && quarters.length === 0 && (
+        <Text fontSize="sm" color="gray.500">
+          {t.integrations.taxReportNone}
+        </Text>
+      )}
+      <VStack align="stretch" spacing={0}>
+        {(quarters ?? []).map((q) => (
+          <Box key={q.key} borderTop="1px solid" borderColor="gray.100" py={3}>
+            <Flex justify="space-between" align={{ base: 'flex-start', md: 'center' }} gap={3} wrap="wrap">
+              <Box minW={0}>
+                <Text fontSize="sm" fontWeight="500" color="gray.800">
+                  {t.integrations.taxReportQuarter(q.quarter, q.year)}
+                </Text>
+                <Text fontSize="xs" color="gray.500">
+                  {t.integrations.taxReportDue} {dueLabel(q.dueDate)}
+                </Text>
+              </Box>
+              <CTAButton
+                variant="outline"
+                size="sm"
+                onClick={() => setOpen((o) => (o === q.key ? null : q.key))}
+              >
+                {open === q.key ? t.integrations.taxReportHide : t.integrations.taxReportShow}
+              </CTAButton>
+            </Flex>
+            <Flex gap={{ base: 4, md: 8 }} mt={2} wrap="wrap" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+              <Box>
+                <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.1em">
+                  {t.integrations.taxReportGross}
+                </Text>
+                <Text fontSize="sm" color="gray.800">{usd(q.grossSales)}</Text>
+              </Box>
+              <Box>
+                <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.1em">
+                  {t.integrations.taxReportTaxable}
+                </Text>
+                <Text fontSize="sm" color="gray.800">{usd(q.taxableSales)}</Text>
+              </Box>
+              <Box>
+                <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.1em">
+                  {t.integrations.taxReportTax}
+                </Text>
+                <Text fontSize="sm" color="gray.900" fontWeight="600">{usd(q.tax)}</Text>
+              </Box>
+            </Flex>
+            {open === q.key && (
+              <VStack align="stretch" spacing={1} mt={3} bg="gray.50" borderRadius="sm" p={3}>
+                {q.lines.map((l, i) => (
+                  <Flex key={i} justify="space-between" gap={3} fontSize="xs" color="gray.700" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <Text minW={0} noOfLines={1}>
+                      {l.date} · {l.booking}
+                    </Text>
+                    <Text flexShrink={0} color="gray.500">
+                      {usd(l.amount)} · {t.integrations.taxReportModeShort[l.mode]} · {t.integrations.taxReportTax} {usd(l.tax)}
+                    </Text>
+                  </Flex>
+                ))}
+              </VStack>
+            )}
+          </Box>
+        ))}
+      </VStack>
+    </Box>
+  );
+}
+
 function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
   const { t } = useAdminLang();
   const [state, setState] = useState<LicenseState | null>(null);
@@ -1282,9 +1433,13 @@ function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
               value={issuedAt}
               onChange={(e) => setIssuedAt(e.target.value)}
             />
-            <Text fontSize="xs" color="gray.500" mt={1}>
-              {t.integrations.licExpires}: {issuedAt ? `${Number(issuedAt.slice(0, 4)) + 5}${issuedAt.slice(4)}` : '—'}
-            </Text>
+            {/* Only once there is a date: a dash standing in for a missing
+                value is still a dash on a screen Alex reads. */}
+            {issuedAt && (
+              <Text fontSize="xs" color="gray.500" mt={1}>
+                {t.integrations.licExpires}: {`${Number(issuedAt.slice(0, 4)) + 5}${issuedAt.slice(4)}`}
+              </Text>
+            )}
           </Box>
           <Box>
             <Text fontSize="sm" mb={1}>

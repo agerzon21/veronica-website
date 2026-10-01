@@ -184,6 +184,15 @@ export type CreateCheckoutInput = {
    * earlier completed session. Never sent to Stripe.
    */
   paidToDate?: number;
+  /**
+   * The part of `amount` that is Pennsylvania sales tax, in dollars, when the
+   * booking adds it (src/data/sales-tax.ts). It is shown as its own line on
+   * the Stripe page and receipt, and the two lines add up to `amount` to the
+   * cent. Zero or absent: one line, exactly as before.
+   */
+  salesTax?: number;
+  /** The tax line's label, e.g. "Pennsylvania sales tax (6%)". */
+  salesTaxLabel?: string;
 };
 
 export type CheckoutSession = { id: string; url: string };
@@ -203,6 +212,7 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
   const {
     portalId, kind, amount, clientEmail, description,
     successUrl, cancelUrl, stripeAccount = null, paidToDate = 0,
+    salesTax = 0, salesTaxLabel = 'Sales tax',
   } = input;
   const paidToDateCents = Math.round(paidToDate * 100);
 
@@ -213,6 +223,8 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
   // 89999.99999 cents is a real class of bug, and a booking is always a whole
   // number of cents.
   const unitAmount = Math.round(amount * 100);
+  // Never more than the whole, and never a line for nothing.
+  const taxCents = Number.isFinite(salesTax) ? Math.min(Math.max(Math.round(salesTax * 100), 0), unitAmount - 1) : 0;
 
   /**
    * A SHORT-LIVED session, inside a thirty minute window.
@@ -242,10 +254,22 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
           quantity: 1,
           price_data: {
             currency: 'usd',
-            unit_amount: unitAmount,
+            unit_amount: unitAmount - taxCents,
             product_data: { name: description },
           },
         },
+        ...(taxCents > 0
+          ? [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: 'usd',
+                  unit_amount: taxCents,
+                  product_data: { name: salesTaxLabel },
+                },
+              },
+            ]
+          : []),
       ],
       /**
        * The only link back to a booking.

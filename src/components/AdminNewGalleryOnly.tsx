@@ -1,4 +1,5 @@
-import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea } from '@chakra-ui/react';
+import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea, Select } from '@chakra-ui/react';
+import { SALES_TAX_MODES, isSalesTaxMode, type SalesTaxMode } from '../data/sales-tax';
 import { fmtAdminDate } from '../utils/adminDate';
 import type { ClientPrefill } from './clientPrefill';
 import { useMemo, useState } from 'react';
@@ -78,6 +79,9 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
   const [retentionMonths, setRetentionMonths] = useState('3');
   const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
   const [retainerAmount, setRetainerAmount] = useState(prefill?.retainer_amount ?? '');
+  // Pennsylvania sales tax: a new booking adds it unless the photos go out of
+  // state (src/data/sales-tax.ts). The same three choices as a full booking.
+  const [salesTax, setSalesTax] = useState<SalesTaxMode>('added');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -156,6 +160,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
           gallery_password: galleryPassword.trim(),
           contract_total_amount: totalNum,
           contract_retainer_amount: retainerNum,
+          sales_tax: salesTax,
           // Keeps the portal ↔ conversation link when Vero got here from a
           // thread, so the inbox still shows the CLIENT badge.
           link_to_conversation_id: prefill?.conversationId ?? null,
@@ -379,6 +384,22 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
                   />
                 </Field>
               </Stack>
+              <Field label={t.newClient.salesTaxLabel} helpText={t.clientDetail.salesTaxHelp[salesTax]}>
+                <Select
+                  id="new-gallery-sales-tax"
+                  value={salesTax}
+                  onChange={(e) => { if (isSalesTaxMode(e.target.value)) setSalesTax(e.target.value); }}
+                  bg="white"
+                  fontSize={{ base: 'md', sm: 'sm' }}
+                  focusBorderColor="brand.accent"
+                >
+                  {SALES_TAX_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {t.clientDetail.salesTaxModes[m]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               <Text fontSize="xs" color="gray.500" fontWeight="300">
                 {t.newGallery.paymentsNote}
               </Text>

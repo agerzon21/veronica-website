@@ -74,6 +74,23 @@ export function formatContractMoney(amount: number): string {
   return `$${whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 }
 
+/**
+ * The same, to the cent whenever there are cents: "$30", "$29.11", "$1,121.90".
+ *
+ * For the sales tax lines, which cannot be rounded to the dollar: 6% of $115
+ * is $6.90, and a contract that said $7 would state a tax nobody charges.
+ * Built by hand for the reason formatContractMoney is (no ICU in some Node
+ * builds). Whole amounts print exactly as formatContractMoney prints them, so
+ * the two can sit side by side in one table.
+ */
+export function formatContractMoneyExact(amount: number): string {
+  const cents = Math.round(Number.isFinite(amount) ? amount * 100 : 0);
+  const abs = Math.abs(cents);
+  const whole = Math.floor(abs / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const frac = abs % 100;
+  return `${cents < 0 ? '-' : ''}$${whole}${frac ? `.${String(frac).padStart(2, '0')}` : ''}`;
+}
+
 export interface WeddingContractVariables {
   effective_date: string;          // e.g. "June 24, 2026"
   photographer_name: string;       // e.g. "Veronika Polbina"
@@ -466,6 +483,36 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         },
         { kind: 'text', emphasis: 'italic', text: 'The event date is not reserved until this contract is signed and the retainer is paid.' },
         { kind: 'text', emphasis: 'italic', text: 'Full payment must be received before delivery of any images.' },
+      ],
+    },
+    // PENNSYLVANIA SALES TAX. Unnumbered and optional, gated on
+    // sales_tax_enabled, so a grandfathered or out-of-state contract renders
+    // byte for byte as every one already on file does, and the numbering never
+    // shifts. Every value is derived from the amount columns on the server
+    // (src/data/sales-tax.ts), never typed, so the tax this states is the tax
+    // the portal and the card checkout charge.
+    {
+      title: 'PENNSYLVANIA SALES TAX',
+      optional: true,
+      requireVariables: ['sales_tax_enabled'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'Pennsylvania sales tax of {{sales_tax_percent}} is added to the amounts in PAYMENT above and is paid with them, so each payment includes its own tax.',
+        },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Sales Tax on the Total Payment', value: '{{sales_tax_amount}}' },
+            { label: 'Total Payment with Tax', value: '{{total_with_tax}}' },
+            { label: 'Retainer with Tax', value: '{{retainer_with_tax}} (due at signing)' },
+            { label: 'Remaining Balance with Tax', value: '{{remaining_with_tax}}' },
+          ],
+        },
+        {
+          kind: 'text',
+          text: 'Any charge added under this Agreement, such as additional time, is taxed in the same way. Tax is always charged on the amount actually paid.',
+        },
       ],
     },
     // PRICE REVIEW. Unnumbered and optional, so a booking without it renders
@@ -1307,6 +1354,32 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       },
       { kind: 'text', emphasis: 'italic', text: 'The session date is not reserved until this contract is signed and the retainer is paid.' },
       { kind: 'text', emphasis: 'italic', text: 'Full payment must be received before delivery of any images.' },
+    ],
+  },
+  // PENNSYLVANIA SALES TAX. The wedding copy carries the reasoning: optional,
+  // unnumbered, gated on sales_tax_enabled, every value derived on the server.
+  {
+    title: 'PENNSYLVANIA SALES TAX',
+    optional: true,
+    requireVariables: ['sales_tax_enabled'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'Pennsylvania sales tax of {{sales_tax_percent}} is added to the amounts in PAYMENT above and is paid with them, so each payment includes its own tax.',
+      },
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Sales Tax on the Total Payment', value: '{{sales_tax_amount}}' },
+          { label: 'Total Payment with Tax', value: '{{total_with_tax}}' },
+          { label: 'Retainer with Tax', value: '{{retainer_with_tax}} (due at signing)' },
+          { label: 'Remaining Balance with Tax', value: '{{remaining_with_tax}}' },
+        ],
+      },
+      {
+        kind: 'text',
+        text: 'Any charge added under this Agreement, such as additional time, is taxed in the same way. Tax is always charged on the amount actually paid.',
+      },
     ],
   },
   // PRICE REVIEW. Optional, unnumbered, gated on price_review_enabled exactly

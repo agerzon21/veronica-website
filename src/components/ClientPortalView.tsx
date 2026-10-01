@@ -41,9 +41,15 @@ import {
   PAYMENT_HANDLES,
   CARD_PAYMENTS_MODE,
   cardPaymentsVisible,
-  cashPrice,
-  cashSaving,
 } from '../data/payment-handles';
+import {
+  PA_SALES_TAX_LABEL,
+  bookingOwedTotal,
+  directAmountFor,
+  retainerOwed,
+  salesTaxModeOf,
+  type SalesTaxMode,
+} from '../data/sales-tax';
 
 // Full client portal payload — mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
@@ -89,6 +95,12 @@ export interface ClientPortalData {
   // Payment — Phase 3
   contract_total_amount: number | null;
   contract_retainer_amount: number | null;
+  /**
+   * Pennsylvania sales tax for this booking (src/data/sales-tax.ts). 'added'
+   * puts 6% on top of the total, the retainer and any charges, and every
+   * figure below includes it. Absent reads as 'absorbed', which adds nothing.
+   */
+  sales_tax?: SalesTaxMode;
   paid_to_date: number;
   payment_plan_enabled: boolean;
   installments: Array<{
@@ -346,8 +358,19 @@ const ClientPortalView = ({
   // itemized in the Balance section below, so the number that changed is
   // always explained by a line they can point at.
   const chargesTotal = data.charges_total ?? 0;
-  const amountOwed =
-    data.contract_total_amount !== null ? data.contract_total_amount + chargesTotal : null;
+  // Plus Pennsylvania sales tax when this booking adds it. Worked out in cents
+  // by the module the server uses, so this page and the card checkout always
+  // ask for the same number.
+  const salesTax = salesTaxModeOf(data.sales_tax);
+  const amountOwed = bookingOwedTotal(data.contract_total_amount, chargesTotal, salesTax);
+  const salesTaxAmount =
+    amountOwed !== null && data.contract_total_amount !== null
+      ? (Math.round(amountOwed * 100) -
+          Math.round(data.contract_total_amount * 100) -
+          Math.round(chargesTotal * 100)) / 100
+      : 0;
+  // The retainer as they pay it, tax included when the booking adds it.
+  const retainerDue = retainerOwed(data.contract_retainer_amount, salesTax);
   /**
    * Floored, like every other consumer of this number.
    *
@@ -415,7 +438,7 @@ const ClientPortalView = ({
   const progress: PortalProgressData = {
     contractStatus: data.contract_status,
     amountOwed,
-    retainerAmount: data.contract_retainer_amount,
+    retainerAmount: retainerDue,
     paidToDate: data.paid_to_date,
     photosDelivered,
     overdue: balanceOverdue,
@@ -1179,6 +1202,7 @@ const ClientPortalView = ({
           retainer={data.contract_retainer_amount}
           paidToDate={data.paid_to_date}
           chargesTotal={chargesTotal}
+          salesTax={salesTax}
           wording={wording}
           // Once photos land, the "All Set / awaiting delivery" state
           // is no longer relevant — client isn't waiting anymore.
@@ -1253,7 +1277,8 @@ const ClientPortalView = ({
                 md:
                   3 +
                   (data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 ? 1 : 0) +
-                  (chargesTotal > 0 ? 1 : 0),
+                  (chargesTotal > 0 ? 1 : 0) +
+                  (salesTaxAmount > 0 ? 1 : 0),
               }}
               spacing={{ base: 5, md: 8 }}
               w="100%"
@@ -1262,8 +1287,8 @@ const ClientPortalView = ({
               {data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 && (
                 <BalanceStat
                   label="Retainer"
-                  value={formatMoney(data.contract_retainer_amount)}
-                  note="Part of total"
+                  value={formatMoney(retainerDue ?? data.contract_retainer_amount)}
+                  note={salesTaxAmount > 0 ? 'With tax, part of the total' : 'Part of total'}
                 />
               )}
               {/* Sits between Total and Paid so the column order reads as
@@ -1274,6 +1299,15 @@ const ClientPortalView = ({
                   label="Added"
                   value={formatMoney(chargesTotal)}
                   note="Listed below"
+                />
+              )}
+              {/* Its own column, so Total + Added + Tax - Paid still reads as
+                  the sum that leaves Remaining. */}
+              {salesTaxAmount > 0 && (
+                <BalanceStat
+                  label="Sales tax"
+                  value={formatMoney(salesTaxAmount)}
+                  note={`${PA_SALES_TAX_LABEL} Pennsylvania`}
                 />
               )}
               <BalanceStat label="Paid" value={formatMoney(data.paid_to_date)} />
@@ -2065,6 +2099,7 @@ function NextStepsPanel({
   retainer,
   paidToDate,
   chargesTotal,
+  salesTax,
   wording,
   photosDelivered,
   credentials,
@@ -2080,6 +2115,8 @@ function NextStepsPanel({
   // The retainer is untouched by these: it reserves the date and is agreed up
   // front, while charges land after the shoot, so they fall on the balance.
   chargesTotal: number;
+  /** Pennsylvania sales tax for this booking; 'added' puts 6% on everything owed. */
+  salesTax: SalesTaxMode;
   // Needed to start a card payment: the portal re-proves ownership on every
   // request rather than holding a session, so the pay endpoint is exactly as
   // protected as the one that showed this balance.
@@ -2103,11 +2140,13 @@ function NextStepsPanel({
 
   // Whole cents, the same basis the header uses, so the corner and this panel
   // can never disagree about whether a booking is settled.
-  const owedCents = moneyCents(total) + moneyCents(chargesTotal);
+  // Tax included when the booking adds it, here as everywhere else.
+  const owedCents = moneyCents(bookingOwedTotal(total, chargesTotal, salesTax) ?? 0);
   const paidCents = moneyCents(paidToDate);
+  const retainerDue = retainerOwed(retainer, salesTax);
   const retainerOutstanding =
-    retainer !== null && retainer > 0 && paidCents < moneyCents(retainer);
-  const retainerToSend = retainerOutstanding ? (moneyCents(retainer!) - paidCents) / 100 : 0;
+    retainer !== null && retainer > 0 && retainerDue !== null && paidCents < moneyCents(retainerDue);
+  const retainerToSend = retainerOutstanding ? (moneyCents(retainerDue!) - paidCents) / 100 : 0;
   const balanceOutstanding = !retainerOutstanding && paidCents < owedCents;
   const balanceToSend = balanceOutstanding ? (owedCents - paidCents) / 100 : 0;
   const fullyPaid = !retainerOutstanding && !balanceOutstanding;
@@ -2147,7 +2186,7 @@ function NextStepsPanel({
             </VStack>
 
             <PayByCardButton kind="retainer" amount={retainerToSend} credentials={credentials} testMode={cardTestMode} />
-            <PaymentMethodsStack amount={retainerToSend} />
+            <PaymentMethodsStack amount={retainerToSend} salesTax={salesTax} />
 
             <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
               Once you've sent it, reply to this booking's email or message Veronika so she can confirm receipt. <Text as="span" fontWeight="500" color="gray.700">If she's already confirmed and this page hasn't updated, tap "Refresh Portal" up top.</Text>
@@ -2214,7 +2253,7 @@ function NextStepsPanel({
             </Box>
 
             <PayByCardButton kind="balance" amount={balanceToSend} credentials={credentials} testMode={cardTestMode} />
-            <PaymentMethodsStack amount={balanceToSend} />
+            <PaymentMethodsStack amount={balanceToSend} salesTax={salesTax} />
 
             <VStack spacing={2} maxW="440px" textAlign="center">
               <Text fontSize="xs" color="gray.600" fontWeight="400" lineHeight="1.7">
@@ -2658,13 +2697,15 @@ function PayByCardButton({
  * no card option there is nothing to be cheaper THAN, and a discount off a
  * price nobody was offered is just a confusing second number.
  */
-function PaymentMethodsStack({ amount }: { amount?: number }) {
+function PaymentMethodsStack({ amount, salesTax }: { amount?: number; salesTax: SalesTaxMode }) {
   const cardsVisible = cardPaymentsVisible(
     typeof window === 'undefined' ? '' : window.location.search,
   );
   const owed = typeof amount === 'number' ? amount : 0;
-  const discounted = cashPrice(owed);
-  const saving = cashSaving(owed);
+  // On a taxed booking the fee comes off the price and the tax is charged on
+  // what is left (src/data/sales-tax.ts), so this is not cashPrice(owed).
+  const discounted = directAmountFor(owed, salesTax);
+  const saving = Math.max(Math.round(owed * 100) - Math.round(discounted * 100), 0) / 100;
   const showSaving = cardsVisible && saving > 0;
 
   return (
@@ -2680,10 +2721,20 @@ function PaymentMethodsStack({ amount }: { amount?: number }) {
           <Text fontSize="sm" color="gray.800">
             Send <strong>{formatMoney(discounted)}</strong> by any of these
           </Text>
-          <Text fontSize="xs" color="gray.600" fontWeight="300">
-            That is the whole amount, and all of it reaches Veronika. Paying by card is{' '}
-            {formatMoney(owed)}, because the card processor takes {formatMoney(saving)} of it.
-          </Text>
+          {salesTax === 'added' ? (
+            // The saving is the card fee AND the tax that would have been
+            // charged on it, so "the processor takes" this much would be
+            // a few cents wrong. Said as what it is.
+            <Text fontSize="xs" color="gray.600" fontWeight="300">
+              That is the whole amount, tax included. Paying by card is {formatMoney(owed)}: the
+              card processor's fee, and the tax on it, add {formatMoney(saving)}.
+            </Text>
+          ) : (
+            <Text fontSize="xs" color="gray.600" fontWeight="300">
+              That is the whole amount, and all of it reaches Veronika. Paying by card is{' '}
+              {formatMoney(owed)}, because the card processor takes {formatMoney(saving)} of it.
+            </Text>
+          )}
         </VStack>
       )}
       <PaymentMethodRow label="Zelle" value={PAYMENT_HANDLES.zelle} />

@@ -14,8 +14,9 @@
  *   event_date: string (YYYY-MM-DD),
  *   contract_template_key: string, // key from CONTRACT_TEMPLATES (e.g. 'wedding')
  *   variables: Record<string, string>, // template variables for that key
- *   contract_total_amount: number,
- *   contract_retainer_amount: number,
+ *   contract_total_amount: number,  // before tax
+ *   contract_retainer_amount: number,  // before tax
+ *   sales_tax?: 'added' | 'absorbed' | 'exempt',  // default 'added' (migration 049)
  *
  *   // both modes:
  *   gallery_password: string,      // unique
@@ -43,12 +44,15 @@ import { sendEmail } from '../_auto-reply.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
+  formatContractMoney,
+  formatContractMoneyExact,
   isContractTemplateKey,
   pruneEmptyOptionalSections,
   requiredVariablesFor,
   stripForeignTypeVariables,
   type ContractTemplateSpec,
 } from '../../src/data/contract-template.js';
+import { isSalesTaxMode, salesTaxContractVariables, type SalesTaxMode } from '../../src/data/sales-tax.js';
 
 function generateToken(): string {
   // 32 bytes → 64 hex chars. Plenty of entropy for a single-use setup link.
@@ -123,6 +127,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let templateKey: string | null = null;
   let totalAmount: number | null = null;
   let retainerAmount: number | null = null;
+  /**
+   * Pennsylvania sales tax for this booking (migration 049, src/data/sales-tax.ts).
+   * A new booking adds 6% unless the form says otherwise: Alex's rule from
+   * 2026-10-01 is that new work is taxed and only what existed before is
+   * grandfathered. 'exempt' is for photos delivered outside Pennsylvania.
+   */
+  const salesTax: SalesTaxMode = isSalesTaxMode(body.sales_tax) ? body.sales_tax : 'added';
   let contractBody: string | null = null;
   let contractVariables: Record<string, string> = {};
   let setupToken: string | null = null;
@@ -200,6 +211,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: 'Retainer cannot exceed total amount.' });
     }
 
+    /*
+     * The money lines are the columns' business, never the caller's, the rule
+     * _portal-update.ts holds for every later edit: the contract must state
+     * exactly what the portal, the card checkout and the delivery gate will
+     * charge. The form already sends the first three in this same format, so
+     * for it nothing changes; a caller that sent anything else is corrected.
+     * The tax lines are empty unless this booking adds tax, which prunes the
+     * PENNSYLVANIA SALES TAX section away.
+     */
+    contractVariables = {
+      ...contractVariables,
+      total_amount: formatContractMoney(totalAmount),
+      retainer_amount: formatContractMoney(retainerAmount),
+      remaining_balance: formatContractMoney(Math.max(totalAmount - retainerAmount, 0)),
+      ...salesTaxContractVariables(totalAmount, retainerAmount, salesTax, formatContractMoneyExact),
+    };
+
     // Render the template body now so it's frozen at creation time.
     // We also persist the variables JSON so the admin can edit them
     // later (while contract is still pending) and we can re-render
@@ -247,6 +275,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           gallery_password, gallery_enabled,
           contract_status, contract_template_key, contract_body, contract_variables,
           contract_total_amount, contract_retainer_amount, paid_to_date,
+          sales_tax,
           setup_token, setup_token_expires_at
         ) values (
           ${mode}, ${sessionType},
@@ -257,6 +286,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${galleryPassword}, true,
           'pending', ${templateKey}, ${contractBody}, ${JSON.stringify(contractVariables)},
           ${totalAmount}, ${retainerAmount}, 0,
+          ${salesTax},
           ${setupToken}, ${setupTokenExpiresAt}
         )
         returning id
@@ -356,7 +386,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           gallery_password, gallery_enabled,
           drive_url, gallery_delivered_at, gallery_expires_at,
           contract_status,
-          contract_total_amount, contract_retainer_amount, paid_to_date
+          contract_total_amount, contract_retainer_amount, paid_to_date,
+          sales_tax
         ) values (
           ${mode}, ${sessionType},
           ${simpleClientFirstName},
@@ -365,7 +396,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${galleryPassword}, true,
           ${simpleDriveUrl}, ${deliveredAt}, ${expiresAt},
           'none',
-          ${simpleTotalAmount}, ${simpleRetainerAmount}, 0
+          ${simpleTotalAmount}, ${simpleRetainerAmount}, 0,
+          ${salesTax}
         )
         returning id
       `) as Array<{ id: string }>;

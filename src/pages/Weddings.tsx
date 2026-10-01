@@ -1057,6 +1057,15 @@ const Weddings = () => {
                   {a.detail}
                 </Text>
               ))}
+              {/* Directly under the prices it qualifies, in the same footnote
+                  treatment, so nobody reads "from $900" and is surprised by
+                  the 6% on their contract. */}
+              <Text textStyle="bodyCopy" color="gray.600" textAlign="center">
+                <Box as="span" textStyle="eyebrow" color="gray.700" mr={2}>
+                  Sales tax.
+                </Box>
+                {weddingData.salesTax}
+              </Text>
             </VStack>
           </Box>
 

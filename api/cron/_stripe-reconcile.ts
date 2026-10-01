@@ -101,6 +101,21 @@ export async function reconcileStripe(): Promise<ReconcileResult> {
   const report = async (key: string, summary: string, action: string) => {
     if (await reportPaymentIssue({ key, summary, action, source: 'reconcile' })) result.newIssues++;
   };
+  /**
+   * A booking's name for a sentence a person reads, falling back to its id.
+   * The summary is also the alert email's subject, so it has to say WHOSE
+   * money in words; the ids go at the end for looking things up.
+   */
+  const nameOf = async (portalId: string): Promise<string> => {
+    try {
+      const rows = (await sql`
+        select client_display_name from client_portals where id = ${portalId}
+      `) as Array<{ client_display_name: string | null }>;
+      return rows[0]?.client_display_name || portalId;
+    } catch {
+      return portalId;
+    }
+  };
   /** The booking a PaymentIntent was recorded against, if it was. */
   const bookingOf = async (pi: string): Promise<string | null> => {
     const rows = (await sql`
@@ -140,7 +155,7 @@ export async function reconcileStripe(): Promise<ReconcileResult> {
         result.recorded++;
         await report(
           `reconciled:${pi ?? s.id}`,
-          `A card payment of ${usd(s.amount_total)} for booking ${r.portalId} was in Stripe but missing from the ledger. It has now been recorded.`,
+          `A ${usd(s.amount_total)} card payment for ${await nameOf(r.portalId)} was in Stripe but missing from the books. It has now been recorded (checkout ${s.id}).`,
           'Nothing to fix by hand. If this happens again, the webhook is losing payments: check the Stripe webhook under Integrations.',
         );
       }
@@ -148,9 +163,9 @@ export async function reconcileStripe(): Promise<ReconcileResult> {
       const code = (err as { code?: unknown })?.code;
       await report(
         `reconcile-failed:${s.id}`,
-        `A paid card checkout (${s.id}, ${usd(s.amount_total)}) could not be recorded: ${
-          code === '23503' ? 'the booking it names no longer exists' : err instanceof Error ? err.message : String(err)
-        }.`,
+        `A ${usd(s.amount_total)} card payment could not be recorded: ${
+          code === '23503' ? 'the booking it was for no longer exists' : err instanceof Error ? err.message : String(err)
+        } (checkout ${s.id}).`,
         'Find it in Stripe and log it on the right booking by hand.',
       );
     }
@@ -172,14 +187,14 @@ export async function reconcileStripe(): Promise<ReconcileResult> {
           if (recorded && !(await rowExists(`${rf.id}:failed`))) {
             await report(
               `refund-failed-counted:${rf.id}`,
-              `A refund of ${usd(rf.amount)} on booking ${booking} ${rf.status} at Stripe, so the money stayed, but the ledger still counts it as returned.`,
+              `A ${usd(rf.amount)} refund for ${await nameOf(booking)} ${rf.status} at Stripe, so the money stayed, but the books still count it as returned (refund ${rf.id}).`,
               'Subscribe the webhook to refund.updated in Stripe so this reverses itself, or correct the balance by hand.',
             );
           }
         } else if (!recorded) {
           await report(
             `refund-missing:${rf.id}`,
-            `A refund of ${usd(rf.amount)} on booking ${booking} is in Stripe but not in the ledger, so the booking still counts that money as paid.`,
+            `A ${usd(rf.amount)} refund for ${await nameOf(booking)} is in Stripe but not in the books, so the booking still counts that money as paid (refund ${rf.id}).`,
             'The webhook retries for three days; if it is still missing tomorrow, record it by hand as a negative payment.',
           );
         }
@@ -210,7 +225,7 @@ export async function reconcileStripe(): Promise<ReconcileResult> {
         if (!(await rowExists(d.id))) {
           await report(
             `dispute-missing:${d.id}`,
-            `A chargeback of ${usd(d.amount)} on booking ${booking} is in Stripe but not in the ledger, so the booking still counts that money as paid.`,
+            `A ${usd(d.amount)} chargeback for ${await nameOf(booking)} is in Stripe but not in the books, so the booking still counts that money as paid (dispute ${d.id}).`,
             'Respond to the dispute in Stripe. Subscribe the webhook to charge.dispute.funds_withdrawn so it records itself.',
           );
         }
@@ -245,7 +260,7 @@ export async function reconcileStripe(): Promise<ReconcileResult> {
       if (!paidIntents.has(r.pi)) {
         await report(
           `phantom:${r.pi}`,
-          `A card payment of $${parseFloat(r.a).toFixed(2)} on booking ${r.client_portal_id} is in the ledger, but Stripe shows no paid checkout for it (${r.pi}).`,
+          `A $${parseFloat(r.a).toFixed(2)} card payment for ${await nameOf(r.client_portal_id)} is in the books, but Stripe shows no paid checkout for it (${r.pi}).`,
           'Look the payment id up in Stripe. A test-mode payment that reached the live ledger looks exactly like this.',
         );
       }

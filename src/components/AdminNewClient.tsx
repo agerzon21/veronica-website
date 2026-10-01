@@ -14,8 +14,10 @@ import {
   OPTIONAL_CLAUSES,
   isContractTemplateKey,
   formatContractMoney,
+  formatContractMoneyExact,
   type ContractTemplateField,
 } from '../data/contract-template';
+import { SALES_TAX_MODES, isSalesTaxMode, salesTaxOn, withSalesTax, type SalesTaxMode } from '../data/sales-tax';
 import { useAdminLang } from '../i18n/admin';
 import {
   type ClientPrefill,
@@ -638,6 +640,13 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * dollar sign in the value makes them render empty with no error anywhere.
    */
   const [totalAmount, setTotalAmount] = useState(moneyDigits(prefill?.total_amount) ?? '');
+  /**
+   * Pennsylvania sales tax (src/data/sales-tax.ts). A new booking adds 6% on
+   * top, Alex's rule from 2026-10-01; out-of-state work is the usual reason to
+   * change it. Sent with the booking, and the server writes the contract's tax
+   * lines from it.
+   */
+  const [salesTax, setSalesTax] = useState<SalesTaxMode>('added');
   const [retainerAmount, setRetainerAmount] = useState(() => {
     const seeded = moneyDigits(prefill?.retainer_amount);
     if (seeded) return seeded;
@@ -1599,6 +1608,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           // has to match total_amount in the rendered contract exactly.
           contract_total_amount: contractTotal,
           contract_retainer_amount: retainer,
+          // Before tax, both of them. The server adds the tax lines.
+          sales_tax: salesTax,
           gallery_password: galleryPassword.trim(),
           // Links portal ↔ conversation so the inbox shows the CLIENT badge
           // and Vero can jump between the two.
@@ -2110,6 +2121,38 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               />
             </Field>
           </Stack>
+
+          <Field label={t.newClient.salesTaxLabel} helpText={t.clientDetail.salesTaxHelp[salesTax]}>
+            <Select
+              id="new-client-sales-tax"
+              value={salesTax}
+              onChange={(e) => { if (isSalesTaxMode(e.target.value)) setSalesTax(e.target.value); }}
+              size={{ base: 'md', md: 'sm' }}
+              fontSize={{ base: 'md', md: 'sm' }}
+              focusBorderColor="brand.accent"
+            >
+              {SALES_TAX_MODES.map((m) => (
+                <option key={m} value={m}>
+                  {t.clientDetail.salesTaxModes[m]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {/* What the client will actually pay, worked out the way the server
+              will write it into the contract, so nobody has to do 6% in their
+              head. The total here is the contract total, travel included. */}
+          {salesTax === 'added' && travelApplication.contractTotal > 0 && (
+            <Text fontSize="sm" color="gray.700" mt={-2}>
+              {t.newClient.salesTaxSummary(
+                formatContractMoneyExact(withSalesTax(travelApplication.contractTotal, 'added')),
+                formatContractMoneyExact(travelApplication.contractTotal),
+                formatContractMoneyExact(salesTaxOn(travelApplication.contractTotal, 'added')),
+                Number.isFinite(parseFloat(retainerAmount))
+                  ? formatContractMoneyExact(withSalesTax(parseFloat(retainerAmount), 'added'))
+                  : null,
+              )}
+            </Text>
+          )}
 
           {/* ─── Gallery Pass ─── */}
           <SectionHeading>{t.newClient.sectionGalleryPass}</SectionHeading>

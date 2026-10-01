@@ -41,6 +41,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { sendEmail } from '../_auto-reply.js';
+import { bookingOwedTotal, salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 
 /**
  * Add calendar months, the way a person counting months on a calendar does.
@@ -302,14 +303,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       /* migration 048 not applied: nothing is marked free yet */
     }
-    const owed = totalAmount !== null && !complimentary ? totalAmount + chargesTotal : null;
+    /**
+     * Pennsylvania sales tax (migration 049): a booking that adds it owes the
+     * tax too, so the photos wait for it like the rest. Allowed to fail like
+     * the two reads above; without the column nothing is taxed.
+     */
+    let salesTax: SalesTaxMode = 'absorbed';
+    try {
+      const t = (await sql`
+        select sales_tax from client_portals where id = ${id}
+      `) as Array<{ sales_tax: string }>;
+      salesTax = salesTaxModeOf(t[0]?.sales_tax);
+    } catch {
+      /* migration 049 not applied: no booking adds tax */
+    }
+    const owed = !complimentary ? bookingOwedTotal(totalAmount, chargesTotal, salesTax) : null;
 
     /**
      * Compared in WHOLE CENTS. As floats, 2500 + 256.22 comes out larger than
      * 2756.22, so a booking paid to the cent could be refused here as owing
      * $0, which is about one in a hundred real total-plus-charge pairs.
+     * bookingOwedTotal already works in cents, so its result is exact.
      */
-    const owedCents = owed !== null ? Math.round(totalAmount! * 100) + Math.round(chargesTotal * 100) : null;
+    const owedCents = owed !== null ? Math.round(owed * 100) : null;
     const paidCents = Math.round(paidToDate * 100);
 
     if (

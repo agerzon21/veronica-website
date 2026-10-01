@@ -1109,11 +1109,12 @@ for (const pg of STATIC_PAGES) {
       weddingPage.packages
         .map(
           (p) =>
-            `\n        <h3>${esc(p.name)} — ${esc(p.coverage)}, ${esc(p.price)}</h3>` +
+            `\n        <h3>${esc(p.name)}: ${esc(p.coverage)}, ${esc(p.price)}</h3>` +
             `\n        <p>${esc(p.tagline)} ${p.buildsOn ? `${esc(p.buildsOn)}: ` : 'Includes: '}${p.includes.map(esc).join('; ')}.</p>`,
         )
         .join('') +
       `\n        <p>${esc(weddingPage.addOns.map((a) => `${a.name}: ${a.detail}`).join(' '))}</p>` +
+      `\n        <p>${esc(weddingPage.salesTax)}</p>` +
       `\n        <h2>Travel</h2>\n        <p>${esc(weddingPage.travel)}</p>` +
       `\n        <h2>Booking</h2>\n        <p>${esc(weddingPage.booking)}</p>` +
       `\n        <h2>Wedding Photography FAQ</h2>` +

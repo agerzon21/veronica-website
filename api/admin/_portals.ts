@@ -22,6 +22,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { loginAdmin, requireAdmin, createAdminSession } from '../_admin-auth.js';
+import { salesTaxModeOf } from '../../src/data/sales-tax.js';
 
 type Row = {
   id: string;
@@ -129,6 +130,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-048 database: nothing is marked free */
     }
 
+    /**
+     * Pennsylvania sales tax per booking (migration 049), so the balances on
+     * this list include the tax a booking adds. Its own query and allowed to
+     * fail like the two above; without the column every booking reads as
+     * 'absorbed', which adds nothing and is what this list showed before.
+     */
+    const salesTaxById = new Map<string, string>();
+    try {
+      const taxRows = (await sql`
+        select id, sales_tax from client_portals
+      `) as Array<{ id: string; sales_tax: string }>;
+      for (const t of taxRows) salesTaxById.set(t.id, t.sales_tax);
+    } catch {
+      /* pre-migration-049 database: no booking adds tax */
+    }
+
     return res.status(200).json({
       success: true,
       level: auth.level,
@@ -147,6 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         paid_to_date: parseFloat(r.paid_to_date),
         charges_total: chargesById.get(r.id) ?? 0,
         complimentary: complimentaryIds.has(r.id),
+        sales_tax: salesTaxModeOf(salesTaxById.get(r.id)),
         drive_url: r.drive_url,
         gallery_delivered_at: r.gallery_delivered_at,
         gallery_expires_at: r.gallery_expires_at,

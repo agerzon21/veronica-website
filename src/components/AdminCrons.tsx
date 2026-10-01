@@ -510,7 +510,7 @@ function LastRunLine({ lastRun }: { lastRun: LastRun | null }) {
     const short = (lastRun.errorMessage ?? '').split('\n')[0].slice(0, 120);
     return (
       <Text fontSize="xs" color="red.600" fontWeight="400">
-        {t.crons.lastRunError(ago, short || '—')}
+        {short ? t.crons.lastRunError(ago, short) : t.crons.lastRunErrorBare(ago)}
       </Text>
     );
   }

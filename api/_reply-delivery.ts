@@ -231,11 +231,26 @@ async function sendInstagram(
 ): Promise<DeliveryResult> {
   const sendResult = await sendIgTextMessage({ recipientIgsid, text });
   if (!sendResult.ok) {
-    // Common failures: outside 24-hour window (Meta returns 400 with
-    // a specific error subcode), account restricted, malformed
-    // recipient. Surface Meta's raw error to the client so the UI
-    // can show something useful.
-    return { ok: false, status: 502, error: sendResult.error || 'IG send failed' };
+    /*
+     * The messaging window. Instagram lets a business reply through the API
+     * only within 24 hours of the person's last message, and answers anything
+     * later with code 10, subcode 2534022, "outside of allowed window". That is
+     * a fact about the thread, not transport trouble, so it is a 422 with a
+     * sentence Vero can act on, as WhatsApp's closed window already is below.
+     * It used to reach the screen as Meta's raw JSON.
+     */
+    const raw = sendResult.error || '';
+    if (/2534022|outside of allowed window/i.test(raw)) {
+      return {
+        ok: false,
+        status: 422,
+        error:
+          "Instagram only lets the site reply within 24 hours of their last message. Copy the text and send it from the Instagram app.",
+      };
+    }
+    // Anything else (account restricted, malformed recipient): Meta's own
+    // words, since there is no better sentence for an unknown failure.
+    return { ok: false, status: 502, error: raw || 'IG send failed' };
   }
 
   const inserted = (await sql`

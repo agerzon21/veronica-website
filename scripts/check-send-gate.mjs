@@ -254,7 +254,80 @@ sendish(false, '', NO_OFFER, 'an empty message');
 sendish(true, 'send it', OFFERED, 'a plain approval');
 sendish(true, 'отправляй', OFFERED, 'a plain approval in Russian');
 
+// ── House style, which rides along ─────────────────────────────────────────
+// Not the gate, but the same file, already loaded, and every word the site
+// writes goes through it. These pin the separator rule (2026-10-01): the model
+// fenced each draft in the chat between "---" lines, which read as long dashes
+// on a line of their own, after the long-dash rule had shipped.
+const { applyHouseStyle } = gate;
+const styleFailures = [];
+let stylePass = 0;
+function style(input, want, note) {
+  const got = applyHouseStyle(input);
+  if (got === want) stylePass++;
+  else styleFailures.push({ note, input, want, got });
+}
+
+style(
+  "Here's a draft:\n\n---\n\nHi Anna,\n\nLooking forward to hearing from you!\n\nWarmly,\nVeronika\nVero Photography\n\n---\n\nLet me know if you'd like any changes!",
+  "Here's a draft:\n\nHi Anna,\n\nLooking forward to hearing from you!\n\nWarmly,\nVeronika\nVero Photography\n\nLet me know if you'd like any changes!",
+  'the chat bubble Alex screenshotted: two fences, each closing up to one blank line',
+);
+style('Draft:\n---\nHi Anna\n---\nLet me know', 'Draft:\n\nHi Anna\n\nLet me know',
+  'a fence with words on both sides keeps the break and loses the mark');
+style('Thanks!\n\n-- \nWarmly,\nVeronika', 'Thanks!\n\nWarmly,\nVeronika',
+  'a signature divider the model copied from sent mail');
+style('---\n\nHi Anna', 'Hi Anna', 'a fence opening the text');
+style('Hi Anna\n\n---', 'Hi Anna', 'a fence closing the text');
+style('Hi\r\n---\r\nThere', 'Hi\r\n\r\nThere', 'CRLF text keeps its line endings');
+style('One\n\n***\n\nTwo\n___\nThree', 'One\n\nTwo\n\nThree', 'the other two markdown rules');
+style('Warmly,\n\u2014\nVero\n\n---\n\nLet me know', 'Warmly,\nVero\n\nLet me know',
+  'a long dash line and a hyphen fence in one reply');
+// Untouched, byte for byte.
+for (const [text, note] of [
+  ['- one\n- two', 'single-hyphen bullets'],
+  ['-\nthe next bullet', 'a lone hyphen is a bullet still being written'],
+  ['Mon-Fri, 570-555-0100', 'hyphens inside words and numbers'],
+  ['see xn--80ak6aa92e.com', 'a double hyphen inside a domain'],
+  ['| a | b |\n|---|---|\n| 1 | 2 |', 'a table divider has pipes on its line'],
+  ['it is a -- b', 'a double hyphen with words on its line is not a rule'],
+  ['Plain text.\n\n\n\nWith gaps.', 'text with no rule keeps even its odd spacing'],
+]) {
+  style(text, text, `untouched: ${note}`);
+}
+
+// The learning backstop's trigger. A false positive here is not cosmetic: the
+// message is stored as a writing rule and loaded into the prompt for every
+// customer. "save that as a draft" was one (2026-10-01), the day the assistant
+// started saving drafts when none was pending.
+const { looksLikeStandingRule } = gate;
+function rule(want, message, note) {
+  const got = looksLikeStandingRule(message);
+  if (got === want) stylePass++;
+  else styleFailures.push({ note, input: message, want: String(want), got: String(got) });
+}
+rule(false, 'save that as a draft', 'saving the draft is not a rule');
+rule(false, 'save this to the reply tab', 'nor is putting it in the Reply tab');
+rule(false, 'ok save that as the reply', 'nor saving it as the reply');
+rule(false, 'сохрани это как черновик', 'the same in Russian');
+rule(true, 'remember this: always sign off with Warmly', 'an explicit memory request is still a rule');
+rule(true, 'save that, never use long dashes', 'save that, about writing, is still a rule');
+rule(true, 'save that as a draft, and never use long dashes', 'a real rule riding along with a draft request');
+rule(true, 'запомни: никогда не используй тире', 'an explicit memory request in Russian');
+
 // ── Report ──────────────────────────────────────────────────────────────────
+if (styleFailures.length) {
+  console.error(`\ncheck-send-gate: house style, ${styleFailures.length} of ${stylePass + styleFailures.length} FAILED\n`);
+  for (const f of styleFailures) {
+    console.error(`  ${f.note}`);
+    console.error(`    input: ${JSON.stringify(f.input)}`);
+    console.error(`    want:  ${JSON.stringify(f.want)}`);
+    console.error(`    got:   ${JSON.stringify(f.got)}\n`);
+  }
+  process.exit(1);
+}
+console.log(`house style: ${stylePass} cases correct (separator lines, and what the rule backstop stores).`);
+
 if (failures.length) {
   console.error(`\ncheck-send-gate: ${failures.length} of ${pass + failures.length} FAILED\n`);
   for (const f of failures) {

@@ -30,6 +30,7 @@ import { requireAdmin } from '../_admin-auth.js';
 // api/ reaches kills the whole admin API at runtime while the build passes.
 // See scripts/check-api-imports.mjs.
 import { formatSchedule, parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
+import { isSalesTaxMode, salesTaxContractVariables, salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
@@ -38,6 +39,7 @@ import {
   requiredVariablesFor,
   stripForeignTypeVariables,
   formatContractMoney,
+  formatContractMoneyExact,
   type ContractTemplateSpec,
 } from '../../src/data/contract-template.js';
 
@@ -202,6 +204,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: false,
         error: 'Contract amounts cannot change after the contract is signed.',
       });
+    }
+
+    /**
+     * Pennsylvania sales tax (migration 049). Read on its own and allowed to
+     * fail, like every column added after the select above was written; a
+     * database without it reads 'absorbed', which adds nothing.
+     *
+     * Adding tax to a signed contract, or taking it off one, changes the price
+     * the client agreed to, so it is refused exactly like an amount edit. The
+     * other change stays open after signing: 'absorbed' and 'exempt' differ
+     * only in whether the sale is reported to Pennsylvania, which is a fact
+     * about where the photos went, not about what the client pays.
+     */
+    let storedSalesTax: SalesTaxMode = 'absorbed';
+    try {
+      const taxRows = (await sql`
+        select sales_tax from client_portals where id = ${id}
+      `) as Array<{ sales_tax: string }>;
+      storedSalesTax = salesTaxModeOf(taxRows[0]?.sales_tax);
+    } catch {
+      /* pre-migration-049 database */
+    }
+    let nextSalesTax: SalesTaxMode | null = null;
+    if (patch.sales_tax !== undefined) {
+      if (!isSalesTaxMode(patch.sales_tax)) {
+        return res.status(400).json({ success: false, error: "sales_tax must be 'added', 'absorbed' or 'exempt'." });
+      }
+      if (
+        contractFrozen &&
+        patch.sales_tax !== storedSalesTax &&
+        (patch.sales_tax === 'added' || storedSalesTax === 'added')
+      ) {
+        return res.status(409).json({
+          success: false,
+          error: 'Sales tax cannot be added to or removed from a signed contract: it is part of the price the client agreed to.',
+        });
+      }
+      nextSalesTax = patch.sales_tax;
     }
 
     // The contract TYPE is patchable while the contract is still pending:
@@ -433,6 +473,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !contractFrozen &&
       (patchedVariables !== null ||
         templateKeyChanged ||
+        nextSalesTax !== null ||
         'contract_total_amount' in patch ||
         'contract_retainer_amount' in patch)
     ) {
@@ -473,6 +514,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Floored, so a retainer larger than the total renders "$0"
             // rather than a negative balance in a signed document.
             remaining_balance: formatContractMoney(Math.max(total - retainer, 0)),
+            // And the tax lines, which follow the same columns and the
+            // booking's tax setting. Empty unless it adds tax, which prunes
+            // the PENNSYLVANIA SALES TAX section away.
+            ...salesTaxContractVariables(total, retainer, nextSalesTax ?? storedSalesTax, formatContractMoneyExact),
           };
         }
       }
@@ -617,11 +662,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (typeof patch.gallery_enabled === 'boolean') {
       await sql`update client_portals set gallery_enabled = ${patch.gallery_enabled}, updated_at = now() where id = ${id}`;
     }
-    // Shot for free, for family or friends (migration 048). A marker for the
-    // admin and for tax, not a price: it changes no balance, so nothing else
-    // here needs to know about it.
+    // Shot for free, for family or friends (migration 048). Nothing here has
+    // to change with it: the screens, checkout and the delivery gate each read
+    // the flag and treat the booking as owing nothing, whatever its total.
     if (typeof patch.complimentary === 'boolean') {
       await sql`update client_portals set complimentary = ${patch.complimentary}, updated_at = now() where id = ${id}`;
+    }
+    // Pennsylvania sales tax, validated above. A pending contract has already
+    // been re-rendered with (or without) its tax lines by the fold.
+    if (nextSalesTax !== null) {
+      await sql`update client_portals set sales_tax = ${nextSalesTax}, updated_at = now() where id = ${id}`;
     }
     // Extending a gallery that is about to expire.
     //

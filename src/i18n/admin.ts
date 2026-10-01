@@ -544,8 +544,8 @@ const dict = {
     // ── AI draft awaiting review (email only) ────────────────────
     draftTitle: { en: 'AI wrote a reply', ru: 'AI написал ответ' },
     draftHelp: {
-      en: "It hasn't been sent. Edit it below if you want, then send — or discard it.",
-      ru: 'Оно не отправлено. Отредактируй ниже, если нужно, потом отправь — или удали.',
+      en: "It hasn't been sent. Send it as it is, edit it first, or discard it.",
+      ru: 'Оно не отправлено. Отправь как есть, сначала отредактируй или удали.',
     },
     draftUse: { en: 'Use this draft', ru: 'Взять черновик' },
     duplicateConfirmTitle: {
@@ -605,6 +605,75 @@ const dict = {
     // Same colon reasoning as above.
     aiStripYourCall: { en: 'your call:', ru: 'за тобой:' },
     followUpBadge: { en: 'Follow up', ru: 'Напомнить' },
+    // ── Follow up, stars and closed leads (migration 050) ─────────────
+    filterAll: { en: 'All', ru: 'Все' },
+    filterStarred: {
+      en: (n: number) => `Starred ${n}`,
+      ru: (n: number) => `Избранные ${n}`,
+    },
+    filterFollowUp: {
+      en: (n: number) => `Follow up ${n}`,
+      ru: (n: number) => `Напомнить ${n}`,
+    },
+    filterEmptyStarred: {
+      en: 'Nothing starred yet. Tap the star at the top of a conversation to keep it here.',
+      ru: 'Пока ничего нет. Нажми на звёздочку вверху переписки, чтобы она появилась здесь.',
+    },
+    filterEmptyFollowUp: {
+      en: 'No leads to follow up right now.',
+      ru: 'Сейчас некому напоминать о себе.',
+    },
+    star: { en: 'Star this conversation', ru: 'Добавить в избранное' },
+    unstar: { en: 'Remove the star', ru: 'Убрать из избранного' },
+    starredLabel: { en: 'Starred', ru: 'В избранном' },
+    showClosed: {
+      en: (n: number) => `Show ${n} closed leads`,
+      ru: (n: number) => `Показать неактуальные (${n})`,
+    },
+    hideClosed: { en: 'Hide closed leads', ru: 'Скрыть неактуальные' },
+    closedReason: {
+      date_passed: { en: 'Date passed', ru: 'Дата прошла' },
+      no_reply: { en: 'No reply', ru: 'Нет ответа' },
+      closed: { en: 'Closed', ru: 'Закрыт' },
+    },
+    closeLead: { en: 'Close lead', ru: 'Отметить неактуальным' },
+    reopenLead: { en: 'Reopen lead', ru: 'Вернуть в работу' },
+    leadClosed: { en: 'Moved to closed leads', ru: 'Перенесено в неактуальные' },
+    leadReopened: { en: 'Lead reopened', ru: 'Возвращено в работу' },
+    followUpHeading: { en: 'Follow up', ru: 'Напомнить о себе' },
+    followUpQuiet: {
+      en: (weeks: number) => `No reply for ${weeks} weeks`,
+      ru: (weeks: number) => `Нет ответа ${weeks} нед.`,
+    },
+    followUpUnanswered: {
+      en: (weeks: number) => `Their message is ${weeks} weeks old`,
+      ru: (weeks: number) => `Их сообщению ${weeks} нед.`,
+    },
+    followUpBody: {
+      en: "A short check-in asks whether they're still looking. The assistant writes it, you edit and send.",
+      ru: 'Короткое сообщение спросит, ищут ли они ещё фотографа. Ассистент напишет черновик, ты поправишь и отправишь.',
+    },
+    followUpDraft: { en: 'Draft a follow-up', ru: 'Написать черновик' },
+    followUpNotInterested: { en: 'Not interested', ru: 'Неинтересно' },
+    draftEdit: { en: 'Edit before sending', ru: 'Отредактировать перед отправкой' },
+    // Instagram lets the site reply only within 24 hours of the customer's last
+    // message (Graph API error 10, subcode 2534022), so past that the reply has
+    // to go from the Instagram app and the panel hands Vero the text instead.
+    // A follow-up is always past it: nobody is flagged before 14 quiet days.
+    followUpInstagram: {
+      en: 'Instagram only lets the site reply within 24 hours of their last message, so this one goes from the Instagram app. Draft it here, then copy it across.',
+      ru: 'Instagram разрешает сайту отвечать только в течение 24 часов после их последнего сообщения, поэтому это сообщение нужно отправить из приложения Instagram. Напиши черновик здесь и скопируй его туда.',
+    },
+    draftInstagramClosed: {
+      en: 'Instagram only lets the site reply within 24 hours of their last message. Copy this, send it from the Instagram app, then discard it here.',
+      ru: 'Instagram разрешает сайту отвечать только в течение 24 часов после их последнего сообщения. Скопируй текст, отправь его из приложения Instagram, а здесь удали черновик.',
+    },
+    draftCopy: { en: 'Copy text', ru: 'Скопировать текст' },
+    draftCopied: { en: 'Copied', ru: 'Скопировано' },
+    draftCopyFailed: {
+      en: 'Could not copy. Select the text above and copy it by hand.',
+      ru: 'Не получилось скопировать. Выдели текст выше и скопируй вручную.',
+    },
     railCollapse: { en: 'Collapse list', ru: 'Свернуть список' },
     railExpand: { en: 'Expand list', ru: 'Развернуть список' },
     draftDiscard: { en: 'Discard', ru: 'Удалить' },
@@ -1773,8 +1842,15 @@ const dict = {
     // Pricing
     totalLabel: { en: 'Total (USD)', ru: 'Общая сумма (USD)' },
     totalHelp: {
-      en: 'Total project cost across the whole booking.',
-      ru: 'Полная стоимость всей съёмки.',
+      en: 'Total project cost across the whole booking, before sales tax.',
+      ru: 'Полная стоимость всей съёмки, без налога.',
+    },
+    salesTaxLabel: { en: 'Pennsylvania sales tax', ru: 'Налог с продаж (Пенсильвания)' },
+    salesTaxSummary: {
+      en: (withTax: string, price: string, tax: string, retainerWithTax: string | null) =>
+        `The client pays ${withTax}: ${price} plus ${tax} tax.${retainerWithTax ? ` Retainer with tax: ${retainerWithTax}.` : ''}`,
+      ru: (withTax: string, price: string, tax: string, retainerWithTax: string | null) =>
+        `Клиент платит ${withTax}: ${price} плюс налог ${tax}.${retainerWithTax ? ` Задаток с налогом: ${retainerWithTax}.` : ''}`,
     },
     retainerLabel: { en: 'Retainer (USD)', ru: 'Задаток (USD)' },
     retainerHelp: {
@@ -2371,6 +2447,31 @@ const dict = {
     },
     complimentaryMark: { en: 'Mark as free', ru: 'Отметить как бесплатную' },
     complimentaryUndo: { en: 'It was a paid booking', ru: 'Это была платная съёмка' },
+    // Pennsylvania sales tax for one booking (migration 049).
+    salesTaxLabel: { en: 'Pennsylvania sales tax', ru: 'Налог с продаж (Пенсильвания)' },
+    salesTaxModes: {
+      added: { en: '6% added on top of the price', ru: '6% сверху цены' },
+      absorbed: { en: 'Included in the price (booked before Oct 1, 2026)', ru: 'Входит в цену (бронь до 1 октября 2026)' },
+      exempt: { en: 'Not a PA sale (photos delivered outside Pennsylvania)', ru: 'Не продажа в PA (фото переданы за пределы штата)' },
+    },
+    salesTaxHelp: {
+      added: {
+        en: "The contract, the client's portal and the card checkout all show the tax as its own line.",
+        ru: 'Налог отдельной строкой в контракте, в портале клиента и при оплате картой.',
+      },
+      absorbed: {
+        en: 'The client pays the agreed price. Vero still owes Pennsylvania 6% of what she receives.',
+        ru: 'Клиент платит оговорённую цену. Вера всё равно платит штату 6% от полученного.',
+      },
+      exempt: {
+        en: 'No Pennsylvania tax. Counted in gross sales only.',
+        ru: 'Налог Пенсильвании не платится. Учитывается только в общей выручке.',
+      },
+    },
+    salesTaxLocked: {
+      en: 'The contract is signed, so tax can no longer be added or taken off.',
+      ru: 'Контракт подписан, поэтому добавить или убрать налог уже нельзя.',
+    },
     chipContractSigned: { en: 'Contract signed', ru: 'Договор подписан' },
     chipContractUnsigned: { en: 'Contract unsigned', ru: 'Договор не подписан' },
     chipGalleryDelivered: { en: 'Gallery sent', ru: 'Галерея отправлена' },
@@ -2386,6 +2487,7 @@ const dict = {
      */
     stripTotal: { en: 'Total', ru: 'Итого' },
     stripCharges: { en: 'Charges', ru: 'Доплаты' },
+    stripTax: { en: 'Tax', ru: 'Налог' },
     stripRetainer: { en: 'Retainer', ru: 'Предоплата' },
     stripPaid: { en: 'Paid', ru: 'Оплачено' },
     tipBadge: { en: 'Tip', ru: 'Чаевые' },
@@ -2442,6 +2544,7 @@ const dict = {
     // Every one of these lines is printed in the client's own portal, which
     // is why the note is guided and required rather than optional.
     statCharges: { en: 'Charges', ru: 'Доплаты' },
+    statTax: { en: 'Sales tax', ru: 'Налог' },
 
     // Per-event insurance. There is no annual policy, so cover is bought for
     // one event at a time and recorded against the booking it belongs to.
@@ -2575,8 +2678,8 @@ const dict = {
     },
     totalAmountLabel: { en: 'Total Amount (USD)', ru: 'Общая сумма (USD)' },
     totalAmountHelp: {
-      en: 'What you charged. Editable until the contract is signed (for full-mode rows).',
-      ru: 'Сколько ты взяла за съёмку. Можно менять, пока контракт не подписан (для полных клиентов).',
+      en: 'What you charged, before sales tax. Editable until the contract is signed (for full-mode rows).',
+      ru: 'Сколько ты взяла за съёмку, без налога. Можно менять, пока контракт не подписан (для полных клиентов).',
     },
     retainerLabel: { en: 'Retainer / Deposit (USD)', ru: 'Задаток / депозит (USD)' },
     retainerHelp: {
@@ -2930,6 +3033,29 @@ const dict = {
     // over, so selling to PA clients needs a licence. It runs five years,
     // which is exactly long enough for everyone to forget it exists.
     licTitle: { en: 'PA sales tax licence', ru: 'Лицензия на налог с продаж (PA)' },
+    // ─── PA sales tax by quarter ─────────────────────
+    taxReportTitle: { en: 'Sales tax by quarter', ru: 'Налог с продаж по кварталам' },
+    taxReportIntro: {
+      en: 'What goes on each myPATH return. Tips, free shoots and card fee discounts are left out, and work delivered out of state counts in gross sales only. It is only what was logged here, so check it against Vero\'s own records before filing.',
+      ru: 'Что вносить в каждую декларацию myPATH. Чаевые, бесплатные съёмки и скидки на комиссию не учитываются, а работа за пределами штата входит только в общую выручку. Здесь только то, что записано в системе, поэтому перед подачей сверь с записями Веры.',
+    },
+    taxReportQuarter: {
+      en: (q: number, year: number) => `Q${q} ${year}, ${['Jan to Mar', 'Apr to Jun', 'Jul to Sep', 'Oct to Dec'][q - 1]}`,
+      ru: (q: number, year: number) => `${q} квартал ${year}, ${['с января по март', 'с апреля по июнь', 'с июля по сентябрь', 'с октября по декабрь'][q - 1]}`,
+    },
+    taxReportDue: { en: 'Due', ru: 'Срок' },
+    taxReportGross: { en: 'Gross sales', ru: 'Общая выручка' },
+    taxReportTaxable: { en: 'Taxable sales', ru: 'Облагаемые продажи' },
+    taxReportTax: { en: 'Tax', ru: 'Налог' },
+    taxReportShow: { en: 'Show payments', ru: 'Показать платежи' },
+    taxReportHide: { en: 'Hide payments', ru: 'Скрыть платежи' },
+    taxReportNone: { en: 'No payments logged yet.', ru: 'Платежей пока нет.' },
+    taxReportFailed: { en: 'Could not load the sales tax report.', ru: 'Не удалось загрузить отчёт по налогу.' },
+    taxReportModeShort: {
+      added: { en: '6% added', ru: '+6%' },
+      absorbed: { en: 'in the price', ru: 'в цене' },
+      exempt: { en: 'out of state', ru: 'вне штата' },
+    },
     licNone: {
       en: 'No licence recorded. Photography is taxable in Pennsylvania, so selling to PA clients needs one.',
       ru: 'Лицензия не указана. Фотоуслуги в Пенсильвании облагаются налогом с продаж.',
@@ -3993,6 +4119,11 @@ const dict = {
     lastRunError: {
       en: (ago: string, msg: string) => `Errored ${ago}: ${msg}`,
       ru: (ago: string, msg: string) => `Ошибка ${ago}: ${msg}`,
+    },
+    // A failure that left no message. It used to print "Errored 2h ago: —".
+    lastRunErrorBare: {
+      en: (ago: string) => `Errored ${ago}`,
+      ru: (ago: string) => `Ошибка ${ago}`,
     },
     lastRunRunning: {
       en: (ago: string) => `Running (started ${ago})`,

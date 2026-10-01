@@ -113,6 +113,16 @@ export function businessFactsForCustomerReplies(): string {
     sections.push(`BOOKING\n- ${trim(data.booking)}`);
   }
 
+  /*
+   * From 2026-10-01 every new booking adds 6% Pennsylvania sales tax on top
+   * (src/data/sales-tax.ts), so a price quoted without it is a price the
+   * contract will contradict. Bookings made before then are grandfathered,
+   * which is why this speaks to new enquiries only.
+   */
+  sections.push(
+    `SALES TAX\n- ${trim((data as { salesTax?: string }).salesTax ?? 'Prices are before 6% Pennsylvania sales tax.')}\n- Whenever you give a price or a starting figure to a new enquiry, say it is plus 6% PA sales tax. Work delivered outside Pennsylvania is not taxed; if the wedding or session is out of state, say Vero will confirm the tax in the contract.`,
+  );
+
   const deposit = faqAnswer('deposit');
   if (deposit) {
     sections.push(`RETAINER AND BALANCE\n- ${deposit}`);

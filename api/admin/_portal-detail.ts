@@ -13,6 +13,7 @@ import { getDb } from '../_db.js';
 import { makeGalleryPreviewToken } from '../portal/_gallery-gate.js';
 import { isStripeTestMode } from '../_stripe.js';
 import { requireAdmin } from '../_admin-auth.js';
+import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 
 type PortalRow = {
   id: string;
@@ -244,6 +245,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-048 database: nothing is marked free */
     }
 
+    /** Pennsylvania sales tax (migration 049). Allowed to fail the same way. */
+    let salesTax: SalesTaxMode = 'absorbed';
+    try {
+      const taxRows = (await sql`
+        select sales_tax from client_portals where id = ${id}
+      `) as Array<{ sales_tax: string }>;
+      salesTax = salesTaxModeOf(taxRows[0]?.sales_tax);
+    } catch {
+      /* pre-migration-049 database: no booking adds tax */
+    }
+
     /**
      * Five fields the CLIENT portal view renders that this endpoint never
      * needed, added so the admin panel can render that exact component in a
@@ -282,6 +294,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // screen that prints a remaining balance needs this third number.
         charges_total: chargesTotal,
         complimentary,
+        sales_tax: salesTax,
         // We never return the raw blob URL — only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,

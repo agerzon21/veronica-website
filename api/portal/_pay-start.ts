@@ -31,6 +31,14 @@ import { getDb } from '../_db.js';
 import { checkPortalPassword } from './_password.js';
 import { createCheckoutSession, isStripeConfigured, isStripeTestMode } from '../_stripe.js';
 import { CARD_PAYMENTS_MODE } from '../../src/data/payment-handles.js';
+import {
+  PA_SALES_TAX_LABEL,
+  bookingOwedTotal,
+  preTaxOf,
+  retainerOwed,
+  salesTaxModeOf,
+  type SalesTaxMode,
+} from '../../src/data/sales-tax.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
 
@@ -220,11 +228,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       row.contract_retainer_amount !== null ? parseFloat(row.contract_retainer_amount) : 0;
 
     /**
+     * Pennsylvania sales tax (migration 049). When the booking adds it, every
+     * figure below is the taxed one, because that is what the contract says
+     * and what the portal shows. Read on its own and allowed to fail: without
+     * the column nothing is taxed, which is how every booking worked before.
+     */
+    let salesTax: SalesTaxMode = 'absorbed';
+    try {
+      const t = (await sql`
+        select sales_tax from client_portals where id = ${row.id}
+      `) as Array<{ sales_tax: string }>;
+      salesTax = salesTaxModeOf(t[0]?.sales_tax);
+    } catch {
+      /* migration 049 not applied: no booking adds tax */
+    }
+
+    /**
      * What is actually owed right now.
      *
-     * The balance is the same arithmetic the other eight places use: total plus
-     * charges minus paid, floored at zero. Never total minus paid, which
-     * silently drops every charge.
+     * The balance is the same arithmetic every other place uses: total plus
+     * charges, plus sales tax when the booking adds it, minus paid, floored at
+     * zero. Never total minus paid, which silently drops every charge.
      *
      * The retainer is what is left of the retainer specifically, so a client
      * who has already paid part of it is asked for the remainder rather than
@@ -234,7 +258,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // In whole cents, because this is what Stripe will charge, and dollars as
     // floats are exactly how 2500 + 256.22 comes out larger than 2756.22.
     const cents = (d: number) => Math.round(d * 100);
-    const outstandingCents = Math.max(cents(total ?? 0) + cents(charges) - cents(paid), 0);
+    const owed = bookingOwedTotal(total ?? 0, charges, salesTax) ?? 0;
+    const outstandingCents = Math.max(cents(owed) - cents(paid), 0);
     const outstanding = outstandingCents / 100;
     const tipsTotal = parseFloat(row.tips_total ?? '0') || 0;
 
@@ -268,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
     } else if (kind === 'retainer') {
-      amount = Math.min(Math.max(cents(retainer) - cents(paid), 0), outstandingCents) / 100;
+      amount = Math.min(Math.max(cents(retainerOwed(retainer, salesTax) ?? 0) - cents(paid), 0), outstandingCents) / 100;
     } else {
       amount = outstanding;
     }
@@ -317,6 +342,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paidToDate: kind === 'tip' ? tipsTotal : paid,
       clientEmail: row.client_email,
       description: label,
+      // Its own line on the Stripe page and receipt. A tip is not a sale, so
+      // it never carries tax.
+      salesTax: kind !== 'tip' && salesTax === 'added' ? (cents(amount) - cents(preTaxOf(amount, salesTax))) / 100 : 0,
+      salesTaxLabel: `Pennsylvania sales tax (${PA_SALES_TAX_LABEL})`,
       // The portal reads its own state on load, so returning to it is enough
       // for the client to see the payment reflected. The query flag only
       // decides which message they land on.

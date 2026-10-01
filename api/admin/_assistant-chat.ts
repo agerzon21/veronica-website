@@ -320,6 +320,20 @@ interface StoredMessage {
   name?: string;
 }
 
+/**
+ * A stored assistant turn, cleaned by today's house style rather than the one
+ * it was written under. Turns are saved as they were cleaned at the time, so a
+ * rule added later (the separator lines, 2026-10-01) would otherwise go on
+ * showing in every old bubble, and go on teaching the model the habit through
+ * its own history. Applied on both reads. applyHouseStyle hands clean text
+ * back unchanged, so a turn that needs nothing costs nothing.
+ */
+function inHouseStyle(m: StoredMessage): StoredMessage {
+  return m.role === 'assistant' && typeof m.content === 'string' && m.content
+    ? { ...m, content: applyHouseStyle(m.content) }
+    : m;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -344,7 +358,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         rows.find((r) => r.slot === slot)?.messages ?? rows[0]?.messages ?? [];
       // Filter down to just user + assistant text turns for the UI —
       // tool_calls / tool responses / system prompt are noise.
-      const displayable = messages.filter(
+      const displayable = messages.map(inHouseStyle).filter(
         (m) => isDisplayableTurn(m),
       );
       return res.status(200).json({ success: true, messages: displayable });
@@ -372,8 +386,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const existing = (await sql`
       SELECT slot, messages FROM assistant_chats WHERE slot = ANY(${readSlots(slot)})
     `) as Array<{ slot: string; messages: StoredMessage[] }>;
-    const priorMessages: StoredMessage[] =
-      existing.find((r) => r.slot === slot)?.messages ?? existing[0]?.messages ?? [];
+    const priorMessages: StoredMessage[] = (
+      existing.find((r) => r.slot === slot)?.messages ?? existing[0]?.messages ?? []
+    ).map(inHouseStyle);
 
     // Load the full ai_context table into the system prompt so the
     // assistant has instant reference for everything it knows,
@@ -793,11 +808,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // fine. Every failure is rendered, not just the first: two failures used
     // to show as one.
     const sendBlocks = toolFailures.filter((f) => f.tool === 'send_reply');
-    const writeBlocks = capturedRule ? [] : toolFailures.filter((f) => f.tool !== 'send_reply');
+    const seenSendFailures = new Set<string>();
+    // A rescued rule excuses a failed NOTE, and only that. It used to blank
+    // every write failure, so a draft that was never saved went unreported on
+    // any turn the backstop also caught a rule: the Reply tab kept its old
+    // text, or none, while the chat said nothing was wrong.
+    const writeBlocks = toolFailures.filter(
+      (f) => f.tool !== 'send_reply' && !(capturedRule && f.tool !== 'update_draft'),
+    );
     // veroNote, never `error`: see the toolFailures declaration. An empty or
     // absent note is a deliberate silence, not a missing string.
     for (const f of sendBlocks) {
       if (!f.veroNote) continue;
+      const key = `${f.tool}:${f.veroNote}`;
+      if (seenSendFailures.has(key)) continue;
+      seenSendFailures.add(key);
       const text =
         f.veroNote === AWAITING_APPROVAL
           ? language === 'ru'
@@ -806,13 +831,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : f.veroNote;
       newlyPersistedMessages.push({ role: 'assistant', content: `⚠️ ${text}` });
     }
+    // One line per DISTINCT failure. The model sometimes retries a refused
+    // write in the same turn, and the identical refusal printed twice, which
+    // reads as two problems (Alex, 2026-10-01). Named for what failed: a draft
+    // is not a note.
+    const seenFailures = new Set<string>();
     for (const f of writeBlocks) {
       if (!f.veroNote) continue;
-      newlyPersistedMessages.push({
-        role: 'assistant',
-        content:
-          (language === 'ru' ? '⚠️ Заметка НЕ сохранена: ' : '⚠️ Note NOT saved: ') + f.veroNote,
-      });
+      const key = `${f.tool}:${f.veroNote}`;
+      if (seenFailures.has(key)) continue;
+      seenFailures.add(key);
+      const label =
+        f.tool === 'update_draft'
+          ? language === 'ru' ? '⚠️ Черновик НЕ сохранён: ' : '⚠️ Draft NOT saved: '
+          : language === 'ru' ? '⚠️ Заметка НЕ сохранена: ' : '⚠️ Note NOT saved: ';
+      newlyPersistedMessages.push({ role: 'assistant', content: label + f.veroNote });
     }
 
     // Persist the thread, bounded. Vero keeps far more scrollback than
@@ -1074,7 +1107,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'update_draft',
       description:
-        "Replace the pending AI draft for a conversation with an improved version, WITHOUT sending it. Call this whenever you produce a complete, ready-to-send rewrite of the draft Vero is refining, so the Reply tab shows your latest version instead of the original. Do NOT call it while discussing options, offering alternatives, or asking a question — only when the text you are handing over could be sent as-is. NEVER ask permission before calling this; updating an unsent draft is not sending it. This does not send anything and does not touch whatever Vero has typed in her own reply box; use send_reply for sending.",
+        "Save a reply as the conversation's draft, WITHOUT sending it: it replaces the pending draft, or becomes the draft when there is none. Call this whenever you produce a complete, ready-to-send message for a conversation (a rewrite of the draft Vero is refining, or a new one such as a follow-up she asked for), so the Reply tab shows it ready to edit and send. Do NOT call it while discussing options, offering alternatives, or asking a question: only when the text you are handing over could be sent as-is. NEVER ask permission before calling this; saving an unsent draft is not sending it. This does not send anything and does not touch whatever Vero has typed in her own reply box; use send_reply for sending.",
       parameters: {
         type: 'object',
         properties: {
@@ -2027,11 +2060,37 @@ async function executeToolCall(
       RETURNING id
     `) as Array<{ id: string }>;
 
+    /**
+     * NO PENDING DRAFT: SAVE IT AS ONE. This used to refuse ("there is no
+     * pending draft to replace") and tell the model to show the text in the
+     * chat instead, so asking the assistant for a follow-up on a quiet thread
+     * produced the message in the chat and a "NOT saved" notice, and nothing in
+     * the Reply tab to edit or send (Alex, 2026-10-01). A new draft row is what
+     * the drafter itself writes (draftOnDemand in api/_ai-reply.ts), so the
+     * Reply tab treats it exactly the same, and nothing is sent.
+     */
     if (updated.length === 0) {
-      return {
-        error:
-          'There is no pending draft on that conversation to replace. It may have been sent or discarded already. Show Vero the improved text in the chat instead.',
-      };
+      const convo = (await sql`
+        SELECT platform FROM conversations WHERE id = ${conversationId} LIMIT 1
+      `) as Array<{ platform: string }>;
+      if (convo.length === 0) return { error: 'No conversation with that id.' };
+      const created = (await sql`
+        INSERT INTO messages (
+          conversation_id, direction, sender, channel, body, sent_at, ai_model, status
+        )
+        VALUES (
+          ${conversationId}, 'outbound', 'ai', ${convo[0].platform}, ${text}, NOW(), ${MODEL}, 'draft'
+        )
+        RETURNING id
+      `) as Array<{ id: string }>;
+      dbWrites.push({
+        type: 'created',
+        category: 'draft',
+        label: 'Draft saved',
+        content_summary: contentSummary,
+        draft_text: text,
+      });
+      return { success: true, action: 'draft_created', message_id: created[0].id };
     }
 
     dbWrites.push({
@@ -2636,9 +2695,9 @@ mailed without permission.
 - One approval sends one message. If you have already sent this turn, ask her
   again before sending anything else.
 
-**Whenever you write a complete, ready-to-send rewrite of a draft she is already refining, also call update_draft with that exact text.** That replaces the pending draft behind the Reply tab so it shows your latest version rather than the original, which matters when she does not send straight away and comes back to it later. It sends nothing. Call it only when the text could go out as-is: not while you are offering options, asking a question, or thinking out loud. Do it in the same turn you show her the rewrite, and do not ask permission for it — updating an unsent draft is not sending, and she can still edit or discard it.
+**Whenever you write a complete, ready-to-send message for a conversation, whether a rewrite of a draft she is refining or a new one she asked for (a follow-up, say), also call update_draft with that exact text.** When there is no draft yet it becomes the draft. That replaces the pending draft behind the Reply tab so it shows your latest version rather than the original, which matters when she does not send straight away and comes back to it later. It sends nothing. Call it only when the text could go out as-is: not while you are offering options, asking a question, or thinking out loud. Do it in the same turn you show her the rewrite, and do not ask permission for it: updating an unsent draft is not sending, and she can still edit or discard it.
 
-If she'd rather send it herself, that's fine — the draft is right there in the chat for her to copy. It goes out as Vero herself, on whatever channel the conversation uses; you don't need to think about Instagram vs email, that's handled.
+If she'd rather send it herself, that's fine: the draft is right there in the chat for her to copy. It goes out as Vero herself, on whatever channel the conversation uses. One limit: Instagram only accepts a reply from here within 24 hours of the customer's last message. If their last message is older than that, do not try send_reply on an Instagram thread; save the draft and tell her to copy it into the Instagram app.
 
 ## HOW THE ADMIN PANEL WORKS (answer her questions from this)
 Vero will ask you how to DO things — "I finished a gallery, how do I give the client access?", "how do I add a photo to the site?". Answer from the facts below. These are maintained by Alex and you cannot edit or delete them; if she says one is wrong, tell her to message Alex rather than trying to change it.
