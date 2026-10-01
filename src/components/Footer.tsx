@@ -44,12 +44,10 @@ const PAD_BOTTOM = 18; // px, what stops the seal looking snug against the edge
  * copyright at 9px, where the theme's smallest token is 0.6875rem (11px), used
  * by eyebrow, metaCaption and formLabel.
  *
- * They now scale between the floor and the ctaLabel size rather than taking one
- * value, because the whole row has to fit one line of a phone: two links, the
- * seal's column, two more. Collaborate and Contact are the wider pair, 114px of
- * words at 13px, and Chakra has no breakpoint between 320 and 480 to switch at.
- * So everything from about 406px up gets the full 13px, and below that the
- * links shrink with the screen, to 10.2px at 320.
+ * They are flat now, at ctaLabel's 13px and that 11px floor, on every screen.
+ * They used to shrink with the viewport, to 10px on a 320px phone, so that the
+ * whole row (two links, the seal's column, two more) fitted while the right
+ * pair said Collaborate. Collab fits a 320px phone at full size.
  */
 
 // Seal tints. The ink is brand.accentText and the ring brand.accent in every
@@ -90,7 +88,7 @@ const FootLink = ({ to, children }: { to: string; children: React.ReactNode }) =
     pt="6px"
     h="44px"
     px="clamp(4px, 1.55vw, 6px)"
-    fontSize="clamp(0.625rem, 3.2vw, 0.8125rem)"
+    fontSize="0.8125rem"
     lineHeight="12px"
     letterSpacing="0.04em"
     whiteSpace="nowrap"
@@ -133,10 +131,15 @@ const Footer = () => {
 
               Wrapping is not an option: a wrapped pair strands a tick at the
               end of a line, which is what the six link version did on every
-              phone. Instead the type, the padding and the tick gaps shrink
-              together below about 406px, and the seal's column narrows with
-              them, but never below 56px, its round link's width, so a tap
-              beside the seal still lands on the word it was aimed at. */}
+              phone. Instead the padding and the tick gaps tighten on the
+              narrowest phones, and the seal's column narrows with them, but
+              never below 56px, its round link's width, so a tap beside the
+              seal still lands on the word it was aimed at.
+
+              COLLAB, NOT COLLABORATE. At full length the right pair was 38px
+              wider than the left, which threw the row off balance and forced
+              the type down to 10px on a 320px phone. Two Ls on purpose: Colab
+              with one is Google's notebook product. */}
           <Flex flex="1 1 0" minW={0} align="flex-start" justify="flex-end" columnGap="clamp(4px, 1.9vw, 7px)">
             <FootLink to="/privacy">Privacy</FootLink>
             <Tick />
@@ -147,12 +150,12 @@ const Footer = () => {
               below their words. pointerEvents none hands those taps through to
               the links instead of swallowing them. */}
           <Flex direction="column" align="center" justify="flex-end" flexShrink={0} w="clamp(56px, 19vw, 146px)" h="44px">
-            <Text m={0} pointerEvents="none" textAlign="center" whiteSpace="nowrap" fontSize="clamp(0.625rem, 2.9vw, 0.6875rem)" lineHeight="14px" letterSpacing="0.06em" color="brand.mutedText">
+            <Text m={0} pointerEvents="none" textAlign="center" whiteSpace="nowrap" fontSize="0.6875rem" lineHeight="14px" letterSpacing="0.06em" color="brand.mutedText">
               © {year} Vero Photography
             </Text>
           </Flex>
           <Flex flex="1 1 0" minW={0} align="flex-start" justify="flex-start" columnGap="clamp(4px, 1.9vw, 7px)">
-            <FootLink to="/collaborate">Collaborate</FootLink>
+            <FootLink to="/collaborate">Collab</FootLink>
             <Tick />
             <FootLink to="/contact">Contact</FootLink>
           </Flex>
