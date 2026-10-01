@@ -229,14 +229,14 @@ silence.** It now blocks the two false claims and allows the true one.
 
 ## 5. PENDING CLIENT THREADS
 
-**Jordan & Dante** — wedding enquiry, four questions. The reply has been
+**Jordan & Dante**, a wedding enquiry with four questions. The reply has been
 redrafted several times. **I do not know whether it was sent.** Check. The
 insurance answer should now read as arranging event cover per booking. Two
 things that may still be wrong and are not gated in code: it says "Stripe"
 where the site lists card/Zelle/Venmo/CashApp, and it describes "$1,300" as a
 package when it is Wedding Day ($900) plus a second photographer ($400).
 
-**April Mathews** — wedding **2027-07-31**, Intimate Wedding, $500, 11 AM to
+**April Mathews**, wedding **2027-07-31**: Intimate Wedding, $500, 11 AM to
 2 PM, contract **pending**. Outstanding:
 - **Lake Scranton needs a full street address.** Currently a place name, so
   the Directions button has nothing to open.
@@ -250,12 +250,12 @@ package when it is Wedding Day ($900) plus a second photographer ($400).
 - Both Nay Aug Park and Lake Scranton are public/utility land and may need
   permits.
 
-**Goldy Noe** — family session enquiry, Lancaster. Her preferred date was
+**Goldy Noe**, a family session enquiry, Lancaster. Her preferred date was
 **the day she submitted the form**. Needs clarifying before anything else.
 Everything else the contract needs was already in her message except
 **coverage hours**.
 
-**Ryan Schmucker** — videographer, Lancaster, nine years at Johns Hopkins, no
+**Ryan Schmucker**, videographer, Lancaster, nine years at Johns Hopkins, no
 wedding reel. Vero replied asking for a call. **Do not add him to the vendors
 page until he has actually worked a day**: that list is recommendations to
 couples and it is her reputation being lent out. Before he shoots anything,
