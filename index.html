@@ -293,6 +293,11 @@
           <li><a href="/about">About Veronika</a></li>
           <li><a href="/journal">Journal</a></li>
           <li><a href="/contact">Contact</a></li>
+          <!-- For photographers and videographers, not for couples. In the
+               nav because the prerender link-walker follows THIS list, not the
+               React footer: a sitemap URL nothing here reaches fails the build
+               by design, which is how /collaborate was caught. -->
+          <li><a href="/collaborate">Collaborate: for videographers and second shooters</a></li>
         </ul>
       </nav>
       <p>
