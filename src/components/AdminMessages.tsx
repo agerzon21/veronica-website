@@ -29,7 +29,7 @@ import {
   useBreakpointValue,
   Input,
 } from '@chakra-ui/react';
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import FaCheckCircle from '../icons/fa/FaCheckCircle';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
@@ -2468,12 +2468,14 @@ function ConversationView({
     return out;
   }, [detail]);
 
-  const phoneSuggestions = useMemo<FoundPhone[]>(() => {
-    const portalId = detail?.client_portal_id ?? detail?.linked_client_portal_id ?? null;
-    if (!portalId) return [];
-    // Already has one: this offers to FILL an empty field, never to replace a
-    // number a person put there.
-    if ((detail?.linked_client_phone ?? '').trim()) return [];
+  /**
+   * Every number the client typed into this thread, oldest first, minus any
+   * Vero turned down. ONE reading feeds three places, so they cannot disagree
+   * about which number the thread holds: the suggestion below (a booking
+   * exists and has no number), the Summary's GATHERED list, and the New Client
+   * form's prefill (no booking yet, which is when a lead shares a number most).
+   */
+  const threadPhones = useMemo<FoundPhone[]>(() => {
     const seen = new Set<string>(dismissedPhones);
     const out: FoundPhone[] = [];
     for (const m of messages) {
@@ -2485,7 +2487,16 @@ function ConversationView({
       }
     }
     return out;
-  }, [messages, detail, dismissedPhones]);
+  }, [messages, dismissedPhones]);
+
+  const phoneSuggestions = useMemo<FoundPhone[]>(() => {
+    const portalId = detail?.client_portal_id ?? detail?.linked_client_portal_id ?? null;
+    if (!portalId) return [];
+    // Already has one: this offers to FILL an empty field, never to replace a
+    // number a person put there.
+    if ((detail?.linked_client_phone ?? '').trim()) return [];
+    return threadPhones;
+  }, [threadPhones, detail]);
 
   const dismissPhone = useCallback((digits: string) => {
     setDismissedPhones((prev) => {
@@ -3117,6 +3128,13 @@ function ConversationView({
       client_full_name: fact('client_name') ?? b?.client_full_name ?? null,
       partner_full_name: fact('partner_name') ?? b?.partner_full_name ?? null,
       client_email: fact('client_email') ?? b?.client_email ?? null,
+      // Not a summariser field, on purpose: a number that gets dialled comes
+      // from the bytes the client sent (threadPhones), never from the model's
+      // prose. Hers wins, as everywhere above. Otherwise the newest number the
+      // client gave, and the form shows it for her to check before saving.
+      client_phone:
+        fact('client_phone') ??
+        (threadPhones.length > 0 ? formatPhone(threadPhones[threadPhones.length - 1].digits) : null),
       // Through moneyDigits, because these two are the only prefill fields
       // that have to come out the other end as a NUMBER. A hand-recorded
       // price reads "$500" and the Total input is type="number", which takes
@@ -3731,6 +3749,7 @@ function ConversationView({
               // the cached summary whenever it's still valid.
               onRegenerate={() => loadAiSummary({ force: true })}
               phoneSuggestions={phoneSuggestions}
+              threadPhones={threadPhones}
               onAddPhone={addPhoneToClient}
               onDismissPhone={dismissPhone}
               recordedFacts={recordedFacts}
@@ -4597,6 +4616,25 @@ const FACT_LABEL: Record<string, string> = {
   notes: 'Notes',
 };
 
+/** The small tag after a GATHERED line that says whose words it came from. */
+function FactSource({ children }: { children: ReactNode }) {
+  return (
+    <Text
+      fontSize="2xs"
+      color="brand.accentText"
+      border="1px solid"
+      borderColor="brand.accentBorder"
+      borderRadius="sm"
+      px={1.5}
+      flexShrink={0}
+      lineHeight="1.6"
+      whiteSpace="nowrap"
+    >
+      {children}
+    </Text>
+  );
+}
+
 function SummaryCard({
   summary,
   loading,
@@ -4606,6 +4644,7 @@ function SummaryCard({
   onRegenerate,
   inPanel = false,
   phoneSuggestions = EMPTY_PHONES,
+  threadPhones = EMPTY_PHONES,
   onAddPhone,
   onDismissPhone,
   recordedFacts = EMPTY_FACTS,
@@ -4626,6 +4665,12 @@ function SummaryCard({
    * Acting on one, either way, removes it.
    */
   phoneSuggestions?: FoundPhone[];
+  /**
+   * Every number the client typed into the thread, whether or not a booking
+   * exists yet. Listed under GATHERED, because a lead that sends a number
+   * before there is a client to put it on has still told us something.
+   */
+  threadPhones?: FoundPhone[];
   onAddPhone?: (digits: string) => void;
   onDismissPhone?: (digits: string) => void;
   /**
@@ -4662,6 +4707,24 @@ function SummaryCard({
       return !supersededBy(line.slice(0, colon), fields);
     });
   }, [localized.gathered, recordedFacts]);
+
+  /**
+   * The client's numbers, as GATHERED lines of their own.
+   *
+   * Read out of their message rather than the model's summary, which is why
+   * this does not wait on a summary version bump and why the model leaving a
+   * reply that is nothing but a number out of its list no longer loses it.
+   * Dropped when Vero
+   * recorded a phone herself (hers wins), when the suggestion card above is
+   * already offering that number, and when one of the model's own lines
+   * carries the same digits.
+   */
+  const phoneLines = useMemo(() => {
+    if (recordedFacts.some((f) => f.field === 'client_phone')) return [];
+    const offered = new Set(phoneSuggestions.map((p) => p.digits));
+    const modelDigits = survivingGathered.map((line) => line.replace(/\D/g, ''));
+    return threadPhones.filter((p) => !offered.has(p.digits) && !modelDigits.some((d) => d.includes(p.digits)));
+  }, [threadPhones, phoneSuggestions, recordedFacts, survivingGathered]);
 
   const strings = {
     header: t.messages.summaryTitle,
@@ -4830,10 +4893,13 @@ function SummaryCard({
                     {t.messages.phoneSuggestBody}
                   </Text>
                   {/* The sentence it came out of. Vero decides from the
-                      context, not from the digits alone. */}
-                  <Text fontSize="xs" color="gray.500" mt={1.5} fontStyle="italic" noOfLines={2}>
-                    &ldquo;{found.context}&rdquo;
-                  </Text>
+                      context, not from the digits alone. Skipped when the
+                      message WAS the number, where it only repeats it. */}
+                  {found.context !== found.raw && (
+                    <Text fontSize="xs" color="gray.500" mt={1.5} fontStyle="italic" noOfLines={2}>
+                      &ldquo;{found.context}&rdquo;
+                    </Text>
+                  )}
                   <Flex gap={2} mt={2} wrap="wrap">
                     <Button
                       size="sm"
@@ -4880,7 +4946,7 @@ function SummaryCard({
                 </Text>
               </Box>
 
-              {(recordedFacts.length > 0 || survivingGathered.length > 0) && (
+              {(recordedFacts.length > 0 || phoneLines.length > 0 || survivingGathered.length > 0) && (
                 <Box>
                   <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={1}>
                     {strings.gathered}
@@ -4899,19 +4965,7 @@ function SummaryCard({
                             {FACT_LABEL[f.field] ?? f.field.replace(/_/g, ' ')}:{' '}
                             <Text as="span" fontWeight="400">{formatPhoneNumbersInText(f.value)}</Text>
                           </Text>
-                          <Text
-                            fontSize="2xs"
-                            color="brand.accentText"
-                            border="1px solid"
-                            borderColor="brand.accentBorder"
-                            borderRadius="sm"
-                            px={1.5}
-                            flexShrink={0}
-                            lineHeight="1.6"
-                            whiteSpace="nowrap"
-                          >
-                            {t.messages.factsFromYou}
-                          </Text>
+                          <FactSource>{t.messages.factsFromYou}</FactSource>
                         </Flex>
                         {/* The words she typed, beside what they became. This
                             is the whole reason the quote is stored: a value on
@@ -4920,6 +4974,27 @@ function SummaryCard({
                         {f.quote && (
                           <Text fontSize="xs" color="gray.400" fontStyle="italic" ml={5} noOfLines={1}>
                             &ldquo;{f.quote}&rdquo;
+                          </Text>
+                        )}
+                      </Box>
+                    ))}
+                    {/* THEIRS NEXT: read out of the client's own message, so it
+                        outranks the model's paraphrase below. The words around
+                        it show when there are any, because "the venue's number
+                        is" is how a wrong number gets caught before it is saved. */}
+                    {phoneLines.map((p) => (
+                      <Box key={`phone-${p.digits}`}>
+                        <Flex gap={2} align="flex-start">
+                          <Text fontSize="sm" color="brand.accent" lineHeight="1.5">•</Text>
+                          <Text fontSize="sm" color="gray.800" lineHeight="1.5" fontWeight="500">
+                            {FACT_LABEL.client_phone}:{' '}
+                            <Text as="span" fontWeight="400">{formatPhone(p.digits)}</Text>
+                          </Text>
+                          <FactSource>{t.messages.phoneFromThread}</FactSource>
+                        </Flex>
+                        {p.context !== p.raw && (
+                          <Text fontSize="xs" color="gray.400" fontStyle="italic" ml={5} noOfLines={1}>
+                            &ldquo;{p.context}&rdquo;
                           </Text>
                         )}
                       </Box>

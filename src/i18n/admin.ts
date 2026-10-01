@@ -261,9 +261,13 @@ const dict = {
     // and for the column header's accessible name. Per column, because
     // "first to last" says nothing useful about a column of money.
     sortDir: {
-      date: {
+      agenda: {
         asc: { en: 'next shoot first', ru: 'сначала ближайшая съёмка' },
         desc: { en: 'oldest first', ru: 'сначала самые давние' },
+      },
+      date: {
+        asc: { en: 'earliest first', ru: 'сначала самые ранние' },
+        desc: { en: 'latest first', ru: 'сначала самые поздние' },
       },
       name: {
         asc: { en: 'A to Z', ru: 'от А до Я' },
@@ -275,6 +279,7 @@ const dict = {
       },
     },
     sortBy: {
+      agenda: { en: 'Upcoming', ru: 'Ближайшие' },
       date: { en: 'Date', ru: 'Дата' },
       name: { en: 'Name', ru: 'Имя' },
       money: { en: 'Money', ru: 'Деньги' },
@@ -314,6 +319,8 @@ const dict = {
     },
     // Second line under a gallery that has photos but has not been sent.
     galleryNotSent: { en: 'Link not sent', ru: 'Ссылка не отправлена' },
+    // Where the balance would be, on a booking shot for free (migration 048).
+    complimentary: { en: 'Free · friends & family', ru: 'Бесплатно · для своих' },
     // Relative event date, the second line of the When cell. Arithmetic is
     // done in AdminDashboard on the UTC midnight value; these leaves only
     // decline the word.
@@ -891,6 +898,8 @@ const dict = {
       ru: (v: string) => `${v} сохранён в карточке`,
     },
     phoneAddFailed: { en: 'Could not save the number', ru: 'Не удалось сохранить номер' },
+    // The tag on a GATHERED phone line read out of the client's own message.
+    phoneFromThread: { en: 'from their message', ru: 'из их сообщения' },
   },
 
   assistant: {
@@ -1336,6 +1345,12 @@ const dict = {
       ru: 'Если укажешь email И ссылку на Drive выше, клиент автоматически получит письмо со ссылкой на галерею и паролем, как только нажмёшь «Создать». Оставь пустым, чтобы скопировать сообщение вручную на следующем экране.',
     },
     clientEmailPlaceholder: { en: 'client@example.com', ru: 'client@example.com' },
+    clientPhoneLabel: { en: 'Client Phone (optional)', ru: 'Телефон клиента (необязательно)' },
+    clientPhoneHelp: {
+      en: "Saved to the client's page, where the Call button dials it.",
+      ru: 'Сохраняется в карточке клиента, кнопка «Позвонить» набирает этот номер.',
+    },
+    clientPhonePlaceholder: { en: '(570) 555-0123', ru: '(570) 555-0123' },
 
     retentionLabel: { en: 'Retention (months)', ru: 'Срок хранения (месяцев)' },
     retentionHelp: {
@@ -1532,6 +1547,7 @@ const dict = {
     pfClientName: { en: 'Client', ru: 'Клиент' },
     pfPartnerName: { en: 'Partner', ru: 'Партнёр' },
     pfClientEmail: { en: 'Email', ru: 'Email' },
+    pfClientPhone: { en: 'Phone', ru: 'Телефон' },
     pfTotal: { en: 'Total', ru: 'Сумма' },
     pfRetainer: { en: 'Retainer', ru: 'Предоплата' },
     peekSubtitle: { en: 'The conversation, read-only', ru: 'Переписка, только чтение' },
@@ -1629,6 +1645,14 @@ const dict = {
       ru: 'На этот адрес уйдёт приглашение — с ним же клиент будет входить в портал.',
     },
     clientEmailPlaceholder: { en: 'client@example.com', ru: 'client@example.com' },
+
+    // Client phone. Optional, and never a contract variable.
+    clientPhoneLabel: { en: 'Client Phone (optional)', ru: 'Телефон клиента (необязательно)' },
+    clientPhoneHelp: {
+      en: "Not on the contract. Saved to the client's page, where the Call button dials it.",
+      ru: 'В договор не попадает. Сохраняется в карточке клиента, кнопка «Позвонить» набирает этот номер.',
+    },
+    clientPhonePlaceholder: { en: '(570) 555-0123', ru: '(570) 555-0123' },
 
     // Responsible party
     responsiblePartyToggle: {
@@ -2272,8 +2296,8 @@ const dict = {
     editContractHide: { en: 'Hide', ru: 'Скрыть' },
     editContractEditFields: { en: 'Edit fields', ru: 'Редактировать поля' },
     editContractHint: {
-      en: 'Any change here re-renders the contract the client sees. Once they sign, this section disappears and edits are no longer possible.',
-      ru: 'Любое изменение здесь заново формирует контракт, который увидит клиент. Как только он подпишет, этот раздел исчезнет и править будет уже нельзя.',
+      en: 'Any change here re-renders the contract the client sees. The prices in it always come from Total Amount and Retainer / Deposit. Once they sign, this section disappears and edits are no longer possible.',
+      ru: 'Любое изменение здесь заново формирует контракт, который увидит клиент. Суммы в нём всегда берутся из полей «Общая сумма» и «Задаток / депозит». Как только он подпишет, этот раздел исчезнет и править будет уже нельзя.',
     },
     saveContractChanges: { en: 'Save Contract Changes', ru: 'Сохранить изменения' },
     contractUpdatedOk: {
@@ -2333,6 +2357,20 @@ const dict = {
     chipOwing: { en: (v: string) => `${v} left`, ru: (v: string) => `Осталось ${v}` },
     chipOverpaid: { en: (v: string) => `${v} overpaid`, ru: (v: string) => `Переплата ${v}` },
     chipSettled: { en: 'Paid up', ru: 'Оплачено' },
+    // A booking shot for free, for family or friends (migration 048).
+    chipComplimentary: { en: 'Free · friends & family', ru: 'Бесплатно · для своих' },
+    complimentaryLabel: { en: 'Free booking', ru: 'Бесплатная съёмка' },
+    summaryFree: { en: 'Free', ru: 'Бесплатно' },
+    complimentaryOn: {
+      en: 'Shot for free for family or friends. Nothing is owed, and it stays out of income and sales tax.',
+      ru: 'Снято бесплатно для семьи или друзей. Оплата не ожидается, в доход и налог с продаж не входит.',
+    },
+    complimentaryOff: {
+      en: 'Shot this one for free, for family or friends?',
+      ru: 'Снимали бесплатно, для семьи или друзей?',
+    },
+    complimentaryMark: { en: 'Mark as free', ru: 'Отметить как бесплатную' },
+    complimentaryUndo: { en: 'It was a paid booking', ru: 'Это была платная съёмка' },
     chipContractSigned: { en: 'Contract signed', ru: 'Договор подписан' },
     chipContractUnsigned: { en: 'Contract unsigned', ru: 'Договор не подписан' },
     chipGalleryDelivered: { en: 'Gallery sent', ru: 'Галерея отправлена' },
@@ -2355,10 +2393,24 @@ const dict = {
       en: 'Tips are not counted toward what this booking owes.',
       ru: 'Чаевые не учитываются в сумме к оплате по этой брони.',
     },
+    // Logging a manual payment: tips, and the part above the balance.
+    paymentIsTip: { en: 'This is a tip', ru: 'Это чаевые' },
+    paymentIsTipHelp: {
+      en: 'A tip does not count toward what they owe.',
+      ru: 'Чаевые не идут в счёт оплаты по договору.',
+    },
+    paymentSplitExcess: {
+      en: (tip: string) => `Record the ${tip} above the balance as a tip`,
+      ru: (tip: string) => `Записать ${tip} сверх остатка как чаевые`,
+    },
+    paymentSplitExcessHelp: {
+      en: 'Anything paid above the contract and its charges is a tip, unless it is a fee you added separately.',
+      ru: 'Всё, что оплачено сверх договора и доплат, считается чаевыми, если это не отдельная доплата.',
+    },
     settleDiscountTitle: { en: 'They paid directly', ru: 'Оплатили напрямую' },
     settleDiscountBody: {
-      en: 'The amount left is the card fee they avoided. Waive it to settle this booking.',
-      ru: 'Остаток равен комиссии за карту, которой удалось избежать. Списать его и закрыть бронь.',
+      en: 'Paying directly saved them the card fee, so their payment counts for more than it says. Waive that part to credit it in full.',
+      ru: 'Оплата напрямую сэкономила им комиссию за карту, поэтому платёж стоит больше указанной суммы. Спишите эту часть, чтобы засчитать его полностью.',
     },
     settleDiscountAction: { en: 'Waive the card fee', ru: 'Списать комиссию' },
     history: { en: 'History', ru: 'История' },
@@ -2946,6 +2998,13 @@ const dict = {
     configLoadFailed: { en: 'Could not load configuration.', ru: 'Не удалось загрузить конфигурацию.' },
     webhookTitle: { en: 'Stripe webhook', ru: 'Вебхук Stripe' },
     webhookOk: { en: 'All events subscribed', ru: 'Все события подключены' },
+    webhookDisabled: { en: 'Turned off by Stripe', ru: 'Отключён в Stripe' },
+    webhookWrongUrl: { en: 'Points at the wrong address', ru: 'Указан не тот адрес' },
+    paymentIssuesTitle: {
+      en: (n: number) => (n === 1 ? 'A payment needs you' : `${n} payments need you`),
+      ru: (n: number) => (n === 1 ? 'Платёж требует внимания' : `Платежей, требующих внимания: ${n}`),
+    },
+    paymentIssueResolve: { en: 'Mark resolved', ru: 'Решено' },
     webhookIncomplete: {
       en: (n: number) => (n === 1 ? '1 event missing' : `${n} events missing`),
       ru: (n: number) => (n === 1 ? 'Не хватает 1 события' : `Не хватает событий: ${n}`),

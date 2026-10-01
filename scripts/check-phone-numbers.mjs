@@ -117,6 +117,16 @@ check('a number beside two email addresses',
 check('unpunctuated, with the claim after it',
   digitsIn('5595997511 this is my number'),
   ['5595997511']);
+// The shape of a real reply (2026-09-30) to "can you share your number so I
+// can call?": the number and nothing else. It used to be found here and then
+// lost, because the only place it could surface needed a booking to exist.
+// Not that client's real number; the shape is what is being pinned.
+check('a bare number sent on its own, as the whole reply',
+  digitsIn('484-238-1907'),
+  ['4842381907']);
+check('...whose context is just the number, so the Summary shows no quote',
+  findPhonesInText('484-238-1907').map((f) => f.context === f.raw),
+  [true]);
 
 // ── findPhonesInText: the numbers it MUST NOT find ──────────────────────────
 // Each of these came back from the real corpus before the matching rule

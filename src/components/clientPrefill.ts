@@ -128,6 +128,17 @@ export interface ClientPrefill extends PrefillBooking {
    * byte, on every run.
    */
   wedding_package: string | null;
+  /**
+   * The client's phone, formatted for reading, or null when the thread has
+   * none. Optional on the new booking and never on its contract: it is what
+   * the Call button on the client's page dials.
+   *
+   * On ClientPrefill and not PrefillBooking for the same reason as
+   * wedding_package, and a stronger one: a number that gets dialled has to
+   * come from the bytes the client sent (findPhonesInText), never from a
+   * model that can paraphrase digits. A phone Vero recorded by hand wins.
+   */
+  client_phone: string | null;
 }
 
 /** One clock reading found in a sentence, before anything is decided about it. */

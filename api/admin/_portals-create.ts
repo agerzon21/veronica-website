@@ -19,6 +19,7 @@
  *
  *   // both modes:
  *   gallery_password: string,      // unique
+ *   client_phone?: string,         // optional, never a contract variable
  *
  *   // optional — if this portal is being created from a DM conversation,
  *   // pass the conversation id and we'll link the two so the inbox
@@ -98,6 +99,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!galleryPassword) {
     return res.status(400).json({ success: false, error: 'gallery_password is required' });
   }
+
+  /**
+   * Optional in both modes, and never a contract variable: it is what the
+   * Call button on the client's page dials. Stored as typed, exactly like an
+   * edit from that page (see _portal-update.ts), because normalising for
+   * dialling and channel matching happens where those happen. The cap keeps a
+   * paste of a whole message out of a field that holds one number.
+   */
+  const clientPhone =
+    typeof body.client_phone === 'string' && body.client_phone.trim()
+      ? body.client_phone.trim().slice(0, 40)
+      : null;
 
   // Mode-specific validation
   let clientDisplayName: string | null = null;
@@ -229,7 +242,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           mode, session_type,
           partner_1_first_name, partner_2_first_name,
           partner_1_full_name, partner_2_full_name,
-          client_display_name, client_email,
+          client_display_name, client_email, client_phone,
           event_date,
           gallery_password, gallery_enabled,
           contract_status, contract_template_key, contract_body, contract_variables,
@@ -239,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${mode}, ${sessionType},
           ${partner1}, ${partner2},
           ${partner1FullName}, ${partner2FullName},
-          ${clientDisplayName}, ${clientEmail},
+          ${clientDisplayName}, ${clientEmail}, ${clientPhone},
           ${eventDate},
           ${galleryPassword}, true,
           'pending', ${templateKey}, ${contractBody}, ${JSON.stringify(contractVariables)},
@@ -338,7 +351,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         insert into client_portals (
           mode, session_type,
           partner_1_first_name,
-          client_display_name, client_email,
+          client_display_name, client_email, client_phone,
           event_date,
           gallery_password, gallery_enabled,
           drive_url, gallery_delivered_at, gallery_expires_at,
@@ -347,7 +360,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ) values (
           ${mode}, ${sessionType},
           ${simpleClientFirstName},
-          ${simpleDisplayName}, ${simpleClientEmail},
+          ${simpleDisplayName}, ${simpleClientEmail}, ${clientPhone},
           ${simpleEventDate},
           ${galleryPassword}, true,
           ${simpleDriveUrl}, ${deliveredAt}, ${expiresAt},

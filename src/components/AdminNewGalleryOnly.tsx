@@ -74,6 +74,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
 
   const [driveUrl, setDriveUrl] = useState('');
   const [clientEmail, setClientEmail] = useState(prefill?.client_email ?? '');
+  const [clientPhone, setClientPhone] = useState(prefill?.client_phone ?? '');
   const [retentionMonths, setRetentionMonths] = useState('3');
   const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
   const [retainerAmount, setRetainerAmount] = useState(prefill?.retainer_amount ?? '');
@@ -148,6 +149,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
           // Reused for greeting-friendly first-name extraction in emails.
           partner_1_first_name: firstWord(clientName) || null,
           client_email: clientEmail.trim().toLowerCase() || null,
+          client_phone: clientPhone.trim() || null,
           event_date: eventDateIso || null,
           drive_url: driveUrl.trim() || null,
           retention_months: months,
@@ -320,6 +322,21 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
               value={clientEmail}
               onChange={(e) => setClientEmail(e.target.value)}
               placeholder={t.newGallery.clientEmailPlaceholder}
+            />
+          </Field>
+
+          <Field
+            label={t.newGallery.clientPhoneLabel}
+            helpText={t.newGallery.clientPhoneHelp}
+          >
+            <FormInput
+              type="tel"
+              inputMode="tel"
+              // Off: the browser's suggestion here would be Vero's own number.
+              autoComplete="off"
+              value={clientPhone}
+              onChange={(e) => setClientPhone(e.target.value)}
+              placeholder={t.newGallery.clientPhonePlaceholder}
             />
           </Field>
 

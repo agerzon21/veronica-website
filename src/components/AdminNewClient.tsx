@@ -514,6 +514,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [galleryPasswordOverride, setGalleryPasswordOverride] = useState<string | null>(null);
 
   const [clientEmail, setClientEmail] = useState(prefill?.client_email ?? '');
+  const [clientPhone, setClientPhone] = useState(prefill?.client_phone ?? '');
   const [eventDateIso, setEventDateIso] = useState(prefill?.event_date ?? '');
   /**
    * The coverage window.
@@ -990,6 +991,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           ? [{ label: t.newClient.pfPartnerName, value: prefill.partner_full_name, required: false }]
           : []),
         { label: t.newClient.pfClientEmail, value: prefill.client_email, required: true },
+        { label: t.newClient.pfClientPhone, value: prefill.client_phone, required: false },
         ...typeScopedRow('wedding_date', t.newClient.pfWeddingDate, prefill.wedding_date ? fmtDate(prefill.wedding_date) : null),
         { label: t.newClient.pfTotal, value: moneyDigits(prefill.total_amount) ? `$${moneyDigits(prefill.total_amount)}` : null, required: true, quote: prefill.total_amount_quote },
         { label: t.newClient.pfRetainer, value: moneyDigits(prefill.retainer_amount) ? `$${moneyDigits(prefill.retainer_amount)}` : null, required: true },
@@ -1588,6 +1590,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           partner_2_full_name: partner2Legal || null,
           client_display_name: clientDisplayName.trim(),
           client_email: clientEmail.trim().toLowerCase(),
+          client_phone: clientPhone.trim() || null,
           event_date: eventDateIso,
           contract_template_key: templateKey,
           variables: finalVariables,
@@ -1860,6 +1863,13 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
           <Field label={t.newClient.clientEmailLabel} required helpText={t.newClient.clientEmailHelp} hasError={fieldErrors.has('clientEmail')}>
             <FormInput type="email" value={clientEmail} onChange={(e) => { setClientEmail(e.target.value); clearFieldError('clientEmail'); }} placeholder={t.newClient.clientEmailPlaceholder} />
+          </Field>
+
+          {/* Optional, and never a contract variable: it goes on the client's
+              page, where the Call button dials it. autoComplete off because
+              the browser's own suggestion here would be Vero's number. */}
+          <Field label={t.newClient.clientPhoneLabel} helpText={t.newClient.clientPhoneHelp}>
+            <FormInput type="tel" inputMode="tel" autoComplete="off" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder={t.newClient.clientPhonePlaceholder} />
           </Field>
 
           {/* ─── Responsible Party (optional) ───
