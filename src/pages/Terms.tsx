@@ -41,7 +41,7 @@ const Terms = () => {
           <>
             These Terms govern your use of{' '}
             <Term>vero.photography</Term> (the <Term>&ldquo;Site&rdquo;</Term>),
-            operated by Veronika Gerzon d/b/a Vero Photography (
+            operated by Veronika Polbina d/b/a Vero Photography (
             <Term>&ldquo;we&rdquo;</Term>, <Term>&ldquo;us&rdquo;</Term>,{' '}
             <Term>&ldquo;the Photographer&rdquo;</Term>). By accessing or
             using the Site, you agree to these Terms. If you don&rsquo;t
@@ -66,7 +66,7 @@ const Terms = () => {
         <PolicySection title="2. Photo copyright" id="copyright">
           <P>
             <Term>All photographs displayed on the Site are the exclusive
-            copyright of Veronika Gerzon.</Term> This includes portfolio
+            copyright of Veronika Polbina.</Term> This includes portfolio
             galleries, individual photo pages, blog / journal posts,
             homepage imagery, and any photograph delivered through a
             Client Portal.
@@ -210,7 +210,7 @@ const Terms = () => {
         <PolicySection title="8. Limitation of liability">
           <P>
             To the fullest extent permitted by law, Vero Photography
-            (Veronika Gerzon, its owners, employees, and contractors)
+            (Veronika Polbina, its owners, employees, and contractors)
             will not be liable for any indirect, incidental, special,
             consequential, or punitive damages arising out of or related
             to your use of the Site. Our total aggregate liability for

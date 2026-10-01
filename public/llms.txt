@@ -1,6 +1,6 @@
 # Vero Photography
 
-Wedding, portrait, family and maternity photography by Veronika Gerzon,
+Wedding, portrait, family and maternity photography by Veronika Polbina,
 based in Scranton, Pennsylvania and available for travel.
 
 Photographs are delivered through a private client portal. The public gallery
@@ -40,5 +40,5 @@ The full list is enumerated in the [sitemap](https://vero.photography/sitemap.xm
   endpoint is explicitly allowed in [robots.txt](https://vero.photography/robots.txt);
   the rest of `/api/` is not, and should not be crawled.
 - `/admin` and `/portal` are private and carry a `noindex` header.
-- Images are copyright Veronika Gerzon and are not licensed for reuse or for
+- Images are copyright Veronika Polbina and are not licensed for reuse or for
   training without written permission.

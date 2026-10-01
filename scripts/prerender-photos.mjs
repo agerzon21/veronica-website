@@ -272,7 +272,7 @@ for (const photo of photos) {
       "keywords": "${photo.keywords.join(', ').replace(/"/g, '\\"')}",` : ''}
       "author": {
         "@type": "Person",
-        "name": "Veronika Gerzon"
+        "name": "Veronika Polbina"
       },
       "copyrightHolder": {
         "@type": "Organization",
@@ -730,7 +730,7 @@ for (const post of posts) {
       "datePublished": "${published}",
       "image": ${JSON.stringify(ogImage)},
       "keywords": ${JSON.stringify(tags.join(', '))},
-${inSeries ? `      "isPartOf": { "@type": "CreativeWorkSeries", "name": ${JSON.stringify(post.series_label || 'A story in parts')} },\n` : ''}${inSeries && post.series_part != null ? `      "position": ${post.series_part},\n` : ''}      "author": { "@type": "Person", "name": "Veronika Gerzon" },
+${inSeries ? `      "isPartOf": { "@type": "CreativeWorkSeries", "name": ${JSON.stringify(post.series_label || 'A story in parts')} },\n` : ''}${inSeries && post.series_part != null ? `      "position": ${post.series_part},\n` : ''}      "author": { "@type": "Person", "name": "Veronika Polbina" },
       "publisher": { "@type": "Organization", "name": "Vero Photography", "url": "${SITE}" },
       "mainEntityOfPage": { "@type": "WebPage", "@id": "${canonical}" }
     }
@@ -901,10 +901,10 @@ console.log(`Pre-rendered ${journalPages} journal posts + the journal index.`);
 const STATIC_PAGES = [
   {
     path: '/about',
-    heading: 'About Veronika Gerzon',
-    title: 'About Veronika Gerzon | Vero Photography',
+    heading: 'About Veronika Polbina',
+    title: 'About Veronika Polbina | Vero Photography',
     description:
-      'About Veronika Gerzon: wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
+      'About Veronika Polbina: wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
     image: `${SITE}/assets/photos/site/about-bg.webp`,
     extra:
       '<h2>My Approach</h2>' +
@@ -931,7 +931,7 @@ const STATIC_PAGES = [
     heading: 'Wedding Photography Services',
     title: 'Wedding Photography Services | Vero Photography',
     description:
-      'Wedding photography by Veronika Gerzon: coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
+      'Wedding photography by Veronika Polbina: coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
     image: `${SITE}/assets/photos/site/weddings-hero.webp`,
   },
   {
@@ -939,7 +939,7 @@ const STATIC_PAGES = [
     heading: 'Photography Portfolio',
     title: 'Photography Portfolio | Vero Photography',
     description:
-      'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Gerzon.',
+      'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Polbina.',
     // One file, named identically here, in SEO.tsx and in Gallery.tsx. Three
     // sources each nominated a different photograph, so which one a shared
     // link previewed depended on whether the sharer's crawler ran JavaScript.

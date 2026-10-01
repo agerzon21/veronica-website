@@ -272,7 +272,7 @@ const InstagramFeed = () => {
 
   const profile = data.profile ?? {};
   const USERNAME: string = profile.username ?? 'vero.art.photo';
-  const DISPLAY_NAME: string = profile.name ?? 'Veronika Gerzon';
+  const DISPLAY_NAME: string = profile.name ?? 'Veronika Polbina';
   const BIO: string = profile.biography ?? 'Wedding & Portrait Photographer';
   const PROFILE_PIC_URL: string | null = profile.profilePictureUrl ?? null;
   const FOLLOWERS_COUNT: number | null = profile.followersCount ?? null;

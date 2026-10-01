@@ -226,7 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           photos = files.map((f) => ({
             url: f.thumbnailUrl,
             fullUrl: f.viewUrl,
-            alt: 'Wedding photography by Veronika Gerzon',
+            alt: 'Wedding photography by Veronika Polbina',
           }));
         }
       } catch (err) {

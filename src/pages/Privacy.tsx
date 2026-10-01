@@ -49,7 +49,7 @@ const Privacy = () => {
       >
         <PolicySection title="Who we are">
           <P>
-            The Site is owned and operated by Veronika Gerzon, a wedding
+            The Site is owned and operated by Veronika Polbina, a wedding
             and portrait photographer based in Scranton, Pennsylvania,
             available worldwide. For any privacy-related question, contact{' '}
             <Text as="a" href="mailto:vero@vero.photography" color="brand.accentText" textDecoration="underline">

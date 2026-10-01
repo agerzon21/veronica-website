@@ -20,12 +20,12 @@ const ROUTE_META: Record<string, RouteMeta> = {
     // was 78 chars and got truncated mid-word.
     title: 'Vero Photography | Scranton Wedding & Portrait Photographer',
     description:
-      'Wedding, portrait, family, and maternity photography by Veronika Gerzon. Based in Scranton, Pennsylvania, available worldwide.',
+      'Wedding, portrait, family, and maternity photography by Veronika Polbina. Based in Scranton, Pennsylvania, available worldwide.',
   },
   '/about': {
-    title: 'About Veronika Gerzon | Vero Photography',
+    title: 'About Veronika Polbina | Vero Photography',
     description:
-      'About Veronika Gerzon: wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
+      'About Veronika Polbina: wedding, portrait, family, and maternity photographer based in Scranton, Pennsylvania. Twelve years of experience, available worldwide.',
     image: `${SITE_URL}/assets/photos/site/about-bg.webp`,
   },
   '/contact': {
@@ -44,13 +44,13 @@ const ROUTE_META: Record<string, RouteMeta> = {
   '/wedding-photography': {
     title: 'Wedding Photography Services | Vero Photography',
     description:
-      'Wedding photography by Veronika Gerzon: coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
+      'Wedding photography by Veronika Polbina: coverage from intimate ceremonies to full days, planning help, honest answers, and trusted local vendors. Based in Scranton, Pennsylvania; available worldwide.',
     image: `${SITE_URL}/assets/photos/site/weddings-hero.webp`,
   },
   '/gallery': {
     title: 'Photography Portfolio | Vero Photography',
     description:
-      'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Gerzon.',
+      'A curated portfolio of wedding, portrait, family, and maternity photography by Veronika Polbina.',
     // Named explicitly rather than inherited. Without it this fell through to
     // DEFAULT_IMAGE while the prerendered /gallery named a second file and
     // Gallery.tsx named a third, so a shared link previewed whichever
@@ -68,25 +68,25 @@ const ROUTE_META: Record<string, RouteMeta> = {
   '/gallery/portraits': {
     title: 'Portrait Photography Portfolio | Vero Photography',
     description:
-      'Portrait photography portfolio: natural-light, lifestyle, and editorial portraits by Veronika Gerzon.',
+      'Portrait photography portfolio: natural-light, lifestyle, and editorial portraits by Veronika Polbina.',
     image: `${SITE_URL}/assets/photos/portraits/shadow-play-portrait.webp`,
   },
   '/gallery/weddings': {
     title: 'Wedding Photography Portfolio | Vero Photography',
     description:
-      'Wedding photography portfolio: destination, beach, and intimate ceremony coverage by Veronika Gerzon.',
+      'Wedding photography portfolio: destination, beach, and intimate ceremony coverage by Veronika Polbina.',
     image: `${SITE_URL}/assets/photos/weddings/newlyweds-running-sea.webp`,
   },
   '/gallery/family': {
     title: 'Family Photography Portfolio | Vero Photography',
     description:
-      'Family photography portfolio: multi-generation, lifestyle, and candid family sessions by Veronika Gerzon.',
+      'Family photography portfolio: multi-generation, lifestyle, and candid family sessions by Veronika Polbina.',
     image: `${SITE_URL}/assets/photos/family/elegant-family-studio-portrait-black.webp`,
   },
   '/gallery/maternity': {
     title: 'Maternity Photography Portfolio | Vero Photography',
     description:
-      'Maternity photography portfolio: beach, studio, and artistic maternity sessions by Veronika Gerzon.',
+      'Maternity photography portfolio: beach, studio, and artistic maternity sessions by Veronika Polbina.',
     image: `${SITE_URL}/assets/photos/maternity/couples-beach-baby-bump-moment.webp`,
   },
   // The two policy routes were absent, so they fell through to the '/' entry

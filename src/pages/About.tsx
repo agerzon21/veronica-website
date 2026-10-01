@@ -355,7 +355,7 @@ const About = () => {
           src={pageHeroFallback(ABOUT_HERO)}
           srcSet={pageHeroSrcSet(ABOUT_HERO)}
           sizes="100vw"
-          alt="Veronika Gerzon kneeling on the grass with her camera."
+          alt="Veronika Polbina kneeling on the grass with her camera."
           position="absolute"
           inset={0}
           w="100%"
@@ -483,7 +483,7 @@ const About = () => {
               <PortraitPair
                 main={{
                   src: '/assets/photos/site/vero-portrait-truck-tulips.webp',
-                  alt: 'Veronika Gerzon seated on the roof of a vintage truck in a field of tulips.',
+                  alt: 'Veronika Polbina seated on the roof of a vintage truck in a field of tulips.',
                   // 45%, not the 55% the previous photograph used. This one is
                   // an environmental frame rather than a tight portrait: the
                   // subject sits near the top and the tulips fill the bottom
@@ -493,7 +493,7 @@ const About = () => {
                 mainRatio={3 / 4}
                 inset={{
                   src: '/assets/photos/site/vero-art.webp',
-                  alt: 'Silhouette of Veronika Gerzon behind layers of backlit fabric.',
+                  alt: 'Silhouette of Veronika Polbina behind layers of backlit fabric.',
                   position: 'center 40%',
                 }}
                 insetSide="right"
@@ -624,13 +624,13 @@ const About = () => {
               <PortraitPair
                 main={{
                   src: '/assets/photos/site/about-bg.webp',
-                  alt: 'Veronika Gerzon lying on a dance floor to photograph guests dancing above her.',
+                  alt: 'Veronika Polbina lying on a dance floor to photograph guests dancing above her.',
                   position: 'center 62%',
                 }}
                 mainRatio={{ base: 3 / 4, lg: 4 / 5 }}
                 inset={{
                   src: '/assets/photos/site/vero-ceremony-lawn.webp',
-                  alt: 'Veronika Gerzon with her camera on the lawn before an outdoor ceremony.',
+                  alt: 'Veronika Polbina with her camera on the lawn before an outdoor ceremony.',
                   position: 'center 30%',
                 }}
                 // Bottom left: the bottom right is where Vero is lying in the

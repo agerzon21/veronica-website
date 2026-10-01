@@ -906,7 +906,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                 PageHeader so it matches every other page's header exactly.
                 The vertical budget constants above were re-derived for the
                 larger pageTitle — see HEADER_CONTENT_*. */}
-            <PageHeader eyebrow="Veronika Gerzon" title="Wedding & Portrait Photographer" />
+            <PageHeader eyebrow="Veronika Polbina" title="Wedding & Portrait Photographer" />
           </MotionBox>
         </Box>
 
