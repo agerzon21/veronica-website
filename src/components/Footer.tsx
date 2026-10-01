@@ -45,11 +45,11 @@ const PAD_BOTTOM = 18; // px, what stops the seal looking snug against the edge
  * by eyebrow, metaCaption and formLabel.
  *
  * They now scale between the floor and the ctaLabel size rather than taking one
- * value. Fixing them at 13px and 11px pushed the three columns to 350px, which
- * hangs 15px off each side of a 320px phone, and Chakra has no breakpoint
- * between 320 and 480 to switch at. The clamps give 320 the 11px floor and
- * everything from about 390 up the full size, with the columns scaling to match
- * the type they hold.
+ * value, because the whole row has to fit one line of a phone: two links, the
+ * seal's column, two more. Collaborate and Contact are the wider pair, 114px of
+ * words at 13px, and Chakra has no breakpoint between 320 and 480 to switch at.
+ * So everything from about 406px up gets the full 13px, and below that the
+ * links shrink with the screen, to 10.2px at 320.
  */
 
 // Seal tints. The ink is brand.accentText and the ring brand.accent in every
@@ -90,7 +90,7 @@ const FootLink = ({ to, children }: { to: string; children: React.ReactNode }) =
     pt="6px"
     h="44px"
     px="clamp(4px, 1.55vw, 6px)"
-    fontSize="clamp(0.625rem, 3.33vw, 0.8125rem)"
+    fontSize="clamp(0.625rem, 3.2vw, 0.8125rem)"
     lineHeight="12px"
     letterSpacing="0.04em"
     whiteSpace="nowrap"
@@ -119,63 +119,42 @@ const Footer = () => {
       {/* The crease */}
       <Box aria-hidden="true" h={`${FOLD}px`} bg="brand.accent" />
 
-      {/* The underside. The links flank the seal and the copyright sits under it.
-          Column widths are EQUAL and independent of their contents, which is
-          the whole trick: the seal stays centred between the groups rather
-          than drifting with the length of the words in them. Below about
-          390px the groups wrap inside those widths instead of overflowing,
-          which is what lets six links live here at all. */}
+      {/* The underside. Two links flank the seal on each side and the copyright
+          sits under it. Gallery and Portal used to be here as well, and both
+          are in the sticky header on every public page, so the footer keeps
+          what the header does not carry, plus Contact. */}
       <Box position="relative" overflow="hidden" bg="brand.surfaceFold" pb={`${PAD_BOTTOM}px`}>
         <SealHalf face={false} />
-        <Flex position="relative" align="flex-start" justify="center">
-          {/* THREE A SIDE, in EQUAL columns, which is what holds the seal in
-              the centre: the width cannot follow the words or the seal drifts
-              with them.
+        <Flex position="relative" align="flex-start">
+          {/* ONE ROW AT EVERY WIDTH. The two side columns split whatever the
+              seal's column leaves EQUALLY (flex 1 1 0), which is what holds the
+              seal in the centre: the width cannot follow the words or the seal
+              drifts with them. Each pair hugs the seal.
 
-              The cap is set by the LEFT group, which is the wider of the two.
-              Measured at the 13px end of the type clamp, Collaborate, Privacy
-              and Terms need 215px between them against 183px for Contact,
-              Portal and Gallery. It was first set to 210, five pixels short,
-              and the symptom was Terms alone dropping to a second line and
-              landing under the copyright. 240 leaves room for the real font
-              to disagree with the arithmetic.
-
-              Below about 750px the viewport cannot hold 240 + 146 + 240, so
-              the groups wrap inside their columns rather than overflowing.
-              That is deliberate: the 44px link height is a touch target and
-              stays, so a narrow footer is simply taller. */}
-          <Flex
-            align="flex-start"
-            justify="flex-end"
-            wrap="wrap"
-            rowGap="0px"
-            gap="7px"
-            w="clamp(100px, 31vw, 240px)"
-          >
-            <FootLink to="/collaborate">Collaborate</FootLink>
-            <Tick />
+              Wrapping is not an option: a wrapped pair strands a tick at the
+              end of a line, which is what the six link version did on every
+              phone. Instead the type, the padding and the tick gaps shrink
+              together below about 406px, and the seal's column narrows with
+              them, but never below 56px, its round link's width, so a tap
+              beside the seal still lands on the word it was aimed at. */}
+          <Flex flex="1 1 0" minW={0} align="flex-start" justify="flex-end" columnGap="clamp(4px, 1.9vw, 7px)">
             <FootLink to="/privacy">Privacy</FootLink>
             <Tick />
             <FootLink to="/terms">Terms</FootLink>
           </Flex>
-          <Flex direction="column" justify="flex-end" w="clamp(118px, 34vw, 146px)" h="44px">
-            <Text m={0} textAlign="center" whiteSpace="nowrap" fontSize="clamp(0.625rem, 2.9vw, 0.6875rem)" lineHeight="14px" letterSpacing="0.06em" color="brand.mutedText">
+          {/* On a phone the copyright is wider than the seal's column, so it is
+              centred and allowed to run under the inner links' 44px targets,
+              below their words. pointerEvents none hands those taps through to
+              the links instead of swallowing them. */}
+          <Flex direction="column" align="center" justify="flex-end" flexShrink={0} w="clamp(56px, 19vw, 146px)" h="44px">
+            <Text m={0} pointerEvents="none" textAlign="center" whiteSpace="nowrap" fontSize="clamp(0.625rem, 2.9vw, 0.6875rem)" lineHeight="14px" letterSpacing="0.06em" color="brand.mutedText">
               © {year} Vero Photography
             </Text>
           </Flex>
-          <Flex
-            align="flex-start"
-            justify="flex-start"
-            wrap="wrap"
-            rowGap="0px"
-            gap="7px"
-            w="clamp(100px, 31vw, 240px)"
-          >
+          <Flex flex="1 1 0" minW={0} align="flex-start" justify="flex-start" columnGap="clamp(4px, 1.9vw, 7px)">
+            <FootLink to="/collaborate">Collaborate</FootLink>
+            <Tick />
             <FootLink to="/contact">Contact</FootLink>
-            <Tick />
-            <FootLink to="/portal">Portal</FootLink>
-            <Tick />
-            <FootLink to="/gallery">Gallery</FootLink>
           </Flex>
         </Flex>
       </Box>
