@@ -72,18 +72,21 @@ const BERKHEIMER = { label: { en: 'Berkheimer', ru: 'Berkheimer' }, href: 'https
 const SCRANTON_TAX_OFFICE = { label: { en: 'Scranton Single Tax Office', ru: 'Налоговый офис Скрантона' }, href: 'https://scrantontaxoffice.org' };
 const PPT_FORMS = { label: { en: 'PPT forms (Berkheimer)', ru: 'Формы PPT (Berkheimer)' }, href: 'https://www.hab-inc.com/pptforms/' };
 
-// Applies to: where she works, and whether she clears the thresholds.
-const IN_SCRANTON_LST: L = {
-  en: 'her work is based in Scranton city and she earns $15,600 or more there in the year. Under that, file the exemption certificate once; the school district\'s $5 is still due.',
-  ru: 'её работа базируется в Скрантоне и она зарабатывает там $15,600 или больше за год. Если меньше, один раз подаётся заявление об освобождении; $5 школьного округа платятся всё равно.',
+// She lives and works from home in Clifton Township (North Pocono School
+// District): 1% earned income tax, and no LST or business tax of its own
+// (DCED register and the township code, checked 2026-10-02). Scranton's two
+// taxes reach only the sessions she does inside the city.
+const WORKS_IN_SCRANTON_LST: L = {
+  en: 'she works inside Scranton city. Clifton Township has no LST, and whether Scranton collects for occasional sessions is unconfirmed: ask the Single Tax Office, (570) 963-6756 ext. 3112. With Scranton earnings under $15,600 a year, the exemption certificate leaves only the school district\'s $5.',
+  ru: 'она работает в черте Скрантона. В Clifton Township налога LST нет, а берёт ли его Скрантон за отдельные съёмки, не подтверждено: спроси в Single Tax Office, (570) 963-6756 доб. 3112. Если заработок в Скрантоне меньше $15,600 за год, заявление об освобождении оставляет только $5 школьного округа.',
 };
-const DOES_BUSINESS_IN_SCRANTON: L = {
-  en: 'she does business in Scranton city (works from there, or regularly shoots there). A zero return is still required.',
-  ru: 'она ведёт бизнес в Скрантоне (работает оттуда или регулярно снимает там). Нулевая декларация всё равно обязательна.',
+const SHOOTS_IN_SCRANTON: L = {
+  en: 'she photographs clients inside Scranton city limits. The city counts even one day of work there, and the tax is only on the profit from that work. Ask Berkheimer, (610) 599-3140, how to split it out and whether a quarter with no Scranton work needs a zero return.',
+  ru: 'она снимает клиентов в черте Скрантона. Город считает даже один день работы, а налог берётся только с прибыли от этой работы. Спроси в Berkheimer, (610) 599-3140, как её выделять и нужна ли нулевая декларация за квартал без работы в Скрантоне.',
 };
 const OWES_1000: L = {
-  en: 'the year\'s federal tax after withholding comes to $1,000 or more. At her income it often does not; check with the preparer.',
-  ru: 'федеральный налог за год после удержаний составит $1,000 или больше. При её доходе часто не составит; уточни у бухгалтера.',
+  en: 'your joint federal tax, less withholding, will reach $1,000 or more. Either way there is no penalty if withholding from your pay this year covers your total tax for last year (110% of it if last year\'s income passed $150,000).',
+  ru: 'ваш совместный федеральный налог за вычетом удержаний составит $1,000 или больше. В любом случае штрафа нет, если удержания из твоей зарплаты в этом году покрывают весь налог за прошлый год (110%, если доход за прошлый год больше $150,000).',
 };
 
 const lstQuarter = (key: string, due: string, quarter: L): TaxDeadline => ({
@@ -96,7 +99,7 @@ const lstQuarter = (key: string, due: string, quarter: L): TaxDeadline => ({
     ru: '$39 за квартал ($156 в год), по почте с квартальной формой для самозанятых: Collector of Taxes, PO Box 20111, Scranton PA 18502.',
   },
   link: SCRANTON_TAX_OFFICE,
-  onlyIf: IN_SCRANTON_LST,
+  onlyIf: WORKS_IN_SCRANTON_LST,
   series: 'lst',
 });
 
@@ -106,8 +109,8 @@ const eitEstimate = (key: string, due: string, quarter: L): TaxDeadline => ({
   kind: 'local',
   title: { en: `Local earned income tax estimate, ${quarter.en}`, ru: `Местный налог на доход, авансовый платёж, ${quarter.ru}` },
   detail: {
-    en: 'Berkheimer form DQ-1 on her net profit: 3.4% if she lives in Scranton city, 1% in Dunmore or Clarks Summit. There is no income threshold; a $0 estimate avoids interest. Berkheimer\'s form says end of month, the statute says the 15th: paying by the 15th satisfies both.',
-    ru: 'Форма Berkheimer DQ-1 на чистую прибыль: 3.4%, если она живёт в Скрантоне, 1% в Dunmore или Clarks Summit. Порога дохода нет; нулевая декларация избавляет от процентов. Berkheimer пишет «конец месяца», закон пишет «15 число»: заплатить до 15 числа подходит для обоих.',
+    en: 'Berkheimer form DQ-1 on her net profit, at 1% (Clifton Township 0.5% plus North Pocono School District 0.5%), with PSD code 350601 for both home and work. Sessions in Scranton don\'t change it. There is no income threshold, and a $0 estimate avoids interest. Berkheimer\'s form says the end of the month, the statute says the 15th: paying by the 15th satisfies both.',
+    ru: 'Форма Berkheimer DQ-1 на чистую прибыль по ставке 1% (Clifton Township 0.5% и North Pocono School District 0.5%), код PSD 350601 и для дома, и для работы. Съёмки в Скрантоне ставку не меняют. Порога дохода нет, а нулевая декларация избавляет от процентов. Berkheimer пишет «конец месяца», закон пишет «15 число»: заплатить до 15-го подходит для обоих.',
   },
   link: BERKHEIMER,
 });
@@ -118,11 +121,11 @@ const pptQuarter = (key: string, due: string, quarter: L): TaxDeadline => ({
   kind: 'local',
   title: { en: `Scranton Payroll Preparation Tax, ${quarter.en}`, ru: `Налог Скрантона PPT, ${quarter.ru}` },
   detail: {
-    en: '1.034% (city 0.2787% plus school district 0.7553%) of her draws or net income, whichever is less. It replaced the Business Privilege and Mercantile taxes in 2022 and covers a sole proprietor working alone. Register once with Berkheimer, then file every quarter.',
-    ru: '1.034% (город 0.2787% и школьный округ 0.7553%) от изъятий или чистого дохода, что меньше. Заменил налог на деловые привилегии и торговый налог в 2022 и касается ИП, работающего в одиночку. Один раз зарегистрироваться в Berkheimer, затем подавать каждый квартал.',
+    en: '1.034% (city 0.2787% plus school district 0.7553%) of the profit from work done inside Scranton, or of her draws if those are less. It replaced the city\'s Business Privilege and Mercantile taxes in 2022 and covers a sole proprietor working alone. Register once with Berkheimer, then file each quarter.',
+    ru: '1.034% (город 0.2787% и школьный округ 0.7553%) от прибыли с работы в черте Скрантона или от изъятий, если они меньше. Заменил городские налоги на деловые привилегии и торговлю в 2022 и касается ИП, работающего в одиночку. Один раз зарегистрироваться в Berkheimer, затем подавать каждый квартал.',
   },
   link: PPT_FORMS,
-  onlyIf: DOES_BUSINESS_IN_SCRANTON,
+  onlyIf: SHOOTS_IN_SCRANTON,
   series: 'ppt',
 });
 
@@ -168,8 +171,8 @@ export const TAX_DEADLINES: TaxDeadline[] = [
     kind: 'local',
     title: { en: '2026 local earned income tax return (Berkheimer F-1)', ru: 'Годовая декларация по местному налогу на доход за 2026 (Berkheimer F-1)' },
     detail: {
-      en: 'Due even if no tax is owed. Attach the PA Schedule C: local tax is figured on the PA profit, not the federal one.',
-      ru: 'Подаётся, даже если налог не причитается. Приложить PA Schedule C: местный налог считается от прибыли по правилам PA, а не федеральной.',
+      en: 'Due even if no tax is owed. Attach the PA Schedule C: local tax is figured on the PA profit, not the federal one. It can be filed jointly with yours, but the two incomes are not combined.',
+      ru: 'Подаётся, даже если налог не причитается. Приложить PA Schedule C: местный налог считается от прибыли по правилам PA, а не федеральной. Можно подать вместе с твоей, но доходы не складываются.',
     },
     link: BERKHEIMER,
   },

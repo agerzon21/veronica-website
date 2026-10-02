@@ -3096,11 +3096,13 @@ const dict = {
     // over, so selling to PA clients needs a licence. It runs five years,
     // which is exactly long enough for everyone to forget it exists.
     // Stripe's API versions, so one can be pinned (STRIPE_API_VERSION in api/_stripe.ts).
+    // `answered` is the version Stripe last replied in: the account default
+    // while nothing is pinned, the pinned one after.
     stripeVersions: {
-      en: (account: string, webhook: string, pinned: string) =>
-        `Stripe API version: account ${account}, webhook ${webhook}, requests pinned to ${pinned}.`,
-      ru: (account: string, webhook: string, pinned: string) =>
-        `Версия Stripe API: аккаунт ${account}, вебхук ${webhook}, запросы закреплены на ${pinned}.`,
+      en: (answered: string, webhook: string, pinned: string) =>
+        `Stripe API version: requests answered in ${answered}, webhook events in ${webhook}, pinned to ${pinned}.`,
+      ru: (answered: string, webhook: string, pinned: string) =>
+        `Версия Stripe API: ответы на запросы в ${answered}, события вебхука в ${webhook}, закреплено на ${pinned}.`,
     },
     stripeVersionDefault: { en: 'the account default', ru: 'версии аккаунта' },
     stripeVersionUnpinned: { en: 'nothing yet', ru: 'пока ничего' },

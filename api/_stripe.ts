@@ -33,17 +33,19 @@ import { createHash, createHmac, timingSafeEqual as cryptoTimingSafeEqual } from
 const API = 'https://api.stripe.com/v1';
 
 /**
- * The API version every request asks for. NOT PINNED YET, deliberately.
+ * The API version every request asks for.
  *
  * Unpinned, a request is answered in the account's default version, and an
  * upgrade in the Stripe dashboard silently changes the shape of what this code
  * reads (the refunds fallback below exists because exactly that happened).
- * Pinning to a guess would be worse: it changes behaviour today. So the
- * Integrations panel now shows the version Stripe reports (stripeApiVersionSeen
- * and the webhook's own), and this is set to THAT value, verified, after which
- * an account upgrade changes nothing here until someone changes this line.
+ * Pinning to a guess would have changed behaviour on the day, so Integrations
+ * first showed the version Stripe actually answered in. On 2026-10-02 the
+ * account and the webhook endpoint both reported 2026-08-26.dahlia, so this
+ * pins THAT: nothing changes today, and an account upgrade changes nothing
+ * here until someone changes this line (and the webhook endpoint's version in
+ * the Stripe dashboard to match).
  */
-export const STRIPE_API_VERSION: string | null = null;
+export const STRIPE_API_VERSION: string | null = '2026-08-26.dahlia';
 
 /** The version Stripe last said it answered in (its Stripe-Version response header). */
 let apiVersionSeen: string | null = null;
