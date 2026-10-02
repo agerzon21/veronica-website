@@ -6,15 +6,18 @@ this is the state of the work.
 
 ---
 
-## 1. WHAT IS LIVE, AND WHAT SHIPS NEXT
+## 1. WHAT IS LIVE
 
-**Live:** `d365cf4`. PA sales tax on new bookings, lead follow-ups, stars and
-closed leads in Messages, the assistant saving a draft when none is pending,
-and the Instagram copy flow. Migrations 049 and 050 are applied to production
-(19 bookings grandfathered as `absorbed`, 3 out-of-state ones `exempt`, new
-bookings default to `added`).
+**Live:** `14b41b7` (2026-10-02), verified on production: every route
+returns 200 and the screen suites pass against the live build. Migrations
+through 052 are applied. Nothing is half-built.
 
-**The next batch**, built and tested locally, in the commit after `d365cf4`:
+Shipped on 2026-10-01 and 02, after `f1ceb61`:
+
+- `d365cf4`: PA sales tax on new bookings, lead follow-ups, stars and closed
+  leads in Messages, the assistant saving a draft when none is pending, and
+  the Instagram copy flow (migrations 049 and 050).
+- `29ba568` to `14b41b7`:
 
 | Change | Where | Database |
 |---|---|---|
@@ -24,14 +27,9 @@ bookings default to `added`).
 | Signing race (audit M10) | `_portal-update.ts` guarded transaction, `api/_contract-fingerprint.ts`, `_sign-contract.ts` | none |
 | Money history (audit M11) | `api/_money-history.ts`, every money writer, "Show change history" on the client screen | **migration 052** |
 | Portal login hardening | constant-work `checkPortalPassword`, `api/portal/_throttle.ts`, paced reset requests | **migration 051** |
-| Stripe API version shown in Integrations, pin ready | `STRIPE_API_VERSION` in `api/_stripe.ts`, still `null` | none |
-| Lead rules on Scranton's date, not UTC | `api/admin/_messages-list.ts` | none |
-| Long-dash sweep | 2,191 lines in 310 files | none |
-
-**Deploy order:** `node scripts/migrate.mjs up --yes` (applies 051 and 052;
-both only add tables, and the code treats a missing table as "no limit" and
-"no history"), then push. Then pin Stripe: read the version Integrations now
-shows, set `STRIPE_API_VERSION` to it, ship that with the next batch.
+| Stripe API pinned to `2026-08-26.dahlia`, the version the account and webhook reported; Integrations shows all three | `STRIPE_API_VERSION` in `api/_stripe.ts` | none |
+| Lead rules on Eastern time, not UTC | `api/admin/_messages-list.ts` | none |
+| Long-dash sweep | 2,193 lines in 310 files | none |
 
 ---
 
