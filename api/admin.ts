@@ -1,7 +1,7 @@
 /**
  * Dispatcher for /api/admin/* routes.
  *
- * Same pattern as api/portal.ts — one function fans out to
+ * Same pattern as api/portal.ts, one function fans out to
  * underscore-prefixed handler files under ./admin/ to stay under
  * Vercel's Hobby-plan 12-function ceiling. The `vercel.json` rewrite
  * maps /api/admin/X → /api/admin?action=X.
@@ -82,6 +82,8 @@ import cronsHistoryHandler from './admin/_crons-history.js';
 import configHealthHandler from './admin/_config-health.js';
 import paymentIssuesHandler from './admin/_payment-issues.js';
 import salesTaxReportHandler from './admin/_sales-tax-report.js';
+import droneLicenseHandler from './admin/_drone-license.js';
+import taxDeadlinesHandler from './admin/_tax-deadlines.js';
 import rebuildHandler from './admin/_rebuild.js';
 import rebuildStatusHandler from './admin/_rebuild-status.js';
 import travelLinkHandler from './admin/_travel-link.js';
@@ -160,6 +162,8 @@ const HANDLERS: Record<
   'config-health': configHealthHandler,
   'payment-issues': paymentIssuesHandler,
   'sales-tax-report': salesTaxReportHandler,
+  'drone-license': droneLicenseHandler,
+  'tax-deadlines': taxDeadlinesHandler,
   rebuild: rebuildHandler,
   'rebuild-status': rebuildStatusHandler,
   // Builds the Google Maps directions link from Veronika's base to a session

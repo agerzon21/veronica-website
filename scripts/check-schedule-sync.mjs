@@ -57,6 +57,8 @@ try {
     // The contract's sales tax lines are derived in the same edit (migration 049).
     'src/data/sales-tax.ts',
     'src/data/payment-handles.ts',
+    // Every money edit is recorded with the change (migration 052).
+    'api/_money-history.ts',
   ]) port(f);
 
   // Auth is not what this file is about; replaced so the cases read as edits
@@ -68,13 +70,22 @@ try {
     `
 export const db = { row: null, statements: [] };
 export function getDb() {
-  return async function sql(strings, ...vals) {
+  const sql = async function sql(strings, ...vals) {
     const q = strings.join(' ? ').replace(/\\s+/g, ' ').trim();
     db.statements.push({ q, vals });
     if (q.startsWith('select id, contract_status')) return [db.row];
     if (q.startsWith('select 1 from client_portals')) return [];
+    // The signing-race guard (_portal-update.ts): the row comes back only
+    // while the contract is unsigned, as the real locked read would.
+    if (q.startsWith('select id from client_portals where id') && q.includes('for update')) {
+      return db.row.contract_status === 'signed' ? [] : [{ id: db.row.id }];
+    }
     return [];
   };
+  // The statements above have already been recorded when the array is built,
+  // so a transaction here is just their results, in order.
+  sql.transaction = async (queries) => Promise.all(queries);
+  return sql;
 }
 `,
   );

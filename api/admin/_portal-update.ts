@@ -31,6 +31,7 @@ import { requireAdmin } from '../_admin-auth.js';
 // See scripts/check-api-imports.mjs.
 import { formatSchedule, parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
 import { isSalesTaxMode, salesTaxContractVariables, salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import { actorName, historyInsert, historyReady } from '../_money-history.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
@@ -97,7 +98,7 @@ function withTypeDefaults(
  *     patchedVariables = { client_names: composed, ...(patchedVariables ?? existingVars) };
  *
  * When the caller did not also patch contract_variables, `patchedVariables` is
- * null, so that spread is `existingVars` — which already contains the key being
+ * null, so that spread is `existingVars`, which already contains the key being
  * set, and it lands AFTER the derived value and overwrites it. The whole block
  * became a no-op in the exact case it was written for: correcting one field on
  * its own. Verified against the real handler before fixing: moving the event
@@ -192,6 +193,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(409).json({ success: false, error: 'That gallery password is already in use.' });
       }
     }
+
+    // Amounts are checked here, before anything at all is written. They used
+    // to be checked next to their own UPDATE, halfway down, after the name,
+    // email and other fields had already been saved, so a typo in a price
+    // returned a 400 for a patch that had half happened.
+    for (const key of ['contract_total_amount', 'contract_retainer_amount'] as const) {
+      if (!(key in patch)) continue;
+      const v = patch[key];
+      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+        return res.status(400).json({
+          success: false,
+          error: `${key} must be a number of dollars, or null to clear it.`,
+        });
+      }
+    }
+    {
+      const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : v === null ? null : Number(v));
+      const total = 'contract_total_amount' in patch ? num(patch.contract_total_amount) : num(existing[0].contract_total_amount);
+      const retainer = 'contract_retainer_amount' in patch ? num(patch.contract_retainer_amount) : num(existing[0].contract_retainer_amount);
+      // Only when this patch sets one of them, so an old booking already in
+      // that state can still have its name or email corrected.
+      const touchesMoney = 'contract_total_amount' in patch || 'contract_retainer_amount' in patch;
+      if (touchesMoney && total !== null && retainer !== null && Number.isFinite(total) && Number.isFinite(retainer) && retainer > total) {
+        return res.status(400).json({
+          success: false,
+          error: 'The retainer cannot be more than the total.',
+        });
+      }
+    }
+
+    // The money history (migration 052): whether it is there, and who is
+    // acting. Looked up once, and only if this patch changes money at all.
+    let historyCtx: { on: boolean; actor: string } | null = null;
+    const history = async () => {
+      if (!historyCtx) {
+        const on = await historyReady(sql);
+        historyCtx = { on, actor: on ? await actorName(sql, auth) : '' };
+      }
+      return historyCtx;
+    };
 
     // Block financial edits once contract is signed
     const contractFrozen = existing[0].contract_status === 'signed';
@@ -587,7 +628,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Apply each field individually with parameterized SQL. Using
     // multiple short statements keeps the dynamic-SQL footprint
-    // minimal — much easier to keep safe than a query builder.
+    // minimal, much easier to keep safe than a query builder.
     /**
      * A cleared field means NULL, not an empty string.
      *
@@ -666,12 +707,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // to change with it: the screens, checkout and the delivery gate each read
     // the flag and treat the booking as owing nothing, whatever its total.
     if (typeof patch.complimentary === 'boolean') {
-      await sql`update client_portals set complimentary = ${patch.complimentary}, updated_at = now() where id = ${id}`;
+      const [was] = (await sql`select complimentary from client_portals where id = ${id}`) as Array<{ complimentary: boolean | null }>;
+      const changed = (was?.complimentary === true) !== patch.complimentary;
+      await sql.transaction([
+        sql`update client_portals set complimentary = ${patch.complimentary}, updated_at = now() where id = ${id}`,
+        ...(changed && (await history()).on
+          ? [historyInsert(sql, id, (await history()).actor, 'complimentary', { to: patch.complimentary })]
+          : []),
+      ]);
     }
     // Pennsylvania sales tax, validated above. A pending contract has already
-    // been re-rendered with (or without) its tax lines by the fold.
-    if (nextSalesTax !== null) {
-      await sql`update client_portals set sales_tax = ${nextSalesTax}, updated_at = now() where id = ${id}`;
+    // been re-rendered with (or without) its tax lines by the fold. A change
+    // into or out of 'added' changes the price, so it is written with the
+    // contract below; 'absorbed' <-> 'exempt' changes no price and goes now.
+    const taxChangesPrice =
+      nextSalesTax !== null &&
+      nextSalesTax !== storedSalesTax &&
+      (nextSalesTax === 'added' || storedSalesTax === 'added');
+    if (nextSalesTax !== null && !taxChangesPrice) {
+      await sql.transaction([
+        sql`update client_portals set sales_tax = ${nextSalesTax}, updated_at = now() where id = ${id}`,
+        ...(nextSalesTax !== storedSalesTax && (await history()).on
+          ? [historyInsert(sql, id, (await history()).actor, 'sales_tax', { from: storedSalesTax, to: nextSalesTax })]
+          : []),
+      ]);
     }
     // Extending a gallery that is about to expire.
     //
@@ -731,30 +790,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Written out twice rather than looped over a column name: a dynamic
     // identifier cannot be a bound parameter, and building one by hand is how
     // an injection gets in. Two explicit statements are worth the repetition.
-    const badAmount = (name: string) =>
-      res.status(400).json({
-        success: false,
-        error: `${name} must be a number of dollars, or null to clear it.`,
-      });
-
-    if ('contract_total_amount' in patch) {
-      const v = patch.contract_total_amount;
-      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
-        return badAmount('contract_total_amount');
-      }
-      if (!contractFrozen) {
-        await sql`update client_portals set contract_total_amount = ${v}, updated_at = now() where id = ${id}`;
-      }
-    }
-    if ('contract_retainer_amount' in patch) {
-      const v = patch.contract_retainer_amount;
-      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
-        return badAmount('contract_retainer_amount');
-      }
-      if (!contractFrozen) {
-        await sql`update client_portals set contract_retainer_amount = ${v}, updated_at = now() where id = ${id}`;
-      }
-    }
+    // (The amounts themselves are validated at the top and written with the
+    // contract below, in one transaction: see "THE SIGNING RACE".)
     if (typeof patch.partner_1_full_name === 'string') {
       const v = patch.partner_1_full_name.trim() || null;
       await sql`update client_portals set partner_1_full_name = ${v}, updated_at = now() where id = ${id}`;
@@ -765,12 +802,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Admin override of the client's portal password. Used when the
-    // client forgets their password and needs to be unblocked — set a
+    // client forgets their password and needs to be unblocked, set a
     // temporary value and tell them to change it on first login.
     // Always allowed regardless of contract status; this is the support
     // hatch.
     // `patch` is Record<string, unknown>, so a key rename is NOT caught by the
-    // compiler — a stale caller would silently no-op and Vero would think she
+    // compiler, a stale caller would silently no-op and Vero would think she
     // had set a password when she had not. Fail loudly instead.
     if ('client_password' in patch) {
       return res.status(400).json({
@@ -804,21 +841,80 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // The pruner sees the SAME merged variables the fill did, which is what
     // drops RELATED WEDDING BOOKING from an engagement contract whose
     // wedding_date was cleared, rather than leaving an orphan heading.
-    if (contractRender) {
-      const { spec, vars } = contractRender;
-      const filled = pruneEmptyOptionalSections(
-        fillTemplate(spec.template, vars),
-        vars,
-      );
-      const body = JSON.stringify(filled);
-      await sql`
-        update client_portals
-        set contract_template_key = ${templateKey},
-            contract_variables = ${JSON.stringify(vars)},
-            contract_body = ${body},
-            updated_at = now()
-        where id = ${id}
-      `;
+    /**
+     * THE SIGNING RACE (audit M10). Everything that changes what the client
+     * pays or reads is written HERE, together, and only while the contract is
+     * still unsigned AT THE MOMENT OF WRITING.
+     *
+     * The status above was read once, at the start. These writes used to be
+     * separate statements guarded only by that early read, so a client who
+     * signed in the second between them got a new price written over a
+     * contract they had just signed, and, worse, the re-render overwrote the
+     * very body they signed, so the stored contract no longer matched their
+     * PDF. Now one transaction locks the row first and every write repeats the
+     * check. If the client got there first, none of it happens and the answer
+     * is a 409 that says why. The other half is in
+     * api/portal/_sign-contract.ts, which refuses to sign a body that changed
+     * after the client loaded it.
+     */
+    const guardedTotal = 'contract_total_amount' in patch && !contractFrozen;
+    const guardedRetainer = 'contract_retainer_amount' in patch && !contractFrozen;
+    if (guardedTotal || guardedRetainer || taxChangesPrice || contractRender) {
+      const body = contractRender
+        ? JSON.stringify(
+            pruneEmptyOptionalSections(fillTemplate(contractRender.spec.template, contractRender.vars), contractRender.vars),
+          )
+        : null;
+      const total = patch.contract_total_amount as number | null;
+      const retainer = patch.contract_retainer_amount as number | null;
+      const asNum = (v: string | null) => (v === null ? null : Number(v));
+      const h = await history();
+      const historyRows = h.on
+        ? [
+            ...(guardedTotal && asNum(existing[0].contract_total_amount) !== total
+              ? [historyInsert(sql, id, h.actor, 'total', { from: asNum(existing[0].contract_total_amount), to: total }, { unsignedOnly: true })]
+              : []),
+            ...(guardedRetainer && asNum(existing[0].contract_retainer_amount) !== retainer
+              ? [historyInsert(sql, id, h.actor, 'retainer', { from: asNum(existing[0].contract_retainer_amount), to: retainer }, { unsignedOnly: true })]
+              : []),
+            ...(taxChangesPrice
+              ? [historyInsert(sql, id, h.actor, 'sales_tax', { from: storedSalesTax, to: nextSalesTax }, { unsignedOnly: true })]
+              : []),
+          ]
+        : [];
+      const results = await sql.transaction([
+        sql`select id from client_portals where id = ${id} and contract_status <> 'signed' for update`,
+        ...(guardedTotal
+          ? [sql`update client_portals set contract_total_amount = ${total}, updated_at = now() where id = ${id} and contract_status <> 'signed'`]
+          : []),
+        ...(guardedRetainer
+          ? [sql`update client_portals set contract_retainer_amount = ${retainer}, updated_at = now() where id = ${id} and contract_status <> 'signed'`]
+          : []),
+        ...(taxChangesPrice
+          ? [sql`update client_portals set sales_tax = ${nextSalesTax}, updated_at = now() where id = ${id} and contract_status <> 'signed'`]
+          : []),
+        ...(contractRender && body !== null
+          ? [
+              sql`
+                update client_portals
+                set contract_template_key = ${templateKey},
+                    contract_variables = ${JSON.stringify(contractRender.vars)},
+                    contract_body = ${body},
+                    updated_at = now()
+                where id = ${id} and contract_status <> 'signed'
+              `,
+            ]
+          : []),
+        ...historyRows,
+      ]);
+      const stillUnsigned = Array.isArray(results[0]) && results[0].length > 0;
+      if (!stillUnsigned) {
+        return res.status(409).json({
+          success: false,
+          error:
+            'The client signed the contract while this was being saved, so the price and the contract were left as they signed them. Reload to see the signed booking.',
+        });
+      }
     }
 
     return res.status(200).json({ success: true });

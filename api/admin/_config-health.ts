@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
-import { listWebhookEndpoints } from '../_stripe.js';
+import { listWebhookEndpoints, STRIPE_API_VERSION, stripeApiVersionSeen } from '../_stripe.js';
 import { HANDLED_EVENTS } from '../_stripe-events.js';
 import { openPaymentIssues } from '../_payment-alerts.js';
 
 /**
- * Config health — which environment variables are actually set in the running
+ * Config health, which environment variables are actually set in the running
  * deployment, and what silently stops working when one is not.
  *
  * WHY THIS EXISTS
@@ -20,7 +20,7 @@ import { openPaymentIssues } from '../_payment-alerts.js';
  * becomes VISIBLE instead of being discovered months later.
  *
  * SECURITY
- * Returns booleans only. No value, no prefix, no length — a set/unset bit
+ * Returns booleans only. No value, no prefix, no length, a set/unset bit
  * cannot leak a credential. Super-only, because knowing which integrations
  * exist is itself a small amount of infrastructure detail.
  */
@@ -33,7 +33,7 @@ import { openPaymentIssues } from '../_payment-alerts.js';
  *   VERCEL_ENV_VAR_LINK     cosmetic deep link in one admin screen
  *
  * Everything else that api/ reads from process.env appears below. If you add a
- * new process.env read, add it here too — an unlisted variable is invisible
+ * new process.env read, add it here too, an unlisted variable is invisible
  * again, which is the whole problem this file exists to solve.
  */
 
@@ -47,13 +47,13 @@ interface Check {
   /** What actually happens when it is missing. Concrete, not "may not work". */
   ifMissing: string;
   /**
-   * What covers for this when it is unset — a hardcoded default, a database
+   * What covers for this when it is unset, a hardcoded default, a database
    * value, another variable. null means NOTHING does, and unset genuinely
    * means broken.
    *
    * This distinction is the whole point of the card. Without it every unset
    * variable looks like a problem, the screen cries wolf on eight things that
-   * are working perfectly, and it gets ignored — which is worse than not
+   * are working perfectly, and it gets ignored, which is worse than not
    * having it, because now the one real gap is buried in noise.
    */
   fallback: string | null;
@@ -133,14 +133,14 @@ const CHECKS: Check[] = [
     key: 'GOOGLE_SERVICE_ACCOUNT_JSON',
     severity: 'feature',
     purpose: 'Google Drive access',
-    ifMissing: 'Gallery sync and client gallery delivery both fail — no photos can be read from Drive.',
+    ifMissing: 'Gallery sync and client gallery delivery both fail, no photos can be read from Drive.',
     fallback: null,
   },
   {
     key: 'GALLERY_DRIVE_FOLDER_ID',
     severity: 'feature',
     purpose: 'Which Drive folder feeds the public gallery',
-    ifMissing: 'Only matters if the database value is also missing — then the sync has nothing to read.',
+    ifMissing: 'Only matters if the database value is also missing, then the sync has nothing to read.',
     // _gallery-sync.ts:143 is `dbValue ?? process.env.GALLERY_DRIVE_FOLDER_ID`,
     // so the database WINS and this env var is legacy backwards-compat.
     fallback: 'Set in the database (Gallery settings), which takes priority over this.',
@@ -198,7 +198,7 @@ const CHECKS: Check[] = [
     key: 'EMAIL_FROM_ADDRESS',
     severity: 'optional',
     purpose: 'The address outgoing email is sent from, and the one the inbox treats as "us"',
-    ifMissing: 'Nothing, unless that address ever changes — then this must be set.',
+    ifMissing: 'Nothing, unless that address ever changes, then this must be set.',
     fallback: 'Hardcoded vero@vero.photography.',
   },
   {
@@ -254,7 +254,7 @@ const CHECKS: Check[] = [
     ifMissing: 'Nothing, while ImprovMX is the inbound provider. Required only if INBOUND_EMAIL_PROVIDER is set to resend.',
     // parseResend is only reachable when PROVIDER === 'resend'; the default and
     // active provider is improvmx, so this code path never runs today.
-    fallback: 'Unused — the inbound provider is ImprovMX.',
+    fallback: 'Unused, the inbound provider is ImprovMX.',
   },
   {
     key: 'CONTRACT_AUDIT_SECRET',
@@ -391,6 +391,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     subscribed: number;
     url: string | null;
     note: string | null;
+    /**
+     * Stripe's API versions, for pinning one (STRIPE_API_VERSION in
+     * _stripe.ts): what the account answers in by default, what the webhook's
+     * events are written in (null: the account default), and what we pin.
+     */
+    versions?: { account: string | null; webhook: string | null; pinned: string | null };
   } = { state: 'unknown', missing: [], subscribed: 0, url: null, note: null };
 
   if (stripeKey) {
@@ -455,6 +461,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           subscribed: wildcard ? HANDLED_EVENTS.length : enabled.size,
           url: ours[0].url ?? null,
           note: wildcard ? 'Subscribed to all events.' : null,
+          versions: {
+            account: stripeApiVersionSeen(),
+            webhook: ours[0].api_version ?? null,
+            pinned: STRIPE_API_VERSION,
+          },
         };
       }
     } catch {

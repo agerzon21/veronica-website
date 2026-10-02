@@ -1,5 +1,5 @@
 /**
- * Dispatcher for /api/cron/* routes — hit by Vercel Cron on a schedule.
+ * Dispatcher for /api/cron/* routes, hit by Vercel Cron on a schedule.
  *
  * Same "one dispatcher, many underscore-prefixed handlers" pattern as
  * /api/admin and /api/portal, so we stay under Vercel Hobby's 12
@@ -17,7 +17,7 @@
  *   GET  /api/cron/gallery-sync    → ./cron/_gallery-sync.ts
  *                                    (daily at 2am UTC; reconciles
  *                                    gallery_photos against the Drive
- *                                    Gallery folder — new photos get
+ *                                    Gallery folder, new photos get
  *                                    AI-drafted metadata, removed ones
  *                                    soft-deleted. Vercel Hobby caps
  *                                    crons at once-per-day; admin can
@@ -31,6 +31,7 @@ import gallerySyncHandler from './cron/_gallery-sync.js';
 import igAvatarRefreshHandler, { CRON_META as IG_AVATAR_META } from './cron/_ig-avatar-refresh.js';
 import stripeFeeBackfillHandler, { CRON_META as STRIPE_FEE_META } from './cron/_stripe-fee-backfill.js';
 import stripeReconcileHandler, { CRON_META as STRIPE_RECONCILE_META } from './cron/_stripe-reconcile.js';
+import taxRemindersHandler, { CRON_META as TAX_REMINDERS_META } from './cron/_tax-reminders.js';
 
 // Exported so the admin "Run now" endpoint (api/admin/_crons-run-now.ts)
 // can look a handler up by name and invoke it in-process, instead of
@@ -42,7 +43,7 @@ export const HANDLERS: Record<
 > = {
   'instagram-check': instagramCheckHandler,
   'gallery-sync': gallerySyncHandler,
-  // No vercel.json cron entry — both Hobby slots are taken. This is chained
+  // No vercel.json cron entry, both Hobby slots are taken. This is chained
   // from instagram-check (which already runs daily and already talks to the
   // Graph API) and is invocable from the admin "Run now" button, which goes
   // through this same HANDLERS map.
@@ -53,27 +54,29 @@ export const HANDLERS: Record<
   // The daily check of Stripe against the ledger. No vercel.json entry for
   // the same reason; chained from gallery-sync, and runnable from the panel.
   'stripe-reconcile': stripeReconcileHandler,
+  // Tax deadline emails. Chained from instagram-check, runnable from the panel.
+  'tax-reminders': taxRemindersHandler,
 };
 
 /**
  * Metadata for jobs that have NO vercel.json cron entry.
  *
  * The admin Crons list reads cron_jobs rows, and the only thing that creates a
- * row is runGuarded — which runs when the job runs. For a scheduled job that is
+ * row is runGuarded, which runs when the job runs. For a scheduled job that is
  * fine: Vercel invokes it and it appears. For a job with no schedule entry it is
- * a deadlock — it cannot appear until it runs, and it can only be run from the
+ * a deadlock, it cannot appear until it runs, and it can only be run from the
  * list it cannot appear in. ig-avatar-refresh hit exactly that and was invisible
  * in the panel despite being registered and working.
  *
  * _crons-list.ts seeds from this so any such job shows up immediately, with its
  * real enable toggle, Run-now button and run history.
  */
-export const UNSCHEDULED_CRON_META = [IG_AVATAR_META, STRIPE_FEE_META, STRIPE_RECONCILE_META] as const;
+export const UNSCHEDULED_CRON_META = [IG_AVATAR_META, STRIPE_FEE_META, STRIPE_RECONCILE_META, TAX_REMINDERS_META] as const;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expected = process.env.CRON_SECRET;
   if (!expected) {
-    console.error('[cron] CRON_SECRET env var is missing — refusing to run');
+    console.error('[cron] CRON_SECRET env var is missing, refusing to run');
     return res.status(500).json({ success: false, error: 'Cron not configured' });
   }
   const authHeader = req.headers.authorization ?? '';

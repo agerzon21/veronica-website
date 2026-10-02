@@ -29,6 +29,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin } from '../_admin-auth.js';
 import { getDb } from '../_db.js';
+import { easternToday } from '../../src/data/tax-calendar.js';
 
 const KEY = 'sales_tax_license';
 
@@ -110,6 +111,26 @@ function dueDateFor(period: string): string {
   return `${dueYear}-${String(dueMonth).padStart(2, '0')}-20`;
 }
 
+/** The last day of a quarter, 'YYYY-MM-DD'. */
+function periodEnd(period: string): string {
+  const [ys, qs] = period.split('-Q');
+  const y = Number(ys);
+  const month = Number(qs) * 3;
+  const last = new Date(Date.UTC(y, month, 0)).getUTCDate();
+  return `${y}-${String(month).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+}
+
+const PERIOD = /^\d{4}-Q[1-4]$/;
+
+/**
+ * A return can only be filed once its quarter has ended, so a quarter still
+ * running cannot be marked filed. Marking one early would also silence its
+ * reminder emails on the Taxes page, which is the failure they exist for.
+ */
+function hasEnded(period: string): boolean {
+  return periodEnd(period) < easternToday();
+}
+
 function addYears(iso: string, years: number): string {
   const d = new Date(iso);
   d.setFullYear(d.getFullYear() + years);
@@ -135,15 +156,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (auth.level !== 'super') {
         return res.status(403).json({ success: false, error: 'Super admin only' });
       }
+      const [prior] = (await sql`
+        select value from system_state where key = ${KEY} limit 1
+      `) as Array<{ value: string | null }>;
+      let existing: LicenseRecord | null = null;
+      try {
+        existing = prior?.value ? (JSON.parse(prior.value) as LicenseRecord) : null;
+      } catch {
+        existing = null;
+      }
       const number = String(req.body?.number ?? '').trim();
       const issuedAt = String(req.body?.issued_at ?? '').trim();
-      if (!number) return res.status(400).json({ success: false, error: 'Licence number required' });
       // Truncated HERE, on the way in, so the full number never reaches the
       // database even once. Digits only, because people paste it with dashes.
+      // Left empty, the saved number stays: only its last four digits exist,
+      // so the form cannot show it, and retyping it to fix a date is a trap.
       const digits = number.replace(/\D/g, '');
-      const numberLast4 = digits.slice(-4);
+      const numberLast4 = digits ? digits.slice(-4) : existing?.numberLast4 ?? '';
+      if (!numberLast4) return res.status(400).json({ success: false, error: 'Licence number required' });
       if (!/^\d{4}-\d{2}-\d{2}$/.test(issuedAt)) {
         return res.status(400).json({ success: false, error: 'issued_at must be YYYY-MM-DD' });
+      }
+      // The last return filed is on the form, for a licence that already has
+      // returns behind it. A save that does not send it keeps what was there:
+      // before, every save wiped it, and every filed quarter went back to
+      // looking unfiled.
+      let lastFiledPeriod = existing?.lastFiledPeriod;
+      if (req.body && 'last_filed_period' in req.body) {
+        const p = String(req.body.last_filed_period ?? '').trim();
+        if (p && (!PERIOD.test(p) || !hasEnded(p))) {
+          return res.status(400).json({ success: false, error: 'The last return filed must be a quarter that has ended, like 2026-Q3' });
+        }
+        lastFiledPeriod = p || undefined;
       }
       // Expiry is derived rather than typed, because a five-year date is
       // exactly the arithmetic a tired person gets wrong, and an expiry that
@@ -154,7 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         expiresAt: String(req.body?.expires_at ?? '').trim() || addYears(issuedAt, LICENSE_YEARS),
         state: String(req.body?.state ?? 'PA').trim().toUpperCase(),
         note: String(req.body?.note ?? '').trim() || undefined,
-        lastFiledPeriod: String(req.body?.last_filed_period ?? '').trim() || undefined,
+        lastFiledPeriod,
       };
       await sql`
         insert into system_state (key, value, updated_at)
@@ -169,8 +213,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ success: false, error: 'Super admin only' });
       }
       const period = String(req.body?.period ?? '').trim();
-      if (!/^\d{4}-Q[1-4]$/.test(period)) {
+      if (!PERIOD.test(period)) {
         return res.status(400).json({ success: false, error: 'period must look like 2026-Q3' });
+      }
+      if (!hasEnded(period)) {
+        return res.status(400).json({ success: false, error: `${period} has not ended yet, so it cannot have been filed` });
       }
       const [existing] = (await sql`
         select value from system_state where key = ${KEY} limit 1
@@ -234,7 +281,9 @@ function describe(record: LicenseRecord) {
    * filed has back periods to sort out, and a confident "next due" would
    * paper over exactly the thing it should be surfacing.
    */
-  const current = quarterOf(new Date());
+  // Scranton's date: from 8 PM Eastern on the last day of a quarter, UTC is
+  // already in the next one.
+  const current = quarterOf(new Date(`${easternToday()}T12:00:00Z`));
   const due = record.lastFiledPeriod ? nextPeriod(record.lastFiledPeriod) : current.period;
   const dueDate = dueDateFor(due);
   const daysUntilFiling = Math.floor(
@@ -244,6 +293,9 @@ function describe(record: LicenseRecord) {
     lastFiled: record.lastFiledPeriod ?? null,
     nextPeriod: due,
     nextDueDate: dueDate,
+    // Whether the next return's quarter is over, so it can be marked filed.
+    nextPeriodEnds: periodEnd(due),
+    nextPeriodEnded: hasEnded(due),
     daysUntilFiling,
     // Overdue means the deadline has passed. 'due' means the quarter has
     // closed and the clock is running. 'open' means it has not closed yet.

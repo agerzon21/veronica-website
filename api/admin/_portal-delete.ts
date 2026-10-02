@@ -9,7 +9,7 @@
  *
  * Refused while ANY payment is on record (see below). Otherwise the schema
  * cascades the delete to the booking's other dependent rows. The signed-contract PDF stored in Vercel Blob
- * is NOT deleted from the blob store — it's kept as a historical
+ * is NOT deleted from the blob store, it's kept as a historical
  * record. If you need to scrub it too, do that out of band.
  *
  * Why this is super-only: deletion is irrecoverable. The regular
@@ -22,6 +22,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin, requireSuper } from '../_admin-auth.js';
+import { actorName, historyReady } from '../_money-history.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -53,12 +54,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * the booking really was a mistake; card payments cannot, by design, so a
      * booking that took a card payment stays.
      */
-    const rows = (await sql`
-      delete from client_portals
-      where id = ${id}
-        and not exists (select 1 from payment_entries where client_portal_id = ${id})
-      returning id
-    `) as Array<{ id: string }>;
+    // The money history (migration 052) keeps a line for the booking itself,
+    // written by the same statement as the delete, so the record of how its
+    // payments were removed is not left pointing at nothing.
+    const recording = await historyReady(sql);
+    const actor = recording ? await actorName(sql, auth) : '';
+    const rows = (recording
+      ? await sql`
+          with gone as (
+            delete from client_portals
+            where id = ${id}
+              and not exists (select 1 from payment_entries where client_portal_id = ${id})
+            returning id, client_display_name, contract_total_amount
+          ), logged as (
+            insert into money_history (client_portal_id, booking_name, actor, action, detail)
+            select gone.id, gone.client_display_name, ${actor}, 'booking_deleted',
+                   jsonb_build_object('total', gone.contract_total_amount)
+            from gone
+          )
+          select id from gone
+        `
+      : await sql`
+          delete from client_portals
+          where id = ${id}
+            and not exists (select 1 from payment_entries where client_portal_id = ${id})
+          returning id
+        `) as Array<{ id: string }>;
     if (rows.length === 0) {
       const exists = (await sql`
         select

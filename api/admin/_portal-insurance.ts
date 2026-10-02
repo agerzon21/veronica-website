@@ -31,6 +31,7 @@ import { getDb } from '../_db.js';
 import { randomUUID } from 'node:crypto';
 import { writeWithRecompute } from '../_payments.js';
 import { requireAdmin } from '../_admin-auth.js';
+import { actorName, historyReady } from '../_money-history.js';
 
 /** Mirrors the CHECK in migration 047, so a typo is a 400 and not a 500. */
 const STATUSES = new Set(['none', 'needed', 'purchased', 'declined']);
@@ -88,6 +89,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }>;
     if (!portal) return res.status(404).json({ success: false, error: 'No such booking' });
 
+    /**
+     * The money history (migration 052). The insurance charge is money on the
+     * client's balance, so moving it is recorded like any other charge: from
+     * what it was to what it is now, read from the charge row itself, first in
+     * the change's own transaction, and only when the amount really moves.
+     */
+    const recording = await historyReady(sql);
+    const actor = recording ? await actorName(sql, auth) : '';
+    const insuranceHistory = (chargeId: string | null, to: number | null) =>
+      recording
+        ? [
+            sql`
+              insert into money_history (client_portal_id, booking_name, actor, action, detail)
+              select ${id}, cp.client_display_name, ${actor}, 'insurance',
+                     jsonb_build_object('from', (select pc.amount from portal_charges pc where pc.id = ${chargeId}::uuid), 'to', ${to}::numeric)
+              from client_portals cp
+              where cp.id = ${id}
+                and (select pc.amount from portal_charges pc where pc.id = ${chargeId}::uuid) is distinct from ${to}::numeric
+            `,
+          ]
+        : [];
+
     if (action === 'save') {
       const status = str(req.body?.status) ?? 'needed';
       if (!STATUSES.has(status)) {
@@ -141,6 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        * that knows the actual cost.
        */
       if (!billable && portal.insurance_charge_id) {
+        writes.unshift(...insuranceHistory(portal.insurance_charge_id, null));
         writes.push(sql`delete from portal_charges where id = ${portal.insurance_charge_id} and client_portal_id = ${id}`);
         writes.push(sql`update client_portals set insurance_charge_id = null where id = ${id}`);
       }
@@ -198,6 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          * changed nothing while the panel reported the client billed.
          */
         const chargeId = portal.insurance_charge_id ?? randomUUID();
+        writes.unshift(...insuranceHistory(chargeId, actual));
         writes.push(sql`
           insert into portal_charges (id, client_portal_id, amount, reason, note, charged_at)
           values (${chargeId}, ${id}, ${actual}, 'insurance', ${label}, now())
@@ -209,6 +234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (portal.insurance_charge_id) {
         // Flipped to non-billable after a charge existed. Remove it, or the
         // client keeps paying for cover Vero has decided to absorb.
+        writes.unshift(...insuranceHistory(portal.insurance_charge_id, null));
         writes.push(sql`delete from portal_charges where id = ${portal.insurance_charge_id} and client_portal_id = ${id}`);
         writes.push(sql`update client_portals set insurance_charge_id = null where id = ${id}`);
       }
@@ -223,6 +249,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'clear') {
       const writes = [];
       if (portal.insurance_charge_id) {
+        writes.push(...insuranceHistory(portal.insurance_charge_id, null));
         writes.push(sql`
           delete from portal_charges
           where id = ${portal.insurance_charge_id} and client_portal_id = ${id}

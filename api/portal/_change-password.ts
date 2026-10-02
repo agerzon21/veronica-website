@@ -15,12 +15,13 @@
  * changing the account owner's password.
  *
  * Same wrong-auth delay pattern as /api/portal/client to blunt timing
- * attacks. We DON'T leak whether the email exists — a bad email
+ * attacks. We DON'T leak whether the email exists, a bad email
  * returns the same 401 as a bad password.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword, hashPortalPassword } from './_password.js';
+import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { getDb } from '../_db.js';
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -59,6 +60,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // Guessing is throttled per address and per network (see _throttle.ts),
+    // checked before the password so a refused attempt costs no scrypt.
+    const throttleKeys = portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
     // Verify credentials against the current password. Same lookup shape
     // as /api/portal/client so behavior stays consistent.
     const rows = (await sql`
@@ -69,12 +78,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       limit 1
     `) as Array<{ id: string; client_password: string | null; client_password_hash: string | null }>;
 
-    // Password verified in code, not SQL — it is hashed now. Same 401 and
+    // Password verified in code, not SQL, it is hashed now. Same 401 and
     // same delay either way so this cannot enumerate client addresses.
+    // The hash check runs first, for every attempt: see checkPortalPassword.
     if (
-      !rows[0] ||
-      !checkPortalPassword(currentPassword, rows[0].client_password_hash).ok
+      !checkPortalPassword(currentPassword, rows[0]?.client_password_hash).ok ||
+      !rows[0]
     ) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
     }

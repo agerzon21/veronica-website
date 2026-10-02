@@ -8,29 +8,33 @@
  *   → 200 { success, contract_status, contract_signed_at, contract_signed_pdf_drive_id }
  *   → 400  on missing/invalid fields
  *   → 401  on bad credentials
- *   → 409  contract not in 'pending' state
+ *   → 409  contract not in 'pending' state, or { code: 'contract_changed', contract_body,
+ *          contract_hash } when it changed after the client loaded it
  *
  * Flow:
  *  1. Auth the client (email + password)
  *  2. Validate consent, signature data, signer_name
  *  3. Build audit record + HMAC-sign it (tamper-evident, ESIGN-compliant)
- *  4. Generate signed PDF (React-PDF) — contract body, both signatures, audit page
+ *  4. Generate signed PDF (React-PDF), contract body, both signatures, audit page
  *  5. Upload PDF to Veronika's "Signed Contracts" Drive folder
  *  6. Email both parties with the PDF attached (Resend)
  *  7. Persist signed state to client_portals
  *
- * Steps 4–6 are sequential because a failure in any one means we shouldn't
- * persist the signed state — the client should be able to retry. We don't
+ * Steps 4-6 are sequential because a failure in any one means we shouldn't
+ * persist the signed state, the client should be able to retry. We don't
  * write to the DB until Drive + email both succeed.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
+import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { createHmac } from 'node:crypto';
 import { put } from '@vercel/blob';
 import { getDb } from '../_db.js';
 import { sendEmail, FROM_ADDRESS } from '../_auto-reply.js';
 import { renderContractPdf, type AuditRecord } from '../_contract-pdf.js';
+import { contractFingerprint } from '../_contract-fingerprint.js';
+import { reportPaymentIssue } from '../_payment-alerts.js';
 import type { ContractTemplate } from '../../src/data/contract-template.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -39,7 +43,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const VERONIKA_NAME = 'Veronika Polbina';
 
 type ClientRow = {
-  // Selected only to authenticate — never returned to the client.
+  // Selected only to authenticate, never returned to the client.
   client_password_hash: string | null;
   id: string;
   client_display_name: string | null;
@@ -63,6 +67,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const signerSignature =
     typeof req.body?.signer_signature === 'string' ? req.body.signer_signature : '';
   const consent = req.body?.consent === true;
+  // The fingerprint of the text the client read (api/portal/_client.ts). Absent
+  // only from a page loaded before this shipped, which still gets the guarded
+  // write at the end.
+  const shownHash =
+    typeof req.body?.contract_hash === 'string' ? req.body.contract_hash.trim().toLowerCase() : '';
 
   if (!email || !password) {
     await sleep(WRONG_AUTH_DELAY_MS);
@@ -102,6 +111,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     console.log('[sign-contract] start', { email });
     const sql = getDb();
+    // Guessing is throttled per address and per network (see _throttle.ts),
+    // checked before the password so a refused attempt costs no scrypt.
+    const throttleKeys = portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
 
     // 1. Auth + load contract body
     const rows = (await sql`
@@ -114,11 +131,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as ClientRow[];
 
 
-    // Password is verified in code now, not in SQL — it is hashed. Same 401 and
+    // Password is verified in code now, not in SQL, it is hashed. Same 401 and
     // same delay whether the email is unknown or the password is wrong, so this
     // cannot be used to discover which addresses belong to clients.
     const authRow = rows[0];
-    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash).ok) {
+    if (!checkPortalPassword(password, authRow?.client_password_hash).ok || !authRow) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }
@@ -135,6 +153,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(409).json({
         success: false,
         error: 'No contract body is set for this portal. Please contact us.',
+      });
+    }
+
+    // THE SIGNING RACE (audit M10). If the contract changed after this page
+    // loaded it, a price edit say, the client has not read what they are
+    // about to sign. Refuse, and hand back the current text so the page can
+    // show it in place; signing it is then one more click, on the right text.
+    const currentHash = contractFingerprint(portal.contract_body);
+    if (shownHash && shownHash !== currentHash) {
+      return res.status(409).json({
+        success: false,
+        code: 'contract_changed',
+        error:
+          'Your contract was updated while you were reading it. The new version is shown below: please read it and sign again.',
+        contract_body: portal.contract_body,
+        contract_hash: currentHash,
       });
     }
 
@@ -160,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const signerUserAgent = (req.headers['user-agent'] as string | undefined) ?? 'unknown';
 
     // 3. HMAC-sign the audit record so the PDF audit page is tamper-evident.
-    // The record we sign is the canonical JSON of the fields below — any
+    // The record we sign is the canonical JSON of the fields below, any
     // change (e.g. someone editing the PDF to alter the signer's name) will
     // invalidate the HMAC.
     const auditPayload = {
@@ -188,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 4. Render PDF
     // Allow the env var to be either the full data URL or just the base64
-    // payload — saves a step when copy-pasting from `base64 -i file.png`.
+    // payload, saves a step when copy-pasting from `base64 -i file.png`.
     const sigEnv = process.env.VERONIKA_SIGNATURE_PNG_BASE64?.trim();
     const photographerSignaturePng = sigEnv
       ? sigEnv.startsWith('data:')
@@ -212,12 +246,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('[sign-contract] PDF rendered', { bytes: pdfBuffer.length });
 
     // 5. Upload to Vercel Blob (private store). The returned URL is random
-    //    and requires the blob token to download — clients access signed
+    //    and requires the blob token to download, clients access signed
     //    PDFs via /api/portal/download-contract, which re-auths and streams
     //    the file back. Storing in Blob (rather than Drive) sidesteps the
     //    "service accounts have no storage quota" issue from a personal
     //    Google account.
-    const pdfFilename = `Contract — ${portal.client_display_name ?? portal.client_email} — ${signedAt.slice(0, 10)}.pdf`;
+    const pdfFilename = `Contract, ${portal.client_display_name ?? portal.client_email}, ${signedAt.slice(0, 10)}.pdf`;
     const { url: pdfUrl } = await put(`contracts/${pdfFilename}`, pdfBuffer, {
       access: 'private',
       contentType: 'application/pdf',
@@ -243,13 +277,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('[sign-contract] email sent');
     } catch (err) {
       // If the email fails after the Blob upload succeeded, the PDF is
-      // still stored — log and continue so the contract is marked signed
+      // still stored, log and continue so the contract is marked signed
       // in the DB. The client can download from the portal directly.
       console.error('[sign-contract] email send failed (Blob upload OK):', err);
     }
 
-    // 7. Persist signed state
-    await sql`
+    // 7. Persist signed state, ONLY if it is still the contract that was
+    //    rendered. The check at the top covers the minutes the client spent
+    //    reading; this covers the seconds the PDF and email took. If Vero
+    //    saved an edit in between (her side writes only while unsigned, see
+    //    _portal-update.ts) or a second tap already signed it, nothing is
+    //    written over it.
+    const persisted = (await sql`
       update client_portals
       set contract_status = 'signed',
           contract_signed_at = ${signedAt},
@@ -262,7 +301,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           contract_signed_pdf_url = ${pdfUrl},
           updated_at = now()
       where id = ${portal.id}
-    `;
+        and contract_status = 'pending'
+        and contract_body = ${portal.contract_body}
+      returning id
+    `) as Array<{ id: string }>;
+    if (persisted.length === 0) {
+      // Rare, and it needs a person: a signed PDF was emailed for text that
+      // changed seconds later. Alex hears about it once, through the same
+      // channel as a payment problem, rather than finding it in a log.
+      console.error('[sign-contract] contract changed or was signed during signing', { portal_id: portal.id });
+      await reportPaymentIssue({
+        key: `contract-race:${portal.id}:${signedAt.slice(0, 16)}`,
+        summary: `${portal.client_display_name ?? portal.client_email}: a signed contract PDF was emailed, but the contract changed (or was already signed) before it could be saved.`,
+        action: 'Open the booking, check which contract is current, and send the client that one to sign.',
+        source: 'contract',
+      }).catch(() => {});
+      return res.status(409).json({
+        success: false,
+        error:
+          'Your contract changed while it was being signed. Please reload the page and check the current version.',
+      });
+    }
     console.log('[sign-contract] DB updated, signing complete');
 
     return res.status(200).json({
@@ -277,7 +336,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// Simple confirmation email — kept short and personal, no marketing tone.
+// Simple confirmation email, kept short and personal, no marketing tone.
 function buildSignedEmailText(clientLabel: string | null, signerName: string): string {
   const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
   return `${greeting}
@@ -291,7 +350,7 @@ If anything looks off or you have questions, just reply to this email.
 Warmly,
 Veronika
 
-— Signed electronically by ${signerName}`;
+Signed electronically by ${signerName}`;
 }
 
 function buildSignedEmailHtml(clientLabel: string | null, signerName: string): string {
@@ -300,7 +359,7 @@ function buildSignedEmailHtml(clientLabel: string | null, signerName: string): s
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
 <p>Hi ${firstName},</p>
-<p>Thank you for signing your contract — you're officially on the books.</p>
+<p>Thank you for signing your contract, you're officially on the books.</p>
 <p>Your signed copy is attached to this email for your records. You can also access it any time from your <a href="https://vero.photography/portal" style="color:#c9a96e">Client Portal</a>.</p>
 <p>If anything looks off or you have questions, just reply to this email.</p>
 <p>Warmly,<br><em>Veronika</em></p>

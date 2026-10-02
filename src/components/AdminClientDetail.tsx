@@ -1,4 +1,4 @@
-import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton, Spinner } from '@chakra-ui/react';
 import { CARD_FEE_DISCOUNT_METHOD } from '../data/payment-handles';
 import {
   SALES_TAX_CONTRACT_KEYS,
@@ -755,6 +755,28 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
    * and a row of $0 figures is exactly what read as unpaid. Same shape as the
    * gallery access row, so the two switches on this screen look alike.
    */
+  // Who changed this booking's money and when (migration 052). In all three
+  // variants of the Payments section below: a free booking, or one whose total
+  // was cleared, still has a money trail worth reading.
+  const moneyHistory = (
+    <MoneyHistory
+      portalId={portalId}
+      adminPassword={adminPassword}
+      // Anything a money edit changes, so an open history refreshes after the
+      // edit that just happened.
+      refreshKey={[
+        portal?.paid_to_date,
+        portal?.charges_total,
+        portal?.contract_total_amount,
+        portal?.contract_retainer_amount,
+        portal?.complimentary,
+        portal?.sales_tax,
+        payments.length,
+        charges.length,
+      ].join('|')}
+    />
+  );
+
   const complimentaryRow = (
     <Stack
       direction={{ base: 'column', md: 'row' }}
@@ -1080,7 +1102,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           />
 
           {/* Once the gallery URL is set, surface the client-facing
-              delivery link — /portal/pass with the password encoded —
+              delivery link, /portal/pass with the password encoded
               so Vero can verify the actual surface her clients see,
               not the raw Drive folder. */}
           {portal.drive_url && (
@@ -1139,7 +1161,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             charges={charges as unknown as Array<Record<string, unknown>>}
           />
 
-          {/* Status label + primary CTA — stacks on mobile so the CTA
+          {/* Status label + primary CTA, stacks on mobile so the CTA
               spans full-width instead of orphaning under a wrapped label. */}
           <Stack
             direction={{ base: 'column', md: 'row' }}
@@ -1350,7 +1372,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             }}
             onSave={(v) => patch({ gallery_password: v }, 'gallery_password')}
           />
-          {/* Access label + toggle — stacks on mobile so the toggle CTA
+          {/* Access label + toggle, stacks on mobile so the toggle CTA
               takes full row width rather than orphaning. */}
           <Stack
             direction={{ base: 'column', md: 'row' }}
@@ -1382,7 +1404,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       </Section>
 
       {/* ─── Payments section. Surfaces whenever a total is on the
-            books — full-mode portals always have one; simple-mode rows
+            books, full-mode portals always have one; simple-mode rows
             have one only when Vero entered totals at creation. ─── */}
       {/* The whole Payments section is gated on a total existing, and the box
           that sets one lives in the LAST section of the screen. So logging a
@@ -1393,7 +1415,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           this is the common case, not an edge one. Set it from here instead. */}
       {portal.complimentary && (
         <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
-          {complimentaryRow}
+          <VStack align="stretch" spacing={3}>
+            {complimentaryRow}
+            {moneyHistory}
+          </VStack>
         </Section>
       )}
 
@@ -1426,6 +1451,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             />
             {salesTaxRow}
             {complimentaryRow}
+            {moneyHistory}
           </VStack>
         </Section>
       )}
@@ -1546,6 +1572,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             )}
             {salesTaxRow}
             {complimentaryRow}
+            {moneyHistory}
           </VStack>
         </Section>
       )}
@@ -1565,7 +1592,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       {portal.mode === 'full' && (
         <Section title={t.clientDetail.sectionContract} icon={FaFileSignature} hue="orange">
           <VStack align="stretch" spacing={3}>
-            {/* Status label + signed-PDF CTA — same stacking pattern so
+            {/* Status label + signed-PDF CTA, same stacking pattern so
                 the "View Signed Copy" button doesn't orphan below. */}
             <Stack
               direction={{ base: 'column', md: 'row' }}
@@ -1854,7 +1881,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
 };
 
 // ─── Sub-components ─────────────────────────────────────────────────────
-// (BackLink removed — replaced by shared <AdminBackButton /> at call sites.)
+// (BackLink removed, replaced by shared <AdminBackButton /> at call sites.)
 
 /**
  * A titled card.
@@ -2902,7 +2929,7 @@ function ContractBadge({ status, signedAt }: { status: string; signedAt: string 
   return <Badge colorScheme="gray" variant="subtle">{t.clientDetail.contractNA}</Badge>;
 }
 
-// Inline editable field — keeps its own draft state so saves only happen
+// Inline editable field, keeps its own draft state so saves only happen
 // on blur/save, not every keystroke.
 function InlineField({
   label,
@@ -3371,6 +3398,152 @@ function SessionTypeField({
  * if it renders when it should not. It shows its own error inline rather than at the top of the page,
  * because on a phone the top of the page is three screens away.
  */
+type MoneyHistoryRow = {
+  id: string;
+  at: string;
+  actor: string;
+  action: string;
+  detail: Record<string, unknown>;
+};
+
+/**
+ * Who changed this booking's money, when, and from what to what (migration
+ * 052, api/_money-history.ts). Folded until asked for, and only fetched then:
+ * it is the record you go looking for when a number surprises you, not
+ * something to read on every visit. An open history refreshes after any money
+ * edit, so the line for the change just made appears under it.
+ */
+function MoneyHistory({
+  portalId,
+  adminPassword,
+  refreshKey,
+}: {
+  portalId: string;
+  adminPassword: string;
+  refreshKey: string;
+}) {
+  const { t, lang } = useAdminLang();
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<MoneyHistoryRow[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/payment-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, id: portalId, action: 'history' }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!data.success) throw new Error(data.error || 'failed');
+        setRows(data.history ?? []);
+        setFailed(false);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, portalId, adminPassword, refreshKey]);
+
+  const money = (v: unknown) =>
+    v === null || v === undefined || v === '' ? t.clientDetail.mhNotSet : formatMoney(Number(v));
+  const how = (method: unknown) =>
+    typeof method === 'string' && method && method !== CARD_FEE_DISCOUNT_METHOD ? method : '';
+  const reason = (r: unknown) =>
+    r === 'overtime'
+      ? t.clientDetail.reasonOvertime
+      : r === 'expense'
+        ? t.clientDetail.reasonExpense
+        : r === 'insurance'
+          ? t.clientDetail.reasonInsurance
+          : t.clientDetail.reasonOther;
+  const tax = (m: unknown) =>
+    m === 'added' || m === 'absorbed' || m === 'exempt' ? t.integrations.taxReportModeShort[m] : String(m ?? '');
+  const describe = (r: MoneyHistoryRow): string => {
+    const d = r.detail ?? {};
+    switch (r.action) {
+      case 'total':
+        return t.clientDetail.mhTotal(money(d.from), money(d.to));
+      case 'retainer':
+        return t.clientDetail.mhRetainer(money(d.from), money(d.to));
+      case 'complimentary':
+        return d.to === true ? t.clientDetail.mhFreeOn : t.clientDetail.mhFreeOff;
+      case 'sales_tax':
+        return t.clientDetail.mhTax(tax(d.from), tax(d.to));
+      case 'payment_added':
+        return t.clientDetail.mhPaymentAdded(money(d.amount), how(d.method));
+      case 'tip_added':
+        return t.clientDetail.mhTipAdded(money(d.amount), how(d.method));
+      case 'payment_deleted':
+        return t.clientDetail.mhPaymentDeleted(money(d.amount), how(d.method));
+      case 'discount_waived':
+        return t.clientDetail.mhDiscountWaived(money(d.amount));
+      case 'charge_added':
+        return t.clientDetail.mhChargeAdded(money(d.amount), reason(d.reason));
+      case 'charge_deleted':
+        return t.clientDetail.mhChargeDeleted(money(d.amount), reason(d.reason));
+      case 'insurance':
+        if (d.from === null || d.from === undefined) return t.clientDetail.mhInsuranceBilled(money(d.to));
+        if (d.to === null || d.to === undefined) return t.clientDetail.mhInsuranceRemoved(money(d.from));
+        return t.clientDetail.mhInsuranceChanged(money(d.from), money(d.to));
+      case 'booking_deleted':
+        return t.clientDetail.mhBookingDeleted;
+      default:
+        return r.action;
+    }
+  };
+  const when = (iso: string) =>
+    new Date(iso).toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+  return (
+    <Box>
+      <CTAButton variant="ghost" size="sm" onClick={() => setOpen((o) => !o)}>
+        {open ? t.clientDetail.moneyHistoryHide : t.clientDetail.moneyHistoryShow}
+      </CTAButton>
+      {open && (
+        <Box mt={2}>
+          {failed ? (
+            <Text fontSize="sm" color="red.600">
+              {t.clientDetail.moneyHistoryFailed}
+            </Text>
+          ) : rows === null ? (
+            <Spinner size="sm" color="brand.accent" />
+          ) : rows.length === 0 ? (
+            <Text fontSize="sm" color="gray.500">
+              {t.clientDetail.moneyHistoryEmpty}
+            </Text>
+          ) : (
+            <VStack align="stretch" spacing={2} data-testid="money-history">
+              {rows.map((r) => (
+                <Box key={r.id} borderLeft="2px solid" borderColor="gray.200" pl={3}>
+                  <Text fontSize="sm" color="gray.700">
+                    {describe(r)}
+                  </Text>
+                  <Text fontSize="xs" color="gray.500">
+                    {when(r.at)} · {r.actor}
+                  </Text>
+                </Box>
+              ))}
+            </VStack>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 function SettleDiscountCallout({
   portalId,
   adminPassword,
@@ -4127,7 +4300,7 @@ function AccountSection({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        // client_email is user data — pass it into the dict function as-is.
+        // client_email is user data, pass it into the dict function as-is.
         setResendMessage({ kind: 'ok', text: t.clientDetail.inviteResent(portal.client_email ?? '') });
         onChanged();
       } else {
@@ -4179,7 +4352,7 @@ function AccountSection({
   return (
     <Section title={t.clientDetail.sectionAccount} icon={FaCog} hue="gray">
       <VStack align="stretch" spacing={4}>
-        {/* Account status + Resend Invite — stacks on mobile so the CTA
+        {/* Account status + Resend Invite, stacks on mobile so the CTA
             spans full width and doesn't orphan under the badge. */}
         <Stack
           direction={{ base: 'column', md: 'row' }}
@@ -4228,11 +4401,11 @@ function AccountSection({
           </Text>
         )}
 
-        {/* Password override — for when the client lost their password.
+        {/* Password override, for when the client lost their password.
             Always available (even before they finish onboarding) because
             we can use it to "complete onboarding on their behalf" too. */}
         <Box>
-          {/* Password label/help + Set-Password toggle — same stacking
+          {/* Password label/help + Set-Password toggle, same stacking
               pattern so the CTA drops below the multi-line copy on
               mobile rather than getting shoved into an unreadable column. */}
           <Stack
@@ -4304,7 +4477,7 @@ function AccountSection({
  * next portal load.
  *
  * Field keys must match the variable names used in the contract
- * template — they round-trip into and out of contract_variables.
+ * template, they round-trip into and out of contract_variables.
  */
 function EditContractVariables({
   portal,
@@ -4893,7 +5066,7 @@ function DangerZone({
       )}
       {confirming && (
         // column-reverse on mobile keeps the destructive action visually
-        // separate from the safe (Cancel) action — Cancel ends up first
+        // separate from the safe (Cancel) action, Cancel ends up first
         // in reading order but Confirm sits on top of the tap zone.
         <Stack direction={{ base: 'column-reverse', md: 'row' }} spacing={2}>
           <CTAButton onClick={() => setConfirming(false)} variant="ghost" size="sm">

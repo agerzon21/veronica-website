@@ -6,7 +6,7 @@
  *     common, nav, messages, assistant, clients, ...) then by
  *     specific key. Each leaf is `{ en: string, ru: string }`.
  *   - `useAdminLang()` returns { lang, setLang, t } where `t` is
- *     the current-language projection of the whole dict — so
+ *     the current-language projection of the whole dict, so
  *     callers write `t.common.save` and get a plain string. No
  *     lookups by key, no missing-key surprises: TypeScript flags
  *     any typo at build time.
@@ -20,8 +20,8 @@
  *   Rules of the road:
  *   - Keep interpolations simple. If you need dynamic values
  *     inside a translated string, use a function leaf
- *     `(name: string) => \`Hello, \${name}\`` — see `.dynamic` examples.
- *   - Don't put user data in the dict — this is UI copy only.
+ *     `(name: string) => \`Hello, \${name}\``, see `.dynamic` examples.
+ *   - Don't put user data in the dict, this is UI copy only.
  *   - When Russian conveys the same idea with a different sentence
  *     structure, translate for meaning, not word-for-word.
  */
@@ -153,6 +153,8 @@ const dict = {
     users: { en: 'Admin users', ru: 'Администраторы' },
     table: { en: 'Table', ru: 'Таблица' },
     calendar: { en: 'Calendar', ru: 'Календарь' },
+    drone: { en: 'Drone licence', ru: 'Лицензия на дрон' },
+    tax: { en: 'Taxes', ru: 'Налоги' },
   },
 
   menuDrawer: {
@@ -164,6 +166,7 @@ const dict = {
     session: { en: 'Session', ru: 'Сессия' },
     signOut: { en: 'Sign out', ru: 'Выйти' },
     language: { en: 'Language', ru: 'Язык' },
+    licences: { en: 'Licences', ru: 'Лицензии' },
   },
 
   clients: {
@@ -214,9 +217,9 @@ const dict = {
         ready: { en: 'Ready', ru: 'Готова' },
         // Gallery hasn't been created at all yet.
         notStarted: { en: 'Not started', ru: 'Не начата' },
-        // Countdown pill next to "Delivered" — days until the gallery
+        // Countdown pill next to "Delivered", days until the gallery
         // link expires. Russian plural rules: 1 день (nom.sg), 2/3/4
-        // дня (gen.sg), 5+ дней (gen.pl); the teen range 11–14 always
+        // дня (gen.sg), 5+ дней (gen.pl); the teen range 11-14 always
         // takes gen.pl regardless of last digit.
         daysLeft: {
           en: (n: number) => `${n}d left`,
@@ -362,16 +365,16 @@ const dict = {
     fullTitle: { en: 'Full Portal', ru: 'Полный портал' },
     fullDescription: {
       en: 'A new booking with a contract to sign, payment tracking, onboarding email, and photo delivery later. Use this for weddings and most paid shoots.',
-      // Split into two shorter sentences — the English one runs long
+      // Split into two shorter sentences, the English one runs long
       // and reads awkwardly translated as a single Russian clause.
       ru: 'Новая съёмка с контрактом на подпись, отслеживанием оплаты, приветственным письмом и передачей фото потом. Подходит для свадеб и большинства платных съёмок.',
     },
     galleryOnlyTitle: { en: 'Gallery Only', ru: 'Только галерея' },
     galleryOnlyDescription: {
-      en: "Just share a Google Drive gallery with a password. No contract, no email, no login — replaces the manual photo handoffs. Use this after a shoot when there's no portal flow.",
+      en: "Just share a Google Drive gallery with a password. No contract, no email, no login, replaces the manual photo handoffs. Use this after a shoot when there's no portal flow.",
       // "manual photo handoffs" → «ручной передачи фото» keeps the
       // specific technical meaning; the em-dash carries over cleanly.
-      ru: 'Просто отправить галерею в Google Drive с паролем. Без контракта, без письма, без входа — заменяет ручную передачу фото. Подходит для съёмок, где полный портал не нужен.',
+      ru: 'Просто отправить галерею в Google Drive с паролем. Без контракта, без письма, без входа, заменяет ручную передачу фото. Подходит для съёмок, где полный портал не нужен.',
     },
   },
 
@@ -415,7 +418,7 @@ const dict = {
       ru: (status: number) => `Не удалось загрузить (${status})`,
     },
     // Individual conversation
-    aiOffBanner: { en: 'AI is off — replies are 100% you.', ru: 'AI отключён — отвечаешь ты сама.' },
+    aiOffBanner: { en: 'AI is off, replies are 100% you.', ru: 'AI отключён, отвечаешь ты сама.' },
     // "Refresh profile" button next to the contact name in the
     // conversation header. Manually re-fetches name / handle / avatar
     // from Instagram via /api/admin/messages-refresh-profile.
@@ -436,7 +439,7 @@ const dict = {
     noConversations: { en: 'No conversations yet.', ru: 'Пока нет диалогов.' },
     dismissAiOffNotice: { en: 'Dismiss AI-off notice', ru: 'Скрыть уведомление об отключённом AI' },
     couldNotLoad: { en: 'Could not load conversation.', ru: 'Не удалось загрузить диалог.' },
-    // Conversation list — fallback labels when contact_name/handle
+    // Conversation list, fallback labels when contact_name/handle
     // are both null. Instagram falls back to a masked ID suffix
     // ("Instagram user 234..."). Email falls back to the sender's
     // email address itself (which is the external_user_id).
@@ -488,12 +491,12 @@ const dict = {
     relativeWeeks: { en: (n: number) => `${n}w`, ru: (n: number) => `${n} нед` },
     // Sending / translation flow
     translationFailedSending: {
-      en: 'Translation failed — sending original text',
-      ru: 'Перевод не удался — отправляю оригинал',
+      en: 'Translation failed, sending original text',
+      ru: 'Перевод не удался, отправляю оригинал',
     },
     translationUnreachableSending: {
-      en: 'Translation unreachable — sending original text',
-      ru: 'Перевод недоступен — отправляю оригинал',
+      en: 'Translation unreachable, sending original text',
+      ru: 'Перевод недоступен, отправляю оригинал',
     },
     sendFailed: { en: 'Send failed', ru: 'Не удалось отправить' },
     clientPortalCreated: {
@@ -533,12 +536,12 @@ const dict = {
     deliveryBouncedRetry: { en: 'Try again', ru: 'Отправить ещё раз' },
     deliveryPending: { en: 'Sending…', ru: 'Отправляется…' },
     deliveryBouncedHelp: {
-      en: "This didn't reach them — their mail server turned it away. That's often temporary (their server was busy or filtering), so trying again later usually works. If it keeps failing, check the address is right and reach them another way.",
-      ru: 'Письмо не дошло — сервер получателя его отклонил. Часто это временно (сервер был занят или сработал фильтр), поэтому повторная отправка обычно срабатывает. Если не проходит снова — проверь адрес и свяжись другим способом.',
+      en: "This didn't reach them, their mail server turned it away. That's often temporary (their server was busy or filtering), so trying again later usually works. If it keeps failing, check the address is right and reach them another way.",
+      ru: 'Письмо не дошло, сервер получателя его отклонил. Часто это временно (сервер был занят или сработал фильтр), поэтому повторная отправка обычно срабатывает. Если не проходит снова, проверь адрес и свяжись другим способом.',
     },
     sendFailedCheckThread: {
       en: "If your message isn't in the thread, it didn't send. Refresh before sending again.",
-      ru: 'Если сообщения нет в переписке — оно не отправилось. Обнови перед повторной отправкой.',
+      ru: 'Если сообщения нет в переписке, оно не отправилось. Обнови перед повторной отправкой.',
     },
 
     // ── AI draft awaiting review (email only) ────────────────────
@@ -553,13 +556,13 @@ const dict = {
       ru: 'Отправить ещё раз?',
     },
     duplicateConfirmBody: {
-      en: 'You just sent this exact message to this person. Sending it again means they receive it twice — send anyway?',
-      ru: 'Ты только что отправила это же сообщение этому человеку. Если отправить снова, он получит его дважды — всё равно отправить?',
+      en: 'You just sent this exact message to this person. Sending it again means they receive it twice, send anyway?',
+      ru: 'Ты только что отправила это же сообщение этому человеку. Если отправить снова, он получит его дважды, всё равно отправить?',
     },
     duplicateConfirmButton: { en: 'Send anyway', ru: 'Всё равно отправить' },
 
     draftRefine: { en: 'Improve with assistant', ru: 'Доработать с ассистентом' },
-    // The refine panel — opens beside the thread instead of navigating to the
+    // The refine panel, opens beside the thread instead of navigating to the
     // Assistant tab, which used to throw away both the conversation context
     // and anything already typed.
     refinePanelTitle: { en: 'AI', ru: 'AI' },
@@ -685,8 +688,8 @@ const dict = {
     markPromotional: { en: 'Hide as promotional', ru: 'Скрыть как рекламу' },
     unmarkPromotional: { en: 'Show in main inbox', ru: 'Вернуть в основной список' },
     markedPromotional: {
-      en: 'Hidden — future emails from this sender are hidden too',
-      ru: 'Скрыто — письма от этого отправителя тоже будут скрыты',
+      en: 'Hidden, future emails from this sender are hidden too',
+      ru: 'Скрыто, письма от этого отправителя тоже будут скрыты',
     },
     unmarkedPromotional: { en: 'Back in the main inbox', ru: 'Снова в основном списке' },
 
@@ -697,13 +700,13 @@ const dict = {
     hidePromotional: { en: 'Hide promotional', ru: 'Скрыть рекламные' },
 
     // ── Personal (friends & family) ──────────────────────────────
-    // Nothing classifies these automatically — Vero marks them by hand — so
+    // Nothing classifies these automatically, Vero marks them by hand, so
     // the copy says "marked", not "detected".
     markPersonal: { en: 'Mark as personal', ru: 'Отметить как личное' },
     unmarkPersonal: { en: 'Move back to inbox', ru: 'Вернуть в основной список' },
     markedPersonal: {
-      en: 'Moved to Personal — the assistant will not reply to this thread',
-      ru: 'В личных — ассистент больше не отвечает в этой переписке',
+      en: 'Moved to Personal, the assistant will not reply to this thread',
+      ru: 'В личных, ассистент больше не отвечает в этой переписке',
     },
     unmarkedPersonal: { en: 'Back in the main inbox', ru: 'Снова в основном списке' },
 
@@ -796,7 +799,7 @@ const dict = {
     // summary follows the global admin language now, so there is one language
     // control in the panel rather than two that could disagree.
     openSummary: { en: 'Open summary', ru: 'Открыть сводку' },
-    closeSummaryOpenChat: { en: 'Close summary — open chat', ru: 'Закрыть сводку — открыть чат' },
+    closeSummaryOpenChat: { en: 'Close summary, open chat', ru: 'Закрыть сводку, открыть чат' },
     // Short pair for the desktop fold control, which sits beside a chevron.
     // closeSummaryOpenChat above is the mobile phrasing, where expanding the
     // summary genuinely replaces the chat.
@@ -809,18 +812,18 @@ const dict = {
     // same account land back into the same row.
     resetConversation: { en: 'Reset conversation', ru: 'Сбросить диалог' },
     resetConversationTooltip: {
-      en: 'Reset — clears all messages + AI memory',
-      ru: 'Сброс — очищает все сообщения и память AI',
+      en: 'Reset, clears all messages + AI memory',
+      ru: 'Сброс, очищает все сообщения и память AI',
     },
     resetConfirmTitle: { en: 'Reset this conversation?', ru: 'Сбросить этот диалог?' },
-    // Dynamic body — shows the contact name + message count so an
+    // Dynamic body, shows the contact name + message count so an
     // accidental click can't confirm without SEEING what's about to
     // be deleted. Cheap accident-protection without a "type YES to
     // confirm" flow. Russian plurals match the pattern used elsewhere
     // in the dict (1 сообщение / 2-4 сообщения / 5+ сообщений).
     resetConfirmBody: {
       en: (name: string, n: number) =>
-        `About to reset conversation with ${name} — this permanently deletes ${n} message${n === 1 ? '' : 's'} and the AI's memory of this thread. The conversation record stays so future messages will still land here. This can't be undone.`,
+        `About to reset conversation with ${name}, this permanently deletes ${n} message${n === 1 ? '' : 's'} and the AI's memory of this thread. The conversation record stays so future messages will still land here. This can't be undone.`,
       ru: (name: string, n: number) => {
         const mod10 = n % 10;
         const mod100 = n % 100;
@@ -828,12 +831,12 @@ const dict = {
         if (mod10 === 1 && mod100 !== 11) msgs = `${n} сообщение`;
         else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) msgs = `${n} сообщения`;
         else msgs = `${n} сообщений`;
-        return `Сейчас будет сброшен диалог с ${name} — безвозвратно удалятся ${msgs} и вся память AI по этой переписке. Запись диалога сохранится, так что будущие сообщения по-прежнему попадут сюда. Отменить нельзя.`;
+        return `Сейчас будет сброшен диалог с ${name}, безвозвратно удалятся ${msgs} и вся память AI по этой переписке. Запись диалога сохранится, так что будущие сообщения по-прежнему попадут сюда. Отменить нельзя.`;
       },
     },
     resetConfirmButton: { en: 'Reset', ru: 'Сбросить' },
     resetSuccess: {
-      en: (n: number) => `Conversation reset — ${n} message${n === 1 ? '' : 's'} deleted`,
+      en: (n: number) => `Conversation reset, ${n} message${n === 1 ? '' : 's'} deleted`,
       // Russian plural: 1 сообщение, 2/3/4 сообщения, 5+ сообщений
       ru: (n: number) => {
         const mod10 = n % 10;
@@ -841,7 +844,7 @@ const dict = {
         let word = 'сообщений';
         if (mod10 === 1 && mod100 !== 11) word = 'сообщение';
         else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) word = 'сообщения';
-        return `Диалог сброшен — удалено ${n} ${word}`;
+        return `Диалог сброшен, удалено ${n} ${word}`;
       },
     },
     resetFailed: { en: 'Reset failed', ru: 'Не удалось сбросить' },
@@ -863,7 +866,7 @@ const dict = {
     sendConfirmNo: { en: 'Keep writing', ru: 'Продолжить писать' },
     sendConfirmHint: {
       en: 'Shift+Enter for a new line. Cmd+Enter sends without asking.',
-      ru: 'Shift+Enter — новая строка. Cmd+Enter отправляет без вопроса.',
+      ru: 'Shift+Enter, новая строка. Cmd+Enter отправляет без вопроса.',
     },
     send: { en: 'Send', ru: 'Отправить' },
     translating: { en: 'Translating…', ru: 'Перевожу…' },
@@ -902,7 +905,7 @@ const dict = {
     },
     // Create-client modal
     convertToClient: { en: 'Convert to client', ru: 'Сделать клиентом' },
-    // Long disclaimer — split into 2 sentences in RU for readability.
+    // Long disclaimer, split into 2 sentences in RU for readability.
     convertDisclaimer: {
       en: 'Creates a simple-mode portal (gallery password only) and links it to this conversation. You can fill in email, event date, contract, and gallery URL later from the Portals tab.',
       ru: 'Создаст упрощённый портал (только с паролем от галереи) и свяжет его с этим диалогом. Email, дату события, контракт и ссылку на галерею можно добавить позже во вкладке «Клиенты».',
@@ -977,7 +980,7 @@ const dict = {
     subtabChat: { en: 'Chat', ru: 'Чат' },
     subtabData: { en: 'Data', ru: 'Данные' },
     // Aria label on the RU/EN pill toggle. The pill LABELS themselves
-    // ("RU"/"EN") stay untranslated — they name the chat language, not
+    // ("RU"/"EN") stay untranslated, they name the chat language, not
     // the admin UI language.
     chatLanguageAria: { en: 'Chat language', ru: 'Язык чата' },
     // The conversation picker on the Chat sub-tab. Without it this chat
@@ -1008,7 +1011,7 @@ const dict = {
       en: (n: number) => `${n} fact${n === 1 ? '' : 's'}`,
       ru: (n: number) => `${n} ${n === 1 ? 'факт' : n < 5 ? 'факта' : 'фактов'}`,
     },
-    // "n added by chatbot" — rephrased in RU for a more natural flow.
+    // "n added by chatbot", rephrased in RU for a more natural flow.
     chatbotAddedCount: {
       en: (n: number) => `${n} added by chatbot`,
       ru: (n: number) => `${n} от ассистента`,
@@ -1039,7 +1042,7 @@ const dict = {
       ru: 'Короткое название для этого факта',
     },
     contentPlaceholder: {
-      // Kept the "English" hint on purpose — DB stores facts in English so
+      // Kept the "English" hint on purpose, DB stores facts in English so
       // the customer-reply engine works regardless of the chat language.
       en: 'The actual fact / rule / info. English.',
       ru: 'Сам факт, правило или информация. По-английски.',
@@ -1059,7 +1062,7 @@ const dict = {
     },
     allFieldsRequired: {
       en: 'Category, label, and content are all required.',
-      ru: 'Заполни категорию, название и содержание — все три обязательны.',
+      ru: 'Заполни категорию, название и содержание, все три обязательны.',
     },
     saveFailed: {
       en: (status: number) => `Save failed (${status})`,
@@ -1076,35 +1079,35 @@ const dict = {
     notEditable: { en: 'Not editable', ru: 'Не редактируется' },
     // Bulleted facts. Arrays land here as leaves because the projector
     // treats any node with { en, ru } as a leaf and returns the value
-    // verbatim — arrays included.
+    // verbatim, arrays included.
     builtInFacts: {
       en: [
         "Assistant is Vero's personal AI, focused on her photography business (portraits, weddings, families, maternity)",
-        'Replies in whichever language you have the toggle set to (Russian or English) — even if you type in the other language',
+        'Replies in whichever language you have the toggle set to (Russian or English), even if you type in the other language',
         'Stores all knowledge base entries in English underneath, so the customer-facing AI reply engine works correctly regardless of the chat language',
-        'Double-checks big value changes (>50% deviation from existing value) before writing — protects against typos',
-        'Only deletes entries when you ask explicitly — never on its own',
+        'Double-checks big value changes (>50% deviation from existing value) before writing, protects against typos',
+        'Only deletes entries when you ask explicitly, never on its own',
         'Reads the current knowledge base below on every turn, so you don\'t have to remind it what it knows',
       ],
       ru: [
-        'Ассистент — твой личный AI, заточенный под твой фотобизнес (портреты, свадьбы, семьи, беременность)',
-        'Отвечает на том языке, который выбран в переключателе (русский или английский) — даже если ты пишешь на другом',
+        'Ассистент, твой личный AI, заточенный под твой фотобизнес (портреты, свадьбы, семьи, беременность)',
+        'Отвечает на том языке, который выбран в переключателе (русский или английский), даже если ты пишешь на другом',
         'Хранит все факты в базе по-английски, чтобы AI-ответы клиентам работали корректно вне зависимости от языка чата',
-        'Перепроверяет крупные изменения (отклонение больше 50% от текущего значения) перед записью — защита от опечаток',
-        'Удаляет записи только по твоему явному запросу — никогда сам',
+        'Перепроверяет крупные изменения (отклонение больше 50% от текущего значения) перед записью, защита от опечаток',
+        'Удаляет записи только по твоему явному запросу, никогда сам',
         'Читает базу знаний ниже перед каждым ответом, чтобы тебе не нужно было напоминать, что он знает',
       ],
     },
     builtInFooter: {
       en: 'These behaviors are wired into the code. Everything else the AI knows lives in the editable facts below.',
-      ru: 'Это поведение зашито в коде. Всё остальное, что знает AI, — в редактируемых фактах ниже.',
+      ru: 'Это поведение зашито в коде. Всё остальное, что знает AI, в редактируемых фактах ниже.',
     },
 
     // Empty state
     emptyTitle: { en: 'The knowledge base is empty', ru: 'База знаний пуста' },
     emptyDescription: {
       en: 'Facts you add here are what the customer-facing AI uses to reply to DMs. Add manually, or head to the Chat tab and let the assistant help you fill it in.',
-      ru: 'Факты, которые ты здесь добавляешь, AI использует, чтобы отвечать клиентам в директе. Добавь вручную или зайди во вкладку «Чат» — ассистент поможет заполнить базу.',
+      ru: 'Факты, которые ты здесь добавляешь, AI использует, чтобы отвечать клиентам в директе. Добавь вручную или зайди во вкладку «Чат», ассистент поможет заполнить базу.',
     },
   },
 
@@ -1151,8 +1154,8 @@ const dict = {
     // That is existing behaviour, and it is exactly the thing that looks like
     // a bug if nobody tells you.
     bulkDeleteBody: {
-      en: 'They disappear from the public gallery straight away. Any of them still in the Drive folder will be restored by the next sync — remove the file from Drive too if you want it gone for good.',
-      ru: 'Они сразу исчезнут из публичной галереи. Те, что остались в папке Drive, вернутся при следующей синхронизации — удалите файл и из Drive, если нужно навсегда.',
+      en: 'They disappear from the public gallery straight away. Any of them still in the Drive folder will be restored by the next sync, remove the file from Drive too if you want it gone for good.',
+      ru: 'Они сразу исчезнут из публичной галереи. Те, что остались в папке Drive, вернутся при следующей синхронизации, удалите файл и из Drive, если нужно навсегда.',
     },
     bulkDeleteConfirm: { en: 'Delete', ru: 'Удалить' },
     bulkSuperOnly: {
@@ -1164,7 +1167,7 @@ const dict = {
       en: (n: number, drafts: number) =>
         `${n} photo${n === 1 ? '' : 's'}${drafts > 0 ? ` · ${drafts} awaiting review` : ''}`,
       // 'фото' is indeclinable in Russian, so it stays the same for all
-      // counts. 'ждёт' (3sg) for exactly 1 draft, 'ждут' (3pl) otherwise —
+      // counts. 'ждёт' (3sg) for exactly 1 draft, 'ждут' (3pl) otherwise
       // the strict paucal is technically 'ждут' anyway, so two branches
       // are enough here.
       ru: (n: number, drafts: number) =>
@@ -1206,19 +1209,19 @@ const dict = {
       ru: 'Папка галереи ещё не подключена',
     },
     driveNotConnectedBody: {
-      en: "Point this site at your Google Drive gallery folder so new photos can sync automatically. You'll need the folder's shareable link — same format you use for client galleries.",
-      ru: 'Укажи сайту, где лежит папка галереи в Google Drive, чтобы новые фото подтягивались автоматически. Понадобится ссылка на папку — та же самая, которую ты даёшь клиентам.',
+      en: "Point this site at your Google Drive gallery folder so new photos can sync automatically. You'll need the folder's shareable link, same format you use for client galleries.",
+      ru: 'Укажи сайту, где лежит папка галереи в Google Drive, чтобы новые фото подтягивались автоматически. Понадобится ссылка на папку, та же самая, которую ты даёшь клиентам.',
     },
     setUpDrive: { en: 'Set up Drive folder', ru: 'Настроить папку Drive' },
 
     // Connected indicator (below title)
     connectedToDrive: { en: 'Connected to Drive', ru: 'Подключено к Drive' },
     connectedViaEnv: {
-      en: ' (via env var — click Settings to move to admin)',
-      ru: ' (через env — нажми «Настройки», чтобы перенести в админку)',
+      en: ' (via env var, click Settings to move to admin)',
+      ru: ' (через env, нажми «Настройки», чтобы перенести в админку)',
     },
 
-    // Sync-result banner — kept as small fragments so the "· part · part"
+    // Sync-result banner, kept as small fragments so the "· part · part"
     // shape survives translation without a mega-string.
     syncSummaryHead: {
       en: (files: number, inserted: number) => `Saw ${files} files in Drive · ${inserted} new`,
@@ -1262,8 +1265,8 @@ const dict = {
 
     // Toasts
     toastSynced: {
-      en: (inserted: number, removed: number) => `Synced — ${inserted} new, ${removed} removed`,
-      ru: (inserted: number, removed: number) => `Синхронизировано — ${inserted} новых, ${removed} удалено`,
+      en: (inserted: number, removed: number) => `Synced, ${inserted} new, ${removed} removed`,
+      ru: (inserted: number, removed: number) => `Синхронизировано, ${inserted} новых, ${removed} удалено`,
     },
     toastSyncFailed: { en: 'Sync failed', ru: 'Синхронизация не удалась' },
     toastPhotoRemoved: { en: 'Photo removed', ru: 'Фото удалено' },
@@ -1299,7 +1302,7 @@ const dict = {
     },
     driveFolderHelp: {
       en: 'Paste the shareable link (or just the folder ID) of the parent Drive folder that holds the four category subfolders (portraits, weddings, family, maternity). The service account this site uses must have Viewer access to that folder.',
-      // Split into three shorter sentences — the English is one long
+      // Split into three shorter sentences, the English is one long
       // block, easier to read in Russian as separate thoughts. Category
       // slugs stay English because that's what the actual folders are
       // named in Drive.
@@ -1307,19 +1310,19 @@ const dict = {
     },
     envLegacyNotice: {
       en: 'Currently loaded from an env var (legacy setup). Saving here moves it to the database so future edits can happen from this page without touching Vercel.',
-      ru: 'Сейчас значение подтягивается из env-переменной (старая настройка). Если сохранить здесь, оно переедет в базу данных — потом можно будет менять прямо отсюда, не заходя в Vercel.',
+      ru: 'Сейчас значение подтягивается из env-переменной (старая настройка). Если сохранить здесь, оно переедет в базу данных, потом можно будет менять прямо отсюда, не заходя в Vercel.',
     },
 
     // Edit modal
     liveUrlPrefix: { en: 'Live URL:', ru: 'URL на сайте:' },
     keywordsHint: {
       en: 'Comma-separated. First one is always the category.',
-      ru: 'Через запятую. Первое слово — всегда категория.',
+      ru: 'Через запятую. Первое слово, всегда категория.',
     },
     driveSectionLabel: { en: 'Drive', ru: 'Drive' },
     driveRenameHint: {
-      en: 'Rename in the admin panel above — Drive filename stays as-is.',
-      ru: 'Переименовывай в форме выше — имя файла в Drive не меняется.',
+      en: 'Rename in the admin panel above, Drive filename stays as-is.',
+      ru: 'Переименовывай в форме выше, имя файла в Drive не меняется.',
     },
 
     // Empty state
@@ -1337,7 +1340,7 @@ const dict = {
       ru: 'Загрузи фото в папку галереи в Drive и нажми «Синхронизировать с Drive», чтобы они появились здесь.',
     },
 
-    // Category display names — used in the filter Select and on the
+    // Category display names, used in the filter Select and on the
     // PhotoCard badge. The lowercase enum values (portraits/weddings/…)
     // still travel over the wire; only the display text is translated.
     categoryNames: {
@@ -1353,10 +1356,10 @@ const dict = {
     kicker: { en: 'New Gallery', ru: 'Новая галерея' },
     heading: { en: 'Share a photo gallery', ru: 'Отправить галерею' },
     intro: {
-      en: "Use this for any booking that doesn't need a contract — portraits, family sessions, anniversaries, etc. You can create it as soon as you get the order and fill in the Drive URL later, or paste the URL now to deliver immediately.",
+      en: "Use this for any booking that doesn't need a contract, portraits, family sessions, anniversaries, etc. You can create it as soon as you get the order and fill in the Drive URL later, or paste the URL now to deliver immediately.",
       // Translated for meaning: keep the "no-contract" idea + the "create
       // now, fill in later" flexibility. Split into two sentences.
-      ru: 'Используй для съёмок без контракта — портреты, семейные, годовщины и всё в таком духе. Можно создать галерею как только получила заказ и вставить ссылку на Drive позже, или сразу вставить ссылку и отправить клиенту.',
+      ru: 'Используй для съёмок без контракта, портреты, семейные, годовщины и всё в таком духе. Можно создать галерею как только получила заказ и вставить ссылку на Drive позже, или сразу вставить ссылку и отправить клиенту.',
     },
 
     // Field labels + help text
@@ -1375,14 +1378,14 @@ const dict = {
 
     eventDateLabel: { en: 'Event Date', ru: 'Дата съёмки' },
     eventDateHelp: {
-      en: 'Optional — used to sort the dashboard and to pick the year for the display name. Defaults to the current year if blank.',
-      ru: 'Необязательно — используется для сортировки в списке и чтобы подставить год в название галереи. По умолчанию — текущий год.',
+      en: 'Optional, used to sort the dashboard and to pick the year for the display name. Defaults to the current year if blank.',
+      ru: 'Необязательно, используется для сортировки в списке и чтобы подставить год в название галереи. По умолчанию, текущий год.',
     },
 
     displayNameLabel: { en: 'Display Name', ru: 'Название галереи' },
     displayNameHelpCustom: {
-      en: 'Custom — clear the field to go back to the auto-generated name.',
-      ru: 'Свой вариант — очисти поле, чтобы вернуться к автоматическому названию.',
+      en: 'Custom, clear the field to go back to the auto-generated name.',
+      ru: 'Свой вариант, очисти поле, чтобы вернуться к автоматическому названию.',
     },
     displayNameHelpAuto: {
       en: 'Auto-generated as "{Session} {Client Name} {Year}", e.g. "Portrait Alex Smith 2026". Type to override.',
@@ -1392,8 +1395,8 @@ const dict = {
 
     galleryPasswordLabel: { en: 'Gallery Password', ru: 'Пароль галереи' },
     galleryPasswordHelpCustom: {
-      en: 'Custom — clear the field to go back to the auto-generated password.',
-      ru: 'Свой вариант — очисти поле, чтобы вернуться к автоматическому паролю.',
+      en: 'Custom, clear the field to go back to the auto-generated password.',
+      ru: 'Свой вариант, очисти поле, чтобы вернуться к автоматическому паролю.',
     },
     galleryPasswordHelpAuto: {
       en: 'Auto-generated from the display name (spaces removed). Type to override.',
@@ -1403,8 +1406,8 @@ const dict = {
 
     driveUrlLabel: { en: 'Google Drive Folder URL', ru: 'Ссылка на папку Google Drive' },
     driveUrlHelp: {
-      en: "Paste the share URL of the folder containing the gallery. Make sure the service account has Viewer access. Optional — leave blank if you're just creating the booking placeholder now and will attach photos later.",
-      ru: 'Вставь ссылку на папку с фотографиями. Убедись, что у сервисного аккаунта есть доступ на просмотр. Необязательно — можно оставить пустым, если пока создаёшь заготовку и приложишь фото позже.',
+      en: "Paste the share URL of the folder containing the gallery. Make sure the service account has Viewer access. Optional, leave blank if you're just creating the booking placeholder now and will attach photos later.",
+      ru: 'Вставь ссылку на папку с фотографиями. Убедись, что у сервисного аккаунта есть доступ на просмотр. Необязательно, можно оставить пустым, если пока создаёшь заготовку и приложишь фото позже.',
     },
     driveUrlPlaceholder: { en: 'https://drive.google.com/drive/folders/...', ru: 'https://drive.google.com/drive/folders/...' },
 
@@ -1424,14 +1427,14 @@ const dict = {
     retentionLabel: { en: 'Retention (months)', ru: 'Срок хранения (месяцев)' },
     retentionHelp: {
       en: 'How long the gallery stays online after delivery. Default is 3.',
-      ru: 'Сколько галерея будет доступна после отправки. По умолчанию — 3 месяца.',
+      ru: 'Сколько галерея будет доступна после отправки. По умолчанию, 3 месяца.',
     },
 
     // Bookkeeping section
     bookkeepingKicker: { en: 'Bookkeeping (optional)', ru: 'Учёт (необязательно)' },
     bookkeepingHint: {
-      en: "These are only visible to you in the admin. The client doesn't see them — gallery-only clients only see their photos.",
-      ru: 'Эти поля видишь только ты в админке. Клиент их не видит — в режиме «только галерея» клиент видит только свои фото.',
+      en: "These are only visible to you in the admin. The client doesn't see them, gallery-only clients only see their photos.",
+      ru: 'Эти поля видишь только ты в админке. Клиент их не видит, в режиме «только галерея» клиент видит только свои фото.',
     },
     totalLabel: { en: 'Total (USD)', ru: 'Итого (USD)' },
     totalHelp: {
@@ -1444,8 +1447,8 @@ const dict = {
       ru: 'Сумма, оплаченная заранее для брони съёмки.',
     },
     paymentsNote: {
-      en: "You can log payments later in the client's detail view — Zelle, cash, Venmo, etc. — with notes attached.",
-      ru: 'Оплаты можно добавить позже в карточке клиента — Zelle, наличные, Venmo и всё остальное — с комментариями.',
+      en: "You can log payments later in the client's detail view, Zelle, cash, Venmo, etc., with notes attached.",
+      ru: 'Оплаты можно добавить позже в карточке клиента, Zelle, наличные, Venmo и всё остальное, с комментариями.',
     },
 
     // Validation errors
@@ -1485,24 +1488,24 @@ const dict = {
     createdHeading: { en: 'Gallery created ✓', ru: 'Галерея создана ✓' },
     createdSubtitle: {
       en: (name: string) => `${name} is in the system.`,
-      ru: (name: string) => `${name} — в системе.`,
+      ru: (name: string) => `${name}, в системе.`,
     },
 
     oneClickLinkLabel: { en: 'One-click link', ru: 'Ссылка в один клик' },
     oneClickLinkHint: {
       en: 'Click Open to test the link in a new tab. The full share message is below.',
-      ru: 'Нажми «Открыть», чтобы проверить ссылку в новой вкладке. Полное сообщение — ниже.',
+      ru: 'Нажми «Открыть», чтобы проверить ссылку в новой вкладке. Полное сообщение, ниже.',
     },
 
     shareWithClient: { en: 'Share this with the client', ru: 'Отправь это клиенту' },
     statusLabel: { en: 'Status', ru: 'Статус' },
     emailWasSentBody: {
-      en: 'An email has been sent to the client — this is a copy in case you want to send it via text/WhatsApp too.',
-      ru: 'Клиенту отправлено письмо — вот копия, на случай если захочешь продублировать в SMS или WhatsApp.',
+      en: 'An email has been sent to the client, this is a copy in case you want to send it via text/WhatsApp too.',
+      ru: 'Клиенту отправлено письмо, вот копия, на случай если захочешь продублировать в SMS или WhatsApp.',
     },
     noEmailBody: {
-      en: "No client email on file — copy this message and send it however you're in touch.",
-      ru: 'Email клиента не указан — скопируй сообщение и отправь любым удобным способом.',
+      en: "No client email on file, copy this message and send it however you're in touch.",
+      ru: 'Email клиента не указан, скопируй сообщение и отправь любым удобным способом.',
     },
     notDeliveredBody: {
       en: "The gallery is set up but no Drive URL was provided yet. Open the client's detail view to paste the URL and mark as delivered when ready.",
@@ -1512,8 +1515,8 @@ const dict = {
 
     passwordPrefix: { en: 'Password:', ru: 'Пароль:' },
     passwordSaveHint: {
-      en: "Save this somewhere — it's how you'll let the client into their gallery once you're ready to deliver.",
-      ru: 'Сохрани где-нибудь — это пароль, который откроет клиенту доступ к галерее, когда будешь готова отправить.',
+      en: "Save this somewhere, it's how you'll let the client into their gallery once you're ready to deliver.",
+      ru: 'Сохрани где-нибудь, это пароль, который откроет клиенту доступ к галерее, когда будешь готова отправить.',
     },
 
     backToDashboard: { en: 'Back to Dashboard', ru: 'К дашборду' },
@@ -1543,7 +1546,7 @@ const dict = {
     },
     placeFromHelp: {
       en: 'The two choices are about WHICH DRIVE you are measuring, not about where you sleep. "The place before it" is the hop between venues, for a day that runs straight from one to the next. "Home" is for a place you set off to separately, which is the right answer when you go back in between. Either way the miles are added to the ones above, because either way you drove them.',
-      ru: 'Выбор о том, КАКУЮ поездку ты измеряешь, а не о том, где ночуешь. «Предыдущего места» — это перегон между площадками, когда день идёт с одной прямо на другую. «Дома» — когда ты едешь туда отдельно, то есть если между ними заезжаешь домой. В обоих случаях мили прибавляются к тем, что выше: ты их всё равно проехала.',
+      ru: 'Выбор о том, КАКУЮ поездку ты измеряешь, а не о том, где ночуешь. «Предыдущего места», это перегон между площадками, когда день идёт с одной прямо на другую. «Дома», когда ты едешь туда отдельно, то есть если между ними заезжаешь домой. В обоих случаях мили прибавляются к тем, что выше: ты их всё равно проехала.',
     },
     placeMilesLabel: { en: 'Miles one way', ru: 'Миль в одну сторону' },
     placeLookItUp: { en: 'Look it up', ru: 'Посмотреть' },
@@ -1640,7 +1643,7 @@ const dict = {
     discardConfirm: { en: 'Leave', ru: 'Выйти' },
     prefilledFromThread: {
       en: (name: string) =>
-        `Filled in from your conversation with ${name}. Check everything before you create the portal — creating it emails the client straight away.`,
+        `Filled in from your conversation with ${name}. Check everything before you create the portal, creating it emails the client straight away.`,
       ru: (name: string) =>
         `Заполнено из переписки с ${name}. Проверь всё перед созданием портала: клиенту сразу уйдёт письмо.`,
     },
@@ -1674,13 +1677,13 @@ const dict = {
 
     // Partners / client name. The second name field only exists on the two
     // types that name two people; everything else asks once.
-    partner1Label: { en: 'Partner 1 Full Name', ru: 'Партнёр 1 — полное имя' },
+    partner1Label: { en: 'Partner 1 Full Name', ru: 'Партнёр 1, полное имя' },
     partner1Help: {
       en: 'Their full legal name. First name is used in the portal greeting.',
       ru: 'Полное имя, как в документах. Первое имя используется в приветствии в портале.',
     },
     partner1Placeholder: { en: 'e.g. Chrisann Bryan', ru: 'например, Chrisann Bryan' },
-    partner2Label: { en: 'Partner 2 Full Name', ru: 'Партнёр 2 — полное имя' },
+    partner2Label: { en: 'Partner 2 Full Name', ru: 'Партнёр 2, полное имя' },
     partner2Help: {
       en: 'Optional. Leave blank for solo bookings (portraits, etc.).',
       ru: 'По желанию. Оставь пустым для сольных съёмок (портреты и т. п.).',
@@ -1698,7 +1701,7 @@ const dict = {
     // Display name
     displayNameLabel: { en: 'Display Name', ru: 'Отображаемое имя' },
     displayNameHelpCustom: {
-      en: 'Custom — clear the field to go back to the auto-generated name.',
+      en: 'Custom, clear the field to go back to the auto-generated name.',
       ru: 'Ты ввела своё значение. Очисти поле, чтобы вернуться к автоматическому имени.',
     },
     displayNameHelpAuto: {
@@ -1711,7 +1714,7 @@ const dict = {
     clientEmailLabel: { en: 'Client Email', ru: 'Email клиента' },
     clientEmailHelp: {
       en: "The invite email goes here. They'll log in with this address.",
-      ru: 'На этот адрес уйдёт приглашение — с ним же клиент будет входить в портал.',
+      ru: 'На этот адрес уйдёт приглашение, с ним же клиент будет входить в портал.',
     },
     clientEmailPlaceholder: { en: 'client@example.com', ru: 'client@example.com' },
 
@@ -1730,11 +1733,11 @@ const dict = {
     },
     responsiblePartyToggleHelp: {
       en: 'Use this when a third party (e.g. mother of the bride) is the one financially responsible for the booking and will be signing the contract. Adds a "Responsible Party" section to the contract.',
-      ru: 'Включи, если за съёмку платит и подписывает контракт третье лицо — например, мама невесты. В контракт добавится раздел «Ответственная сторона».',
+      ru: 'Включи, если за съёмку платит и подписывает контракт третье лицо, например, мама невесты. В контракт добавится раздел «Ответственная сторона».',
     },
     responsiblePartyNameLabel: {
       en: 'Responsible Party Full Name',
-      ru: 'Ответственная сторона — полное имя',
+      ru: 'Ответственная сторона, полное имя',
     },
     responsiblePartyNameHelp: {
       en: "Their full legal name. They'll be the one signing the contract.",
@@ -1760,7 +1763,7 @@ const dict = {
     // Event title
     eventTitleLabel: { en: 'Event Title', ru: 'Название события' },
     eventTitleHelpCustom: {
-      en: 'Custom — clear the field to go back to the auto-generated title.',
+      en: 'Custom, clear the field to go back to the auto-generated title.',
       ru: 'Ты ввела своё значение. Очисти поле, чтобы вернуться к автоматическому названию.',
     },
     eventTitleHelpAuto: {
@@ -1780,7 +1783,7 @@ const dict = {
     coverageLabel: { en: 'Coverage', ru: 'Продолжительность съёмки' },
     coverageHelp: {
       en: 'Specific Times for known hours. Half/Full Day for packages where the schedule will be locked in later.',
-      ru: '«Точное время» — если часы уже известны. «Полдня» / «Целый день» — для пакетов, где расписание уточнится позже.',
+      ru: '«Точное время», если часы уже известны. «Полдня» / «Целый день», для пакетов, где расписание уточнится позже.',
     },
     // Shown for the types that do not offer the half-day / full-day presets,
     // which are wedding packages. Those two buttons are not on screen there,
@@ -1808,11 +1811,11 @@ const dict = {
     // are the actual contract text sent to the customer)
     onTheContract: { en: 'On the contract:', ru: 'В контракте:' },
     contractTimeSlot: {
-      en: 'Will appear on the contract — Event Details → Time',
+      en: 'Will appear on the contract, Event Details → Time',
       ru: 'Попадёт в контракт: раздел «Event Details → Time»',
     },
     contractAdditionalNotesSlot: {
-      en: 'Will appear on the contract — Additional Notes',
+      en: 'Will appear on the contract, Additional Notes',
       ru: 'Попадёт в контракт: раздел «Additional Notes»',
     },
     noteForYou: {
@@ -1827,8 +1830,8 @@ const dict = {
     // Custom coverage
     customCoverageLabel: { en: 'Custom Coverage Description', ru: 'Описание съёмки' },
     customCoverageHelp: {
-      en: 'Free text — appears on the contract as the Time. e.g. "Ceremony coverage only, exact times TBD" or "Approximately 3 hours, schedule TBD".',
-      ru: 'Свободный текст — появится в контракте в поле «Time». Например: «Только церемония, точное время уточняется» или «Около 3 часов, расписание уточняется».',
+      en: 'Free text, appears on the contract as the Time. e.g. "Ceremony coverage only, exact times TBD" or "Approximately 3 hours, schedule TBD".',
+      ru: 'Свободный текст, появится в контракте в поле «Time». Например: «Только церемония, точное время уточняется» или «Около 3 часов, расписание уточняется».',
     },
     customCoveragePlaceholder: {
       en: 'e.g. Approximately 3 hours, exact times to be confirmed',
@@ -1861,7 +1864,7 @@ const dict = {
     // Gallery password
     galleryPasswordLabel: { en: 'Gallery Password', ru: 'Пароль от галереи' },
     galleryPasswordHelpCustom: {
-      en: 'Custom — clear the field to go back to the auto-generated password.',
+      en: 'Custom, clear the field to go back to the auto-generated password.',
       ru: 'Ты ввела своё значение. Очисти поле, чтобы вернуться к автоматическому паролю.',
     },
     galleryPasswordHelpAuto: {
@@ -1871,8 +1874,8 @@ const dict = {
 
     // Contract details intro
     contractDetailsIntro: {
-      en: 'Values that get filled into the contract template. Most have sensible defaults — only touch if this booking needs something different.',
-      ru: 'Значения, которые подставятся в шаблон контракта. У большинства уже есть разумные значения — меняй, только если для этой съёмки нужно что-то особенное.',
+      en: 'Values that get filled into the contract template. Most have sensible defaults, only touch if this booking needs something different.',
+      ru: 'Значения, которые подставятся в шаблон контракта. У большинства уже есть разумные значения, меняй, только если для этой съёмки нужно что-то особенное.',
     },
 
     // Optional clauses
@@ -1961,8 +1964,8 @@ const dict = {
     // Additional notes
     customClausesLabel: { en: 'Custom Clauses / Addendums', ru: 'Свои пункты / приложения' },
     customClausesHelp: {
-      en: "Anything specific to this booking — e.g. 'Includes drone footage', 'Second photographer for ceremony only', or any unusual terms. Appears as an addendum at the end of the contract. Leave blank to skip.",
-      ru: 'Всё, что касается именно этой съёмки — например: «Включена съёмка с дрона», «Второй фотограф только на церемонии» или любые нестандартные условия. Появится приложением в конце контракта. Оставь пустым, если ничего нет.',
+      en: "Anything specific to this booking, e.g. 'Includes drone footage', 'Second photographer for ceremony only', or any unusual terms. Appears as an addendum at the end of the contract. Leave blank to skip.",
+      ru: 'Всё, что касается именно этой съёмки, например: «Включена съёмка с дрона», «Второй фотограф только на церемонии» или любые нестандартные условия. Появится приложением в конце контракта. Оставь пустым, если ничего нет.',
     },
     customClausesPlaceholder: {
       en: 'Leave blank if none.',
@@ -2018,7 +2021,7 @@ const dict = {
       en: 'Sent, but not confirmed yet. It may still arrive.',
       ru: 'Отправлено, доставка не подтверждена. Возможно, ещё придёт.',
     },
-    // Deliberately says nothing about whether the portal exists — see
+    // Deliberately says nothing about whether the portal exists, see
     // inviteFailedPortalExists below. Claiming "the portal was created anyway"
     // unconditionally was wrong: Vero went back to the client list after a
     // bounce and the client was not there.
@@ -2027,17 +2030,17 @@ const dict = {
       ru: 'Приглашение не дошло до этого адреса.',
     },
     inviteFailedPortalExists: {
-      en: 'The portal itself was created — only the email failed. Retry, or continue and send the link another way.',
-      ru: 'Портал создан — не отправилось только письмо. Повтори или продолжи и отправь ссылку иначе.',
+      en: 'The portal itself was created, only the email failed. Retry, or continue and send the link another way.',
+      ru: 'Портал создан, не отправилось только письмо. Повтори или продолжи и отправь ссылку иначе.',
     },
     inviteRetry: { en: 'Try sending again', ru: 'Отправить ещё раз' },
     inviteRetryNote: {
-      en: 'This makes a new link — any earlier one stops working.',
-      ru: 'Будет создана новая ссылка — старая перестанет работать.',
+      en: 'This makes a new link, any earlier one stops working.',
+      ru: 'Будет создана новая ссылка, старая перестанет работать.',
     },
     inviteGiveUp: {
-      en: 'Still not sending. Message Alex — the portal exists, only the email failed.',
-      ru: 'Всё ещё не отправляется. Напиши Алексу — портал создан, не ушло только письмо.',
+      en: 'Still not sending. Message Alex, the portal exists, only the email failed.',
+      ru: 'Всё ещё не отправляется. Напиши Алексу, портал создан, не ушло только письмо.',
     },
     inviteSkip: { en: 'Continue anyway', ru: 'Продолжить всё равно' },
     serverErrorStatus: {
@@ -2053,7 +2056,7 @@ const dict = {
     badgeGalleryOnly: { en: 'Gallery-only', ru: 'Только галерея' },
     badgeInvitePending: { en: 'Invite pending', ru: 'Приглашение отправлено' },
     couldNotLoad: { en: 'Could not load this portal.', ru: 'Не удалось загрузить портал.' },
-    // Generic dynamic error fallback — original code had a mix of trailing-period
+    // Generic dynamic error fallback, original code had a mix of trailing-period
     // vs no-period; callers append '.' where the source had it, to preserve
     // exact wording.
     serverErrorStatus: {
@@ -2347,7 +2350,7 @@ const dict = {
     status: { en: 'Status', ru: 'Статус' },
     contractSigned: { en: 'Signed', ru: 'Подписан' },
     // Rendered inline after "Signed" badge, like "on Aug 12, 2026".
-    // Russian uses "от {date}" — same idea, more natural syntax.
+    // Russian uses "от {date}", same idea, more natural syntax.
     contractSignedOn: {
       en: (date: string) => `on ${date}`,
       ru: (date: string) => `от ${date}`,
@@ -2365,8 +2368,8 @@ const dict = {
         `Клиент записан как ${sessionType}, но контракт собран по шаблону ${contractType}. Выбери нужный тип в поле «Тип съёмки» в разделе «Детали» ниже: оба значения меняются вместе, и контракт перепишется под выбранный.`,
     },
     editContractUnknownTemplate: {
-      en: "Couldn't determine which template this portal uses. To make changes, void it and create a new one — or edit the relevant DB columns directly.",
-      ru: 'Не удалось понять, какой шаблон использует этот портал. Чтобы что-то изменить, аннулируй его и создай заново — или отредактируй нужные поля в базе напрямую.',
+      en: "Couldn't determine which template this portal uses. To make changes, void it and create a new one, or edit the relevant DB columns directly.",
+      ru: 'Не удалось понять, какой шаблон использует этот портал. Чтобы что-то изменить, аннулируй его и создай заново, или отредактируй нужные поля в базе напрямую.',
     },
     editContractTitle: { en: 'Edit contract', ru: 'Редактировать контракт' },
     editContractHide: { en: 'Hide', ru: 'Скрыть' },
@@ -2516,10 +2519,70 @@ const dict = {
     },
     settleDiscountAction: { en: 'Waive the card fee', ru: 'Списать комиссию' },
     history: { en: 'History', ru: 'История' },
+    // The money history (migration 052): one line per change a person made.
+    moneyHistoryShow: { en: 'Show change history', ru: 'Показать историю изменений' },
+    moneyHistoryHide: { en: 'Hide change history', ru: 'Скрыть историю изменений' },
+    moneyHistoryEmpty: {
+      en: 'No changes recorded yet. From now on every change to this booking\'s money is listed here, with who made it.',
+      ru: 'Изменений пока нет. Теперь здесь видно каждое изменение денег по этой брони и кто его сделал.',
+    },
+    moneyHistoryFailed: { en: 'Could not load the history.', ru: 'Не удалось загрузить историю.' },
+    mhNotSet: { en: 'not set', ru: 'не указано' },
+    mhTotal: {
+      en: (from: string, to: string) => `Total changed from ${from} to ${to}`,
+      ru: (from: string, to: string) => `Сумма изменена: было ${from}, стало ${to}`,
+    },
+    mhRetainer: {
+      en: (from: string, to: string) => `Retainer changed from ${from} to ${to}`,
+      ru: (from: string, to: string) => `Аванс изменён: было ${from}, стало ${to}`,
+    },
+    mhFreeOn: { en: 'Marked as free', ru: 'Отмечено как бесплатное' },
+    mhFreeOff: { en: 'No longer free', ru: 'Больше не бесплатное' },
+    mhTax: {
+      en: (from: string, to: string) => `Sales tax changed from ${from} to ${to}`,
+      ru: (from: string, to: string) => `Налог с продаж: было «${from}», стало «${to}»`,
+    },
+    mhPaymentAdded: {
+      en: (amount: string, how: string) => `Payment of ${amount} logged${how ? `, ${how}` : ''}`,
+      ru: (amount: string, how: string) => `Записана оплата ${amount}${how ? `, ${how}` : ''}`,
+    },
+    mhTipAdded: {
+      en: (amount: string, how: string) => `Tip of ${amount} logged${how ? `, ${how}` : ''}`,
+      ru: (amount: string, how: string) => `Записаны чаевые ${amount}${how ? `, ${how}` : ''}`,
+    },
+    mhPaymentDeleted: {
+      en: (amount: string, how: string) => `Payment of ${amount} deleted${how ? ` (${how})` : ''}`,
+      ru: (amount: string, how: string) => `Удалена оплата ${amount}${how ? ` (${how})` : ''}`,
+    },
+    mhDiscountWaived: {
+      en: (amount: string) => `Card fee of ${amount} waived (paid directly)`,
+      ru: (amount: string) => `Списана комиссия за карту ${amount} (оплата напрямую)`,
+    },
+    mhChargeAdded: {
+      en: (amount: string, reason: string) => `Charge of ${amount} added, ${reason}`,
+      ru: (amount: string, reason: string) => `Добавлено начисление ${amount}, ${reason}`,
+    },
+    mhChargeDeleted: {
+      en: (amount: string, reason: string) => `Charge of ${amount} removed, ${reason}`,
+      ru: (amount: string, reason: string) => `Удалено начисление ${amount}, ${reason}`,
+    },
+    mhInsuranceBilled: {
+      en: (amount: string) => `Insurance billed at ${amount}`,
+      ru: (amount: string) => `Страховка выставлена: ${amount}`,
+    },
+    mhInsuranceChanged: {
+      en: (from: string, to: string) => `Insurance charge changed from ${from} to ${to}`,
+      ru: (from: string, to: string) => `Начисление за страховку: было ${from}, стало ${to}`,
+    },
+    mhInsuranceRemoved: {
+      en: (amount: string) => `Insurance charge of ${amount} removed`,
+      ru: (amount: string) => `Удалено начисление за страховку ${amount}`,
+    },
+    mhBookingDeleted: { en: 'Booking deleted', ru: 'Бронь удалена' },
     logAPayment: { en: 'Log a Payment', ru: 'Записать оплату' },
     amountLabel: { en: 'Amount (USD)', ru: 'Сумма (USD)' },
     methodLabel: { en: 'Method', ru: 'Способ' },
-    // Zelle / Venmo are brand names — keep in English; only "Cash" translates.
+    // Zelle / Venmo are brand names, keep in English; only "Cash" translates.
     methodPlaceholder: { en: 'Zelle / Cash / Venmo...', ru: 'Zelle / наличные / Venmo...' },
     dateLabel: { en: 'Date', ru: 'Дата' },
     noteLabel: { en: 'Note (optional)', ru: 'Заметка (необязательно)' },
@@ -2531,7 +2594,7 @@ const dict = {
     deletePaymentAria: { en: 'Delete payment', ru: 'Удалить оплату' },
     confirmDelete: { en: 'Confirm delete', ru: 'Подтвердить удаление' },
     deleting: { en: 'Deleting...', ru: 'Удаляю...' },
-    // Loading-text variants — kept as three-period strings so they
+    // Loading-text variants, kept as three-period strings so they
     // read consistently next to the other "-ing..." labels in this
     // file (deleting, opening, delivering). common.saving/sending use
     // the typographic ellipsis char; here we want visual parity within
@@ -2778,17 +2841,17 @@ const dict = {
     // ─── Danger zone ──────────────────────────────────
     dangerZoneBody: {
       en: 'Hard-deletes the portal and all logged payments. Cannot be undone. The signed-contract PDF in Blob storage is kept as a historical record.',
-      ru: 'Полностью удаляет портал и все записанные оплаты. Отменить нельзя. PDF подписанного контракта остаётся в хранилище — как исторический документ.',
+      ru: 'Полностью удаляет портал и все записанные оплаты. Отменить нельзя. PDF подписанного контракта остаётся в хранилище, как исторический документ.',
     },
     deleteThisPortal: { en: 'Delete this portal', ru: 'Удалить этот портал' },
   },
 
   journalEditor: {
-    // Top-bar labels — mobile uses the short version so both save
+    // Top-bar labels, mobile uses the short version so both save
     // buttons fit inside 44px targets side-by-side; desktop swaps in
     // the fuller phrasing. The non-Short variants live in `t.journal.*`
     // (backToPosts, publish, republish, saveDraft, saveDraftShort).
-    // "Republish" on mobile is translated as "Обновить" — literally
+    // "Republish" on mobile is translated as "Обновить", literally
     // "update", but the shorter, more idiomatic verb for republishing.
     republishShort: { en: 'Republish', ru: 'Обновить' },
 
@@ -2824,15 +2887,15 @@ const dict = {
       ru: 'Летняя свадьба на северном берегу',
     },
 
-    // Slug field. "Slug" itself is a technical/URL term — keep the
+    // Slug field. "Slug" itself is a technical/URL term, keep the
     // English word in RU too, same as we do elsewhere in the admin.
     slugLabel: { en: 'Slug', ru: 'Slug' },
     slugHelpAuto: {
       en: 'Leave blank to auto-generate from the title',
-      ru: 'Оставь пустым — сгенерируется из заголовка автоматически',
+      ru: 'Оставь пустым, сгенерируется из заголовка автоматически',
     },
     // Live preview of what the URL will be. The URL itself is language-
-    // neutral; only the "URL:" prefix would move — keeping it identical
+    // neutral; only the "URL:" prefix would move, keeping it identical
     // in both languages for consistency with other URL displays.
     slugHelpUrl: {
       en: (slug: string) => `URL: vero.photography/journal/${slug}`,
@@ -2846,17 +2909,17 @@ const dict = {
     // Event date field
     eventDateLabel: { en: 'Event date', ru: 'Дата события' },
     eventDateHelp: {
-      en: 'The date this post is anchored to on the timeline. For a shoot, use the day it happened — not today. Leave blank to use the publish date instead.',
-      // Split into three short sentences — the English runs a bit long
+      en: 'The date this post is anchored to on the timeline. For a shoot, use the day it happened, not today. Leave blank to use the publish date instead.',
+      // Split into three short sentences, the English runs a bit long
       // and reads more naturally in RU as separate thoughts.
-      ru: 'К какой дате запись привязана на таймлайне. Для съёмки — тот день, когда она прошла, а не сегодня. Оставь пустым, чтобы использовать дату публикации.',
+      ru: 'К какой дате запись привязана на таймлайне. Для съёмки, тот день, когда она прошла, а не сегодня. Оставь пустым, чтобы использовать дату публикации.',
     },
 
     // Excerpt field
     excerptLabel: { en: 'Excerpt', ru: 'Краткое описание' },
     excerptHelp: {
-      en: 'Short teaser shown in card previews and as SEO description (~1–2 sentences)',
-      ru: 'Короткий тизер: показывается в превью карточек и как SEO-описание (примерно 1–2 предложения)',
+      en: 'Short teaser shown in card previews and as SEO description (~1-2 sentences)',
+      ru: 'Короткий тизер: показывается в превью карточек и как SEO-описание (примерно 1-2 предложения)',
     },
     excerptPlaceholder: {
       en: 'One or two sentences that pull the reader in.',
@@ -2866,24 +2929,24 @@ const dict = {
     // Body field
     bodyLabel: { en: 'Body', ru: 'Текст' },
     bodyHelp: {
-      en: 'Full write-up. Markdown supported (rendered in session 3 — displays as-is for now).',
-      // "Session 3" is a dev-milestone reference — reworded to a generic
+      en: 'Full write-up. Markdown supported (rendered in session 3, displays as-is for now).',
+      // "Session 3" is a dev-milestone reference, reworded to a generic
       // "рендер добавится позже" so it reads naturally to Vero.
-      ru: 'Полный текст. Поддерживается Markdown (рендер добавится позже — пока показывается как есть).',
+      ru: 'Полный текст. Поддерживается Markdown (рендер добавится позже, пока показывается как есть).',
     },
     bodyPlaceholder: {
-      en: 'Tell the story — how the day unfolded, favorite moments, whatever you want.',
-      ru: 'Расскажи историю — как прошёл день, любимые моменты, всё, что захочется.',
+      en: 'Tell the story, how the day unfolded, favorite moments, whatever you want.',
+      ru: 'Расскажи историю, как прошёл день, любимые моменты, всё, что захочется.',
     },
 
     // Drive folder field
     driveFolderLabel: { en: 'Google Drive folder', ru: 'Папка Google Drive' },
     driveFolderHelp: {
-      en: 'Upload the 5–15 photos for this post to a Drive folder (same workflow as client galleries), share it so anyone with the link can view, and paste the folder link here. The FIRST photo (by filename) is used as the cover — prefix names like 01, 02, 03… in Drive to control order.',
-      // Split into three sentences — the English is one long compound
+      en: 'Upload the 5-15 photos for this post to a Drive folder (same workflow as client galleries), share it so anyone with the link can view, and paste the folder link here. The FIRST photo (by filename) is used as the cover, prefix names like 01, 02, 03… in Drive to control order.',
+      // Split into three sentences, the English is one long compound
       // that reads awkwardly translated as-is. Preserved "по имени файла"
       // for the sort-order rule so the mechanic stays clear.
-      ru: 'Загрузи 5–15 фото для этой записи в папку Drive (тот же процесс, что и для клиентских галерей) и открой доступ по ссылке. Вставь ссылку на папку сюда. ПЕРВОЕ фото (по имени файла) становится обложкой — префиксы 01, 02, 03… в Drive задают порядок.',
+      ru: 'Загрузи 5-15 фото для этой записи в папку Drive (тот же процесс, что и для клиентских галерей) и открой доступ по ссылке. Вставь ссылку на папку сюда. ПЕРВОЕ фото (по имени файла) становится обложкой, префиксы 01, 02, 03… в Drive задают порядок.',
     },
     driveFolderPlaceholder: {
       en: 'https://drive.google.com/drive/folders/...',
@@ -2894,7 +2957,7 @@ const dict = {
     coverAltLabel: { en: 'Cover photo alt text', ru: 'Alt-текст обложки' },
     coverAltHelp: {
       en: "Alt text for the first photo (used as the post's cover / og:image). Describe what's in it for screen readers and search engines. Optional.",
-      ru: 'Alt-текст для первого фото (оно же обложка и og:image). Опиши, что на фото — для скринридеров и поисковиков. По желанию.',
+      ru: 'Alt-текст для первого фото (оно же обложка и og:image). Опиши, что на фото, для скринридеров и поисковиков. По желанию.',
     },
     coverAltPlaceholder: {
       en: 'Bride and groom under an oak tree at sunset',
@@ -2902,9 +2965,9 @@ const dict = {
     },
 
     // Session type field. Option values (portrait/wedding/…) stay
-    // English on the wire — only the display labels translate.
+    // English on the wire, only the display labels translate.
     sessionTypeLabel: { en: 'Session type', ru: 'Тип съёмки' },
-    sessionOptionNone: { en: '— (none)', ru: '— (нет)' },
+    sessionOptionNone: { en: ', (none)', ru: ', (нет)' },
     sessionOptionWedding: { en: 'Wedding', ru: 'Свадебная' },
     sessionOptionPortrait: { en: 'Portrait', ru: 'Портретная' },
     sessionOptionFamily: { en: 'Family', ru: 'Семейная' },
@@ -2915,7 +2978,7 @@ const dict = {
     // Tags field
     tagsLabel: { en: 'Tags', ru: 'Теги' },
     tagsHelp: { en: 'Comma-separated', ru: 'Через запятую' },
-    // Tag values themselves are English (they become searchable slugs) —
+    // Tag values themselves are English (they become searchable slugs)
     // placeholder stays in English in both languages so Vero sees the
     // right shape.
     tagsPlaceholder: {
@@ -2975,21 +3038,21 @@ const dict = {
     // Danger zone (superadmin-only delete)
     dangerZone: { en: 'Danger zone', ru: 'Опасная зона' },
     dangerZoneBody: {
-      en: 'Deleting a post removes it permanently. No undo — including the body, tags, and photo URL list. Cover image + photo files themselves are not touched (they live in Drive/etc).',
-      ru: 'Удаление записи убирает её навсегда. Отменить нельзя — вместе с текстом, тегами и списком ссылок на фото. Сами файлы обложки и фото не трогаются (они лежат в Drive и т.п.).',
+      en: 'Deleting a post removes it permanently. No undo, including the body, tags, and photo URL list. Cover image + photo files themselves are not touched (they live in Drive/etc).',
+      ru: 'Удаление записи убирает её навсегда. Отменить нельзя, вместе с текстом, тегами и списком ссылок на фото. Сами файлы обложки и фото не трогаются (они лежат в Drive и т.п.).',
     },
     deletePost: { en: 'Delete post', ru: 'Удалить запись' },
     deleting: { en: 'Deleting...', ru: 'Удаляю...' },
   },
 
   // Rebuild control. Lives in its own block rather than under `integrations`
-  // because the button appears on the Journal screen too — Integrations is
+  // because the button appears on the Journal screen too, Integrations is
   // super-only, and the person publishing journal posts is not a super admin.
   rebuild: {
     title: { en: 'Search engine pages', ru: 'Страницы для поисковиков' },
     subtitle: {
-      en: 'New photos and journal entries appear on the site straight away. The separate pages search engines read are built when the site is published — rebuild after adding something so Google can find it.',
-      ru: 'Новые фотографии и записи журнала появляются на сайте сразу. Отдельные страницы, которые читают поисковики, создаются при публикации сайта — пересоберите его после добавления материалов, чтобы Google их нашёл.',
+      en: 'New photos and journal entries appear on the site straight away. The separate pages search engines read are built when the site is published, rebuild after adding something so Google can find it.',
+      ru: 'Новые фотографии и записи журнала появляются на сайте сразу. Отдельные страницы, которые читают поисковики, создаются при публикации сайта, пересоберите его после добавления материалов, чтобы Google их нашёл.',
     },
     action: { en: 'Rebuild site', ru: 'Пересобрать сайт' },
     actionShort: { en: 'Rebuild', ru: 'Пересобрать' },
@@ -3009,16 +3072,16 @@ const dict = {
     failed: { en: 'Could not start the build.', ru: 'Не удалось запустить сборку.' },
     checking: { en: 'Checking…', ru: 'Проверка…' },
     upToDate: {
-      en: 'Everything is published — nothing waiting.',
-      ru: 'Всё опубликовано — изменений нет.',
+      en: 'Everything is published, nothing waiting.',
+      ru: 'Всё опубликовано, изменений нет.',
     },
     // Numeric rather than "3 new photos", so neither language needs plural
     // agreement for a count that can be any number or negative (a removal).
     waiting: {
       en: (photos: number, journal: number) =>
-        `Waiting to publish — photos ${photos >= 0 ? '+' : ''}${photos} · journal ${journal >= 0 ? '+' : ''}${journal}`,
+        `Waiting to publish, photos ${photos >= 0 ? '+' : ''}${photos} · journal ${journal >= 0 ? '+' : ''}${journal}`,
       ru: (photos: number, journal: number) =>
-        `Ожидает публикации — фото ${photos >= 0 ? '+' : ''}${photos} · журнал ${journal >= 0 ? '+' : ''}${journal}`,
+        `Ожидает публикации, фото ${photos >= 0 ? '+' : ''}${photos} · журнал ${journal >= 0 ? '+' : ''}${journal}`,
     },
     waitingEdits: {
       en: 'Edits are waiting to be published.',
@@ -3032,6 +3095,19 @@ const dict = {
     // Photography is taxable in Pennsylvania however the photos are handed
     // over, so selling to PA clients needs a licence. It runs five years,
     // which is exactly long enough for everyone to forget it exists.
+    // Stripe's API versions, so one can be pinned (STRIPE_API_VERSION in api/_stripe.ts).
+    stripeVersions: {
+      en: (account: string, webhook: string, pinned: string) =>
+        `Stripe API version: account ${account}, webhook ${webhook}, requests pinned to ${pinned}.`,
+      ru: (account: string, webhook: string, pinned: string) =>
+        `Версия Stripe API: аккаунт ${account}, вебхук ${webhook}, запросы закреплены на ${pinned}.`,
+    },
+    stripeVersionDefault: { en: 'the account default', ru: 'версии аккаунта' },
+    stripeVersionUnpinned: { en: 'nothing yet', ru: 'пока ничего' },
+    taxMoved: {
+      en: 'The sales tax licence and the quarterly report are now under Menu, Taxes.',
+      ru: 'Лицензия на налог с продаж и квартальный отчёт теперь в Меню, Налоги.',
+    },
     licTitle: { en: 'PA sales tax licence', ru: 'Лицензия на налог с продаж (PA)' },
     // ─── PA sales tax by quarter ─────────────────────
     taxReportTitle: { en: 'Sales tax by quarter', ru: 'Налог с продаж по кварталам' },
@@ -3091,6 +3167,16 @@ const dict = {
       en: 'Only the last four digits are stored. The full number never reaches the database.',
       ru: 'Сохраняются только последние четыре цифры. Полный номер не попадает в базу.',
     },
+    licNumberKeep: { en: 'Leave it empty to keep the saved one.', ru: 'Оставь пустым, чтобы сохранить прежний.' },
+    licLastFiledField: { en: 'Last return filed', ru: 'Последняя поданная декларация' },
+    licLastFiledHelp: {
+      en: 'The latest quarter already filed in myPATH. Every quarter up to it counts as filed.',
+      ru: 'Последний квартал, уже поданный в myPATH. Все кварталы до него считаются поданными.',
+    },
+    licNotEnded: {
+      en: (period: string, ends: string) => `${period} can be marked filed once it ends on ${ends}.`,
+      ru: (period: string, ends: string) => `${period} можно отметить поданной после окончания квартала, ${ends}.`,
+    },
 
     // ─── Config health ────────────────────────────────
     configTitle: { en: 'Configuration', ru: 'Конфигурация' },
@@ -3110,8 +3196,8 @@ const dict = {
     configUsingFallback: { en: 'Using fallback', ru: 'Запасной вариант' },
     configNoFallback: { en: 'Nothing covers for this', ru: 'Ничего не подменяет' },
     configCoveredExplain: {
-      en: 'Unset, but something else covers for it — this is fine and needs no action.',
-      ru: 'Не задана, но есть замена — это нормально, ничего делать не нужно.',
+      en: 'Unset, but something else covers for it, this is fine and needs no action.',
+      ru: 'Не задана, но есть замена, это нормально, ничего делать не нужно.',
     },
     configCritical: { en: 'Required', ru: 'Обязательно' },
     configFeature: { en: 'Feature', ru: 'Функция' },
@@ -3214,8 +3300,8 @@ const dict = {
       ru: 'Не удалось получить статус.',
     },
     noRotationDate: {
-      en: 'No rotation date on record — click Mark as Refreshed to establish a baseline.',
-      ru: 'Дата ротации ещё не записана — нажми «Обновлено», чтобы задать точку отсчёта.',
+      en: 'No rotation date on record, click Mark as Refreshed to establish a baseline.',
+      ru: 'Дата ротации ещё не записана, нажми «Обновлено», чтобы задать точку отсчёта.',
     },
     lastRotatedPrefix: { en: 'Last rotated', ru: 'Последняя ротация:' },
     // Compact "(N days ago)" tail. Russian plural rules: 1 день / 2-4 дня /
@@ -3252,13 +3338,13 @@ const dict = {
     },
     runwaySuffix: {
       en: 'of runway left (60-day token window).',
-      ru: 'до истечения токена (окно — 60 дней).',
+      ru: 'до истечения токена (окно, 60 дней).',
     },
     pastWindow: {
-      en: 'Past the 60-day window — auto-refresh may no longer work.',
-      ru: 'Прошло больше 60 дней — авто-обновление может уже не работать.',
+      en: 'Past the 60-day window, auto-refresh may no longer work.',
+      ru: 'Прошло больше 60 дней, авто-обновление может уже не работать.',
     },
-    // Kept English on purpose — "Instagram user ID" is a technical identifier
+    // Kept English on purpose, "Instagram user ID" is a technical identifier
     // name that stays the same across UIs.
     instagramUserIdLabel: { en: 'Instagram user ID:', ru: 'Instagram user ID:' },
 
@@ -3288,14 +3374,14 @@ const dict = {
     step4Before: { en: 'Paste it into Vercel →', ru: 'Вставь его в Vercel →' },
     step4After: { en: '→ Save → Redeploy', ru: '→ Save → Redeploy' },
     // Step 5 wraps the <strong>Mark as Refreshed</strong> button label
-    // inline — split around it so the label stays a single source of truth.
+    // inline, split around it so the label stays a single source of truth.
     step5Before: {
-      en: "That’s it — the reminder clock resets automatically the next time this page loads or the daily cron runs (the",
-      ru: 'Готово — таймер напоминания сбросится сам при следующей загрузке страницы или запуске ежедневного крона (кнопка',
+      en: "That’s it, the reminder clock resets automatically the next time this page loads or the daily cron runs (the",
+      ru: 'Готово, таймер напоминания сбросится сам при следующей загрузке страницы или запуске ежедневного крона (кнопка',
     },
     step5After: {
       en: 'button below is just an optional way to reset it right this second)',
-      ru: 'ниже — просто способ сбросить таймер прямо сейчас, если хочется)',
+      ru: 'ниже, просто способ сбросить таймер прямо сейчас, если хочется)',
     },
 
     // ─── Action buttons ───────────────────────────────
@@ -3306,7 +3392,7 @@ const dict = {
     markedRefreshedTitle: { en: 'Marked as refreshed', ru: 'Отмечено как обновлено' },
     markedRefreshedBody: {
       en: 'Reminder clock reset. Next nudge in ~50 days.',
-      ru: 'Таймер сброшен. Следующее напоминание — через ~50 дней.',
+      ru: 'Таймер сброшен. Следующее напоминание, через ~50 дней.',
     },
 
     // ─── Error strings ────────────────────────────────
@@ -3321,7 +3407,7 @@ const dict = {
 
     // ─── Footnote about the daily cron ────────────────
     autoReminderLabel: { en: 'Auto-reminder:', ru: 'Авто-напоминание:' },
-    // Alex's email is baked in — it's the destination, not user data.
+    // Alex's email is baked in, it's the destination, not user data.
     autoReminderBody: {
       en: " A daily cron watches this stamp and emails you at agerzon21@gmail.com when we're ~10 days from the token's 60-day expiry. You should rarely need to open this tab.",
       ru: ' Ежедневный крон следит за отметкой и присылает письмо на agerzon21@gmail.com примерно за 10 дней до истечения 60-дневного токена. Открывать эту вкладку почти не придётся.',
@@ -3355,7 +3441,7 @@ const dict = {
     republish: { en: 'Save & Republish', ru: 'Сохранить и опубликовать' },
     publishing: { en: 'Publishing...', ru: 'Публикую...' },
     liveAt: { en: 'Live at', ru: 'Опубликовано:' },
-    // Journal list — errors, aria labels, meta strings, badges,
+    // Journal list, errors, aria labels, meta strings, badges,
     // empty state.
     loadFailed: {
       en: (status: number) => `Load failed (${status})`,
@@ -3367,7 +3453,7 @@ const dict = {
     photosLinked: { en: 'Photos linked', ru: 'Фото привязаны' },
     noPhotosYet: { en: 'No photos yet', ru: 'Фото пока нет' },
     // Meta row: "Published <date>" / "Updated <date>". The date is
-    // already formatted upstream — we just wrap it with the prefix.
+    // already formatted upstream, we just wrap it with the prefix.
     publishedOn: {
       en: (date: string) => `Published ${date}`,
       ru: (date: string) => `Опубликовано ${date}`,
@@ -3383,11 +3469,11 @@ const dict = {
     // Empty state (no posts yet)
     emptyTitle: { en: 'No posts yet', ru: 'Пока нет записей' },
     emptyDescription: {
-      en: 'Write a weekly recap of a recent shoot — 10–15 favorite photos with a short story. First post publishes to /journal.',
+      en: 'Write a weekly recap of a recent shoot, 10-15 favorite photos with a short story. First post publishes to /journal.',
       // Split into two sentences for readability. "First post publishes
       // to /journal" reworded to "как только опубликуешь первую…" so it
       // reads like a natural next step rather than a spec detail.
-      ru: 'Напиши обзор недавней съёмки — 10–15 любимых кадров с короткой историей. Первая запись появится на /journal, как только её опубликуешь.',
+      ru: 'Напиши обзор недавней съёмки, 10-15 любимых кадров с короткой историей. Первая запись появится на /journal, как только её опубликуешь.',
     },
   },
 
@@ -3412,7 +3498,7 @@ const dict = {
     refreshAria: { en: 'Refresh reviews', ru: 'Обновить отзывы' },
     deleteAria: { en: 'Delete review', ru: 'Удалить отзыв' },
 
-    // + New CTA — short version fits the icon-only mobile breakpoint
+    // + New CTA, short version fits the icon-only mobile breakpoint
     newReview: { en: 'New Review', ru: 'Новый отзыв' },
     newReviewShort: { en: 'New', ru: 'Новый' },
 
@@ -3435,9 +3521,9 @@ const dict = {
     // ones have no "Read it on Google" button on the site yet.
     noLink: { en: 'No link yet', ru: 'Нет ссылки' },
 
-    // Source badges — kept as brand names (Google/Yelp/Instagram/Email
+    // Source badges, kept as brand names (Google/Yelp/Instagram/Email
     // stay English in RU too, since they're recognized in Cyrillic UIs
-    // the same way). "Manual" is the odd one out — translated for
+    // the same way). "Manual" is the odd one out, translated for
     // clarity so Vero knows what she typed herself vs. imported.
     sourceGoogle: { en: 'Google', ru: 'Google' },
     sourceYelp: { en: 'Yelp', ru: 'Yelp' },
@@ -3471,7 +3557,7 @@ const dict = {
       ru: 'Добавь отзыв, полученный в Google, Instagram-директе или по почте. Отмеченные «В избранном» появятся на главной.',
     },
 
-    // Google Aggregate card — the "5.0 · 15 reviews" badge on the home
+    // Google Aggregate card, the "5.0 · 15 reviews" badge on the home
     // page. Two scalars kept in system_state and edited by hand here
     // rather than pulled from the Places API.
     aggregateTitle: { en: 'Google Aggregate', ru: 'Итоги Google' },
@@ -3486,7 +3572,7 @@ const dict = {
       ru: (date: string) => `Обновлено ${date}`,
     },
     aggregateInvalidRating: {
-      en: 'Rating must be a number 0.0–5.0',
+      en: 'Rating must be a number 0.0-5.0',
       ru: 'Рейтинг должен быть числом от 0.0 до 5.0',
     },
     aggregateInvalidCount: {
@@ -3532,13 +3618,13 @@ const dict = {
     authorPhotoLabel: { en: 'Author photo URL', ru: 'Ссылка на фото автора' },
     authorPhotoHelp: {
       en: 'Optional. Leave blank to show initials in a gold circle.',
-      ru: 'Необязательно. Оставь пустым — покажем инициалы в золотом кружке.',
+      ru: 'Необязательно. Оставь пустым, покажем инициалы в золотом кружке.',
     },
 
     ratingLabel: { en: 'Rating', ru: 'Оценка' },
-    // Aria label on each clickable star — announces "3 stars" to screen
+    // Aria label on each clickable star, announces "3 stars" to screen
     // readers. Russian plural: 1 звезда, 2-4 звезды, 5+ звёзд. The
-    // 5-star case ("5 звёзд") uses the "ё" letter deliberately — that's
+    // 5-star case ("5 звёзд") uses the "ё" letter deliberately, that's
     // the correct genitive plural form.
     ratingStarAria: {
       en: (n: number) => `${n} star${n === 1 ? '' : 's'}`,
@@ -3551,8 +3637,8 @@ const dict = {
 
     publishDateLabel: { en: 'Publish date', ru: 'Дата отзыва' },
     publishDateHelp: {
-      en: 'When the review was left. Optional — shown on the card when set.',
-      ru: 'Когда клиент оставил отзыв. Необязательно — если задано, покажем на карточке.',
+      en: 'When the review was left. Optional, shown on the card when set.',
+      ru: 'Когда клиент оставил отзыв. Необязательно, если задано, покажем на карточке.',
     },
 
     sourceLabel: { en: 'Source', ru: 'Источник' },
@@ -3627,7 +3713,7 @@ const dict = {
     // editor. Same switches appear inline on each list card too.
     visibleHelp: {
       en: 'When off, the review is hidden from the public site.',
-      ru: 'Если выключено — отзыв не будет показан на сайте.',
+      ru: 'Если выключено, отзыв не будет показан на сайте.',
     },
     // api/reviews.ts serves only rows that are visible AND featured, so this
     // switch decides whether the review is on the home page at all.
@@ -3636,7 +3722,7 @@ const dict = {
       ru: 'На главной показываются только отмеченные отзывы.',
     },
 
-    // Danger zone — superadmin-only, mirrors journalEditor.dangerZone*
+    // Danger zone, superadmin-only, mirrors journalEditor.dangerZone*
     dangerZone: { en: 'Danger zone', ru: 'Опасная зона' },
     dangerZoneBody: {
       en: 'Deleting a review removes it permanently. No undo.',
@@ -3661,7 +3747,7 @@ const dict = {
     },
     refreshAria: { en: 'Refresh weddings content', ru: 'Обновить данные' },
 
-    // Shared error shapes — same pattern as reviews/journal/gallery.
+    // Shared error shapes, same pattern as reviews/journal/gallery.
     loadFailed: {
       en: (status: number) => `Load failed (${status})`,
       ru: (status: number) => `Не удалось загрузить (${status})`,
@@ -3766,7 +3852,7 @@ const dict = {
     },
     featuredSaved: { en: 'Featured posts saved', ru: 'Подборка сохранена' },
 
-    // Focal-point drag editors for the journal slideshow — each
+    // Focal-point drag editors for the journal slideshow, each
     // featured entry anchors its cover separately in the big stage
     // image and in the thumbnail strip, so crops stop cutting faces.
     focusHelp: {
@@ -3786,7 +3872,7 @@ const dict = {
     focusReset: { en: 'Reset', ru: 'Сбросить' },
 
     // ── Card 3: Selected work ───────────────────────────────────
-    // Curates the clickable Selected Work mosaic — public wedding
+    // Curates the clickable Selected Work mosaic, public wedding
     // gallery photos that link to /photo/weddings/<slug>. Distinct
     // from the hero/folder photos, which are non-clickable ambiance.
     selectedWorkTitle: { en: 'Selected work', ru: 'Избранные работы' },
@@ -3853,7 +3939,7 @@ const dict = {
       ru: 'Подрядчики размещаются бесплатно, в порядке взаимной рекомендации. На сайте рядом с ними стоит пометка, что Веро работает независимо от них.',
     },
     // Russian plural: 1 подрядчик, 2/3/4 подрядчика, 5+ подрядчиков
-    // (teens 11-14 take gen.pl) — same shape as reviews.reviewCount.
+    // (teens 11-14 take gen.pl), same shape as reviews.reviewCount.
     vendorCount: {
       en: (n: number) => `${n} vendor${n === 1 ? '' : 's'}`,
       ru: (n: number) => {
@@ -3935,9 +4021,9 @@ const dict = {
       },
     },
 
-    // "12 leads · 3 new" — the "N new" tail uses a mini plural helper
+    // "12 leads · 3 new", the "N new" tail uses a mini plural helper
     // because English needs "new" invariant while Russian needs
-    // agreement (1 новый, 2/3/4 новых — technically "новый" is masc.sg
+    // agreement (1 новый, 2/3/4 новых, technically "новый" is masc.sg
     // agreeing with "лид"; kept simple with "новых" as a shortcut).
     subtitleWithNew: {
       en: (total: number, unread: number) =>
@@ -3978,20 +4064,20 @@ const dict = {
 
     emptyTitle: { en: 'No leads yet', ru: 'Пока нет лидов' },
     emptyDescription: {
-      en: "Contact-form submissions land here. They also go straight to Vero's email — this is the searchable history + status tracker.",
-      ru: 'Сюда попадают заявки из формы. Одновременно они приходят на почту Veronike — этот экран для истории и отметок о статусе.',
+      en: "Contact-form submissions land here. They also go straight to Vero's email, this is the searchable history + status tracker.",
+      ru: 'Сюда попадают заявки из формы. Одновременно они приходят на почту Veronike, этот экран для истории и отметок о статусе.',
     },
   },
 
   leadsEditor: {
-    // Modal title — no "new" variant because leads only arrive via the
+    // Modal title, no "new" variant because leads only arrive via the
     // public form; the admin panel is read + status + notes only.
     editTitle: { en: 'Lead Details', ru: 'Информация о лиде' },
 
-    // Toast on save success — status flip and/or notes edit
+    // Toast on save success, status flip and/or notes edit
     leadSaved: { en: 'Lead updated', ru: 'Лид обновлён' },
 
-    // Field labels — the immutable submitter-owned fields (name, email,
+    // Field labels, the immutable submitter-owned fields (name, email,
     // shoot type, preferred date, location, message) show as detail rows
     // rather than form inputs, so their labels double as row headers.
     emailLabel: { en: 'Email', ru: 'Email' },
@@ -4001,7 +4087,7 @@ const dict = {
     locationLabel: { en: 'Location', ru: 'Локация' },
     messageLabel: { en: 'Message', ru: 'Сообщение' },
 
-    // Reply shortcut — opens mailto: with subject prefilled to match
+    // Reply shortcut, opens mailto: with subject prefilled to match
     // the auto-reply Gmail-threading logic in _auto-reply.ts.
     replyViaEmail: { en: 'Reply via email', ru: 'Ответить письмом' },
 
@@ -4009,7 +4095,7 @@ const dict = {
     statusLabel: { en: 'Status', ru: 'Статус' },
 
     // The status enum. Kept in sync with STATUS_VALUES in AdminLeads.tsx
-    // and ALLOWED_STATUSES in api/admin/_leads-update.ts — three sources
+    // and ALLOWED_STATUSES in api/admin/_leads-update.ts, three sources
     // of truth, one intent (add a status → update all three).
     statusOption: {
       new:       { en: 'New',       ru: 'Новый' },
@@ -4040,19 +4126,19 @@ const dict = {
 
     notesLabel: { en: 'Notes', ru: 'Заметки' },
     notesHelp: {
-      en: 'Internal only — never shown to the lead. Jot follow-up plans, quotes given, blockers, etc.',
-      ru: 'Только для внутреннего использования — клиент их не увидит. Записывай планы, цены, комментарии.',
+      en: 'Internal only, never shown to the lead. Jot follow-up plans, quotes given, blockers, etc.',
+      ru: 'Только для внутреннего использования, клиент их не увидит. Записывай планы, цены, комментарии.',
     },
     notesPlaceholder: {
-      en: 'e.g. Called back Tue, sent quote — waiting on reply.',
-      ru: 'например, Перезвонили во вторник, отправили цену — ждём ответа.',
+      en: 'e.g. Called back Tue, sent quote, waiting on reply.',
+      ru: 'например, Перезвонили во вторник, отправили цену, ждём ответа.',
     },
 
-    // Danger zone — super-only, mirrors reviewsEditor.dangerZone*
+    // Danger zone, super-only, mirrors reviewsEditor.dangerZone*
     dangerZone: { en: 'Danger zone', ru: 'Опасная зона' },
     dangerZoneBody: {
-      en: 'Deleting a lead removes it permanently. Prefer flipping status to "spam" or "ghosted" instead — keeps the record for later analytics.',
-      ru: 'Удаление уберёт лида навсегда. Лучше сначала поставить статус «Спам» или «Не ответил» — так запись останется для аналитики.',
+      en: 'Deleting a lead removes it permanently. Prefer flipping status to "spam" or "ghosted" instead, keeps the record for later analytics.',
+      ru: 'Удаление уберёт лида навсегда. Лучше сначала поставить статус «Спам» или «Не ответил», так запись останется для аналитики.',
     },
     deleteLead: { en: 'Delete lead', ru: 'Удалить лида' },
 
@@ -4062,6 +4148,118 @@ const dict = {
       en: (name: string) => `The lead from ${name} will be permanently removed.`,
       ru: (name: string) => `Лид от ${name} будет удалён навсегда.`,
     },
+  },
+
+  // The drone licence checklist (AdminDroneLicense). Only the chrome lives
+  // here; each step's words are in src/data/drone-license-content.ts.
+  drone: {
+    tabTitle: { en: 'Drone licence', ru: 'Лицензия на дрон' },
+    subtitle: {
+      en: 'FAA Part 107 Remote Pilot Certificate',
+      ru: 'Сертификат пилота дрона FAA (Part 107)',
+    },
+    progress: {
+      en: (done: number, total: number) => `${done} of ${total} steps done`,
+      ru: (done: number, total: number) => `Выполнено шагов: ${done} из ${total}`,
+    },
+    next: { en: 'Next', ru: 'Дальше' },
+    allDone: {
+      en: 'Every step is done. Keep the dates below in mind.',
+      ru: 'Все шаги выполнены. Держи в голове даты ниже.',
+    },
+    leaveOn: { en: 'Leaving on', ru: 'Дата отъезда' },
+    leaveOnHelp: {
+      en: 'The test has to happen before this.',
+      ru: 'Тест нужно сдать до этой даты.',
+    },
+    daysLeft: {
+      en: (n: number) => (n === 1 ? '1 day left' : `${n} days left`),
+      ru: (n: number) => `Осталось дней: ${n}`,
+    },
+    leftAlready: { en: 'This date has passed', ru: 'Эта дата прошла' },
+    testAfterLeaving: {
+      en: 'The booked test is after you leave.',
+      ru: 'Тест назначен на дату после отъезда.',
+    },
+    testAfterChange: {
+      en: 'The booked test is on or after Oct 26, when chart-image questions are added. An earlier seat makes it easier.',
+      ru: 'Тест назначен на 26 октября или позже, когда добавятся вопросы с картинками карт. С более ранней датой будет проще.',
+    },
+    whatToDo: { en: 'What to do', ru: 'Что сделать' },
+    goodToKnow: { en: 'Good to know', ru: 'Полезно знать' },
+    links: { en: 'Links', ru: 'Ссылки' },
+    record: { en: 'Write down', ru: 'Записать' },
+    fromEarlier: { en: 'From earlier steps', ru: 'Из прошлых шагов' },
+    dates: { en: 'Dates', ru: 'Даты' },
+    time: { en: 'Time', ru: 'Время' },
+    cost: { en: 'Cost', ru: 'Стоимость' },
+    noPasswords: {
+      en: 'Never type a password here, only the numbers the step asks for.',
+      ru: 'Никогда не вводи сюда пароли, только номера, которые просит шаг.',
+    },
+    save: { en: 'Save', ru: 'Сохранить' },
+    saved: { en: 'Saved', ru: 'Сохранено' },
+    markDone: { en: 'Mark done', ru: 'Отметить выполненным' },
+    undo: { en: 'Not done yet', ru: 'Ещё не сделано' },
+    doneOn: {
+      en: (date: string, who: string) => `Done ${date}${who ? `, by ${who}` : ''}`,
+      ru: (date: string, who: string) => `Сделано ${date}${who ? `, ${who}` : ''}`,
+    },
+    show: { en: 'Show', ru: 'Показать' },
+    hide: { en: 'Hide', ru: 'Скрыть' },
+    loadFailed: {
+      en: 'Could not load the checklist. Try again in a moment.',
+      ru: 'Не удалось загрузить список. Попробуй ещё раз чуть позже.',
+    },
+    saveFailed: {
+      en: 'Could not save. Nothing was changed, try again.',
+      ru: 'Не удалось сохранить. Ничего не изменилось, попробуй ещё раз.',
+    },
+    refreshAria: { en: 'Reload the checklist', ru: 'Обновить список' },
+  },
+
+  // The Taxes page (AdminTax). Deadline words are in src/data/tax-calendar.ts
+  // and the 2026 guide in src/data/tax-guide.ts.
+  tax: {
+    tabTitle: { en: 'Taxes', ru: 'Налоги' },
+    subtitle: { en: 'Deadlines, sales tax, and the 2026 return', ru: 'Сроки, налог с продаж и декларация за 2026' },
+    comingUp: { en: 'Coming up', ru: 'Ближайшие сроки' },
+    remindersNote: {
+      en: 'An email arrives 14 days and 3 days before each one, until it is marked done.',
+      ru: 'Письмо приходит за 14 и за 3 дня до каждого срока, пока он не отмечен выполненным.',
+    },
+    nothingOpen: { en: 'Nothing due: every listed deadline is done.', ru: 'Ничего не горит: все сроки в списке выполнены.' },
+    showAll: { en: (n: number) => `Show all ${n}`, ru: (n: number) => `Показать все (${n})` },
+    showFewer: { en: 'Show fewer', ru: 'Свернуть' },
+    listRunsOut: {
+      en: (date: string) => `The listed deadlines run out on ${date}. Ask for next year's to be added.`,
+      ru: (date: string) => `Сроки в списке заканчиваются ${date}. Попроси добавить следующий год.`,
+    },
+    doneHeading: { en: 'Done', ru: 'Сделано' },
+    undo: { en: 'Not done', ru: 'Не сделано' },
+    kinds: {
+      sales: { en: 'PA sales tax', ru: 'Налог с продаж PA' },
+      federal: { en: 'Federal', ru: 'Федеральный' },
+      pa: { en: 'Pennsylvania', ru: 'Пенсильвания' },
+      local: { en: 'Scranton', ru: 'Скрантон' },
+      records: { en: 'Records', ru: 'Документы' },
+    },
+    overdue: { en: (n: number) => `${n} day${n === 1 ? '' : 's'} late`, ru: (n: number) => `Просрочено на ${n} дн.` },
+    today: { en: 'Due today', ru: 'Сегодня' },
+    inDays: { en: (n: number) => `in ${n} day${n === 1 ? '' : 's'}`, ru: (n: number) => `через ${n} дн.` },
+    onlyIf: { en: 'Only if:', ru: 'Только если:' },
+    markOnCard: { en: 'Marked filed on the licence card below.', ru: 'Отмечается поданной в карточке лицензии ниже.' },
+    markDone: { en: 'Mark done', ru: 'Отметить выполненным' },
+    // Switches off every date of a tax that applies only in some cases.
+    notApplicable: { en: "Doesn't apply to her", ru: 'Её не касается' },
+    seriesOff: {
+      en: (name: string) => `${name}: doesn't apply, every date hidden`,
+      ru: (name: string) => `${name}: не касается, все сроки скрыты`,
+    },
+    seriesUndo: { en: 'Undo', ru: 'Отменить' },
+    loadFailed: { en: 'Could not load the deadlines.', ru: 'Не удалось загрузить сроки.' },
+    saveFailed: { en: 'Could not save that. Try again.', ru: 'Не удалось сохранить. Попробуй ещё раз.' },
+    refreshAria: { en: 'Reload the deadlines', ru: 'Обновить сроки' },
   },
 
   crons: {
@@ -4120,7 +4318,7 @@ const dict = {
       en: (ago: string, msg: string) => `Errored ${ago}: ${msg}`,
       ru: (ago: string, msg: string) => `Ошибка ${ago}: ${msg}`,
     },
-    // A failure that left no message. It used to print "Errored 2h ago: —".
+    // A failure that left no message. It used to print "Errored 2h ago:, ".
     lastRunErrorBare: {
       en: (ago: string) => `Errored ${ago}`,
       ru: (ago: string) => `Ошибка ${ago}`,
@@ -4158,7 +4356,7 @@ const dict = {
     // Same column: the error when there is one, otherwise what the run did.
     historyOutcome: { en: 'Result', ru: 'Результат' },
 
-    // Toggle-confirm — we DON'T actually pop a modal on toggle (the
+    // Toggle-confirm, we DON'T actually pop a modal on toggle (the
     // switch flip is instant + reversible), but on Run Now we do
     // surface a soft "are you sure" toast so a mis-tap on the wedding
     // photo sync doesn't kick off a Vision-API bill for nothing.
@@ -4175,16 +4373,16 @@ const dict = {
     // ─── Toasts ───────────────────────────────────────
     toggleFailed: { en: 'Could not update cron', ru: 'Не удалось обновить задачу' },
     runNowSuccess: {
-      en: (name: string) => `Ran '${name}' — see last-run info above`,
-      ru: (name: string) => `Задача «${name}» выполнена — статус выше`,
+      en: (name: string) => `Ran '${name}', see last-run info above`,
+      ru: (name: string) => `Задача «${name}» выполнена, статус выше`,
     },
     runNowSkipped: {
-      en: (name: string) => `Skipped '${name}' — enable it first`,
-      ru: (name: string) => `«${name}» пропущена — сначала включи её`,
+      en: (name: string) => `Skipped '${name}', enable it first`,
+      ru: (name: string) => `«${name}» пропущена, сначала включи её`,
     },
     runNowFailed: {
-      en: (name: string) => `'${name}' errored — check the history`,
-      ru: (name: string) => `«${name}» завершилась с ошибкой — см. историю`,
+      en: (name: string) => `'${name}' errored, check the history`,
+      ru: (name: string) => `«${name}» завершилась с ошибкой, см. историю`,
     },
 
     // ─── Errors ───────────────────────────────────────
@@ -4306,17 +4504,17 @@ const dict = {
     deleteBody: {
       en: (email: string) =>
         `${email} will be removed permanently, along with every session they have open. This cannot be undone. ` +
-        `If you only want to take their access away for now, disable the account instead — that is reversible.`,
+        `If you only want to take their access away for now, disable the account instead, that is reversible.`,
       ru: (email: string) =>
         `${email} будет удалён навсегда вместе со всеми активными сессиями. Это необратимо. ` +
-        `Если нужно лишь временно закрыть доступ — отключите аккаунт, это обратимо.`,
+        `Если нужно лишь временно закрыть доступ, отключите аккаунт, это обратимо.`,
     },
     deleteConfirm: { en: 'Delete permanently', ru: 'Удалить навсегда' },
     deletedToast: { en: 'Account deleted', ru: 'Аккаунт удалён' },
     // Why the two original accounts show no Delete button.
     envBackedHint: {
-      en: 'Set up from an environment variable — can be disabled, but not deleted.',
-      ru: 'Создан из переменной окружения — можно отключить, но не удалить.',
+      en: 'Set up from an environment variable, can be disabled, but not deleted.',
+      ru: 'Создан из переменной окружения, можно отключить, но не удалить.',
     },
     disabledToast: { en: 'Access disabled', ru: 'Доступ отключён' },
     enabledToast: { en: 'Access restored', ru: 'Доступ восстановлен' },
@@ -4333,11 +4531,11 @@ const dict = {
     addFailed: { en: 'Could not create that account.', ru: 'Не удалось создать аккаунт.' },
 
     // Shown once, after creation. There is no way to see it again, which is
-    // the point — so the copy has to say so plainly.
+    // the point, so the copy has to say so plainly.
     tempTitle: { en: 'Account created', ru: 'Аккаунт создан' },
     tempBody: {
-      en: 'Give them this one-time password. It will not be shown again — if it gets lost, disable the account and make a new one.',
-      ru: 'Передайте им этот одноразовый пароль. Он больше не будет показан — если потеряется, отключите аккаунт и создайте новый.',
+      en: 'Give them this one-time password. It will not be shown again, if it gets lost, disable the account and make a new one.',
+      ru: 'Передайте им этот одноразовый пароль. Он больше не будет показан, если потеряется, отключите аккаунт и создайте новый.',
     },
     tempCopy: { en: 'Copy password', ru: 'Скопировать пароль' },
     tempCopied: { en: 'Copied', ru: 'Скопировано' },
@@ -4390,11 +4588,11 @@ const dict = {
     recoveryBody: {
       en:
         'The passwords in the Vercel environment variables (SUPER_ADMIN_PASSWORD, ADMIN_PASSWORD) keep working as a way back in, ' +
-        'even after you change your password here. Sign in with one of those, then change your password on this screen — ' +
+        'even after you change your password here. Sign in with one of those, then change your password on this screen, ' +
         'enter that same environment-variable password as your current password.',
       ru:
         'Пароли из переменных окружения Vercel (SUPER_ADMIN_PASSWORD, ADMIN_PASSWORD) продолжают работать как запасной вход, ' +
-        'даже после смены пароля здесь. Войдите с одним из них и смените пароль на этом экране — ' +
+        'даже после смены пароля здесь. Войдите с одним из них и смените пароль на этом экране, ' +
         'в поле «текущий пароль» введите тот же пароль из переменной окружения.',
     },
     ownNoAccount: {
@@ -4456,7 +4654,7 @@ const Ctx = createContext<AdminI18nCtx>(FALLBACK);
 const STORAGE_KEY = 'vero_admin_lang';
 
 /**
- * Provider — mount at the top of the admin surface. Chooses the
+ * Provider, mount at the top of the admin surface. Chooses the
  * default language from adminLevel (Vero → RU, super → EN) unless
  * the user has stored a manual override in localStorage.
  */
@@ -4523,5 +4721,5 @@ export function readAdminLang(defaultLang: AdminLang = 'en'): AdminLang {
   const stored = window.localStorage.getItem(STORAGE_KEY);
   return stored === 'ru' || stored === 'en' ? stored : defaultLang;
 }
-// Silence "unused" for the internal type — TS needs it referenced.
+// Silence "unused" for the internal type, TS needs it referenced.
 export type _LeafUnused = Leaf;

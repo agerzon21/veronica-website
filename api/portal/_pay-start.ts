@@ -29,6 +29,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { checkPortalPassword } from './_password.js';
+import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { createCheckoutSession, isStripeConfigured, isStripeTestMode } from '../_stripe.js';
 import { CARD_PAYMENTS_MODE } from '../../src/data/payment-handles.js';
 import {
@@ -147,6 +148,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // Guessing is throttled per address and per network (see _throttle.ts),
+    // checked before the password so a refused attempt costs no scrypt.
+    const throttleKeys = portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
     const rows = (await sql`
       select id, client_display_name, client_email, client_password_hash,
              session_type, contract_status, contract_total_amount, contract_retainer_amount,
@@ -172,7 +181,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Same shape as _client.ts: the delay and the identical message make a
     // wrong password and an unknown address indistinguishable, so this cannot
     // be used to discover which addresses have bookings.
-    if (!row || !checkPortalPassword(password, row.client_password_hash).ok) {
+    if (!checkPortalPassword(password, row?.client_password_hash).ok || !row) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }

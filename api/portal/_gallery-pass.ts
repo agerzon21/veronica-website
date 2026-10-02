@@ -1,7 +1,7 @@
 /**
- * Manage the Gallery Pass for a Client Portal — rotate / enable / disable /
+ * Manage the Gallery Pass for a Client Portal, rotate / enable / disable /
  * set custom. Re-authenticates on every call against the client's email +
- * password (no session token in this MVP — credentials live only in the
+ * password (no session token in this MVP, credentials live only in the
  * page's React state, never persisted).
  *
  * POST { email, password, action, customPassword? }
@@ -16,6 +16,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
+import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { getDb } from '../_db.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -23,7 +24,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Omit visually-confusable chars (I, O, 0, 1, L) so guests who read the
 // password aloud at the reception don't fumble it. 8 chars from a 32-char
-// alphabet ≈ 40 bits — well over a trillion possibilities, plenty for our
+// alphabet ≈ 40 bits, well over a trillion possibilities, plenty for our
 // brute-force protection + uniqueness constraint.
 const PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
@@ -37,7 +38,7 @@ const randomGalleryPassword = (): string => {
 
 // Returns a generated gallery password that doesn't collide with any
 // existing one. The DB has a UNIQUE constraint on gallery_password so a
-// race-condition collision would just throw on insert/update — but we
+// race-condition collision would just throw on insert/update, but we
 // prefer to find a free one cleanly up front. Bounded retries because if
 // the table is somehow full of every 8-char password (it won't be), we
 // want a thrown error rather than an infinite loop.
@@ -90,6 +91,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // Guessing is throttled per address and per network (see _throttle.ts),
+    // checked before the password so a refused attempt costs no scrypt.
+    const throttleKeys = portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
 
     // 1. Authenticate
     const auth = (await sql`
@@ -99,9 +108,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       limit 1
     `) as Array<{ id: string; client_password: string | null; client_password_hash: string | null }>;
 
-    // Password verified in code, not SQL — it is hashed now. Same 401 and
+    // Password verified in code, not SQL, it is hashed now. Same 401 and
     // same delay either way so this cannot enumerate client addresses.
-    if (!auth[0] || !checkPortalPassword(password, auth[0].client_password_hash).ok) {
+    if (!checkPortalPassword(password, auth[0]?.client_password_hash).ok || !auth[0]) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }

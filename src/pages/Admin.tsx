@@ -11,6 +11,8 @@ import { AnimatePresence, m } from 'framer-motion';
 import FaBars from '../icons/fa/FaBars';
 import FaBookOpen from '../icons/fa/FaBookOpen';
 import FaClock from '../icons/fa/FaClock';
+import FaHelicopter from '../icons/fa/FaHelicopter';
+import FaFileInvoiceDollar from '../icons/fa/FaFileInvoiceDollar';
 import FaCommentDots from '../icons/fa/FaCommentDots';
 import FaEnvelopeOpenText from '../icons/fa/FaEnvelopeOpenText';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
@@ -48,13 +50,15 @@ import AdminMessages, { REFINE_SESSION_KEY } from '../components/AdminMessages';
 import { clearAllDrafts } from '../components/draftStore';
 import AdminAssistant from '../components/AdminAssistant';
 import AdminCrons from '../components/AdminCrons';
+import AdminDroneLicense from '../components/AdminDroneLicense';
+import AdminTax from '../components/AdminTax';
 import AdminUsers from '../components/AdminUsers';
 import { AdminI18nProvider, useAdminLang, readAdminLang, adminDict, type AdminLang } from '../i18n/admin';
 
 // Which top-level dashboard tab is active. Only relevant when
 // view.kind === 'dashboard'; deeper views (mode-chooser, new-*, detail)
-// live outside the tab shell for now — they're modal-ish flows.
-type DashTab = 'clients' | 'messages' | 'leads' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'weddings' | 'integrations' | 'crons' | 'users';
+// live outside the tab shell for now, they're modal-ish flows.
+type DashTab = 'clients' | 'messages' | 'leads' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'weddings' | 'integrations' | 'crons' | 'users' | 'drone' | 'tax';
 
 // Sub-tab for the Clients group (Table / Calendar). Moved up here from
 // AdminDashboard so the mobile bottom-nav sub-strip can drive it directly
@@ -71,7 +75,7 @@ type NavGroup = 'clients' | 'inbox' | 'studio' | 'menu';
 // Integrations, Crons and Admin users are super-only, reached via the Menu
 // drawer only, so they intentionally live outside the mobile bottom-nav groups.
 const TAB_TO_GROUP: Record<
-  Exclude<DashTab, 'integrations' | 'crons' | 'users'>,
+  Exclude<DashTab, 'integrations' | 'crons' | 'users' | 'drone' | 'tax'>,
   Exclude<NavGroup, 'menu'>
 > = {
   clients: 'clients',
@@ -85,8 +89,8 @@ const TAB_TO_GROUP: Record<
 };
 
 // (GROUP_DEFAULT_TAB was used by the old auto-navigate-on-group-tap
-// behavior. Now that tapping a group only OPENS the sub-menu — the
-// user picks the sub-tab explicitly — no default is needed. Kept as
+// behavior. Now that tapping a group only OPENS the sub-menu, the
+// user picks the sub-tab explicitly, no default is needed. Kept as
 // a comment for the archaeology.)
 
 const MotionBox = m(Box);
@@ -126,7 +130,7 @@ const looksLikeSessionToken = (v: string) => /^[a-f0-9]{64}$/.test(v);
 
 const Admin = () => {
   // Email is lazy-initialized from localStorage so a returning
-  // admin sees their address already filled in — a real quality-of-
+  // admin sees their address already filled in, a real quality-of-
   // life win for Vero, who signs in daily. hasSavedEmail gates the
   // "Welcome back" line on the login screen (new visitors see the
   // stock form). Both use the same read helper so they can't drift.
@@ -135,7 +139,7 @@ const Admin = () => {
   // The credential sent with every admin API call: a session token once one
   // has been issued, otherwise the raw password (env-var logins get no token).
   // Seeded from a previous page view, which is what lets a reload stay signed
-  // in — see the restore effect below.
+  // in, see the restore effect below.
   //
   // This is NOT what the login form is bound to. It used to be, and the result
   // was that a stored 64-hex session token rendered as a pre-filled password
@@ -212,7 +216,7 @@ const Admin = () => {
   const menuDisclosure = useDisclosure();
 
   // Two-form fetcher. On INITIAL login (`credentials` includes email),
-  // the endpoint validates the email+password pair — this is what makes
+  // the endpoint validates the email+password pair, this is what makes
   // brute-force so much harder now. On subsequent REFRESH calls we send
   // password alone (bearer token pattern), no email.
   const loadPortals = async (
@@ -244,7 +248,7 @@ const Admin = () => {
             // tab; it just will not survive a reload.
           }
         } else if (credentials.email) {
-          // No token came back, so this was an env-var login — there is no
+          // No token came back, so this was an env-var login, there is no
           // admin_users row to attach a session to. The typed password has to
           // become the credential, or every later request goes out empty.
           // Guarded on `email` so a refresh call never overwrites a good token.
@@ -270,28 +274,28 @@ const Admin = () => {
       // downstream reads it, and leaving it in state keeps it in the DOM.
       setLoginPassword('');
       setShowPassword(false);
-      // Remember this email for next time. Safe to swallow errors —
+      // Remember this email for next time. Safe to swallow errors
       // localStorage can throw in Safari private mode, and losing
       // the autofill nicety is a strictly cosmetic regression.
       try {
         localStorage.setItem(SAVED_EMAIL_KEY, email.trim());
         setHasSavedEmail(true);
       } catch {
-        /* localStorage blocked — no-op */
+        /* localStorage blocked, no-op */
       }
     } else {
       setError(r.error || 'Sign in failed.');
     }
   };
 
-  // "Sign in as different user" — forgets the saved email and blanks
+  // "Sign in as different user", forgets the saved email and blanks
   // the input so a new address can be typed. Doesn't touch the password
   // field or focus anywhere in particular; the user's next tap decides.
   const handleClearSavedEmail = () => {
     try {
       localStorage.removeItem(SAVED_EMAIL_KEY);
     } catch {
-      /* localStorage blocked — no-op */
+      /* localStorage blocked, no-op */
     }
     setEmail('');
     setHasSavedEmail(false);
@@ -307,12 +311,12 @@ const Admin = () => {
   };
 
   /**
-   * Sign out of the admin panel. Not a real "session" — the password
-   * lives in component state until reload — but this gives Vero a
+   * Sign out of the admin panel. Not a real "session", the password
+   * lives in component state until reload, but this gives Vero a
    * clean way to lock the panel back down (e.g. handing her laptop
    * to a client mid-session) without needing to close the browser.
    * Clears state + navigates to the public home page (NOT back to
-   * /admin's login form — Alex flagged that as a security concern
+   * /admin's login form, Alex flagged that as a security concern
    * since it advertises the admin URL after logout).
    */
   const handleSignOut = () => {
@@ -359,7 +363,7 @@ const Admin = () => {
   };
 
   // When we transition from the login screen to the dashboard, scroll
-  // to the very top of the page — the user just tapped Sign In in the
+  // to the very top of the page, the user just tapped Sign In in the
   // middle of the viewport, and without this the browser retains
   // whatever scroll position the login page had (which was often
   // scrolled down because the login card is centered vertically).
@@ -383,7 +387,7 @@ const Admin = () => {
         try {
           sessionStorage.removeItem(ADMIN_SESSION_KEY);
         } catch {
-          /* private-mode Safari — the state reset below is what matters */
+          /* private-mode Safari, the state reset below is what matters */
         }
         setPassword('');
       }
@@ -555,10 +559,10 @@ const Admin = () => {
             <>
               {/* Desktop tab strip. Sits above the active tab body. On
                   mobile we hide this entirely and use the fixed bottom
-                  nav below instead — the pill row was overflowing 375px
+                  nav below instead, the pill row was overflowing 375px
                   viewports and blowing out the whole page.
 
-                  Integrations tab is superadmin-only — Vero never sees
+                  Integrations tab is superadmin-only, Vero never sees
                   it, so she can't get confused (or worse, accidentally
                   paste something into a token box). */}
               <AdminTabStrip
@@ -582,8 +586,8 @@ const Admin = () => {
                 <AdminMessages
                   adminPassword={password}
                   adminLevel={adminLevel}
-                  // Lets a conversation hand off to the Assistant tab —
-                  // "this draft isn't right, help me fix it" — without
+                  // Lets a conversation hand off to the Assistant tab
+                  // "this draft isn't right, help me fix it", without
                   // Vero having to navigate and re-explain which thread
                   // she means.
                   onOpenAssistant={() => setDashTab('assistant')}
@@ -620,6 +624,9 @@ const Admin = () => {
               {dashTab === 'users' && (
                 <AdminUsers adminPassword={password} adminLevel={adminLevel} />
               )}
+              {/* Both levels: it is Vero's checklist, and Alex helps with it. */}
+              {dashTab === 'drone' && <AdminDroneLicense adminPassword={password} />}
+              {dashTab === 'tax' && adminLevel === 'super' && <AdminTax adminPassword={password} />}
             </>
           )}
           {view.kind === 'mode-chooser' && (
@@ -709,7 +716,7 @@ const Admin = () => {
         </Box>
         {/* Mobile-only bottom nav + sub-nav strip. Rendered once here
             at the shell level so it stays visible while Vero is
-            reading a conversation, editing a photo, etc. — the way
+            reading a conversation, editing a photo, etc., the way
             iOS/Android tab bars work. Hidden during drill-in sub-flows
             (mode-chooser / new-client / client-detail) since those
             have their own back navigation. */}
@@ -724,7 +731,7 @@ const Admin = () => {
           />
         )}
 
-        {/* Menu drawer — the "More" panel behind the Menu bottom-nav
+        {/* Menu drawer, the "More" panel behind the Menu bottom-nav
             slot. Sign out, public-site links, home, integrations for
             super. Reused on desktop via the Menu button in the top
             pill strip. */}
@@ -762,6 +769,14 @@ const Admin = () => {
             setDashTab('users');
             menuDisclosure.onClose();
           }}
+          onGoDrone={() => {
+            setDashTab('drone');
+            menuDisclosure.onClose();
+          }}
+          onGoTax={() => {
+            setDashTab('tax');
+            menuDisclosure.onClose();
+          }}
         />
       </AdminI18nProvider>
     );
@@ -778,7 +793,7 @@ const Admin = () => {
     );
   }
 
-  // Login screen — matches the Portal dark style. Renders the site
+  // Login screen, matches the Portal dark style. Renders the site
   // Navbar + Footer inline so anyone hitting /admin unauthenticated
   // has an obvious way back to the public site (App.tsx hides both
   // for /admin, so we bring our own here). Once logged in, the admin
@@ -863,7 +878,7 @@ const Admin = () => {
                 </Text>
               </VStack>
 
-              {/* "Welcome back, ..." affordance — only appears when
+              {/* "Welcome back..." affordance, only appears when
                   we've got a remembered email in localStorage. New
                   visitors see the stock form with an empty email
                   field. The "different user" link clears the memory
@@ -1000,7 +1015,7 @@ const Admin = () => {
                         }
                         icon={<Icon as={showPassword ? FaEyeSlash : FaEye} boxSize={4} />}
                         onClick={() => setShowPassword((v) => !v)}
-                        // Not a submit button — without this, Enter in the
+                        // Not a submit button, without this, Enter in the
                         // password field would toggle visibility instead of
                         // signing in.
                         type="button"
@@ -1041,11 +1056,11 @@ const Admin = () => {
 };
 
 /**
- * Shared tab definitions — used by both the desktop tab strip and
+ * Shared tab definitions, used by both the desktop tab strip and
  * the mobile bottom nav so the two nav treatments can't drift.
  */
 // Language-agnostic tab metadata. Each entry carries a labelKey that
-// maps into t.nav.* — nav components read the current-language label
+// maps into t.nav.*, nav components read the current-language label
 // via useAdminLang() at render time, so switching languages doesn't
 // require a re-render of the tab list itself.
 type NavLabelKey = 'clients' | 'messages' | 'leads' | 'assistant' | 'journal' | 'gallery' | 'reviews' | 'weddings' | 'integrations';
@@ -1065,9 +1080,9 @@ const TABS: TabDef[] = [
 function tabsFor(isSuper: boolean): TabDef[] {
   // Leads is super-only: it duplicates what Vero already does in Messages
   // (every submission lands there as a conversation), so for her it was a
-  // second, worse copy of the inbox. The contact_submissions data stays —
+  // second, worse copy of the inbox. The contact_submissions data stays
   // it is the structured record that survives thread deletion and the
-  // export source — it just is not her daily surface.
+  // export source, it just is not her daily surface.
   const base = isSuper ? TABS : TABS.filter((t) => t.id !== 'leads');
   return isSuper ? [...base, { id: 'integrations', labelKey: 'integrations', icon: FaPlug }] : base;
 }
@@ -1075,7 +1090,7 @@ function tabsFor(isSuper: boolean): TabDef[] {
 /**
  * DESKTOP tab strip. Same flat 6-tab pill row as before + a Menu
  * button on the right that opens the same drawer the mobile Menu
- * bottom-nav slot opens. Hidden on mobile — bottom nav takes over.
+ * bottom-nav slot opens. Hidden on mobile, bottom nav takes over.
  */
 /**
  * The unsaved-work question, for an exit triggered from the nav.
@@ -1190,7 +1205,7 @@ function AdminTabStrip({
             );
           })}
         </HStack>
-        {/* Menu on the far right — sign out + public-site jumps. */}
+        {/* Menu on the far right, sign out + public-site jumps. */}
         <Box
           as="button"
           type="button"
@@ -1224,7 +1239,7 @@ function AdminTabStrip({
 }
 
 /**
- * MOBILE bottom nav — 4 groups (Clients / Inbox / Studio / Menu). The
+ * MOBILE bottom nav, 4 groups (Clients / Inbox / Studio / Menu). The
  * sub-nav (Table/Calendar, Messages/Assistant, Journal/Gallery) is
  * TAP-TO-OPEN and appears above the bar with a spring animation.
  * Tap anywhere outside the nav to close. Tapping a sub-tab navigates
@@ -1269,7 +1284,7 @@ function AdminMobileNav({
       setOpenGroup(null);
     };
     // pointerdown fires before click, so submenu closes before other
-    // handlers see the tap — feels snappier than click.
+    // handlers see the tap, feels snappier than click.
     window.addEventListener('pointerdown', handler);
     return () => window.removeEventListener('pointerdown', handler);
   }, [openGroup]);
@@ -1277,7 +1292,7 @@ function AdminMobileNav({
   // iOS Safari keeps position:fixed elements pinned to the LAYOUT
   // viewport, which does NOT shrink when the software keyboard opens.
   // Result: while a textarea is focused (e.g. the Assistant chat
-  // composer), the entire mobile nav is parked BEHIND the keyboard —
+  // composer), the entire mobile nav is parked BEHIND the keyboard
   // taps on where the nav LOOKS to be actually hit the keyboard and
   // do nothing. This was the "Assistant page nav is broken" bug.
   // The visualViewport API measures the visible portion, so we can
@@ -1301,7 +1316,7 @@ function AdminMobileNav({
     };
   }, []);
 
-  // Also close on route change (safety net — if something outside
+  // Also close on route change (safety net, if something outside
   // this component changes activeTab, don't leave a stale panel open).
   useEffect(() => {
     setOpenGroup(null);
@@ -1309,12 +1324,13 @@ function AdminMobileNav({
 
   // Derive the currently-active group purely for visual highlighting
   // (which tab in the bottom bar looks selected). Independent of
-  // openGroup — the sub-menu can be open on Inbox while the active
+  // openGroup, the sub-menu can be open on Inbox while the active
   // group is Studio.
   // Integrations, Crons and Admin users are super-only, reached via the Menu
-  // drawer, so all three highlight the Menu slot in the bottom nav.
+  // drawer, and the drone licence page is reached the same way by both
+  // levels, so all four highlight the Menu slot in the bottom nav.
   const activeGroup: NavGroup =
-    activeTab === 'integrations' || activeTab === 'crons' || activeTab === 'users'
+    activeTab === 'integrations' || activeTab === 'crons' || activeTab === 'users' || activeTab === 'drone' || activeTab === 'tax'
       ? 'menu'
       : TAB_TO_GROUP[activeTab];
 
@@ -1329,7 +1345,7 @@ function AdminMobileNav({
       : openGroup === 'inbox'
       ? [
           { id: 'messages', label: t.nav.messages, isActive: activeTab === 'messages', onClick: () => { onChangeTab('messages'); setOpenGroup(null); } },
-          // Leads is super-only — see tabsFor.
+          // Leads is super-only, see tabsFor.
           ...(isSuper
             ? [{ id: 'leads', label: t.nav.leads, isActive: activeTab === 'leads', onClick: () => { onChangeTab('leads'); setOpenGroup(null); } }]
             : []),
@@ -1366,7 +1382,7 @@ function AdminMobileNav({
       display={{ base: 'block', md: 'none' }}
       pointerEvents="none"
     >
-      {/* Sub-nav pill strip — appears ABOVE the bottom bar when a
+      {/* Sub-nav pill strip, appears ABOVE the bottom bar when a
           group's sub-menu is open. Cute spring animation (y +12→0
           with a slight scale bump) so it feels tappable, not just
           faded in. Pointer-events re-enabled on the pill itself so
@@ -1427,7 +1443,7 @@ function AdminMobileNav({
         )}
       </AnimatePresence>
 
-      {/* Bottom nav bar — 4 groups, always visible. Chevron above the
+      {/* Bottom nav bar, 4 groups, always visible. Chevron above the
           icon signals "tap opens a sub-menu"; the chevron rotates
           180° when its group's sub-menu is open. */}
       <Box
@@ -1451,7 +1467,7 @@ function AdminMobileNav({
                 aria-selected={isActive}
                 aria-expanded={g.hasSubmenu ? isOpen : undefined}
                 // Blur any focused input on pointerdown so the tap
-                // reliably registers on iOS Safari — otherwise the
+                // reliably registers on iOS Safari, otherwise the
                 // keyboard dismissal reflow can eat the synthesized
                 // click. Complements the visualViewport translation.
                 onPointerDown={() => {
@@ -1477,7 +1493,7 @@ function AdminMobileNav({
                 _active={{ bg: 'rgba(201, 169, 110, 0.08)' }}
                 sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                {/* Chevron affordance — signals the tab opens a submenu.
+                {/* Chevron affordance, signals the tab opens a submenu.
                     Small enough to not compete with the icon; rotates
                     when the submenu is open. */}
                 {g.hasSubmenu && (
@@ -1517,7 +1533,7 @@ function AdminMobileNav({
 }
 
 /**
- * Menu drawer — the "More" panel behind the Menu bottom-nav slot.
+ * Menu drawer, the "More" panel behind the Menu bottom-nav slot.
  * Slides in from the right on both mobile + desktop (Chakra's default
  * for Drawer placement="right"). Holds the meta-actions that don't
  * belong in a tab: sign out, jump-to-public-site links, and (for
@@ -1534,6 +1550,8 @@ function AdminMenuDrawer({
   onGoIntegrations,
   onGoCrons,
   onGoUsers,
+  onGoDrone,
+  onGoTax,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1542,6 +1560,8 @@ function AdminMenuDrawer({
   onGoIntegrations: () => void;
   onGoCrons: () => void;
   onGoUsers: () => void;
+  onGoDrone: () => void;
+  onGoTax: () => void;
 }) {
   const { t, lang, setLang } = useAdminLang();
   return (
@@ -1568,7 +1588,7 @@ function AdminMenuDrawer({
           px={0}
         >
           <VStack align="stretch" spacing={0} mt={4}>
-            {/* Language toggle — sits at the top of the drawer so Vero
+            {/* Language toggle, sits at the top of the drawer so Vero
                 can find it fast if the interface came up in the wrong
                 language. Two-pill segmented switch, persists per
                 browser (localStorage) once she picks explicitly. */}
@@ -1577,7 +1597,7 @@ function AdminMenuDrawer({
               <MenuLanguageToggle value={lang} onChange={setLang} />
             </Box>
 
-            {/* Public site jumps — Vero's own website links so she
+            {/* Public site jumps, Vero's own website links so she
                 can preview what she's building. Opens in a new tab
                 so the admin session stays intact. */}
             <MenuSectionLabel>{t.menuDrawer.publicSite}</MenuSectionLabel>
@@ -1586,12 +1606,18 @@ function AdminMenuDrawer({
             <MenuLink href="/journal" icon={FaBookOpen} label={t.nav.journal} newTab />
             <MenuLink href="/portal" icon={FaExternalLinkAlt} label={t.menuDrawer.clientPortal} newTab />
 
+            {/* Both levels. Out of the tab bar on purpose: it is a checklist
+                worked through over a few weeks, not a daily surface. */}
+            <MenuSectionLabel>{t.menuDrawer.licences}</MenuSectionLabel>
+            <MenuButton icon={FaHelicopter} label={t.nav.drone} onClick={onGoDrone} />
+
             {adminLevel === 'super' && (
               <>
                 <MenuSectionLabel>{t.menuDrawer.super}</MenuSectionLabel>
                 <MenuButton icon={FaClock} label={t.nav.crons} onClick={onGoCrons} />
                 <MenuButton icon={FaUsersCog} label={t.nav.users} onClick={onGoUsers} />
                 <MenuButton icon={FaPlug} label={t.nav.integrations} onClick={onGoIntegrations} />
+                <MenuButton icon={FaFileInvoiceDollar} label={t.nav.tax} onClick={onGoTax} />
               </>
             )}
 

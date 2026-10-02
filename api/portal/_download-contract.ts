@@ -6,7 +6,7 @@
  *   → 401  on bad credentials
  *   → 404  if the portal has no signed PDF yet
  *
- * The PDF lives in a private Vercel Blob store — the URL stored in the DB
+ * The PDF lives in a private Vercel Blob store, the URL stored in the DB
  * isn't directly accessible without the BLOB_READ_WRITE_TOKEN. This
  * endpoint re-authenticates the client (same email+password used to log
  * into the portal), pulls the blob using the token, and streams it back
@@ -19,6 +19,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
+import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { get as getBlob } from '@vercel/blob';
 import { getDb } from '../_db.js';
 
@@ -26,7 +27,7 @@ const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Row = {
-  // Selected only to authenticate — never returned to the client.
+  // Selected only to authenticate, never returned to the client.
   client_password_hash: string | null;
   client_display_name: string | null;
   client_email: string;
@@ -52,6 +53,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // Guessing is throttled per address and per network (see _throttle.ts),
+    // checked before the password so a refused attempt costs no scrypt.
+    const throttleKeys = portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
     const rows = (await sql`
       select client_display_name, client_email, contract_signed_pdf_url, contract_signed_at,
              client_password_hash
@@ -62,11 +71,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as Row[];
 
 
-    // Password is verified in code now, not in SQL — it is hashed. Same 401 and
+    // Password is verified in code now, not in SQL, it is hashed. Same 401 and
     // same delay whether the email is unknown or the password is wrong, so this
     // cannot be used to discover which addresses belong to clients.
     const authRow = rows[0];
-    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash).ok) {
+    if (!checkPortalPassword(password, authRow?.client_password_hash).ok || !authRow) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }
@@ -88,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const dateLabel = portal.contract_signed_at
       ? new Date(portal.contract_signed_at).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
-    const downloadName = `Contract — ${portal.client_display_name ?? portal.client_email} — ${dateLabel}.pdf`;
+    const downloadName = `Contract, ${portal.client_display_name ?? portal.client_email}, ${dateLabel}.pdf`;
 
     // HTTP headers can only contain ASCII. The display name often has
     // an em dash or other unicode, so we emit two filenames per RFC 5987:

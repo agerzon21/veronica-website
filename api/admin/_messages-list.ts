@@ -11,7 +11,7 @@
  *   → 401 wrong password
  *   → 405 non-POST
  *
- * Accepts both admin (Vero) and super (Alex) — Messages is a Vero-
+ * Accepts both admin (Vero) and super (Alex), Messages is a Vero-
  * facing tool.
  */
 
@@ -92,6 +92,9 @@ async function closedByVeroAt(sql: ReturnType<typeof getDb>): Promise<Map<string
   }
 }
 
+// "Today" is Scranton's today, written out, never CURRENT_DATE: Neon runs on
+// UTC, so from 8 PM Eastern CURRENT_DATE is already tomorrow, and a lead whose
+// shoot is today was closed as "date passed" four hours early.
 async function leadStates(sql: ReturnType<typeof getDb>): Promise<Map<string, LeadState>> {
   const out = new Map<string, LeadState>();
   const closedAt = await closedByVeroAt(sql);
@@ -104,13 +107,13 @@ async function leadStates(sql: ReturnType<typeof getDb>): Promise<Map<string, Le
         ORDER BY m.conversation_id, m.sent_at DESC
       )
       SELECT c.id, last.direction, last.sent_at AS last_at,
-             (CURRENT_DATE - (last.sent_at AT TIME ZONE 'America/New_York')::date) AS days,
+             ((NOW() AT TIME ZONE 'America/New_York')::date - (last.sent_at AT TIME ZONE 'America/New_York')::date) AS days,
              COALESCE(
                CASE WHEN c.summary_json->'booking'->>'event_date' ~ '^\\d{4}-\\d{2}-\\d{2}$'
                     THEN (c.summary_json->'booking'->>'event_date')::date END,
                CASE WHEN sub.preferred_date ~ '^\\d{4}-\\d{2}-\\d{2}$'
                     THEN sub.preferred_date::date END
-             ) - CURRENT_DATE AS days_to_date,
+             ) - (NOW() AT TIME ZONE 'America/New_York')::date AS days_to_date,
              (
                SELECT COUNT(DISTINCT (o.sent_at AT TIME ZONE 'America/New_York')::date)
                FROM messages o
@@ -215,7 +218,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
 
-    // Global kill switch state — read once, return in the same
+    // Global kill switch state, read once, return in the same
     // payload so the inbox doesn't need a separate roundtrip.
     const stateRows = (await sql`
       SELECT value FROM system_state WHERE key = 'messaging_ai_state' LIMIT 1

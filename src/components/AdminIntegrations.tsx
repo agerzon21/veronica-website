@@ -1,5 +1,5 @@
-import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, Input, useToast } from '@chakra-ui/react';
-import { useCallback, useEffect, useState } from 'react';
+import { Box, VStack, HStack, Stack, Text, Flex, Icon, Badge, IconButton, useToast } from '@chakra-ui/react';
+import { useEffect, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaCopy from '../icons/fa/FaCopy';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
@@ -11,7 +11,6 @@ import FaTerminal from '../icons/fa/FaTerminal';
 import CTAButton from './ui/CTAButton';
 import RebuildSiteButton from './ui/RebuildSiteButton';
 import { useAdminLang } from '../i18n/admin';
-import type { SalesTaxMode } from '../data/sales-tax';
 
 /**
  * The "Integrations" tab in /admin: Instagram, WhatsApp, rebuilds and the
@@ -60,8 +59,11 @@ const AdminIntegrations = ({ adminPassword }: Props) => {
         </Text>
       </VStack>
 
-      <SalesTaxLicenseCard adminPassword={adminPassword} />
-      <SalesTaxReportCard adminPassword={adminPassword} />
+      {/* The sales tax cards moved to Menu, Taxes (AdminTax.tsx). One line
+          here so the old place still points at the new one. */}
+      <Text fontSize="sm" color="gray.500" mt={4}>
+        {t.integrations.taxMoved}
+      </Text>
       <InstagramCard adminPassword={adminPassword} />
       <WhatsAppCard adminPassword={adminPassword} />
       <RebuildCard adminPassword={adminPassword} />
@@ -341,7 +343,7 @@ function WhatsAppCard({ adminPassword }: { adminPassword: string }) {
 }
 
 /**
- * Rebuild card — regenerate the prerendered pages from current database
+ * Rebuild card, regenerate the prerendered pages from current database
  * content. The same control is on the Journal screen in compact form, because
  * this screen is super-only and the person publishing posts is not a super
  * admin; both render the one RebuildSiteButton.
@@ -397,10 +399,11 @@ interface WebhookHealth {
   subscribed: number;
   url: string | null;
   note: string | null;
+  versions?: { account: string | null; webhook: string | null; pinned: string | null };
 }
 
 /**
- * Configuration card — which environment variables the RUNNING deployment can
+ * Configuration card, which environment variables the RUNNING deployment can
  * actually see, and what silently stops working when one is missing.
  *
  * This exists because the failure mode here is never a crash. VERCEL_DEPLOY_HOOK_URL
@@ -472,7 +475,7 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
 
   // "Not set" is only a problem when nothing covers for it. Most unset
   // variables here have a hardcoded default or a database value, which is why
-  // the site runs fine with several unset — so those are reported separately
+  // the site runs fine with several unset, so those are reported separately
   // rather than counted as failures.
   const broken = checks?.filter((c) => !c.set && c.fallback === null) ?? [];
   const covered = checks?.filter((c) => !c.set && c.fallback !== null) ?? [];
@@ -605,6 +608,15 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
                   {webhook.note}
                 </Text>
               )}
+              {webhook.versions && (webhook.versions.account || webhook.versions.webhook) && (
+                <Text fontSize="xs" color="gray.600" fontWeight="300" mt={1.5}>
+                  {t.integrations.stripeVersions(
+                    webhook.versions.account ?? '?',
+                    webhook.versions.webhook ?? t.integrations.stripeVersionDefault,
+                    webhook.versions.pinned ?? t.integrations.stripeVersionUnpinned,
+                  )}
+                </Text>
+              )}
               {webhook.missing.length > 0 && (
                 <>
                   <VStack align="stretch" spacing={0.5} mb={2}>
@@ -715,7 +727,7 @@ function ConfigHealthCard({ adminPassword }: { adminPassword: string }) {
  *
  * The daily cron in api/cron/_instagram-check.ts fires a reminder email
  * ~50 days after the last stamp. Alex owns the actual rotation via the
- * local `scripts/refresh-instagram-token.mjs` — the button here is the
+ * local `scripts/refresh-instagram-token.mjs`, the button here is the
  * "I did it" acknowledgement, not the rotation itself.
  */
 function InstagramCard({ adminPassword }: { adminPassword: string }) {
@@ -725,7 +737,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
   const [marking, setMarking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Tiny local flag that briefly swaps the copy IconButton's icon to a checkmark
-  // after clipboard write succeeds — pure visual acknowledgement, no toast noise.
+  // after clipboard write succeeds, pure visual acknowledgement, no toast noise.
   const [copied, setCopied] = useState(false);
   const toast = useToast();
 
@@ -739,7 +751,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
 
   const handleCopyCommand = () => {
     // Fire-and-forget clipboard write; ignore rejection (e.g. insecure context)
-    // rather than surfacing a toast — the icon-swap is enough feedback.
+    // rather than surfacing a toast, the icon-swap is enough feedback.
     void navigator.clipboard?.writeText(ROTATE_COMMAND).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
@@ -811,7 +823,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
       p={{ base: 5, md: 7 }}
       maxW="720px"
     >
-      {/* Card header — Instagram icon + label + live status badge */}
+      {/* Card header, Instagram icon + label + live status badge */}
       <Flex align="center" justify="space-between" mb={5} wrap="wrap" gap={3}>
         <HStack spacing={3}>
           <Flex
@@ -874,7 +886,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
         </Flex>
       )}
 
-      {/* How-to-rotate section — the whole procedure lives here so the
+      {/* How-to-rotate section, the whole procedure lives here so the
           card is self-contained. Alex runs the script locally, updates
           Vercel, then clicks Mark as Refreshed to reset the clock. */}
       <Box mt={6} pt={5} borderTop="1px solid" borderColor="gray.100">
@@ -890,7 +902,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
             {t.integrations.howToRotate}
           </Text>
         </Flex>
-        {/* Real <ol> so browsers render decimal markers — previously a VStack
+        {/* Real <ol> so browsers render decimal markers, previously a VStack
             wrapped bare <li> children, which produced no numbers at all. */}
         <Box as="ol" pl={5} listStyleType="decimal">
           <Box as="li" fontSize="sm" color="gray.700" lineHeight="1.7" mb={3}>
@@ -953,7 +965,7 @@ function InstagramCard({ adminPassword }: { adminPassword: string }) {
         </Box>
       </Box>
 
-      {/* Actions row — stacks vertically on mobile so full-width tap targets
+      {/* Actions row, stacks vertically on mobile so full-width tap targets
           don't sit half-off-viewport when the labels are long. */}
       <Stack direction={{ base: 'column', md: 'row' }} spacing={2} mt={6}>
         <CTAButton
@@ -1083,444 +1095,6 @@ function StatusDetail({ status }: { status: IgStatus }) {
         </Text>
       )}
     </VStack>
-  );
-}
-
-/**
- * The PA sales tax licence.
- *
- * Photography is taxable in Pennsylvania whether the photographs arrive as
- * prints or as a download link (61 Pa. Code 32.37), so selling shoots to PA
- * clients requires a Sales, Use and Hotel Occupancy Tax licence. It costs
- * nothing and it lapses after five years, which is precisely the interval
- * that guarantees nobody remembers it: long enough that the confirmation
- * email is unfindable, short enough to matter.
- *
- * Tracked here for the same reason the Instagram token is, and with the same
- * status vocabulary, so one glance at this screen reads the same way for
- * both. The renewal itself is automatic and free, but only while every return
- * has been filed, which is the part worth saying out loud: a licence lapses
- * because returns were missed, not because a renewal was.
- */
-interface LicenseState {
-  status: 'fresh' | 'aging' | 'overdue' | 'expired' | 'unknown';
-  daysUntilExpiry?: number;
-  license: {
-    numberLast4: string;
-    issuedAt: string;
-    expiresAt: string;
-    state: string;
-    note?: string;
-    lastFiledPeriod?: string;
-  } | null;
-  filing?: {
-    lastFiled: string | null;
-    nextPeriod: string;
-    nextDueDate: string;
-    daysUntilFiling: number;
-    state: 'open' | 'due' | 'overdue';
-  };
-}
-
-interface TaxQuarter {
-  key: string;
-  year: number;
-  quarter: 1 | 2 | 3 | 4;
-  dueDate: string;
-  grossSales: number;
-  taxableSales: number;
-  tax: number;
-  lines: Array<{ date: string; booking: string; amount: number; mode: SalesTaxMode; sale: number; tax: number }>;
-}
-
-/** Cents only when there are some: "$3,855", "$165.30". */
-const usd = (n: number): string =>
-  `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', {
-    minimumFractionDigits: Math.round(Math.abs(n) * 100) % 100 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
-
-/**
- * Pennsylvania sales tax by quarter: the three numbers each myPATH return
- * asks for, and the payments behind them (api/admin/_sales-tax-report.ts).
- *
- * Below the licence card on purpose. That card says WHEN the next return is
- * due; this one says WHAT goes on it. Each quarter opens up into its payments,
- * because a tax figure nobody can check line by line is not one to file.
- */
-function SalesTaxReportCard({ adminPassword }: { adminPassword: string }) {
-  const { t, lang } = useAdminLang();
-  const [quarters, setQuarters] = useState<TaxQuarter[] | null>(null);
-  const [err, setErr] = useState('');
-  const [open, setOpen] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/sales-tax-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: adminPassword }),
-        });
-        const data = await res.json();
-        if (cancelled) return;
-        if (res.ok && data.success) setQuarters(data.quarters as TaxQuarter[]);
-        else setErr(data.error || t.integrations.taxReportFailed);
-      } catch {
-        if (!cancelled) setErr(t.integrations.taxReportFailed);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [adminPassword, t.integrations.taxReportFailed]);
-
-  const dueLabel = (iso: string) =>
-    new Date(`${iso}T12:00:00Z`).toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: 'UTC',
-    });
-
-  return (
-    <Box
-      bg="white"
-      border="1px solid"
-      borderColor="gray.200"
-      borderRadius="sm"
-      p={{ base: 5, md: 7 }}
-      maxW="720px"
-      mt={6}
-    >
-      <Text as="h2" fontSize="md" fontWeight="400" color="gray.800" m={0} mb={2}>
-        {t.integrations.taxReportTitle}
-      </Text>
-      <Text fontSize="sm" color="gray.600" mb={4}>
-        {t.integrations.taxReportIntro}
-      </Text>
-      {err && (
-        <Text fontSize="sm" color="red.600">
-          {err}
-        </Text>
-      )}
-      {quarters && quarters.length === 0 && (
-        <Text fontSize="sm" color="gray.500">
-          {t.integrations.taxReportNone}
-        </Text>
-      )}
-      <VStack align="stretch" spacing={0}>
-        {(quarters ?? []).map((q) => (
-          <Box key={q.key} borderTop="1px solid" borderColor="gray.100" py={3}>
-            <Flex justify="space-between" align={{ base: 'flex-start', md: 'center' }} gap={3} wrap="wrap">
-              <Box minW={0}>
-                <Text fontSize="sm" fontWeight="500" color="gray.800">
-                  {t.integrations.taxReportQuarter(q.quarter, q.year)}
-                </Text>
-                <Text fontSize="xs" color="gray.500">
-                  {t.integrations.taxReportDue} {dueLabel(q.dueDate)}
-                </Text>
-              </Box>
-              <CTAButton
-                variant="outline"
-                size="sm"
-                onClick={() => setOpen((o) => (o === q.key ? null : q.key))}
-              >
-                {open === q.key ? t.integrations.taxReportHide : t.integrations.taxReportShow}
-              </CTAButton>
-            </Flex>
-            <Flex gap={{ base: 4, md: 8 }} mt={2} wrap="wrap" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-              <Box>
-                <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.1em">
-                  {t.integrations.taxReportGross}
-                </Text>
-                <Text fontSize="sm" color="gray.800">{usd(q.grossSales)}</Text>
-              </Box>
-              <Box>
-                <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.1em">
-                  {t.integrations.taxReportTaxable}
-                </Text>
-                <Text fontSize="sm" color="gray.800">{usd(q.taxableSales)}</Text>
-              </Box>
-              <Box>
-                <Text fontSize="2xs" color="gray.500" textTransform="uppercase" letterSpacing="0.1em">
-                  {t.integrations.taxReportTax}
-                </Text>
-                <Text fontSize="sm" color="gray.900" fontWeight="600">{usd(q.tax)}</Text>
-              </Box>
-            </Flex>
-            {open === q.key && (
-              <VStack align="stretch" spacing={1} mt={3} bg="gray.50" borderRadius="sm" p={3}>
-                {q.lines.map((l, i) => (
-                  <Flex key={i} justify="space-between" gap={3} fontSize="xs" color="gray.700" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    <Text minW={0} noOfLines={1}>
-                      {l.date} · {l.booking}
-                    </Text>
-                    <Text flexShrink={0} color="gray.500">
-                      {usd(l.amount)} · {t.integrations.taxReportModeShort[l.mode]} · {t.integrations.taxReportTax} {usd(l.tax)}
-                    </Text>
-                  </Flex>
-                ))}
-              </VStack>
-            )}
-          </Box>
-        ))}
-      </VStack>
-    </Box>
-  );
-}
-
-function SalesTaxLicenseCard({ adminPassword }: { adminPassword: string }) {
-  const { t } = useAdminLang();
-  const [state, setState] = useState<LicenseState | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [number, setNumber] = useState('');
-  const [issuedAt, setIssuedAt] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch('/api/admin/license-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setState(data);
-        if (data.license) {
-          // Never prefilled from the server: only four digits exist there, and
-          // putting them in the edit box invites saving them as the whole number.
-          setNumber('');
-          setIssuedAt(data.license.issuedAt);
-          setNote(data.license.note ?? '');
-        }
-      }
-    } catch {
-      /* A card that cannot load is silent, not broken: the rest of the screen still works. */
-    }
-  }, [adminPassword]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function save() {
-    setErr('');
-    setBusy(true);
-    try {
-      const res = await fetch('/api/admin/license-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: adminPassword,
-          action: 'save',
-          number,
-          issued_at: issuedAt,
-          note,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setState(data);
-        setEditing(false);
-      } else {
-        setErr(data.error || 'Could not save');
-      }
-    } catch {
-      setErr('Network error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function markFiled(period: string) {
-    setErr('');
-    setBusy(true);
-    try {
-      const res = await fetch('/api/admin/license-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, action: 'mark-filed', period }),
-      });
-      const data = await res.json();
-      if (data.success) setState(data);
-      else setErr(data.error || 'Could not save');
-    } catch {
-      setErr('Network error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const lic = state?.license;
-  const days = state?.daysUntilExpiry;
-  const scheme =
-    state?.status === 'fresh'
-      ? 'green'
-      : state?.status === 'aging'
-        ? 'orange'
-        : state?.status === 'unknown'
-          ? 'gray'
-          : 'red';
-
-  return (
-    <Box
-      bg="white"
-      border="1px solid"
-      borderColor="gray.200"
-      borderRadius="sm"
-      p={{ base: 5, md: 7 }}
-      maxW="720px"
-      mt={6}
-    >
-      <HStack justify="space-between" mb={4}>
-        <Text as="h2" fontSize="md" fontWeight="400" color="gray.800" m={0}>
-          {t.integrations.licTitle}
-        </Text>
-        {lic && (
-          <Badge colorScheme={scheme}>
-            {state?.status === 'expired'
-              ? t.integrations.licExpired
-              : `${days} ${t.integrations.licDaysLeft}`}
-          </Badge>
-        )}
-      </HStack>
-
-      {!lic && !editing && (
-        <Text fontSize="sm" color="gray.600" mb={4}>
-          {t.integrations.licNone}
-        </Text>
-      )}
-
-      {lic && !editing && (
-        <VStack align="stretch" spacing={1} mb={4}>
-          <Text fontSize="sm">
-            <strong>{t.integrations.licNumber}:</strong> ••••{lic.numberLast4} ({lic.state})
-          </Text>
-          <Text fontSize="sm" color="gray.600">
-            {t.integrations.licIssued} {lic.issuedAt} · {t.integrations.licExpires} {lic.expiresAt}
-          </Text>
-          {lic.note && (
-            <Text fontSize="sm" color="gray.500">
-              {lic.note}
-            </Text>
-          )}
-        </VStack>
-      )}
-
-      {editing && (
-        <VStack align="stretch" spacing={3} mb={4}>
-          <Box>
-            <Text fontSize="sm" mb={1}>
-              {t.integrations.licNumber}
-            </Text>
-            <Input size="sm" value={number} onChange={(e) => setNumber(e.target.value)} />
-            <Text fontSize="xs" color="gray.500" mt={1}>
-              {t.integrations.licNumberHelp}
-            </Text>
-          </Box>
-          <Box>
-            <Text fontSize="sm" mb={1}>
-              {t.integrations.licIssued}
-            </Text>
-            <Input
-              size="sm"
-              type="date"
-              value={issuedAt}
-              onChange={(e) => setIssuedAt(e.target.value)}
-            />
-            {/* Only once there is a date: a dash standing in for a missing
-                value is still a dash on a screen Alex reads. */}
-            {issuedAt && (
-              <Text fontSize="xs" color="gray.500" mt={1}>
-                {t.integrations.licExpires}: {`${Number(issuedAt.slice(0, 4)) + 5}${issuedAt.slice(4)}`}
-              </Text>
-            )}
-          </Box>
-          <Box>
-            <Text fontSize="sm" mb={1}>
-              {t.integrations.licNote}
-            </Text>
-            <Input
-              size="sm"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t.integrations.licNotePlaceholder}
-            />
-          </Box>
-          {err && (
-            <Text fontSize="sm" color="red.600">
-              {err}
-            </Text>
-          )}
-        </VStack>
-      )}
-
-      {lic && state?.filing && !editing && (
-        <Box borderTopWidth="1px" borderColor="gray.200" pt={3} mb={3}>
-          <HStack justify="space-between" mb={2}>
-            <Text fontSize="sm" fontWeight="500">
-              {t.integrations.licFilingTitle}
-            </Text>
-            <Badge
-              colorScheme={
-                state.filing.state === 'overdue'
-                  ? 'red'
-                  : state.filing.state === 'due'
-                    ? 'orange'
-                    : 'green'
-              }
-            >
-              {state.filing.state === 'overdue'
-                ? t.integrations.licOverdue
-                : `${state.filing.daysUntilFiling} ${t.integrations.licDaysLeft}`}
-            </Badge>
-          </HStack>
-          <Text fontSize="sm" color="gray.700">
-            {t.integrations.licNextDue}: <strong>{state.filing.nextPeriod}</strong>,{' '}
-            {t.integrations.licDueOn} {state.filing.nextDueDate}
-          </Text>
-          <Text fontSize="sm" color="gray.500" mb={2}>
-            {t.integrations.licLastFiled}:{' '}
-            {state.filing.lastFiled ?? t.integrations.licNeverFiled}
-          </Text>
-          <CTAButton
-            size="sm"
-            variant="ghost"
-            isDisabled={busy}
-            onClick={() => markFiled(state.filing!.nextPeriod)}
-          >
-            {t.integrations.licMarkFiled} {state.filing.nextPeriod}
-          </CTAButton>
-          <Text fontSize="xs" color="gray.500" mt={2}>
-            {t.integrations.licQuartersNote}
-          </Text>
-        </Box>
-      )}
-
-      <Text fontSize="xs" color="gray.500" mb={3}>
-        {t.integrations.licRenewNote}
-      </Text>
-
-      {editing ? (
-        <HStack spacing={3}>
-          <CTAButton size="sm" isDisabled={busy || !number || !issuedAt} onClick={save}>
-            {t.integrations.licSave}
-          </CTAButton>
-          <CTAButton size="sm" variant="ghost" isDisabled={busy} onClick={() => setEditing(false)}>
-            {t.common.cancel}
-          </CTAButton>
-        </HStack>
-      ) : (
-        <CTAButton size="sm" onClick={() => setEditing(true)}>
-          {lic ? t.common.edit : t.integrations.licSave}
-        </CTAButton>
-      )}
-    </Box>
   );
 }
 

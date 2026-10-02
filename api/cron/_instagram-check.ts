@@ -9,12 +9,12 @@
  * system_state key so a redeploy or manual invocation doesn't re-send).
  *
  * Deliberately does NOT attempt to refresh the token itself. Alex owns
- * the rotation — runs `scripts/refresh-instagram-token.mjs` locally,
+ * the rotation, runs `scripts/refresh-instagram-token.mjs` locally,
  * pastes into Vercel, clicks Mark as Refreshed. This cron is a
  * reminder, not automation.
  *
  * Runs daily at 12:00 UTC (see vercel.json crons). Vercel Hobby's
- * minimum granularity is daily, which is fine — we've got a 10-day
+ * minimum granularity is daily, which is fine, we've got a 10-day
  * buffer built into the alert threshold.
  */
 
@@ -24,24 +24,25 @@ import { sendEmail } from '../_auto-reply.js';
 import { getDb } from '../_db.js';
 import { detectAndMarkRotation } from '../_ig-detect.js';
 import { runGuarded, type CronTrigger } from './_guard.js';
+import { sendTaxReminders, CRON_META as TAX_REMINDERS_META } from './_tax-reminders.js';
 
 // Cron metadata registered into cron_jobs on the first run. Kept as a
 // const at the top so a grep for "instagram-check" lands on the truth
-// (schedule stays in sync with vercel.json by convention — the guard
+// (schedule stays in sync with vercel.json by convention, the guard
 // re-upserts on every invocation, so any manual drift auto-heals).
 const CRON_META = {
   name: 'instagram-check',
   path: '/api/cron/instagram-check',
   schedule: '0 12 * * *',
   description:
-    'Daily Instagram upkeep. (1) Refreshes contact profile pictures — Meta pre-signs those URLs and they expire in 24-72h, so without this every avatar in Messages goes blank. (2) Emails Alex when the long-lived token has ~10 days of runway left; reminder only, Alex owns the rotation. NOTE: disabling this stops the avatar refresh too.',
+    'Daily Instagram upkeep. (1) Refreshes contact profile pictures, Meta pre-signs those URLs and they expire in 24-72h, so without this every avatar in Messages goes blank. (2) Emails Alex when the long-lived token has ~10 days of runway left; reminder only, Alex owns the rotation. NOTE: disabling this stops the avatar refresh too.',
 } as const;
 
 // Instagram long-lived tokens are 60 days. Alert at day 50 → 10 days
 // of runway to notice + rotate.
 const REMIND_AFTER_DAYS = 50;
 
-// Don't re-remind within this many days of the previous email —
+// Don't re-remind within this many days of the previous email
 // prevents the daily cron from re-emailing every single day once a
 // token is overdue and Alex hasn't rotated yet. He'll get one nudge,
 // then silence for a week, then another nudge. Not flood.
@@ -65,6 +66,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? 'manual'
       : 'schedule';
 
+  // Tax deadline emails (_tax-reminders.ts), chained here because this job
+  // already runs every morning and already emails Alex. Its own guard and
+  // try/catch: neither job can stop the other.
+  try {
+    const tax = await runGuarded({ ...TAX_REMINDERS_META, trigger }, () => sendTaxReminders());
+    console.log(`[cron/instagram-check] tax reminders: ${JSON.stringify(tax.ok ?? tax.error ?? 'skipped')}`);
+  } catch (err) {
+    console.error('[cron/instagram-check] tax reminders failed (continuing):', err instanceof Error ? err.message : String(err));
+  }
+
   const result = await runGuarded({ ...CRON_META, trigger }, doInstagramCheck);
 
   if (result.skipped) {
@@ -77,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 /**
- * The actual reminder logic — separated from the HTTP handler so
+ * The actual reminder logic, separated from the HTTP handler so
  * runGuarded() can time it, catch its throws, and record enabled /
  * disabled cleanly. Returns a small payload the handler splats into
  * the JSON response.
@@ -85,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 async function doInstagramCheck(): Promise<{ action: string; daysSince?: number }> {
   // Refresh Instagram avatars FIRST. This function has several early returns
   // (no refresh date, already alerted, daysSince < 50, already reminded) and
-  // the "nothing to do" path is the common steady state — anything placed
+  // the "nothing to do" path is the common steady state, anything placed
   // after them would never run in normal operation. Wrapped in its own
   // try/catch so an avatar failure can never suppress the token-expiry email,
   // which is this job's actual purpose.
@@ -126,7 +137,7 @@ async function doInstagramCheck(): Promise<{ action: string; daysSince?: number 
   const remindedAt = rows.find((r) => r.key === 'ig_token_reminded_at')?.updated_at;
 
   if (!refreshedAt) {
-    // Table's empty — no rotation date on record. One-shot alert so
+    // Table's empty, no rotation date on record. One-shot alert so
     // the situation is noticed; then dedupe kicks in.
     if (recentlyReminded(remindedAt)) {
       return { action: 'silent-no-refresh-date' };
@@ -171,7 +182,7 @@ async function markReminded(sql: ReturnType<typeof getDb>) {
 async function sendReminderEmail(refreshedAt: string | null, daysSince: number | null) {
   const runwayLine =
     refreshedAt && daysSince !== null
-      ? `The token was last rotated ${daysSince} days ago (${new Date(refreshedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}). Meta's 60-day expiry window is approaching — time to rotate.`
+      ? `The token was last rotated ${daysSince} days ago (${new Date(refreshedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}). Meta's 60-day expiry window is approaching, time to rotate.`
       : `No token rotation date is on record. Rotate now to establish a baseline, or run the DB migration in db/migrations/002-system-state.sql if you haven't already.`;
 
   const text = `Time to rotate the Instagram token.
@@ -189,7 +200,7 @@ Steps (takes ~2 minutes):
   5. Vercel → Deployments → ⋯ on latest → Redeploy
   6. Come back to ${ADMIN_LINK} → Integrations → click "Mark as Refreshed"
 
-The site keeps working while you rotate — this email is a reminder, not an emergency. But if the token expires (past day 60) auto-refresh no longer works and you'd need a full re-mint via developers.facebook.com.
+The site keeps working while you rotate, this email is a reminder, not an emergency. But if the token expires (past day 60) auto-refresh no longer works and you'd need a full re-mint via developers.facebook.com.
 `;
 
   const html = `<!DOCTYPE html>

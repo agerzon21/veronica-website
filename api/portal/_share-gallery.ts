@@ -23,6 +23,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
+import { galleryKeys, portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { getDb } from '../_db.js';
 import { sendEmail } from '../_auto-reply.js';
 
@@ -48,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Two auth modes:
   //   - email + password (full-portal client sharing their own gallery)
-  //   - gallery_password only (someone using /portal/pass — they don't
+  //   - gallery_password only (someone using /portal/pass, they don't
   //     have an account, they just have the password)
   // Either way, the rate limit is per-portal so abuse is bounded
   // regardless of how widely the password gets shared.
@@ -68,6 +69,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // Throttled like every portal password check (see _throttle.ts). A gallery
+    // password has no address to count against, so only the network counts.
+    const throttleKeys = galleryPassword ? galleryKeys(req) : portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
     const rows = galleryPassword
       ? ((await sql`
           select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at
@@ -84,19 +93,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           limit 1
         `) as PortalRow[]);
 
-    // Password verified in code, not SQL — it is hashed now. Same 401 and
+    // Password verified in code, not SQL, it is hashed now. Same 401 and
     // same delay either way so this cannot enumerate client addresses.
-    // Only the email+password branch needs a code-side check — the gallery
+    // Only the email+password branch needs a code-side check, the gallery
     // branch matches on gallery_password, which is deliberately still plaintext
     // (it is a bearer token in a shareable URL, see migration 025).
     const shareRow = rows[0];
-    const shareOk =
-      !!shareRow &&
-      (galleryPassword
-        ? true
-        : checkPortalPassword(password, shareRow.client_password_hash).ok);
+    // The hash check runs whether or not a row was found: see checkPortalPassword.
+    const passwordOk = galleryPassword
+      ? true
+      : checkPortalPassword(password, shareRow?.client_password_hash).ok;
+    const shareOk = !!shareRow && passwordOk;
 
     if (!shareOk) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({
         success: false,

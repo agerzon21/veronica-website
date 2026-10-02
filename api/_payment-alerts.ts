@@ -43,7 +43,8 @@ export type PaymentIssue = {
   summary: string;
   /** What to do about it, when there is something specific. */
   action?: string;
-  source: 'webhook' | 'reconcile' | 'return';
+  /** 'contract': signing hit the race in api/portal/_sign-contract.ts. Not money, but the same person has to act. */
+  source: 'webhook' | 'reconcile' | 'return' | 'contract';
   /** ISO time it was first seen. Filled in here. */
   at?: string;
   /**
@@ -136,7 +137,9 @@ export async function reportPaymentIssue(issue: PaymentIssue): Promise<boolean> 
         ? 'the Stripe webhook'
         : issue.source === 'reconcile'
           ? 'the daily check against Stripe'
-          : 'a client returning from checkout';
+          : issue.source === 'contract'
+            ? 'a client signing their contract'
+            : 'a client returning from checkout';
     const lines = [
       issue.summary,
       ...(issue.action ? [`What to do: ${issue.action}`] : []),
@@ -145,7 +148,7 @@ export async function reportPaymentIssue(issue: PaymentIssue): Promise<boolean> 
     ];
     await sendEmail({
       to: ALERT_TO,
-      subject: `[Vero Admin] Payment needs attention: ${issue.summary.slice(0, 90)}`,
+      subject: `[Vero Admin] ${issue.source === 'contract' ? 'Contract' : 'Payment'} needs attention: ${issue.summary.slice(0, 90)}`,
       text: lines.join('\n\n') + '\n',
       html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;color:#333;max-width:560px">${lines
         .map((l) => `<p style="margin:0 0 12px">${escapeHtml(l)}</p>`)

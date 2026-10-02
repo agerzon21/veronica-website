@@ -8,7 +8,7 @@
  *   → 405 on non-POST
  *
  * Same re-auth pattern as the other mutating portal endpoints
- * (gallery-pass, sign-contract) — email + password verified against
+ * (gallery-pass, sign-contract), email + password verified against
  * `client_portals` on every call. No session token yet; when we add
  * one it'll replace this shape uniformly.
  *
@@ -17,12 +17,13 @@
  * doesn't need to know the current state before firing.
  *
  * Favorites are stored on the `client_portals.favorite_photo_ids`
- * TEXT[] column — Drive file IDs, one per hearted photo. Empty
+ * TEXT[] column, Drive file IDs, one per hearted photo. Empty
  * array is the default state.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
+import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { getDb } from '../_db.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -56,6 +57,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // Guessing is throttled per address and per network (see _throttle.ts),
+    // checked before the password so a refused attempt costs no scrypt.
+    const throttleKeys = portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
 
     // Verify the client + fetch their id in one shot. Same shape as
     // /api/portal/client so behavior is consistent.
@@ -67,11 +76,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as Array<{ id: string; client_password: string | null; client_password_hash: string | null }>;
 
 
-    // Password is verified in code now, not in SQL — it is hashed. Same 401 and
+    // Password is verified in code now, not in SQL, it is hashed. Same 401 and
     // same delay whether the email is unknown or the password is wrong, so this
     // cannot be used to discover which addresses belong to clients.
     const authRow = rows[0];
-    if (!authRow || !checkPortalPassword(password, authRow.client_password_hash).ok) {
+    if (!checkPortalPassword(password, authRow?.client_password_hash).ok || !authRow) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }

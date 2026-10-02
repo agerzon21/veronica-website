@@ -51,7 +51,7 @@ import {
   type SalesTaxMode,
 } from '../data/sales-tax';
 
-// Full client portal payload — mirrors the shape returned by
+// Full client portal payload, mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
 // of the rollout populates / consumes it.
 export interface ClientPortalData {
@@ -71,7 +71,7 @@ export interface ClientPortalData {
   /** True when the deployed Stripe keys are test keys. See api/portal/_client.ts. */
   card_test_mode?: boolean;
 
-  // Session metadata — surfaced in the portal header so clients see
+  // Session metadata, surfaced in the portal header so clients see
   // what they booked without having to open the contract. Every field
   // is nullable because older portals were created before we started
   // storing them.
@@ -86,13 +86,15 @@ export interface ClientPortalData {
   event_location: string | null;
   delivery_timeframe: string | null;
 
-  // Contract — Phase 2
+  // Contract, Phase 2
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
   contract_body: string | null;
+  /** Fingerprint of contract_body, sent back when signing (api/_contract-fingerprint.ts). */
+  contract_hash?: string | null;
   contract_signed_pdf_available: boolean;
 
-  // Payment — Phase 3
+  // Payment, Phase 3
   contract_total_amount: number | null;
   contract_retainer_amount: number | null;
   /**
@@ -145,15 +147,15 @@ export interface ClientPortalData {
     charged_at: string;
   }>;
 
-  // Gallery Pass settings — Phase 1c
+  // Gallery Pass settings, Phase 1c
   gallery_password: string;
   gallery_enabled: boolean;
 
-  // Gallery hosting — surfaced in the UI as the "available until" line
+  // Gallery hosting, surfaced in the UI as the "available until" line
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
 
-  // Favorites — Drive file IDs the client has hearted. Only populated
+  // Favorites, Drive file IDs the client has hearted. Only populated
   // for full-mode portals (guests on /portal/pass don't get favorites).
   favorite_photo_ids: string[];
 }
@@ -162,14 +164,14 @@ interface ClientPortalViewProps {
   data: ClientPortalData;
   // Re-auth credentials for actions that mutate portal state (rotate the
   // Gallery Pass, sign the contract, etc.). The credentials live in the
-  // Portal page's React state only — never persisted to storage — so a
+  // Portal page's React state only, never persisted to storage, so a
   // tab refresh boots the client back to the login form. Acceptable for
   // this MVP; sessions can come later.
   credentials: { email: string; password: string };
   onDataUpdate: (data: ClientPortalData) => void;
   // Fired after the client changes their password from the Account
   // section. Parent (Portal.tsx) uses this to keep its cached
-  // credentials.password in sync — without it, the next mutating
+  // credentials.password in sync, without it, the next mutating
   // request (rotate gallery pass, sign contract, etc.) would fail
   // authentication because the parent would still be sending the old
   // password.
@@ -309,7 +311,7 @@ function bookingWording(templateKey: string | null, sessionType: string | null):
 // index.html and its script src differs from the one WE loaded, a new
 // deploy has landed.
 //
-// Called from the portal's Refresh button — if this returns true we do
+// Called from the portal's Refresh button, if this returns true we do
 // a full window.location.reload() to pick up the new bundle. Falls
 // through silently (returns false) on any failure so a network hiccup
 // never breaks the normal data-refresh path.
@@ -323,7 +325,7 @@ async function hasNewerDeploy(): Promise<boolean> {
     if (!currentBundle) return false;
 
     // Fetch the live index.html for this route. cache: 'no-store' is
-    // belt-and-suspenders on top of the vercel.json no-cache header —
+    // belt-and-suspenders on top of the vercel.json no-cache header
     // guarantees we're seeing what the CDN would serve fresh, not
     // some proxy cache in between.
     const res = await fetch(window.location.pathname, {
@@ -410,7 +412,7 @@ const ClientPortalView = ({
   // credit the photographer owes.
   const creditBalance = remainingCents !== null && remainingCents < 0 ? -remainingCents / 100 : 0;
 
-  // Whether the NextStepsPanel will render anything — same conditions
+  // Whether the NextStepsPanel will render anything, same conditions
   // it uses internally, mirrored here so PortalTopNav can decide
   // whether to add a "Next Steps" pill AND so we know where to
   // auto-scroll after signing.
@@ -616,7 +618,7 @@ const ClientPortalView = ({
   const [signOutOpen, setSignOutOpen] = useState(false);
 
   // Auto-scroll to Next Steps immediately after the client signs the
-  // contract. Without this, the page just re-renders in place — but
+  // contract. Without this, the page just re-renders in place, but
   // the ContractSignSection (big signature-pad UI) collapses into a
   // tiny SignedContractSection, which leaves the user's viewport
   // stranded somewhere down in the Share section, missing the whole
@@ -648,7 +650,7 @@ const ClientPortalView = ({
   //
   // Uses scroll position directly instead of IntersectionObserver
   // because IO fires the moment any pixel of the section enters the
-  // observation zone — which, for a small placeholder positioned
+  // observation zone, which, for a small placeholder positioned
   // right below the Balance section, incorrectly triggers "in view"
   // when the user has only scrolled to Balance. Scroll-based check
   // is definitively "user has scrolled INTO the section" (its top
@@ -734,7 +736,7 @@ const ClientPortalView = ({
   const handleToggleFavorite = useCallback(
     (photoId: string, currentlyFavorite: boolean) => {
       const action = currentlyFavorite ? 'remove' : 'add';
-      // Optimistic update — flip local state first.
+      // Optimistic update, flip local state first.
       const nextFavorites = currentlyFavorite
         ? favorites.filter((id) => id !== photoId)
         : Array.from(new Set([...favorites, photoId]));
@@ -780,13 +782,13 @@ const ClientPortalView = ({
 
   // ─── Refresh ───
   // Page reload would log them out (credentials live in state), so a
-  // soft refresh button is genuinely useful — most relevant right
+  // soft refresh button is genuinely useful, most relevant right
   // after they've sent a payment and want to see Vero's "Payment
   // Received" entry show up without losing the session.
   const [refreshing, setRefreshing] = useState(false);
   // When Vercel has deployed a newer build since this page loaded, we
   // surface a small notice under the Refresh button with a "Reload" CTA.
-  // We don't force-reload — that would log the client out mid-task,
+  // We don't force-reload, that would log the client out mid-task,
   // which is much more annoying than briefly missing a new feature.
   // The client decides when to reload (e.g. after they finish signing
   // the contract or sharing a gallery link).
@@ -795,7 +797,7 @@ const ClientPortalView = ({
     setRefreshing(true);
     try {
       // Check for a new build in parallel with the data fetch. If one
-      // landed, we just flag it — the client keeps their session and
+      // landed, we just flag it, the client keeps their session and
       // sees the notice when they're ready to act on it.
       const [newer, res] = await Promise.all([
         hasNewerDeploy(),
@@ -811,7 +813,7 @@ const ClientPortalView = ({
         onDataUpdate(fresh as ClientPortalData);
       }
     } catch {
-      // Swallow — user can just click again. No toast clutter.
+      // Swallow, user can just click again. No toast clutter.
     } finally {
       setRefreshing(false);
     }
@@ -876,7 +878,7 @@ const ClientPortalView = ({
     }
   };
 
-  // Single helper for every gallery-pass action — auth + the action are
+  // Single helper for every gallery-pass action, auth + the action are
   // all server-side, this just dispatches and folds the new state back into
   // the parent's clientData so the rest of the view stays in sync.
   const callGalleryPass = async (
@@ -1055,7 +1057,7 @@ const ClientPortalView = ({
 
           Content: title + welcome + labeled session-info rows
           (Email / Event / Type / Location / Delivery). Every info
-          row is conditional — clients booked before we started
+          row is conditional, clients booked before we started
           storing a field just skip that row rather than showing an
           empty label. Refresh button uses the canonical CTAButton
           so it matches every other button on the site. */}
@@ -1088,11 +1090,11 @@ const ClientPortalView = ({
           {data.client_name ? `Welcome, ${data.client_name}` : 'Welcome'}
         </Text>
 
-        {/* Session summary — each row is a centered label-value pair
+        {/* Session summary, each row is a centered label-value pair
             (no fixed-width label column, so the whole block reads as
             centered content rather than left-aligned two-column). We
             keep Email + the date + Location; Session and Delivery
-            got dropped as noisy — three feels right for the "at a
+            got dropped as noisy, three feels right for the "at a
             glance" role this block plays. The date's label follows the
             booking type: a family client sees "Session Date". */}
         <VStack
@@ -1151,7 +1153,7 @@ const ClientPortalView = ({
           )}
         </HStack>
 
-        {/* Update-available notice — surfaces when Refresh detected a
+        {/* Update-available notice, surfaces when Refresh detected a
             newer build. Non-blocking; the client keeps their session
             and can reload when they're ready. Reload uses a text-link
             treatment rather than another button because it visually
@@ -1186,7 +1188,7 @@ const ClientPortalView = ({
         )}
       </Box>
 
-      {/* Next-steps panel — hoisted to the top of the section list so
+      {/* Next-steps panel, hoisted to the top of the section list so
           the very first thing signed clients see is what they still
           need to do (retainer / balance) or an "all set" confirmation,
           before the collapsed signed contract or any other section.
@@ -1205,7 +1207,7 @@ const ClientPortalView = ({
           salesTax={salesTax}
           wording={wording}
           // Once photos land, the "All Set / awaiting delivery" state
-          // is no longer relevant — client isn't waiting anymore.
+          // is no longer relevant, client isn't waiting anymore.
           // Panel returns null in that case (fully-paid + delivered).
           photosDelivered={photosDelivered}
           credentials={credentials}
@@ -1233,7 +1235,11 @@ const ClientPortalView = ({
           <ContractSignSection
             credentials={credentials}
             contractBody={data.contract_body}
+            contractHash={data.contract_hash ?? null}
             onSigned={(updates) => onDataUpdate({ ...data, ...updates })}
+            onContractChanged={(body, hash) =>
+              onDataUpdate({ ...data, contract_body: body, contract_hash: hash })
+            }
           />
         )}
         {data.contract_status === 'signed' && data.contract_signed_at && (
@@ -1245,7 +1251,7 @@ const ClientPortalView = ({
         )}
       </Box>
 
-      {/* ─── Payment / Balance section — Phase 3 fills this in fully.
+      {/* ─── Payment / Balance section, Phase 3 fills this in fully.
             For now, surface the totals so it's visible end-to-end. ─── */}
       {data.contract_total_amount !== null && remaining !== null && (
         <Box
@@ -1389,7 +1395,7 @@ const ClientPortalView = ({
               </Box>
             )}
 
-            {/* Itemized payment log — every entry Veronika has recorded
+            {/* Itemized payment log, every entry Veronika has recorded
                 (retainer, balance, etc.), with method and notes. Doesn't
                 include in-the-future installment plan rows; those live
                 below in their own section. */}
@@ -1554,7 +1560,7 @@ const ClientPortalView = ({
           header sit flush with its container). Order is now:
           Balance → Password → Photos → Share. The "Gallery Pass vs
           login password" ambiguity that motivated the old ordering
-          isn't a real problem in the new IA — Gallery Pass has moved
+          isn't a real problem in the new IA, Gallery Pass has moved
           into Share, so the two are far apart.
           id wrapper is the portal top nav's scroll target. */}
       <Box
@@ -1653,7 +1659,7 @@ const ClientPortalView = ({
           }
           return (
             /* Placeholder inherits gray.50 from the photos-section
-               wrapper — no explicit bg needed here. */
+               wrapper, no explicit bg needed here. */
             <Box py={{ base: 14, md: 20 }} px={6} textAlign="center">
               <Text
                 fontSize="xs"
@@ -1688,7 +1694,7 @@ const ClientPortalView = ({
           re-authenticated each call with the credentials passed down from
           the Portal page.
           id="gallery-share-section" is the smooth-scroll target for the
-          gallery's sticky Share widget — same id is used on the
+          gallery's sticky Share widget, same id is used on the
           /portal/pass route so the widget doesn't need to know its
           context, it just scrolls to whichever element exists. */}
       <Box
@@ -1717,7 +1723,7 @@ const ClientPortalView = ({
           </VStack>
 
           {!data.gallery_enabled ? (
-            /* Disabled state — one clear "enable to share" CTA. No point
+            /* Disabled state, one clear "enable to share" CTA. No point
                showing password/link/email UI when nothing will work. */
             <VStack spacing={4} textAlign="center">
               <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
@@ -1744,7 +1750,7 @@ const ClientPortalView = ({
                 Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.
               </Text>
 
-              {/* HERO — one-click link with big Copy button */}
+              {/* HERO, one-click link with big Copy button */}
               <Box
                 w="100%"
                 bg="brand.surface"
@@ -1855,8 +1861,8 @@ const ClientPortalView = ({
                 </VStack>
 
                 {/* Manual password + management controls. The controls
-                    (rotate, disable, set custom) live here — attached
-                    to the password itself — instead of being their own
+                    (rotate, disable, set custom) live here, attached
+                    to the password itself, instead of being their own
                     prominent block at the top of the section, so the
                     share-flow reads as the primary purpose. */}
                 <VStack w="100%" spacing={2} align="stretch">
@@ -1901,7 +1907,7 @@ const ClientPortalView = ({
                     </Box>
                   </Flex>
 
-                  {/* Password management row — three buttons centered
+                  {/* Password management row, three buttons centered
                       below the password itself. Small helper line below
                       spells out what each does so clients don't have to
                       guess; "Rotate" and "Set custom" are especially
@@ -2013,7 +2019,7 @@ const ClientPortalView = ({
  * One labeled row in the portal-header session summary. Kept as a
  * component so every row shares the exact same layout, alignment,
  * type scale, and gold label treatment. Keep new header info coming
- * through this — do NOT hand-roll another Flex-label-value pair.
+ * through this, do NOT hand-roll another Flex-label-value pair.
  */
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <Flex
@@ -2127,9 +2133,9 @@ function NextStepsPanel({
   // event", to family and maternity clients who have neither.
   wording: BookingWording;
   // When true, the "All Set / awaiting delivery" state stops
-  // rendering entirely — the client isn't awaiting anything, the
+  // rendering entirely, the client isn't awaiting anything, the
   // photos are already there. Retainer/balance states still show
-  // if somehow relevant (rare — normally payments finish before
+  // if somehow relevant (rare, normally payments finish before
   // delivery, but be defensive about the state).
   photosDelivered: boolean;
 }) {
@@ -2194,7 +2200,7 @@ function NextStepsPanel({
           </>
         ) : balanceOutstanding ? (
           <>
-            {/* Celebrate the retainer being received — this section
+            {/* Celebrate the retainer being received, this section
                 exists specifically because the "you already did the
                 urgent thing" moment was previously invisible; users
                 saw "next step: pay balance" and thought they were
@@ -2268,7 +2274,7 @@ function NextStepsPanel({
             </VStack>
           </>
         ) : (
-          /* Fully paid — this whole section becomes an informational
+          /* Fully paid, this whole section becomes an informational
              "here's what happens next" panel instead of a to-do.
              Signals warmly that everything on the client's side is
              done and photos are on the way, so the empty Photos
@@ -2314,7 +2320,7 @@ function NextStepsPanel({
   );
 }
 
-// Small helper — the three payment-method rows show up in both the
+// Small helper, the three payment-method rows show up in both the
 // retainer and balance flows, and were duplicated inline. Extracted
 // so future tweaks (adding a method, changing handles, etc) live in
 // one place instead of two.
@@ -2859,7 +2865,7 @@ function SignedContractSection({
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       // Open in a new tab. The browser's PDF viewer renders inline and has
-      // its own download button — covers both "view" and "save" from one
+      // its own download button, covers both "view" and "save" from one
       // action. We hold the object URL for a bit so the new tab has time
       // to fetch it before we revoke.
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -2873,7 +2879,7 @@ function SignedContractSection({
   };
 
   return (
-    // Transparent — the section wrapper in the parent tree owns the
+    // Transparent, the section wrapper in the parent tree owns the
     // background (gray.50 in the new alternation) so we let it show
     // through here rather than repainting a color inside.
     <Box
@@ -2923,16 +2929,22 @@ function SignedContractSection({
  *
  * Kept as its own component because it owns a fair amount of local state
  * (the signature canvas ref, the typed name, the consent flag, the
- * submitting/error states) — pulling it out keeps ClientPortalView
+ * submitting/error states), pulling it out keeps ClientPortalView
  * readable as a layout component.
  */
 function ContractSignSection({
   credentials,
   contractBody,
+  contractHash,
   onSigned,
+  onContractChanged,
 }: {
   credentials: { email: string; password: string };
   contractBody: string | null;
+  /** What the server says this text is; sent back so a changed contract is refused. */
+  contractHash: string | null;
+  /** The contract changed while they read it: show the new text in place. */
+  onContractChanged: (body: string, hash: string | null) => void;
   onSigned: (updates: {
     contract_status: 'signed';
     contract_signed_at: string;
@@ -2947,7 +2959,7 @@ function ContractSignSection({
 
   // Parse the frozen contract body. If it's missing or malformed, we show a
   // friendly "being prepared" message rather than a sign form pointed at
-  // nothing — the endpoint would 409 anyway, but the UI shouldn't promise
+  // nothing, the endpoint would 409 anyway, but the UI shouldn't promise
   // signing it can't deliver.
   const contract = useMemo<ContractTemplate | null>(() => {
     if (!contractBody) return null;
@@ -2960,7 +2972,7 @@ function ContractSignSection({
 
   // Size the signature canvas to its rendered CSS size × devicePixelRatio.
   // Without this, the fixed internal pixel buffer doesn't match the
-  // stretched CSS width — pointer events get coordinate-rounded, and the
+  // stretched CSS width, pointer events get coordinate-rounded, and the
   // bezier smoothing in signature_pad accumulates that error over long
   // strokes, producing visible drift between cursor and ink.
   useEffect(() => {
@@ -3027,6 +3039,7 @@ function ContractSignSection({
             signer_name: signerName.trim(),
             signer_signature: signatureDataUrl,
             consent: true,
+            ...(contractHash ? { contract_hash: contractHash } : {}),
           }),
         });
       } catch (err) {
@@ -3042,12 +3055,31 @@ function ContractSignSection({
       // page). Logging both the status and the raw body to the console
       // makes the failure mode obvious in DevTools.
       const rawBody = await res.text();
-      let data: { success?: boolean; error?: string; contract_signed_at?: string } | null = null;
+      let data: {
+        success?: boolean;
+        error?: string;
+        code?: string;
+        contract_signed_at?: string;
+        contract_body?: string;
+        contract_hash?: string | null;
+      } | null = null;
       try {
         data = rawBody ? JSON.parse(rawBody) : null;
       } catch {
         console.error('[sign-contract] non-JSON response', { status: res.status, rawBody });
         setError(`Server returned an unexpected response (status ${res.status}). Open the browser console for details.`);
+        return;
+      }
+
+      if (data?.code === 'contract_changed' && data.contract_body) {
+        // They were about to sign text that is no longer the contract. Show
+        // the new text where the old one was, and make them confirm and sign
+        // again: the typed name can stay, the intent to sign cannot carry over.
+        onContractChanged(data.contract_body, data.contract_hash ?? null);
+        setConsent(false);
+        sigPadRef.current?.clear();
+        setError(data.error || 'Your contract was updated. Please read the new version and sign again.');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
 
@@ -3093,7 +3125,7 @@ function ContractSignSection({
   }
 
   return (
-    // Transparent — the section wrapper (contract-section) owns the
+    // Transparent, the section wrapper (contract-section) owns the
     // background (gray.50 in the new alternation).
     <Box
       py={{ base: 12, md: 14 }}
@@ -3136,7 +3168,7 @@ function ContractSignSection({
           If anything looks wrong with your details, or if there's a clause you'd like to adjust or don't fully understand, please reach out to Veronika before signing so she can update it.
         </Text>
 
-        {/* Full contract body. The signature section is skipped — the form
+        {/* Full contract body. The signature section is skipped, the form
             below replaces it. Page scroll carries the user through; we don't
             trap scroll inside a small box because that hides the document. */}
         <ContractBodyView contract={contract} />
@@ -3154,7 +3186,7 @@ function ContractSignSection({
           <Box w="35px" h="1px" bg="brand.accent" />
         </VStack>
 
-        {/* Typed full name — required for the audit trail */}
+        {/* Typed full name, required for the audit trail */}
         <Box w="100%">
           <Text
             as="label"
@@ -3241,7 +3273,7 @@ function ContractSignSection({
           </Box>
         </Box>
 
-        {/* Consent checkbox — the ESIGN "intent to sign" requirement */}
+        {/* Consent checkbox, the ESIGN "intent to sign" requirement */}
         <Checkbox
           isChecked={consent}
           onChange={(e) => setConsent(e.target.checked)}
@@ -3279,7 +3311,7 @@ function ContractSignSection({
 /**
  * Renders the contract body for in-portal reading. Mirrors the look of the
  * PDF (numbered sections, gold accents, bullets) but in HTML/Chakra so it
- * flows naturally on mobile. Skips the signature_block paragraph — the
+ * flows naturally on mobile. Skips the signature_block paragraph, the
  * sign form is the in-portal equivalent.
  */
 function ContractBodyView({ contract }: { contract: ContractTemplate }) {
@@ -3435,7 +3467,7 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
  * endpoints use.
  *
  * On success, we call `onChanged(newPassword)` so the parent Portal
- * page can update the cached credentials — otherwise the next mutating
+ * page can update the cached credentials, otherwise the next mutating
  * API call would still be sending the old password.
  */
 function ChangePasswordSection({
@@ -3461,7 +3493,7 @@ function ChangePasswordSection({
 
   const handleToggle = () => {
     if (open) {
-      // Closing — wipe any in-flight edits + banner so reopening is clean.
+      // Closing, wipe any in-flight edits + banner so reopening is clean.
       reset();
     }
     setOpen((o) => !o);
@@ -3523,7 +3555,7 @@ function ChangePasswordSection({
 
   // NOTE: borderTop AND bg live on the section wrapper in the parent
   // tree now (id="password-section"), so we don't double-border it
-  // here and we don't force white — inherits gray.50 from the
+  // here and we don't force white, inherits gray.50 from the
   // wrapper for the alternating-stripe rhythm.
   return (
     <Box py={{ base: 10, md: 12 }} px={6}>
@@ -3555,7 +3587,7 @@ function ChangePasswordSection({
 
         {/* Collapse animates the height + fade in/out instead of an
             instant show/hide. On iOS this matters not just for polish
-            — an instant collapse used to snap the page shorter mid-scroll,
+an instant collapse used to snap the page shorter mid-scroll,
             which triggered the rubber-band overscroll past the footer. */}
         <Collapse in={open} animateOpacity>
           <VStack spacing={3} w="100%" maxW="360px" pt={2} mx="auto">

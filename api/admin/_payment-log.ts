@@ -45,6 +45,7 @@ import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { CARD_FEE_DISCOUNT_METHOD } from '../../src/data/payment-handles.js';
 import { writeWithRecompute } from '../_payments.js';
+import { actorName, historyInsert, historyReady, readHistory } from '../_money-history.js';
 import {
   bookingOwedTotal,
   earnedDirectDiscountTaxed,
@@ -199,6 +200,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // The money history (migration 052): written in each change's own
+    // transaction below, and skipped, never failed, before the table exists.
+    const recording = await historyReady(sql);
+    const actor = recording ? await actorName(sql, auth) : '';
 
     if (action === 'delete') {
       const entryId = typeof req.body?.entry_id === 'string' ? req.body.entry_id.trim() : '';
@@ -225,6 +230,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sql,
         id,
         [
+          // History first: once the row is deleted there is nothing to read.
+          // Same conditions as the delete, so a refused card payment writes
+          // no history either.
+          ...(recording
+            ? [
+                sql`
+                  insert into money_history (client_portal_id, booking_name, actor, action, detail)
+                  select ${id}, cp.client_display_name, ${actor}, 'payment_deleted',
+                         jsonb_build_object('amount', pe.amount, 'method', pe.method, 'kind', pe.kind, 'paid_at', pe.paid_at, 'note', pe.note)
+                  from payment_entries pe join client_portals cp on cp.id = pe.client_portal_id
+                  where pe.id = ${entryId}
+                    and pe.client_portal_id = ${id}
+                    and coalesce(pe.source, 'manual') <> 'stripe'
+                `,
+              ]
+            : []),
           sql`
             delete from payment_entries
             where id = ${entryId}
@@ -235,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ],
         { paid: true },
       );
-      const removed = writeRows[0] as Array<{ id: string }>;
+      const removed = writeRows[recording ? 1 : 0] as Array<{ id: string }>;
 
       if (removed.length === 0) {
         // Either it was a card payment, or it was already gone. Say which,
@@ -338,6 +359,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           values (${id}, ${tipCents / 100}, ${method || null}, ${tipNote}, ${paidAt}, 'tip')
         `);
       }
+      if (recording && paymentCents > 0) {
+        writes.push(historyInsert(sql, id, actor, 'payment_added', { amount: paymentCents / 100, method, paid_at: paidAt, note }));
+      }
+      if (recording && tipCents > 0) {
+        writes.push(historyInsert(sql, id, actor, 'tip_added', { amount: tipCents / 100, method, paid_at: paidAt, split: kind === 'payment' }));
+      }
       const { paidToDate } = await writeWithRecompute(sql, id, writes, { paid: true });
       return respondWithPayments(sql, id, res, paidToDate, {
         recorded: { payment: paymentCents / 100, tip: tipCents / 100 },
@@ -423,6 +450,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             values (${id}, ${waiverCents / 100}, ${CARD_FEE_DISCOUNT_METHOD},
                     'Paid directly, so the card processing fee was waived', now())
           `,
+          ...(recording ? [historyInsert(sql, id, actor, 'discount_waived', { amount: waiverCents / 100 })] : []),
         ],
         { paid: true },
       );
@@ -450,7 +478,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { chargesTotal } = await writeWithRecompute(
         sql,
         id,
-        [sql`delete from portal_charges where id = ${chargeId} and client_portal_id = ${id}`],
+        [
+          ...(recording
+            ? [
+                sql`
+                  insert into money_history (client_portal_id, booking_name, actor, action, detail)
+                  select ${id}, cp.client_display_name, ${actor}, 'charge_deleted',
+                         jsonb_build_object('amount', pc.amount, 'reason', pc.reason, 'note', pc.note)
+                  from portal_charges pc join client_portals cp on cp.id = pc.client_portal_id
+                  where pc.id = ${chargeId} and pc.client_portal_id = ${id}
+                `,
+              ]
+            : []),
+          sql`delete from portal_charges where id = ${chargeId} and client_portal_id = ${id}`,
+        ],
         { charges: true },
       );
       return respondWithCharges(sql, id, res, chargesTotal);
@@ -482,18 +523,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { chargesTotal } = await writeWithRecompute(
         sql,
         id,
-        [sql`
-          insert into portal_charges (client_portal_id, amount, reason, note, charged_at)
-          values (${id}, ${amount}, ${reason}, ${note || null}, ${chargedAt})
-        `],
+        [
+          sql`
+            insert into portal_charges (client_portal_id, amount, reason, note, charged_at)
+            values (${id}, ${amount}, ${reason}, ${note || null}, ${chargedAt})
+          `,
+          ...(recording ? [historyInsert(sql, id, actor, 'charge_added', { amount, reason, note })] : []),
+        ],
         { charges: true },
       );
       return respondWithCharges(sql, id, res, chargesTotal);
     }
 
+    if (action === 'history') {
+      return res.status(200).json({ success: true, history: await readHistory(sql, id) });
+    }
+
     return res
       .status(400)
-      .json({ success: false, error: 'action must be add, delete, settle-discount, add-charge or delete-charge' });
+      .json({ success: false, error: 'action must be add, delete, settle-discount, add-charge, delete-charge or history' });
   } catch (err) {
     console.error('[admin/payment-log] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

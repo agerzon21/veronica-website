@@ -1,5 +1,5 @@
 /**
- * Client Portal auth — email + password access for full client portal.
+ * Client Portal auth, email + password access for full client portal.
  *
  * POST { email, password }
  *   → 200 { success, ...full portal payload }    on hit
@@ -24,10 +24,12 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
+import { clearFailures, portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { isGalleryReleased } from './_gallery-gate.js';
 import { getDb } from '../_db.js';
 import { isStripeTestMode } from '../_stripe.js';
 import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import { contractFingerprint } from '../_contract-fingerprint.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -38,13 +40,13 @@ type ClientPortalRow = {
   // Always 'full' here (the lookup filters on it), but selected rather than
   // assumed so isGalleryReleased is handed the row's real mode.
   mode: 'simple' | 'full';
-  // Selected only to authenticate. Never returned — check the response object
+  // Selected only to authenticate. Never returned, check the response object
   // below; neither field appears in it.
   client_password_hash: string | null;
   client_display_name: string | null;
   client_email: string | null;
   drive_url: string | null;
-  // Session metadata — shown in the portal header so the client sees
+  // Session metadata, shown in the portal header so the client sees
   // what they booked at a glance (Wedding on {date} at {location},
   // delivery within {timeframe}). event_date + session_type live as
   // top-level columns; the more descriptive event_title,
@@ -97,6 +99,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // Guessing is throttled per address and per network (see _throttle.ts),
+    // checked before the password so a refused attempt costs no scrypt.
+    const throttleKeys = portalKeys(req, email);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
     const rows = (await sql`
       select id, mode, client_display_name, client_email, drive_url,
              event_date, session_type, contract_template_key, contract_variables,
@@ -112,20 +122,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       limit 1
     `) as ClientPortalRow[];
 
-    // The password is no longer compared in SQL — it is hashed now, so the
+    // The password is no longer compared in SQL, it is hashed now, so the
     // check has to happen in code. Same 401 and same delay whether the email
     // was unknown or the password was wrong, so this cannot be used to
     // enumerate which addresses are clients.
     const candidate = rows[0];
-    const check = candidate
-      ? checkPortalPassword(password, candidate.client_password_hash)
-      : { ok: false };
+    // Always one scrypt, row or no row: see checkPortalPassword.
+    const check = checkPortalPassword(password, candidate?.client_password_hash);
 
     if (!candidate || !check.ok) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_AUTH_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect email or password' });
     }
-
+    // Signed in: any earlier typos for this address are forgotten.
+    await clearFailures(sql, throttleKeys);
 
     const row = rows[0];
 
@@ -164,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fetch the payment-entry log so the client can see itemized
     // payments their photographer has logged (e.g. "Retainer received
-    // via Zelle — Jun 25"). This is separate from `installments`,
+    // via Zelle, Jun 25"). This is separate from `installments`,
     // which is for the planned Stripe-managed payment-plan flow.
     const paymentRows = (await sql`
       select id, amount, method, note, paid_at, kind
@@ -271,7 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Session-metadata fields for the portal header. contract_variables
-    // is a JSONB blob with contract-template placeholders — we surface
+    // is a JSONB blob with contract-template placeholders, we surface
     // the human-readable ones (title, location, delivery window). Kept
     // permissive: if the blob doesn't have a field or the whole thing
     // is null (older portals created before we started storing it),
@@ -339,7 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       gallery_withheld: !galleryReleased,
       warning,
 
-      // Session metadata — shown in the portal header
+      // Session metadata, shown in the portal header
       event_date: row.event_date,
       session_type: row.session_type,
       contract_template_key: row.contract_template_key ?? 'wedding',
@@ -352,7 +363,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contract_status: row.contract_status,
       contract_signed_at: row.contract_signed_at,
       contract_body: row.contract_body,
-      // We never return the raw blob URL to the client — it's not directly
+      // Sent back when signing, so a contract that changed while the client was
+      // reading it is refused instead of signed (see _contract-fingerprint.ts).
+      contract_hash: contractFingerprint(row.contract_body),
+      // We never return the raw blob URL to the client, it's not directly
       // accessible without the token. Surface only whether a signed PDF
       // exists; the UI uses /api/portal/download-contract to fetch it.
       contract_signed_pdf_available: !!row.contract_signed_pdf_url,
@@ -383,7 +397,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       gallery_delivered_at: row.gallery_delivered_at,
       gallery_expires_at: row.gallery_expires_at,
 
-      // Favorites — list of Drive file IDs the client has hearted.
+      // Favorites, list of Drive file IDs the client has hearted.
       // Empty array if none / column not yet populated.
       favorite_photo_ids: row.favorite_photo_ids ?? [],
     });

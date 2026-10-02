@@ -1,5 +1,5 @@
 /**
- * Gallery Pass auth — password-only access for read-only photo viewing.
+ * Gallery Pass auth, password-only access for read-only photo viewing.
  *
  * POST { password }
  *   → 200 { success, client_name, drive_url, rootFiles, sections, gallery_expires_at }   on hit
@@ -29,6 +29,7 @@ import {
   GALLERY_WITHHELD_MESSAGE,
 } from './_gallery-gate.js';
 import { getDb } from '../_db.js';
+import { galleryKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
 const WRONG_PASSWORD_DELAY_MS = 750;
@@ -63,6 +64,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
+    // A gallery password is a short word in a shareable link: guessing it is
+    // throttled per network (see _throttle.ts), before the lookup.
+    const throttleKeys = galleryKeys(req);
+    const gate = await throttled(sql, throttleKeys);
+    if (gate.blocked) {
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
+    }
     const rows = (await sql`
       select id, client_display_name, drive_url, gallery_enabled, gallery_expires_at,
              mode, gallery_delivered_at
@@ -72,6 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as GalleryRow[];
 
     if (rows.length === 0 || !rows[0].gallery_enabled) {
+      await recordFailure(sql, throttleKeys);
       await sleep(WRONG_PASSWORD_DELAY_MS);
       return res.status(401).json({ success: false, error: 'Incorrect password' });
     }

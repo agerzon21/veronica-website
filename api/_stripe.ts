@@ -33,6 +33,25 @@ import { createHash, createHmac, timingSafeEqual as cryptoTimingSafeEqual } from
 const API = 'https://api.stripe.com/v1';
 
 /**
+ * The API version every request asks for. NOT PINNED YET, deliberately.
+ *
+ * Unpinned, a request is answered in the account's default version, and an
+ * upgrade in the Stripe dashboard silently changes the shape of what this code
+ * reads (the refunds fallback below exists because exactly that happened).
+ * Pinning to a guess would be worse: it changes behaviour today. So the
+ * Integrations panel now shows the version Stripe reports (stripeApiVersionSeen
+ * and the webhook's own), and this is set to THAT value, verified, after which
+ * an account upgrade changes nothing here until someone changes this line.
+ */
+export const STRIPE_API_VERSION: string | null = null;
+
+/** The version Stripe last said it answered in (its Stripe-Version response header). */
+let apiVersionSeen: string | null = null;
+export function stripeApiVersionSeen(): string | null {
+  return apiVersionSeen;
+}
+
+/**
  * Stripe's own default tolerance for how stale a webhook may be.
  *
  * The timestamp check is not ceremony: without it a signature captured once
@@ -99,6 +118,7 @@ async function stripeRequest<T>(
   };
   if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+  if (STRIPE_API_VERSION) headers['Stripe-Version'] = STRIPE_API_VERSION;
 
   /**
    * Bounded. Without a timeout a hung Stripe call holds the whole function
@@ -114,6 +134,7 @@ async function stripeRequest<T>(
     signal: AbortSignal.timeout(15_000),
   });
 
+  apiVersionSeen = res.headers.get('stripe-version') ?? apiVersionSeen;
   const text = await res.text();
   let parsed: unknown;
   try {
@@ -377,6 +398,8 @@ export type StripeWebhookEndpoint = {
   url?: string;
   status?: string;
   enabled_events?: string[];
+  /** The version its events are written in; null means the account default. */
+  api_version?: string | null;
 };
 
 export async function listWebhookEndpoints(): Promise<StripeWebhookEndpoint[]> {
