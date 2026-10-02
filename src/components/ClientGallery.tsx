@@ -42,7 +42,7 @@ import {
   type PortalChrome,
 } from './portalLayout';
 
-// Same URL used by the homepage GoogleReviewsSection — single source of
+// Same URL used by the homepage GoogleReviewsSection, single source of
 // truth would be nicer, but keeping the duplication local rather than
 // dragging the whole reviews section's data along.
 const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
@@ -54,7 +54,7 @@ export interface DriveFile {
   size: number | null;
   // Natural image dimensions from Drive's imageMediaMetadata. Used
   // by the justified-layout gallery to size each tile to the photo's
-  // real aspect ratio at first paint — no reflow while thumbs load.
+  // real aspect ratio at first paint, no reflow while thumbs load.
   width: number | null;
   height: number | null;
   thumbnailUrl: string;
@@ -90,7 +90,7 @@ interface ClientGalleryProps {
   // When set, render a "Share this gallery" section at the bottom with
   // a copyable one-click link + an email-invite form. Used on the
   // /portal/pass route (gallery-only) where the viewer has no portal
-  // account — the password they typed is the auth. Full-mode portals
+  // account, the password they typed is the auth. Full-mode portals
   // get a richer share UI inside the Gallery Pass section instead, so
   // we leave this prop unset for them.
   galleryPassword?: string;
@@ -101,11 +101,11 @@ interface ClientGalleryProps {
   // reads it from the client-auth response. Null when the gallery
   // doesn't expire.
   expiresAt?: string | null;
-  // Favorites — when both are provided, the heart UI is enabled on
+  // Favorites, when both are provided, the heart UI is enabled on
   // every tile + inside the modal, and a dedicated Favorites section
   // appears at the bottom. Only wired up for full-portal users
   // (guests on /portal/pass leave these undefined, which disables the
-  // whole feature — guests have no persistent identity to attach
+  // whole feature, guests have no persistent identity to attach
   // favorites to). See ClientPortalView for the API call + optimistic
   // update.
   favorites?: string[];
@@ -150,7 +150,7 @@ interface GridTileProps {
   index: number;
   onSelect: (i: number) => void;
   setRef: (el: HTMLDivElement | null) => void;
-  // Favorites — omitted for guests on /portal/pass (no persistent
+  // Favorites, omitted for guests on /portal/pass (no persistent
   // identity to attach hearts to); provided for full-portal users.
   isFavorite?: boolean;
   onToggleFavorite?: (photoId: string, currentlyFavorite: boolean) => void;
@@ -158,7 +158,7 @@ interface GridTileProps {
 
 /**
  * One thumbnail in the gallery grid. Extracted as its own component so each
- * tile owns its thumbnail-load state — if a thumbnail fails (e.g. Drive's
+ * tile owns its thumbnail-load state, if a thumbnail fails (e.g. Drive's
  * thumbnail endpoint occasionally 4xx's video files until they're fully
  * processed) we swap to a placeholder card instead of leaving the user with
  * a broken-image icon. Video files also get a play-icon overlay so it's
@@ -174,7 +174,7 @@ const THUMB_WIDTHS = [400, 600, 800];
 
 // A failed thumbnail was permanent: one cancelled request and that tile showed
 // a placeholder for the rest of the session even though the file is fine. Retry
-// before giving up — the failures this is built for are transient.
+// before giving up, the failures this is built for are transient.
 const MAX_THUMB_RETRIES = 2;
 
 const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite }: GridTileProps) => {
@@ -327,7 +327,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
           pointerEvents="none"
         />
       </Box>
-      {/* Per-photo quick-download in the corner — desktop only. Hidden on
+      {/* Per-photo quick-download in the corner, desktop only. Hidden on
           touch via @media (hover: hover) since iOS Safari fires :hover on
           first tap, which would briefly flash this icon. Canonical mobile
           save flow is the "Save to Photos" button inside the lightbox.
@@ -374,11 +374,11 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
         <Icon as={isVideo ? FaExternalLinkAlt : FaDownload} boxSize={3.5} />
       </Box>
 
-      {/* Favorite heart — top-left corner, opposite the download.
+      {/* Favorite heart, top-left corner, opposite the download.
           Always visible when the photo IS favorited (so users see
           their picks at a glance while scrolling); only appears on
           hover otherwise. Mobile shows it always since there's no
-          hover — the extra visual weight is worth it for tap
+          hover, the extra visual weight is worth it for tap
           discoverability. Only rendered when favorites are enabled
           (full-portal users). */}
       {favoritesEnabled && (
@@ -405,7 +405,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
           aria-pressed={isFavorite}
           sx={{
             WebkitTapHighlightColor: 'transparent',
-            // Show on hover for desktop — matches the download-icon
+            // Show on hover for desktop, matches the download-icon
             // reveal pattern above so the two corner controls feel
             // consistent.
             '@media (hover: hover)': {
@@ -440,7 +440,7 @@ const ClientGallery = ({
   const favoritesSet = new Set(favorites ?? []);
   const favoritesCount = favoritesSet.size;
 
-  // "Show only favorites" filter — toggled from the Favorites info
+  // "Show only favorites" filter, toggled from the Favorites info
   // card at the bottom of the gallery. When active, the whole grid
   // collapses to just hearted photos in their original section
   // context (not a separate grid), the sections without any
@@ -571,7 +571,7 @@ const ClientGallery = ({
   // shows when the client is actually looking at the gallery, not when
   // they're up reading their contract or down at the login-password
   // section in the full portal. On /portal/pass the whole page is the
-  // gallery so this is always true — no visible change there.
+  // gallery so this is always true, no visible change there.
   const galleryRootRef = useRef<HTMLDivElement | null>(null);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   useEffect(() => {
@@ -615,7 +615,7 @@ const ClientGallery = ({
   const selected = selectedIndex !== null ? allFiles[selectedIndex] : null;
 
   return (
-    // No explicit bg — the parent controls it. Inside ClientPortalView
+    // No explicit bg, the parent controls it. Inside ClientPortalView
     // the photos-section wrapper is white for alternation. On the
     // standalone /portal/pass route, Portal.tsx wraps ClientGallery
     // in a Box with the necessary Navbar clearance so both routes
@@ -643,7 +643,7 @@ const ClientGallery = ({
         />
       )}
 
-      {/* Header — id lets the Info pill in the top nav scroll back
+      {/* Header, id lets the Info pill in the top nav scroll back
           here. All the top-of-gallery orientation lives inside: title,
           count (with favorite total in parens), expiration ribbon,
           save-tips card. Padding matches other portal sections
@@ -682,7 +682,7 @@ const ClientGallery = ({
           {clientName ? `Welcome, ${clientName}` : 'Your Photos'}
         </Text>
         {totalCount > 0 && (
-          // Count line — always reports the TOTAL number of photos.
+          // Count line, always reports the TOTAL number of photos.
           // When favorites are enabled and non-zero, tacks on the
           // hearted count in parens so clients see at a glance how
           // many they've picked out. Sections count follows as a
@@ -703,7 +703,7 @@ const ClientGallery = ({
           </Text>
         )}
 
-        {/* Available-until ribbon — actual visible banner with notched
+        {/* Available-until ribbon, actual visible banner with notched
             ends so it doesn't blend into the header metadata like the
             old subtle line did. Bold date sits inside the ribbon; the
             "contact Veronika / download by" note lives below it as a
@@ -719,7 +719,7 @@ const ClientGallery = ({
           />
         )}
 
-        {/* Save-tips card — warm gold-tinted card so it reads as
+        {/* Save-tips card, warm gold-tinted card so it reads as
             helpful info rather than a legal footnote. Horizontal
             three-column on desktop; on mobile we go with a compact
             single-line-per-tip layout (icon + tight two-line copy)
@@ -778,10 +778,10 @@ const ClientGallery = ({
         )}
       </Box>
 
-      {/* Review CTA — warm gold-tinted card, elevated visual weight so
+      {/* Review CTA, warm gold-tinted card, elevated visual weight so
           this doesn't get lost like the outline-only version did.
           Sits right below the header so it's the first thing after the
-          welcome, before the photo grid. Personal italic note stays —
+          welcome, before the photo grid. Personal italic note stays
           it's the emotional anchor. Five gold stars evoke the ask
           without saying "please review" out loud. */}
       {/* ONE panel, not two stacked ones. The review ask and the tip were
@@ -848,7 +848,7 @@ const ClientGallery = ({
         </Box>
       </Box>
 
-      {/* Filter-on banner — appears only when the favorites filter is
+      {/* Filter-on banner, appears only when the favorites filter is
           engaged. Warm gold-tinted card matching the rest of the
           treatment; canonical CTAButton for "Show all photos" so it
           matches every other outline button on the site. */}
@@ -862,13 +862,13 @@ const ClientGallery = ({
         />
       )}
 
-      {/* Grid — renders the current display set (filtered or not).
+      {/* Grid, renders the current display set (filtered or not).
           When the favorites filter is on, sections with 0 hearts
           drop out entirely and the flat allFiles array walks only
           the visible photos, so modal arrow-nav stays consistent. */}
       {totalCount > 0 ? (
         <Box px={{ base: 2, md: 6 }} pb={20}>
-          {/* Root-level files (no subfolder). Show first, no header — these
+          {/* Root-level files (no subfolder). Show first, no header, these
               are the files Veronika placed directly in the gallery root. If
               she delivered everything in subfolders, this is empty. */}
           {displayRootFiles.length > 0 && (
@@ -890,7 +890,7 @@ const ClientGallery = ({
             </SimpleGrid>
           )}
 
-          {/* Sections — one per subfolder. Each gets its own labeled grid.
+          {/* Sections, one per subfolder. Each gets its own labeled grid.
               Index offset accumulates so itemRefs[i] always maps to
               allFiles[i] (the same array the lightbox navigates by). */}
           {displaySections.map((section, sIdx) => {
@@ -913,7 +913,7 @@ const ClientGallery = ({
                 // header below whatever chrome this surface has.
                 sx={{ scrollMarginTop: chrome.scrollMargin }}
               >
-                {/* Section header — matches the gallery's main header
+                {/* Section header, matches the gallery's main header
                     treatment but scaled down: small gold uppercase label,
                     larger section name in light weight, thin gold rule.
                     Consistent with the rest of the site's typography. */}
@@ -967,7 +967,7 @@ const ClientGallery = ({
             );
           })}
 
-          {/* Favorites info + filter section — informational card
+          {/* Favorites info + filter section, informational card
               (not a duplicate grid). Explains how favorites work,
               exposes the filter toggle, and reserves space for the
               future "request an album" flow. Only rendered for full-
@@ -983,7 +983,7 @@ const ClientGallery = ({
           )}
         </Box>
       ) : filterActive ? (
-        // Filter is on and somehow returned zero — defensive edge
+        // Filter is on and somehow returned zero, defensive edge
         // case (favorites list out of sync with the gallery, or
         // Vero removed a photo the client had hearted). Give a
         // clear way out.
@@ -1010,7 +1010,7 @@ const ClientGallery = ({
         </Box>
       )}
 
-      {/* Lightbox — same ImageModal the public gallery uses. The download
+      {/* Lightbox, same ImageModal the public gallery uses. The download
           props swap the bottom CTA to "Download" (saving the file via the
           anchor's download attribute) and the share icon is hidden since
           client photos don't have a public share URL. */}
@@ -1051,7 +1051,7 @@ const ClientGallery = ({
           // uniform square grid regardless of photo aspect, so a
           // full-opacity landing would visibly mismatch the thumb's
           // aspect at the last frame. Public masonry gallery leaves
-          // this off — its thumbs match photo aspects exactly.
+          // this off, its thumbs match photo aspects exactly.
           fadeOnClose
           // Favorite state for the currently-open photo + callback.
           // The heart in the modal top bar is only rendered when
@@ -1065,11 +1065,11 @@ const ClientGallery = ({
         />
       )}
 
-      {/* The old "Want everything?" bottom section was removed — Download
+      {/* The old "Want everything?" bottom section was removed, Download
           All now lives in the sticky action bar (rendered below), always
           reachable regardless of scroll position. No point duplicating. */}
 
-      {/* Share section — only rendered when the parent route passes a
+      {/* Share section, only rendered when the parent route passes a
           gallery password, i.e. /portal/pass (gallery-only access).
           Full-mode portals have a richer share UI in their Gallery Pass
           section already. The id is the scroll-target the sticky bar's
@@ -1340,7 +1340,7 @@ function SaveTip({
  *
  * Kept as its own component so if we ever want to reuse this ribbon
  * treatment elsewhere (e.g. contract-signed banner) we can just call
- * it — please don't duplicate the clip-path values by hand.
+ * it, please don't duplicate the clip-path values by hand.
  */
 function ExpiryRibbon({
   expiresAt,
@@ -1397,7 +1397,7 @@ function ExpiryRibbon({
 
 /**
  * Favorites info section at the bottom of the gallery grid. NOT a
- * duplicate photo grid — it's an informational + control card that:
+ * duplicate photo grid, it's an informational + control card that:
  *   - explains how favorites work (mirrors the save-tips card format)
  *   - exposes the "Show only favorites" filter toggle
  *   - reserves space for the future "Request an album" flow
@@ -1435,7 +1435,7 @@ function FavoritesInfoSection({
       borderTop="1px solid"
       borderColor="gray.100"
     >
-      {/* Section header — matches the gallery's Info header treatment
+      {/* Section header, matches the gallery's Info header treatment
           so the two feel like siblings. */}
       <Box textAlign="center" mb={{ base: 6, md: 8 }} px={4}>
         <Text
@@ -1468,7 +1468,7 @@ function FavoritesInfoSection({
         </Text>
       </Box>
 
-      {/* Info + filter toggle card — warm gold-tinted, same treatment
+      {/* Info + filter toggle card, warm gold-tinted, same treatment
           as the save-tips card at the top of the gallery so both read
           as informational callouts. */}
       <Box px={{ base: 4, md: 6 }} pb={{ base: 10, md: 14 }}>
@@ -1524,7 +1524,7 @@ function FavoritesInfoSection({
           </Flex>
         </Box>
 
-        {/* Album placeholder — reserves space in the design for the
+        {/* Album placeholder, reserves space in the design for the
             future request-an-album flow. For now it's a plain-text
             "coming soon" note with a Contact CTA (canonical CTAButton
             → /contact) so users have a path if they want an album
@@ -2163,7 +2163,7 @@ function NavStripDivider() {
  * Share section for gallery-only access (the /portal/pass route).
  * Three paths: copy the one-click URL, copy just the password, or have
  * us email an invite. The email path is rate-limited server-side at
- * 5/24h per gallery — same limit the full-portal share uses — so
+ * 5/24h per gallery, same limit the full-portal share uses, so
  * "anyone with the password can share" doesn't turn into a spam
  * vector.
  */
@@ -2248,7 +2248,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
           Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.
         </Text>
 
-        {/* One-click link — HERO action. The primary way we want people
+        {/* One-click link, HERO action. The primary way we want people
             to share; big centered "Copy Link" button with the URL as
             a visible-but-secondary preview underneath. Password + email
             paths still exist below as clearly-labeled alternatives, but
@@ -2298,7 +2298,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
           </Text>
         </Box>
 
-        {/* Secondary paths — visually demoted so they read as "in case
+        {/* Secondary paths, visually demoted so they read as "in case
             you need it," not as equal alternatives. Email above manual
             password because "send them the link" is a much more common
             path than "read a password to someone over the phone." */}
@@ -2364,7 +2364,7 @@ function GalleryShareSection({ galleryPassword }: { galleryPassword: string }) {
             )}
           </VStack>
 
-          {/* Plain password fallback — last, least-common path (used
+          {/* Plain password fallback, last, least-common path (used
               when someone can't click the link but can type a password
               read aloud over a call). */}
           <VStack w="100%" spacing={2} align="stretch">

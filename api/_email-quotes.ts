@@ -7,7 +7,7 @@
  * 1. DISPLAY. Every reply in a thread arrives carrying the entire
  *    conversation re-quoted beneath it. The admin panel already renders
  *    the full thread above, so repeating it inside each bubble is pure
- *    noise — by message four the actual sentence is buried under three
+ *    noise, by message four the actual sentence is buried under three
  *    screens of `>`.
  *
  * 2. RECOVERY. When Veronika replies from Gmail instead of the panel,
@@ -55,7 +55,7 @@ const ATTRIBUTION_PATTERNS: RegExp[] = [
   //
   // `when` is anchored to END AT A CLOCK TIME. An unanchored lazy group
   // stops at the first whitespace it can get away with, which splits the
-  // date mid-way ("Thu, Aug") and dumps the remainder into `who` —
+  // date mid-way ("Thu, Aug") and dumps the remainder into `who`
   // yielding an author of "20, 2026 at 11:57 AM Vero Photography" and an
   // unparseable timestamp.
   /^On\s+(?<when>.{4,70}?\d{1,2}:\d{2}(?:\s*[AP]M)?)\s+(?<who>.{1,120}?)\s+wrote:\s*$/im,
@@ -63,7 +63,7 @@ const ATTRIBUTION_PATTERNS: RegExp[] = [
   /^On\s+(?<when>.{4,60}?,\s*at\s+\d{1,2}:\d{2}(?:\s*[AP]M)?),\s*(?<who>.{1,120}?)\s+wrote:\s*$/im,
   // Russian Gmail: "чт, 20 авг. 2026 г. в 11:57, Имя <addr>:"
   /^(?<when>(?:пн|вт|ср|чт|пт|сб|вс),\s*.{4,60}?\s+в\s+\d{1,2}:\d{2}),\s*(?<who>.{1,120}?):\s*$/im,
-  // Loose fallback — no recoverable timestamp, but still a real boundary.
+  // Loose fallback, no recoverable timestamp, but still a real boundary.
   /^On\s+.{6,120}?\s+wrote:\s*$/im,
   // Generic forwarded/original-message separators.
   /^-{2,}\s*(?:Original Message|Forwarded message|Пересылаемое сообщение)\s*-{2,}\s*$/im,
@@ -75,7 +75,7 @@ const ATTRIBUTION_PATTERNS: RegExp[] = [
  * Gmail drops the RFC 3676 `-- ` delimiter when it quotes, so the
  * signature arrives as ordinary text with nothing marking where the
  * message ends. Without trimming, every recovered message carries
- * "Warmly, Veronika, Vero Photography" — which reads as though she typed
+ * "Warmly, Veronika, Vero Photography", which reads as though she typed
  * it twice once the panel appends the real signature on the next send.
  */
 const TRAILING_SIGNOFF =
@@ -120,7 +120,7 @@ function findQuoteBoundary(body: string): number {
 /**
  * Split an email body into new content and quoted history.
  *
- * If no boundary is found, everything is treated as new content — the
+ * If no boundary is found, everything is treated as new content, the
  * safe direction to be wrong in.
  */
 export function splitQuotedEmail(rawBody: string): SplitEmail {
@@ -134,7 +134,7 @@ export function splitQuotedEmail(rawBody: string): SplitEmail {
   const newContent = body.slice(0, boundary).replace(/\s+$/, '');
   const quoted = body.slice(boundary);
 
-  // A boundary at position 0 means the message is quote-only — a
+  // A boundary at position 0 means the message is quote-only, a
   // "+1" or an empty reply. Keep the original body rather than
   // storing an empty string.
   if (!newContent.trim()) {
@@ -145,7 +145,7 @@ export function splitQuotedEmail(rawBody: string): SplitEmail {
 }
 
 /**
- * Parse the FIRST quoted block — which, because mail clients nest
+ * Parse the FIRST quoted block, which, because mail clients nest
  * oldest-deepest, is the most recent message in the chain. That is the
  * one we might be missing.
  */
@@ -182,7 +182,7 @@ export function parseMostRecentQuote(quoted: string): QuotedMessage | null {
     break;
   }
 
-  // Strip one level of '>' markers. Stop at the next attribution line —
+  // Strip one level of '>' markers. Stop at the next attribution line
   // beyond it is an OLDER message we already have.
   const collected: string[] = [];
   for (const line of rest.split('\n')) {
@@ -191,14 +191,14 @@ export function parseMostRecentQuote(quoted: string): QuotedMessage | null {
     collected.push(unquoted);
   }
 
-  // Drop the signature block — it is chrome, and including it makes
+  // Drop the signature block, it is chrome, and including it makes
   // recovered messages compare unequal to what we actually sent.
   let text = collected.join('\n');
   const sigAt = text.search(SIG_DELIMITER);
   if (sigAt > 0) {
     text = text.slice(0, sigAt);
   } else {
-    // No delimiter survived the quoting — trim a recognizable sign-off
+    // No delimiter survived the quoting, trim a recognizable sign-off
     // instead, but only if real content precedes it.
     const trimmed = text.replace(TRAILING_SIGNOFF, '');
     if (trimmed.trim().length >= 15) text = trimmed;
@@ -215,7 +215,7 @@ export function parseMostRecentQuote(quoted: string): QuotedMessage | null {
  *
  * Exact comparison is useless here: mail clients re-wrap lines, convert
  * unicode punctuation, and drop or reformat signatures. So compare on
- * collapsed alphanumerics, and treat a containment match as equal —
+ * collapsed alphanumerics, and treat a containment match as equal
  * a quote is frequently a truncated version of the original.
  */
 export function looksLikeSameMessage(a: string, b: string): boolean {
@@ -242,7 +242,7 @@ export function looksLikeSameMessage(a: string, b: string): boolean {
   // Containment alone is too strict for the case that actually bites:
   // the SAME message rendered two different ways. Our auto-reply goes
   // out as multipart, and the client's quote may come back derived from
-  // the HTML part — carrying a "Vero Photography" header and a
+  // the HTML part, carrying a "Vero Photography" header and a
   // "you're receiving this because…" footer that the stored plaintext
   // part never had. 608 chars vs 431, neither containing the other,
   // despite being one message. Without this the auto-reply gets

@@ -9,12 +9,12 @@
  *                    dynamically through the page. Stored raw (URL or
  *                    id), parsed on every read like gallery/journal.
  *   - featuredSlugs: ordered journal-post slugs for "From the Journal"
- *                    (max 10 — Alex capped the section at 5-10).
+ *                    (max 10, Alex capped the section at 5-10).
  *
  * POST { password, action: 'get' }
  *   → { success, heroes, folderId, featuredSlugs }
  * POST { password, action: 'set', heroes?, folderId?, featuredSlugs? }
- *   → { success } — only the provided keys are written, so the three
+ *   → { success }, only the provided keys are written, so the three
  *   admin cards can save independently.
  */
 
@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ success: false, error: 'invalid focus value' });
           }
           // Empty url keeps the SLOT (slots have fixed jobs: packages 1-3,
-          // FAQ, quote background) — an empty slot just renders nothing.
+          // FAQ, quote background), an empty slot just renders nothing.
           entries.push({ url, focus: item?.focus ?? '50% 50%', zoom: asZoom(item?.zoom) });
         }
         writes.push([KEY_HEROES, JSON.stringify(entries.slice(0, MAX_PINNED))]);

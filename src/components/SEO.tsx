@@ -5,7 +5,7 @@ import { useLocation } from 'react-router-dom';
 // Route-aware base SEO. Each route gets its own title, description, canonical,
 // and OG/Twitter image so Google doesn't see every page as a duplicate of /.
 // Page components are still free to override individual tags via their own
-// Helmet — later Helmet instances win, so e.g. IndividualPhoto.tsx overrides
+// Helmet, later Helmet instances win, so e.g. IndividualPhoto.tsx overrides
 // these for /photo/:category/:photoId.
 
 const SITE_URL = 'https://vero.photography';
@@ -15,7 +15,7 @@ type RouteMeta = { title: string; description: string; image?: string };
 
 const ROUTE_META: Record<string, RouteMeta> = {
   '/': {
-    // 59 chars — under Google's 60-char SERP truncation threshold so the
+    // 59 chars, under Google's 60-char SERP truncation threshold so the
     // whole brand+keyword string shows in search results. Previous title
     // was 78 chars and got truncated mid-word.
     title: 'Vero Photography | Scranton Wedding & Portrait Photographer',
@@ -39,7 +39,7 @@ const ROUTE_META: Record<string, RouteMeta> = {
       'Your inquiry has been received. Veronika will be in touch shortly to discuss your photography session.',
   },
   // Was missing entirely, so this route fell through to the home defaults and
-  // shipped the homepage's title, description and canonical — on the site's
+  // shipped the homepage's title, description and canonical, on the site's
   // highest-intent commercial page.
   '/wedding-photography': {
     title: 'Wedding Photography Services | Vero Photography',
@@ -183,7 +183,7 @@ const SEO = () => {
   }, [canonical]);
 
   // Per-page WebPage + primaryImageOfPage. This is the missing signal
-  // that lets Google pick the right SERP thumbnail per route — the
+  // that lets Google pick the right SERP thumbnail per route, the
   // existing static ProfessionalService schema in index.html covers
   // the business entity, but doesn't declare which image is the page's
   // primary one. Without this, Google falls back to its automated
@@ -217,7 +217,7 @@ const SEO = () => {
       <meta charSet="utf-8" />
       <meta name="language" content="English" />
       {/* max-image-preview:large lets Google show the chosen thumbnail at
-          its full SERP size instead of a tiny 50x50 — doesn't decide
+          its full SERP size instead of a tiny 50x50, doesn't decide
           *which* image, but ensures whatever Google picks is shown big.
           Google's own case studies cite up to 333% click increase from
           this directive. */}
@@ -249,7 +249,7 @@ const SEO = () => {
       <meta name="twitter:description" content={resolved.description} />
       <meta name="twitter:image" content={image} />
 
-      {/* Structured data — primaryImageOfPage is the canonical signal
+      {/* Structured data, primaryImageOfPage is the canonical signal
           Google uses (alongside og:image) to choose the SERP thumbnail. */}
       <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
     </Helmet>

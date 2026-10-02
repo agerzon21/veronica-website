@@ -102,7 +102,7 @@ const Welcome = () => {
         setDone(true);
         // Brief pause so the success state is visible, then push to /portal
         // with the email prefilled. The client will still need to type their
-        // password — we deliberately do NOT auto-login because the password
+        // password, we deliberately do NOT auto-login because the password
         // they just chose isn't held in any session yet.
         setTimeout(() => {
           navigate(`/portal?email=${encodeURIComponent(data.email)}`);

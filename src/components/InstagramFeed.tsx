@@ -13,11 +13,11 @@ import IgPostModal, { type IgPostForModal } from './IgPostModal';
 // Native grid replacement for the Instagram embed. Cross-origin iframes
 // can't be promoted to independent compositor layers on iOS Safari and
 // Instagram's own JS inside them runs scroll observers we have no control
-// over — rendering posts as plain <img> tags eliminates the scroll cost
+// over, rendering posts as plain <img> tags eliminates the scroll cost
 // and unlocks every framer-motion animation for the section.
 //
 // Data flow:
-//   1. First paint uses the bundled instagram.json — instant, no network.
+//   1. First paint uses the bundled instagram.json, instant, no network.
 //      In production this typically has working URLs from the build's
 //      Graph API fetch; in dev it's an empty stub.
 //   2. On mount we fetch /api/instagram-feed for FRESH urls. Instagram's
@@ -28,14 +28,14 @@ import IgPostModal, { type IgPostForModal } from './IgPostModal';
 //      whatever we had so the section still looks intentional.
 //
 // Layout:
-//   * Desktop: mosaic — 4-column grid, first tile spans 2×2 (the
+//   * Desktop: mosaic, 4-column grid, first tile spans 2×2 (the
 //     "hero" slot), remaining 8 tiles 1×1. Fills two rows of 4.
 //   * Mobile: clean 3×3 grid. Mosaic on mobile would either shrink
 //     the hero to unrecognizable or push the small tiles below the
 //     fold.
 // Each tile shows a hover overlay with likes/comments/caption
 // snippet, a corner badge for videos/reels/carousels, and opens a
-// lightbox modal (IgPostModal) on click — no more forced navigation
+// lightbox modal (IgPostModal) on click, no more forced navigation
 // to Instagram just to read a caption.
 
 const INSTAGRAM_URL = 'https://www.instagram.com/vero.art.photo';
@@ -138,13 +138,13 @@ const tileSrcSet = (url: string): string | undefined => {
     .join(', ');
 };
 
-// A tile that fails to load has, until now, stayed blank forever — there was
+// A tile that fails to load has, until now, stayed blank forever, there was
 // no onError anywhere in this component.
 //
 // Nine tiles mount at once when `near` flips, all cross-origin to
 // scontent-*.cdninstagram.com on a connection that is cold at that moment
 // (~894ms of DNS+TCP+TLS, per the measurement in the observer comment above).
-// A few of those nine can fail transiently — reset or timed out mid-burst. The
+// A few of those nine can fail transiently, reset or timed out mid-burst. The
 // data is fine; the request just never completed. That is why tapping a blank
 // tile has always "fixed" it: the modal issues one fresh request on a
 // now-warm connection and it succeeds.
@@ -152,7 +152,7 @@ const tileSrcSet = (url: string): string | undefined => {
 // So: retry once after a short delay, then fall back to the local derivative
 // for that slot. PHOTOS is all-live or all-fallback (see the >= 9 test), so
 // slot i maps cleanly onto FALLBACK_PHOTOS[i]. The dataset flags make this
-// idempotent and loop-proof — an <img> can only ever escalate retry -> local
+// idempotent and loop-proof, an <img> can only ever escalate retry -> local
 // -> give up, never cycle.
 const handleTileError = (e: React.SyntheticEvent<HTMLImageElement>, slot: number) => {
   const img = e.currentTarget;
@@ -161,7 +161,7 @@ const handleTileError = (e: React.SyntheticEvent<HTMLImageElement>, slot: number
   if (!stage) {
     img.dataset.vgStage = 'retry';
     const original = img.currentSrc || img.src;
-    // Cache-busting the retry would defeat the point — we want the warm
+    // Cache-busting the retry would defeat the point, we want the warm
     // connection, not a fresh cache entry. Re-assigning the same src is enough
     // to re-issue the request.
     window.setTimeout(() => {
@@ -211,20 +211,20 @@ const InstagramFeed = () => {
   const [near, setNear] = useState(false);
 
   // This section sits several viewport-heights below the fold (the hero is
-  // 350lvh), but the fetch used to fire on mount at ~5.6s — and the response
+  // 350lvh), but the fetch used to fire on mount at ~5.6s, and the response
   // triggers a cross-origin connection to Instagram's CDN that was costing
   // ~894ms of DNS+TCP+TLS right inside the LCP window.
   //
   // rootMargin is deliberately MODEST. An earlier version used 2500px to beat
   // the browser's native lazy-image heuristic, but the hero is ~2880px tall,
-  // so a 2500px margin fires the observer on mount and gates nothing —
+  // so a 2500px margin fires the observer on mount and gates nothing
   // Lighthouse caught all nine fallback photos still loading at ~199ms.
   // Because the <img> tags themselves are now gated on `near` (see the grid
   // below), there is no race with the browser to win: nothing can be fetched
   // before we render it. 600px is simply "about to be scrolled into view".
   useEffect(() => {
     const el = sectionRef.current;
-    // Fail OPEN in every degraded case — a missing feed is worse than an
+    // Fail OPEN in every degraded case, a missing feed is worse than an
     // early fetch.
     if (!el || typeof IntersectionObserver === 'undefined') {
       setNear(true);
@@ -256,7 +256,7 @@ const InstagramFeed = () => {
           setData(live);
         }
       } catch {
-        // Network error / endpoint missing — keep the bundled fallback.
+        // Network error / endpoint missing, keep the bundled fallback.
       }
     })();
     return () => {
@@ -283,7 +283,7 @@ const InstagramFeed = () => {
   // pt is trimmed against layerStyle="section" (declared after it so it wins):
   // the chapter row above already closes with its own padding, and the two
   // together were the "too much white space" note. pb stays on the section
-  // interval — the run into Kind Words is correct as is.
+  // interval, the run into Kind Words is correct as is.
   return (
     <Box ref={sectionRef} layerStyle="section" pt={{ base: 8, md: 12 }} px={4} bg="white">
       {/* Eyebrow + 40px rule. Not PageHeader: this section has no title of its
@@ -337,7 +337,7 @@ const InstagramFeed = () => {
                   height="100%"
                   // Sits ~1770px below the fold, past Chrome's lazy-load
                   // threshold, and is a cross-origin request to Instagram's
-                  // CDN — it was costing ~894ms of DNS+TCP+TLS inside the
+                  // CDN, it was costing ~894ms of DNS+TCP+TLS inside the
                   // LCP window. Deliberately no fallbackSrc: Chakra ignores
                   // it whenever `loading` is set, so it would be dead code.
                   loading="lazy"
@@ -372,7 +372,7 @@ const InstagramFeed = () => {
             </HStack>
           </Link>
 
-          {/* Counts row — only renders if we have live data, so the
+          {/* Counts row, only renders if we have live data, so the
               fallback profile card stays clean. */}
           {(FOLLOWERS_COUNT != null || MEDIA_COUNT != null) && (
             <HStack spacing={{ base: 3, md: 4 }}>
@@ -408,9 +408,9 @@ const InstagramFeed = () => {
           Fills two rows of 4 cells with the hero occupying the top-left
           2×2 block. Total: 1 hero + 8 small = 9 tiles across 8 cells,
           because the hero doubles as 4 cells and 8 more small tiles
-          take up the remaining 12 cells... wait — 4 cols × 3 rows = 12
+          take up the remaining 12 cells... wait, 4 cols × 3 rows = 12
           cells, hero takes 4 cells, 8 small take 8 cells, total 12. ✓
-        - Mobile: clean 3×3 (all 1×1). Hero styling turns off — visually
+        - Mobile: clean 3×3 (all 1×1). Hero styling turns off, visually
           the mosaic doesn't work at narrow widths (hero shrinks too
           much or pushes everything below fold).
       */}
@@ -483,7 +483,7 @@ const InstagramFeed = () => {
               // 0 posts (and fetch-instagram.mjs caps at 6 while the >= 9 test
               // below needs 9), so EVERY page load paints FALLBACK_PHOTOS
               // first, then swaps to live data. Fallbacks have no permalink and
-              // live posts do, so all nine keys changed — React destroyed nine
+              // live posts do, so all nine keys changed, React destroyed nine
               // already-loaded <img>s and mounted nine empty lazy ones into a
               // page that had stopped scrolling, where the lazy heuristic
               // silently declined to load some of them and nothing ever
@@ -512,7 +512,7 @@ const InstagramFeed = () => {
             >
               {/* Render the <img> only once the section is near the viewport.
                   loading="lazy" alone was NOT enough: Lighthouse measured all
-                  nine full-resolution fallback photos — 5.1MB — downloading at
+                  nine full-resolution fallback photos, 5.1MB, downloading at
                   ~315ms, which on simulated slow 4G pushed LCP to 15.4s. The
                   browser's lazy threshold is a heuristic that varies with
                   connection type; this doesn't depend on it.
@@ -529,7 +529,7 @@ const InstagramFeed = () => {
                     // above) is already the gate, and it gates the ELEMENT, not
                     // just the fetch. Stacking lazy on top only adds a second,
                     // heuristic gate that can decline to load a tile that is
-                    // already on screen — which is exactly what went wrong.
+                    // already on screen, which is exactly what went wrong.
                     decoding="async"
                     onError={(e) => handleTileError(e, i)}
                   />
@@ -543,7 +543,7 @@ const InstagramFeed = () => {
                   recognize the post type. */}
               <MediaTypeBadge photo={photo} />
 
-              {/* Hover overlay — appears on desktop hover, shows engagement +
+              {/* Hover overlay, appears on desktop hover, shows engagement +
                   a caption snippet. Mobile users tap-to-open the modal
                   instead of relying on hover states. */}
               <Flex
@@ -560,7 +560,7 @@ const InstagramFeed = () => {
                 pointerEvents="none"
               >
                 {/* One size for every tile. This used to switch on `isHero`, a
-                    boolean, which is not a breakpoint — it meant the hero and
+                    boolean, which is not a breakpoint, it meant the hero and
                     its neighbours spoke in two different type sizes. */}
                 {(photo.likeCount != null || photo.commentsCount != null) && (
                   <HStack spacing={4} color="white" mb={photo.caption ? 2 : 0}>
@@ -586,7 +586,7 @@ const InstagramFeed = () => {
                     at 15/16px; over a 266px thumbnail that filled roughly 40%
                     of the tile. metaCaption is uppercase, which a sentence is
                     not. The size still tracks isHero because the hero tile is
-                    genuinely ~2x the others — a real size difference, not a
+                    genuinely ~2x the others, a real size difference, not a
                     breakpoint. */}
                 {photo.caption && (
                   <Text
@@ -615,7 +615,7 @@ const InstagramFeed = () => {
         })}
       </Grid>
 
-      {/* Post lightbox — opens on tile click, shows full caption +
+      {/* Post lightbox, opens on tile click, shows full caption +
           engagement + "View on Instagram" CTA. Keeps users on the
           site rather than punting them straight to instagram.com on
           every tap. */}

@@ -46,7 +46,7 @@ export function justifyLayout(
     const rawWidth = rawWidthOf(current);
     const totalGap = gap * (current.length - 1);
     const availableWidth = Math.max(0, containerWidth - totalGap);
-    // For the last row, don't stretch above target — a single trailing
+    // For the last row, don't stretch above target, a single trailing
     // photo shouldn't inflate to fill the container. Middle rows scale
     // freely (usually shrinking a bit) so the row fills width exactly.
     const scale = isLast

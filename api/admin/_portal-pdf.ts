@@ -60,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const dateLabel = portal.contract_signed_at
       ? new Date(portal.contract_signed_at).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
-    const downloadName = `Contract — ${portal.client_display_name ?? portal.client_email ?? 'client'} — ${dateLabel}.pdf`;
+    const downloadName = `Contract, ${portal.client_display_name ?? portal.client_email ?? 'client'}, ${dateLabel}.pdf`;
     const asciiFallback = downloadName.replace(/[^\x20-\x7E]/g, '-');
     const encodedName = encodeURIComponent(downloadName);
 

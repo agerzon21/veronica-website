@@ -20,14 +20,14 @@ import { useAdminLang, type AdminLang } from '../i18n/admin';
 import { fmtAdminDate, adminLocale } from '../utils/adminDate';
 
 /**
- * "Leads" tab in /admin — every submission from the public contact form.
+ * "Leads" tab in /admin, every submission from the public contact form.
  *
  * Lives in the Comms/Inbox group alongside Messages + Assistant since the
  * shape of the work is the same ("inbound thing that needs a reply +
  * status tracking"), just email-driven rather than IG DM-driven.
  *
  * Read-mostly UI: the form fields (name, email, shoot_type, preferred_date,
- * location, message) are immutable — the submitter wrote them, we don't
+ * location, message) are immutable, the submitter wrote them, we don't
  * edit their words. Only three fields are editable from the admin panel:
  * status (new → contacted → replied → booked / ghosted / spam), an internal
  * notes field, and the `contacted_at` timestamp (auto-set the first time
@@ -40,7 +40,7 @@ import { fmtAdminDate, adminLocale } from '../utils/adminDate';
  *
  * Available to BOTH admin (Vero) and super (Alex). Delete is superadmin-
  * gated on both UI and API (leads-delete requires super). Status flips +
- * notes edits stay on the admin tier — Vero's daily workflow.
+ * notes edits stay on the admin tier, Vero's daily workflow.
  */
 
 interface Props {
@@ -108,7 +108,7 @@ export interface LeadRow {
   updated_at: string;
 }
 
-// Editor is either closed or opened on an existing row. No "create" mode —
+// Editor is either closed or opened on an existing row. No "create" mode
 // leads only ever come in via the public form.
 type EditorState = null | { lead: LeadRow };
 
@@ -215,12 +215,12 @@ const AdminLeads = ({ adminPassword, adminLevel }: Props) => {
   };
 
   // Summary counts for the subtitle line. "N new" is the most useful
-  // signal — everything else is background.
+  // signal, everything else is background.
   const newCount = items ? items.filter((r) => r.status === 'new').length : 0;
 
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header — same shape as AdminReviews (kicker + H1 + subtitle +
+      {/* Header, same shape as AdminReviews (kicker + H1 + subtitle +
           refresh IconButton). No "+ New" CTA because leads only arrive
           via the public form. */}
       <Flex align="flex-end" justify="space-between" mb={{ base: 5, md: 8 }} gap={3}>
@@ -250,7 +250,7 @@ const AdminLeads = ({ adminPassword, adminLevel }: Props) => {
 
         <HStack spacing={2} flexShrink={0}>
           {/* The page is super-only now; export is the reason the data is
-              kept at all. Client-side on purpose — the rows are already
+              kept at all. Client-side on purpose, the rows are already
               loaded, and a CSV needs no thirteenth serverless function. */}
           <IconButton
             aria-label={t.leads.exportAria}
@@ -439,7 +439,7 @@ function LeadCard({
 
         {/* Visual "drill in" affordance. Was previously a real Edit
             CTAButton inside this same card <button>, which is invalid
-            HTML (button-in-button — flagged by adversarial review, was
+            HTML (button-in-button, flagged by adversarial review, was
             triggering React validateDOMNesting warnings and confusing
             screen readers). The whole card is already clickable + has
             a hover state, so the chevron is enough visual signal that
@@ -486,7 +486,7 @@ function LeadEditorModal({
 
   // Normalize the current form state to compare against what the
   // server sent us. Notes get trimmed here the same way the server
-  // will normalize them on save — so leading/trailing whitespace in
+  // will normalize them on save, so leading/trailing whitespace in
   // the input doesn't fake-out the dirty check.
   const normalizedNotes = notes.trim() || null;
   const dirtyStatus = status !== lead.status;
@@ -495,7 +495,7 @@ function LeadEditorModal({
   // If Vero flips status past 'new' (i.e. she has actually done something
   // about this lead) and contacted_at hasn't been set yet, stamp NOW()
   // server-side so we have an "acted at" timestamp for later analytics
-  // ("average lead response time"). Once set, we don't overwrite it —
+  // ("average lead response time"). Once set, we don't overwrite it
   // and the server-side COALESCE guard in _leads-update.ts enforces
   // that invariant on the race case.
   const shouldStampContactedAt =
@@ -511,7 +511,7 @@ function LeadEditorModal({
     try {
       // Send ONLY the fields the user actually changed. The server's
       // COALESCE / CASE-WHEN-provided branches then leave the untouched
-      // fields alone — so two tabs racing (Tab A flips status, Tab B
+      // fields alone, so two tabs racing (Tab A flips status, Tab B
       // adds notes) both commit their intended edit without stomping
       // the other's field. Without this, we send both fields on every
       // save and the later tab reverts whatever the earlier one
@@ -544,7 +544,7 @@ function LeadEditorModal({
   };
 
   // mailto: subject mirrors the auto-reply subject line so Gmail threads
-  // together (subject-based threading — RFC 5322 References would be
+  // together (subject-based threading, RFC 5322 References would be
   // cleaner but the customer's mail client won't have that header on the
   // outbound reply since we're not composing in-app).
   const mailtoHref = buildMailto(lead);
@@ -558,7 +558,7 @@ function LeadEditorModal({
       // Lock the modal while a save is in flight. Otherwise Esc /
       // overlay-tap dismisses the editor mid-request but the parent
       // still gets an onSaved callback + toast when the fetch resolves,
-      // which is confusing ("I cancelled that — why did it save?").
+      // which is confusing ("I cancelled that, why did it save?").
       // Buttons in the footer are also isDisabled={saving}, so this
       // just closes the last two dismiss vectors.
       closeOnOverlayClick={!saving}
@@ -595,7 +595,7 @@ function LeadEditorModal({
           </Box>
         )}
 
-        {/* Header block — who + when + status. Not editable; that's the
+        {/* Header block, who + when + status. Not editable; that's the
             submitter's identity. */}
         <Box
           bg="brand.surface"
@@ -688,7 +688,7 @@ function LeadEditorModal({
           )}
         </VStack>
 
-        {/* Message body — indented like a quoted email, preserves line
+        {/* Message body, indented like a quoted email, preserves line
             breaks. Still immutable. */}
         {lead.message && (
           <Field label={t.leadsEditor.messageLabel}>
@@ -763,7 +763,7 @@ function LeadEditorModal({
           />
         </Field>
 
-        {/* Danger zone — superadmin-only, mirrors AdminReviewsEditor
+        {/* Danger zone, superadmin-only, mirrors AdminReviewsEditor
             + AdminJournalEditor. */}
         {adminLevel === 'super' && onRequestDelete && (
           <Box
@@ -985,7 +985,7 @@ function formatDateTime(iso: string): string {
 }
 
 // Coarse-grained relative time. Precise-to-the-minute isn't the point on
-// a lead card — "3 days ago" vs "2 days ago" is enough. For anything
+// a lead card, "3 days ago" vs "2 days ago" is enough. For anything
 // older than a month we show the actual date instead.
 function formatRelative(iso: string): string {
   const d = new Date(iso);
@@ -1006,7 +1006,7 @@ function buildMailto(lead: LeadRow): string {
   const subject = `Re: Your ${lead.shoot_type || 'Photography'} Inquiry`;
   // Per RFC 6068 the address must NOT be percent-encoded (the '@'
   // separator has to stay literal, and email local-parts are already
-  // valid mailto chars), and hfield values must use %20 for spaces —
+  // valid mailto chars), and hfield values must use %20 for spaces
   // NOT '+' (URLSearchParams' form-urlencoded convention). Gmail iOS
   // in particular decodes '+' as a literal '+' in the subject, which
   // would give us "Re:+Your+Portrait+Session+Inquiry" and break

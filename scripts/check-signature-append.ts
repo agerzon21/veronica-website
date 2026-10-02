@@ -11,7 +11,7 @@
  * the HTML body (built from the stripped text) carries none in the body
  * paragraphs.
  *
- * No DB, no network — pure functions only. Safe to run anywhere.
+ * No DB, no network, pure functions only. Safe to run anywhere.
  */
 import {
   appendSignatureText,
@@ -30,10 +30,10 @@ const count = (haystack: string, needle: string): number =>
 let failures = 0;
 const check = (note: string, cond: boolean, detail?: string) => {
   if (cond) {
-    console.log(`  ok — ${note}`);
+    console.log(`  ok, ${note}`);
   } else {
     failures++;
-    console.error(`  FAIL — ${note}${detail ? `\n    ${detail}` : ''}`);
+    console.error(`  FAIL, ${note}${detail ? `\n    ${detail}` : ''}`);
   }
 };
 
@@ -55,7 +55,7 @@ const check = (note: string, cond: boolean, detail?: string) => {
   check('round-tripped signed draft stays single-signed', twice === once, JSON.stringify(twice));
 }
 
-// 3. Model sign-off AND an old canonical signature stacked — both collapse.
+// 3. Model sign-off AND an old canonical signature stacked, both collapse.
 {
   const body = `Hi there!\n\nWarmly,  \nVeronika\nVero Photography\n\n-- \n${SIG}`;
   const out = appendSignatureText(body, SIG);
@@ -91,7 +91,7 @@ const check = (note: string, cond: boolean, detail?: string) => {
 }
 
 // 8. HTML path: built from the STRIPPED body, so the model's sign-off must
-//    not appear in the paragraphs — only the signature block carries it.
+//    not appear in the paragraphs, only the signature block carries it.
 {
   const body =
     'Looking forward to it!\n\nWarmly,  \nVeronika  \nVero Photography';

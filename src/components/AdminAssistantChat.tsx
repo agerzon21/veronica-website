@@ -27,7 +27,7 @@ import { useAdminLang, type AdminLang } from '../i18n/admin';
  * language toggle in the parent tab flips this to English so admins
  * helping her can chat in their own language. The assistant:
  *   - always knows what's in ai_context (loaded server-side each turn
- *     into the system prompt — no history-scrolling required)
+ *     into the system prompt, no history-scrolling required)
  *   - can look up + modify that knowledge base via tool calls
  *   - answers in the current UI language but stores English underneath
  *     for the customer-facing AI reply engine
@@ -38,11 +38,11 @@ import { useAdminLang, type AdminLang } from '../i18n/admin';
  *
  * Voice input: press-and-hold the mic button, speak in the current
  * language, release; the transcript populates the composer. Uses the
- * browser's built-in SpeechRecognition (Chrome/Safari) — no external
+ * browser's built-in SpeechRecognition (Chrome/Safari), no external
  * service. Recognition lang switches with the UI toggle.
  *
  * Chat history is intentionally NOT retranslated when the language
- * flips — previous turns stay in whatever language they were written
+ * flips, previous turns stay in whatever language they were written
  * in. Only NEW turns switch. Keeps things honest about what actually
  * happened + avoids a wonky retranslation UX.
  */
@@ -73,8 +73,8 @@ interface Props {
   seed?: { text: string; token: number } | null;
   /**
    * Fired when the assistant sends the reply itself, via its `send_reply`
-   * tool, rather than Vero sending from the draft card. Same end state — the
-   * message is out the door — so the refine session should end either way.
+   * tool, rather than Vero sending from the draft card. Same end state, the
+   * message is out the door, so the refine session should end either way.
    */
   onReplySent?: () => void;
   /**
@@ -163,12 +163,12 @@ const STRINGS: Record<AdminLang, Strings> = {
     loadingEmpty: '',
     emptyTitle: 'Твой личный ассистент готов',
     emptyDescription:
-      'Спрашивай о ценах, стиле, услугах, ответах клиентам — что знаешь, чего не знаешь, что добавить. Всё, что мы обсудим, ассистент запомнит.',
+      'Спрашивай о ценах, стиле, услугах, ответах клиентам, что знаешь, чего не знаешь, что добавить. Всё, что мы обсудим, ассистент запомнит.',
     suggestedPrompts: [
       'Что ты знаешь о моих ценах?',
       'Расскажи, какой у меня стиль общения с клиентами',
       'Добавь новую услугу: семейная фотосессия в студии за $400',
-      'Ответы AI слишком формальные — сделай их теплее',
+      'Ответы AI слишком формальные, сделай их теплее',
     ],
     quickActionsLabel: 'С чем помочь?',
     quickActions: [
@@ -194,7 +194,7 @@ const STRINGS: Record<AdminLang, Strings> = {
       },
     ],
     toastLabels: { created: 'Записал', updated: 'Обновил', deleted: 'Удалил' },
-    draftToastLabel: 'Черновик обновлён — вкладка «Ответ»',
+    draftToastLabel: 'Черновик обновлён, вкладка «Ответ»',
     errorReply: (detail) => `(Что-то пошло не так: ${detail})`,
     nothingRecorded: '(В карточку этого клиента ничего не записано.)',
     serverUnreachable: '(Не удалось связаться с сервером.)',
@@ -217,12 +217,12 @@ const STRINGS: Record<AdminLang, Strings> = {
     loadingEmpty: '',
     emptyTitle: 'Your personal assistant is ready',
     emptyDescription:
-      'Ask about pricing, style, services, client replies — what you know, what you don\'t, what to add. Anything we discuss, the assistant will remember.',
+      'Ask about pricing, style, services, client replies, what you know, what you don\'t, what to add. Anything we discuss, the assistant will remember.',
     suggestedPrompts: [
       'What do you know about my pricing?',
       'Tell me about my client communication style',
       'Add a new service: family studio session for $400',
-      'The AI replies feel too formal — make them warmer',
+      'The AI replies feel too formal, make them warmer',
     ],
     quickActionsLabel: 'What do you need?',
     quickActions: [
@@ -248,7 +248,7 @@ const STRINGS: Record<AdminLang, Strings> = {
       },
     ],
     toastLabels: { created: 'Saved', updated: 'Updated', deleted: 'Deleted' },
-    draftToastLabel: 'Draft updated — see the Reply tab',
+    draftToastLabel: 'Draft updated, see the Reply tab',
     errorReply: (detail) => `(Something went wrong: ${detail})`,
     // No worked example. This line shows up whenever the model claims a save
     // it did not make, which is often, and a sample price repeated down the
@@ -262,8 +262,8 @@ const STRINGS: Record<AdminLang, Strings> = {
 
 const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = null, seed = null, onReplySent, onDraftUpdated, onClientFactsRecorded }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // A conversation can hand a question over — "this draft isn't right,
-  // help me fix it" — by parking a prompt in sessionStorage and switching
+  // A conversation can hand a question over, "this draft isn't right,
+  // help me fix it", by parking a prompt in sessionStorage and switching
   // tabs. Read once on mount and clear, so it can't reappear later.
   // Prefills rather than sends: the prompt ends mid-sentence on purpose,
   // waiting for Vero to say what she'd change.
@@ -272,8 +272,8 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
 
   // The parked handoff prompt is consumed in an effect, not in the useState
   // initializer above. StrictMode double-invokes initializers: the first call
-  // read the key and removed it, and the second call — whose return value React
-  // actually keeps — found nothing, so the prompt silently vanished. An effect
+  // read the key and removed it, and the second call, whose return value React
+  // actually keeps, found nothing, so the prompt silently vanished. An effect
   // runs after the state is settled, and a StrictMode re-run finds the key
   // already gone and no-ops.
   //
@@ -311,7 +311,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   /**
    * The chat stays mounted across conversation switches, and the composer
    * used to load its text once, at mount. Switching Daria → Lorraine kept
-   * Daria's half-typed prompt on screen — and the save effect below, which
+   * Daria's half-typed prompt on screen, and the save effect below, which
    * was keyed on the scope too, then wrote Daria's text into LORRAINE's
    * saved slot, making the leak permanent. Each conversation's composer is
    * its own pocket: on a switch, what was typed is parked under the scope
@@ -491,7 +491,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
           setMessages(data.messages ?? []);
         }
       } catch {
-        // Silent — the empty state UI handles "no messages yet."
+        // Silent, the empty state UI handles "no messages yet."
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -512,7 +512,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     setLoading(true);
   }, [conversationId]);
 
-  // Chat scroll behavior — the first render after history loads
+  // Chat scroll behavior, the first render after history loads
   // should be scrolled to the TOP of whatever exists (so Vero sees
   // the greeting / suggested prompts / start of the conversation
   // instead of the tail end). After that, every new message /
@@ -768,7 +768,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   // (record via MediaRecorder → POST to /api/admin/transcribe →
   // OpenAI Whisper). The old browser-native SpeechRecognition flow
   // was fundamentally flaky on iOS Safari (per multiple debugging
-  // sessions) — Whisper is one HTTP round-trip and always works.
+  // sessions), Whisper is one HTTP round-trip and always works.
   // Handler just appends the transcript into the composer input.
   const handleTranscript = useCallback((text: string) => {
     setInput((prev) => (prev ? `${prev} ${text}` : text));
@@ -777,7 +777,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   return (
     <Flex
       direction="column"
-      // The chat itself is the ONLY thing that scrolls — the outer
+      // The chat itself is the ONLY thing that scrolls, the outer
       // flex is fixed-height so header + composer stay put on mobile.
       // dvh (dynamic viewport height) plays nicely with iOS Safari's
       // collapsing address bar. minH removed so small phones don't
@@ -788,14 +788,14 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
       px={embedded ? 2 : 0}
       overflow="hidden"
     >
-      {/* Header row — desktop shows the hint text; mobile keeps just
+      {/* Header row, desktop shows the hint text; mobile keeps just
           the reset icon so vertical space is preserved. Reset button
           is an icon-only 36×36 button (with tooltip) to save the
           full-line real estate the old label chip was eating. */}
       <Flex align="center" justify="space-between" mb={2} px={1} gap={2}>
-        {/* Quick actions + the hint share the left side, so on mobile —
+        {/* Quick actions + the hint share the left side, so on mobile
             where the hint is hidden and this row held nothing but the
-            right-aligned reset — the menu costs no extra vertical space.
+            right-aligned reset, the menu costs no extra vertical space.
             It used to sit on its own line above the composer, which on a
             phone was a whole row spent on one chip. */}
         <HStack spacing={3} minW={0}>
@@ -859,7 +859,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
           {/* Standalone tab only. Chakra breakpoints measure the VIEWPORT, not
               this column, so on a 1440px screen the `lg` hint still rendered
               inside a ~370px panel and shoved the quick-actions chip onto two
-              lines. The hint is redundant there anyway — the panel header
+              lines. The hint is redundant there anyway, the panel header
               already says what the panel is. */}
           {!embedded && (
             <Text
@@ -939,7 +939,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         )}
       </Box>
 
-      {/* Composer — textarea gets its own row on mobile so it isn't
+      {/* Composer, textarea gets its own row on mobile so it isn't
           crushed to ~230px alongside the mic + send buttons. Mic is
           rendered as icon-only always; Send is icon-only on mobile
           (to keep the row balanced) and CTA-labeled on desktop. */}
@@ -971,14 +971,14 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
         bg="white"
         flexShrink={0}
       >
-        {/* Chakra breakpoints measure the VIEWPORT, not this container — so
+        {/* Chakra breakpoints measure the VIEWPORT, not this container, so
             inside the 420px refine panel on a 1440px screen the composer was
             still using the desktop ROW layout and the textarea collapsed to
             181px (measured). Embedded always stacks, so the field gets the
             panel's full width. */}
         {/* Embedded from lg up: field on the left, send stacked over mic in a
-            narrow right column. The previous shape — field, then a button row
-            beneath it — left that whole row mostly empty however the button
+            narrow right column. The previous shape, field, then a button row
+            beneath it, left that whole row mostly empty however the button
             was sized, which is the "wasted space" this replaces. Below lg the
             panel is full-screen and the stacked shape is right. */}
         <Stack
@@ -992,7 +992,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
             placeholder={t.placeholder}
             // Was rows={2}: about two lines visible, which is unusable when
             // drafting a client reply. Height is driven by minH rather than
-            // rows so the two viewports can differ — the chat root is a FIXED
+            // rows so the two viewports can differ, the chat root is a FIXED
             // height on mobile (calc(100dvh - 260px)), so every pixel the
             // composer takes comes straight out of the message list. Desktop
             // has the room; a phone does not.
@@ -1038,7 +1038,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
           />
           {/* Mic + send row. Mic uses the shared VoiceInput component
               which records via MediaRecorder and posts to OpenAI
-              Whisper on release — much more reliable than the
+              Whisper on release, much more reliable than the
               browser's SpeechRecognition API on iOS Safari. */}
           {/* alignSelf, not just justify: the parent column stack stretches its
               children, so this row filled the panel and the send button grew
@@ -1048,8 +1048,8 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
               whatever the mic does not, because a hugging button left two
               thirds of the row as dead space. From lg up the panel is a
               420px column beside the thread, where a full-width send button
-              is the thing that looks wrong — so it hugs there instead. */}
-          {/* Desktop panel: a narrow icon column beside the field — send on the
+              is the thing that looks wrong, so it hugs there instead. */}
+          {/* Desktop panel: a narrow icon column beside the field, send on the
               top two thirds, mic on the bottom third, both icon-only. A labelled
               send button was long and thin while the mic looked oversized for
               something rarely used on a keyboard; dropping the labels gives the
@@ -1108,7 +1108,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
             still left it on screen, and it was never worth a row directly
             above the send button: it documented a shortcut that does not
             exist on a phone and that nobody needs told twice on a desktop.
-            The shortcut itself still works — see the Textarea's onKeyDown. */}
+            The shortcut itself still works, see the Textarea's onKeyDown. */}
       </Box>
     </Flex>
   );
@@ -1296,7 +1296,7 @@ const TOAST_META: Record<DbWrite['type'], { icon: typeof FaPlus }> = {
   deleted: { icon: FaTrash },
 };
 
-// (Old Web Speech API type declarations lived here — no longer
+// (Old Web Speech API type declarations lived here, no longer
 // needed now that voice input goes through Whisper via <VoiceInput>.)
 
 export default AdminAssistantChat;

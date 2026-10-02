@@ -2,7 +2,7 @@
  * Admin: generate an AI-powered summary of a conversation so Vero
  * can glance at the top of a thread and immediately know what the
  * customer is asking about, what info's been gathered, whether it's
- * even worth her time, and what her next step should be — without
+ * even worth her time, and what her next step should be, without
  * reading the full message history.
  *
  * POST { password, conversationId, force? }
@@ -13,7 +13,7 @@
  *   → 502 upstream OpenAI error
  *
  * `cached: true` in the response means we hit the DB cache (no
- * OpenAI call, instant) — the frontend can use this if it ever
+ * OpenAI call, instant), the frontend can use this if it ever
  * wants to show "cached / regenerated" state; for now it's
  * informational.
  *
@@ -28,17 +28,17 @@
  * outbound one from Vero / the AI), we regenerate. Same message
  * id = safe to serve cache.
  *
- * `classification` — one of booking-inquiry, existing-client,
+ * `classification`, one of booking-inquiry, existing-client,
  *              general-question, collaboration-offer, personal, spam-or-unrelated,
  *              unclear. Lets Vero see at a glance whether to engage.
- * `asking` — one sentence: what the customer is fundamentally asking for
- * `gathered` — array of specific facts the customer has shared (dates,
+ * `asking`, one sentence: what the customer is fundamentally asking for
+ * `gathered`, array of specific facts the customer has shared (dates,
  *              locations, session types, headcounts, styles they like,
- *              constraints, etc.) — empty array if nothing specific yet
- * `nextStep` — one sentence: what Vero should do next (confirm date,
+ *              constraints, etc.), empty array if nothing specific yet
+ * `nextStep`, one sentence: what Vero should do next (confirm date,
  *              send package options, ask a specific missing question,
  *              or ignore if spam)
- * `tone` — one word describing the customer's energy (enthusiastic,
+ * `tone`, one word describing the customer's energy (enthusiastic,
  *          hesitant, price-sensitive, casual, urgent, formal)
  */
 
@@ -139,7 +139,7 @@ interface LocalizedSummary {
   gathered: string[];
   /** Gaps only the customer can fill. */
   missing: string[];
-  /** Gaps Vero fills herself — the price and the retainer. */
+  /** Gaps Vero fills herself, the price and the retainer. */
   decide: string[];
   nextStep: string;
 }
@@ -153,7 +153,7 @@ interface LocalizedSummary {
  *
  * `gathered` and `missing` used to be two independent free-text lists from one
  * pass, with nothing tying them together, so the model could contradict
- * itself — and did: one summary listed "Client name: Daria Klabun" and
+ * itself, and did: one summary listed "Client name: Daria Klabun" and
  * "Groom's name: Tufan Akshahin" under gathered while simultaneously asking
  * for both under missing, having decided a name in a chat was not a "full
  * legal name". No prompt wording makes that reliably impossible.
@@ -189,8 +189,8 @@ export interface BookingFields {
   session_scope: string | null;
   /**
    * Verbatim source sentences for the two values that cost money to get
-   * wrong. Real threads renegotiate — one in this inbox contains $1,000,
-   * $1,400 and $2,000 — so the form shows Vero what a figure came from
+   * wrong. Real threads renegotiate, one in this inbox contains $1,000,
+   * $1,400 and $2,000, so the form shows Vero what a figure came from
    * instead of silently filling in a number.
    */
   total_amount_quote: string | null;
@@ -274,7 +274,7 @@ function readDurations(src: unknown): DurationStatement[] {
  * conflate. Only the customer can say when the wedding is or how to spell her
  * partner's surname. The price and the retainer are Vero's own decisions, and
  * showing them under a heading that reads as "ask them for this" produced
- * advice like "ask Daria for the amount of the advance payment" — telling a
+ * advice like "ask Daria for the amount of the advance payment", telling a
  * photographer to ask a client what deposit she would like to be charged.
  *
  * `types` replaced a single couple-only flag once there were six contracts
@@ -373,7 +373,7 @@ interface Summary {
   classification: Classification;
   tone: string;
   // Bilingual copies. Old cached rows (pre-migration) still contain
-  // flat `asking` / `gathered` / `nextStep` fields — we keep those
+  // flat `asking` / `gathered` / `nextStep` fields, we keep those
   // as optional so the frontend can fall back if `en`/`ru` are
   // missing on an old row.
   en: LocalizedSummary;
@@ -384,7 +384,7 @@ interface Summary {
   // Which generation of the summariser wrote this row. Absent on every row
   // written before it existed, which is what retires them.
   summaryVersion?: number;
-  // Legacy fields — populated on old cache rows, unused on new ones.
+  // Legacy fields, populated on old cache rows, unused on new ones.
   // Kept in the type so the JSON round-trip stays lossless.
   asking?: string;
   gathered?: string[];
@@ -451,13 +451,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Cache hit — nothing new since the last summary, no force flag, and the
+    // Cache hit, nothing new since the last summary, no force flag, and the
     // cached row was written by this version of the summariser.
     //
     // That last condition matters. Summaries cached before `booking` existed
     // carry a "Still needed" list the MODEL wrote as free text, which is
     // exactly the thing that used to contradict the facts listed right above
-    // it — one row named the client and her partner as gathered facts and then
+    // it, one row named the client and her partner as gathered facts and then
     // asked for both again. Those rows are otherwise immortal: a summary is
     // only rebuilt when a new message arrives, so a settled thread would show
     // the old contradictory list indefinitely. Treating a row with no
@@ -507,7 +507,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Persist so the next request hits cache. If the latest message
     // id changed BETWEEN the SELECT above and this UPDATE (very
-    // narrow race), we just cache with the older id — the next
+    // narrow race), we just cache with the older id, the next
     // request notices and regenerates. Not worth locking.
     await sql`
       UPDATE conversations
@@ -518,7 +518,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         -- A thread the classifier calls spam-or-unrelated should not get
         -- AI replies. Without this the assistant was drafting warm
         -- replies to marketing blasts, and those drafts surfaced as the
-        -- inbox preview — making a thread Vero had never opened look
+        -- inbox preview, making a thread Vero had never opened look
         -- like she had answered it.
         --
         -- Deliberately one-way: promotional switches AI OFF, but a
@@ -547,7 +547,7 @@ async function generateSummary(
   const client = getOpenAI();
 
   // Business timezone, not UTC. Vercel runs UTC, so on a weekday evening in ET
-  // `toISOString()` is already tomorrow — enough to push a bare "the 12th" into
+  // `toISOString()` is already tomorrow, enough to push a bare "the 12th" into
   // the wrong month at a boundary.
   const dayOf = (d: Date | string) =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(d));
@@ -587,14 +587,14 @@ Today is ${dayOf(new Date())}. Every transcript line is prefixed with the date t
 
 Return a JSON object with EXACTLY these keys:
 - "classification": one string, EXACTLY one of:
-    * "booking-inquiry" — real photography client asking about pricing/availability/sessions/weddings
-    * "existing-client" — someone Vero is already working with (references a past shoot, a scheduled event, a delivered gallery, or is following up on something Vero personally started)
-    * "general-question" — genuine but non-booking (e.g. asking about her camera gear, admiring her work with no ask)
-    * "collaboration-offer" — a legitimate creative/brand collab proposal (rare — most "collab" DMs are actually spam)
-    * "personal" — a friend or acquaintance writing to Vero as a person: a social invitation, plans, catching up, personal chat. Warm and specific to her as a human rather than as a business. This is NOT spam — do not label a friend spam.
-    * "spam-or-unrelated" — solicitation, sales pitch, agency outreach (web design, SEO, marketing services, "your website is outdated", "we can help you"), crypto/investment, unrelated to photography, or template mass-DM. When in doubt between this and collaboration-offer, prefer this — real collabs are extremely rare.
-    * "unclear" — you genuinely cannot tell (e.g. just "hey" with no prior context)
-Fill "booking" BEFORE writing "gathered" — decide the facts first, then describe them. If a detail belongs in "gathered" while its key is still null, the NULL is the mistake: go back and fill the key. Never resolve the disagreement by dropping the fact from "gathered", which would hide the error rather than fix it.
+    * "booking-inquiry", real photography client asking about pricing/availability/sessions/weddings
+    * "existing-client", someone Vero is already working with (references a past shoot, a scheduled event, a delivered gallery, or is following up on something Vero personally started)
+    * "general-question", genuine but non-booking (e.g. asking about her camera gear, admiring her work with no ask)
+    * "collaboration-offer", a legitimate creative/brand collab proposal (rare, most "collab" DMs are actually spam)
+    * "personal", a friend or acquaintance writing to Vero as a person: a social invitation, plans, catching up, personal chat. Warm and specific to her as a human rather than as a business. This is NOT spam, do not label a friend spam.
+    * "spam-or-unrelated", solicitation, sales pitch, agency outreach (web design, SEO, marketing services, "your website is outdated", "we can help you"), crypto/investment, unrelated to photography, or template mass-DM. When in doubt between this and collaboration-offer, prefer this, real collabs are extremely rare.
+    * "unclear", you genuinely cannot tell (e.g. just "hey" with no prior context)
+Fill "booking" BEFORE writing "gathered", decide the facts first, then describe them. If a detail belongs in "gathered" while its key is still null, the NULL is the mistake: go back and fill the key. Never resolve the disagreement by dropping the fact from "gathered", which would hide the error rather than fix it.
 
 - "tone": ONE WORD (English) describing the customer's tone. Options: enthusiastic, hesitant, curious, decisive, casual, formal, urgent, price-sensitive, promotional (for spam/agency pitches), unclear.
 - "booking": an object holding the details needed to write a contract and open a client portal. This is DATA, not prose: do not translate it, do not add commentary, do not write "unknown" or "TBD". Every key below MUST be present.
@@ -626,14 +626,14 @@ Fill "booking" BEFORE writing "gathered" — decide the facts first, then descri
   "gathered" and this object are the same facts read two ways, so they can never disagree. Every fact you put in "gathered" must appear in its matching key here, and every key here that carries a value, including a "session_durations" list with anything in it, must show up in "gathered". If you are about to write a detail into "gathered" while its key is still null, the key is what is wrong: go back and fill it.
 
 - "en": an object with:
-    - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry — nothing specific asked yet." If spam, describe what they're pitching.
-    - "gathered": array of concrete facts ESTABLISHED ANYWHERE IN THIS THREAD, in English, no matter who said them. Include what the customer shared AND what Vero quoted or committed to — a price Vero gave IS a gathered fact and is one of the most important ones. Cover: session type, event date, event time or coverage hours, location, headcount, the price/total quoted, any retainer or deposit, what's included, full names, email addresses, phone numbers, deadlines, styles and constraints. Where a number came from Vero rather than the customer, say so plainly, e.g. "Price quoted: $500 for 3 hours (quoted by Vero)". If the same thing was said more than once with different values, give the MOST RECENT and note it changed, e.g. "Price quoted: $1,400 (revised from $1,000)". If a price was CONDITIONAL on something, say what on and name the other figure too, e.g. "Price quoted: $400 at Malcolm Gross Rose Garden, or $450 for a location about 2 hours away (quoted by Vero)". A bare "$400" there is how Vero reads a summary, decides it has lost the second number, and stops trusting the panel. Empty array if nothing concrete or if it's spam. Format phone numbers with proper grouping like "(555) 123-4567" — never as one long digit string.
-    - "nextStep": one English sentence — what should Vero do next. If details are still needed from the customer before a contract could be written, say which ones to ask for. NEVER suggest asking the customer for the price or the retainer/deposit amount: those are Vero's to set, and asking a client what she would like to be charged reads as amateurish. If the only thing outstanding is a figure Vero has not named yet, tell her to decide and quote it, not to ask.
+    - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry, nothing specific asked yet." If spam, describe what they're pitching.
+    - "gathered": array of concrete facts ESTABLISHED ANYWHERE IN THIS THREAD, in English, no matter who said them. Include what the customer shared AND what Vero quoted or committed to, a price Vero gave IS a gathered fact and is one of the most important ones. Cover: session type, event date, event time or coverage hours, location, headcount, the price/total quoted, any retainer or deposit, what's included, full names, email addresses, phone numbers, deadlines, styles and constraints. Where a number came from Vero rather than the customer, say so plainly, e.g. "Price quoted: $500 for 3 hours (quoted by Vero)". If the same thing was said more than once with different values, give the MOST RECENT and note it changed, e.g. "Price quoted: $1,400 (revised from $1,000)". If a price was CONDITIONAL on something, say what on and name the other figure too, e.g. "Price quoted: $400 at Malcolm Gross Rose Garden, or $450 for a location about 2 hours away (quoted by Vero)". A bare "$400" there is how Vero reads a summary, decides it has lost the second number, and stops trusting the panel. Empty array if nothing concrete or if it's spam. Format phone numbers with proper grouping like "(555) 123-4567", never as one long digit string.
+    - "nextStep": one English sentence, what should Vero do next. If details are still needed from the customer before a contract could be written, say which ones to ask for. NEVER suggest asking the customer for the price or the retainer/deposit amount: those are Vero's to set, and asking a client what she would like to be charged reads as amateurish. If the only thing outstanding is a figure Vero has not named yet, tell her to decide and quote it, not to ask.
 - "ru": an object with the SAME keys ("asking", "gathered", "nextStep") but in RUSSIAN. Preserve phone-number formatting, proper names, and specific dates/times unchanged (e.g. "9:30am" stays "9:30am", "Bushkill Falls" stays "Bushkill Falls").
 
-Reply with ONLY the JSON object — no preamble, no markdown code fences, no explanation.
+Reply with ONLY the JSON object, no preamble, no markdown code fences, no explanation.
 
-Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026". If the customer said "next weekend" don't try to convert it — write it as they said it.`;
+Facts and dates should be short, "Aug 12, 2026" not "the 12th of August 2026". If the customer said "next weekend" don't try to convert it, write it as they said it.`;
 
   const response = await client.chat.completions.create({
     model: MODEL,
@@ -750,7 +750,7 @@ Facts and dates should be short — "Aug 12, 2026" not "the 12th of August 2026"
   const ru = readLocale(
     parsed.ru,
     // If the model failed to give us Russian, fall back to the
-    // English copy rather than empty — better than nothing.
+    // English copy rather than empty, better than nothing.
     en.asking,
     en.nextStep,
   );

@@ -56,7 +56,7 @@ const ThankYou = () => {
   // Resolved ONCE on mount via useState's lazy initializer so later renders
   // can't flip the answer out from under the rendered content.
   //
-  // The sessionStorage marker no longer guards a network call — Contact.tsx
+  // The sessionStorage marker no longer guards a network call, Contact.tsx
   // performs the submission before navigating here. It exists purely so a
   // back-navigation doesn't re-fire the Google Ads conversion event and
   // inflate lead counts.
@@ -83,7 +83,7 @@ const ThankYou = () => {
   );
 
   // Poll Resend until the recipient's mail server actually accepts the
-  // message. Restored from commit a0014d6 — it was disabled the day it
+  // message. Restored from commit a0014d6, it was disabled the day it
   // shipped because RESEND_API_KEY was sending-access and every read
   // returned a permission error, so the page fell back to a 10-second
   // timer and told customers "Confirmation Sent" on faith. The key is
@@ -118,7 +118,7 @@ const ThankYou = () => {
 
       if (status === 'delivered') return setAutoReplyStatus('delivered');
       if (status && TERMINAL_FAILURES.includes(status)) return setAutoReplyStatus('failed');
-      // queued / sent / delayed / unknown — still in transit. After the
+      // queued / sent / delayed / unknown, still in transit. After the
       // window, stop waiting and say so honestly rather than showing a
       // green state we haven't earned.
       if (Date.now() - startedAt >= MAX_WAIT_MS) return setAutoReplyStatus('pending');

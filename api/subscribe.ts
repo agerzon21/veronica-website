@@ -9,7 +9,7 @@
  * Generates a unique 10% discount code per email, stores the subscriber in
  * Neon, and fires a one-time welcome email with the code. If the email is
  * already in the table (unique constraint), we return success silently
- * without sending a duplicate email — prevents discount-code farming.
+ * without sending a duplicate email, prevents discount-code farming.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
 
     // Try insert. ON CONFLICT lets us handle the duplicate-email case cleanly
-    // in a single round trip — no race condition between SELECT and INSERT.
+    // in a single round trip, no race condition between SELECT and INSERT.
     const discountCode = generateDiscountCode();
     const inserted = (await sql`
       insert into subscribers (email, source, discount_code)
@@ -59,13 +59,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as ExistingRow[];
 
     if (inserted.length === 0) {
-      // Already subscribed — do NOT re-fire the welcome email (anti-abuse).
+      // Already subscribed, do NOT re-fire the welcome email (anti-abuse).
       return res.status(200).json({ success: true, alreadySubscribed: true });
     }
 
     // Mirrors api/contact.ts behavior exactly: await the email send and
     // return 500 if it fails. Vercel serverless suspends the function once
-    // res.send() runs — fire-and-forget promises never complete, which is
+    // res.send() runs, fire-and-forget promises never complete, which is
     // why the previous version's emails silently never went out even though
     // the popup said "You're in". The popup catches non-200 responses and
     // displays an error so the user can retry.

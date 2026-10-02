@@ -10,7 +10,7 @@ import { hashPortalPassword } from './_password.js';
  *   → 400 missing fields or password too short
  *   → 401 token unknown, already used, or expired
  *
- * The token IS the authentication — same model as the setup_token in
+ * The token IS the authentication, same model as the setup_token in
  * _welcome-complete.ts. Possession of a 32-byte random value that we only ever
  * sent to the address on the account is treated as proof of control of that
  * address.
@@ -21,7 +21,7 @@ import { hashPortalPassword } from './_password.js';
  * link expired needs to be told that rather than left guessing why nothing
  * happened.
  *
- * The token is single-use — cleared in the same UPDATE that sets the password,
+ * The token is single-use, cleared in the same UPDATE that sets the password,
  * so a leaked link in a mail archive cannot be replayed later.
  *
  * Returns the email so the UI can drop the client straight into the portal with
@@ -42,8 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   //
   // Login trims (api/portal/_client.ts:75) and so does the change-password
   // form, but these two set-a-password paths stored the raw value. A password
-  // ending in a space — a paste, or a mobile keyboard adding one after
-  // autocomplete — was therefore hashed WITH the space and compared WITHOUT it,
+  // ending in a space, a paste, or a mobile keyboard adding one after
+  // autocomplete, was therefore hashed WITH the space and compared WITHOUT it,
   // so it could never sign in. The client sees "Incorrect email or password"
   // for the password they just chose.
   //
@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
 
-    // Look up by the HASH — the raw token is never stored.
+    // Look up by the HASH, the raw token is never stored.
     const rows = (await sql`
       SELECT id, client_email, reset_token_expires_at
       FROM client_portals

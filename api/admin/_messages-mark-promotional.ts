@@ -9,7 +9,7 @@
  *
  * Folds the thread out of the main inbox list. Because email
  * conversations are keyed on the sender's address, this also covers
- * everything that sender writes in future — their next message routes
+ * everything that sender writes in future, their next message routes
  * into this same row, which is already marked.
  *
  * Marking also switches the AI off for the thread. There is no value in
@@ -17,8 +17,8 @@
  * visible in the inbox preview, which made a thread Vero had never
  * opened look like she had answered it.
  *
- * Unmarking sets FALSE — an explicit "show this", which overrides an AI
- * classification that would otherwise keep folding the thread — and
+ * Unmarking sets FALSE, an explicit "show this", which overrides an AI
+ * classification that would otherwise keep folding the thread, and
  * switches the AI back on, since un-hiding is a statement that the
  * thread is real.
  */
@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
 
-    // FALSE is an explicit "show this", not an absence of opinion — it
+    // FALSE is an explicit "show this", not an absence of opinion, it
     // has to override an auto-classification that would otherwise keep
     // folding the thread. NULL means "no opinion, let the classifier
     // decide" and is only ever set by migration 022.

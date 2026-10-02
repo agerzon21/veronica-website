@@ -17,7 +17,7 @@ import { PAYMENT_HANDLES, CARD_PAYMENTS_MODE } from '../data/payment-handles';
  */
 const ZELLE_PHONE = PAYMENT_HANDLES.zelle;
 
-// Zelle wordmark logo (official purple, from Wikimedia Commons — public domain)
+// Zelle wordmark logo (official purple, from Wikimedia Commons, public domain)
 const ZelleLogo = ({ width = 120 }: { width?: number }) => (
   <svg width={width} height={width * 0.527} viewBox="0 0 1200 633" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
     <rect height="100%" width="100%" fill="#6c1cd3" rx="80" />
@@ -120,7 +120,7 @@ const Pay = () => {
                     <Text textStyle="metaCaption">Phone Number</Text>
                     {/* Deliberately NOT a textStyle. This is a number to be
                         read off the screen and retyped into a banking app, and
-                        no token covers "large data value" — the display tokens
+                        no token covers "large data value", the display tokens
                         are all Cormorant, whose lining figures are harder to
                         tell apart at a glance (5/6/8/9) than the body sans. */}
                     <Text

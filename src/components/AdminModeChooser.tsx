@@ -79,7 +79,7 @@ function Card({
       cursor="pointer"
       transition="all 0.2s"
       // Touch devices trigger `:hover` on tap and get stuck in the lifted
-      // state until the next tap elsewhere — gate the lift behind a real
+      // state until the next tap elsewhere, gate the lift behind a real
       // hover-capable pointer, and pair it with an explicit press state.
       _active={{ borderColor: 'brand.accent', bg: 'rgba(201, 169, 110, 0.06)' }}
       sx={{

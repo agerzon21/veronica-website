@@ -1,5 +1,5 @@
 /**
- * Vero's email signature — loaded from system_state, appended to
+ * Vero's email signature, loaded from system_state, appended to
  * outbound mail sent from the admin panel.
  *
  * Lives in the DB rather than a constant so Veronika can edit it from
@@ -7,7 +7,7 @@
  * same wording the contact-form auto-reply already uses, so mail sent
  * from the panel reads identically to what clients already receive.
  *
- * Only applied to the EMAIL channel. Instagram DMs get no signature —
+ * Only applied to the EMAIL channel. Instagram DMs get no signature
  * signing a DM reads as automated, and the handle is already visible.
  *
  * Failure posture: a missing or unreadable signature must never block a
@@ -50,7 +50,7 @@ export async function loadSignature(): Promise<EmailSignature> {
 
     const byKey = new Map(rows.map((r) => [r.key, r.value]));
     // An empty-string value is a deliberate "no signature" choice by
-    // Vero and must be respected — only null/undefined falls back.
+    // Vero and must be respected, only null/undefined falls back.
     const text = byKey.get(SIGNATURE_KEY_TEXT);
     const html = byKey.get(SIGNATURE_KEY_HTML);
     return {
@@ -68,7 +68,7 @@ export async function loadSignature(): Promise<EmailSignature> {
  * LF, and strip trailing whitespace from every line. The AI writes its
  * sign-offs with Markdown's two-trailing-space line breaks ("Warmly,  \n"),
  * which is invisible in any mail client but defeated the old exact
- * endsWith check — that mismatch is how a client received the signature
+ * endsWith check, that mismatch is how a client received the signature
  * twice. Per-line trailing whitespace carries no meaning in email text,
  * so normalizing the whole outbound body is safe.
  */
@@ -189,7 +189,7 @@ export function appendSignatureText(body: string, signature: string): string {
  * as escaped HTML with line breaks preserved, followed by the signature
  * block.
  *
- * The composer is a plain textarea — Vero types text, not markup — so
+ * The composer is a plain textarea, Vero types text, not markup, so
  * this ESCAPES her input. Without that, a client whose name contains
  * `<` or an ampersand in a URL would produce broken or (worse)
  * injectable markup in the delivered email.

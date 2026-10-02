@@ -10,12 +10,12 @@
  *   1. Check global kill switch (system_state.messaging_ai_state)
  *   2. Check per-conversation ai_enabled toggle
  *   3. Check dedup: any outbound msg after this inbound already?
- *      (auto-send channels only — see note in the code)
+ *      (auto-send channels only, see note in the code)
  *   4. Check rate limit: any AI msg from us in the last 5 min?
  *      (auto-send channels only)
  *   5. Detect booking COMMITMENT (deposit/contract/"book it") → send
  *      bridge, disable AI, done. Pricing questions and date mentions
- *      deliberately do NOT bridge — they go to the model.
+ *      deliberately do NOT bridge, they go to the model.
  *   6. Detect spam (last 3 inbounds too similar) → send bridge, disable AI, done
  *   7. Detect wrap-up trigger (>= MAX_AI_MSGS AI replies already)
  *      → send wrap-up handoff, disable AI, done
@@ -33,7 +33,7 @@
  * only what is genuinely unsafe. They previously banned quoting any
  * price and making any suggestion, which meant the pricing Vero had
  * carefully entered could never be used, and no amount of coaching
- * through the Assistant tab could change it — her edits land in
+ * through the Assistant tab could change it, her edits land in
  * ai_context, which the hardcoded rules overrode. If Vero is asking
  * for behavior the rails prohibit, the rails are what need revisiting.
  */
@@ -50,7 +50,7 @@ import { getDb } from './_db.js';
 import { sendIgTextMessage } from './_ig-send.js';
 
 // GPT-4o-mini is fast, cheap, and plenty smart for concierge-style
-// short replies. ~$0.15/1M input tokens, ~$0.60/1M output — a typical
+// short replies. ~$0.15/1M input tokens, ~$0.60/1M output, a typical
 // reply is well under a cent.
 const OPENAI_MODEL = 'gpt-4o-mini';
 
@@ -83,11 +83,11 @@ const MIN_GAP_MS_BETWEEN_AI = 60_000; // 60 seconds
 const HISTORY_CONTEXT_MESSAGES = 30;
 
 /**
- * COMMITMENT keywords only — the point where money or a firm date is
+ * COMMITMENT keywords only, the point where money or a firm date is
  * actually being locked in, which Vero must handle herself.
  *
  * Deliberately much narrower than it used to be. The old list included
- * 'price', 'cost', 'how much', 'rate', 'package', 'available' — i.e. the
+ * 'price', 'cost', 'how much', 'rate', 'package', 'available', i.e. the
  * ordinary questions every prospective client opens with. Bridging those
  * meant the assistant refused to answer exactly the questions Vero had
  * loaded pricing data into the knowledge base to answer, and then
@@ -107,7 +107,7 @@ const BOOKING_INTENT_KEYWORDS = [
   'оплатить', 'оплата', 'внести',
 ];
 
-// Date pattern regex — catches month names, ISO dates, "the 12th",
+// Date pattern regex, catches month names, ISO dates, "the 12th",
 // "next weekend", "this saturday", etc.
 //
 // No longer a bridge trigger. A date mention is ordinary in a first
@@ -130,11 +130,11 @@ const DATE_INTENT_PATTERNS: RegExp[] = [
 ];
 
 // Agency / solicitation / spam patterns. These are the sales pitches
-// that flood every creator's DMs — web design agencies claiming her
+// that flood every creator's DMs, web design agencies claiming her
 // site is "outdated", SEO shops, marketing services, crypto pitches,
 // bogus "collab" offers with a link. The right response is SILENCE:
 // no reply, no bridge (which would just confirm the account is live
-// and hand them a target). Match is broad-and-generous on purpose —
+// and hand them a target). Match is broad-and-generous on purpose
 // false positives here are extremely cheap (Vero can toggle AI back
 // on and reply manually if she wants) while false negatives are the
 // context-deaf "great! for pricing…" reply that embarrasses her.
@@ -147,7 +147,7 @@ const SPAM_SOLICITATION_PATTERNS: RegExp[] = [
   // Agency / service selling ("we specialize in", "we help X grow", "we design")
   /\bwe (specialize|specialise) in\b/i,
 
-  // FREELANCER pitches — the same solicitation in the first person.
+  // FREELANCER pitches, the same solicitation in the first person.
   // Every pattern here used to assume "we", so a solo editor writing
   // "Hello! I'm a professional photo editor, I specialize in colour
   // correction..." sailed straight through. That flavor is the single
@@ -164,7 +164,7 @@ const SPAM_SOLICITATION_PATTERNS: RegExp[] = [
   /\bwe (are|are a|are an)\s+\w+\s+(agency|studio|team|company|firm)/i,
   /\bour (agency|studio|team|portfolio|services|clients?|work)\b/i,
 
-  // "Just reply YES / reply DM for X" — classic mass-DM CTA
+  // "Just reply YES / reply DM for X", classic mass-DM CTA
   /\b(just )?reply ["']?(yes|y|dm|info|more|details)["']?\b/i,
   /\bcomment ["']?(yes|info|more|details)["']?\b/i,
 
@@ -177,7 +177,7 @@ const SPAM_SOLICITATION_PATTERNS: RegExp[] = [
   /\b(crypto|bitcoin|forex|trading|investment opportunity|passive income|financial freedom)\b/i,
   /\b(earn|make) \$?\d+.*\b(per|a|\/) ?(day|week|month|hour)/i,
 
-  // "We noticed your account / came across your profile" — cold outreach opener
+  // "We noticed your account / came across your profile", cold outreach opener
   /\bwe (noticed|came across|found|discovered) (your|the) (account|profile|website|instagram|page)/i,
 
   // Bulk collab bait ("we'd love to collaborate", link included)
@@ -208,11 +208,11 @@ export interface ReplyResult {
     | 'skipped-rate-limit'
     | 'skipped-casual-message'
     | 'skipped-spam-solicitation'
-    // Judged not to be a business message at INBOUND time — see
+    // Judged not to be a business message at INBOUND time, see
     // classifyInboundRelevance. Distinct from skipped-personal, which is
     // Vero's manual flag on the whole conversation.
     | 'skipped-not-business'
-    // Cross-invocation race — another Vercel lambda already claimed
+    // Cross-invocation race, another Vercel lambda already claimed
     // the ai_reply_intents row for this inbound (Meta shipped two
     // POSTs milliseconds apart to two different lambdas). See
     // db/migrations/015-ai-reply-intents.sql for the mechanism.
@@ -272,7 +272,7 @@ function getOpenAI(): OpenAI {
 }
 
 /**
- * Main entry — call after persisting an inbound message. Handles
+ * Main entry, call after persisting an inbound message. Handles
  * everything from guardrail checks to sending the outbound reply.
  * Never throws; returns a structured result the caller can log.
  */
@@ -305,8 +305,8 @@ export async function processInboundMessage(args: {
     }
     // Personal threads (friends & family) are checked BEFORE ai_enabled, and
     // separately from it, on purpose. ai_enabled is a soft toggle with several
-    // writers — the escalation path, the summary classifier, Vero's own switch
-    // — any of which can flip it back on. is_personal has exactly one writer
+    // writers, the escalation path, the summary classifier, Vero's own switch
+    // any of which can flip it back on. is_personal has exactly one writer
     // (_messages-mark-personal.ts), so it is the durable statement that this
     // thread is not work. Auto-replying to Vero's sister as if she were a
     // prospective client is the failure this prevents.
@@ -321,7 +321,7 @@ export async function processInboundMessage(args: {
     // ── 3. Dedup: did we already reply to this inbound? ──────
     // Both this gate and the rate limit below exist to stop us SENDING a
     // second message on top of one we just sent. On a draft-only channel
-    // we never send — the AI writes, Vero decides — so neither applies,
+    // we never send, the AI writes, Vero decides, so neither applies,
     // and applying them silently costs her the feature.
     //
     // That is exactly what happened with contact-form leads: the
@@ -350,7 +350,7 @@ export async function processInboundMessage(args: {
 
     // ── 4. Rate limit: any outbound within the last N seconds? ──
     // Compute the cutoff timestamp in JS rather than using a Postgres
-    // INTERVAL literal — the sql-tag driver treats every ${} as a
+    // INTERVAL literal, the sql-tag driver treats every ${} as a
     // parameterized bind, but $N placeholders inside quoted strings
     // like 'INTERVAL "$2 seconds"' are just literal text to Postgres,
     // so the driver ends up binding more params than the query
@@ -404,7 +404,7 @@ export async function processInboundMessage(args: {
     }
 
     // ── 7. Agency / solicitation spam filter ─────────────────
-    // Silent skip — don't reply, don't send a bridge, don't confirm
+    // Silent skip, don't reply, don't send a bridge, don't confirm
     // the account is live. Also flip ai_enabled off so a follow-up
     // pitch doesn't burn another API call. Vero can regen the
     // summary in the inbox to see the classification, and if she
@@ -418,7 +418,7 @@ export async function processInboundMessage(args: {
       `;
       return {
         action: 'skipped-spam-solicitation',
-        reason: 'agency / solicitation pattern matched — silent skip',
+        reason: 'agency / solicitation pattern matched, silent skip',
       };
     }
 
@@ -426,7 +426,7 @@ export async function processInboundMessage(args: {
     //
     // Claim exclusive right to reply in THIS CONVERSATION. If Meta
     // shipped two POSTs milliseconds apart to two different Vercel
-    // lambdas (routine — happens whenever a customer types quickly,
+    // lambdas (routine, happens whenever a customer types quickly,
     // not just on retries), both lambdas will have passed the dedup
     // + rate-limit gates above concurrently. The PRIMARY KEY on
     // ai_reply_intents.conversation_id makes this INSERT atomic:
@@ -443,12 +443,12 @@ export async function processInboundMessage(args: {
     // about "don't send two replies to the same customer in a tiny
     // window." Two different mids in the same conversation processed
     // by two lambdas would each claim their own row if we keyed on
-    // inbound_message_id — both would proceed and both would send.
+    // inbound_message_id, both would proceed and both would send.
     // Conversation-scoped claim is the right lock granularity.
     //
     // Placed AFTER the silent-skip filters (empty/emoji + spam
     // solicitation) so we don't burn claim rows on messages we'd
-    // never reply to anyway — and BEFORE any code path that sends
+    // never reply to anyway, and BEFORE any code path that sends
     // (bridges + main AI reply below).
     // Track whether we actually acquired the claim. Stays false in
     // the fail-open path below (missing table); the finally then
@@ -474,12 +474,12 @@ export async function processInboundMessage(args: {
       // Defensive fail-open on missing table (42P01). If someone
       // deployed the code before running migration 015, we don't
       // want every single AI reply to silently die with
-      // 'error-generation-failed' — that would look identical to
+      // 'error-generation-failed', that would look identical to
       // an OpenAI outage from the outside. Fall back to pre-015
       // behavior (works but the cross-invocation race is possible)
       // and emit a loud warning that names the exact remediation.
       //
-      // Any OTHER error here is unexpected — re-throw so the outer
+      // Any OTHER error here is unexpected, re-throw so the outer
       // catch handles it as a real pipeline error.
       const msg = claimErr instanceof Error ? claimErr.message : String(claimErr);
       const isMissingTable =
@@ -487,7 +487,7 @@ export async function processInboundMessage(args: {
         (msg.includes('does not exist') || msg.includes('42P01'));
       if (!isMissingTable) throw claimErr;
       console.warn(
-        '[ai-reply] ai_reply_intents table missing — falling back to pre-015 ' +
+        '[ai-reply] ai_reply_intents table missing, falling back to pre-015 ' +
           'behavior. Cross-invocation double-reply race is possible until ' +
           'db/migrations/015-ai-reply-intents.sql is applied to prod Neon. ' +
           `Underlying error: ${msg}`,
@@ -497,7 +497,7 @@ export async function processInboundMessage(args: {
     }
 
     // Below this point we ALWAYS release the claim in the finally
-    // block if we acquired it — success OR failure. The claim's
+    // block if we acquired it, success OR failure. The claim's
     // purpose is pure serialization: once we're done, the next
     // legitimate reply to this conversation should be free to
     // proceed. Keeping the claim on success would block ALL future
@@ -505,7 +505,7 @@ export async function processInboundMessage(args: {
     // during our flight already hit skipped-concurrent-run above;
     // any inbound arriving AFTER we release will pass the claim
     // gate but get caught by the existing dedup ("outbound after
-    // this inbound?") or the 60s rate-limit gate — because our
+    // this inbound?") or the 60s rate-limit gate, because our
     // outbound is now in the DB.
     try {
       // ── 7b. Don't stack drafts ────────────────────────────────
@@ -541,7 +541,7 @@ export async function processInboundMessage(args: {
       // any request for a suggestion, on top of a keyword list that
       // included 'price', 'cost', 'available' and 'package'. Between
       // them, almost every real opening message got the canned deferral
-      // instead of an answer — and the bridge switches the AI off, so
+      // instead of an answer, and the bridge switches the AI off, so
       // one false positive killed the thread permanently.
       //
       // Now only actual transaction intent (deposit, contract, invoice,
@@ -586,20 +586,20 @@ export async function processInboundMessage(args: {
       // ── 10c. Is this business at all? ────────────────────────
       // See classifyInboundRelevance. Only personal and spam stay silent;
       // anything ambiguous still gets answered. The thread and its summary
-      // stay fully visible either way — nothing is hidden, we just don't
+      // stay fully visible either way, nothing is hidden, we just don't
       // send a stranger's friend a brush-off about photography.
       const relevance = await classifyInboundRelevance(history);
       if (relevance === 'personal' || relevance === 'spam') {
         return {
           action: 'skipped-not-business',
-          reason: `classified ${relevance} at inbound — no reply sent`,
+          reason: `classified ${relevance} at inbound, no reply sent`,
         };
       }
 
       // ── 11. Load ai_context for the system prompt ─────────────
       //
       // EXCLUDES source='system'. Those rows document how the admin
-      // panel works — they exist so Veronika can ask the in-panel
+      // panel works, they exist so Veronika can ask the in-panel
       // assistant "how do I give a client gallery access?". They are
       // not facts about the photography business, and a customer
       // asking about wedding coverage must never be told how to use
@@ -649,7 +649,7 @@ export async function processInboundMessage(args: {
 
       // ── 13. Deliver, or draft ────────────────────────────────
       //
-      // Instagram sends automatically. Email does NOT — it drafts and
+      // Instagram sends automatically. Email does NOT, it drafts and
       // waits for Vero.
       //
       // Not timidity: email is the channel real bookings arrive on, the
@@ -701,7 +701,7 @@ export async function processInboundMessage(args: {
       // Only release if we actually acquired the claim (the fail-
       // open path above leaves claimAcquired=false, in which case
       // the DELETE would also throw 42P01 and just add noise).
-      // Swallow any DELETE failure — we don't want a cleanup error
+      // Swallow any DELETE failure, we don't want a cleanup error
       // to mask the real return value we're about to hand back.
       // Worst case a stuck claim row lingers; the next inbound in
       // this conversation will be blocked until it's cleared
@@ -739,7 +739,7 @@ export async function processInboundMessage(args: {
  * The pipeline above deliberately goes quiet in several situations: the
  * booking bridge disables the AI the moment real money or contract talk
  * starts, personal threads are skipped, and a thread that hit its reply cap
- * stays silent. Those are the right defaults for UNPROMPTED drafting — and
+ * stays silent. Those are the right defaults for UNPROMPTED drafting, and
  * they are also exactly the moments Vero most wants help writing a reply,
  * because what remains is the high-stakes part of the conversation.
  *
@@ -757,7 +757,7 @@ export async function processInboundMessage(args: {
  * not say.
  *
  * The draft generator reads messages, and "a portal was just created and the
- * invite email went out" is not a message — it lives in client_portals. So a
+ * invite email went out" is not a message, it lives in client_portals. So a
  * post-creation follow-up ("just sent your portal link, check your inbox")
  * was impossible to draft: the model literally could not know it happened.
  * This block injects that state, and spells out the one detail everyone gets
@@ -794,7 +794,7 @@ export async function portalContextBlock(
     if (rows.length === 0) return null;
     const p = rows[0];
     const lines = [
-      'PORTAL STATUS (from the system, not the thread — the customer may not have mentioned any of this):',
+      'PORTAL STATUS (from the system, not the thread, the customer may not have mentioned any of this):',
       `- This customer has a client portal (${p.mode} mode).`,
     ];
     // Who they are and what they booked. The thread often does not say: a
@@ -826,10 +826,10 @@ export async function portalContextBlock(
       lines.push(
         p.account_active
           ? '- They have finished setting up their portal account.'
-          : '- They have NOT yet finished setting up their account — the invite link is sitting in their email, and spam folders eat these.',
+          : '- They have NOT yet finished setting up their account, the invite link is sitting in their email, and spam folders eat these.',
       );
       lines.push(
-        `- Contract status: ${p.contract_status}. The contract is reviewed and signed INSIDE the portal, after account setup. It is never an email attachment — do not imply one.`,
+        `- Contract status: ${p.contract_status}. The contract is reviewed and signed INSIDE the portal, after account setup. It is never an email attachment, do not imply one.`,
       );
     }
     lines.push(
@@ -1195,7 +1195,7 @@ async function sendBridgeAndEscalate(
     'Thanks so much for reaching out! You\'ll have a personal reply shortly.';
 
   // Off-Instagram channels draft rather than send, exactly like a normal
-  // AI reply does — see the dispatch in step 13. A bridge is still a
+  // AI reply does, see the dispatch in step 13. A bridge is still a
   // message going out under Vero's name, so it gets the same human step.
   if (convo.platform !== 'instagram') {
     await sql`
@@ -1254,7 +1254,7 @@ async function sendBridgeAndEscalate(
  * matched "Facebook", and Russian "сколько" ("how many") matched
  * "сколько человек". Seven out of eight ordinary opening messages
  * tripped the booking bridge, which sent a canned deferral and switched
- * the AI off for that conversation permanently — half of Vero's threads
+ * the AI off for that conversation permanently, half of Vero's threads
  * ended up with ai_enabled=false from false positives alone.
  *
  * JS `\b` is ASCII-only, so it silently fails on Cyrillic. Unicode
@@ -1279,7 +1279,7 @@ function matchesDateIntent(text: string): boolean {
  * Detects agency / solicitation / sales-pitch DMs. Bias toward
  * silence: false positives (a real client whose message vaguely
  * matches a pattern) cost us "AI didn't reply, Vero handles manually
- * as usual" — no drama. False negatives cost us a context-deaf reply
+ * as usual", no drama. False negatives cost us a context-deaf reply
  * that embarrasses Vero (see the "your website is outdated…" example
  * that triggered this filter).
  */
@@ -1288,11 +1288,11 @@ function matchesSpamSolicitation(text: string): boolean {
 }
 
 /**
- * A message is "truly empty" if it has no substantive content —
+ * A message is "truly empty" if it has no substantive content
  * pure emojis, punctuation only, whitespace, or a single character.
  * We stay silent on these because there's genuinely nothing to
  * respond to, not because we're guessing the sender is a friend.
- * A short "hey" alone will pass this filter — the AI's conservative
+ * A short "hey" alone will pass this filter, the AI's conservative
  * prompt handles it appropriately with a brief opener.
  */
 function isEmptyOrEmojiOnly(text: string): boolean {
@@ -1343,26 +1343,26 @@ function jaccard(a: Set<string>, b: Set<string>): number {
  * WHY THIS EXISTS
  * The pipeline had exactly two relevance filters: a regex list of agency
  * sales pitches, and repeat-message detection. Everything else went straight
- * to generation — and generation is only ever asked to WRITE a reply, so it
+ * to generation, and generation is only ever asked to WRITE a reply, so it
  * has no way to decline. A friend messaging "we're doing a bonfire tomorrow
  * at 6 if you want to come" got a polite brush-off explaining that Vero is
  * unavailable for social events. The model understood perfectly well it
  * wasn't business; it just had no option to stay silent.
  *
- * The summary classifier WOULD have caught it — spam-or-unrelated switches AI
- * off — but that runs on demand when Vero opens the thread, which is after
+ * The summary classifier WOULD have caught it, spam-or-unrelated switches AI
+ * off, but that runs on demand when Vero opens the thread, which is after
  * the reply has already auto-sent on Instagram.
  *
  * So the judgement moves to inbound, before generation.
  *
  * Deliberately biased toward replying: only 'personal' and 'spam' stay
- * silent. Anything ambiguous — a bare "hey", an unclear one-liner — still
+ * silent. Anything ambiguous, a bare "hey", an unclear one-liner, still
  * gets a reply, because a missed client costs far more than a needless
  * hello, and Vero's own stored guidance says to answer greetings.
  *
  * This does NOT set conversations.is_personal. That flag folds the thread
  * into the Personal section, and auto-hiding someone on one guess is not a
- * call this should make — Vero has a button for it.
+ * call this should make, Vero has a button for it.
  */
 // Exported for testing: this gate decides whether a real person gets a reply
 // at all, so it needs to be checkable against actual messages.
@@ -1380,10 +1380,10 @@ export async function classifyInboundRelevance(
           role: 'system',
           content: `Veronika is a wedding and portrait photographer. Classify the LAST message from THEM into exactly one word:
 
-business — any photography enquiry, an existing client, a question about her work, pricing, availability, a booking, or anything a paying customer would send.
-personal — a friend or acquaintance writing to her as a person: social invitations, catching up, plans, personal chat. Warm and specific to her as a human, not as a business.
-spam — sales pitches, agency or SEO outreach, crypto, mass-DM templates, anything soliciting HER.
-unclear — you genuinely cannot tell.
+business, any photography enquiry, an existing client, a question about her work, pricing, availability, a booking, or anything a paying customer would send.
+personal, a friend or acquaintance writing to her as a person: social invitations, catching up, plans, personal chat. Warm and specific to her as a human, not as a business.
+spam, sales pitches, agency or SEO outreach, crypto, mass-DM templates, anything soliciting HER.
+unclear, you genuinely cannot tell.
 
 Answer with ONE word and nothing else. When torn between business and unclear, answer unclear. When torn between personal and business, answer business.`,
         },
@@ -1422,7 +1422,7 @@ interface GenerateArgs {
    *
    * This is what decides the voice. A draft she reads and approves is from
    * her, so it is written in the first person. An Instagram reply leaves
-   * immediately with nobody having seen it — claiming to be Vero there would
+   * immediately with nobody having seen it, claiming to be Vero there would
    * put words in her mouth, so it stays her assistant.
    */
   reviewedBeforeSending: boolean;
@@ -1459,7 +1459,7 @@ async function generateReply(args: GenerateArgs): Promise<string> {
   const response = await client.chat.completions.create({
     model: OPENAI_MODEL,
     messages: chatMessages,
-    // Keep replies short and warm — the tone context also asks for
+    // Keep replies short and warm, the tone context also asks for
     // this but the parameter enforces it as a hard cap.
     max_tokens: 300,
     temperature: 0.7,
@@ -1478,7 +1478,7 @@ export function buildSystemPrompt(
   contextRows: ContextRow[],
   aiMessageCount: number,
   mentionsDate: boolean,
-  /** See GenerateArgs.reviewedBeforeSending — this decides the voice. */
+  /** See GenerateArgs.reviewedBeforeSending, this decides the voice. */
   reviewedBeforeSending: boolean,
 ): string {
   // Group context rows by category for clean prompt structure.
@@ -1491,10 +1491,10 @@ export function buildSystemPrompt(
   const identityRows = byCategory.get('identity') ?? [];
   const assistantName =
     identityRows.find((r) => r.label === 'Assistant name')?.content ?? "Vero's Assistant";
-  // First-message intro template — Vero edits this via the Assistant
+  // First-message intro template, Vero edits this via the Assistant
   // tab. If empty, the AI just introduces itself with the name.
   // Two intros, because the two voices need different greetings and one
-  // template cannot serve both — a first-person opener under the assistant
+  // template cannot serve both, a first-person opener under the assistant
   // persona contradicts the voice block it sits beneath. Picked below, once
   // the persona is resolved.
   const veroIntro =
@@ -1503,7 +1503,7 @@ export function buildSystemPrompt(
     identityRows.find((r) => r.label === 'First-message intro (assistant)')?.content ?? '';
 
   // Who the draft speaks AS. This used to be hard-coded ("You are NOT Vero"),
-  // which meant no amount of knowledge-base editing could change it — Vero
+  // which meant no amount of knowledge-base editing could change it, Vero
   // asked three times and it silently could not take. Now it is a setting.
   // Defaults to 'assistant', so nothing changes until it is set deliberately.
   const replyPersona = (
@@ -1514,7 +1514,7 @@ export function buildSystemPrompt(
   // 'auto' is the default and the one that carries the nuance: a reply Vero
   // approves before it is sent goes out AS her, and an Instagram reply that
   // auto-sends with nobody having read it stays her assistant. A flat 'vero'
-  // would have Instagram claiming to be her, unreviewed — which is exactly
+  // would have Instagram claiming to be her, unreviewed, which is exactly
   // the thing the assistant persona exists to avoid.
   const speakAsVero =
     replyPersona === 'vero' ||
@@ -1547,32 +1547,32 @@ export function buildSystemPrompt(
     contextSections.push(`## ${heading}\n${bullets}`);
   }
 
-  // Website CTA hint — the AI decides when to weave it in naturally
+  // Website CTA hint, the AI decides when to weave it in naturally
   // (usually after ~2 exchanges when the conversation has warmed).
   const websiteCtaHint =
     aiMessageCount >= 2
       ? 'You may naturally mention vero.photography once during this exchange if it fits (portfolio link).'
-      : 'Do NOT mention the website in your first 1-2 replies — feels salesy. Save it for once the conversation has warmed.';
+      : 'Do NOT mention the website in your first 1-2 replies, feels salesy. Save it for once the conversation has warmed.';
 
-  // First-message greeting guidance — includes Vero's edited intro
+  // First-message greeting guidance, includes Vero's edited intro
   // template if she has one, so what she writes in the Assistant tab
   // actually shapes the greeting the customer receives.
   const firstMessageIntro = speakAsVero ? veroIntro : assistantIntro;
   const introGuidance = firstMessageIntro
-    ? `On your FIRST reply of the conversation, use this greeting template as your style/tone reference (adapt lightly for the specific message you're responding to, keep it brief, don't quote verbatim if it doesn't fit — but preserve the spirit):
+    ? `On your FIRST reply of the conversation, use this greeting template as your style/tone reference (adapt lightly for the specific message you're responding to, keep it brief, don't quote verbatim if it doesn't fit, but preserve the spirit):
 
 "${firstMessageIntro}"
 
 Then, in the same message, briefly address whatever the customer actually asked. Don't re-introduce in subsequent replies.`
     : speakAsVero
-    ? `On your FIRST reply of the conversation, greet the customer warmly by name and go straight to what they asked. Do NOT introduce yourself — you are Vero, and she does not announce herself to her own inbox.`
+    ? `On your FIRST reply of the conversation, greet the customer warmly by name and go straight to what they asked. Do NOT introduce yourself, you are Vero, and she does not announce herself to her own inbox.`
     : `On your FIRST reply of the conversation, introduce yourself briefly as "${assistantName}" (one sentence) and then address whatever the customer asked. Don't re-introduce in subsequent replies.`;
 
   // The current message names a date. Dates used to be intercepted
   // before the model ever ran; now they reach it, so the guardrail has
   // to be loud at exactly the moment it matters.
   const dateWarning = mentionsDate
-    ? ' **The message you are replying to mentions a specific date — this rule is live right now.**'
+    ? ' **The message you are replying to mentions a specific date, this rule is live right now.**'
     : '';
 
   /**
@@ -1599,18 +1599,18 @@ Then, in the same message, briefly address whatever the customer actually asked.
 Check any date the customer gives against that before you write about it. If the date they asked for is today, tomorrow, or already past, say so plainly and ask whether they meant a different one. Do not quietly repeat it back as though it were a normal future booking. This does NOT change rule 1: you still never say whether a date is free.`;
 
   // The two personas differ ONLY in voice. Every safety rail below applies
-  // identically either way — see api/_reply-core-rules.ts for which of these
+  // identically either way, see api/_reply-core-rules.ts for which of these
   // are adjustable (this one) and which are not (dates, pricing, invented
   // facts, which protect real bookings).
   const whoYouAre = speakAsVero
-    ? `You are Veronika ("Vero") — a wedding and portrait photographer — writing replies in your own inbox.
+    ? `You are Veronika ("Vero"), a wedding and portrait photographer, writing replies in your own inbox.
 
 ## WHO YOU ARE (never violate)
 - You ARE Vero. Write in the FIRST PERSON: "I", "my", "I'll". Never refer to "Vero" in the third person.
-- Never describe yourself as an assistant, a bot, or as writing on someone's behalf. Never say "Vero will follow up" — say "I'll follow up".
+- Never describe yourself as an assistant, a bot, or as writing on someone's behalf. Never say "Vero will follow up", say "I'll follow up".
 - Every draft is reviewed by Vero before it is sent, so it must read exactly as though she wrote it herself.
 - ${introGuidance}`
-    : `You are ${assistantName} — an AI assistant helping Vero manage her Instagram inbox while she's shooting.
+    : `You are ${assistantName}, an AI assistant helping Vero manage her Instagram inbox while she's shooting.
 
 ## WHO YOU ARE (never violate)
 - You are NOT Vero. You're her AI assistant.
@@ -1632,20 +1632,20 @@ ${todayBlock}
 
 ${houseRulesBlock}
 
-## HARD BEHAVIORAL RULES (these are safety rails — never break them)
-1. **NEVER confirm availability on a specific date.** If a customer names a date, acknowledge it as noted — never "great!", "that works!", "she's free" or anything implying it's held. Only Vero confirms dates.${dateWarning}
+## HARD BEHAVIORAL RULES (these are safety rails, never break them)
+1. **NEVER confirm availability on a specific date.** If a customer names a date, acknowledge it as noted, never "great!", "that works!", "she's free" or anything implying it's held. Only Vero confirms dates.${dateWarning}
 2. **Pricing: give RANGES, never a firm quote.** You MAY share the figures in KNOWN FACTS below, always framed as a starting point or a range, for example "sessions typically start around X", "wedding coverage runs roughly X to Y". Then explain that the exact number depends on the specifics and ask for what's missing: number of people, location and travel distance, and how many hours of coverage. NEVER state a final total, and never invent a figure that isn't in KNOWN FACTS. If you have no relevant figure, say ${speakAsVero ? "you'll follow up with a quote" : 'Vero will follow up with a quote'}.
-3. **You SHOULD be helpful and ask good questions.** Answer what you can from KNOWN FACTS, and gather what Vero will need — session type, guest count, rough location and travel, timeframe, the kind of look they're after. Suggesting options that appear in KNOWN FACTS is fine and encouraged. What you must NOT do is invent creative direction, promise a specific artistic outcome, or claim details that aren't written below.
+3. **You SHOULD be helpful and ask good questions.** Answer what you can from KNOWN FACTS, and gather what Vero will need, session type, guest count, rough location and travel, timeframe, the kind of look they're after. Suggesting options that appear in KNOWN FACTS is fine and encouraged. What you must NOT do is invent creative direction, promise a specific artistic outcome, or claim details that aren't written below.
 4. **NEVER commit to deliverables or timing** beyond what's in KNOWN FACTS. Before you answer any question about what a package includes, what they receive, how many photos, or when, read "WHAT WE DO NOT PUBLISH" below and use the replacement wording it gives you. A number you supply becomes a promise Vero has to keep. This rule has been broken in production: a draft told a real couple they would receive "500-700 professionally edited photos", a figure that exists nowhere in this business.
-5. When you genuinely don't know, say so — but only after answering what you DO know. ${
+5. When you genuinely don't know, say so, but only after answering what you DO know. ${
     speakAsVero
       ? '"I\'ll get back to you on that" as a reply to a question you have the facts for is a failure, not a safe default.'
       : '"Let me pass this to Vero" as a reply to a question you have the facts for is a failure, not a safe default.'
   }
 
-## KNOWN FACTS (only cite these — never invent details)
+## KNOWN FACTS (only cite these, never invent details)
 
-### From the website (authoritative — these are the real published numbers)
+### From the website (authoritative, these are the real published numbers)
 These are generated from src/data/wedding-page.json, the same file the public weddings page renders, so they cannot drift from what the customer can read for themselves. Where anything below contradicts a fact further down, THIS wins. Some of it is written in Vero's own first-person voice because it is lifted from her site copy; restate it in whatever voice this reply is using rather than quoting it raw.
 
 ${businessFactsForCustomerReplies()}
@@ -1661,22 +1661,22 @@ ${paymentFactsForCustomerReplies()}
 
 ## TONE
 - **Brief.** 1-2 sentences per reply, maximum. Never wall-of-text.
-- Match the customer's energy — brief if brief, thoughtful if they're thoughtful (but still short).
-- Warm and professional but NOT effusive. Avoid "amazing!", "wonderful!", "absolutely!" — those sound robotic AND can imply commitment.
+- Match the customer's energy, brief if brief, thoughtful if they're thoughtful (but still short).
+- Warm and professional but NOT effusive. Avoid "amazing!", "wonderful!", "absolutely!", those sound robotic AND can imply commitment.
 - Prefer "got it", "thanks for sharing", "noted" as acknowledgments.
 - Emojis sparingly (max one per reply, when it fits naturally). Not required.
 - Use the customer's first name once, if they've shared it. Don't repeat.
 - Match the customer's language (English, Russian, or whatever they wrote in).
-- NO sign-off, ever. Do not end with "Warmly,", a name, or "Vero Photography". Email replies get Vero's real signature appended automatically at send time — one you write shows up twice. Instagram DMs are unsigned on purpose.
+- NO sign-off, ever. Do not end with "Warmly,", a name, or "Vero Photography". Email replies get Vero's real signature appended automatically at send time, one you write shows up twice. Instagram DMs are unsigned on purpose.
 
 ## STYLE GUIDE
 - ${websiteCtaHint}
 - If someone asks a question you have a KNOWN FACT for → answer it, then ask ONE follow-up that moves things forward.
 - If someone asks something you have no KNOWN FACT for → brief acknowledgment + ${speakAsVero ? '"I\'ll follow up on that personally."' : '"Vero will follow up personally on that."'}
-- Answer AND gather. Do not withhold information you have in order to route the customer to Vero — she added those facts so they would get used.
+- Answer AND gather. Do not withhold information you have in order to route the customer to Vero, she added those facts so they would get used.
 
 ## THE GOAL
-Be genuinely useful on the first reply, and leave Vero a warm lead with the details already collected. Answer what you can from KNOWN FACTS, give ranges rather than quotes, and gather the specifics a real quote depends on. You're a knowledgeable first responder — not a salesperson, and not a wall that forwards everything to Vero.
+Be genuinely useful on the first reply, and leave Vero a warm lead with the details already collected. Answer what you can from KNOWN FACTS, give ranges rather than quotes, and gather the specifics a real quote depends on. You're a knowledgeable first responder, not a salesperson, and not a wall that forwards everything to Vero.
 
 Now respond to the most recent customer message.`;
 }

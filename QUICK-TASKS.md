@@ -22,20 +22,20 @@ statements into the Neon SQL editor. Every part of that is now wrong:
   `client_portals`.
 - The real flow is **Clients → + New → Gallery Only** (or **Full Portal** for
   contract bookings). No SQL.
-- It told Vero to send clients to `/portal` with only a password — but
+- It told Vero to send clients to `/portal` with only a password, but
   `/portal` needs an email *and* a password. Gallery-only clients use
   `/portal/pass`, and the admin panel generates that link for her.
 - Rotating a password was an `UPDATE`; it's now an inline field on the client's
   record. Removing access was a `DELETE`; it's now a toggle.
 
 An audit of the codebase found **42** statements across the docs contradicted by
-the code. Instructions that drift are worse than no instructions — Vero follows
+the code. Instructions that drift are worse than no instructions, Vero follows
 them, they fail, and she stops trusting the docs *and* the panel.
 
 Hence the change of approach: the how-to knowledge now lives next to the code
 it describes, is verified against it, and is re-seeded when the panel changes.
 A markdown file nobody re-reads after shipping a feature will always rot.
 
-**Developer-facing docs are still files** and still accurate — see
+**Developer-facing docs are still files** and still accurate, see
 [DATABASE.md](DATABASE.md), [CLIENT_PORTAL.md](CLIENT_PORTAL.md),
 [CLAUDE.md](CLAUDE.md), and [TRANSITIONS.md](TRANSITIONS.md).

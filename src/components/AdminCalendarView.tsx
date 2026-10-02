@@ -22,7 +22,7 @@ interface Props {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Returns "2026-08-09" — local-timezone date string for keying portals
+// Returns "2026-08-09", local-timezone date string for keying portals
 // against an event_date stored as DATE in Postgres (which we receive as
 // a YYYY-MM-DD string after JSON serialization).
 const ymd = (d: Date): string =>
@@ -45,7 +45,7 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
     const map = new Map<string, AdminPortalSummary[]>();
     for (const p of portals) {
       if (!p.event_date) continue;
-      // Normalize to YYYY-MM-DD — event_date from the API may be a full
+      // Normalize to YYYY-MM-DD, event_date from the API may be a full
       // ISO timestamp, just take the date part.
       const key = p.event_date.slice(0, 10);
       const list = map.get(key) ?? [];
@@ -81,11 +81,11 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
 
   const today = todayYmd();
 
-  // Agenda list for mobile — chronological list of days IN the visible
+  // Agenda list for mobile, chronological list of days IN the visible
   // month that have events. 6×7 grid cells crushed to ~53px on a 375px
   // viewport, which meant EventChip labels truncated to 3 chars and
   // taps were basically impossible. Agenda is honest about the shape
-  // of the data (which is inherently a list, not a grid — a photographer
+  // of the data (which is inherently a list, not a grid, a photographer
   // has 1-2 sessions a week, not 30).
   const agenda = useMemo(() => {
     return cells
@@ -152,7 +152,7 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
 
   return (
     <Box>
-      {/* Month nav — bigger nav buttons on mobile so the chevrons are
+      {/* Month nav, bigger nav buttons on mobile so the chevrons are
           real tap targets, and Today gets a border so it reads as a
           button rather than orphaned text. */}
       <Flex align="center" justify="space-between" mb={4} gap={3} flexWrap="wrap">
@@ -196,7 +196,7 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
           Today
         </Box>
 
-        {/* Month/Agenda. Desktop only — it sits up here in the control row
+        {/* Month/Agenda. Desktop only, it sits up here in the control row
             rather than down by the legend, where it read as part of the key.
             Mobile renders its own copy next to the legend, since this row is
             tight on a phone. */}
@@ -235,7 +235,7 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
         </HStack>
       </Flex>
 
-      {/* Agenda list — only days with events. Default on mobile, available on
+      {/* Agenda list, only days with events. Default on mobile, available on
           desktop via the toggle. */}
       <Box display={effectiveView === 'agenda' ? 'block' : 'none'} mb={4}>
         {agenda.length === 0 ? (
@@ -328,7 +328,7 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
         )}
       </Box>
 
-      {/* Desktop: 6×7 month grid — hidden on mobile because 40-53px
+      {/* Desktop: 6×7 month grid, hidden on mobile because 40-53px
           cells with 10px event labels are actively worse than an
           agenda. */}
       {/* Month grid. Default on desktop; on a phone it is tight but useful for
@@ -371,7 +371,7 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
         </Box>
       </Box>
 
-      {/* Legend — centred, with the layout toggle beside it. */}
+      {/* Legend, centred, with the layout toggle beside it. */}
       <Flex
         mt={4}
         direction={{ base: 'column', sm: 'row' }}
@@ -393,7 +393,7 @@ const AdminCalendarView = ({ portals, onOpenPortal, matchIds }: Props) => {
           border="1px solid"
           borderColor="gray.200"
           // Desktop shows this beside Table/Calendar in the dashboard header
-          // instead — down here next to the legend it read as part of the key.
+          // instead, down here next to the legend it read as part of the key.
           display={{ base: 'inline-flex', md: 'none' }}
         >
           {(['month', 'agenda'] as const).map((v) => (

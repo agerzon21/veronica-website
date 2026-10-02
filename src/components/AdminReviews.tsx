@@ -25,7 +25,7 @@ import { toDirectImageUrl, isDriveUrl, driveFileId } from '../utils/driveImage';
 import { isGooglePhotoCdnUrl, isHttpsUrl, verifyLabel } from '../utils/reviewSource';
 
 /**
- * "Reviews" tab in /admin — manage the testimonials that show up on the
+ * "Reviews" tab in /admin, manage the testimonials that show up on the
  * public site (home page's Google Reviews section). Lives alongside
  * Journal + Gallery under the Studio group.
  *
@@ -35,7 +35,7 @@ import { isGooglePhotoCdnUrl, isHttpsUrl, verifyLabel } from '../utils/reviewSou
  * ConfirmDialog primitive rather than window.confirm so the touch
  * targets are big on mobile.
  *
- * Available to BOTH admin (Vero) and super (Alex) — reviews are
+ * Available to BOTH admin (Vero) and super (Alex), reviews are
  * photography-adjacent work. Only Delete is superadmin-gated on the
  * UI side, matching the API's requireSuper gate on reviews-delete.
  */
@@ -103,7 +103,7 @@ const EMPTY_FORM: FormState = {
 // Editor is either closed, opened for create, or opened on an existing row.
 type EditorState = null | { mode: 'create' } | { mode: 'edit'; review: ReviewRow };
 
-// Shared input styling — mirrors AdminJournalEditor's inputStyles. The
+// Shared input styling, mirrors AdminJournalEditor's inputStyles. The
 // { base: 'md', md: 'sm' } fontSize bump on mobile prevents iOS Safari
 // from zooming the viewport when a field gains focus.
 const inputStyles = {
@@ -154,7 +154,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminPassword]);
 
-  // Inline toggle for visible / featured — roundtrips the whole review
+  // Inline toggle for visible / featured, roundtrips the whole review
   // through the upsert endpoint (the same one the modal editor uses).
   // Optimistic: flip local state first, roll back on failure so the
   // switch feels instant even on slow connections.
@@ -244,7 +244,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
 
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header — same layout as AdminJournal so Studio-group tabs feel
+      {/* Header, same layout as AdminJournal so Studio-group tabs feel
           uniform: gold kicker, thin H1, count subtitle, icon-only Refresh
           + primary "+ New" CTA. */}
       <Flex align="flex-end" justify="space-between" mb={{ base: 5, md: 8 }} gap={3}>
@@ -297,7 +297,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
         </Box>
       )}
 
-      {/* Google Aggregate card — the "5.0 · 15 reviews" badge on the
+      {/* Google Aggregate card, the "5.0 · 15 reviews" badge on the
           public home page. Lives above the review list because it's a
           persistent site-wide setting, not a moderation queue item. */}
       <Box mb={{ base: 5, md: 6 }}>
@@ -325,7 +325,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
         </VStack>
       )}
 
-      {/* Editor modal — key-ed by the current editor state so switching
+      {/* Editor modal, key-ed by the current editor state so switching
           from create → edit → different edit always remounts with fresh
           form state seeded from the right row. */}
       {editor !== null && (
@@ -367,7 +367,7 @@ const AdminReviews = ({ adminPassword, adminLevel }: Props) => {
 // ── Google Aggregate card ──────────────────────────────────────────
 // A compact editor for the two system_state scalars that drive the
 // "5.0 · 15 reviews on Google" badge on the home page. Save is only
-// enabled when both fields are valid AND dirty — nudges the admin
+// enabled when both fields are valid AND dirty, nudges the admin
 // toward "leave it alone unless something actually changed."
 function GoogleAggregateCard({ adminPassword }: { adminPassword: string }) {
   const { t } = useAdminLang();
@@ -428,7 +428,7 @@ function GoogleAggregateCard({ adminPassword }: { adminPassword: string }) {
     countInput.trim() !== initialCount.trim();
   const canSave = ratingValid && countValid && dirty && !saving;
 
-  // Human-friendly timestamp — formatted client-side so the browser
+  // Human-friendly timestamp, formatted client-side so the browser
   // locale wins, matching how the review-card publish_date renders.
   const updatedLabel = useMemo(() => {
     if (!updatedAt) return t.reviews.aggregateNeverUpdated;
@@ -697,7 +697,7 @@ function ReviewCard({
             </Text>
           )}
 
-          {/* Inline switches — always thumb-reachable so Vero can flip
+          {/* Inline switches, always thumb-reachable so Vero can flip
               a review's visibility without opening the modal. */}
           <Wrap spacing={4} pt={1}>
             <HStack spacing={2}>
@@ -727,7 +727,7 @@ function ReviewCard({
           </Wrap>
         </VStack>
 
-        {/* Actions — Edit CTA on every breakpoint (matches AdminGallery
+        {/* Actions, Edit CTA on every breakpoint (matches AdminGallery
             behavior, which also always shows the edit button); trash
             icon only visible to super. */}
         <HStack spacing={2} flexShrink={0} align="flex-start">
@@ -1034,7 +1034,7 @@ function ReviewEditorModal({
           />
         </Stack>
 
-        {/* Danger zone — superadmin-only, mirrors AdminJournalEditor. */}
+        {/* Danger zone, superadmin-only, mirrors AdminJournalEditor. */}
         {isEdit && adminLevel === 'super' && onRequestDelete && (
           <Box
             mt={4}
@@ -1320,7 +1320,7 @@ function Chip({ label, tone }: { label: string; tone: 'gold' | 'gray' }) {
 function SourceBadge({ source }: { source: Source }) {
   const { t } = useAdminLang();
   // Source colors are the recognizable brand accents (Google blue, Yelp
-  // red, Instagram pink) — everything else defaults to the neutral gray
+  // red, Instagram pink), everything else defaults to the neutral gray
   // used elsewhere in admin. Kept low-key so the badges don't shout.
   const config = {
     google:    { icon: FaGoogle,    label: t.reviews.sourceGoogle,    color: '#4285f4' },

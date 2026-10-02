@@ -14,7 +14,7 @@
  *
  * Per-client editability: the *rendered* template body is frozen into the
  * `client_portals.contract_body` column at signing time. That snapshot
- * is what the PDF generates from — never the live template. Updating
+ * is what the PDF generates from, never the live template. Updating
  * this file only affects future contracts, never previously signed ones.
  * Legal best practice.
  */
@@ -26,10 +26,10 @@ export type ContractParagraph =
   | { kind: 'signature_block' };
 
 export interface ContractSection {
-  number?: string; // e.g. 'I', 'II' — optional so headings without roman nums work
+  number?: string; // e.g. 'I', 'II'; optional so headings without roman nums work
   title: string;
   // If true, the section is dropped post-fill when its content is
-  // effectively empty — either all paragraphs render empty (the
+  // effectively empty, either all paragraphs render empty (the
   // ADDITIONAL NOTES case) or, if `requireVariables` is set, when any
   // of those variables is blank.
   optional?: boolean;
@@ -106,9 +106,9 @@ export interface WeddingContractVariables {
   remaining_balance: string;       // formatted "$180"
   balance_due_window: string;      // e.g. "TEN (10) Days"
   payment_methods: string;         // e.g. "Card, cash, Venmo, Cash App or Zelle"
-  retention_months: string;        // e.g. "3" — how long the gallery stays online
+  retention_months: string;        // e.g. "3": how long the gallery stays online
   additional_notes: string;        // free-text addendum; section is hidden if empty
-  // Optional — if a third party is paying and signing on behalf of the
+  // Optional, if a third party is paying and signing on behalf of the
   // clients (e.g. mother of the bride), name + relationship go here.
   // The RESPONSIBLE PARTY section in the template is marked optional
   // and gets pruned when either of these is blank.
@@ -179,7 +179,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       ],
     },
     // Optional, unnumbered. Only renders when responsible_party_name +
-    // responsible_party_relationship are both set — otherwise pruned
+    // responsible_party_relationship are both set, otherwise pruned
     // server-side by pruneEmptyOptionalSections() before the contract
     // body is frozen.
     {
@@ -261,7 +261,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
     },
     // Optional, unnumbered. Included when two_camera_enabled is 'yes'.
     // The clause clarifies that the second camera is an assistant
-    // capacity, not an independent professional photographer — protects
+    // capacity, not an independent professional photographer, protects
     // the Photographer from being held to "two pros" expectations.
     {
       title: 'TWO-CAMERA COVERAGE',
@@ -281,7 +281,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
     },
     // Optional, unnumbered. Included when additional_retouching_enabled
     // is 'yes'. Makes clear that advanced retouching is an add-on, not
-    // part of the base package — and that scope/price is negotiated
+    // part of the base package, and that scope/price is negotiated
     // case-by-case.
     {
       title: 'OPTION FOR ADDITIONAL RETOUCHING',
@@ -679,7 +679,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         { kind: 'text', text: 'This Agreement represents the entire understanding between parties.' },
       ],
     },
-    // Unnumbered addendum — only included in the rendered contract when
+    // Unnumbered addendum, only included in the rendered contract when
     // additional_notes is non-empty (stripped in admin when blank).
     {
       title: 'ADDITIONAL NOTES',
@@ -697,7 +697,7 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
 /**
  * Field metadata for the admin's "new client" form. Drives label, input
  * type, placeholder, and default. Keep ordered the way the form should
- * read top to bottom — the admin renders fields in this order.
+ * read top to bottom, the admin renders fields in this order.
  */
 export interface ContractTemplateField {
   key: string;
@@ -753,7 +753,7 @@ export interface ContractTemplateSpec {
 // Fields that show up in the admin's "Contract Variables" section.
 // Excludes anything the form handles explicitly with its own widget
 // (partner names, event date/time, total, retainer, gallery password,
-// event title, client display name, additional notes — those have
+// event title, client display name, additional notes, those have
 // custom inputs above this section).
 export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
   {
@@ -767,8 +767,8 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     label: 'Event Location',
     placeholder: 'Venue name and full address',
     // Deliberately guidance, not validation. Address autocomplete was
-    // considered and rejected — a Google Cloud project and an API key for ~10
-    // addresses a month — and hard-validating would block the real case where
+    // considered and rejected, a Google Cloud project and an API key for ~10
+    // addresses a month, and hard-validating would block the real case where
     // all we have is a venue name. So the check is Vero's, and this tells her
     // exactly what to check.
     //
@@ -1923,7 +1923,7 @@ export function requiredVariablesFor(key: string): string[] {
  * - If the section declares `requireVariables`, the section is dropped
  *   when any of those variables is missing or blank in `vars`.
  * - Otherwise, the section is dropped when every paragraph is empty
- *   (the ADDITIONAL NOTES case — a single `{{variable}}` paragraph
+ *   (the ADDITIONAL NOTES case, a single `{{variable}}` paragraph
  *   that substitutes to '').
  *
  * Used by the admin endpoints so the saved contract_body never shows

@@ -4,7 +4,7 @@
  * Called from api/contact.ts after the submission has been persisted and
  * the auto-reply sent. Produces the same conversation shape the email
  * webhook produces, so a form submission and a later direct email from
- * the same person land in ONE thread — the conversation is keyed on the
+ * the same person land in ONE thread, the conversation is keyed on the
  * sender's address, and the form gave us that address.
  *
  * Best-effort by design. Every failure path here is caught and logged,
@@ -29,11 +29,11 @@ export interface RecordResult {
 }
 
 export interface RecordArgs {
-  /** contact_submissions.id — NULL if that insert failed. */
+  /** contact_submissions.id, NULL if that insert failed. */
   submissionId: string | null;
   data: ContactPayload;
   /**
-   * The auto-reply's real SMTP Message-ID as ASSIGNED BY RESEND — read
+   * The auto-reply's real SMTP Message-ID as ASSIGNED BY RESEND, read
    * back after send, never minted by us (Resend discards a Message-ID
    * header you set). This is the anchor the whole thread hangs off, so
    * if it's wrong the customer sees loose emails.
@@ -51,7 +51,7 @@ export interface RecordArgs {
 /**
  * Render the form fields as a message body.
  *
- * Mirrors migration 017's backfill SQL exactly — the two must agree or
+ * Mirrors migration 017's backfill SQL exactly, the two must agree or
  * imported history and live submissions will look different in the same
  * inbox.
  */
@@ -70,12 +70,12 @@ export function buildSubmissionBody(data: ContactPayload): string {
 
 export function buildSubmissionSubject(data: ContactPayload): string {
   const shoot = data.shoot_type?.trim();
-  return shoot ? `Contact form inquiry — ${shoot}` : 'Contact form inquiry';
+  return shoot ? `Contact form inquiry, ${shoot}` : 'Contact form inquiry';
 }
 
 /**
- * Upsert the conversation, append the inbound submission, and — if the
- * auto-reply went out — append that as an outbound message too.
+ * Upsert the conversation, append the inbound submission, and, if the
+ * auto-reply went out, append that as an outbound message too.
  *
  * Recording the auto-reply matters for more than display. api/_ai-reply.ts
  * skips a conversation when an outbound already exists after the newest
@@ -115,7 +115,7 @@ export async function recordContactSubmission(args: RecordArgs): Promise<RecordR
 
     // Deterministic id keyed on the submission row so a retry can't
     // double-record. Falls back to a time-based key when the
-    // contact_submissions insert failed — still unique, just not
+    // contact_submissions insert failed, still unique, just not
     // reconcilable with a lead row.
     const externalId = args.submissionId
       ? `form:${args.submissionId}`

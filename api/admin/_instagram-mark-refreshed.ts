@@ -8,7 +8,7 @@
  *   → 405 non-POST
  *
  * The flow this supports: Alex runs `node scripts/refresh-instagram-token.mjs`
- * locally, pastes the new token into Vercel, redeploys — and then clicks the
+ * locally, pastes the new token into Vercel, redeploys, and then clicks the
  * "Mark as Refreshed" button in the admin Integrations tab. That button
  * hits this endpoint, which upserts `updated_at = now()` on the
  * `system_state` row keyed by 'ig_token_refreshed'. The admin card + the
@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // _ig-detect.ts stays in sync. Without this, the very next status
     // check would compare current-hash to stale-hash, decide "the
     // token was rotated!" (because they differ), and update timestamp
-    // AGAIN — harmless but confusing to trace in logs.
+    // AGAIN, harmless but confusing to trace in logs.
     const currentToken = process.env.IG_ACCESS_TOKEN ?? '';
     const currentHash = currentToken ? hashToken(currentToken) : null;
 

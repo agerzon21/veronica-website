@@ -5,14 +5,14 @@ import type { ReactNode } from 'react';
  * The one page header. Eyebrow → rule → title → lead.
  *
  * There was a PageHeader before this one, at src/components/PageHeader.tsx,
- * with zero imports — an earlier attempt at this that never got adopted. It is
+ * with zero imports, an earlier attempt at this that never got adopted. It is
  * deleted; this replaces it and is actually wired up.
  *
  * WHY IT EXISTS
  * Ten public pages each hand-rolled this block. The eyebrow appeared at four
  * letter-spacings and four sizes; the title was uppercase-tracked on Contact,
  * sentence case on Journal, a third ramp on Gallery, and hidden offscreen on
- * About. The 1px gold rule was 40px wide on nine pages and 35px on eleven —
+ * About. The 1px gold rule was 40px wide on nine pages and 35px on eleven
  * and sat ABOVE the title on five, BELOW it on three.
  *
  * THE RULE GOES ABOVE THE TITLE, always, directly under the eyebrow, so it
@@ -26,7 +26,7 @@ import type { ReactNode } from 'react';
  */
 
 interface PageHeaderProps {
-  /** Small gold label above the rule. Optional — 404 has none. */
+  /** Small gold label above the rule. Optional, 404 has none. */
   eyebrow?: string;
   /** The h1. Sentence case; the token never uppercases it. */
   title: ReactNode;
@@ -36,7 +36,7 @@ interface PageHeaderProps {
   onDark?: boolean;
   /** Left-aligns instead of centring. Gallery category headers use this. */
   align?: 'center' | 'left';
-  /** Render the title as something other than h1 — item pages that already have one. */
+  /** Render the title as something other than h1, item pages that already have one. */
   as?: 'h1' | 'h2' | 'p';
   /** Step down to contentTitle: journal posts, policies, photo pages. */
   size?: 'page' | 'content';

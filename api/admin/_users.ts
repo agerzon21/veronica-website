@@ -16,7 +16,7 @@ import { hashPortalPassword, verifyPortalHash } from '../portal/_password.js';
  * POST { password, op: 'set-active', user_id, is_active }            → super only
  * POST { password, op: 'delete', user_id }                           → super only
  * POST { password, op: 'change-own', current_password, new_password } → any admin
- *   (also the break-glass reset when authenticated by env password — see below)
+ *   (also the break-glass reset when authenticated by env password, see below)
  * POST { password, op: 'signout-others' }                            → any admin
  *
  * WHY THE SELF-SERVICE OPS ARE NOT SUPER-ONLY
@@ -32,7 +32,7 @@ import { hashPortalPassword, verifyPortalHash } from '../portal/_password.js';
  *
  * WHY THERE IS NO 'set-password-for-another-user'
  * That would let one admin silently take over another's account. Creating a
- * user issues a one-time password instead, shown once to whoever created it —
+ * user issues a one-time password instead, shown once to whoever created it
  * so the act of granting access is visible and deliberate rather than something
  * that can be done quietly to an existing account.
  *
@@ -43,7 +43,7 @@ import { hashPortalPassword, verifyPortalHash } from '../portal/_password.js';
  * you want when an account should simply never have existed.
  *
  * Delete is safe to offer because admin_sessions.user_id is the only foreign
- * key pointing at admin_users, and it is ON DELETE CASCADE — so removing a row
+ * key pointing at admin_users, and it is ON DELETE CASCADE, so removing a row
  * cannot strand a reference. If anything ever references admin_users for an
  * audit trail, this needs revisiting.
  */
@@ -59,7 +59,7 @@ const SELF_SERVICE_OPS = new Set(['change-own', 'signout-others']);
  * not emailed: that would be another template and another delivery failure
  * mode for something handed over in person or by text anyway.
  *
- * randomInt (CSPRNG), NOT Math.random — this is the sole credential for an
+ * randomInt (CSPRNG), NOT Math.random, this is the sole credential for an
  * account with access to every client record on the site. Math.random is
  * xorshift128+, whose internal state is recoverable from a few observed
  * outputs.
@@ -67,7 +67,7 @@ const SELF_SERVICE_OPS = new Set(['change-own', 'signout-others']);
  * The alphabet drops 0/O/1/l/I so it can be read aloud or copied off a screen
  * without ambiguity. 16 characters over a 32-character alphabet is 80 bits,
  * and the length is FIXED rather than derived from a float's decimal expansion
- * — the previous base-36 slice could land well under MIN_PASSWORD_LENGTH.
+ * the previous base-36 slice could land well under MIN_PASSWORD_LENGTH.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -91,10 +91,10 @@ type UserRow = {
 /**
  * Delete every session for a user EXCEPT the one making the request.
  *
- * Hashed in JS rather than with Postgres digest() — that needs the pgcrypto
+ * Hashed in JS rather than with Postgres digest(), that needs the pgcrypto
  * extension, which this database does not have enabled.
  *
- * Callers must check auth.userId first — both call sites return 409 for an
+ * Callers must check auth.userId first, both call sites return 409 for an
  * env-var login, which has no user row and therefore no sessions to manage.
  */
 async function dropOtherSessions(
@@ -157,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `) as UserRow[];
 
       // Live session count per user, so it is obvious who is currently signed
-      // in somewhere — the main thing you want to know before deactivating.
+      // in somewhere, the main thing you want to know before deactivating.
       const sessions = (await sql`
         SELECT user_id, count(*)::int AS n
         FROM admin_sessions
@@ -171,14 +171,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         // The caller's own id, so the UI can mark their row and hide the
         // disable button on it. An env-var login carries no userId, so resolve
-        // it from the LOGIN_*_EMAIL the level implies — otherwise the operator
+        // it from the LOGIN_*_EMAIL the level implies, otherwise the operator
         // is shown a "Disable access" button on their own row.
         me: auth.userId ?? (await lookupEnvAccount(auth.level))?.id ?? null,
         users: rows.map((r) => ({
           ...r,
           active_sessions: byUser.get(r.id) ?? 0,
           // Backed by a Vercel env credential, so it can be disabled but never
-          // deleted — see the delete branch for why.
+          // deleted, see the delete branch for why.
           env_backed: envBacked.has(r.email.trim().toLowerCase()),
         })),
       });
@@ -250,7 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // race window from two round-trips to one statement.
       //
       // It does NOT eliminate it. The EXISTS is an unlocked read against the
-      // statement snapshot, and EvalPlanQual rechecks only the target row —
+      // statement snapshot, and EvalPlanQual rechecks only the target row
       // which differs between the two requests. Two concurrent disables of two
       // different supers, interleaved precisely, could still reach zero. With
       // one super-admin and a single operator that is not a real scenario;
@@ -299,7 +299,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // An env-backed account must never be deleted.
       //
-      // Deleting it does not revoke anything — it does the opposite. Access for
+      // Deleting it does not revoke anything, it does the opposite. Access for
       // these two accounts is gated by envAccountDisabled(), which asks "is
       // there a row for this email that is switched off?". Remove the row and
       // the answer becomes "no row, so not disabled", and the env password logs
@@ -369,13 +369,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // No userId means the caller authenticated with one of the Vercel env
       // passwords rather than a session token (resolveSession always yields a
       // userId, so this is unambiguous). That is the documented way back in
-      // after forgetting a database password — and it has to actually END in a
+      // after forgetting a database password, and it has to actually END in a
       // working password, or the recovery card on the screen is a lie.
       //
       // The current-password check is skipped here, deliberately: the env
       // password IS the proof, and by definition someone recovering does not
       // know the database password they are replacing. This grants nothing new
-      // — an env login already has full super access — it just lets that access
+      // an env login already has full super access, it just lets that access
       // repair the account instead of leaving it stranded.
       //
       // Which account is unambiguous: requireAdmin only returns 'super' for
@@ -429,14 +429,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Every OTHER session for this user dies; the current one survives so the
       // person changing their password is not signed out of the tab they are in.
       // On the break-glass path there is no session to preserve, so this clears
-      // all of them — correct, since the password just changed underneath them.
+      // all of them, correct, since the password just changed underneath them.
       await dropOtherSessions(sql, targetId, req.body?.password);
       return res.status(200).json({ success: true });
     }
 
     if (op === 'signout-others') {
       // Same as the tail of a password change, without needing to change the
-      // password — for "I left myself signed in on someone else's laptop".
+      // password, for "I left myself signed in on someone else's laptop".
       if (!auth.userId) {
         return res.status(409).json({
           success: false,

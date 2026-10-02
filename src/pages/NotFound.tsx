@@ -25,13 +25,13 @@ const NotFound = () => {
         <Box ref={contentRef} w="100%" maxW="measure">
           <Reveal shown={shown} from={{ opacity: 0, y: 20 }} duration={0.8}>
             <VStack spacing={8}>
-              {/* The numeral is decoration, not the heading — aria-hidden so a
+              {/* The numeral is decoration, not the heading, aria-hidden so a
                   screen reader gets "Page not found", not "four hundred four". */}
               <Text textStyle="pageTitle" color="gray.200" aria-hidden="true">
                 404
               </Text>
 
-              {/* Same eyebrow-less header block every other page uses — the
+              {/* Same eyebrow-less header block every other page uses, the
                   rule sits above the title, not under it. */}
               <PageHeader
                 size="content"

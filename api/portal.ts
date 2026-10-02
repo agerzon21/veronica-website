@@ -7,7 +7,7 @@
  * segment into ?action=... so client code can still hit clean URLs.
  *
  * The actual handlers live in _-prefixed sibling files under ./portal/
- * — those don't get deployed as standalone functions but ARE bundled
+ * those don't get deployed as standalone functions but ARE bundled
  * with this one at build time when imported.
  *
  * Routes (the rewrite handles all of these):

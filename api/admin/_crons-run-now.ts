@@ -19,7 +19,7 @@
  *     varies by env: prod, preview, local). Local dev "just works".
  *
  * The cron's own handler reads `req.query.trigger` to distinguish
- * scheduled vs. manual runs — we set it to 'manual' here so history
+ * scheduled vs. manual runs, we set it to 'manual' here so history
  * rows are labeled correctly.
  *
  * Response body captures what the cron replied with, whether success

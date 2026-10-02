@@ -11,18 +11,18 @@ import { useAdminLang } from '../i18n/admin';
 import { partWord } from '../utils/seriesWords';
 
 /**
- * Journal post editor — create + edit share this one form. When
+ * Journal post editor, create + edit share this one form. When
  * `postId` is null → create mode (submits to journal-create). When
  * set → edit mode (loads via journal-detail on mount, submits to
  * journal-update).
  *
- * Photo workflow: Vero uploads a post's 5–15 photos to a Google Drive
+ * Photo workflow: Vero uploads a post's 5-15 photos to a Google Drive
  * folder (same workflow she already uses for client galleries) and
  * pastes the folder's shareable link. The public post endpoint lists
  * the folder at request time, so she can add/remove photos in Drive
  * without republishing.
  *
- * Delete is only shown to superadmin — matches the API's requireSuper
+ * Delete is only shown to superadmin, matches the API's requireSuper
  * gate on journal-delete so the button doesn't appear-but-not-work
  * for Vero.
  */
@@ -40,7 +40,7 @@ interface PostForm {
   title: string;
   excerpt: string;
   body_markdown: string;
-  // Alt text for the cover photo — which is now automatically the
+  // Alt text for the cover photo, which is now automatically the
   // first photo in the Drive folder. No separate cover URL field.
   cover_image_alt: string;
   drive_folder_url: string;
@@ -50,11 +50,11 @@ interface PostForm {
   // Event date as YYYY-MM-DD (native <input type="date"> value).
   // Backend normalizes this to noon UTC so the calendar day is
   // consistent across timezones. Empty string means "use publish
-  // default" — NOW on first publish, preserve on subsequent saves.
+  // default", NOW on first publish, preserve on subsequent saves.
   published_at: string;
   // The story this entry belongs to. In 'new' mode series_slug stays
   // empty and the NAME is sent as the slug, because the server
-  // slugifies whatever it receives — so the two can never drift apart
+  // slugifies whatever it receives, so the two can never drift apart
   // the way a second client-side slugify would let them.
   series_slug: string;
   series_part: string;
@@ -97,7 +97,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
   const [form, setForm] = useState<PostForm>(EMPTY_FORM);
 
   // Session-type option list. Values (portrait/wedding/…) stay English
-  // — they're the on-the-wire enum. Only the labels translate.
+  // they're the on-the-wire enum. Only the labels translate.
   const sessionOptions = [
     { value: '',           label: t.journalEditor.sessionOptionNone },
     { value: 'wedding',    label: t.journalEditor.sessionOptionWedding },
@@ -344,7 +344,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
 
   return (
     <Box maxW="900px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Top bar — back link + title + save actions */}
+      {/* Top bar, back link + title + save actions */}
       <Flex align="center" justify="space-between" mb={6} wrap="wrap" gap={3}>
         <AdminBackButton onClick={onCancel} label={t.journal.backToPosts} />
 
@@ -480,7 +480,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           />
         </Field>
 
-        {/* Drive folder — the single source of photos for this post.
+        {/* Drive folder, the single source of photos for this post.
             First photo (by filename) becomes the cover; the rest form
             the gallery. Vero controls order by prefixing filenames
             (01_, 02_, 03_…) in Drive. */}
@@ -508,7 +508,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           />
         </Field>
 
-        {/* Session type + tags row — side by side on desktop, stacked on
+        {/* Session type + tags row, side by side on desktop, stacked on
             phones so each field gets full width (the tags input in
             particular gets very cramped at 2/3 of a phone screen). */}
         <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
@@ -672,7 +672,7 @@ const AdminJournalEditor = ({ adminPassword, adminLevel, postId, onCancel, onSav
           )}
         </Box>
 
-        {/* Danger zone — superadmin-only, mirrors client detail page */}
+        {/* Danger zone, superadmin-only, mirrors client detail page */}
         {postId && adminLevel === 'super' && (
           <Box
             mt={8}
@@ -809,7 +809,7 @@ function isoToDateInput(iso: string): string {
 }
 
 /**
- * Today's date in YYYY-MM-DD (local zone) — used as the max on the
+ * Today's date in YYYY-MM-DD (local zone), used as the max on the
  * date picker so Vero can't accidentally schedule into the future.
  */
 function todayDateInput(): string {

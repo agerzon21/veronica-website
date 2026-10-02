@@ -84,7 +84,7 @@ function validateReviewInput(body: unknown): ValidationResult {
     return { ok: false, status: 400, error: 'text is required' };
   }
 
-  // Accept numeric strings from the admin form too — <input type="number">
+  // Accept numeric strings from the admin form too, <input type="number">
   // gives us a string in some browsers.
   const ratingRaw = typeof r.rating === 'string' ? Number(r.rating) : r.rating;
   if (typeof ratingRaw !== 'number' || !Number.isFinite(ratingRaw)) {
@@ -101,7 +101,7 @@ function validateReviewInput(body: unknown): ValidationResult {
       : null;
 
   // Accept a plain YYYY-MM-DD (from <input type="date">) or an ISO
-  // timestamp. We store as DATE in Postgres so either shape works —
+  // timestamp. We store as DATE in Postgres so either shape works
   // just reject obvious garbage.
   let publish_date: string | null = null;
   if (typeof r.publish_date === 'string' && r.publish_date.trim()) {
@@ -126,7 +126,7 @@ function validateReviewInput(body: unknown): ValidationResult {
   }
 
   const featured = r.featured === true;
-  // visible defaults to true — an admin who forgets to set it gets a
+  // visible defaults to true, an admin who forgets to set it gets a
   // publishable review, not a hidden one they then wonder about.
   const visible = r.visible === false ? false : true;
 

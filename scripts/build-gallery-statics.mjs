@@ -22,8 +22,8 @@
  *
  * WHAT IT WRITES
  *
- *   public/assets/photos/<category>/<slug>.webp   — resized, one per photo
- *   api/_gallery-statics.json                     — the manifest api/gallery.ts
+ *   public/assets/photos/<category>/<slug>.webp, resized, one per photo
+ *   api/_gallery-statics.json, the manifest api/gallery.ts
  *                                                   filters on, so a photo the
  *                                                   build could not export is
  *                                                   hidden rather than broken
@@ -111,7 +111,7 @@ async function main() {
   loadEnv();
   const url = process.env.POSTGRES_URL_LOCAL || process.env.POSTGRES_URL || process.env.DATABASE_URL;
   if (!url) {
-    console.error('gallery-statics: no database url — cannot determine which photos are published');
+    console.error('gallery-statics: no database url, cannot determine which photos are published');
     process.exit(1);
   }
   const sql = neon(url);
@@ -133,14 +133,14 @@ async function main() {
     try {
       snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8'));
     } catch {
-      /* no snapshot (check run standalone) — fall back to the live query */
+      /* no snapshot (check run standalone), fall back to the live query */
     }
     const expected = snapshot
       ? photos.filter((p) => snapshot.includes(`${p.category}/${p.slug}`))
       : photos;
     const skipped = snapshot ? photos.length - expected.length : 0;
     if (skipped > 0) {
-      console.log(`gallery-statics --check: ${skipped} photo(s) published after the export step — they land in the next build, not this one`);
+      console.log(`gallery-statics --check: ${skipped} photo(s) published after the export step, they land in the next build, not this one`);
     }
     const missing = expected.filter((p) => !existsSync(absPath(p)));
     if (missing.length) {
@@ -152,7 +152,7 @@ async function main() {
         console.error('\nRun: node scripts/build-gallery-statics.mjs');
         process.exit(1);
       }
-      console.warn('  (local build — these will simply be absent from the gallery here)');
+      console.warn('  (local build, these will simply be absent from the gallery here)');
     } else {
       console.log('gallery-statics --check: every published photo has a static file.');
     }
@@ -172,7 +172,7 @@ async function main() {
         console.error(`${msg} Refusing to continue: shipping now would hide them from the gallery.`);
         process.exit(1);
       }
-      console.warn(`${msg} Local build — continuing without them.`);
+      console.warn(`${msg} Local build, continuing without them.`);
       writeManifest(photos.filter((p) => existsSync(absPath(p))));
       return;
     }
@@ -197,7 +197,7 @@ async function main() {
 
   const present = photos.filter((p) => existsSync(absPath(p)));
   if (present.length !== photos.length && STRICT) {
-    console.error(`gallery-statics: ${photos.length - present.length} photo(s) still missing after export — failing`);
+    console.error(`gallery-statics: ${photos.length - present.length} photo(s) still missing after export, failing`);
     process.exit(1);
   }
   writeManifest(present);
@@ -209,7 +209,7 @@ function writeSnapshot(photos) {
     mkdirSync(dirname(SNAPSHOT), { recursive: true });
     writeFileSync(SNAPSHOT, JSON.stringify(photos.map((p) => `${p.category}/${p.slug}`)));
   } catch {
-    /* best effort — --check falls back to the live query without it */
+    /* best effort, --check falls back to the live query without it */
   }
 }
 

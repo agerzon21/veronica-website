@@ -97,8 +97,8 @@ async function processDir(category) {
   return { processed, skipped, savedBytes };
 }
 
-console.log(`Compressing photos — target: <${TARGET_KB}KB, max dim: ${MAX_DIM}px, quality: ${WEBP_QUALITY}`);
-if (isDryRun) console.log('DRY RUN — no files will be modified');
+console.log(`Compressing photos, target: <${TARGET_KB}KB, max dim: ${MAX_DIM}px, quality: ${WEBP_QUALITY}`);
+if (isDryRun) console.log('DRY RUN, no files will be modified');
 
 let totalProcessed = 0;
 let totalSkipped = 0;

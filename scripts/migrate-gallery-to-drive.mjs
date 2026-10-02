@@ -9,14 +9,14 @@
 //   1. Upload public/assets/photos/{portraits,weddings,family,maternity}/
 //      to a Drive "Gallery" folder with matching subfolder names.
 //   2. Share the parent folder with the service account (viewer OK).
-//   3. Set env vars (probably in .env.local — `vercel env pull` if needed):
+//   3. Set env vars (probably in .env.local, `vercel env pull` if needed):
 //        POSTGRES_URL, GOOGLE_SERVICE_ACCOUNT_JSON, GALLERY_DRIVE_FOLDER_ID
-//   4. Dry run (default — prints what WOULD happen, changes nothing):
+//   4. Dry run (default, prints what WOULD happen, changes nothing):
 //        node scripts/migrate-gallery-to-drive.mjs
 //   5. Actually commit to the DB after reviewing dry-run output:
 //        node scripts/migrate-gallery-to-drive.mjs --commit
 //
-// The script is idempotent — running it twice does nothing on the
+// The script is idempotent, running it twice does nothing on the
 // second run (dup drive_file_id → skipped). Safe to re-run after
 // uploading more files.
 
@@ -140,7 +140,7 @@ for (const { category, file } of drivePairs) {
     // Sanity: CSV category should match Drive folder category.
     if (csv.category !== category) {
       console.warn(
-        `[migrate] Category mismatch for "${file.name}": CSV says "${csv.category}", Drive folder is "${category}" — using Drive folder.`,
+        `[migrate] Category mismatch for "${file.name}": CSV says "${csv.category}", Drive folder is "${category}", using Drive folder.`,
       );
     }
     matched.push({ csv, driveFile: file, category });
@@ -168,7 +168,7 @@ if (driveUnmatched.length > 0) {
 }
 if (csvUnmatched.length > 0) {
   console.log('');
-  console.log('  Files in CSV without matching Drive upload (WILL NOT be migrated — upload them first):');
+  console.log('  Files in CSV without matching Drive upload (WILL NOT be migrated, upload them first):');
   for (const csv of csvUnmatched.slice(0, 10)) {
     console.log(`    - [${csv.category}] ${csv.filename}`);
   }
@@ -190,7 +190,7 @@ let inserted = 0;
 let skipped = 0;
 let failed = 0;
 
-// Insert matched rows first — they get the full CSV metadata + go
+// Insert matched rows first, they get the full CSV metadata + go
 // straight to 'published' status (they're already live on the site).
 for (const { csv, driveFile, category } of matched) {
   try {
@@ -219,7 +219,7 @@ for (const { csv, driveFile, category } of matched) {
   }
 }
 
-// Insert unmatched Drive files as drafts with empty metadata —
+// Insert unmatched Drive files as drafts with empty metadata
 // Vero can edit them in the admin panel. This handles the case
 // where she uploaded NEW photos to Drive during the migration
 // window that aren't in the CSV yet.
@@ -262,7 +262,7 @@ console.log(`[migrate] DB write complete: ${inserted} inserted, ${skipped} alrea
 if (csvUnmatched.length > 0) {
   console.log('');
   console.log(`[migrate] REMINDER: ${csvUnmatched.length} CSV row(s) had no matching Drive upload.`);
-  console.log(`[migrate] Upload those files to Drive and re-run this script — it's safe to run again.`);
+  console.log(`[migrate] Upload those files to Drive and re-run this script, it's safe to run again.`);
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -295,7 +295,7 @@ async function listGalleryTree(drive, parentFolderId) {
     .sort(natCmp);
   const rootFiles = items.filter(isMediaFile).sort(natCmp).map(toDriveFile);
 
-  // Fan out over subfolders in parallel — typical gallery has 4.
+  // Fan out over subfolders in parallel, typical gallery has 4.
   const sections = await Promise.all(
     subFolders
       .filter((f) => f.id && f.name)

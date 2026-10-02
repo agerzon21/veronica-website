@@ -12,7 +12,7 @@ import type { ReactNode } from 'react';
  * (~40 KB) into the homepage bundle, for a feature no public page uses:
  * `useToast` appears in 14 files and every one is Admin, Portal, Journal or
  * VoiceInput. It is also what made a LazyMotion conversion measure as exactly
- * zero — Chakra kept pulling the full `motion` regardless.
+ * zero, Chakra kept pulling the full `motion` regardless.
  *
  * So the app root uses Chakra's toast-free `Provider` and the three lazy routes
  * that need toasts mount this instead. Because those routes are code-split, the

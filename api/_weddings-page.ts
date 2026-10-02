@@ -1,6 +1,6 @@
 /**
  * Public payload for the /wedding-photography page, dispatched from
- * api/gallery.ts as GET /api/gallery/wedding-page (underscore file —
+ * api/gallery.ts as GET /api/gallery/wedding-page (underscore file
  * NOT a serverless function; the 12-function budget is spent).
  *
  * One request returns everything dynamic the page shows:
@@ -12,10 +12,10 @@
  *     featuredSlugs: [slug, ...] }          // ordered journal picks
  *
  * The page pairs featuredSlugs with /api/journal/list (also edge-cached)
- * to get titles/covers — journal already resolves those, no duplication.
+ * to get titles/covers, journal already resolves those, no duplication.
  *
  * Failure posture mirrors api/journal.ts: a Drive hiccup returns empty
- * arrays, never a 500 — the page falls back to its built-in photo strip.
+ * arrays, never a 500, the page falls back to its built-in photo strip.
  */
 
 import galleryStatics from './_gallery-statics.json' with { type: 'json' };
@@ -113,7 +113,7 @@ export function parseSelected(raw: string | null | undefined, cap: number): Sele
 /**
  * The five PINNED photo slots. Not "heroes" anymore (Alex's correction):
  * these are the photos that must NOT reshuffle per visit, each with an
- * explicit job — 0-2 back the three package cards, 3 sits beside the
+ * explicit job, 0-2 back the three package cards, 3 sits beside the
  * FAQ, 4 is the wide background of the closing quote section.
  */
 export interface PinnedEntry {
@@ -148,7 +148,7 @@ export function parsePinned(raw: string | null | undefined, cap: number): Pinned
 /**
  * The featured list started life as a plain array of slugs; it is now an
  * array of { slug, focusStage, focusThumb } so Vero can stop cover crops
- * from cutting faces. Both shapes parse — old stored values keep working
+ * from cutting faces. Both shapes parse, old stored values keep working
  * with centered defaults.
  */
 export function parseFeatured(raw: string | null | undefined, cap: number): FeaturedEntry[] {

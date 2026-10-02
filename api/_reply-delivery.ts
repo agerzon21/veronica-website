@@ -30,7 +30,7 @@ import {
 } from './_email-signature.js';
 
 const MAX_IG_MESSAGE_LEN = 1000; // sensible for IG DMs; Meta rejects >1000 anyway
-const MAX_EMAIL_MESSAGE_LEN = 100_000; // 100KB body cap — huge but sane bound
+const MAX_EMAIL_MESSAGE_LEN = 100_000; // 100KB body cap, huge but sane bound
 
 // Configuration for outbound email. All controllable via env so this
 // works for other tenants later without code changes.
@@ -58,8 +58,8 @@ export interface DeliveryResult {
  * How far back to look for an identical message before treating a send
  * as an accidental repeat.
  *
- * Generous on purpose. The real duplicate we found had a 32-second gap —
- * a slow send with no feedback, clicked twice — but the same mistake
+ * Generous on purpose. The real duplicate we found had a 32-second gap
+ * a slow send with no feedback, clicked twice, but the same mistake
  * happens minutes later when someone isn't sure the first one went. A
  * genuinely intentional repeat inside 15 minutes is vanishingly rare,
  * and it isn't blocked anyway, just confirmed.
@@ -136,7 +136,7 @@ export async function deliverReply(
   //
   // Sends aren't instant, and the panel gives no feedback until the
   // request returns. On a slow connection that's several seconds of a
-  // screen that looks like nothing happened — so the button gets pressed
+  // screen that looks like nothing happened, so the button gets pressed
   // again, and the customer receives the same message twice. This is a
   // 409 rather than a silent no-op: silently dropping it would look
   // identical to a failure and provoke a third attempt.
@@ -192,7 +192,7 @@ export async function deliverReply(
           : null;
 
   if (result) {
-    // A successful send resolves whatever draft was pending — whether Vero
+    // A successful send resolves whatever draft was pending, whether Vero
     // sent it verbatim, edited it first, or typed something else entirely.
     // Leaving it would re-show the banner over a thread she just answered,
     // and would block the engine from drafting again (one draft per
@@ -219,7 +219,7 @@ export async function deliverReply(
 
 /**
  * Instagram send path. Unchanged from the original single-platform
- * implementation — just extracted into a helper so the top-level
+ * implementation, just extracted into a helper so the top-level
  * handler stays clean.
  */
 async function sendInstagram(
@@ -327,7 +327,7 @@ async function sendWhatsApp(
  * if it already starts with "Re:", else prefix "Re: ".
  *
  * In-Reply-To: the most recent message's external_message_id
- * (regardless of direction — we're replying to whatever came last).
+ * (regardless of direction, we're replying to whatever came last).
  *
  * References: full chain of external_message_ids from oldest to
  * newest, so mail clients (Gmail, Apple Mail, Outlook) reconstruct
@@ -344,7 +344,7 @@ async function sendEmail(
   // first so References is built in the correct order.
   //
   // CRITICAL FILTER: only REAL SMTP Message-IDs may enter References or
-  // In-Reply-To. Not every row in `messages` has one — we mint synthetic
+  // In-Reply-To. Not every row in `messages` has one, we mint synthetic
   // external_message_ids for things that never traversed SMTP, using a
   // `<scheme>:` prefix:
   //
@@ -376,7 +376,7 @@ async function sendEmail(
 
   // Subject: prefer the newest subject that actually went over email.
   // A form submission's subject is internal phrasing ("Contact form
-  // inquiry — Portrait Session"); replying "Re: Contact form inquiry"
+  // inquiry, Portrait Session"); replying "Re: Contact form inquiry"
   // to a client reads like leaked back-office jargon. The auto-reply
   // normally supplies a client-facing subject; the generic fallback
   // covers threads imported by migration 017, which have no auto-reply
@@ -402,7 +402,7 @@ async function sendEmail(
   //   1. Pre-generate Message-ID (crypto.randomUUID inside the helper)
   //   2. INSERT pending row (external_message_id = messageId,
   //      status implicit via the presence of a real sent_at NULL
-  //      later? no — we use a simpler pattern: insert body-first,
+  //      later? no, we use a simpler pattern: insert body-first,
   //      then send; if send fails after INSERT, we DELETE the row so
   //      it doesn't linger as a ghost "sent" message the customer
   //      never got).
@@ -412,7 +412,7 @@ async function sendEmail(
   //
   // Retry safety: if the request re-fires with the exact same
   // conversation_id + text within a short window, the client
-  // shouldn't be retrying — they should be composing a new message.
+  // shouldn't be retrying, they should be composing a new message.
   // Vero manually re-clicking Send after a failure is intentional
   // and gets a fresh Message-ID + fresh row. That's correct: the
   // failure MEANS the previous send didn't reach the customer, so
@@ -431,7 +431,7 @@ async function sendEmail(
   const { randomUUID } = await import('node:crypto');
   // 'pending:' prefix, deliberately WITHOUT an '@'. This is a placeholder
   // holding the UNIQUE slot until Resend tells us the real Message-ID,
-  // and isRealMessageId() must reject it — an id shaped like
+  // and isRealMessageId() must reject it, an id shaped like
   // <uuid>@ourdomain would sail through that filter and get emitted in
   // References, which is the exact bug this replaces.
   const preMessageId = `pending:${randomUUID()}`;
@@ -441,7 +441,7 @@ async function sendEmail(
   // input, so the thread is a faithful record of what the client
   // actually received.
   //
-  // Strip any signature the body already carries FIRST — the AI writes
+  // Strip any signature the body already carries FIRST, the AI writes
   // its own sign-off (with Markdown two-space line breaks that defeated
   // the old exact-match guard), and a saved draft can round-trip already
   // signed. Both text and HTML are then built from the same stripped
@@ -454,7 +454,7 @@ async function sendEmail(
 
   // Insert the outbound row FIRST. On UNIQUE conflict (near-impossible
   // with a fresh UUID but defensive) we know something's already
-  // reserved this ID — bail without sending.
+  // reserved this ID, bail without sending.
   const inserted = (await sql`
     INSERT INTO messages (
       conversation_id, direction, sender, channel, body,
@@ -469,11 +469,11 @@ async function sendEmail(
   `) as Array<{ id: string; sent_at: string; external_message_id: string | null }>;
 
   if (inserted.length === 0) {
-    // UUID collision — astronomically unlikely but handle cleanly.
+    // UUID collision, astronomically unlikely but handle cleanly.
     console.error(
       `[reply-delivery] UUID collision on pre-INSERT for convo=${conversationId}`,
     );
-    return { ok: false, status: 500, error: 'Message ID collision — please retry' };
+    return { ok: false, status: 500, error: 'Message ID collision, please retry' };
   }
 
   // Now send. Pass the pre-generated ID so the outbound Message-ID
@@ -515,7 +515,7 @@ async function sendEmail(
   // These are different identifiers and only the Message-ID is stored
   // (it's what threading needs). But when someone reports "I sent a
   // reply and the client never got it", the only question that matters
-  // is what Resend did with it — and without the tracking id there is no
+  // is what Resend did with it, and without the tracking id there is no
   // way to look that up in their dashboard. Delivery can lag several
   // minutes, so "hasn't arrived" and "failed" look identical from the
   // panel; this line is what tells them apart.
@@ -526,7 +526,7 @@ async function sendEmail(
   if (sendResult.resendId) {
     try {
       // Swap the placeholder for the Message-ID Resend actually used, so
-      // the customer's reply — which will carry it in In-Reply-To — can
+      // the customer's reply, which will carry it in In-Reply-To, can
       // be matched, and so our next send can reference it. Null is fine:
       // the delivery poller backfills it (see _messages-delivery.ts).
       let realMessageId: string | null = null;
@@ -550,7 +550,7 @@ async function sendEmail(
   }
 
   console.log(
-    `[reply-delivery] email accepted by Resend — to=${recipientEmail} ` +
+    `[reply-delivery] email accepted by Resend, to=${recipientEmail} ` +
       `resend_id=${sendResult.resendId ?? 'unknown'} message_id=${preMessageId}`,
   );
 

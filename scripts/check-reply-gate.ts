@@ -5,7 +5,7 @@
  *
  * The first case is verbatim the Instagram DM that got a photography
  * brush-off sent to one of Vero's friends. Only 'personal' and 'spam' stay
- * silent — anything ambiguous still gets a reply, because a missed client
+ * silent, anything ambiguous still gets a reply, because a missed client
  * costs more than a needless hello.
  */
 import { config } from 'dotenv';
@@ -17,7 +17,7 @@ const CASES: Array<{ text: string; expect: string; note: string }> = [
   { text: "Hey, we're doing a bon fire tomorrow night at 6 if you want to come for it!", expect: 'personal', note: 'the DM that misfired' },
   { text: 'Hi! Are you available June 26 2027 for a wedding? What are your rates?', expect: 'business', note: 'real enquiry' },
   { text: 'Hello, we help photographers rank #1 on Google. Interested in a free audit?', expect: 'spam', note: 'agency pitch' },
-  { text: 'hey', expect: 'unclear', note: 'ambiguous — must still reply' },
+  { text: 'hey', expect: 'unclear', note: 'ambiguous, must still reply' },
   { text: 'Loved the photos you took of us last summer! Can we book again in May?', expect: 'business', note: 'returning client' },
 ];
 

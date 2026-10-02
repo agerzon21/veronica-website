@@ -27,7 +27,7 @@ const DESKTOP = heroVariantsDesktop as {
 /**
  * The homepage carousel's DESKTOP candidates, for the element that is only
  * ever shown from lg up. Still computed, because the carousel renders a
- * separate element per breakpoint and so takes a separate srcset for each —
+ * separate element per breakpoint and so takes a separate srcset for each
  * it is the one caller that must NOT get the full ladder.
  */
 export const desktopSrcSetFor = (original: string): string | undefined => {

@@ -16,14 +16,14 @@
  * is provider-agnostic, so switching vendors is an adapter, not a
  * rewrite.
  *
- *   improvmx (ACTIVE) — Alex's existing $9/mo Premium plan includes
+ *   improvmx (ACTIVE), Alex's existing $9/mo Premium plan includes
  *     webhooks. The alias forwards to Veronika's Gmail AND to this URL
  *     in one rule (comma-separated destinations), so Gmail keeps
  *     receiving everything on an independent path. Requires no DNS
- *     changes at all. Auth is a shared token in the query string —
+ *     changes at all. Auth is a shared token in the query string
  *     ImprovMX does not sign its webhooks.
  *
- *   resend (STANDBY) — signed with Svix, and Resend stores inbound mail
+ *   resend (STANDBY), signed with Svix, and Resend stores inbound mail
  *     so a down webhook loses nothing. Requires an MX record and shares
  *     the sending quota. Kept wired because it is the likely path if
  *     this ever ships to other photographers, where per-tenant domain
@@ -35,7 +35,7 @@
  *
  * Primary key is the SENDER'S ADDRESS, not the In-Reply-To header. One
  * client means one ongoing thread, which is how a photographer actually
- * works — and it means threading still works when a provider omits
+ * works, and it means threading still works when a provider omits
  * In-Reply-To (ImprovMX does not document it). In-Reply-To is used only
  * as a corroborating signal when present.
  *
@@ -53,7 +53,7 @@ import { getDb } from '../_db.js';
 import { processInboundMessage } from '../_ai-reply.js';
 import { splitQuotedEmail, looksLikeSameMessage, type QuotedMessage } from '../_email-quotes.js';
 
-/** Our own sending identity — used to drop echoes of our own outbound. */
+/** Our own sending identity, used to drop echoes of our own outbound. */
 const SELF_ADDRESS = (process.env.EMAIL_FROM_ADDRESS || 'vero@vero.photography').toLowerCase();
 
 /**
@@ -64,7 +64,7 @@ const SELF_NOTIFICATION_DOMAINS = ['web3forms.com'];
 
 /**
  * Senders whose bulk mail we WANT, because it carries new customer
- * reviews. Matched together with a review-ish subject — see
+ * reviews. Matched together with a review-ish subject, see
  * isReviewNotification.
  */
 const REVIEW_NOTIFICATION_DOMAINS = ['google.com', 'yelp.com'];
@@ -88,7 +88,7 @@ interface InboundEmail {
   /** Parent Message-ID if the provider exposed one. Advisory only. */
   inReplyTo: string | null;
   sentAt: string;
-  /** Names only — bytes stay with the provider / in Gmail. */
+  /** Names only: bytes stay with the provider / in Gmail. */
   attachmentNames: string[];
 }
 
@@ -193,7 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // buries the actual sentence under screens of '>'.
     //
     // The quote is also the ONLY record of messages Veronika sent from
-    // Gmail rather than the panel — those never touch our webhook. So
+    // Gmail rather than the panel, those never touch our webhook. So
     // before discarding it, mine it for anything missing.
     const split = splitQuotedEmail(email.body);
     await recoverQuotedOutbound(
@@ -205,7 +205,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     const body = email.attachmentNames.length
-      ? `${split.newContent}\n\n[Attachments: ${email.attachmentNames.join(', ')} — open in Gmail]`
+      ? `${split.newContent}\n\n[Attachments: ${email.attachmentNames.join(', ')}; open in Gmail]`
       : split.newContent;
 
     const inserted = (await sql`
@@ -223,7 +223,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `) as Array<{ id: string }>;
 
     if (inserted.length === 0) {
-      console.log(`[inbox/email-webhook] duplicate ${email.providerMessageId} — skipped`);
+      console.log(`[inbox/email-webhook] duplicate ${email.providerMessageId}, skipped`);
       return res.status(200).json({ ok: true, duplicate: true });
     }
 
@@ -233,14 +233,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── Hand off to the AI reply engine ───────────────────────────
     //
-    // Ack the provider FIRST, then think — same shape as the Instagram
+    // Ack the provider FIRST, then think, same shape as the Instagram
     // webhook. ImprovMX retries only twice before dropping mail
     // permanently, so a slow OpenAI call must never sit on the response.
     //
     // On email the engine DRAFTS rather than sends (migration 019), so
-    // nothing reaches the customer without Vero. Every other guardrail —
+    // nothing reaches the customer without Vero. Every other guardrail
     // kill switch, per-conversation toggle, rate limit, spam filter,
-    // booking-commitment bridge — applies unchanged.
+    // booking-commitment bridge, applies unchanged.
     //
     // Review notifications are skipped: Google telling us someone left a
     // review is not a customer writing in, and drafting a reply to it
@@ -287,7 +287,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ────────────────────────────────────────────────────────────────
 
 /**
- * ImprovMX POSTs a fully-parsed message in one request — no second
+ * ImprovMX POSTs a fully-parsed message in one request, no second
  * fetch needed for the body.
  *
  * Auth: ImprovMX does not sign webhooks. The only mechanisms available
@@ -297,7 +297,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
  * the observed source address unreliable.
  *
  * The alias should be configured with `?attachments=false` so files are
- * not base64-inlined into the request — Vercel rejects bodies over
+ * not base64-inlined into the request, Vercel rejects bodies over
  * 4.5MB, and a client sending three photos would otherwise vanish. The
  * files still reach Gmail; we keep their names.
  */
@@ -352,7 +352,7 @@ function parseImprovMx(req: VercelRequest, rawBody: string): ParseResult {
   //
   // We route inbound mail into a conversation by From address alone, and
   // From is trivially forged. ImprovMX evaluates SPF upstream and passes
-  // the verdict through, so use it — a forged "client" asking Veronika to
+  // the verdict through, so use it, a forged "client" asking Veronika to
   // change payment details is the realistic attack here, not spam.
   //
   // We FLAG rather than reject: SPF legitimately fails on relayed and
@@ -364,12 +364,12 @@ function parseImprovMx(req: VercelRequest, rawBody: string): ParseResult {
   if (spf === 'fail') {
     body =
       `⚠️ This message failed sender verification (SPF). The "from" address ` +
-      `may be forged — confirm by phone before acting on anything in it.\n\n${body}`;
+      `may be forged, confirm by phone before acting on anything in it.\n\n${body}`;
     console.warn(`[inbox/email-webhook] SPF fail for claimed sender ${fromAddress}`);
   }
 
   // Prefer the message's own Message-ID so a redelivery dedupes. Fall
-  // back to a content-derived key rather than a random one — a random id
+  // back to a content-derived key rather than a random one, a random id
   // would defeat the UNIQUE constraint on retry.
   //
   // Attachment names are folded into the hash. Without them, a client who
@@ -403,7 +403,7 @@ function parseImprovMx(req: VercelRequest, rawBody: string): ParseResult {
 
 /**
  * Read the upstream SPF result out of whichever header the provider
- * supplied. Returns null when no verdict is present — absence is not
+ * supplied. Returns null when no verdict is present, absence is not
  * failure, and must not be treated as one.
  */
 function spfVerdict(headers: Record<string, unknown>): 'pass' | 'fail' | null {
@@ -413,7 +413,7 @@ function spfVerdict(headers: Record<string, unknown>): 'pass' | 'fail' | null {
   const lower = raw.toLowerCase();
   if (/spf\s*=\s*pass|^\s*pass\b/.test(lower)) return 'pass';
   if (/spf\s*=\s*(?:fail|softfail)|^\s*(?:fail|softfail)\b/.test(lower)) return 'fail';
-  // none / neutral / temperror / permerror — not an assertion either way.
+  // none / neutral / temperror / permerror, not an assertion either way.
   return null;
 }
 
@@ -424,7 +424,7 @@ const IMPROVMX_SOURCE_IP = '15.237.103.194';
 // ────────────────────────────────────────────────────────────────
 
 /**
- * Resend signs webhooks with Svix and sends METADATA ONLY — the body,
+ * Resend signs webhooks with Svix and sends METADATA ONLY, the body,
  * headers, and attachments require a second API call. Kept wired but
  * inactive; see the file header for why ImprovMX is the current choice.
  */
@@ -507,7 +507,7 @@ async function parseResend(req: VercelRequest, rawBody: string): Promise<ParseRe
 /**
  * Reasons to acknowledge a message without storing it.
  *
- * Vacation responders and bounce notifications are the common case —
+ * Vacation responders and bounce notifications are the common case
  * without this filter they create phantom "the client replied" threads
  * and, once AI is enabled for email, an auto-responder ping-pong.
  */
@@ -520,7 +520,7 @@ function shouldSkip(
 
   // Review notifications are wanted, and the bulk filter below would eat
   // them. Google Business Profile and Yelp both send with
-  // `Precedence: bulk` / `Auto-Submitted: auto-generated` — the exact
+  // `Precedence: bulk` / `Auto-Submitted: auto-generated`, the exact
   // headers that identify a vacation responder. Without this exemption
   // the reviews auto-ingest (Phase 6) has no input at all: the mail
   // arrives, and we throw it away before storing it.
@@ -532,14 +532,14 @@ function shouldSkip(
 
   // Notification mail generated by our OWN contact-form pipeline and
   // addressed to Veronika. Ingesting it creates a second, junk thread
-  // beside the real one for every single submission — the customer's
+  // beside the real one for every single submission, the customer's
   // details rendered as if a stranger named "Vero Photography Website"
   // had emailed in.
   //
   // The Resend lead notification is already covered by the SELF_ADDRESS
   // check above (it sends as vero@). Web3Forms is not: it sends from its
   // own domain, and the site still dual-runs it. This can come out once
-  // the Web3Forms cord is cut — see Phase 2 PR 2 in TRANSITIONS.md.
+  // the Web3Forms cord is cut, see Phase 2 PR 2 in TRANSITIONS.md.
   const domain = fromAddress.split('@')[1] ?? '';
   if (SELF_NOTIFICATION_DOMAINS.includes(domain)) {
     return `own form-notification pipeline (${domain})`;
@@ -592,7 +592,7 @@ async function readRawBody(req: VercelRequest): Promise<string> {
     const buf = await getRawBody(req, { encoding: 'utf8' });
     return typeof buf === 'string' ? buf : String(buf);
   } catch {
-    // Body already consumed upstream — reconstruct as best we can.
+    // Body already consumed upstream, reconstruct as best we can.
     const b = req.body;
     if (b == null) return '';
     if (typeof b === 'string') return b;
@@ -601,7 +601,7 @@ async function readRawBody(req: VercelRequest): Promise<string> {
   }
 }
 
-/** Accepts JSON or form-encoded — providers differ and can change. */
+/** Accepts JSON or form-encoded, providers differ and can change. */
 function parseBody(raw: string): Record<string, unknown> | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -659,7 +659,7 @@ function parseFromHeader(from: string): { displayName: string | null; address: s
  * Splitting on whitespace BEFORE stripping brackets matters: In-Reply-To
  * is single-valued per spec but clients do send space-separated chains,
  * and stripping outer brackets first corrupts every token. Take the last
- * one — the most immediate parent.
+ * one, the most immediate parent.
  */
 function normalizeMsgId(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -699,7 +699,7 @@ function attachmentNames(value: unknown): string[] {
  *
  * The value lands in messages.sent_at, and the messages_touch_conversation
  * trigger (migration 005) copies it unconditionally into
- * conversations.last_message_at — which is the inbox sort key. The `Date`
+ * conversations.last_message_at, which is the inbox sort key. The `Date`
  * header is set by the sender's mail client, so without a clamp anyone
  * can pin a thread to the top of Vero's inbox forever with a year-2099
  * date, or sink a live conversation below every stale one with a
@@ -711,7 +711,7 @@ function attachmentNames(value: unknown): string[] {
  * Ordering integrity beats fidelity to a clock we cannot verify.
  */
 const FUTURE_SKEW_MS = 5 * 60 * 1000; // 5 minutes of clock drift
-const PAST_SKEW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — a slow relay, not a broken clock
+const PAST_SKEW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, a slow relay, not a broken clock
 
 function coerceDate(value: unknown): string {
   const now = Date.now();
@@ -722,7 +722,7 @@ function coerceDate(value: unknown): string {
   };
 
   if (typeof value === 'number' && Number.isFinite(value)) {
-    // Unix seconds vs milliseconds — anything below ~1e11 is seconds.
+    // Unix seconds vs milliseconds, anything below ~1e11 is seconds.
     const iso = clamp(value < 1e11 ? value * 1000 : value);
     if (iso) return iso;
   }
@@ -731,12 +731,12 @@ function coerceDate(value: unknown): string {
     if (iso) return iso;
   }
   if (value != null && String(value).trim()) {
-    console.warn(`[inbox/email-webhook] unusable Date "${String(value).slice(0, 60)}" — using now`);
+    console.warn(`[inbox/email-webhook] unusable Date "${String(value).slice(0, 60)}", using now`);
   }
   return new Date(now).toISOString();
 }
 
-/** Stable non-cryptographic hash — dedup key only, never a secret. */
+/** Stable non-cryptographic hash, dedup key only, never a secret. */
 function hashString(input: string): string {
   let h = 2166136261;
   for (let i = 0; i < input.length; i++) {
@@ -769,7 +769,7 @@ function firstQuery(v: string | string[] | undefined): string | null {
  * HTML → readable text, for senders that omit a text/plain part.
  *
  * Drops <head> (otherwise "Untitled Document" leads the preview) and
- * CSS-hidden preheader divs — the marketing pattern where a
+ * CSS-hidden preheader divs, the marketing pattern where a
  * display:none block exists purely to control Gmail's snippet. Without
  * that, the inbox preview shows tracking chrome instead of the message.
  */
@@ -799,7 +799,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-// Documentation only — Vercel reads `export const config` from the
+// Documentation only, Vercel reads `export const config` from the
 // top-level function file (api/inbox.ts), not from imported handlers.
 // The bodyParser:false that actually applies is declared there.
 export const config = {
@@ -816,7 +816,7 @@ export const config = {
  * webhook and the thread has a hole. Their next reply quotes it, so the
  * quoted block is the only evidence we will ever get. Without this, the
  * panel shows the client asking a question and then apparently being
- * ignored — and once AI-on-email lands, the assistant would draft a
+ * ignored, and once AI-on-email lands, the assistant would draft a
  * reply to a question she already answered.
  *
  * Guards, in order of how badly each would misfire:
@@ -866,7 +866,7 @@ async function recoverQuotedOutbound(
     //
     // Attribution lines carry a wall-clock time with NO timezone ("at
     // 1:22 PM"). Vercel runs UTC, so parsing that yields 13:22 UTC for a
-    // message actually sent at 13:22 EDT — four hours early, which sorts
+    // message actually sent at 13:22 EDT, four hours early, which sorts
     // the recovered message above the thread instead of into it. That is
     // exactly the bug this replaced: the recovery worked, but landed the
     // message where nobody would look for it.
@@ -879,7 +879,7 @@ async function recoverQuotedOutbound(
     const anchorMs = Number.isFinite(replyMs) ? replyMs : Date.now();
     const sentAt = new Date(anchorMs - 1000).toISOString();
 
-    // 'recovered:' marks this as reconstructed, not sent by us — it is a
+    // 'recovered:' marks this as reconstructed, not sent by us, it is a
     // synthetic id and is filtered out of RFC 5322 References headers by
     // isRealMessageId() in _messages-send.ts.
     const externalId = `recovered:${hashString(`${conversationId}|${quote.body}`)}`;
@@ -914,8 +914,8 @@ async function recoverQuotedOutbound(
  * when a customer leaves a review.
  *
  * Requires BOTH a known sender domain and a review-ish subject. Google
- * sends a great deal of bulk mail to a business address — security
- * alerts, Workspace marketing, Search Console digests — and none of that
+ * sends a great deal of bulk mail to a business address, security
+ * alerts, Workspace marketing, Search Console digests, and none of that
  * belongs in Veronika's client inbox. Subdomain-aware so
  * `businessprofile-noreply@notifications.google.com` matches too.
  */

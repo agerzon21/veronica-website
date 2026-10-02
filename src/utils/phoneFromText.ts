@@ -69,7 +69,7 @@ export function formatWaId(waId: string): string {
  * tel:, sms:, wa.me, and the wa_id a WhatsApp webhook reports. Migration 037's
  * column comment is explicit that normalisation lives in application code
  * precisely "so it can be matched against a WhatsApp wa_id and an SMS sender
- * without a second parse" — this is that function.
+ * without a second parse", this is that function.
  *
  * Returns null rather than guessing. A half-parsed number is worse than no
  * button: the button appears, she taps it in a hurry, and it dials somebody
@@ -219,7 +219,7 @@ export function findPhonesInText(
      * A tel: LINK TARGET, not a typed number.
      *
      * Bark's marketing mail renders "call our Customer Experience team on
-     * (424) 227-5323 <tel:+14242275869>" — the href and the words disagree,
+     * (424) 227-5323 <tel:+14242275869>", the href and the words disagree,
      * and neither belongs to a client. Every real number in this inbox was
      * typed in prose ("my number is 732 330 3426"), so dropping URI targets
      * costs nothing and removes the only false positive left in 261 real

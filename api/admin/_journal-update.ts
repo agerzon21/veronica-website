@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       published_at: string | null;
     }>;
 
-    // Rebuild whenever this edit changes what the public site should serve —
+    // Rebuild whenever this edit changes what the public site should serve
     // which includes UNpublishing, not just publishing. The prerendered page is
     // filesystem-served and outlives the database change otherwise. A slug
     // change matters too: it strands the old URL on a stale file.

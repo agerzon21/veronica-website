@@ -4,7 +4,7 @@
  *   GET /api/reviews[?limit=N]
  *     → { success, reviews: [PublicReview, ...], aggregate: { rating, count } }
  *
- * Returns only reviews that are BOTH visible AND featured — the site
+ * Returns only reviews that are BOTH visible AND featured, the site
  * shows a curated set on the homepage/testimonial section, not the
  * full moderation queue. Ordered by (sort_order ASC, publish_date DESC
  * NULLS LAST, created_at DESC) so Vero can pin favourites via
@@ -15,7 +15,7 @@
  * it from admin without hitting the Places API (see
  * api/admin/_reviews-aggregate.ts).
  *
- * Minimal payload — the admin view carries the moderation metadata
+ * Minimal payload, the admin view carries the moderation metadata
  * (visible/featured/sort_order), the public payload doesn't need any of
  * it. `source` IS public now: the full-review popup names the site the
  * review lives on ("Read it on Google"), and `review_url` / `photo_urls`
@@ -29,7 +29,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
 
-// Hard ceiling on ?limit even if a caller passes something huge —
+// Hard ceiling on ?limit even if a caller passes something huge
 // no client legitimately needs more than this, and it caps the
 // worst-case response size.
 const MAX_LIMIT = 100;
@@ -60,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sql = getDb();
-    // Two independent queries fire in parallel — Neon serverless keeps
+    // Two independent queries fire in parallel, Neon serverless keeps
     // its own pooled connection, so the round-trips overlap cleanly.
     const [rows, aggregateRows] = await Promise.all([
       sql`

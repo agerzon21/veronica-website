@@ -7,7 +7,7 @@
  * WHY THIS EXISTS
  * Vero asked three times for drafts to stop opening "Hi! I'm Vero's
  * Assistant". Each time the in-panel assistant agreed and wrote a `tone`
- * entry, and each time nothing changed — the persona was hard-coded, and
+ * entry, and each time nothing changed, the persona was hard-coded, and
  * `tone` entries are injected as KNOWN FACTS beneath a block marked "never
  * violate". Nothing anywhere could answer "so which voice IS it using?"
  * without someone reading the prompt source. Now it can be checked.
@@ -22,7 +22,7 @@ import { buildSystemPrompt } from '../api/_ai-reply.js';
 async function main() {
   const url = process.env.POSTGRES_URL || process.env.DATABASE_URL;
   if (!url) {
-    console.error('No POSTGRES_URL / DATABASE_URL — cannot read the knowledge base.');
+    console.error('No POSTGRES_URL / DATABASE_URL, cannot read the knowledge base.');
     process.exit(2);
   }
   const sql = neon(url);
@@ -34,7 +34,7 @@ async function main() {
 
   const persona =
     rows.find((r) => r.category === 'identity' && r.label === 'Reply persona')?.content ??
-    '(unset — defaults to assistant)';
+    '(unset, defaults to assistant)';
   // Both paths, because the whole point is that they differ: an email draft
   // Vero approves goes out as her; an Instagram reply auto-sends unreviewed
   // and must not claim to be her.

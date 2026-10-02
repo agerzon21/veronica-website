@@ -684,7 +684,7 @@ const Contact = () => {
         <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />
       </Helmet>
 
-      {/* Hero — the same band every other page opens with: 45vh / 53vh, the
+      {/* Hero: the same band every other page opens with: 45vh / 53vh, the
           same veil, the same header ramp. */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden" bg="#3a342d">
           {/* srcSet is the whole ladder, mobile rungs and desktop rungs
@@ -1252,7 +1252,7 @@ const Contact = () => {
                   pointerEvents: 'none',
                   opacity: floating ? 1 : 0,
                   transition: 'opacity 0.25s',
-                  // brand.surface at zero alpha, NOT `transparent` — the
+                  // brand.surface at zero alpha, NOT `transparent`, the
                   // keyword interpolates through rgba(0,0,0,0) and greys the
                   // middle of the fade.
                   bgGradient: 'linear(to-t, brand.surface, rgba(253, 249, 240, 0))',

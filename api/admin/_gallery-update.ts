@@ -8,13 +8,13 @@
  *   → 404 row not found
  *   → 409 slug collides with another row
  *
- * All editable fields are optional in the request — only the ones
+ * All editable fields are optional in the request, only the ones
  * present get updated. This lets the admin UI patch a single field
  * (e.g. "flip to published", "edit description") without sending
  * the whole row shape.
  *
  * status='draft' → status='published' transition auto-stamps
- * published_at (only on the first transition — subsequent flips
+ * published_at (only on the first transition, subsequent flips
  * preserve the original date so unpublishing then republishing
  * doesn't reset the chronological order).
  */
@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       publishedAt = new Date().toISOString();
     }
 
-    // COALESCE-based patch — only overwrite columns that were
+    // COALESCE-based patch, only overwrite columns that were
     // provided in the request. Every field falls back to the
     // existing column value when we pass NULL.
     const rows = (await sql`

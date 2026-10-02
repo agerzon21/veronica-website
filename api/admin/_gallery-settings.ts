@@ -13,7 +13,7 @@
  *   → 200 { success }
  *   → 400 if folderId is empty or unparseable
  *
- * The stored value is whatever the user typed (URL or bare id) —
+ * The stored value is whatever the user typed (URL or bare id)
  * the cron re-parses it each run so future edits don't require a
  * particular format.
  */
@@ -68,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: "Couldn't extract a Drive folder ID. Paste the folder's full URL (or its ID).",
         });
       }
-      // Store whatever the user typed — the sync code parses it each
+      // Store whatever the user typed, the sync code parses it each
       // time, so we don't lose the URL format if that's what they
       // pasted (helps visual verification later).
       await sql`

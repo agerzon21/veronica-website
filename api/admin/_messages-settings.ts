@@ -9,7 +9,7 @@
  *   → 400 invalid payload / unsafe HTML
  *   → 401 wrong password
  *
- * Admin-level (not super) — this is Vero's own sign-off, and she should
+ * Admin-level (not super), this is Vero's own sign-off, and she should
  * be able to change it without going through Alex.
  *
  * Stored in system_state under the keys seeded by migration 017. An
@@ -29,7 +29,7 @@ const MAX_SIGNATURE_LEN = 4000;
  * is the one admin-editable field that becomes markup in someone else's
  * inbox. Vero is trusted, but a pasted snippet from a "free email
  * signature generator" can easily carry a tracking script or a remote
- * iframe — which would tank deliverability and leak her recipients to a
+ * iframe, which would tank deliverability and leak her recipients to a
  * third party. Reject the dangerous constructs rather than silently
  * stripping them, so she can see what was wrong and fix it.
  */

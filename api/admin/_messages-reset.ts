@@ -1,7 +1,7 @@
 /**
- * Admin: "Wipe conversation" — test-reset for a single conversation.
+ * Admin: "Wipe conversation", test-reset for a single conversation.
  *
- * Available to BOTH admin and super — Vero resets test conversations
+ * Available to BOTH admin and super, Vero resets test conversations
  * constantly while tuning the AI assistant, and gating this on super
  * would mean asking Alex every time. (The handler has always used
  * requireAdmin; this docblock said "super-admin only" and was simply
@@ -25,7 +25,7 @@
  *
  * The two writes (DELETE messages + UPDATE conversation) are wrapped
  * in a Postgres transaction so a partial reset (messages gone but
- * summary still cached) cannot happen — the neon serverless driver
+ * summary still cached) cannot happen, the neon serverless driver
  * exposes .transaction() for exactly this.
  */
 
@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // conversation to a clean slate, send new probe messages, see how
   // the (freshly-configured) AI responds without carryover from
   // previous test runs. The UI's ConfirmDialog is the safeguard
-  // against accidental clicks — server just enforces admin auth.
+  // against accidental clicks, server just enforces admin auth.
   const auth = await requireAdmin(req.body?.password);
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
 
@@ -90,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Best-effort clear of any stuck ai_reply_intents claim (kept
     // out of the transaction above so the reset still works even
-    // if migration 015 hasn't been applied yet — a missing table
+    // if migration 015 hasn't been applied yet, a missing table
     // throws 42P01, which we swallow). If a lambda ever crashed
     // hard mid-flight, its claim row would linger and future AI
     // replies would skip with 'skipped-concurrent-run' until
@@ -109,12 +109,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (msg.includes('does not exist') || msg.includes('42P01'));
       if (isMissingTable) {
         console.warn(
-          '[admin/messages-reset] ai_reply_intents table missing — skipped ' +
+          '[admin/messages-reset] ai_reply_intents table missing, skipped ' +
             'stuck-claim cleanup. Apply db/migrations/015-ai-reply-intents.sql ' +
             'to prod Neon.',
         );
       } else {
-        // Log but don't fail — the main reset succeeded, this is bonus cleanup.
+        // Log but don't fail, the main reset succeeded, this is bonus cleanup.
         console.error(
           '[admin/messages-reset] failed to clear ai_reply_intents:',
           claimErr,

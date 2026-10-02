@@ -1,7 +1,7 @@
 /**
  * Admin: create or update a wedding vendor. The reviews-upsert pattern:
  * id present → UPDATE, absent → INSERT. Full-shape body, no patch
- * complexity — the editor always sends every field.
+ * complexity, the editor always sends every field.
  *
  * POST { password, vendor: { id?, name, category, blurb?, websiteUrl?,
  *        instagram?, photoUrl?, sortOrder?, active? } }

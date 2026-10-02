@@ -1,4 +1,4 @@
-# Meta Business Verification — reference notes
+# Meta Business Verification, reference notes
 
 Alex owns this end-to-end (Vero doesn't touch it). This doc is a
 compact reference: what we decided, what to submit, gotchas we
@@ -11,7 +11,7 @@ anticipated, and what verification unlocks downstream.
 | Business type | Sole proprietor | No LLC/DBA registered. Meta accepts individual verification with photo ID + utility bill showing name + address. |
 | Legal name | Veronika Polbina | She has NOT taken Gerzon. Polbina is her legal name and the one on her ID, her contracts and her insurance policy. Not a marketing name. |
 | Facebook Page | ✓ Already exists, linked to vero.art.photo | Required by Meta's plumbing regardless of whether we ever post to it. |
-| Business email | `vero@vero.photography` | **Test first** — mailbox must actually *receive* mail (Resend is send-only). If it doesn't, use personal Gmail. |
+| Business email | `vero@vero.photography` | **Test first**, mailbox must actually *receive* mail (Resend is send-only). If it doesn't, use personal Gmail. |
 | Business address | Vero's home address | Must match the utility bill. |
 | Business phone | Vero's mobile | Meta calls/SMSes to verify. |
 | Website | https://vero.photography | |
@@ -20,7 +20,7 @@ anticipated, and what verification unlocks downstream.
 
 For sole proprietor verification, Meta wants **both**:
 
-- Government photo ID (driver's license or passport) — clear scan/photo
+- Government photo ID (driver's license or passport), clear scan/photo
 - Utility bill OR bank statement, ≤90 days old, showing name + address that match the ID
 
 **Use a scanner app (iOS Notes has one built in).** Photos with corners cut off / glare / obvious phone-shake get bounced. PDFs from a scanner rarely do.
@@ -35,21 +35,21 @@ For sole proprietor verification, Meta wants **both**:
 
 ## Timeline
 
-- Typical: 3–7 business days
-- Occasionally: 2–3 weeks if Meta requests additional docs
+- Typical: 3-7 business days
+- Occasionally: 2-3 weeks if Meta requests additional docs
 - Rare worst case: up to 6 weeks
 
-Meta emails the decision to the business email above. If declined, they explain why and you can re-submit with corrected docs — usually straightforward.
+Meta emails the decision to the business email above. If declined, they explain why and you can re-submit with corrected docs, usually straightforward.
 
 ## What this unlocks
 
 Only once verification is approved:
 
 - **Instagram App Review** can be submitted for our vero-photography-feed app with a screencast of the messaging assistant
-- App Review takes another 1–2 weeks of Meta review
+- App Review takes another 1-2 weeks of Meta review
 - Once approved, the app flips from "development" (testers only) to "Live" and real customer Instagram DMs can flow through the messaging system
 
-Without verification the messaging assistant works only for Instagram accounts we add as "testers" — fine for our own end-to-end testing, but not for real customers.
+Without verification the messaging assistant works only for Instagram accounts we add as "testers", fine for our own end-to-end testing, but not for real customers.
 
 ## Gotchas to avoid
 
@@ -64,8 +64,8 @@ Quick check that `vero@vero.photography` is a real inbox, not just a Resend send
 
 - From Gmail (or any other account), send a plain "hi" to `vero@vero.photography`
 - If Vero gets it, use that address on the form
-- If she doesn't, use `agerzon21@gmail.com` or her personal Gmail instead — Meta accepts personal addresses, just looks a touch less on-brand to the reviewer
+- If she doesn't, use `agerzon21@gmail.com` or her personal Gmail instead, Meta accepts personal addresses, just looks a touch less on-brand to the reviewer
 
 ## Ping me when the status changes
 
-Just "Meta approved" or "Meta bounced, said X" — so I can either proceed with App Review or help fix documentation issues.
+Just "Meta approved" or "Meta bounced, said X", so I can either proceed with App Review or help fix documentation issues.

@@ -6,7 +6,7 @@ import FaChevronLeft from '../../icons/fa/FaChevronLeft';
  * view (client detail, mode chooser, new-client forms, journal editor,
  * mobile Messages conversation view). Replaces the hand-rolled
  * `Box as="button"` back links that were showing up on every screen
- * with 14-22px tap targets — impossible to hit reliably on a phone.
+ * with 14-22px tap targets, impossible to hit reliably on a phone.
  *
  * Aligns visually with the section it's inside by using ml={-2} so the
  * chevron sits flush with body text below.
@@ -15,7 +15,7 @@ import FaChevronLeft from '../../icons/fa/FaChevronLeft';
 interface Props {
   onClick: () => void;
   label?: string;
-  // Optional aria-label override for icon-only usage (rare — most back
+  // Optional aria-label override for icon-only usage (rare, most back
   // buttons want the visible text).
   'aria-label'?: string;
   /**
@@ -37,7 +37,7 @@ const AdminBackButton = ({ onClick, label = 'Back', 'aria-label': ariaLabel, onD
       alignItems="center"
       gap={2}
       // The negative margin pulls the icon back to align with body text
-      // below — but only where the parent has enough padding to absorb it.
+      // below, but only where the parent has enough padding to absorb it.
       // If a caller doesn't have that room they can wrap us in a spacer.
       ml={{ base: -2, md: -2 }}
       px={2}

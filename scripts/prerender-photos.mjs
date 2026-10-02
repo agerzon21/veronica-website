@@ -1,5 +1,5 @@
 // Pre-render script for individual photo pages. Runs at build time
-// (npm build) — generates one static HTML file per published photo
+// (npm build), generates one static HTML file per published photo
 // with proper meta tags so search engines can index the page
 // without executing JavaScript.
 //
@@ -26,7 +26,7 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.local', quiet: true });
 loadEnv({ quiet: true });
 
-// VERCEL_ENV, not VERCEL — the latter is '1' on preview builds too, and a
+// VERCEL_ENV, not VERCEL, the latter is '1' on preview builds too, and a
 // preview should stay buildable when the DB is briefly unreachable.
 const isProdBuild = process.env.VERCEL_ENV === 'production';
 // Escape hatch so an urgent contract-signing hotfix is never blocked by a
@@ -55,7 +55,7 @@ const SITE = 'https://vero.photography';
 /**
  * Remove the site-name suffix that photos.ts appends to every title.
  *
- * This used to be an inline /  \\| Vero Photography$/ — in which `\\|` is an
+ * This used to be an inline /  \\| Vero Photography$/, in which `\\|` is an
  * escaped backslash followed by ALTERNATION, so it matched " Vero Photography"
  * at the end and left the pipe behind. All 227 breadcrumbs shipped a name
  * ending in " |". Slicing the constant cannot drift from it.
@@ -63,13 +63,13 @@ const SITE = 'https://vero.photography';
 const stripSuffix = (title) =>
   title.endsWith(TITLE_SUFFIX) ? title.slice(0, -TITLE_SUFFIX.length) : title;
 
-// Neon setup — accepts either POSTGRES_URL (matches api/_db.ts
+// Neon setup, accepts either POSTGRES_URL (matches api/_db.ts
 // convention) or DATABASE_URL (common in local .env). No URL → skip.
 const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 if (!dbUrl) {
   failProd('no POSTGRES_URL / DATABASE_URL in a production build.');
   console.warn(
-    '[prerender] POSTGRES_URL not set — skipping prerender + sitemap generation.',
+    '[prerender] POSTGRES_URL not set, skipping prerender + sitemap generation.',
   );
   process.exit(0);
 }
@@ -102,7 +102,7 @@ for (let attempt = 0; attempt < 3; attempt++) {
 if (lastErr) {
   console.error('[prerender] DB query failed after 3 attempts:', lastErr.message);
   failProd('could not reach the database.');
-  console.warn('[prerender] Continuing with empty photo set — SPA route still works.');
+  console.warn('[prerender] Continuing with empty photo set, SPA route still works.');
   rows = [];
 }
 
@@ -114,12 +114,12 @@ if (lastErr) {
  * Same scoring as findRelatedPhotos in src/data/photos.ts: keyword overlap
  * first, same-category as the tiebreak. Duplicated rather than imported
  * because this script is plain .mjs and photos.ts is TypeScript inside the
- * Vite graph — keep the two in sync if either changes.
+ * Vite graph, keep the two in sync if either changes.
  *
  * ONE deliberate difference: the app drops candidates with zero keyword
  * overlap, because showing a visitor an unrelated photo under "Related" is
  * worse than showing fewer. Here the list is a crawl path, and a photo whose
- * keywords match nothing would otherwise end up with no inbound links at all —
+ * keywords match nothing would otherwise end up with no inbound links at all
  * 16 of the 227 did. Falling back to same-category keeps every page reachable.
  */
 /**
@@ -157,7 +157,7 @@ function relatedTo(photo, all, count = 6) {
  *
  * The keyword-related list leaves gaps: relatedness is not symmetric, so 16 of
  * the 227 photos were never in anybody's top 6 and ended up with no inbound
- * links at all. A ring is the cheap guarantee — every photo has exactly one
+ * links at all. A ring is the cheap guarantee, every photo has exactly one
  * predecessor, so every photo is reachable no matter how unusual its keywords.
  */
 function ringNeighbours(photo, all) {
@@ -184,7 +184,7 @@ const photos = rows
     keywords: Array.isArray(r.keywords) ? r.keywords : [],
     // For sitemap <lastmod>. NOT updated_at: the nightly gallery-sync cron
     // touches drive_seen_at on every row it sees in Drive, and the
-    // touch-updated_at trigger fires on any UPDATE — so updated_at is "when
+    // touch-updated_at trigger fires on any UPDATE, so updated_at is "when
     // the cron last ran" (all 229 photos said "today"), which is the exact
     // all-identical-lastmod pattern that teaches Google to ignore the field.
     // published_at is set once and left alone.
@@ -200,7 +200,7 @@ const photoTemplate = template.replace(
   '',
 );
 if (photoTemplate === template) {
-  console.warn('[prerender] homepage noscript block not found — did index.html change?');
+  console.warn('[prerender] homepage noscript block not found, did index.html change?');
 }
 
 let totalPages = 0;
@@ -238,7 +238,7 @@ for (const photo of photos) {
   html = html.replace(/\s*<meta\s+property="og:[^"]*"\s+content="[^"]*"\s*\/?>/g, '');
   // Drop any canonical inherited from index.html. photoMeta adds the correct
   // per-photo one below; two canonicals on a page is worse than none, and
-  // relying on the Open Graph strip to swallow it was fragile — a single
+  // relying on the Open Graph strip to swallow it was fragile, a single
   // explanatory comment in the wrong place silently terminated that regex.
   html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
 
@@ -340,7 +340,7 @@ ${ringNeighbours(photo, photos)
 console.log(`Pre-rendered ${totalPages} individual photo pages.`);
 
 // ---------------------------------------------------------------------------
-// Category gallery pages — the missing link.
+// Category gallery pages, the missing link.
 //
 // The 227 photo pages above are richly interlinked (related + ring neighbours)
 // and every one points UP to /gallery/<category>. Nothing pointed DOWN. The
@@ -355,7 +355,7 @@ console.log(`Pre-rendered ${totalPages} individual photo pages.`);
 // Descriptions follow the CLAUDE.md tone rules: no locations, no praise words.
 //
 // ROUTING: vercel.json rewrites /gallery/:category to /gallery/:category.html,
-// with the category list spelled out rather than a bare :category — an unknown
+// with the category list spelled out rather than a bare :category, an unknown
 // category would otherwise rewrite to a .html that does not exist and 404,
 // where today it falls through to the SPA. Keep that list and this object in
 // sync. (The note lives here because vercel.json is JSON and cannot hold a
@@ -369,7 +369,7 @@ const CATEGORY_META = {
   },
   portraits: {
     heading: 'Portrait Photography',
-    description: 'Portrait sessions — individual, couple and editorial work.',
+    description: 'Portrait sessions, individual, couple and editorial work.',
   },
   family: {
     heading: 'Family Photography',
@@ -477,7 +477,7 @@ for (const [category, meta] of Object.entries(CATEGORY_META)) {
   // An empty category would ship a page advertising nothing. Skip it rather
   // than publish a dead end, and let the reachability check below complain.
   if (inCategory.length === 0) {
-    console.warn(`[prerender] category "${category}" has no published photos — skipping page.`);
+    console.warn(`[prerender] category "${category}" has no published photos, skipping page.`);
     continue;
   }
 
@@ -489,7 +489,7 @@ for (const [category, meta] of Object.entries(CATEGORY_META)) {
   // Real image, resolved from the DB to the same static path the
   // photo pages use. The old categoryDetails image paths in Gallery.tsx still
   // point at /assets/photos/..., which is where photos lived BEFORE they moved
-  // to Drive — pointing an og:image there would share a broken preview.
+  // to Drive, pointing an og:image there would share a broken preview.
   const ogImage = `${SITE}${inCategory[0].url}`;
   let html = photoTemplate;
 
@@ -532,7 +532,7 @@ ${inCategory
     </script>`;
 
   // index.html ships its own title/description/OG/canonical for the homepage.
-  // Leaving them gives two <title>s and — worse — two canonicals, which is the
+  // Leaving them gives two <title>s and, worse, two canonicals, which is the
   // exact trap the photo loop above documents. Strip before injecting.
   html = html.replace(/[ \t]*<title>[\s\S]*?<\/title>\n?/, '');
   html = html.replace(/[ \t]*<meta name="description"[^>]*>\n?/, '');
@@ -580,7 +580,7 @@ console.log(`Pre-rendered ${categoryPages} category gallery pages.`);
 if (categoryPages === 0) failProd('prerendered 0 category pages.');
 
 // ---------------------------------------------------------------------------
-// Journal — listing page + one page per published post.
+// Journal, listing page + one page per published post.
 //
 // Same defect the category pages had, and it mattered more: the posts carry
 // real venue and town names ("Malcolm Gross Rose Gardens", "Milford, PA"),
@@ -588,7 +588,7 @@ if (categoryPages === 0) failProd('prerendered 0 category pages.');
 // reachable, prerendered, or in the sitemap. /journal served the SPA shell and
 // the posts load from /api/journal at runtime.
 //
-// Published predicate is copied verbatim from api/journal.ts handleList —
+// Published predicate is copied verbatim from api/journal.ts handleList
 // status = 'published' AND published_at IS NOT NULL. A draft must never get a
 // static page; getting this wrong publishes unfinished writing.
 // ---------------------------------------------------------------------------
@@ -642,7 +642,7 @@ for (const list of seriesMembers.values()) {
  * Deliberately tiny Markdown subset: "## heading" and blank-line-separated
  * paragraphs, with inline [text](url) flattened to its text and everything
  * escaped FIRST. This is the noscript body a crawler reads, not the rendered
- * page — JournalPost.tsx still owns real rendering. A full parser here would
+ * page, JournalPost.tsx still owns real rendering. A full parser here would
  * be more surface area than the job needs, and mis-parsed Markdown would ship
  * broken HTML into every post page.
  */
@@ -774,7 +774,7 @@ ${others.map((o) => `          <li><a href="/journal/${o.slug}">${esc(o.title)}<
   journalPages++;
 }
 
-// The listing page — this is the edge that makes the posts reachable at all.
+// The listing page, this is the edge that makes the posts reachable at all.
 {
   const canonical = `${SITE}/journal`;
   const pageTitle = `Journal${TITLE_SUFFIX}`;
@@ -854,7 +854,7 @@ ${posts
 ${posts
   .map(
     (o) =>
-      `          <li><a href="/journal/${o.slug}">${esc(o.title)}</a> — ${esc((o.excerpt || '').trim())}</li>`,
+      `          <li><a href="/journal/${o.slug}">${esc(o.title)}</a>, ${esc((o.excerpt || '').trim())}</li>`,
   )
   .join('\n')}
         </ul>
@@ -875,7 +875,7 @@ ${posts
 console.log(`Pre-rendered ${journalPages} journal posts + the journal index.`);
 
 // ---------------------------------------------------------------------------
-// Static marketing pages — /about, /contact, /wedding-photography, /gallery.
+// Static marketing pages, /about, /contact, /wedding-photography, /gallery.
 //
 // These are SPA-only routes, so they are served the raw index.html, which
 // carries the HOMEPAGE's <title>, description and canonical. A canonical
@@ -890,7 +890,7 @@ console.log(`Pre-rendered ${journalPages} journal posts + the journal index.`);
 //
 // react-helmet-async sets the right tags at runtime, but that only helps a
 // renderer, and only on a second pass. Putting them in the first-pass HTML
-// removes the dependency entirely — which is what the photo, category and
+// removes the dependency entirely, which is what the photo, category and
 // journal pages already do.
 //
 // Titles and descriptions are duplicated from ROUTE_META in
@@ -1034,7 +1034,7 @@ const STATIC_PAGES = [
 }
 
 // The weddings page shares its packages/FAQ copy with the SPA through this
-// JSON file — one source, so the page and what crawlers see cannot drift.
+// JSON file, one source, so the page and what crawlers see cannot drift.
 // FAQPage structured data is emitted into the STATIC HTML because Helmet-only
 // JSON-LD needs JS execution, and rich-result eligibility shouldn't depend
 // on Google's render pass.
@@ -1214,7 +1214,7 @@ const staticUrls = [
 ];
 
 // Real per-URL <lastmod> from the DB, date-only. Google ignores changefreq and
-// priority but does read lastmod when the values are credible — and with 229
+// priority but does read lastmod when the values are credible, and with 229
 // photo pages sitting in "Discovered - currently not indexed", it is one of
 // the few recrawl signals we can legitimately send. Static pages carry none:
 // we have no honest timestamp for them, and a fabricated one (e.g. build date
@@ -1282,7 +1282,7 @@ console.log(
 }
 
 // ---------------------------------------------------------------------------
-// Build manifest — a fingerprint of exactly what content this build baked in.
+// Build manifest, a fingerprint of exactly what content this build baked in.
 //
 // Prerendered pages are a snapshot, so the site can be silently behind the
 // database: a photo published in admin, or a journal post edited, changes
@@ -1293,7 +1293,7 @@ console.log(
 // api/admin/_rebuild-status.ts computes the SAME fingerprint live and compares
 // it to this file. Counts catch publishes, unpublishes and deletions; the max
 // updated_at catches edits to something already published. If you change the
-// shape here, change it there — the two queries are deliberately identical and
+// shape here, change it there, the two queries are deliberately identical and
 // are the only thing keeping the comparison honest.
 // ---------------------------------------------------------------------------
 let manifest = { builtAt: new Date().toISOString(), photos: null, journal: null };
@@ -1314,7 +1314,7 @@ try {
     journal: { published: jo.published, latest: jo.latest ? new Date(jo.latest).toISOString() : null },
   };
 } catch (err) {
-  // A manifest we could not build must not fail the deploy — the worst case is
+  // A manifest we could not build must not fail the deploy, the worst case is
   // the button falls back to "unknown" and stays clickable, which is how it
   // behaved before this existed.
   console.warn(`[prerender] could not build content manifest: ${err.message}`);
@@ -1399,7 +1399,7 @@ if (unreachable.length) {
   console.log('Every sitemap URL is reachable by following links from the homepage.');
 }
 
-// Not fatal — a page can be legitimately linked without being a ranking
+// Not fatal, a page can be legitimately linked without being a ranking
 // target. Worth surfacing so the sitemap does not quietly fall behind.
 if (orphanedFromSitemap.length) {
   console.warn(

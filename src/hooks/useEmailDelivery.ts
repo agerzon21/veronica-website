@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
  * Poll Resend until an email is actually accepted by the recipient's server.
  *
  * Extracted from src/pages/ThankYou.tsx, which has done exactly this since
- * commit a0014d6 — the same 3s interval, the same 60s ceiling, the same
+ * commit a0014d6, the same 3s interval, the same 60s ceiling, the same
  * terminal-failure list. The admin invite flow needed identical behaviour, and
  * two copies of a polling loop drift.
  *
@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
  * blocklisted. Reporting success on the API's 200 is how a client silently
  * never receives their portal invite.
  *
- * Pass `emailId = null` to sit idle — the hook does nothing until it has an id.
+ * Pass `emailId = null` to sit idle, the hook does nothing until it has an id.
  */
 
 export type EmailDeliveryStatus = 'idle' | 'sending' | 'delivered' | 'pending' | 'failed';
@@ -22,7 +22,7 @@ export type EmailDeliveryStatus = 'idle' | 'sending' | 'delivered' | 'pending' |
 const POLL_INTERVAL_MS = 3000;
 const MAX_WAIT_MS = 60000;
 
-// Anything here is final — stop polling, tell the operator it did not arrive.
+// Anything here is final, stop polling, tell the operator it did not arrive.
 const TERMINAL_FAILURES = ['bounced', 'complained', 'failed', 'canceled', 'suppressed'];
 
 export function useEmailDelivery(emailId: string | null): EmailDeliveryStatus {
@@ -54,7 +54,7 @@ export function useEmailDelivery(emailId: string | null): EmailDeliveryStatus {
       if (current === 'delivered') return setStatus('delivered');
       if (current && TERMINAL_FAILURES.includes(current)) return setStatus('failed');
 
-      // queued / sent / delayed / unknown — still in transit. After the window,
+      // queued / sent / delayed / unknown, still in transit. After the window,
       // stop waiting and say so honestly rather than showing a green state we
       // have not earned.
       if (Date.now() - startedAt >= MAX_WAIT_MS) return setStatus('pending');

@@ -10,7 +10,7 @@ const StatsSection = () => {
       <Reveal amount="some" from={{ opacity: 0, y: 20 }} duration={0.8}>
         <VStack spacing={6} mb={{ base: 10, md: 14 }}>
           <Text textStyle="eyebrow">Veronika Polbina</Text>
-          {/* 40px, not 35 — the one rule width PageHeader uses everywhere. */}
+          {/* 40px, not 35, the one rule width PageHeader uses everywhere. */}
           <Box w="40px" h="1px" bg="brand.accent" />
           <Text textStyle="bodyLead">Wedding & Portrait Photographer</Text>
         </VStack>

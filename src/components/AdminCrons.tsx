@@ -13,7 +13,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * "Crons" super-admin panel — the single place to see every registered
+ * "Crons" super-admin panel, the single place to see every registered
  * Vercel cron, toggle each on/off without a redeploy, kick a manual
  * run, and inspect run history. Lives behind the Menu drawer (not the
  * main tab strip) because it's operator-only, not part of Vero's
@@ -23,7 +23,7 @@ import { useAdminLang } from '../i18n/admin';
  * in api/cron/_guard.ts, which upserts a cron_jobs row on the first
  * invocation and re-syncs path/schedule/description on every one
  * after that. So this UI reflects reality as of the last time each
- * cron actually ran — a brand-new cron won't appear until its first
+ * cron actually ran, a brand-new cron won't appear until its first
  * scheduled tick (or a manual /api/cron/<name> curl during dev).
  */
 
@@ -65,7 +65,7 @@ interface HistoryRun {
 /**
  * Renders a cron's returned summary as readable text.
  *
- * Before this, a successful run showed "ok, 711ms" and nothing else — there
+ * Before this, a successful run showed "ok, 711ms" and nothing else, there
  * was no way to tell a sync that published four photos from one that did
  * nothing. That is a bad property for the job that can also DELETE photos.
  *
@@ -75,12 +75,12 @@ interface HistoryRun {
  */
 function ResultSummary({ result }: { result: Record<string, unknown> | null }) {
   const { t } = useAdminLang();
-  if (!result) return <Text as="span" color="gray.300">—</Text>;
+  if (!result) return <Text as="span" color="gray.300">, </Text>;
 
   const labels = t.cronResult.labels as Record<string, string>;
   const parts: string[] = [];
 
-  // Keys whose length just restates a count already shown — insertedSlugs is
+  // Keys whose length just restates a count already shown, insertedSlugs is
   // always the same length as `inserted`.
   const REDUNDANT = new Set(['insertedSlugs']);
 
@@ -89,7 +89,7 @@ function ResultSummary({ result }: { result: Record<string, unknown> | null }) {
     const label = labels[key] ?? key;
 
     if (typeof value === 'number') {
-      // Drop zeros — "0 added, 0 removed, 0 restored" is noise on the runs
+      // Drop zeros, "0 added, 0 removed, 0 restored" is noise on the runs
       // where nothing happened, which is most of them.
       if (value !== 0) parts.push(`${label}: ${value}`);
     } else if (typeof value === 'boolean') {
@@ -168,7 +168,7 @@ const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
   // than a UI whose every API call 403s.
   //
   // This sits BELOW the hooks on purpose. It used to sit above them, which made
-  // useEffect conditional — React requires the same hooks in the same order on
+  // useEffect conditional, React requires the same hooks in the same order on
   // every render, and a level change while mounted would have thrown.
   if (!isSuper) {
     return (
@@ -178,7 +178,7 @@ const AdminCrons = ({ adminPassword, adminLevel }: Props) => {
     );
   }
 
-  // Optimistic toggle — flip local state first, roll back if the API
+  // Optimistic toggle, flip local state first, roll back if the API
   // rejects. Feels instant even on flaky connections. Matches the
   // pattern in AdminReviews for the featured/visible switches.
   const toggleEnabled = async (row: CronRow, next: boolean) => {
@@ -367,7 +367,7 @@ function CronCard({
       _hover={{ borderColor: 'brand.accent' }}
       transition="all 0.15s"
     >
-      {/* Top row — icon + name + enabled Switch */}
+      {/* Top row, icon + name + enabled Switch */}
       <Flex align="flex-start" gap={4} wrap={{ base: 'wrap', md: 'nowrap' }}>
         <Flex
           w="40px"
@@ -433,7 +433,7 @@ function CronCard({
           </Box>
         </VStack>
 
-        {/* Enabled Switch — thumb-reachable, aria-labelled for screen readers. */}
+        {/* Enabled Switch, thumb-reachable, aria-labelled for screen readers. */}
         <HStack spacing={2} flexShrink={0} pt={1}>
           <Switch
             isChecked={row.enabled}
@@ -445,7 +445,7 @@ function CronCard({
         </HStack>
       </Flex>
 
-      {/* Actions row — Run now + History toggle. Stacks on mobile so
+      {/* Actions row, Run now + History toggle. Stacks on mobile so
           the tap targets stay full width. */}
       <Flex mt={5} pt={4} borderTop="1px solid" borderColor="gray.100" gap={2} wrap="wrap">
         <CTAButton
@@ -724,7 +724,7 @@ function EmptyState() {
 /**
  * Turn a 5-field cron expression into a human sentence for the common
  * cases in this project. Anything else falls back to the raw
- * expression tagged as "custom" — we deliberately don't ship a full
+ * expression tagged as "custom", we deliberately don't ship a full
  * cron parser here because Vercel Hobby crons are daily-only anyway.
  */
 function humanSchedule(expr: string, t: ReturnType<typeof useAdminLang>['t']): string {
@@ -735,7 +735,7 @@ function humanSchedule(expr: string, t: ReturnType<typeof useAdminLang>['t']): s
 }
 
 /**
- * "3h ago" / "2d ago" / "now" — compact-relative for the last-run
+ * "3h ago" / "2d ago" / "now", compact-relative for the last-run
  * one-liner. Bilingual because the summary row is what the operator
  * scans first. Full timestamps live in the history panel.
  */

@@ -6,19 +6,19 @@
  *   node scripts/build-hero-variants.mjs --check     # CI: fail if anything is stale
  *
  * WHY THIS EXISTS
- * The hero carousel was serving full-resolution gallery originals — up to
- * 1.2MB each — to phones rendering them at roughly 566 CSS px. That was ~2.99MB
+ * The hero carousel was serving full-resolution gallery originals, up to
+ * 1.2MB each, to phones rendering them at roughly 566 CSS px. That was ~2.99MB
  * of the homepage's 3.77MB payload and the single biggest contributor to
  * Speed Index.
  *
  * WHY IT IS NOT scripts/compress-photos.mjs
  * That script rewrites originals IN PLACE at a 2400px longest edge, which cuts
- * portrait-orientation photos down to ~1500px wide — visibly soft on a
+ * portrait-orientation photos down to ~1500px wide, visibly soft on a
  * full-bleed desktop hero, and unrecoverable. This one never touches an
  * original. Desktop keeps the untouched file; only phones get a derivative.
  *
  * OUTPUT LOCATION
- * public/assets/hero/ — deliberately NOT under public/assets/photos/, because
+ * public/assets/hero/, deliberately NOT under public/assets/photos/, because
  * scripts/measure-photos.mjs walks that tree keyed by bare filename and feeds
  * src/data/photo-dims.json straight into the client bundle. Variants there
  * would balloon it.
@@ -42,7 +42,7 @@ const outDir = join(root, 'public', 'assets', 'hero');
 
 // The slide does NOT render at viewport width. It renders inside the camera
 // LCD, which computeCameraSize() in HeroSection.tsx scales to 1.2x viewport
-// coverage — LCD_BOUNDS.mobile puts the screen at 36% of the camera width, so
+// coverage, LCD_BOUNDS.mobile puts the screen at 36% of the camera width, so
 // the actual painted width is much larger than the viewport suggests:
 //   iPhone 15 Pro Max (430x932, DPR 3)     -> LCD 799 CSS px -> 2397 device px
 //   iPhone 15 Pro     (393x852, DPR 3)     -> LCD 730 CSS px -> 2190 device px
@@ -50,18 +50,18 @@ const outDir = join(root, 'public', 'assets', 'hero');
 //
 // 1600 keeps the upscale to ~1.2-1.5x on DPR-3 flagships. The first draft used
 // 1100, derived from two wrong numbers (a 566px LCD and DPR 1.75), which would
-// have upscaled 1.8-2.2x — visibly soft on the hero of a photographer's site.
+// have upscaled 1.8-2.2x, visibly soft on the hero of a photographer's site.
 // 1600 costs ~3.0MB of variants instead of ~1.7MB, still ~2.6x under the
 // 7.86MB of originals it replaces.
 // TWO rungs. 1600 is sized for DPR-3 flagships (LCD 730-799 CSS px -> ~2200
-// device px). But a 412x823 viewport at DPR 1.75 — Lighthouse's profile, and a
-// very common mid-tier Android — only needs 705 * 1.75 = 1234 device px, so it
+// device px). But a 412x823 viewport at DPR 1.75, Lighthouse's profile, and a
+// very common mid-tier Android, only needs 705 * 1.75 = 1234 device px, so it
 // was being handed ~32% more bytes than it can display. srcSet lets the browser
 // pick. Do not collapse these to one rung in either direction.
 const WIDTHS = [1280, 1600];
 const PRIMARY = 1600; // the plain `src` fallback for anything without srcset
 
-// Desktop was still being served the untouched originals — 8.26MB across the
+// Desktop was still being served the untouched originals, 8.26MB across the
 // 12 desktop-eligible slides, up to 5947px wide. That is why mobile PageSpeed
 // improved dramatically and desktop did not move off 72.
 //
@@ -69,11 +69,11 @@ const PRIMARY = 1600; // the plain `src` fallback for anything without srcset
 // 2304 at 1920, capped at 2940. So 2560 covers every non-retina desktop and
 // retina up to a ~1280 viewport, while the ORIGINAL stays in the srcset as the
 // top rung for large retina displays. Nothing is downscaled below what the
-// screen can show — several originals are only 2000px wide and are already
+// screen can show, several originals are only 2000px wide and are already
 // being upscaled today, so they get no rung at all (the size guard skips any
 // re-encode that is not actually smaller).
 // 1680 exists because Lighthouse measured the desktop hero being served at
-// 1895x1419 for a 1642x1213 display box — 97KB wasted on pixels nobody sees.
+// 1895x1419 for a 1642x1213 display box, 97KB wasted on pixels nobody sees.
 // With only 1920 and 2560 on offer the browser had nothing closer to pick.
 const DESKTOP_WIDTHS = [1680, 1920, 2560];
 const DESKTOP_QUALITY = 78;
@@ -180,7 +180,7 @@ const PAGE_HERO_DESKTOP_SRCS = PAGE_HERO_SRCS.filter((s) => !PAGE_HEROES[s].mobi
 const PAGE_HERO_EXTRA_WIDTHS = [2880];
 
 // Only slides that can actually appear on mobile need a derivative. A slide's
-// mobile source is its mobileUrl when set, otherwise its url — entry 8
+// mobile source is its mobileUrl when set, otherwise its url, entry 8
 // deliberately shows a different photo on mobile than on desktop.
 const mobileSources = [
   ...new Set([
@@ -189,7 +189,7 @@ const mobileSources = [
   ]),
 ];
 
-// Desktop uses `url`, never mobileUrl — entry 8 deliberately shows a different
+// Desktop uses `url`, never mobileUrl, entry 8 deliberately shows a different
 // photo on each.
 // Page heroes need desktop rungs too, and for the same reason the carousel
 // does: at 1440 a full-bleed hero paints 2880 device pixels on a retina
@@ -305,7 +305,7 @@ for (const src of desktopSources) {
     ? [...DESKTOP_WIDTHS, ...PAGE_HERO_EXTRA_WIDTHS]
     : DESKTOP_WIDTHS;
   for (const w of widths) {
-    // Never emit a rung at or above the original's own width — that is pure
+    // Never emit a rung at or above the original's own width, that is pure
     // re-encode with no pixels gained, and for the 2000px-wide slides it would
     // hand the browser a same-size candidate that is not actually better.
     if (!meta.width || meta.width <= w) continue;
@@ -433,7 +433,7 @@ if (missingSources.length) {
 if (isCheck) {
   // The derivatives MUST be committed. Nothing else validates this: the bundle
   // bakes in /assets/hero/* URLs at build time and a Chakra <Image> with a
-  // missing src renders a blank hero — silently, and only on mobile. A
+  // missing src renders a blank hero, silently, and only on mobile. A
   // source-scoped `git add src scripts ...` would ship exactly that.
   const { execFileSync } = await import('child_process');
   const tracked = new Set(
@@ -452,7 +452,7 @@ if (isCheck) {
     process.exit(1);
   }
 
-  // The committed manifest is what actually ships to the client — validate it
+  // The committed manifest is what actually ships to the client, validate it
   // rather than just the files on disk. A slide added to hero-slides.json
   // without a regenerate would otherwise sail through.
   const onDisk = existsSync(manifestPath)

@@ -5,12 +5,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import CTAButton from '../components/ui/CTAButton';
 
 /**
- * /portal/reset?token=… — set a new portal password from an emailed link.
+ * /portal/reset?token=…, set a new portal password from an emailed link.
  *
  * Deliberately NOT built on Welcome.tsx, despite the visual similarity. Welcome
  * does a mandatory pre-flight POST to /api/portal/welcome to validate its
  * setup_token before rendering the form, and there is no equivalent lookup for
- * a reset token — adding one would mean a third endpoint whose only job is to
+ * a reset token, adding one would mean a third endpoint whose only job is to
  * confirm a token exists, which also hands an attacker a free oracle for
  * testing tokens. Here the token is validated once, on submit, by the endpoint
  * that actually uses it.
@@ -52,7 +52,7 @@ const ResetPassword = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         setDone(true);
-        // Straight to the login with the email prefilled — she has just proved
+        // Straight to the login with the email prefilled, she has just proved
         // control of that address, so making her retype it is pure friction.
         setTimeout(() => {
           navigate(`/portal?email=${encodeURIComponent(data.email ?? '')}`);

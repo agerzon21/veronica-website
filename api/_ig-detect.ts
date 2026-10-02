@@ -15,7 +15,7 @@
  *   - /api/cron/instagram-check    (fires daily)
  *
  * Not called from /api/instagram-feed (that's on the request hot path
- * and doesn't need this — the cron will catch any rotation within 24h).
+ * and doesn't need this, the cron will catch any rotation within 24h).
  *
  * We hash rather than store the token itself: even if the DB were ever
  * compromised, the hash doesn't leak the actual credential. SHA-256
@@ -49,7 +49,7 @@ export async function detectAndMarkRotation(): Promise<DetectResult> {
   `) as Array<{ updated_at: string; value: string | null }>;
 
   if (rows.length === 0) {
-    // No row at all — bootstrap. Store the current hash + NOW as a
+    // No row at all, bootstrap. Store the current hash + NOW as a
     // reasonable "we first saw this token today" baseline. If Alex
     // knows the actual rotation date was earlier, he can UPDATE the
     // timestamp manually in Neon.
@@ -65,7 +65,7 @@ export async function detectAndMarkRotation(): Promise<DetectResult> {
   if (storedHash === null) {
     // Row exists but hash was never recorded (this covers the interim
     // state after migration 003 lands but before the first status
-    // check runs). Store the hash without touching the timestamp — we
+    // check runs). Store the hash without touching the timestamp, we
     // trust the seeded/existing rotation date.
     await sql`
       UPDATE system_state SET value = ${currentHash} WHERE key = 'ig_token_refreshed'

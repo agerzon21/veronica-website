@@ -8,15 +8,15 @@ import AdminAssistantData from './AdminAssistantData';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * "Assistant" tab in /admin — two internal sub-tabs:
- *   1. Chat  — Vero talks to her AI business assistant in her chosen
+ * "Assistant" tab in /admin, two internal sub-tabs:
+ *   1. Chat, Vero talks to her AI business assistant in her chosen
  *              language (Russian by default; togglable to English so
  *              admins helping her can chat in their own language).
  *              The assistant reads + writes the ai_context knowledge
  *              base via tool calls, so shaping the customer-facing
  *              reply engine becomes a conversation instead of a
  *              spreadsheet.
- *   2. Data  — the underlying facts, in a card view with search +
+ *   2. Data, the underlying facts, in a card view with search +
  *              inline editing. Useful for quick browsing / manual
  *              cleanup / seeing what the chatbot recently added.
  *
@@ -94,7 +94,7 @@ const AdminAssistant = ({ adminPassword }: Props) => {
 
   return (
     <Box maxW="1200px" mx="auto">
-      {/* Tab header — title + language toggle. Stack on mobile so
+      {/* Tab header, title + language toggle. Stack on mobile so
           the toggle doesn't orphan to a second wrapped row. */}
       <Flex
         direction={{ base: 'row', md: 'row' }}
@@ -118,7 +118,7 @@ const AdminAssistant = ({ adminPassword }: Props) => {
           </Text>
           {/* Concise subtitle that stays on one line at 375px so the
               header doesn't eat two extra rows of vertical space on
-              mobile — every pixel matters when the chat + composer
+              mobile, every pixel matters when the chat + composer
               need to fit above the bottom nav. */}
           <Text fontSize={{ base: 'xs', md: 'sm' }} color="gray.500" fontWeight="300" noOfLines={1}>
             {t.assistant.subtitle}

@@ -1,12 +1,12 @@
 /**
- * OpenAI Vision helper — given a public image URL, returns
+ * OpenAI Vision helper, given a public image URL, returns
  * alt / title / description / keywords that match the site's
  * house style (see CLAUDE.md → "Frankenstein the new photos").
  *
  * Used by the gallery sync cron to auto-fill metadata for new
  * photos Vero drops into a Drive folder, so she never has to
  * hand-write descriptions again. The output is stored on
- * gallery_photos as a DRAFT — she reviews + tweaks + publishes
+ * gallery_photos as a DRAFT, she reviews + tweaks + publishes
  * from the admin panel.
  *
  * We use GPT-4o-mini because vision is cheap ($0.15 / $0.60 per
@@ -41,13 +41,13 @@ export interface VisionResult {
  * Analyze a single photo and produce house-style metadata.
  *
  * `imageUrl` must be a publicly reachable URL (Drive's thumbnail
- * endpoint works — no auth needed on the OpenAI side).
+ * endpoint works, no auth needed on the OpenAI side).
  *
  * `category` biases keyword selection and is always included as
  * the first keyword (per CLAUDE.md).
  *
  * On success returns a fully populated VisionResult. On failure
- * (rate limit, model returned bad JSON, network) throws — the
+ * (rate limit, model returned bad JSON, network) throws, the
  * cron catches it and inserts the photo with a placeholder
  * "needs review" description so Vero can fix it manually.
  */
@@ -80,7 +80,7 @@ export async function describePhoto(
   const raw = response.choices[0]?.message?.content?.trim() ?? '{}';
   const parsed = JSON.parse(raw) as Partial<VisionResult>;
 
-  // Defensive parse — model MOSTLY returns the right shape but
+  // Defensive parse, model MOSTLY returns the right shape but
   // occasionally slips a field, so we coerce + fill defaults so
   // the caller never gets a half-shape.
   const slug = normalizeSlug(typeof parsed.slug === 'string' ? parsed.slug : '');
@@ -145,17 +145,17 @@ function normalizeKeywords(
 const SYSTEM_PROMPT = `You are helping a photographer catalog photos for her portfolio website. You analyze a photo and produce standardized metadata in the exact shape the site expects.
 
 Return a JSON object with these EXACT keys:
-- "slug": short kebab-case identifier, 2-5 words, describing what's in the photo (e.g. "sunset-palm-tree-portrait", "bride-groom-first-dance"). URL-safe: only lowercase letters, digits, hyphens. No trailing category name — that's handled elsewhere.
-- "title": concise page title, 3-7 words, describing the photo (e.g. "Sunset Portrait Beneath a Palm Tree"). Title Case. Do NOT append "| Vero Photography" — that's auto-added.
+- "slug": short kebab-case identifier, 2-5 words, describing what's in the photo (e.g. "sunset-palm-tree-portrait", "bride-groom-first-dance"). URL-safe: only lowercase letters, digits, hyphens. No trailing category name, that's handled elsewhere.
+- "title": concise page title, 3-7 words, describing the photo (e.g. "Sunset Portrait Beneath a Palm Tree"). Title Case. Do NOT append "| Vero Photography", that's auto-added.
 - "alt": one short sentence describing what's in the photo, screen-reader-friendly. Factual, not marketing.
 - "description": 1-2 sentences. Warm but understated tone. Descriptive of the visual and the feeling.
 - "keywords": array of 5-8 lowercase, single- or hyphenated-word tags from the canonical vocabulary below.
 
 STRICT STYLE RULES (never violate):
-1. NO LOCATION NAMES anywhere — no "Punta Cana", "Scranton", "Almaty", "beach in Bali", etc. The photographer's business must be portable.
+1. NO LOCATION NAMES anywhere, no "Punta Cana", "Scranton", "Almaty", "beach in Bali", etc. The photographer's business must be portable.
 2. NO GENERIC PRAISE WORDS in title/description: avoid "stunning", "beautiful", "captivating", "vibrant", "joyful", "magical", "enchanting", "gorgeous", "breathtaking".
 3. NO PEOPLE-NAME REFERENCES in keywords.
-4. Match the tone of a warm, understated photography portfolio — factual descriptions of what's in the frame + the feeling, not marketing copy.
+4. Match the tone of a warm, understated photography portfolio, factual descriptions of what's in the frame + the feeling, not marketing copy.
 5. Alt text is the shortest of the three prose fields; description is the longest but still max 2 sentences.
 
 CANONICAL KEYWORD VOCABULARY (use ONLY these words for keywords, adding fresh ones only when a concept truly isn't covered):
@@ -170,6 +170,6 @@ Style/Mood: black-and-white, portrait, close-up, aerial, collage, artistic, eleg
 
 Things: flowers, lotus, sunflowers, palm-trees, swimsuit, dress, rings, bouquet, veil, vintage, tropical, autumn, christmas
 
-The category (portraits / weddings / family / maternity) is ALWAYS the first keyword — the caller adds it, don't include it yourself.
+The category (portraits / weddings / family / maternity) is ALWAYS the first keyword, the caller adds it, don't include it yourself.
 
-Reply with ONLY the JSON object — no preamble, no markdown code fences, no explanation.`;
+Reply with ONLY the JSON object, no preamble, no markdown code fences, no explanation.`;

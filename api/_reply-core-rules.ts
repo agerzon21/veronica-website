@@ -7,7 +7,7 @@
  *
  *  1. Nothing else knew they existed. Vero told the in-panel assistant three
  *     times to stop replying as "Vero's Assistant". Each time it agreed, and
- *     each time it wrote a `tone` entry — because its instructions funnel all
+ *     each time it wrote a `tone` entry, because its instructions funnel all
  *     behavioural feedback into `tone`, and `tone` is injected under a heading
  *     that reads "KNOWN FACTS (only cite these)", below a block marked "never
  *     violate". Her instruction could not win, and nothing told her that.
@@ -18,18 +18,18 @@
  *     the preference as immovable as the safety rail.
  *
  * So: the assistant reads this list, can tell Vero exactly which rule her
- * request collides with, and — for `adjustable` ones — knows the supported way
+ * request collides with, and, for `adjustable` ones, knows the supported way
  * to change it. Non-adjustable ones it explains and refuses, pointing at Alex.
  */
 
 export interface CoreRule {
   id: string;
-  /** One line, in Vero's terms — this is what the assistant quotes back. */
+  /** One line, in Vero's terms, this is what the assistant quotes back. */
   summary: string;
   /** Why it exists, so the assistant can explain rather than just refuse. */
   rationale: string;
   /**
-   * Adjustable rules have a supported mechanism. Safety rails do not — those
+   * Adjustable rules have a supported mechanism. Safety rails do not, those
    * protect money and commitments, and a wrong one costs a real booking.
    */
   adjustable: boolean;
@@ -43,10 +43,10 @@ export const CORE_RULES: CoreRule[] = [
     summary:
       'Drafts Vero approves are written in the FIRST PERSON as her. Instagram replies, which auto-send unreviewed, are written as her assistant.',
     rationale:
-      'A draft is reviewed and approved before it leaves, so by the time the customer reads it, it genuinely is from Vero — introducing an assistant there is noise. An Instagram reply goes out immediately with nobody having read it; claiming to be Vero would put words in her mouth she never saw.',
+      'A draft is reviewed and approved before it leaves, so by the time the customer reads it, it genuinely is from Vero, introducing an assistant there is noise. An Instagram reply goes out immediately with nobody having read it; claiming to be Vero would put words in her mouth she never saw.',
     adjustable: true,
     mechanism:
-      'ai_context row category="identity", label="Reply persona". "auto" (default) applies the split above. "vero" forces first person everywhere INCLUDING unreviewed Instagram sends — only if Vero explicitly asks for that, and say what it means before doing it. "assistant" forces the assistant voice everywhere. If moving away from "auto", also check category="identity", label="First-message intro" still matches the voice.',
+      'ai_context row category="identity", label="Reply persona". "auto" (default) applies the split above. "vero" forces first person everywhere INCLUDING unreviewed Instagram sends, only if Vero explicitly asks for that, and say what it means before doing it. "assistant" forces the assistant voice everywhere. If moving away from "auto", also check category="identity", label="First-message intro" still matches the voice.',
   },
   {
     id: 'never-confirm-dates',
@@ -73,9 +73,9 @@ export const CORE_RULES: CoreRule[] = [
 /** Rendered into the in-panel assistant's prompt so it can push back accurately. */
 export function coreRulesForAssistant(): string {
   return CORE_RULES.map((r) => {
-    const head = `- **${r.id}** — ${r.summary}\n  Why: ${r.rationale}`;
+    const head = `- **${r.id}**, ${r.summary}\n  Why: ${r.rationale}`;
     return r.adjustable
       ? `${head}\n  ADJUSTABLE. To change it: ${r.mechanism}`
-      : `${head}\n  NOT ADJUSTABLE by you or by Vero through this chat — it protects a real booking. Explain it and suggest she message Alex if she genuinely wants it changed.`;
+      : `${head}\n  NOT ADJUSTABLE by you or by Vero through this chat, it protects a real booking. Explain it and suggest she message Alex if she genuinely wants it changed.`;
   }).join('\n');
 }

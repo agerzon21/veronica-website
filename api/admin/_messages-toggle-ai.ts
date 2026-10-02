@@ -13,7 +13,7 @@
  * can flip it.
  *
  * The booking-intent / spam / wrap-up escalations in the AI engine
- * also flip this to false automatically — those escalations converge
+ * also flip this to false automatically, those escalations converge
  * on the same signal ("this thread needs Vero"). Vero can re-enable
  * from the inbox when she wants the AI back in the loop.
  */

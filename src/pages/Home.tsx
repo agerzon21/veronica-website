@@ -16,7 +16,7 @@ type Slide = {
   /** Only set when mobileUrl is a different photograph, not a derivative. */
   mobileAlt?: string;
   mobileUrl?: string;
-  /** "path 1280w, path 1600w" — mobile derivatives only. */
+  /** "path 1280w, path 1600w", mobile derivatives only. */
   mobileSrcSet?: string;
   /** Desktop rungs plus the untouched original as the widest candidate. */
   desktopSrcSet?: string;
@@ -31,7 +31,7 @@ type Slide = {
 // 1100px derivative per mobile-eligible slide and records it in
 // hero-variants.json; here we point mobileUrl at that derivative.
 //
-// Desktop is untouched — `url` still resolves to the original file, so the
+// Desktop is untouched, `url` still resolves to the original file, so the
 // full-bleed hero keeps its quality on a large retina display.
 //
 // The `?? original` fallback is deliberate: if the manifest is ever stale or a
@@ -39,8 +39,8 @@ type Slide = {
 // rendering a blank hero. Slower, never broken.
 const VARIANTS = heroVariants as Record<string, Record<string, string>>;
 
-// Desktop was still served the untouched originals — 8.26MB across 12 slides,
-// up to 5947px wide — which is why mobile PageSpeed moved and desktop stayed
+// Desktop was still served the untouched originals, 8.26MB across 12 slides,
+// up to 5947px wide, which is why mobile PageSpeed moved and desktop stayed
 // at 72. The ORIGINAL remains the widest srcset candidate, so a large retina
 // display still gets the full-quality file; everything smaller takes a rung.
 // desktopSrcSetFor moved to utils/heroSrcSet when the contact and gallery
@@ -126,7 +126,7 @@ const Home: React.FC = () => {
         <meta property="og:image" content="https://vero.photography/assets/photos/site/contact-bg.webp" />
       </Helmet>
       <HeroSection images={CAROUSEL_IMAGES} />
-      {/* Her own work before anyone else's feed: three doors in one row —
+      {/* Her own work before anyone else's feed: three doors in one row
           portfolio, latest journal entry, wedding packages. */}
       <HomeChapters />
       <InstagramFeed />

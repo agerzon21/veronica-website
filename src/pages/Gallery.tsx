@@ -11,7 +11,7 @@ import GalleryGrid from '../components/GalleryGrid';
 import NotFound from './NotFound';
 import { useSmartBack } from '../components/ui/useSmartBack';
 
-// Match the shape /api/gallery returns — kept local here (rather
+// Match the shape /api/gallery returns, kept local here (rather
 // than a shared type file) since the API is the source of truth and
 // the extra fields (originalUrl, driveViewUrl) are optional for
 // consumers that don't need them.
@@ -88,7 +88,7 @@ const Gallery = () => {
         if (cancelled) return;
         if (res.ok && data.success) {
           // Randomize order so gallery browsing feels fresh each
-          // visit — matches the previous CSV-based behavior.
+          // visit, matches the previous CSV-based behavior.
           const shuffled = [...(data.photos as PublicPhoto[])].sort(() => Math.random() - 0.5);
           setImages(shuffled);
         } else {
@@ -162,7 +162,7 @@ const Gallery = () => {
 
   if (!categoryInfo) {
     // An unknown category used to render a blank 200 page with no meta at
-    // all — indexable nothing. NotFound brings the standard 404 UI and its
+    // all, indexable nothing. NotFound brings the standard 404 UI and its
     // noindex with it.
     return <NotFound />;
   }
@@ -214,7 +214,7 @@ const Gallery = () => {
           zIndex={2}
         >
           {/* Was a hard link to /gallery, so arriving here from the weddings
-              page and pressing Back dropped you on the gallery index — a page
+              page and pressing Back dropped you on the gallery index, a page
               you had never seen. */}
           <Box
             as="button"
@@ -244,7 +244,7 @@ const Gallery = () => {
       {/* Images Grid */}
       <Box py={{ base: 6, md: 10 }} px={{ base: 4, md: 12 }}>
         {images === null ? (
-          // Initial fetch — before we know how many tiles there are.
+          // Initial fetch, before we know how many tiles there are.
           // Center a spinner + subtle label so the empty space reads
           // as intentional loading rather than a broken page. Once
           // the API responds, GalleryGrid takes over and shows the

@@ -16,7 +16,7 @@ import CTAButton from './ui/CTAButton';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * "Data" panel of the Assistant tab — a redesigned view of the
+ * "Data" panel of the Assistant tab, a redesigned view of the
  * ai_context knowledge base.
  *
  * The old version was a dense form-per-row grid that Alex called
@@ -26,7 +26,7 @@ import { useAdminLang } from '../i18n/admin';
  *   - "Chatbot" pill on rows the AI assistant wrote (so Vero can
  *     spot her recent auto-changes)
  *   - Search bar at top for keyword filtering across all categories
- *   - Empty categories don't render at all — no noise
+ *   - Empty categories don't render at all, no noise
  *   - Editing is a clean modal, not inline-in-place
  *
  * All CRUD reuses the existing /api/admin/context-* endpoints; the
@@ -80,7 +80,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
         // The /api/admin/context-list endpoint returns the row list
         // under the key `contexts` (matches its original shape from
         // the old messaging-only UI). Falling back to `entries` in
-        // case anyone ever adds an alias — cheap, keeps this
+        // case anyone ever adds an alias, cheap, keeps this
         // robust to server-side renames.
         setEntries(data.contexts ?? data.entries ?? []);
       } else {
@@ -124,7 +124,7 @@ const AdminAssistantData = ({ adminPassword }: Props) => {
     <Box maxW="1000px" mx="auto" px={{ base: 0, md: 0 }}>
       <BuiltInBehaviorCard />
 
-      {/* Toolbar — stacks on mobile so search gets full width + Add
+      {/* Toolbar, stacks on mobile so search gets full width + Add
           fact becomes a proper full-width primary CTA rather than a
           tiny pill orphaned to the right. */}
       <Stack
@@ -585,7 +585,7 @@ function EditModal({
 
 /**
  * Read-only card that surfaces the meta rules baked into the chat
- * endpoint's system prompt — the stuff that isn't stored in
+ * endpoint's system prompt, the stuff that isn't stored in
  * ai_context but still shapes every reply. Making it visible here
  * gives Vero a complete picture of what the AI "knows" without her
  * having to trust that we haven't quietly hardcoded anything weird.
@@ -596,7 +596,7 @@ function EditModal({
  * card goes away.
  *
  * Keep this in sync manually with the buildSystemPrompt() rules on
- * the server — this card lies about behavior if someone edits the
+ * the server, this card lies about behavior if someone edits the
  * endpoint and forgets to update this list.
  */
 function BuiltInBehaviorCard() {

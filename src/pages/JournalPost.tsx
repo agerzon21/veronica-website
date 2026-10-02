@@ -23,7 +23,7 @@ import ReadingProgress from '../components/ReadingProgress';
 import { partWord } from '../utils/seriesWords';
 
 /**
- * Individual journal post page — rendered when the URL is
+ * Individual journal post page, rendered when the URL is
  * /journal/:slug. Fetches the post + its resolved photo list from
  * /api/journal/post, renders the markdown body, hero image, photo
  * gallery, tags, share button, and chronological prev/next post
@@ -36,8 +36,8 @@ import { partWord } from '../utils/seriesWords';
  * Cover is used for og:image so link previews on Instagram / Facebook /
  * iMessage render correctly.
  *
- * LAYOUT: the page column is `content` (1000px). Prose — back link,
- * header, markdown body, tags, share, nav — is constrained to
+ * LAYOUT: the page column is `content` (1000px). Prose, back link,
+ * header, markdown body, tags, share, nav, is constrained to
  * `contentNarrow` (720px) inside it so the reading measure is the
  * site's, while the cover and the photo grid run the full column. The
  * photographs are the point; they get the extra width, not the padding.
@@ -79,7 +79,7 @@ interface SiblingSummary {
 
 /**
  * Split the markdown body into short chunks so photo bands can be woven
- * between them. Chunk sizes cycle one paragraph, then two — the first
+ * between them. Chunk sizes cycle one paragraph, then two, the first
  * photograph arrives after a single paragraph and the page keeps
  * alternating instead of front-loading the words. Headings never end a
  * chunk; they stay attached to the paragraph that follows, so a band
@@ -122,7 +122,7 @@ interface BandPlan {
 
 /**
  * Decide which photos get woven into the text and which stay for the
- * closing mosaic. Deliberately deterministic (no randomness — this runs
+ * closing mosaic. Deliberately deterministic (no randomness, this runs
  * on every render): bands cycle fullbleed → trio → stagger → duo, most
  * of the photo set gets woven, and a fixed reserve keeps the ending a
  * proper wall of photographs. When the remaining budget can't afford the
@@ -163,7 +163,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
   const location = useLocation();
   const back =
     (location.state as { back?: { to: string; label: string } } | null)?.back ?? DEFAULT_BACK;
-  // One lightbox for the whole page — bands and the closing grid both open
+  // One lightbox for the whole page, bands and the closing grid both open
   // it with a global photo index, so arrow keys walk EVERY photo in order
   // no matter where the visitor clicked in.
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -262,7 +262,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
           next: list[idx + 1] ?? null, // older post
         });
       } catch {
-        // ignore — nav is a bonus, not required
+        // ignore, nav is a bonus, not required
       }
     })();
     return () => {
@@ -273,7 +273,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
   const handleShare = async () => {
     if (!post) return;
     const url = `${window.location.origin}/journal/${post.slug}`;
-    // Prefer the native share sheet on mobile — much nicer than a
+    // Prefer the native share sheet on mobile, much nicer than a
     // copy toast when the user is on their phone.
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
@@ -284,7 +284,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
         });
         return;
       } catch {
-        // User cancelled — fall through to clipboard as a fallback
+        // User cancelled, fall through to clipboard as a fallback
       }
     }
     try {
@@ -387,11 +387,11 @@ const JournalPost = ({ slug }: { slug: string }) => {
       <ReadingProgress articleRef={articleRef} />
 
       {/* overflowX clip: the fullbleed bands run w=100vw out of the centered
-          column, and 100vw includes the scrollbar — without the clip that's
+          column, and 100vw includes the scrollbar, without the clip that's
           a few px of horizontal scroll on every post. */}
       <Box ref={articleRef} bg="white" minH="100vh" layerStyle="pageTop" pb={{ base: '3.5rem', md: '6rem' }} overflowX="clip">
         <Box maxW="content" mx="auto" px={{ base: 4, md: 6 }}>
-          {/* Back link + header — held to the reading measure */}
+          {/* Back link + header, held to the reading measure */}
           <Box maxW="contentNarrow" mx="auto">
             <Box mb={{ base: 6, md: 8 }}>
               <BackToJournalLink back={back} />
@@ -452,10 +452,10 @@ const JournalPost = ({ slug }: { slug: string }) => {
             </Box>
           </Box>
 
-          {/* Cover image — runs the full page column. fullUrl (w2000), not
+          {/* Cover image, runs the full page column. fullUrl (w2000), not
               the w800 thumb: this is the largest image on the page, and the
               thumb rendered blurry at column width on retina. Natural aspect
-              ratio, no fixed-height crop — a 580px objectFit=cover window
+              ratio, no fixed-height crop, a 580px objectFit=cover window
               was decapitating every landscape cover. The grid tiles keep
               their thumbs and crops; they display small. */}
           {coverPhoto && (
@@ -470,7 +470,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
             </Box>
           )}
 
-          {/* Body — text woven with photo bands. Chunks keep the reading
+          {/* Body, text woven with photo bands. Chunks keep the reading
               measure; bands run the full column. Same rule as the cover:
               the photographs get the width, the words get the measure. */}
           {chunks.map((chunk, i) => (
@@ -490,7 +490,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
             </Fragment>
           ))}
 
-          {/* Closing grid — every photo the bands didn't use */}
+          {/* Closing grid, every photo the bands didn't use */}
           {post.photos.length > bandPhotoCount(bands) && (
             <PhotoGrid
               photos={post.photos.slice(bandPhotoCount(bands))}
@@ -498,7 +498,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
             />
           )}
 
-          {/* Footer block — back to the reading measure */}
+          {/* Footer block, back to the reading measure */}
           <Box maxW="contentNarrow" mx="auto">
             {/* Tags footer */}
             {post.tags.length > 0 && (
@@ -540,7 +540,7 @@ const JournalPost = ({ slug }: { slug: string }) => {
               />
             )}
 
-            {/* Chronological navigation — prev (newer) + next (older) posts.
+            {/* Chronological navigation, prev (newer) + next (older) posts.
                 Hidden entirely if neither exists. */}
             {(siblings.prev || siblings.next) && (
               <SimpleGrid
@@ -585,7 +585,7 @@ function bandPhotoCount(bands: BandPlan[]): number {
 
 /**
  * Markdown renderers, hoisted so every text chunk shares one instance.
- * These are stateless — keeping them inline meant a fresh object per
+ * These are stateless, keeping them inline meant a fresh object per
  * render for no benefit once the body split into multiple chunks.
  */
 const mdComponents = {
@@ -658,7 +658,7 @@ const mdComponents = {
 
 /**
  * Editorial drop cap on the opening paragraph only. The serif initial is
- * the one flourish the text gets — everything else stays the site's
+ * the one flourish the text gets, everything else stays the site's
  * reading measure.
  */
 const DROP_CAP_SX = {
@@ -682,7 +682,7 @@ const BAND_TILE_SX = {
  * One clickable photograph. `ratio` crops it to a fixed-shape tile;
  * `cover` fills whatever box the parent grid gives it (trio cells, where
  * the row heights come from the container). Neither → natural shape.
- * `full` requests the w2000 asset — for anything displayed wider than
+ * `full` requests the w2000 asset, for anything displayed wider than
  * about half the column.
  */
 function BandTile({
@@ -735,7 +735,7 @@ function BandTile({
 /**
  * The edge-to-edge moment: one photograph breaking out of the column to
  * the full viewport width, uncropped. Orientation is only knowable once
- * the image loads — a portrait at 100vw would be one-and-a-half screens
+ * the image loads, a portrait at 100vw would be one-and-a-half screens
  * tall, so portraits fall back to a centered column presentation
  * instead. Landscapes get the full bleed at their natural shape.
  */
@@ -784,12 +784,12 @@ function FullBleedTile({ photo, onClick }: { photo: Photo; onClick: () => void }
 
 /**
  * One woven photo band. Four shapes cycle through the article:
- *   fullbleed — one landscape running edge-to-edge across the viewport
- *   trio      — a collage: one tall feature with two squares beside it
- *   stagger   — asymmetric pair, the narrower one dropped a beat lower
- *   duo       — two portrait-cropped tiles side by side
+ *   fullbleed, one landscape running edge-to-edge across the viewport
+ *   trio, a collage: one tall feature with two squares beside it
+ *   stagger, asymmetric pair, the narrower one dropped a beat lower
+ *   duo, two portrait-cropped tiles side by side
  * Every tile opens the shared lightbox at its global index. Crops only
- * happen at tile sizes — photographs shown big keep their own shape.
+ * happen at tile sizes, photographs shown big keep their own shape.
  */
 function PhotoBand({
   photos,
@@ -868,7 +868,7 @@ const DEFAULT_BACK = { to: '/journal', label: 'Back to the journal' };
  * `{ back: { to, label } }`, and the link takes you back where you
  * actually came from. Direct visits and journal-internal navigation
  * (prev/next cards deliberately do NOT pass state) fall back to the
- * journal. Used twice — header and the not-found screen.
+ * journal. Used twice, header and the not-found screen.
  */
 /**
  * The other half of the story.
@@ -1067,7 +1067,7 @@ function SiblingNavCard({
         {/* That post's own cover, quietly zooming on hover. The gradient
             keeps white text readable over any photograph. Drive thumbnails
             occasionally rate-limit under a burst (this page loads a lot of
-            them) — on error the img hides itself so the card degrades to
+            them), on error the img hides itself so the card degrades to
             gradient-on-surface instead of a broken-image glyph. */}
         {sibling.cover_image_url && (
           <Image
@@ -1133,13 +1133,13 @@ function SiblingNavCard({
  *   - No modal focus-trap fights with the arrow-key handlers
  *
  * Client-only affordances (download, save-to-Photos, favorites) are
- * intentionally left out — this is a public showcase, not a gallery
+ * intentionally left out, this is a public showcase, not a gallery
  * where visitors need to take files with them.
  */
 function PhotoGrid({ photos, onOpen }: { photos: Photo[]; onOpen: (i: number) => void }) {
   // Mosaic, not a uniform grid: every fifth photograph becomes a
   // double-height feature spanning four of the six columns; the rest
-  // flow dense around it. Deterministic pattern, no measuring needed —
+  // flow dense around it. Deterministic pattern, no measuring needed
   // crops happen at tile size where they're invisible.
   return (
     <Grid
@@ -1211,7 +1211,7 @@ function Lightbox({
       onClick={onClose}
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      {/* Close button — top-right, always above the site header */}
+      {/* Close button, top-right, always above the site header */}
       <Box
         as="button"
         type="button"

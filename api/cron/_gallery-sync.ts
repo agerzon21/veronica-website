@@ -1,5 +1,5 @@
 /**
- * Gallery sync cron — reconciles the gallery_photos table against
+ * Gallery sync cron, reconciles the gallery_photos table against
  * the Drive "Gallery" parent folder that holds Vero's uploads.
  *
  * Runs on Vercel cron (see vercel.json). Also invokable via
@@ -8,7 +8,7 @@
  *
  * The sync logic, in order:
  *   1. List every image file under the parent folder (via
- *      listFolderTree — one Drive call per subfolder, in parallel).
+ *      listFolderTree, one Drive call per subfolder, in parallel).
  *      Each subfolder's name is the category (case-insensitive match
  *      against the four gallery categories; unknown folders skipped
  *      with a log warning).
@@ -52,7 +52,7 @@ import { reconcileStripe, CRON_META as STRIPE_RECONCILE_META } from './_stripe-r
 
 // Cron metadata registered into cron_jobs on the first run. Kept as a
 // const so a grep for "gallery-sync" lands on the truth (schedule
-// stays in sync with vercel.json by convention — the guard re-upserts
+// stays in sync with vercel.json by convention, the guard re-upserts
 // on every invocation, so any manual drift auto-heals).
 const CRON_META = {
   name: 'gallery-sync',
@@ -67,7 +67,7 @@ const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'mat
 
 // How many new photos to process per cron run. Bounded so a big
 // initial import doesn't blow past Vercel's function timeout in
-// one shot — leftovers get picked up on the next scheduled run.
+// one shot, leftovers get picked up on the next scheduled run.
 /**
  * Mass-deletion guard thresholds. A run will not soft-delete more than
  * MAX_FRACTION of the live photos, and never trips below MIN_ABS so that
@@ -75,7 +75,7 @@ const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'mat
  *
  * At the current 227 live photos the ceiling is 45, so removing any one
  * category (the smallest is 19, the largest 97) still passes for maternity and
- * family but stops weddings and portraits — which is the intent: the guard is
+ * family but stops weddings and portraits, which is the intent: the guard is
  * for "a whole chunk vanished at once", not for routine edits.
  */
 const SOFT_DELETE_MAX_FRACTION = 0.2;
@@ -98,7 +98,7 @@ interface ExistingRow {
 // Sentinel error thrown for a misconfigured Drive folder. The guard
 // treats it like any other throw (marks the run as 'error' with this
 // message), and the outer handler unwraps it to a 400 rather than
-// the default 500 — the operator-facing error message is user-facing.
+// the default 500, the operator-facing error message is user-facing.
 class ConfigError extends Error {}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -128,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 /**
- * The reconciliation body — separated from the HTTP handler so
+ * The reconciliation body, separated from the HTTP handler so
  * runGuarded() can time it and record enabled / disabled cleanly.
  * Returns a payload the handler splats into JSON.
  */
@@ -166,7 +166,7 @@ async function doGallerySync() {
     );
   }
 
-  // Folder id is admin-editable — stored in system_state so a
+  // Folder id is admin-editable, stored in system_state so a
   // non-technical operator can set it from the Gallery tab without
   // touching Vercel env vars. Env var still respected as a fallback
   // for backwards-compat with any existing deploy that has it set.
@@ -191,7 +191,7 @@ async function doGallerySync() {
 
   // ── 1. Discover: list every image in every category subfolder ──
   const tree = await listFolderTree(folderId);
-  // Root files are ignored — Vero organizes into per-category
+  // Root files are ignored, Vero organizes into per-category
   // subfolders; anything at the root is a mistake and shouldn't
   // silently appear in some default category.
   const perCategory = groupByCategory(tree.sections);
@@ -253,7 +253,7 @@ async function doGallerySync() {
   const liveCount = liveRows.length;
 
   // A whole category disappearing in one run is the folder-rename signature,
-  // and it is not caught by the percentage ceiling — maternity is only 19 of
+  // and it is not caught by the percentage ceiling, maternity is only 19 of
   // 227 photos, well under it, yet losing all of maternity is exactly the
   // failure this guard exists for. So treat "every live photo in some category
   // is suddenly missing" as blocking on its own, at any size.
@@ -309,7 +309,7 @@ async function doGallerySync() {
     `;
   }
 
-  // ── 4. Insert new photos — bounded + concurrent Vision calls ──
+  // ── 4. Insert new photos, bounded + concurrent Vision calls ──
   const batch = toInsert.slice(0, MAX_NEW_PER_RUN);
   const inserted: string[] = [];
   const insertFailures: Array<{ file: string; error: string }> = [];
@@ -319,7 +319,7 @@ async function doGallerySync() {
       const vision = await describePhoto(file.thumbnailUrl, category);
       // Slug uniqueness: append a short suffix on collision. We
       // check by inserting with ON CONFLICT and retrying with an
-      // incrementing suffix — simple and race-safe.
+      // incrementing suffix, simple and race-safe.
       const finalSlug = await insertWithUniqueSlug(
         sql,
         vision,
@@ -338,7 +338,7 @@ async function doGallerySync() {
 
   // ── 5. Trigger a Vercel deploy so prerendered HTML pages
   //     refresh with the new set. Only fire if the set of live
-  //     photos actually changed — a pure "refresh timestamps"
+  //     photos actually changed, a pure "refresh timestamps"
   //     run doesn't need to redeploy.
   //
   //     Inserts are deliberately NOT a reason. The sync adds new photos as
@@ -401,7 +401,7 @@ function groupByCategory(sections: FolderSection[]): Map<Category, DriveFile[]> 
   for (const s of sections) {
     const normalized = s.name.trim().toLowerCase() as Category;
     if (!CATEGORIES.includes(normalized)) {
-      console.warn(`[gallery-sync] unknown category folder '${s.name}' — skipping ${s.files.length} files`);
+      console.warn(`[gallery-sync] unknown category folder '${s.name}', skipping ${s.files.length} files`);
       continue;
     }
     out.get(normalized)!.push(...s.files);
@@ -472,7 +472,7 @@ function fallbackSlug(filename: string): string {
 /**
  * Bounded-concurrency map. Runs `fn` over every item in `items`
  * with at most `limit` in flight at a time. Errors inside `fn`
- * don't stop other work — the caller is expected to handle them
+ * don't stop other work, the caller is expected to handle them
  * inside the callback.
  */
 async function mapWithConcurrency<T>(
@@ -494,13 +494,13 @@ async function mapWithConcurrency<T>(
  * POSTs to the Vercel Deploy Hook so the prerendered per-photo
  * static HTML pages get regenerated with the new set. No-op if
  * the env var isn't set (local dev, or the hook hasn't been
- * created yet — the site still works, just static HTML doesn't
+ * created yet, the site still works, just static HTML doesn't
  * auto-refresh).
  */
 async function triggerDeployHook(): Promise<boolean> {
   const url = process.env.VERCEL_DEPLOY_HOOK_URL;
   if (!url) {
-    console.log('[gallery-sync] VERCEL_DEPLOY_HOOK_URL not set — skipping redeploy trigger');
+    console.log('[gallery-sync] VERCEL_DEPLOY_HOOK_URL not set, skipping redeploy trigger');
     return false;
   }
   try {

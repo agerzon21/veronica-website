@@ -6,9 +6,9 @@ export type BackTarget = { to: string; label: string };
 /**
  * "Back" that returns you to where you actually came from.
  *
- * Every back control on the site used to hardcode its destination — the
+ * Every back control on the site used to hardcode its destination, the
  * wedding gallery always went to /gallery, a photo always went to its
- * category — so arriving from the weddings page and pressing Back dropped you
+ * category, so arriving from the weddings page and pressing Back dropped you
  * somewhere you had never been.
  *
  * The rule here is: if there is an entry behind us that WE pushed, go back to
@@ -23,8 +23,8 @@ export type BackTarget = { to: string; label: string };
  * the page being returned to is restored (see ScrollToTop in App.tsx), which
  * pushing a fresh entry to the same URL would not do.
  *
- * A caller that knows better can still pass explicit router state —
- * `<Link state={{ back: { to, label } }}>` — and that wins for the LABEL.
+ * A caller that knows better can still pass explicit router state
+ * `<Link state={{ back: { to, label } }}>`, and that wins for the LABEL.
  * The navigation itself stays a real back step whenever one exists.
  */
 export function useSmartBack(fallback: BackTarget) {
@@ -48,7 +48,7 @@ export function useSmartBack(fallback: BackTarget) {
   // `to` comes back as well, for anything that wants it for a title or href.
   if (canGoBack) {
     // The label is the caller's best guess at where back leads, and it is
-    // usually right — a post's parent really is the journal. Falling back to a
+    // usually right, a post's parent really is the journal. Falling back to a
     // bare "Back" here threw away good copy for no gain.
     return { label: explicit?.label ?? fallback.label, onClick: goBack, to };
   }

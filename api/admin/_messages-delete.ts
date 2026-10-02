@@ -8,28 +8,28 @@
  *   → 404 no such conversation
  *
  * Distinct from messages-reset, which wipes the MESSAGES but keeps the
- * conversation row so the same Instagram account lands back in it — the
+ * conversation row so the same Instagram account lands back in it, the
  * behaviour Vero relies on to re-test the AI without a second test
  * account. Useful for that, useless for tidying: it leaves an empty row
  * in the inbox forever with no way to remove it. This is that way.
  *
  * ─── What this actually destroys ────────────────────────────────
  *
- *   messages              — CASCADE from the FK (migration 005). Gone.
- *   conversation_summary  — columns on the row itself. Gone.
- *   ai_reply_intents      — CASCADE. Gone, which is correct: the claim
+ *   messages, CASCADE from the FK (migration 005). Gone.
+ *   conversation_summary, columns on the row itself. Gone.
+ *   ai_reply_intents, CASCADE. Gone, which is correct: the claim
  *                           is a per-conversation lock with no meaning
  *                           once the conversation doesn't exist.
  *
  * ─── What survives, deliberately ────────────────────────────────
  *
- *   contact_submissions   — the lead record keeps its name, email,
+ *   contact_submissions, the lead record keeps its name, email,
  *                           shoot type, date and location;
  *                           conversation_id is ON DELETE SET NULL
  *                           (migration 017). Deleting a cluttered thread
  *                           must not destroy the enquiry that created
- *                           it — those are the business's records.
- *   client_portals        — untouched. The FK points the other way
+ *                           it, those are the business's records.
+ *   client_portals, untouched. The FK points the other way
  *                           (conversations → portals), so removing a
  *                           conversation cannot affect a real client.
  *
@@ -78,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ success: false, error: 'Conversation not found' });
     }
 
-    // Single statement — messages and any reply-intent claim cascade.
+    // Single statement, messages and any reply-intent claim cascade.
     // The assistant transcript for this thread is keyed by slot, not by a
     // foreign key, so nothing cascades. Without this the row outlives the
     // conversation it discusses, forever.

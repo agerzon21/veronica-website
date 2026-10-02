@@ -14,16 +14,16 @@ import { LazyMotion, domAnimation } from 'framer-motion';
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 // Home and IndividualPhoto stay EAGER on purpose.
-//   Home — the LCP route. Lazying it would add a round trip to the one page
+//   Home, the LCP route. Lazying it would add a round trip to the one page
 //   the performance audit measures.
-//   IndividualPhoto — the prerendered SEO route. The build emits no
+//   IndividualPhoto, the prerendered SEO route. The build emits no
 //   modulepreload links, so a lazy chunk here costs every indexed /photo/*
 //   page an extra RTT for ~14KB. Not worth it.
 import Home from './pages/Home';
 import IndividualPhoto from './pages/IndividualPhoto';
 
 // Everything below is code-split. Admin alone is ~359KB of the old single
-// bundle, Journal ~139KB, Portal ~91KB — none of which a homepage visitor
+// bundle, Journal ~139KB, Portal ~91KB, none of which a homepage visitor
 // should ever download.
 const About = lazy(() => import('./pages/About'));
 const Contact = lazy(() => import('./pages/Contact'));
@@ -45,7 +45,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import SEO from './components/SEO';
 // ExitIntentPopup stays eager deliberately: it mounts unconditionally on every
-// non-admin route, so a lazy chunk would be requested immediately anyway — and
+// non-admin route, so a lazy chunk would be requested immediately anyway, and
 // splitting it drags icon-button/input/button into their own chunks, costing 6
 // extra requests for a ~5KB component.
 import ExitIntentPopup from './components/ExitIntentPopup';
@@ -55,7 +55,7 @@ import { scheduleAnalytics, trackPageView } from './utils/analytics';
 
 /**
  * Scroll positions per history entry. A plain Map, not state: writing it must
- * never cause a render, and it should die with the tab — these are positions
+ * never cause a render, and it should die with the tab, these are positions
  * within THIS session's history, not something to persist.
  */
 const scrollPositions = new Map<string, number>();
@@ -89,7 +89,7 @@ const debugScroll = (...args: unknown[]) => {
       console.info('[scroll]', ...args);
     }
   } catch {
-    /* private mode — never let tracing break navigation */
+    /* private mode, never let tracing break navigation */
   }
 };
 
@@ -104,7 +104,7 @@ const debugScroll = (...args: unknown[]) => {
  * on that pop. So restoration is done here, by history entry.
  *
  * THE KEY GUARD IS NOT OPTIONAL. That same modal close fires a pop which
- * React Router reports as a POP on the SAME entry — same key, same pathname,
+ * React Router reports as a POP on the SAME entry, same key, same pathname,
  * only `navigationType` flips. Without the guard this effect would re-run and
  * scroll the gallery to the top, which is the exact bug main.tsx is protecting
  * against. Acting only when the entry itself changes leaves the modal alone.
@@ -120,7 +120,7 @@ const SCROLL_KEYS = new Set([
  * This guard used to cancel on ANY wheel or touchstart, which quietly broke
  * the two gestures people actually use to go back. A macOS two-finger
  * swipe-back IS a stream of horizontal wheel events, and an iOS edge-swipe
- * begins with a touchstart — so the very gesture that triggered the back
+ * begins with a touchstart, so the very gesture that triggered the back
  * navigation immediately cancelled the restore it triggered. Buttons worked,
  * swipes did not, which is exactly the split Alex reported.
  *
@@ -179,8 +179,8 @@ const restoreTo = (top: number) => {
   }, CANCEL_GRACE_MS);
 
   // Landing is not the end of it. Anything still resolving ABOVE the viewport
-  // — a lazy photograph without reserved height, a font swap, a grid that
-  // reflows — changes the height of the document above us afterwards, and
+  // a lazy photograph without reserved height, a font swap, a grid that
+  // reflows, changes the height of the document above us afterwards, and
   // Chrome's scroll anchoring then deliberately moves the page to keep its
   // chosen anchor still. On the weddings page at desktop widths that landed
   // people on the FAQ heading instead of where they left, and only when the
@@ -204,8 +204,8 @@ const restoreTo = (top: number) => {
     window.removeEventListener('keydown', onKey);
   };
 
-  // Pages here finish loading well after mount — lazy route chunks first, then
-  // journal lists, Instagram and gallery dimensions — so the document is
+  // Pages here finish loading well after mount, lazy route chunks first, then
+  // journal lists, Instagram and gallery dimensions, so the document is
   // usually far too short to hold the saved position on the first frame.
   // Bounded by wall-clock rather than a frame count, and it stops the instant
   // the position sticks, so a page that is ready immediately costs one frame.
@@ -253,12 +253,12 @@ function ScrollToTop() {
   // declaration order. When the sampler below was declared first AND seeded
   // itself with `scrollPositions.set(key, window.scrollY)`, that seed ran
   // before this effect and overwrote the stored position with the live scroll
-  // — which, one frame after a route swap, is 0. The restore then read back
+  // which, one frame after a route swap, is 0. The restore then read back
   // its own zero. The trace said it plainly: "pop with nothing saved ... 0".
   //
   // The seed is gone and this effect now reads before anything can write.
   useEffect(() => {
-    // Same history entry as last time — a modal opening or closing, not a
+    // Same history entry as last time, a modal opening or closing, not a
     // navigation. See the note above.
     if (handledKey.current === key) return;
     handledKey.current = key;
@@ -350,7 +350,7 @@ function ScrollToTop() {
 /**
  * gtag used to load from module scope, pulling 356KB of transfer / ~1.07MB of
  * uncompressed third-party JS into the window where the page was still trying
- * to paint. scheduleAnalytics defers it — but bypasses the delay entirely for
+ * to paint. scheduleAnalytics defers it, but bypasses the delay entirely for
  * paid clicks and the whole /contact funnel, so ad attribution is never at
  * risk. See src/utils/analytics.ts.
  */
@@ -368,7 +368,7 @@ function AnalyticsBoot() {
  * idle time buys back instant navigation for the cost of a rounding error.
  *
  * Deliberately excluded: Admin (89KB), Journal (42KB) and Portal (25KB). Those
- * are the whole reason for splitting — a visitor browsing the gallery should
+ * are the whole reason for splitting, a visitor browsing the gallery should
  * never download the admin panel.
  */
 function PrefetchPublicRoutes() {
@@ -412,7 +412,7 @@ function PrefetchPublicRoutes() {
       const ric = (window as any).requestIdleCallback as
         | ((cb: () => void, opts?: { timeout: number }) => number)
         | undefined;
-      // Safari has no requestIdleCallback — a plain timeout is close enough for
+      // Safari has no requestIdleCallback, a plain timeout is close enough for
       // work this small.
       idleId = ric ? ric(warm, { timeout: 3000 }) : window.setTimeout(warm, 300);
     };
@@ -436,7 +436,7 @@ function PrefetchPublicRoutes() {
 }
 
 /**
- * Inner shell — lives inside <Router> so it can use useLocation() to
+ * Inner shell, lives inside <Router> so it can use useLocation() to
  * gate site-wide chrome per-route.
  *
  * Navbar + Footer are HIDDEN on /admin because the logged-in admin
@@ -444,7 +444,7 @@ function PrefetchPublicRoutes() {
  * chrome would eat vertical space and look confusing next to admin
  * nav. The admin LOGIN screen (also at /admin) still needs the
  * site chrome so an unauthenticated visitor has an obvious way
- * back to the public site — that's handled inside Admin.tsx, which
+ * back to the public site, that's handled inside Admin.tsx, which
  * renders <Navbar /> + <Footer /> inline on the login branch only.
  *
  * /portal and /portal/pass follow the SAME pattern, for the same
@@ -479,9 +479,9 @@ function AppShell() {
       {!ownChrome && <Navbar />}
       {/* The fallback reserves a full viewport height on purpose. <Footer />
           renders after <Routes>, so a null or short fallback would paint the
-          footer high and then shove it down when the chunk lands — turning a
+          footer high and then shove it down when the chunk lands, turning a
           perfect CLS of 0 into a visible layout shift. */}
-      {/* The site had NO <main> landmark anywhere — Chakra's Box renders a div,
+      {/* The site had NO <main> landmark anywhere, Chakra's Box renders a div,
           so every route was an undifferentiated div soup to screen readers and
           to AI agents. Wrapping <Routes> gives exactly one <main> per page,
           outside <Suspense> so it exists even while a lazy chunk is loading. */}

@@ -159,7 +159,7 @@ function relatedTileSizes(width: number | null, height: number | null): string {
 const IndividualPhoto: React.FC = () => {
   const { category, photoId } = useParams<{ category: string; photoId: string }>();
   // Called up here, before any early return, because hooks cannot be
-  // conditional — the label is derived from the route param rather than the
+  // conditional, the label is derived from the route param rather than the
   // fetched photo for the same reason.
   const back = useSmartBack({
     to: `/gallery/${category}`,
@@ -167,7 +167,7 @@ const IndividualPhoto: React.FC = () => {
   });
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [loading, setLoading] = useState(true);
-  // True only when the API said 404 — the slug genuinely doesn't exist.
+  // True only when the API said 404, the slug genuinely doesn't exist.
   // A transient failure (5xx, network) also leaves photo null, but must NOT
   // send noindex: Googlebot rendering a live page during an API hiccup would
   // otherwise see a noindex on a perfectly good URL.
@@ -287,7 +287,7 @@ const IndividualPhoto: React.FC = () => {
 
   // Fetch the main photo and its related photos in parallel from the
   // gallery API. The related endpoint runs the same keyword-overlap
-  // scoring the old client-side findRelatedPhotos did — just on the
+  // scoring the old client-side findRelatedPhotos did, just on the
   // server, so we don't ship the entire photo set to the browser.
   useEffect(() => {
     if (!category || !photoId) return;
@@ -317,7 +317,7 @@ const IndividualPhoto: React.FC = () => {
           if (relatedData.success) setRelatedPhotos(relatedData.photos);
         }
       } catch {
-        // Silent fail — the render below shows a "photo not found"
+        // Silent fail, the render below shows a "photo not found"
         // state when `photo` is null after loading.
         if (!cancelled) setPhoto(null);
       } finally {
@@ -374,7 +374,7 @@ const IndividualPhoto: React.FC = () => {
       <Box minH="100vh" bg="white">
         {/* A dead slug is served the SPA shell with a 200 (the static 404 can't
             exist behind the catch-all rewrite), so noindex here is the only
-            signal telling Google this URL is gone — NotFound and JournalPost
+            signal telling Google this URL is gone, NotFound and JournalPost
             already send it; this branch was the one hole. Gated on the API's
             404 so a transient 5xx/network failure never noindexes a live page. */}
         {gone && (
@@ -417,7 +417,7 @@ const IndividualPhoto: React.FC = () => {
   // was handed photo.width. Appending it here as well listed it twice.
   const mainSrcSet = photo.width ? gridRungs : undefined;
 
-  // BreadcrumbList schema — makes the page eligible for breadcrumb rich results
+  // BreadcrumbList schema, makes the page eligible for breadcrumb rich results
   // and tells Google how the photo fits in the site hierarchy. Helps with
   // indexing thin photo pages by establishing internal-link context.
   const breadcrumbSchema = {
@@ -450,7 +450,7 @@ const IndividualPhoto: React.FC = () => {
       </Helmet>
 
       <Box minH="100vh" bg="white" layerStyle="pageTop">
-        {/* Breadcrumb — small, semantic. Real <a href> tags so they're
+        {/* Breadcrumb, small, semantic. Real <a href> tags so they're
             crawlable and provide internal links INTO the photo pages from
             the perspective of Googlebot crawling the gallery → category → photo. */}
         <Box
@@ -486,12 +486,12 @@ const IndividualPhoto: React.FC = () => {
           </Flex>
         </Box>
 
-        {/* Hero image — full width. Container uses the photo's real
+        {/* Hero image, full width. Container uses the photo's real
             aspect ratio (from DB, via /api/gallery/post) so it has a
-            non-zero height BEFORE the image loads — that's what lets
+            non-zero height BEFORE the image loads, that's what lets
             the cream placeholder + gold spinner show up while the
             Drive proxy warms its cache. Falls back to 3/2 if the
-            aspect isn't known (rare — pre-migration photos might
+            aspect isn't known (rare, pre-migration photos might
             lack dims). */}
         <Box
           position="relative"
@@ -636,7 +636,7 @@ const IndividualPhoto: React.FC = () => {
             <Container maxW="content" px={0}>
               <VStack spacing={{ base: 8, md: 10 }}>
                 {/* Same eyebrow → rule → title arrangement as PageHeader, but
-                    the heading here is an h2 at sectionTitle — PageHeader only
+                    the heading here is an h2 at sectionTitle, PageHeader only
                     offers pageTitle/contentTitle, so it can't render this one. */}
                 <VStack spacing={{ base: 4, md: 5 }}>
                   <Text textStyle="eyebrowOnFold">Related</Text>

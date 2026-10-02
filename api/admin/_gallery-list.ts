@@ -8,8 +8,8 @@
  * Returns ALL rows (drafts + published) by default so Vero can
  * review AI-generated drafts and flip them to published. Filters:
  *   - category?: only that category
- *   - status?:   'draft' | 'published' — only that status
- *   - includeDeleted?: boolean (default false) — include
+ *   - status?:   'draft' | 'published', only that status
+ *   - includeDeleted?: boolean (default false), include
  *                      soft-deleted rows too (for "restore"
  *                      workflows). Hidden by default so the
  *                      standard editing view isn't polluted.
@@ -66,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     // Neon's tagged template can't easily do dynamic WHERE clauses
     // via string concatenation. Branch on the filter combo instead
-    // — verbose but each query is straightforward and safe.
+    // verbose but each query is straightforward and safe.
     let rows: Row[];
     if (category && status && !includeDeleted) {
       rows = (await sql`

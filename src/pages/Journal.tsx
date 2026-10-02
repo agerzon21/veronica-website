@@ -75,14 +75,14 @@ const STRIP_SIZES = '(min-width: 48em) 560px, (min-width: 28em) 400px, 220px';
 const JOURNAL_HERO = '/assets/photos/site/journal-hero.webp';
 
 /**
- * Journal — Vero's periodic long-form recaps of recent photoshoots
- * (5–15 photos + narrative). Two routes share this component:
+ * Journal, Vero's periodic long-form recaps of recent photoshoots
+ * (5-15 photos + narrative). Two routes share this component:
  *
  *   /journal          → the timeline index (this file's default)
  *   /journal/:slug    → the individual post (delegates to JournalPost)
  *
  * The timeline is a vertical center-rail on desktop with year markers
- * and cards alternating left/right off the rail — feels editorial and
+ * and cards alternating left/right off the rail, feels editorial and
  * distinctive, matches the site's understated gold-on-white palette.
  * On mobile it collapses to a single-column left-rail so the cards
  * get the full width instead of trying to squeeze into a half.
@@ -116,7 +116,7 @@ const Journal = () => {
   const { slug } = useParams<{ slug?: string }>();
 
   // Single component, two behaviors. When a slug is in the URL, defer
-  // entirely to JournalPost — it fetches its own data + owns its SEO.
+  // entirely to JournalPost, it fetches its own data + owns its SEO.
   if (slug) {
     // The fallback is character for character JournalPost's own `loading`
     // state, so the handover from chunk-pending to data-pending paints
@@ -189,12 +189,12 @@ function JournalIndex() {
         <meta property="og:image" content="https://vero.photography/assets/photos/site/journal-hero.webp" />
       </Helmet>
 
-      {/* Hero — every other section of the site opens on a photograph;
+      {/* Hero, every other section of the site opens on a photograph;
           the journal was the one page that opened on white. Served from
           /assets (no Drive dependency, no layout shift). */}
       {/* One hero height across the whole site. These were 45/53 here, 46/50
           on the journal, 45/50 and 40/45 across the two gallery views and
-          52/58 on weddings — five different first impressions for one site.
+          52/58 on weddings, five different first impressions for one site.
           About's is the reference. */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
         <Image
@@ -250,7 +250,7 @@ function JournalIndex() {
 function Timeline({ grouped }: { grouped: Array<[number, PostSummary[]]> }) {
   // Rail lives at 12px from the container's left edge on mobile and
   // dead-center on desktop. Children (dots, year markers, cards) all
-  // position against this same origin — so no `pl` on the container,
+  // position against this same origin, so no `pl` on the container,
   // otherwise absolute-positioned children inside child Flexes end up
   // shifted right by that padding and drift off the rail.
   return (
@@ -300,7 +300,7 @@ function YearMarker({ year }: { year: number }) {
   // rail visually threads through it. Absolute positioning + a -50%
   // translate keeps the badge center pinned to the rail even as the
   // badge width changes with year length ("2026" vs "2025", etc.).
-  // Desktop keeps the older flex-center behavior — the rail is at
+  // Desktop keeps the older flex-center behavior, the rail is at
   // 50% and the badge naturally centers over it.
   return (
     <Flex
@@ -332,7 +332,7 @@ function YearMarker({ year }: { year: number }) {
  * A single post on the rail.
  *
  * This used to be a CENTRE-rail timeline with entries alternating left and
- * right at w="50%". That is the right shape for a company history or a CV —
+ * right at w="50%". That is the right shape for a company history or a CV
  * many short entries, where the alternation carries the eye. For six
  * photograph-led posts it meant half the page was blank on every row, by
  * construction, which is why the journal read as empty no matter how much the
@@ -340,7 +340,7 @@ function YearMarker({ year }: { year: number }) {
  *
  * The rail now runs down the left on every breakpoint and each entry takes the
  * full column, so the covers get roughly twice the width they had. The rail,
- * the dots and the year markers stay — that was the characterful part; the
+ * the dots and the year markers stay, that was the characterful part; the
  * alternation was the part costing half the canvas.
  */
 function TimelineEntry({ post }: { post: PostSummary }) {
@@ -351,7 +351,7 @@ function TimelineEntry({ post }: { post: PostSummary }) {
       {/* A dated marker on the rail, not a 9px dot.
           The dot said "something happened here"; it did not say WHEN, so the
           rail read as decoration rather than a timeline. The day sits in the
-          disc and the month above it — the two together are what make the
+          disc and the month above it, the two together are what make the
           spine legible as chronology while scrolling.
 
           published_at is nullable, so a post without one falls back to a plain
@@ -423,7 +423,7 @@ function TimelineEntry({ post }: { post: PostSummary }) {
  * One post: a dense cluster of its photographs, then the words.
  *
  * This replaced an accordion. Each post ships FIVE photos in the list payload
- * and the card showed one — the other four sat behind a chevron, so a page
+ * and the card showed one, the other four sat behind a chevron, so a page
  * about photography displayed six photographs and a lot of cream.
  *
  * The reference site Alex keeps pointing at (jovanarikalo.com) is dense:
@@ -438,7 +438,7 @@ function TimelineEntry({ post }: { post: PostSummary }) {
 function TimelineCard({ post }: { post: PostSummary }) {
   const photos = post.photos ?? [];
   const lead = photos[0];
-  // Up to four supporting frames. Fewer is fine — the grid just gets shorter,
+  // Up to four supporting frames. Fewer is fine, the grid just gets shorter,
   // and a post with a single photo still reads correctly as one image.
   const rest = photos.slice(1, 5);
 
@@ -451,7 +451,7 @@ function TimelineCard({ post }: { post: PostSummary }) {
       // data-group, NOT role="group": this renders as an <a>, and an
       // explicit ARIA role overrides the implicit link role, dropping every
       // card out of a screen reader's links list. Chakra's _groupHover matches
-      // data-group just as well — the pattern already used elsewhere here.
+      // data-group just as well, the pattern already used elsewhere here.
       data-group
       _hover={{ textDecoration: 'none' }}
       // The reader's chunk, started on intent rather than on click. A pointer
@@ -468,7 +468,7 @@ function TimelineCard({ post }: { post: PostSummary }) {
           mb={4}
           align="stretch"
           // Column on phones. Side by side, the four supporting frames would
-          // share the 38% left over from the lead — roughly 60px each on a
+          // share the 38% left over from the lead, roughly 60px each on a
           // 375px screen, which is a swatch rather than a photograph. Stacked,
           // the lead runs full width and the rest become a strip beneath it at
           // about 85px.
@@ -578,7 +578,7 @@ function TimelineCard({ post }: { post: PostSummary }) {
         </Text>
 
         {/* No clamp on the excerpt. Every one in the database is 126-151
-            characters, which fits in two or three lines at this measure — the
+            characters, which fits in two or three lines at this measure, the
             ellipsis was truncating text that had room to finish. */}
         {post.excerpt && (
           <Text textStyle="bodyCopy" mb={3}>
@@ -588,14 +588,14 @@ function TimelineCard({ post }: { post: PostSummary }) {
 
         {/* Reads as the whole block's affordance, not a link inside it.
             On a pointer device it is driven by _groupHover on the card
-            wrapper, so hovering the photographs — or the title, or anywhere
-            else in the entry — slides the arrow in and draws the rule. The
+            wrapper, so hovering the photographs, or the title, or anywhere
+            else in the entry, slides the arrow in and draws the rule. The
             movement is what says the whole block is the target.
             
             TOUCH HAS NO HOVER, so that reveal never fires on a phone, which
             is exactly where the large tap target matters most. Under
             (hover: none) the arrow and rule are simply drawn at rest instead
-            — same affordance, no interaction needed to see it. Querying hover
+same affordance, no interaction needed to see it. Querying hover
             capability rather than width is the point: a small laptop window
             still gets the animation, a large tablet still gets the static
             version. */}
@@ -702,7 +702,7 @@ function groupByYear(posts: PostSummary[]): Array<[number, PostSummary[]]> {
     if (!map.has(year)) map.set(year, []);
     map.get(year)!.push(p);
   }
-  // Years descending — newest year first.
+  // Years descending, newest year first.
   return [...map.entries()].sort((a, b) => b[0] - a[0]);
 }
 
@@ -710,7 +710,7 @@ function groupByYear(posts: PostSummary[]): Array<[number, PostSummary[]]> {
  * The rail marker's month and day.
  *
  * journal_posts.published_at is NULLABLE. `new Date(null)` is the epoch rather
- * than Invalid Date, so an unset date would quietly render "JAN / 1" — a wrong
+ * than Invalid Date, so an unset date would quietly render "JAN / 1", a wrong
  * answer that looks like a right one. Both return null instead, and the marker
  * falls back to a plain dot.
  */

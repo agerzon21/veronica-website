@@ -9,13 +9,13 @@
  *
  *   GET /api/gallery/post?category=weddings&slug=first-dance
  *     → { success, photo: PublicPhoto }
- *     Returns a single photo — powers /photo/<category>/<slug>.
+ *     Returns a single photo, powers /photo/<category>/<slug>.
  *
  * Both endpoints return null for width/height when Drive didn't
  * report dimensions; the client falls back to 3:2 in that case
  * (same as photos.ts's FALLBACK_DIMS did in the file-based era).
  *
- * URLs handed back are /api/photo?id=<drive_file_id> — the existing
+ * URLs handed back are /api/photo?id=<drive_file_id>, the existing
  * proxy at /api/photo does the WebP transcode + edge cache. No
  * change to how images actually load.
  */
@@ -29,12 +29,12 @@ type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
 const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'maternity'] as const;
 
 type PublicPhoto = {
-  id: string;               // = slug — the URL identifier the frontend uses everywhere
+  id: string;               // = slug, the URL identifier the frontend uses everywhere
   slug: string;
   category: Category;
-  url: string;              // /api/photo?id=<drive_file_id> — served through the resizing proxy
+  url: string;              // /api/photo?id=<drive_file_id>, served through the resizing proxy
   originalUrl: string;      // /api/photo?id=<drive_file_id> (unresized fallback)
-  driveViewUrl: string;     // https://drive.google.com/file/d/<id>/view — for "open original"
+  driveViewUrl: string;     // https://drive.google.com/file/d/<id>/view, for "open original"
   alt: string;
   title: string;            // suffixed with " | Vero Photography" for compatibility with existing consumers
   description: string;
@@ -154,7 +154,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     const row = rows[0];
     if (!row) return res.status(404).json({ success: false, error: 'Photo not found' });
 
-    // Shorter cache for individual posts than the list — Vero may
+    // Shorter cache for individual posts than the list, Vero may
     // tweak a caption and want to see it live quickly.
     res.setHeader(
       'Cache-Control',
@@ -173,7 +173,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 }
 
 /**
- * Related photos — for the "you might also like" strip on each
+ * Related photos, for the "you might also like" strip on each
  * individual photo page. Same scoring algo photos.ts used to
  * compute in-memory: rank by keyword overlap, break ties by
  * same-category, then randomly. Moving it server-side keeps the
@@ -259,8 +259,8 @@ function rowToPublic(row: Row): PublicPhoto {
     // deploy, for a gallery almost nobody browses. It also made the endpoint a
     // free quota drain, since any junk query param was a cache miss.
     //
-    // Byte-for-byte this is a wash — measured across 8 photos, static is 2%
-    // heavier in aggregate, some larger and some smaller — because the exporter
+    // Byte-for-byte this is a wash, measured across 8 photos, static is 2%
+    // heavier in aggregate, some larger and some smaller, because the exporter
     // uses the same 2400px/q82 settings the proxy did.
     url: `/assets/photos/${row.category}/${row.slug}.webp`,
     originalUrl: `/assets/photos/${row.category}/${row.slug}.webp`,

@@ -18,7 +18,7 @@ import CTAButton from './CTAButton';
  * plays well with our design system + goes full-screen on mobile so the
  * touch targets are big.
  *
- * Usage — the caller controls open state so cascading confirms + async
+ * Usage, the caller controls open state so cascading confirms + async
  * flows are natural:
  *
  *   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -57,7 +57,7 @@ const ConfirmDialog = ({
   onConfirm,
   onCancel,
 }: Props) => {
-  // The dialog needs a focusable "least destructive" ref for a11y —
+  // The dialog needs a focusable "least destructive" ref for a11y
   // cancel is always the right default so escape / autofocus lands
   // somewhere safe.
   const cancelRef = useRef<HTMLButtonElement>(null);

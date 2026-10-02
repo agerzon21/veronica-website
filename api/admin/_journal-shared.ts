@@ -6,7 +6,7 @@
  */
 
 // 'article' is the blog kind: advice and notes from behind the lens
-// rather than a photographed event. Timeline-wise identical — the
+// rather than a photographed event. Timeline-wise identical, the
 // publish date IS the event date (Alex's framing).
 const SESSION_TYPES = new Set(['wedding', 'portrait', 'family', 'maternity', 'article']);
 
@@ -17,21 +17,21 @@ export interface JournalInput {
   body_markdown: string;
   // Alt text for the cover photo (which is now automatically the
   // first photo in the Drive folder). Kept as `cover_image_alt` in
-  // the DB for now — the column just gets repurposed instead of
+  // the DB for now, the column just gets repurposed instead of
   // requiring another migration.
   cover_image_alt: string | null;
-  // Photos come from a Google Drive folder — Vero uploads there, shares
+  // Photos come from a Google Drive folder, Vero uploads there, shares
   // the link, and pastes it here. The public post endpoint lists the
   // folder at read time (same pattern as client galleries).
   drive_folder_url: string | null;
   session_type: string | null;
   tags: string[];
   status: 'draft' | 'published';
-  // The event date — what the timeline sorts + displays on. When
+  // The event date, what the timeline sorts + displays on. When
   // provided (YYYY-MM-DD from a native <input type="date">), we save
   // as noon UTC so it renders as the same calendar day in every
   // timezone (midnight UTC would slip a day earlier in the Americas).
-  // Null means "use publish default" — auto NOW on first publish,
+  // Null means "use publish default", auto NOW on first publish,
   // preserve existing on subsequent saves.
   published_at: string | null;
   // The multi-part story this entry belongs to, if any. Null on almost
@@ -85,7 +85,7 @@ export function validateJournalInput(body: unknown): ValidateResult {
   // string coming in means "auto-derive".
   const rawSlug = typeof b.slug === 'string' ? b.slug.trim() : '';
   const slug = rawSlug ? slugify(rawSlug) : slugify(title);
-  if (!slug) return { ok: false, status: 400, error: 'slug is empty after normalization — check title/slug' };
+  if (!slug) return { ok: false, status: 400, error: 'slug is empty after normalization, check title/slug' };
 
   const excerpt = typeof b.excerpt === 'string' ? b.excerpt.trim() : '';
   if (excerpt.length > 400) return { ok: false, status: 400, error: 'excerpt too long (max 400)' };

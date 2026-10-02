@@ -5,7 +5,7 @@
  *
  * Fetches every conversation where contact_name IS NULL and calls the
  * Meta Graph API to enrich it with the sender's real profile. Skips
- * silently on API errors — a stale/blocked IGSID means "leave it blank
+ * silently on API errors, a stale/blocked IGSID means "leave it blank
  * and move on" (this is the same policy the webhook auto-enrich path
  * uses).
  *
@@ -13,17 +13,17 @@
  *   - Once, after the auto-enrich feature ships, to fill in the rows
  *     that predate it.
  *   - Occasionally, if you notice a batch of unfilled conversations
- *     (shouldn't happen — webhook enriches on every new DM).
+ *     (shouldn't happen, webhook enriches on every new DM).
  *
  * Usage:
  *   node --env-file=.env.local scripts/backfill-ig-profiles.mjs
  *
  * Requires POSTGRES_URL and IG_ACCESS_TOKEN in the env. `.env.local`
- * mirrors production for local dev — sync it via `vercel env pull`.
+ * mirrors production for local dev, sync it via `vercel env pull`.
  *
  * Uses direct fetch + a copy of the failure-mode categorization from
  * api/_ig-profile.ts (can't import the .ts helper from a plain .mjs
- * script — no tsc step in this path). Keep them roughly in sync.
+ * script, no tsc step in this path). Keep them roughly in sync.
  */
 
 import { neon } from '@neondatabase/serverless';
@@ -32,18 +32,18 @@ const POSTGRES_URL = process.env.POSTGRES_URL;
 const IG_ACCESS_TOKEN = process.env.IG_ACCESS_TOKEN;
 
 if (!POSTGRES_URL) {
-  console.error('POSTGRES_URL missing — did you `vercel env pull` recently?');
+  console.error('POSTGRES_URL missing, did you `vercel env pull` recently?');
   process.exit(1);
 }
 if (!IG_ACCESS_TOKEN) {
-  console.error('IG_ACCESS_TOKEN missing — did you `vercel env pull` recently?');
+  console.error('IG_ACCESS_TOKEN missing, did you `vercel env pull` recently?');
   process.exit(1);
 }
 
 const IG_GRAPH_HOST = 'https://graph.instagram.com';
 const IG_API_VERSION = 'v25.0';
 const PROFILE_FIELDS = ['name', 'username', 'profile_pic'].join(',');
-// 200ms between calls — nowhere near the BUC ceiling but polite, and
+// 200ms between calls, nowhere near the BUC ceiling but polite, and
 // keeps us from tripping any burst detection during a backfill.
 const DELAY_MS = 200;
 
@@ -101,7 +101,7 @@ async function main() {
   `;
 
   if (rows.length === 0) {
-    console.log('Nothing to backfill — every Instagram conversation already has contact_name.');
+    console.log('Nothing to backfill, every Instagram conversation already has contact_name.');
     return;
   }
 

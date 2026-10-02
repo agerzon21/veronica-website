@@ -50,24 +50,24 @@ exit-intent newsletter popup. Both use the Postgres database documented in
 
 You only do this once per environment. Walkthrough:
 
-1. **Create project** at https://console.cloud.google.com — name: `vero-photography`
+1. **Create project** at https://console.cloud.google.com, name: `vero-photography`
 2. **Enable Drive API**: APIs & Services → Library → search "Google Drive
    API" → Enable
 3. **Create service account**: APIs & Services → Credentials →
    + Create Credentials → Service account → name `vero-portal-reader`. Skip
    the "grant access" steps.
 4. **Generate JSON key**: click the service account → Keys tab → Add Key →
-   Create new key → JSON → Create. A file downloads — treat like a password.
+   Create new key → JSON → Create. A file downloads, treat like a password.
 5. **Veronika shares her parent client folder** in Drive with the service
    account email (`vero-portal-reader@...iam.gserviceaccount.com`) as
    **Viewer**. The "Google account not found" warning is expected for
-   service accounts — share anyway.
+   service accounts, share anyway.
 6. **Add JSON to Vercel** as env var `GOOGLE_SERVICE_ACCOUNT_JSON`.
    Marked Sensitive. Production + Preview only.
 
 ### Database setup
 
-Already covered in [DATABASE.md](DATABASE.md) — `client_galleries`,
+Already covered in [DATABASE.md](DATABASE.md), `client_galleries`,
 `subscribers`, `contact_submissions` tables.
 
 ## Adding a new client gallery
@@ -90,7 +90,7 @@ Every time Veronika delivers a job:
    );
    ```
 
-   `drive_url` can be the full URL OR just the folder ID — `_drive.ts`
+   `drive_url` can be the full URL OR just the folder ID, `_drive.ts`
    handles both.
 
 4. Veronika tells the client: "Go to vero.photography/portal, password
@@ -99,7 +99,7 @@ Every time Veronika delivers a job:
 ## Password guidelines
 
 - Random + 8+ characters minimum. The 750ms delay on wrong passwords means
-  brute-forcing 8-char alphanumerics would take centuries — but only if
+  brute-forcing 8-char alphanumerics would take centuries, but only if
   passwords are unguessable. Don't use names or birthdays.
 - Easy patterns: a memorable word + 4 digits (`SUNFLOWER-7421`, `BRIDE-9385`).
 - Each client gets a unique password. Don't reuse across galleries.
@@ -114,18 +114,18 @@ Every time Veronika delivers a job:
 - When a client mentions their code at booking, Veronika verifies by
   searching: `select email, discount_code, created_at from subscribers where
   discount_code = 'VERO-XXXXXXXX';`
-- The code is one-use by trust — we don't enforce single use. If we ever
+- The code is one-use by trust, we don't enforce single use. If we ever
   need to, add a `redeemed_at timestamptz` column and check it.
 
 ## Newsletter cadence (future)
 
-This site collects subscribers but doesn't actively send newsletters yet —
+This site collects subscribers but doesn't actively send newsletters yet
 just the one welcome email. If/when Veronika wants to start sending:
 
 - Build a `/api/admin/broadcast` endpoint that loops `subscribers where
   subscribed = true` and sends via the existing SMTP transport.
 - Consider moving to ConvertKit / Beehiiv if the list grows beyond ~200
-  subscribers — better deliverability, real unsubscribe handling, analytics.
+  subscribers, better deliverability, real unsubscribe handling, analytics.
 - Add an `/api/unsubscribe?token=X` endpoint and an unsubscribe link in every
   email (CAN-SPAM requirement). Single-token-per-subscriber, stored in a new
   `unsubscribe_token` column.
@@ -137,10 +137,10 @@ just the one welcome email. If/when Veronika wants to start sending:
 | `api/_db.ts` | Shared Neon connection |
 | `api/_drive.ts` | Drive API client + folder listing |
 | `api/_welcome-email.ts` | Welcome email template + send function |
-| `api/clients.ts` | POST `/api/clients` — password gate |
-| `api/subscribe.ts` | POST `/api/subscribe` — email capture |
+| `api/clients.ts` | POST `/api/clients`, password gate |
+| `api/subscribe.ts` | POST `/api/subscribe`, email capture |
 | `api/contact.ts` | Updated to also log to Neon |
-| `src/pages/Portal.tsx` | `/portal` route — password page + gallery wrapper |
+| `src/pages/Portal.tsx` | `/portal` route, password page + gallery wrapper |
 | `src/components/ClientGallery.tsx` | Grid + lightbox + downloads |
 | `src/components/ExitIntentPopup.tsx` | Exit-intent detection + signup form |
 
@@ -157,7 +157,7 @@ vercel dev
 ```
 
 Hit:
-- `http://localhost:3000/portal` — try a wrong password (expect ~750ms delay
+- `http://localhost:3000/portal`, try a wrong password (expect ~750ms delay
   + "didn't match"), then add a test row to `client_galleries` and try the
   real password.
 - Visit any page, leave mouse out the top of viewport → popup should appear.
@@ -195,7 +195,7 @@ the email she'd expect.
 delete from client_galleries where label = 'smith-wedding-jun-2026';
 ```
 
-The Drive folder is untouched — only the portal access is revoked. To also
+The Drive folder is untouched, only the portal access is revoked. To also
 revoke Drive access, Veronika removes the service account from that folder's
 sharing (or deletes the folder entirely).
 

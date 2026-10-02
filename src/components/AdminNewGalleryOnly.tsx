@@ -444,7 +444,7 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API can fail on insecure origins. Falling back to a
-      // textarea select is more code than it's worth — the message is
+      // textarea select is more code than it's worth, the message is
       // selectable in the readonly Textarea below.
     }
   };
@@ -473,7 +473,7 @@ function SuccessScreen({ state, onDone }: { state: SuccessState; onDone: () => v
         </Text>
       </VStack>
 
-      {/* Quick-access link card — only shown when delivered. The full
+      {/* Quick-access link card, only shown when delivered. The full
           message below has the same URL, but it's buried in copy; this
           gives Vero an instant copy-or-click target to verify the link
           works before she pastes the long message elsewhere. */}

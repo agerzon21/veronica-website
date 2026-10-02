@@ -9,7 +9,7 @@
  *   → 403 admin-level (not super)
  *   → 405 non-POST
  *
- * "Last run" is one LEFT JOIN LATERAL — the DB picks the single most
+ * "Last run" is one LEFT JOIN LATERAL, the DB picks the single most
  * recent cron_runs row per cron_jobs row without pulling the whole
  * history into the app. Falls back to lastRun: null for a cron that
  * has never executed (which shouldn't happen once vercel.json is
@@ -52,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Seed rows for jobs that have no vercel.json schedule entry. Without this
     // they can never appear here: the list reads cron_jobs, only runGuarded
-    // writes cron_jobs, and runGuarded only runs when the job runs — which for
+    // writes cron_jobs, and runGuarded only runs when the job runs, which for
     // an unscheduled job can only be triggered from this list. ON CONFLICT keeps
     // the operator's `enabled` choice intact and only refreshes the metadata.
     for (const meta of UNSCHEDULED_CRON_META) {

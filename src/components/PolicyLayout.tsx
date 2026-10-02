@@ -5,7 +5,7 @@ import Reveal, { useReveal } from './ui/Reveal';
 /**
  * Shared page shell for legal / policy pages (/privacy, /terms, and any
  * future ones like a cookie policy). Keeps the two documents visually
- * identical so they read as one coherent legal surface — you'd never
+ * identical so they read as one coherent legal surface, you'd never
  * want the Privacy Policy and Terms to look like they were built by
  * two different teams.
  *
@@ -81,7 +81,7 @@ const PolicyLayout = ({ title, kicker, effectiveDate, intro, children }: PolicyL
           {children}
         </VStack>
 
-        {/* Footer note — every policy page ends with a "contact us" nudge
+        {/* Footer note, every policy page ends with a "contact us" nudge
             so readers who have questions know exactly where to go. Kept
             simple gray so it doesn't try to compete with the site's
             actual Contact page. */}
@@ -129,7 +129,7 @@ export const PolicySection = ({
   id?: string;
 }) => (
   <Box id={id} sx={{ scrollMarginTop: '90px' }}>
-    {/* mt/mb rather than `m={0}` + `mb` — the shorthand was cancelling the
+    {/* mt/mb rather than `m={0}` + `mb`, the shorthand was cancelling the
         bottom margin and padding depending on prop resolution order. */}
     <Text
       as="h2"
@@ -149,7 +149,7 @@ export const PolicySection = ({
 );
 
 /**
- * Body paragraph — set the line-height + size once here so every
+ * Body paragraph, set the line-height + size once here so every
  * paragraph across every policy reads the same.
  */
 export const P = ({ children }: { children: React.ReactNode }) => (

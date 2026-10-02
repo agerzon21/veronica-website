@@ -1,5 +1,5 @@
 /**
- * Dispatcher for /api/inbox/* routes — the receiving side of the
+ * Dispatcher for /api/inbox/* routes, the receiving side of the
  * messaging feature. Third-party platforms (Meta / Instagram now,
  * WhatsApp / SMS later) POST message events here.
  *
@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
  * signature verification (X-Hub-Signature-256 on IG, Svix on Resend).
  * Declaring it here applies it to every route dispatched under
  * /api/inbox/*. The individual handler files also declare the same
- * export as documentation — those declarations are inert at runtime
+ * export as documentation, those declarations are inert at runtime
  * but useful for readers who navigate to the handler directly.
  */
 export const config = {

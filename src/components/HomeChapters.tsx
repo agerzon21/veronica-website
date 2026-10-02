@@ -121,7 +121,7 @@ export function HomeChapters() {
         const posts = data.posts as JournalPost[];
         if (posts.length === 0) return;
         // A different entry per visit, so the homepage is never the same
-        // twice. Runtime only — never at import time, where it would be
+        // twice. Runtime only, never at import time, where it would be
         // baked into the prerendered HTML.
         setPost(posts[Math.floor(Math.random() * posts.length)]);
       } catch {
@@ -138,7 +138,7 @@ export function HomeChapters() {
 
   // Asymmetric padding on purpose. The gap ABOVE is shared with the hero's
   // own trailing white, and the gap BELOW is shared with the Instagram
-  // section's top padding — 80 + 96 was reading as a hole in the page. Both
+  // section's top padding, 80 + 96 was reading as a hole in the page. Both
   // ends give up roughly half; the interval between the feed and Kind Words
   // is untouched because that one already reads right.
   return (

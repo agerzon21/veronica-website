@@ -11,14 +11,14 @@
  * build stamped into /build-manifest.json. Counts catch publishes, unpublishes
  * and deletions; max(updated_at) catches edits to something already published.
  * The two queries are duplicated verbatim from scripts/prerender-photos.mjs and
- * must stay identical — that symmetry is the whole mechanism.
+ * must stay identical, that symmetry is the whole mechanism.
  *
  * POST { password }
  *   → 200 { success, pending, reason, deployed, current, builtAt }
  *   → 401 / 405
  *
  * `pending` is deliberately TRUE when the manifest cannot be read. An unknown
- * state must not present as "nothing to publish" — that would quietly stop Vero
+ * state must not present as "nothing to publish", that would quietly stop Vero
  * ever rebuilding.
  */
 

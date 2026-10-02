@@ -1,16 +1,16 @@
 /**
- * Seeds ai_context with source='system' rows — the documentation the
+ * Seeds ai_context with source='system' rows, the documentation the
  * in-panel assistant uses to answer Veronika's "how do I…" questions.
  *
  *   node --env-file=.env.local scripts/seed-system-knowledge.mjs
  *
  * Re-runnable: deletes and replaces the whole source='system' set every
- * time. That is safe precisely because these rows are ours — Vero's own
+ * time. That is safe precisely because these rows are ours, Vero's own
  * knowledge is source='manual' or 'chatbot' and is never touched here.
  * Re-run it whenever the admin panel changes.
  *
  * The content in scripts/data/system-knowledge.json was extracted from
- * the codebase and then adversarially verified against it — 27 of the 32
+ * the codebase and then adversarially verified against it, 27 of the 32
  * entries had to be corrected on that pass, because a first reading of
  * the UI produced steps that named buttons which don't exist or promised
  * outcomes the code doesn't deliver. Do not hand-edit that file without
@@ -29,7 +29,7 @@ import { dirname, join } from 'node:path';
 
 const url = process.env.POSTGRES_URL;
 if (!url) {
-  console.error('POSTGRES_URL not set — run with --env-file=.env.local');
+  console.error('POSTGRES_URL not set, run with --env-file=.env.local');
   process.exit(1);
 }
 const sql = neon(url);
@@ -53,7 +53,7 @@ for (const [i, e] of entries.entries()) {
   const category = CATEGORY_BY_AREA[e.category] ?? 'panel_help';
   const content =
     e.content.replace(/^LABEL:.*\n+/i, '').trim() +
-    (e.requiresAlex ? "\n\n(This one is Alex's — not something to try from the panel.)" : '');
+    (e.requiresAlex ? "\n\n(This one is Alex's, not something to try from the panel.)" : '');
   await sql`
     INSERT INTO ai_context (category, label, content, source, active, sort_order)
     VALUES (${category}, ${e.label}, ${content}, 'system', TRUE, ${i})

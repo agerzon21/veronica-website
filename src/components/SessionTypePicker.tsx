@@ -6,7 +6,7 @@ interface Props {
 }
 
 // Standard set of session types. Kept lowercase so it round-trips
-// through the DB without surprises — display is title-cased.
+// through the DB without surprises, display is title-cased.
 const STANDARD_TYPES = [
   'wedding',
   'engagement',
@@ -24,7 +24,7 @@ const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCa
  * Chips for the standard session types + a "Custom" fallback that opens
  * a free-text input. Reduces typing for Vero (most shoots fall into the
  * standard list) without locking out anything weird that might come up
- * later — gifted shoot, brand campaign, whatever.
+ * later, gifted shoot, brand campaign, whatever.
  */
 const SessionTypePicker = ({ value, onChange }: Props) => {
   const isStandard = STANDARD_TYPES.includes(value);

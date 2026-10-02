@@ -8,7 +8,7 @@ import CTAButton from './ui/CTAButton';
 import { SITE_LOGO_H, SITE_LOGO_H_MOBILE } from './siteHeader';
 
 // One nav-link treatment, shared by the main links and the Client Portal
-// utility link — and the same `ctaLabel` token MobileNav uses, so the menu
+// utility link, and the same `ctaLabel` token MobileNav uses, so the menu
 // does not change personality when the viewport narrows.
 const navLinkProps: LinkProps = {
   textStyle: 'ctaLabel',
@@ -17,7 +17,7 @@ const navLinkProps: LinkProps = {
   textUnderlineOffset: '6px',
   transition: 'color 0.3s',
   _hover: {
-    // Gold TEXT on white must be accentText — the signature accent is 2.24:1
+    // Gold TEXT on white must be accentText, the signature accent is 2.24:1
     // and fails AA. The decorative accent stays for rules and borders.
     color: 'brand.accentText',
     textDecoration: 'underline',
@@ -59,7 +59,7 @@ const Navbar = () => {
   const handleClose = () => setIsOpen(false);
 
   // Logo click: from any other route, RouterLink takes you home. But when
-  // already on `/`, RouterLink is a no-op — feels broken. Force a reload so
+  // already on `/`, RouterLink is a no-op, feels broken. Force a reload so
   // the click always does something visible (resets scroll + replays the
   // hero cinematic from the top), matching the "click logo to go home"
   // expectation visitors have on every site.
@@ -84,7 +84,7 @@ const Navbar = () => {
       py={4}
       boxShadow="sm"
     >
-      {/* contentWide is the site's outer container token — the nav now shares
+      {/* contentWide is the site's outer container token, the nav now shares
           an edge with the page content instead of running 80px wider. */}
       <HStack justify="space-between" align="center" maxW="contentWide" mx="auto">
         <Link
@@ -103,7 +103,7 @@ const Navbar = () => {
           <Image
             // The wordmark's "Vero" is pure black, which disappears against the
             // gray.900 mobile menu behind it. logo-light.svg is the same file
-            // with only the two dark inks lifted — the grey disc and the white
+            // with only the two dark inks lifted, the grey disc and the white
             // monogram are untouched, so it is the same mark, not a restyle.
             src={isOpen ? '/assets/images/logo-light.svg' : '/assets/images/logo.svg'}
             // The width/height ATTRIBUTES stay: they hand the browser the
@@ -111,7 +111,7 @@ const Navbar = () => {
             // reflowing. But `width` is ALSO a presentational hint, so with no
             // CSS width the box computed to 460px around a 263px wordmark and
             // `contain` centred it inside ~98px of dead space per side. That
-            // phantom 197px — not the breakpoint — is what pushed Client
+            // phantom 197px, not the breakpoint, is what pushed Client
             // Portal off the right edge. `width: auto` derives the box from
             // height x ratio, so the box is now exactly the ink.
             htmlWidth={460}
@@ -129,7 +129,7 @@ const Navbar = () => {
 
         {/* Desktop Navigation. Main nav (everything except Client Portal)
             renders first, then a thin gold separator, then Client Portal
-            as a utility link — so it reads as "for existing clients"
+            as a utility link, so it reads as "for existing clients"
             rather than another nav peer without losing accessibility.
             Contact is the conversion path and therefore a real CTAButton,
             not a Link wearing a border. Selection is by NAME (not array
@@ -141,7 +141,7 @@ const Navbar = () => {
             the narrowest width where it all fits with real breathing room
             (52px), which is why the switch lives here and the sizes above
             interpolate rather than step. BurgerMenu and MobileNav are both
-            `lg` too — moving only this one would leave 768-991px with no
+            `lg` too, moving only this one would leave 768-991px with no
             navigation at all. */}
         <HStack spacing={NAV_GAP} display={{ base: 'none', lg: 'flex' }}>
           {menuItems

@@ -1,6 +1,6 @@
 /**
  * Admin: flip the global AI kill switch (system_state row keyed by
- * 'messaging_ai_state'). Superadmin only — this stops ALL auto
+ * 'messaging_ai_state'). Superadmin only, this stops ALL auto
  * replies across every conversation instantly. Nuclear option for
  * when the AI is misbehaving or Vero wants full manual control
  * temporarily.

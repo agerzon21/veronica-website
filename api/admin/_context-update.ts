@@ -82,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       WHERE id = ${id}
         -- source='system' rows are OUR documentation of how the admin
         -- panel works (migration 018). They are not Vero's business
-        -- knowledge and must not be editable from the Context tab —
+        -- knowledge and must not be editable from the Context tab
         -- otherwise the assistant's own instructions can be rewritten by
         -- accident, and nobody notices until it starts answering wrong.
         AND source <> 'system'

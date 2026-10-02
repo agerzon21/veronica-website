@@ -4,11 +4,11 @@
  * accidentally trashes a photo, we can un-delete from the DB).
  *
  * If the file is still present in the Drive folder, the next sync
- * cron run will restore it (see _gallery-sync.ts — deleted rows
+ * cron run will restore it (see _gallery-sync.ts, deleted rows
  * with matching drive_file_id get resurrected). So the delete
  * only "sticks" if Vero also removes the file from Drive. For a
  * true forever-delete: superadmin can hard-delete via a separate
- * flow later (not built yet — not needed for MVP).
+ * flow later (not built yet, not needed for MVP).
  *
  * POST { password, id }
  *   → 200 { success }

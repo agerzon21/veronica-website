@@ -6,16 +6,16 @@
  * SpeechRecognition API, which was fundamentally flaky on iOS Safari:
  *   - First-use permission prompt swallowed pointerup events
  *   - onresult often never fired on ru-RU
- *   - No reliable error surface — "nothing happens" was the norm
+ *   - No reliable error surface, "nothing happens" was the norm
  *
  * Whisper solves all three: one HTTP request, ~$0.006/min, works
  * reliably across every browser that supports MediaRecorder (which is
  * everything current).
  *
- * POST — multipart/form-data with:
+ * POST, multipart/form-data with:
  *   - password: admin bearer (form field)
  *   - language: 'ru' | 'en' | undefined (form field, optional hint)
- *   - file: the audio blob (mp4/webm/ogg/wav — Whisper accepts any)
+ *   - file: the audio blob (mp4/webm/ogg/wav, Whisper accepts any)
  *
  *   → 200 { success, transcript }
  *   → 400 no file / no password
@@ -28,12 +28,12 @@ import OpenAI, { toFile } from 'openai';
 import Busboy from 'busboy';
 import { requireAdmin } from '../_admin-auth.js';
 
-// Vercel serverless function config — allow larger request bodies
+// Vercel serverless function config, allow larger request bodies
 // since audio blobs can be ~1MB for a 30s clip.
 export const config = {
   api: {
     bodyParser: false,
-    // 10MB cap — 30s of decent-quality audio is well under this; a
+    // 10MB cap, 30s of decent-quality audio is well under this; a
     // higher cap risks runaway uploads eating our function memory.
     sizeLimit: '10mb',
   },
@@ -41,7 +41,7 @@ export const config = {
 
 const MODEL = 'whisper-1';
 // Cap what we'll send to Whisper. 30s of speech is more than any
-// reasonable single dictation — if Vero exceeds this she should
+// reasonable single dictation, if Vero exceeds this she should
 // pause + tap the mic again for the next segment.
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 
@@ -151,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       model: MODEL,
       language: lang,
       // 'text' returns a plain string in `text`; 'verbose_json' gives
-      // segment timings — we don't need those, so save the bytes.
+      // segment timings, we don't need those, so save the bytes.
       response_format: 'json',
     });
 

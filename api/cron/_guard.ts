@@ -9,10 +9,10 @@
  *   2. Read cron_jobs.enabled. If false, write a 'skipped' run row
  *      and return { skipped: true } WITHOUT calling work(). The admin
  *      toggle in AdminCrons is the single source of truth for whether
- *      a cron does anything — flipping it off pauses instantly, no
+ *      a cron does anything, flipping it off pauses instantly, no
  *      redeploy or vercel.json edit required.
  *
- *   3. Run work() with try/finally bookkeeping — insert a 'running'
+ *   3. Run work() with try/finally bookkeeping, insert a 'running'
  *      row up front, then UPDATE it to 'ok' + duration_ms on success
  *      or 'error' + first-line-of-message on throw. The 'running'
  *      insert is deliberately BEFORE the try so a work() exception
@@ -20,8 +20,8 @@
  *
  * Fail-open on infrastructure errors: if the cron_jobs table itself
  * has a problem (missing during rollout, transient DB blip, ...) the
- * work still runs. The alternative — silently NOT running scheduled
- * work because the meta-table is broken — is scarier than a run that
+ * work still runs. The alternative, silently NOT running scheduled
+ * work because the meta-table is broken, is scarier than a run that
  * doesn't get logged. Errors log to the function output; that's the
  * escape hatch.
  */
@@ -50,7 +50,7 @@ interface GuardInput {
 
 /**
  * Wrap a cron handler body. `work` is only invoked when the DB says
- * this cron is enabled — a disabled cron records a 'skipped' run and
+ * this cron is enabled, a disabled cron records a 'skipped' run and
  * returns early. The caller decides how to shape its HTTP response
  * from the returned struct.
  */
@@ -65,7 +65,7 @@ export async function runGuarded<T>(
   // fast. RETURNING gives us the row's id (needed for cron_runs FK)
   // and current enabled flag in one shot. On the cold path where
   // the table doesn't exist, we swallow the error and fall through
-  // to running the work — see the fail-open note at the top.
+  // to running the work, see the fail-open note at the top.
   let cronJobId: string | null = null;
   let enabled = true;
   try {
@@ -85,7 +85,7 @@ export async function runGuarded<T>(
     }
   } catch (err) {
     console.error(
-      `[cron-guard/${name}] register/read failed — running work anyway (fail-open):`,
+      `[cron-guard/${name}] register/read failed, running work anyway (fail-open):`,
       err,
     );
     // No cron_jobs row → we can't write run rows either. Just do the
@@ -103,7 +103,7 @@ export async function runGuarded<T>(
     try {
       // cronJobId is null only when the upsert above failed (e.g. the table
       // does not exist yet). There is nothing to attach a run row to in that
-      // case, so skip the bookkeeping rather than crash the job — this guard
+      // case, so skip the bookkeeping rather than crash the job, this guard
       // is fail-open by design, see the note at the top of the file.
       if (cronJobId) await insertRun(cronJobId, 'skipped', trigger, null, null);
     } catch (err) {
@@ -113,14 +113,14 @@ export async function runGuarded<T>(
   }
 
   // ── 3. Insert 'running' up front so a mid-work crash still leaves
-  //     a row (marked 'running' forever — a signal the process was
+  //     a row (marked 'running' forever, a signal the process was
   //     killed). Then run work, then UPDATE with the outcome. ──
   const runId = randomUUID();
   try {
     if (cronJobId) await insertRunWithId(runId, cronJobId, 'running', trigger);
   } catch (err) {
-    // Even the running-marker insert failed. Still run the work —
-    // fail-open — but we won't be able to record the outcome either.
+    // Even the running-marker insert failed. Still run the work
+    // fail-open, but we won't be able to record the outcome either.
     console.error(`[cron-guard/${name}] running-row insert failed:`, err);
     try {
       const ok = await work();
@@ -137,7 +137,7 @@ export async function runGuarded<T>(
     return { skipped: false, ok };
   } catch (workErr) {
     const msg = firstLine(workErr);
-    // Best-effort finalize — if THIS also fails we've done what we
+    // Best-effort finalize, if THIS also fails we've done what we
     // can. The 'running' row lingers as a signal for the operator.
     try {
       await finalizeRun(runId, 'error', Date.now() - startedMs, msg);
@@ -219,7 +219,7 @@ async function finalizeRun(
     `;
   } catch (err) {
     // Migration 028 adds cron_runs.result, and migrations here are applied BY
-    // HAND — so this code can legitimately be live before the column exists.
+    // HAND, so this code can legitimately be live before the column exists.
     // Retry without it rather than failing the run: losing the summary is a
     // cosmetic regression, a thrown finalize is a broken cron.
     console.error('[cron-guard] result write failed, retrying without it:', err);

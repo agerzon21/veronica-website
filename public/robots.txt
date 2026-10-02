@@ -2,9 +2,9 @@ User-agent: *
 Allow: /
 
 # Googlebot RENDERS pages, and it obeys robots.txt for every fetch the page's
-# JavaScript makes. The public pages hydrate from read-only APIs — a photo
+# JavaScript makes. The public pages hydrate from read-only APIs, a photo
 # page calls /api/gallery/post, a category grid /api/gallery/list, journal
-# pages /api/journal/* — so a blanket "Disallow: /api/" makes those calls fail
+# pages /api/journal/*, so a blanket "Disallow: /api/" makes those calls fail
 # inside Google's renderer, the page renders its "Photo not found" / error
 # state, and Google classifies a perfectly good URL as a Soft 404. That is not
 # hypothetical: a live URL-inspection test of /photo/family/... came back
@@ -32,7 +32,7 @@ Disallow: /api/
 Sitemap: https://vero.photography/sitemap.xml
 
 # No Crawl-delay. It used to be 10, which throttles compliant crawlers to one
-# URL per 10 seconds — roughly 40 minutes to walk the 235 URLs in the sitemap.
+# URL per 10 seconds, roughly 40 minutes to walk the 235 URLs in the sitemap.
 # Google ignores the directive entirely, so it only ever slowed down Bing and
 # the smaller crawlers. The site is static and CDN-cached; there is nothing to
 # protect from crawl load.

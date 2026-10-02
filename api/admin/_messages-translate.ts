@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Fire both in parallel — detection is fast, no reason to serialize.
+    // Fire both in parallel, detection is fast, no reason to serialize.
     const [translated, detectedLang] = await Promise.all([
       translateText(text, targetLang),
       detectLanguage(text),

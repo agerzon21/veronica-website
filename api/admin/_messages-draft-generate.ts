@@ -6,8 +6,8 @@
  *   → 409 when a draft is already pending (the UI should be showing it)
  *
  * Exists because the automatic pipeline deliberately goes quiet exactly when
- * conversations get serious — the booking bridge switches the AI off the
- * moment payment or contract talk starts — and those are the replies Vero
+ * conversations get serious, the booking bridge switches the AI off the
+ * moment payment or contract talk starts, and those are the replies Vero
  * most wants a starting point for. See draftOnDemand in _ai-reply.ts for why
  * an explicit request bypasses the guardrails.
  */

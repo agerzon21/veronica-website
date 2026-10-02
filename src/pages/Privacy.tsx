@@ -10,10 +10,10 @@ import PolicyLayout, { PolicySection, P, PolicyList, Term } from '../components/
  *   - What data we collect from users of THIS site
  *   - How we use third-party services (Meta, Google, Resend, Neon)
  *   - How a user can request deletion of their data
- * — those three are Meta's minimum-bar requirements.
+ * those three are Meta's minimum-bar requirements.
  *
  * This is a template document. It reflects what the site actually does
- * (based on the codebase — contact form, subscribe, portal auth, IG
+ * (based on the codebase, contact form, subscribe, portal auth, IG
  * feed, analytics), but Alex should have a lawyer review before
  * relying on it for real-world enforcement.
  */
@@ -87,7 +87,7 @@ const Privacy = () => {
               </>,
               <>
                 <Term>Analytics.</Term> We use Google Analytics to
-                understand aggregate site traffic patterns — pageviews,
+                understand aggregate site traffic patterns, pageviews,
                 referrers, general device / browser information. This
                 data is pseudonymous and not tied to identified individuals.
               </>,
@@ -100,7 +100,7 @@ const Privacy = () => {
                 <Term>Instagram feed cache.</Term> Public posts from
                 <Term> @vero.art.photo </Term>
                 are fetched and briefly cached on our servers for display
-                on the homepage. This is public content — nothing private
+                on the homepage. This is public content, nothing private
                 is stored.
               </>,
             ]}
@@ -225,7 +225,7 @@ const Privacy = () => {
             We will confirm your request within 5 business days and
             complete the deletion within 30 days, subject to any legal
             obligations we have to retain records (for example, financial
-            records for tax purposes). Deletion is permanent — we cannot
+            records for tax purposes). Deletion is permanent, we cannot
             recover a portal or gallery after removal.
           </P>
         </PolicySection>
@@ -272,7 +272,7 @@ const Privacy = () => {
   );
 };
 
-// Small helper — external links in policy body should always open in a
+// Small helper, external links in policy body should always open in a
 // new tab and get nofollow so they don't leak page rank to third parties.
 function PolicyLink({ href }: { href: string }) {
   return (

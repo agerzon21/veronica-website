@@ -8,7 +8,7 @@
  * Ordered newest-first via the composite index on created_at DESC. The
  * admin list is expected to grow slowly (a handful of leads per week);
  * no server-side pagination for now. If the list ever crosses ~500 rows
- * we'll add a limit/offset — mirrors the reviews handler philosophy.
+ * we'll add a limit/offset, mirrors the reviews handler philosophy.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const auth = await requireAdmin(req.body?.password);
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
-  // Leads is a super-only surface now — the page duplicates Vero's
+  // Leads is a super-only surface now, the page duplicates Vero's
   // inbox and was removed from her navigation, so the API matches.
   const superCheck = requireSuper(auth.level);
   if (!superCheck.ok) return res.status(superCheck.status).json({ success: false, error: superCheck.error });

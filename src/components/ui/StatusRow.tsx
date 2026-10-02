@@ -6,7 +6,7 @@ import { type ReactNode } from 'react';
  * the left (title + optional subtitle) and an action group on the right
  * (buttons, switches, links, whatever). Repeated 5+ times in
  * AdminClientDetail as the "Delivery / Gallery Pass / Contract Status /
- * Account Status" pattern — extracting it stops the mobile orphan-CTA
+ * Account Status" pattern, extracting it stops the mobile orphan-CTA
  * problem where the button `wrap="wrap"`ed to its own line, right-
  * aligned, floating in whitespace.
  *
@@ -17,7 +17,7 @@ import { type ReactNode } from 'react';
 interface Props extends Omit<StackProps, 'children' | 'title'> {
   title: ReactNode;
   subtitle?: ReactNode;
-  // Right-side content — buttons, switches, status badges, etc.
+  // Right-side content, buttons, switches, status badges, etc.
   action: ReactNode;
   // Optional pre-title element (icon, avatar, etc.)
   leading?: ReactNode;

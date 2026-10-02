@@ -25,7 +25,7 @@ const WIDTHS = [400, 800, 1600];
 /**
  * Only the four public-gallery folders, and only a bare `.webp` slug.
  *
- * Anything else — a Drive thumbnail, a site asset, a URL carrying a query —
+ * Anything else, a Drive thumbnail, a site asset, a URL carrying a query
  * gets no srcset and keeps its own src. The gallery has had photographs from
  * more than one source before and will again.
  */

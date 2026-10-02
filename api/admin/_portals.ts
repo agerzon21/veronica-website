@@ -1,10 +1,10 @@
 /**
- * Admin: list all client portals. Also doubles as the LOGIN endpoint —
+ * Admin: list all client portals. Also doubles as the LOGIN endpoint
  * the admin dashboard calls this on sign-in and again on manual refresh.
  *
  * POST { email?, password }
  *   → If `email` is present: treated as a LOGIN. We validate the
- *     email+password pair (loginAdmin) — this is what enforces the
+ *     email+password pair (loginAdmin), this is what enforces the
  *     two-factor secret at sign-in. Correct pair returns 200 with the
  *     portal list + level; wrong pair returns 401 "Incorrect email or
  *     password".
@@ -14,7 +14,7 @@
  *   → 200 { success, level, portals: [...] }
  *   → 401 on bad credentials
  *
- * Returns a flattened summary per portal — enough for the admin dashboard
+ * Returns a flattened summary per portal, enough for the admin dashboard
  * table to show name, contract status, paid-vs-total, gallery status,
  * event date. Detail view will fetch full record separately.
  */
@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // On a LOGIN (email present) mint a session token, if this resolved to a real
   // admin_users row. The panel stores that instead of the raw password, which
-  // is what makes a reload survivable — today it keeps the password in React
+  // is what makes a reload survivable, today it keeps the password in React
   // state and loses it on refresh.
   //
   // Env-var logins get no token (there is no user row to attach one to) and
@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
       );
     } catch (err) {
-      // Never fail a valid login because session creation failed — the caller
+      // Never fail a valid login because session creation failed, the caller
       // falls back to sending the password, which still authenticates.
       console.error('[admin/portals] could not create session:', err);
     }

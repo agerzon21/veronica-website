@@ -8,7 +8,7 @@ import { salesTaxModeOf } from '../data/sales-tax';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
 
 /**
- * "Preview Client Portal" — the client's own screen, read only, inside admin.
+ * "Preview Client Portal", the client's own screen, read only, inside admin.
  *
  * WHY IT MOUNTS THE REAL COMPONENT. The point of the preview is to see what the
  * client sees, most usefully whether a balance reads correctly after a payment,

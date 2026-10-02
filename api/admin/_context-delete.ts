@@ -1,5 +1,5 @@
 /**
- * Admin: delete an ai_context row. Available to admin + super —
+ * Admin: delete an ai_context row. Available to admin + super
  * this isn't a super-only op because Vero legitimately owns the
  * assistant's content. The seed rows can be recreated from the
  * migration file if she deletes them accidentally.
@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     // source='system' rows are our own documentation of the admin panel
-    // (migration 018) — protected from deletion. Excluding them in the
+    // (migration 018), protected from deletion. Excluding them in the
     // WHERE clause means a protected row reports as "not found" rather
     // than silently succeeding while deleting nothing.
     const rows = (await sql`

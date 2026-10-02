@@ -25,7 +25,7 @@ import { requireAdmin } from '../_admin-auth.js';
  * itself.
  *
  * Delete is a SOFT delete (deleted_at), matching _gallery-delete.ts. A photo
- * still in Drive that is soft-deleted here gets RESTORED by the next sync —
+ * still in Drive that is soft-deleted here gets RESTORED by the next sync
  * that is the existing documented behaviour, not something this handler
  * changes, and the UI says so.
  */
@@ -120,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (op === 'delete') {
-      // Destructive, so super-only — matching how deletes are gated elsewhere
+      // Destructive, so super-only, matching how deletes are gated elsewhere
       // in the panel. Soft delete: the row survives and the next sync restores
       // it if the file is still in Drive.
       if (auth.level !== 'super') {

@@ -17,7 +17,7 @@
  *
  * Set a calendar reminder for ~Day 50 after each refresh. We don't auto-
  * persist via the Vercel API because that path has fragile edge cases
- * (delete-then-create, env var IDs, etc.) — a 1-minute manual paste
+ * (delete-then-create, env var IDs, etc.), a 1-minute manual paste
  * every 50 days is more reliable.
  */
 

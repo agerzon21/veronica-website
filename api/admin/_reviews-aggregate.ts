@@ -9,7 +9,7 @@
  * links to Vero's Google profile. Rather than hit the Places API (which
  * requires a billed key and rate-limits itself into uselessness for a
  * small business), Vero updates these two values by hand whenever new
- * reviews land — a 10-second copy-edit that runs on the order of once
+ * reviews land, a 10-second copy-edit that runs on the order of once
  * a month.
  *
  * POST { password }
@@ -19,7 +19,7 @@
  *
  * A read call is distinguished from an update by the ABSENCE of both
  * `rating` and `count` in the body. Any admin (not just super) can edit
- * — this is copy-editing, not destructive.
+ * this is copy-editing, not destructive.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -29,7 +29,7 @@ import { requireAdmin } from '../_admin-auth.js';
 const KEY_RATING = 'google_review_rating';
 const KEY_COUNT = 'google_review_count';
 
-// Accept 0-5 with an optional single decimal — matches how Google
+// Accept 0-5 with an optional single decimal, matches how Google
 // itself formats aggregate ratings (e.g. '4.9', '5.0').
 const RATING_REGEX = /^[0-5](\.\d)?$/;
 
@@ -51,7 +51,7 @@ async function readAggregate(sql: ReturnType<typeof getDb>) {
   let updatedAt: string | null = null;
 
   for (const r of rows) {
-    // Newest updated_at across the two rows — surfaces the most recent
+    // Newest updated_at across the two rows, surfaces the most recent
     // edit regardless of which field the admin touched.
     if (r.updated_at && (!updatedAt || r.updated_at > updatedAt)) {
       updatedAt = r.updated_at;
@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, rating, count, updated_at: updatedAt });
     }
 
-    // Update path — both fields must be present and valid. Partial
+    // Update path, both fields must be present and valid. Partial
     // updates aren't supported; the admin form always sends both.
     const rating = typeof body.rating === 'string' ? body.rating.trim() : '';
     if (!RATING_REGEX.test(rating)) {
@@ -111,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const countStr = String(countRaw);
 
-    // Two upserts run serially — the system_state table is tiny and
+    // Two upserts run serially, the system_state table is tiny and
     // the round-trip cost is negligible compared to the request
     // envelope. A transaction would be overkill for two independent
     // scalars that don't need to move atomically.

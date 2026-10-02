@@ -5,7 +5,7 @@
  *   npm run ig-fallbacks:check     # CI: fail if missing, uncommitted, or drifted
  *
  * WHY
- * InstagramFeed renders nine tiles in a 1:1 grid — ~114 CSS px on mobile, 266
+ * InstagramFeed renders nine tiles in a 1:1 grid, ~114 CSS px on mobile, 266
  * (or 544 for the first) on desktop. The fallback set pointed straight at nine
  * full-resolution gallery originals: 4.99 MiB, up to 3808px wide.
  *
@@ -18,7 +18,7 @@
  * Square `cover` crops, matching the AspectRatio ratio={1} the grid renders.
  *
  * IMPORTANT: these are for the GRID ONLY. Photo.url must keep pointing at the
- * full-resolution original — it is the React key AND what IgPostModal renders
+ * full-resolution original, it is the React key AND what IgPostModal renders
  * in an 85vh lightbox. A square crop there would be centre-cropped and upscaled.
  */
 

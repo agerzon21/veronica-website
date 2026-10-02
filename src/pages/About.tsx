@@ -13,7 +13,7 @@ import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
 const MotionDiv = m.div;
 
 /**
- * The About page — editorial spread (Alex picked option 1 of five mocks).
+ * The About page, editorial spread (Alex picked option 1 of five mocks).
  *
  * ONE LAYOUT, NOT TWO. The old page hand-built a mobile stack and a
  * desktop split as separate trees, which meant every copy edit had to be
@@ -23,7 +23,7 @@ const MotionDiv = m.div;
  *
  * EVERY PHOTOGRAPH HERE IS PORTRAIT (checked: 1600x2400, 3033x4360,
  * 3808x5712, and vero-ceremony-lawn at 960x1440). They are framed
- * accordingly — the only full-bleed use is the hero, which is deliberately
+ * accordingly, the only full-bleed use is the hero, which is deliberately
  * anchored high so the subject survives the landscape crop; everywhere else
  * they sit in portrait frames that respect the original shape.
  *
@@ -51,7 +51,7 @@ const FADE_IN_SEC = 0.75;
  * made the story trail off into a table. At the top they are the page
  * introducing itself, and they cost no height: the hero already had room.
  *
- * Each carries its icon, and two of them say more than they used to — "12+
+ * Each carries its icon, and two of them say more than they used to, "12+
  * Years" and "Worldwide" were fragments that only made sense next to a label
  * column that no longer exists.
  */
@@ -91,7 +91,7 @@ const StatValue = ({
     const step = (t: number) => {
       if (start === null) start = t;
       const p = Math.min(1, (t - start) / COUNT_MS);
-      // easeOutCubic — quick off the mark, settles rather than stopping dead.
+      // easeOutCubic, quick off the mark, settles rather than stopping dead.
       setN(Math.round(countTo * (1 - Math.pow(1 - p, 3))));
       if (p < 1) raf = requestAnimationFrame(step);
     };
@@ -112,7 +112,7 @@ const StatValue = ({
 
 /**
  * The line itself. Each fact rises out from behind its own mask a beat after
- * the one before, and the years tick up to twelve — the same arrival the band
+ * the one before, and the years tick up to twelve, the same arrival the band
  * had, at a size that belongs in a hero rather than a section.
  */
 const HeroFacts = () => {

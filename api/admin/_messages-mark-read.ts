@@ -8,7 +8,7 @@
  *   → 404 no such conversation
  *
  * Called by the inbox UI when Vero opens a conversation. Purely a
- * UX signal — no permission gating beyond admin (Vero opening her
+ * UX signal, no permission gating beyond admin (Vero opening her
  * own inbox marks it as read; that's the whole flow).
  */
 

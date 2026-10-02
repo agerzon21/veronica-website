@@ -9,7 +9,7 @@ const ADS_ID = 'AW-18082198928';
 // depends entirely on gtag reading the click id off the URL when it executes.
 // If gtag boots late and the visitor has already tapped a nav link, the query
 // string is gone, the _gcl_aw cookie is never written, and the conversion
-// still fires but arrives UNATTRIBUTED — a silent revenue-reporting failure
+// still fires but arrives UNATTRIBUTED, a silent revenue-reporting failure
 // with no error anywhere. Capturing it here makes deferral safe.
 const LANDING_URL = typeof window !== 'undefined' ? window.location.href : '';
 const LANDING_PATH = typeof window !== 'undefined' ? window.location.pathname : '/';
@@ -64,14 +64,14 @@ export const ensureAdsDestination = () => {
 };
 
 /**
- * Load gtag now. Idempotent and synchronous — safe to call from anywhere,
+ * Load gtag now. Idempotent and synchronous, safe to call from anywhere,
  * including immediately before sending a conversion.
  */
 export const ensureAnalytics = () => {
   if (booted || typeof window === 'undefined') return;
   booted = true;
 
-  // send_page_view false because ScrollToTop already sends one per route —
+  // send_page_view false because ScrollToTop already sends one per route
   // without it the landing page gets counted twice.
   //
   // page_location is deliberately NOT set here. A gtag config parameter is a
@@ -79,7 +79,7 @@ export const ensureAnalytics = () => {
   // pinning it would report the landing URL for the whole session: /gallery,
   // /photo/*, and /contact/thank-you would all show up as the landing page in
   // GA4, and every paid click would spawn a unique gclid-bearing row. It goes
-  // on each page_view event instead — see trackPageView.
+  // on each page_view event instead, see trackPageView.
   ReactGA.initialize(GA_ID, { gtagOptions: { send_page_view: false } });
 
   // The Ads destination is configured separately, and NOT on every load. See
@@ -107,7 +107,7 @@ export const scheduleAnalytics = () => {
     return () => {};
   }
 
-  // Anchored to navigation start, not to when this effect happened to mount —
+  // Anchored to navigation start, not to when this effect happened to mount
   // mount is already ~4s in on a throttled phone, so a naive delay would push
   // gtag LATER than it loads today and make TBT worse.
   const delay = Math.max(0, 1500 - performance.now());
@@ -125,13 +125,13 @@ export const scheduleAnalytics = () => {
   };
 };
 
-// Google Ads conversion — fires when a contact-form submission actually
+// Google Ads conversion, fires when a contact-form submission actually
 // lands on /contact/thank-you (guarded by ThankYou's autoReplyPayload
 // check so direct visits / refreshes / back-navs don't inflate).
 //
 // The send_to value pairs the Ads account with the specific conversion
 // action; both together identify which conversion this event belongs to.
-// value + currency are for reporting only — we hard-code $1 USD because
+// value + currency are for reporting only, we hard-code $1 USD because
 // a contact-form lead has no inherent monetary value at submission time.
 export const trackAdsLeadConversion = () => {
   if (typeof window === 'undefined') return;
@@ -150,7 +150,7 @@ export const trackAdsLeadConversion = () => {
 };
 
 // Track page views. Buffered rather than sent blind: react-ga4 does NOT no-op
-// before initialize — it would push into dataLayer ahead of the js/config
+// before initialize, it would push into dataLayer ahead of the js/config
 // pair, and gtag.js drops events that precede a destination's config.
 export const trackPageView = (path: string) => {
   const location = typeof window !== 'undefined' ? window.location.href : '';
@@ -161,7 +161,7 @@ export const trackPageView = (path: string) => {
   ReactGA.send({ hitType: 'pageview', page: path, location });
 };
 
-// Track events. Every caller is user-initiated, so booting here is free —
+// Track events. Every caller is user-initiated, so booting here is free
 // the pointerdown listener in scheduleAnalytics has almost always fired
 // already, and ensureAnalytics is idempotent.
 export const trackEvent = (category: string, action: string, label?: string) => {

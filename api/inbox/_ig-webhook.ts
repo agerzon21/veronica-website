@@ -4,7 +4,7 @@
  * Two-mode endpoint per Meta's webhook spec:
  *
  *   GET  /api/inbox/ig-webhook
- *     Handshake — Meta calls this ONCE when we subscribe from the app
+ *     Handshake, Meta calls this ONCE when we subscribe from the app
  *     dashboard. It sends hub.mode=subscribe, hub.verify_token=<our-secret>,
  *     hub.challenge=<random-string>. If our stored IG_WEBHOOK_VERIFY_TOKEN
  *     matches what Meta sent, we echo back hub.challenge in plaintext and
@@ -28,7 +28,7 @@
  *   Meta signs the raw request body with the app secret and sends it as
  *   `X-Hub-Signature-256: sha256=<hex>`. We recompute the HMAC over the
  *   raw body using IG_APP_SECRET and constant-time compare. Never trust
- *   an unsigned or mis-signed payload — the URL is public and anyone
+ *   an unsigned or mis-signed payload, the URL is public and anyone
  *   could POST fake messages otherwise.
  *
  *   ⚠️  IMPORTANT: IG_APP_SECRET must be the INSTAGRAM App secret, not
@@ -79,12 +79,12 @@ import { fetchIgProfile } from '../_ig-profile.js';
 // synchronous webhook path (before we ack Meta with 200). Meta's
 // webhook timeout is ~20s. The AI reply pipeline runs AFTER we ack
 // (see waitUntil() in handleMessageEvent), so this cap is really
-// about not stalling the ack — 1.5s is generous. Fail fast if the
+// about not stalling the ack, 1.5s is generous. Fail fast if the
 // Graph API is slow.
 const PROFILE_FETCH_TIMEOUT_MS = 1500;
 
 // Message events besides plain text (echoes, deleted, reactions, etc.)
-// arrive on the same webhook — we ignore anything without a text body
+// arrive on the same webhook, we ignore anything without a text body
 // for MVP. If we ever want to react to attachments / stickers, add
 // handling here.
 interface IgMessagingEvent {
@@ -122,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 /**
  * Meta calls this once per subscription. Echo back hub.challenge iff
- * hub.verify_token matches ours. Plaintext response (NOT JSON) — Meta
+ * hub.verify_token matches ours. Plaintext response (NOT JSON), Meta
  * expects the raw challenge string as the response body.
  */
 function handleVerification(req: VercelRequest, res: VercelResponse) {
@@ -138,7 +138,7 @@ function handleVerification(req: VercelRequest, res: VercelResponse) {
     // Don't leak whether it was mode or token that failed.
     return res.status(403).send('Forbidden');
   }
-  // Plaintext echo — Meta parses the response body as the challenge
+  // Plaintext echo, Meta parses the response body as the challenge
   // value. Setting Content-Type explicitly since Vercel's default JSON
   // wrapping would break the handshake.
   res.setHeader('Content-Type', 'text/plain');
@@ -148,13 +148,13 @@ function handleVerification(req: VercelRequest, res: VercelResponse) {
 /**
  * Process incoming message events. Signature-verify first, then store.
  * Reply generation is deferred to a later stage (fire-and-forget from
- * here — session 2's AI reply worker).
+ * here, session 2's AI reply worker).
  */
 async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   const appSecret = process.env.IG_APP_SECRET;
   if (!appSecret) {
     console.error('[inbox/ig-webhook] IG_APP_SECRET env var missing');
-    // 500 here means Meta will retry — worth it so we don't silently
+    // 500 here means Meta will retry, worth it so we don't silently
     // drop messages during a config failure.
     return res.status(500).json({ error: 'Server not configured' });
   }
@@ -186,7 +186,7 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   const sigsMatch = safeEqual(providedSig, expectedSig);
 
   if (!sigsMatch) {
-    // Diagnostic logging — masked so we don't leak secrets into logs.
+    // Diagnostic logging, masked so we don't leak secrets into logs.
     // First 4 chars of both signatures + secret prefix + body-source
     // + body length is enough to pinpoint mismatches without exposing
     // sensitive material. Remove after we've confirmed signatures work.
@@ -211,7 +211,7 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
 
   // Diagnostic: log the shape of every payload we receive so we can
   // trace what Meta is (or isn't) sending. We describe the shape
-  // structurally without dumping user content — enough to know
+  // structurally without dumping user content, enough to know
   // "this was a messaging_seen from user X" without leaking DM text.
   const shape = describePayloadShape(payload);
   console.log(`[inbox/ig-webhook] received ${shape}`);
@@ -219,13 +219,13 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   // Only care about Instagram-object webhooks. Meta may share the
   // endpoint if we ever add other object types (facebook page, etc.).
   if (payload.object !== 'instagram') {
-    console.log(`[inbox/ig-webhook] ignored — object='${payload.object}' (not 'instagram')`);
+    console.log(`[inbox/ig-webhook] ignored, object='${payload.object}' (not 'instagram')`);
     return res.status(200).json({ ignored: 'non-instagram object' });
   }
 
   // Persist FIRST, respond FAST. Meta expects a 200 within ~20s or
   // it treats the webhook as failed and retries. AI reply generation
-  // happens after we return via waitUntil() below — see that section
+  // happens after we return via waitUntil() below, see that section
   // for the ack-first rationale.
   let persistStats: PersistStats;
   try {
@@ -261,7 +261,7 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   //
   // Two reasons this ordering matters:
   //
-  //   1. Meta enforces a ~20s webhook SLA — a slow OpenAI call (or
+  //   1. Meta enforces a ~20s webhook SLA, a slow OpenAI call (or
   //      any other slow downstream) that keeps the response open past
   //      that mark gets us classified as an unhealthy subscriber, at
   //      which point Meta starts batching / delaying deliveries to us.
@@ -274,7 +274,7 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   //      api/inbox.ts (vercel.json) is the outer bound on that
   //      lifetime.
   //
-  // IMPORTANT — Sequential inside ONE waitUntil, not one waitUntil
+  // IMPORTANT, Sequential inside ONE waitUntil, not one waitUntil
   // per message:
   //
   //   When Meta batches multiple messaging events into a single POST
@@ -283,7 +283,7 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   //   processInboundMessage() calls against the same conversation.
   //   The dedup and rate-limit guards in _ai-reply.ts are read-then-
   //   decide with no locking, so all N would pass, call OpenAI, send,
-  //   and insert — customer gets N replies instead of the one
+  //   and insert, customer gets N replies instead of the one
   //   combined reply the AI would naturally produce from history.
   //
   //   Draining the loop sequentially inside a single waitUntil
@@ -294,17 +294,17 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
   //   and shows up in the transcript; only the redundant AI+send
   //   for B is suppressed.
   //
-  //   NOTE — this fix closes the within-invocation race (Meta batches
+  //   NOTE, this fix closes the within-invocation race (Meta batches
   //   N events into ONE POST). The cross-invocation race (Meta ships
   //   two separate POSTs milliseconds apart to two different Vercel
-  //   lambdas) is UNCHANGED and still open — see TRANSITIONS.md
+  //   lambdas) is UNCHANGED and still open, see TRANSITIONS.md
   //   "IG webhook follow-ups" for the plan (sentinel INSERT with a
   //   UNIQUE constraint on in-reply-to). Rare in practice (Meta
   //   usually batches), and the 60s rate-limit gate catches most of
-  //   the fallout — but a bounded double-reply is still possible
+  //   the fallout, but a bounded double-reply is still possible
   //   until the sentinel lands.
   //
-  // processInboundMessage doesn't throw — it returns a structured
+  // processInboundMessage doesn't throw, it returns a structured
   // ReplyResult. The .catch here is belt-and-suspenders in case a
   // future edit slips a throw through; a background rejection would
   // otherwise silently vanish.
@@ -342,7 +342,7 @@ async function handleMessageEvent(req: VercelRequest, res: VercelResponse) {
 
 /**
  * Describe a webhook payload's shape without dumping content.
- * Instagram DMs are private user messages — logging raw text would
+ * Instagram DMs are private user messages, logging raw text would
  * be a privacy leak. Structural description is enough to diagnose
  * "which subscription field fired + how many events."
  */
@@ -370,7 +370,7 @@ interface StoredMessageRef {
   conversationId: string;
   messageId: string;
   sentAt: string;
-  // Meta's message ID (mid) — the primary key we get from Instagram.
+  // Meta's message ID (mid), the primary key we get from Instagram.
   // Threaded through so downstream logs can be grepped by mid, letting
   // us correlate a specific inbound to its ai-reply outcome without
   // joining through the DB (which is what we had to do before we
@@ -383,7 +383,7 @@ interface PersistStats {
   processedEcho: number;
   skippedNoText: number;
   skippedNoMessageField: number;
-  // References to the actual DB rows created — used by the caller to
+  // References to the actual DB rows created, used by the caller to
   // trigger AI reply generation for each new inbound. Empty on
   // no-op / all-skipped payloads (e.g., only echoes or reactions).
   storedMessages: StoredMessageRef[];
@@ -401,7 +401,7 @@ interface PersistStats {
  * conversation per unique sender, insert one message per event. All
  * within a single Neon roundtrip loop.
  *
- * Returns counters so the caller can log a per-event summary — useful
+ * Returns counters so the caller can log a per-event summary, useful
  * for tracing "we received 3 events, stored 1, skipped 2 for reason X"
  * without dumping raw payload content.
  */
@@ -430,7 +430,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     // account) sends a message from the Instagram app directly,
     // NOT through our admin panel. We store them as outbound
     // 'human' messages so the admin thread reflects the full
-    // conversation — otherwise Vero's own replies from her phone
+    // conversation, otherwise Vero's own replies from her phone
     // silently vanish from the transcript. Dedup with admin-panel
     // sends happens automatically via the UNIQUE constraint on
     // external_message_id (both paths write the same `mid`).
@@ -441,7 +441,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     const text = evt.message.text;
     const mid = evt.message.mid;
     // For a normal inbound, the customer is the sender. For an echo,
-    // Vero is the sender and the customer is the recipient — so the
+    // Vero is the sender and the customer is the recipient, so the
     // customer's IGSID (which keys the conversation) is on
     // recipient.id for echoes.
     const customerIgsid = isEcho ? evt.recipient?.id : evt.sender?.id;
@@ -478,7 +478,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     // have a display name for them yet. Two triggers:
     //   1. Row was freshly inserted (was_inserted = true).
     //   2. Row existed but contact_name is still NULL (a previous
-    //      enrichment attempt failed — worth retrying).
+    //      enrichment attempt failed, worth retrying).
     // Fail-open: any error from fetchIgProfile is logged and swallowed
     // there; the webhook 200 is never blocked. We DO await it (with a
     // hard timeout) so a fast success updates the row before we
@@ -491,7 +491,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
     const sender = isEcho ? 'human' : 'contact';
 
     // Insert the message. The UNIQUE constraint on external_message_id
-    // makes this idempotent — Meta's re-deliveries silently no-op AND
+    // makes this idempotent, Meta's re-deliveries silently no-op AND
     // admin-panel sends dedup against later echoes for the same mid.
     // ON CONFLICT ... RETURNING returns NO row on conflict, which is
     // exactly what we want here: retries + echo-after-admin-send
@@ -513,7 +513,7 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
       stats.stored++;
       if (isEcho) {
         // Track echoes separately for observability but NOT for
-        // AI-reply triggering — Vero replying from her phone
+        // AI-reply triggering, Vero replying from her phone
         // shouldn't spawn a bot reply on top of her own.
         stats.processedEcho++;
         stats.echoMids.push(mid);
@@ -536,12 +536,12 @@ async function persistEvents(payload: IgWebhookPayload): Promise<PersistStats> {
  *
  * Called inline from the persist loop but hard-capped at
  * PROFILE_FETCH_TIMEOUT_MS via Promise.race so a slow Graph API can
- * never blow the Meta webhook SLA. All errors are swallowed —
+ * never blow the Meta webhook SLA. All errors are swallowed
  * this is a best-effort enrichment, not a load-bearing step.
  *
  * We race the fetch against a timer; whichever fires first wins.
  * The fetch itself keeps running in the background if the timer
- * wins first — that's fine (no side effects; Node's event loop
+ * wins first, that's fine (no side effects; Node's event loop
  * will finish it or drop it on function suspend).
  */
 async function enrichConversationProfile(
@@ -556,7 +556,7 @@ async function enrichConversationProfile(
       ),
     ]);
     if (!profile) {
-      // Either fetch failed, or timeout won. Nothing to write —
+      // Either fetch failed, or timeout won. Nothing to write
       // leaving fields NULL means "still needs enrichment" so the
       // NEXT DM from this user will retry.
       return;
@@ -610,7 +610,7 @@ function safeEqual(a: string, b: string): boolean {
  * `req.body` and consuming the stream. When that happens `raw-body`
  * throws "stream already read". We fall back to whatever's in
  * `req.body`, but the re-serialized JSON almost certainly won't byte-
- * match Meta's original — signature verification will fail even with
+ * match Meta's original, signature verification will fail even with
  * the correct secret. Not much we can do about that at the code
  * level; it's a runtime quirk.
  *
@@ -625,7 +625,7 @@ async function readRawBody(
   // us exact bytes.
   try {
     const body = await getRawBody(req, {
-      // No length cap of our own — Meta's webhook payloads are small.
+      // No length cap of our own, Meta's webhook payloads are small.
       // If they ever balloon we can tighten this to something like 1mb.
       encoding: null, // return Buffer, not decoded string
     });
@@ -641,7 +641,7 @@ async function readRawBody(
   }
 
   if (req.body === undefined || req.body === null) {
-    // Vercel parsed but req.body is empty — weird case, treat as
+    // Vercel parsed but req.body is empty, weird case, treat as
     // empty payload.
     return { body: Buffer.from(''), source: 'parsed-object' };
   }
@@ -651,7 +651,7 @@ async function readRawBody(
   if (typeof req.body === 'string') {
     return { body: Buffer.from(req.body, 'utf8'), source: 'parsed-string' };
   }
-  // Object — re-serialize (likely won't byte-match Meta's original).
+  // Object, re-serialize (likely won't byte-match Meta's original).
   return {
     body: Buffer.from(JSON.stringify(req.body), 'utf8'),
     source: 'parsed-object',
@@ -665,7 +665,7 @@ function firstQuery(v: string | string[] | undefined): string | undefined {
 
 // Documentation only. Vercel reads `export const config` from the
 // TOP-LEVEL function file (api/inbox.ts), not from imported handler
-// modules — the bodyParser:false that actually takes effect at
+// modules, the bodyParser:false that actually takes effect at
 // runtime lives there. Kept here so readers who navigate directly
 // to this handler understand raw-body is expected. See the
 // readRawBody() docstring for why we need raw bytes for HMAC.

@@ -17,7 +17,7 @@ import type { Theme } from '@chakra-ui/react';
  * and createProvider unconditionally renders `<ToastProvider>`. Chakra's toast
  * component does `import { motion } from 'framer-motion'` at module scope, so
  * mounting it drags framer-motion's drag and layout-projection machinery
- * (~40 KB) into whatever chunk the provider lives in — the homepage bundle —
+ * (~40 KB) into whatever chunk the provider lives in, the homepage bundle
  * for a feature no public page uses. `useToast` appears in 14 files and every
  * one is Admin, Portal, Journal or VoiceInput. It is also why converting the
  * app to LazyMotion measured as exactly zero: Chakra kept pulling full `motion`
@@ -29,7 +29,7 @@ import type { Theme } from '@chakra-ui/react';
  * `@chakra-ui/react/dist/esm/provider/index.mjs`, which has no types and is an
  * internal path that a minor upgrade could move. Every piece it composes IS
  * public, so this rebuilds the same tree from the public API. If Chakra changes
- * what its provider composes, this file needs the same change — compare against
+ * what its provider composes, this file needs the same change, compare against
  * node_modules/@chakra-ui/react/dist/esm/provider/provider.mjs after upgrading.
  *
  * Deliberately omitted from the original: `portalZIndex` (unset here, so the

@@ -3,7 +3,7 @@
    * Typechecks the serverless functions.
    *
    * tsconfig.json only includes "src", so nothing under api/ was ever
-   * typechecked — `npm run build` runs `tsc` against the app and Vercel builds
+   * typechecked, `npm run build` runs `tsc` against the app and Vercel builds
    * each function without a project-wide check. That gap shipped a broken
    * import (`import { sql }` from a module that only exports `getDb`) straight
    * to production. It took /api/admin down completely, because api/admin.ts

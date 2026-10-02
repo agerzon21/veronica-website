@@ -79,7 +79,7 @@ const LoadingImage = ({
         onLoad={() => setLoaded(true)}
         // Errored images still flip loaded so the spinner doesn't
         // stay forever. The failed <img> will show the browser's
-        // native broken-image icon (rare in practice — Drive proxy
+        // native broken-image icon (rare in practice, Drive proxy
         // is reliable).
         onError={() => setLoaded(true)}
         loading={loading}

@@ -32,7 +32,7 @@ config({ quiet: true });
 
 // Byte-identical to api/portal/_password.ts. A mismatch here would seed hashes
 // the app cannot verify, silently pushing every login onto the env-var
-// fallback — working, but not actually migrated.
+// fallback, working, but not actually migrated.
 const hash = (plain) => {
   const salt = randomBytes(16);
   return `scrypt$${salt.toString('hex')}$${scryptSync(plain, salt, 64).toString('hex')}`;
@@ -72,7 +72,7 @@ console.log(`[seed-admins] ${candidates.length} account(s) from env:`);
 candidates.forEach((c) => console.log(`  ${c.level.padEnd(5)}  ${c.email}`));
 
 if (isDryRun) {
-  console.log('\n[seed-admins] DRY RUN — nothing written.');
+  console.log('\n[seed-admins] DRY RUN, nothing written.');
   process.exit(0);
 }
 
@@ -94,6 +94,6 @@ const rows = await sql`SELECT email, level, is_active FROM admin_users ORDER BY 
 console.log(`\n[seed-admins] admin_users now holds ${rows.length} account(s):`);
 rows.forEach((r) => console.log(`  ${r.level.padEnd(5)}  ${r.email}  active=${r.is_active}`));
 console.log(
-  '\n[seed-admins] Sign in exactly as before — the same passwords now resolve\n' +
+  '\n[seed-admins] Sign in exactly as before, the same passwords now resolve\n' +
     '              against the database instead of the env vars.',
 );

@@ -10,12 +10,12 @@
  * should not sit at the top of the queue looking like a client needs a reply.
  *
  * Unlike promotional, NOTHING classifies this automatically and nothing ever
- * will — see db/migrations/024-personal-flag.sql. This endpoint is the only
+ * will, see db/migrations/024-personal-flag.sql. This endpoint is the only
  * writer of the column, which is why it is a plain boolean with no "no opinion"
  * state.
  *
  * Because 005-messaging.sql has UNIQUE (platform, external_user_id), a
- * conversation IS the sender, so this covers everything they send in future —
+ * conversation IS the sender, so this covers everything they send in future
  * their next message routes into this same row, already marked.
  *
  * TWO HALVES, and only one of them is load-bearing:
@@ -29,7 +29,7 @@
  * (_messages-toggle-ai.ts, _messages-summary.ts, and the escalation path in
  * _ai-reply.ts), so unmarking a thread that escalation had deliberately
  * disarmed will silently re-arm it. Consistency with promotional beats
- * cleverness here, and the owner chose this explicitly — but it is a real edge,
+ * cleverness here, and the owner chose this explicitly, but it is a real edge,
  * not an absence of one.
  */
 
@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
 
     // Marking switches the assistant off; unmarking switches it back on, on the
-    // same reasoning as promotional — un-hiding is an explicit statement that
+    // same reasoning as promotional, un-hiding is an explicit statement that
     // the thread is real, so leaving the assistant off would make her wonder
     // why nothing drafts.
     const rows = personal

@@ -234,7 +234,7 @@ export function parseCoverageWindow(
   if (hits.length < 2) return { start: null, end: null };
 
   const [a, b] = hits;
-  // "3 to 6 pm" — the marker on the second reading governs both.
+  // "3 to 6 pm", the marker on the second reading governs both.
   const merA = a.mer ?? b.mer;
   const merB = b.mer ?? a.mer;
 

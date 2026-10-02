@@ -53,7 +53,7 @@ interface CTAButtonProps {
   // the breakpoints where it's true. Common pattern: `fullWidth={{ base: true, md: false }}`
   // for CTAs that stretch on mobile but hug their content on desktop.
   fullWidth?: boolean | { base?: boolean; sm?: boolean; md?: boolean; lg?: boolean; xl?: boolean };
-  // External link target — defaults to _blank for href, _self for `to`
+  // External link target, defaults to _blank for href, _self for `to`
   newTab?: boolean;
   // When set, renders `download` on the anchor so the browser saves the file
   // instead of navigating. String = suggested filename. Auto-forces newTab=false.
@@ -62,14 +62,14 @@ interface CTAButtonProps {
   // that would otherwise blow past a mobile viewport in nowrap mode. Unsets
   // whiteSpace and gently tightens letterSpacing on mobile so the label wraps.
   wrapText?: boolean;
-  // Accessibility label — used on icon-only buttons.
+  // Accessibility label, used on icon-only buttons.
   'aria-label'?: string;
   // Explicit height, for the rare CTA that has to fill a sized slot rather
-  // than size itself from its padding — e.g. the send button in the refine
+  // than size itself from its padding, e.g. the send button in the refine
   // panel, which is two thirds of a fixed-height column beside the composer.
   // Added here rather than hand-rolling that one button, per the note above.
   h?: string | Record<string, string>;
-  // Flex sizing, for the same reason as `h` — a CTA that is one sized child
+  // Flex sizing, for the same reason as `h`, a CTA that is one sized child
   // of a column rather than a self-sizing button.
   flex?: string | Record<string, string>;
   // 'photoTab' only: up to three small photos for the fan, left to right.
@@ -164,7 +164,7 @@ const sizeStyles: Record<Size, Record<string, any>> = {
 };
 
 // Visual variants. Hover transform is identical across all CTAs so the page
-// reads consistently — only the resting fill/border colors differ.
+// reads consistently, only the resting fill/border colors differ.
 // Ghost = borderless text button (replaces hand-rolled `Box as="button"`).
 // Danger = red-tone destructive action (replaces hand-rolled red Boxes).
 const variantStyles = (variant: Variant, tone: Tone): Record<string, any> => {
@@ -565,7 +565,7 @@ const CTAButton = ({
       ) : (
         icon && <Icon as={icon} boxSize={size === 'sm' ? 3.5 : 4} />
       )}
-      {/* Skip the label entirely when there is none — an empty span still
+      {/* Skip the label entirely when there is none, an empty span still
           consumes the flex `gap`, which pushes an icon-only button off-centre. */}
       {(children || (isLoading && loadingText)) && (
         <Box as="span">{isLoading && loadingText ? loadingText : children}</Box>
@@ -604,7 +604,7 @@ const CTAButton = ({
   }
 
   if (href) {
-    // Downloads stay in the same tab — opening a new tab just to immediately
+    // Downloads stay in the same tab, opening a new tab just to immediately
     // close it after the download starts is jarring UX.
     const openInNewTab = download ? false : (newTab ?? true);
     return (

@@ -5,14 +5,14 @@
  *   → 200 { success, level, posts: [...] }
  *   → 401 on bad password
  *
- * Returns a summary per post — enough for the admin list view.
+ * Returns a summary per post, enough for the admin list view.
  * Full post content (body_markdown, resolved Drive photos) is
  * fetched on-demand via journal-detail when the editor opens.
  *
  * For each post with a Drive folder, we resolve the first photo
  * so the admin row can show it as a thumbnail (matching what
  * visitors will see as the post's cover). The fan-out is parallel
- * and errors on any one post are swallowed — a Drive hiccup on one
+ * and errors on any one post are swallowed, a Drive hiccup on one
  * post shouldn't take down the whole list.
  */
 
@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at DESC
     `) as Row[];
 
-    // Resolve first Drive photo per post in parallel — same pattern
+    // Resolve first Drive photo per post in parallel, same pattern
     // as the public list endpoint. Returns null cover for posts with
     // no folder or a Drive failure; the UI falls back to a book icon.
     const posts = await Promise.all(

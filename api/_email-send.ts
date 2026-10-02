@@ -1,5 +1,5 @@
 /**
- * Email reply sender — outbound side of the email inbox feature.
+ * Email reply sender, outbound side of the email inbox feature.
  *
  * Companion to _email-webhook.ts (inbound). Wires up In-Reply-To +
  * References so mail clients thread the conversation correctly.
@@ -12,7 +12,7 @@
  * mattered: RESEND SILENTLY DISCARDS IT and assigns its own (an Amazon
  * SES id).
  *
- * Confirmed empirically — a real customer reply carried
+ * Confirmed empirically, a real customer reply carried
  * `In-Reply-To: 010001a02045c24f-…-0000`, an SES id, not ours. So every
  * In-Reply-To/References we emitted pointed at a message that existed
  * only in our database. Gmail has required a genuine reference chain
@@ -28,7 +28,7 @@
  *
  * Set to vero@vero.photography, the same address we send from. Mail to
  * it hits ImprovMX, which fans out to both Veronika's Gmail and our
- * inbound webhook — so replies reach the panel with no subdomain and no
+ * inbound webhook, so replies reach the panel with no subdomain and no
  * extra DNS, and the customer sees one consistent address.
  */
 
@@ -52,11 +52,11 @@ export interface EmailReplyArgs {
   replyTo: string;               // where customer replies should land (our subdomain)
   subject: string;               // full subject including any Re: prefix
   body: string;                  // plaintext body
-  html?: string;                 // optional rich body — falls back to text-in-<pre>
+  html?: string;                 // optional rich body, falls back to text-in-<pre>
   inReplyTo?: string | null;     // normalized Message-ID we're replying to
   references?: string[];         // full thread chain, oldest to newest, normalized
   // Optional pre-generated Message-ID. Callers that want to persist
-  // the outbound row BEFORE calling this helper (for idempotency —
+  // the outbound row BEFORE calling this helper (for idempotency
   // send-then-persist can double-send on DB blips) should generate
   // their own UUID, insert the row, then pass the same ID here so
   // the SMTP Message-ID header matches what's in the DB. Omit to
@@ -69,7 +69,7 @@ export interface EmailReplyResult {
   /**
    * The SMTP Message-ID we generated for this outbound, normalized
    * (no angle brackets). Store this as the message row's
-   * external_message_id — the customer's next reply will carry it
+   * external_message_id, the customer's next reply will carry it
    * in their In-Reply-To header, matched by the webhook.
    */
   messageId?: string;
@@ -103,7 +103,7 @@ function generateMessageId(fromAddress: string): string {
  *   - Resend rejects the send (unverified domain, bad address, rate
  *     limit) → returns { ok: false, error, statusCode }. Caller can
  *     surface to the admin UI.
- *   - Network / timeout — caught here, returned as { ok: false }.
+ *   - Network / timeout, caught here, returned as { ok: false }.
  *     Note: we do NOT set an AbortSignal timeout like _ig-send.ts
  *     does, because email sends can legitimately take a few seconds
  *     during warm-up, and unlike IG webhook we're inside an admin
@@ -127,7 +127,7 @@ export async function sendEmailReply(
   // Resend silently discards it and assigns its own (an Amazon SES id).
   // Setting one produced an id that existed only in our database, so the
   // In-Reply-To/References we built from it referenced a message no mail
-  // client had ever seen — and Gmail, which since 2019 requires a real
+  // client had ever seen, and Gmail, which since 2019 requires a real
   // reference chain and will not thread on subject alone, showed the
   // customer a pile of unrelated emails.
   //
@@ -178,7 +178,7 @@ export async function sendEmailReply(
  * Derive a customer-facing subject line for a reply.
  *
  * If the parent subject already starts with `Re:` (case-insensitive,
- * possibly with a colon variant), reuse it verbatim — mail clients
+ * possibly with a colon variant), reuse it verbatim, mail clients
  * don't want `Re: Re: Re:` chains. Otherwise prefix `Re: `.
  *
  * Empty / missing parent subject → `Re:` alone, which mail clients

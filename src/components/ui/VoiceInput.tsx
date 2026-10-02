@@ -6,7 +6,7 @@ import FaMicrophone from '../../icons/fa/FaMicrophone';
  * Press-and-hold microphone button that records audio via
  * MediaRecorder and posts the blob to /api/admin/transcribe (OpenAI
  * Whisper). Replaces the browser SpeechRecognition API which was
- * unreliable on iOS Safari — Whisper is one HTTP round-trip and
+ * unreliable on iOS Safari, Whisper is one HTTP round-trip and
  * always works.
  *
  * Behavior:
@@ -16,7 +16,7 @@ import FaMicrophone from '../../icons/fa/FaMicrophone';
  *   - visible states: idle → listening (gold pulse) → uploading (spinner)
  *   - errors surface as toasts so "nothing happens" never happens again
  *
- * Callback receives the transcript string (never null) — caller decides
+ * Callback receives the transcript string (never null), caller decides
  * how to insert it (append, replace, etc.).
  */
 
@@ -58,7 +58,7 @@ const VoiceInput = ({
   const startedAtRef = useRef<number>(0);
   const toast = useToast();
 
-  // MediaRecorder support check — bail early if the browser can't
+  // MediaRecorder support check, bail early if the browser can't
   // record (very old iOS Safari, some in-app browsers).
   useEffect(() => {
     if (
@@ -137,7 +137,7 @@ const VoiceInput = ({
     const recorder = recorderRef.current;
     if (!recorder || state !== 'recording') return;
 
-    // Ignore super-short taps that clearly weren't actual dictation —
+    // Ignore super-short taps that clearly weren't actual dictation
     // avoids uploading a 30ms blob and getting an empty transcript
     // that overwrites what Vero was already typing.
     const elapsedMs = Date.now() - startedAtRef.current;

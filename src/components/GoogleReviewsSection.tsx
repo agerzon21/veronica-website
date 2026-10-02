@@ -1,5 +1,5 @@
 // Reviews now come from the DB (admin panel Reviews tab). Was hardcoded
-// TESTIMONIAL_POOL — see git history.
+// TESTIMONIAL_POOL, see git history.
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Text, Flex, VStack, HStack, Link, Icon, Image, Portal } from '@chakra-ui/react';
 import { AnimatePresence, m, useInView, useMotionValue, useScroll, useTransform } from 'framer-motion';
@@ -58,7 +58,7 @@ const GOOGLE_WRITE_REVIEW_URL = 'https://g.page/r/CSNq8ccyWt_wEAE/review';
 
 // Fallback used when the API errors or the aggregate row hasn't been
 // seeded yet. Keeps the badge from ever rendering "· null Reviews on
-// Google" — a small stability net for a piece of homepage chrome.
+// Google", a small stability net for a piece of homepage chrome.
 const FALLBACK_RATING = '5.0';
 const FALLBACK_REVIEW_COUNT = 15;
 
@@ -77,7 +77,7 @@ const GoogleReviewsSection = () => {
   //
   // The drift he picked is 50% OF THE BAND's height. framer-motion's '%'
   // translation is a percentage of the ELEMENT's own height, and the backdrop
-  // is taller than the band by twice the overscan below — so the band figure
+  // is taller than the band by twice the overscan below, so the band figure
   // has to be divided by (1 + 2 x overscan) before it goes in here.
   // 50 / 2.02 = 24.75.
   //
@@ -161,8 +161,8 @@ const GoogleReviewsSection = () => {
   // Only fetch once this section is near the viewport.
   //
   // This ran on mount, which put /api/reviews on the homepage's critical
-  // request chain — a PageSpeed run measured it as the longest pole there at
-  // 891 ms — for a strip that sits well below the fold. The score barely cares
+  // request chain, a PageSpeed run measured it as the longest pole there at
+  // 891 ms, for a strip that sits well below the fold. The score barely cares
   // (that audit is unscored and the payload is 2 KiB), but every homepage visit
   // was invoking a serverless function for data most visitors never scroll to,
   // and function calls are the scarce resource on this plan.
@@ -186,7 +186,7 @@ const GoogleReviewsSection = () => {
             () => Math.random() - 0.5
           );
           setReviews(shuffled);
-          // aggregate.rating / .count are null before Vero seeds them —
+          // aggregate.rating / .count are null before Vero seeds them
           // fall through to the constants so the badge stays intact.
           const agg = data.aggregate as
             | { rating?: string | null; count?: number | null }
@@ -231,7 +231,7 @@ const GoogleReviewsSection = () => {
       {/* Words about photographs deserve a photograph behind them, and it
           PARALLAXES: the backdrop is taller than the section and drifts
           against the scroll, so the band has depth instead of sitting
-          flat. Portrait-centred on each breakpoint — the wide frame on
+          flat. Portrait-centred on each breakpoint, the wide frame on
           desktop, the lighthouse portrait on phones, which is the shape
           a phone actually has room for. */}
       {/* Desktop: unchanged from Alex's tuning. */}
@@ -276,7 +276,7 @@ const GoogleReviewsSection = () => {
               column, so `cover` fills the height exactly and crops only the
               sides. That left no vertical overflow, which meant the
               `objectPosition: center 35%` this used to carry was doing literally
-              nothing — the framing could not be adjusted at all.
+              nothing, the framing could not be adjusted at all.
               A transform moves the picture itself, which works regardless of
               which axis is overflowing. Alex tuned these on a live preview. The
               1.1 scale is what keeps the frame covered at a 5% shift: scaling is
@@ -325,10 +325,10 @@ const GoogleReviewsSection = () => {
               it, so no section had a name in the heading outline. The theme sets
               no styles on h1-h6 and CSSReset gives them the same margin as p. */}
           <Text as="h2" textStyle="eyebrowOnDark">Kind Words</Text>
-          {/* 40px, not 35 — the one rule width PageHeader uses everywhere. */}
+          {/* 40px, not 35, the one rule width PageHeader uses everywhere. */}
           <Box w="40px" h="1px" bg="brand.accent" />
 
-          {/* Google rating badge — links to profile */}
+          {/* Google rating badge, links to profile */}
           <Link
             href={GOOGLE_PROFILE_URL}
             isExternal
@@ -364,7 +364,7 @@ const GoogleReviewsSection = () => {
           </Link>
         </VStack>
 
-        {/* Testimonial cards — skeleton while loading, hidden if empty */}
+        {/* Testimonial cards, skeleton while loading, hidden if empty */}
         {loading ? (
           <Flex
             gap={{ base: 10, md: 14 }}

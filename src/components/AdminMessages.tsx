@@ -256,7 +256,7 @@ function TranslateChip({
 }
 
 /**
- * "Messages" tab in /admin — the unified inbox for Instagram DMs
+ * "Messages" tab in /admin, the unified inbox for Instagram DMs
  * (WhatsApp / SMS to slot into the same UI later via the `platform`
  * column on conversations).
  *
@@ -274,7 +274,7 @@ function TranslateChip({
  * Auto-polls every 30s while the tab is visible so Vero sees new
  * messages without manual refresh.
  *
- * Both admin (Vero) and super (Alex) see this tab — messaging is a
+ * Both admin (Vero) and super (Alex) see this tab, messaging is a
  * Vero-facing tool. Global kill switch is super-only (UI hides the
  * button for admin level; endpoint enforces server-side too).
  */
@@ -355,7 +355,7 @@ export interface Message {
   // header (auto-derived from the parent thread with a "Re: " prefix).
   subject?: string | null;
   in_reply_to?: string | null;
-  // How THIS message arrived — distinct from the conversation's
+  // How THIS message arrived, distinct from the conversation's
   // platform, which is how we reply. A contact-form submission arrives
   // as 'form' inside a conversation whose platform is 'email'.
   channel?: 'instagram' | 'email' | 'form' | 'whatsapp' | 'sms';
@@ -372,8 +372,8 @@ export type InquiryClassification =
   | 'collaboration-offer'
   // A friend or acquaintance writing to Vero as a person. Deliberately its
   // own category: a bonfire invitation from a friend used to land in
-  // spam-or-unrelated, which is both wrong and — because that classification
-  // switches AI off for the thread — quietly permanent.
+  // spam-or-unrelated, which is both wrong and, because that classification
+  // switches AI off for the thread, quietly permanent.
   | 'personal'
   | 'spam-or-unrelated'
   | 'unclear';
@@ -383,7 +383,7 @@ interface LocalizedSummary {
   gathered: string[];
   /** Gaps only the customer can fill. */
   missing?: string[];
-  /** Gaps Vero fills herself — the price and the retainer. */
+  /** Gaps Vero fills herself, the price and the retainer. */
   decide?: string[];
   nextStep: string;
 }
@@ -391,10 +391,10 @@ interface LocalizedSummary {
 export interface AiSummary {
   classification: InquiryClassification;
   tone: string;
-  // New bilingual shape — always populated on fresh summaries.
+  // New bilingual shape, always populated on fresh summaries.
   en?: LocalizedSummary;
   ru?: LocalizedSummary;
-  // Legacy flat fields — old cached summaries only have these,
+  // Legacy flat fields, old cached summaries only have these,
   // no `en`/`ru`. Kept as fallbacks so old rows still render until
   // they get regenerated on the next new message.
   asking?: string;
@@ -633,7 +633,7 @@ const POLL_INTERVAL_MS = 30_000;
  *
  * sessionStorage rather than props or a route param because the two tabs
  * are siblings with no shared state, and the handoff is a one-shot
- * message, not app state — the Assistant reads it once on mount and
+ * message, not app state, the Assistant reads it once on mount and
  * clears it. Survives the remount that switching tabs causes, which is
  * the whole point.
  */
@@ -812,7 +812,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
     // Capture the rail state only when the panel is actually opening.
     // "Edit with assistant" calls this again on an ALREADY-open panel to
     // switch tabs, and capturing then records the collapsed-for-the-panel
-    // state as the thing to restore — so closing the panel "restored" a
+    // state as the thing to restore, so closing the panel "restored" a
     // collapsed rail, which on a phone rendered the desktop avatar strip.
     if (refineFor !== selectedId) railBeforeRefine.current = listCollapsed;
     setListCollapsed(true);
@@ -826,13 +826,13 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
   /**
    * A send from the assistant happened entirely server-side, so no client
    * state knows the message exists. This used to only flip the tab back to
-   * Summary — the thread kept rendering its stale message list, the reply
+   * Summary, the thread kept rendering its stale message list, the reply
    * Vero had JUST sent was nowhere in it, and it stayed missing until a
    * manual refresh. Sending felt like it had not worked.
    *
    * So: reload the thread, then close the panel and land on the
    * conversation, where the sent message and its delivery state now are.
-   * (An earlier version deliberately kept the panel open after a send — that
+   * (An earlier version deliberately kept the panel open after a send, that
    * ask predated the send flows ending back on the thread, and keeping it
    * open now means covering up the very message you want to see go out.
    * Vero's explicit current ask is: send, then show me the conversation.)
@@ -855,7 +855,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
 
   // On a reload, reopen the conversation the refine session belongs to. The
   // panel is bound to that thread, so it does not follow her to a different
-  // one — it would be refining the wrong person's draft — but it is waiting
+  // one, it would be refining the wrong person's draft, but it is waiting
   // when she comes back.
   // Mount only. The comment below used to claim that, but the effect re-ran on
   // every change: pressing back on a phone sets selectedId to null and this
@@ -878,7 +878,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
   const [globalToggleConfirmOpen, setGlobalToggleConfirmOpen] = useState(false);
   const [globalToggleLoading, setGlobalToggleLoading] = useState(false);
   // Email signature editor. Lives at the tab level rather than inside a
-  // conversation — it applies to every email Vero sends, not to one thread.
+  // conversation, it applies to every email Vero sends, not to one thread.
   const [signatureOpen, setSignatureOpen] = useState(false);
   const toast = useToast();
 
@@ -948,7 +948,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
   // Mobile drill-down: when a conversation is selected on a phone, we
   // want the ConversationView to take over the whole screen (edge-to-
   // edge, with a back chevron), NOT stack under the conversation list.
-  // The old vertical stack was Alex's #2 complaint — you'd click a
+  // The old vertical stack was Alex's #2 complaint, you'd click a
   // thread and the chat rendered "at the bottom of the screen below
   // everything" (his words), invisible without scrolling.
   const showListOnMobile = !selected;
@@ -956,7 +956,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
 
   return (
     <Box maxW="1400px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Tab header — hidden on mobile when a conversation is open so
+      {/* Tab header, hidden on mobile when a conversation is open so
           the drill-down feels like a real screen switch, not a
           scrolling chase. Desktop always shows it.
           All actions live on the SAME row as the title (AI toggle pill
@@ -983,7 +983,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
             </Text>
           </VStack>
 
-          {/* Actions row — AI toggle pill (the pill IS the toggle now,
+          {/* Actions row, AI toggle pill (the pill IS the toggle now,
               not a status label + separate button) + refresh icon.
               For non-super admins the pill is a read-only status
               indicator that opens no confirm dialog on tap. */}
@@ -1043,7 +1043,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
         onCancel={() => setGlobalToggleConfirmOpen(false)}
       />
 
-      {/* Email signature editor — applies to every email sent from the
+      {/* Email signature editor, applies to every email sent from the
           panel, so it lives here rather than inside a conversation. */}
       <SignatureModal
         isOpen={signatureOpen}
@@ -1065,7 +1065,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
           minH={{ lg: '75vh' }}
           maxH={{ lg: '85vh' }}
         >
-          {/* Left rail — conversation list. Hidden on mobile when a
+          {/* Left rail, conversation list. Hidden on mobile when a
               thread is open so it doesn't stack awkwardly under the
               chat view. */}
           <Box
@@ -1079,7 +1079,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
             maxH={{ base: 'auto', lg: '100%' }}
             display={{ base: showListOnMobile ? 'block' : 'none', lg: 'block' }}
           >
-            {/* Fold control. Desktop only — on mobile the rail and the thread
+            {/* Fold control. Desktop only, on mobile the rail and the thread
                 are already separate screens, so there is nothing to fold. */}
             <Flex
               display={{ base: 'none', lg: 'flex' }}
@@ -1167,7 +1167,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
             )}
           </Box>
 
-          {/* Right pane — selected conversation or empty prompt.
+          {/* Right pane, selected conversation or empty prompt.
               On mobile when a thread is open, this Box becomes
               full-viewport (position fixed, inset 0, above the
               bottom nav) so the composer never gets buried below
@@ -1210,7 +1210,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                 summary={selected}
                 adminPassword={adminPassword}
                 // Mobile back: unset selection to return to the list.
-                // Desktop-only: unused — SelectPrompt shows when null.
+                // Desktop-only: unused, SelectPrompt shows when null.
                 onBack={() => setSelectedId(null)}
                 onRefreshList={loadList}
                 onOpenAssistant={onOpenAssistant}
@@ -1230,7 +1230,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
             )}
           </Box>
 
-          {/* Third column — refine the draft with the assistant WITHOUT
+          {/* Third column, refine the draft with the assistant WITHOUT
               leaving the thread. Previously this navigated to the Assistant
               tab, which meant losing sight of the conversation you were
               answering, and coming back wiped whatever you had typed. Keyed
@@ -1333,7 +1333,7 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
                 {/* Summary and Reply are rendered by ConversationView, which
                     owns that state, and portalled in here. A portal follows the
                     REACT tree, so context still resolves, while the DOM node
-                    stays a sibling of the thread pane — which it has to be:
+                    stays a sibling of the thread pane, which it has to be:
                     inside the pane it would inherit a fixed, z-25, overflow
                     hidden stacking context and the bottom-clearance math would
                     stop holding. */}
@@ -1378,12 +1378,12 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
 
 /**
  * Global-AI pill in the messages header. Doubles as the toggle button
- * — tap flips AI on/off globally (super-admin only; regular admins
+ * tap flips AI on/off globally (super-admin only; regular admins
  * see it as a read-only status indicator). Green when on, orange when
  * off; a small dot inside pulses when off to signal that auto-replies
  * are currently silenced.
  *
- * Merged from what used to be TWO elements — a green indicator badge
+ * Merged from what used to be TWO elements, a green indicator badge
  * + a separate "Pause AI globally" CTAButton eating a whole row. Alex
  * flagged the two-element pattern as wasteful; the pill IS the toggle.
  */
@@ -1401,7 +1401,7 @@ function GlobalAiTogglePill({
       ? { bg: 'green.100', color: 'green.700', dot: 'green.500', label: t.messages.aiOn, title: t.messages.tapToPause }
       : { bg: 'orange.100', color: 'orange.700', dot: 'orange.500', label: t.messages.aiPaused, title: t.messages.tapToResume };
   // The dynamic `as` swaps between a real <button> and a <div> based
-  // on whether we have an onClick — regular admins get a read-only
+  // on whether we have an onClick, regular admins get a read-only
   // pill, super gets a clickable toggle. Chakra's polymorphic `as`
   // typing can't narrow this so we cast the props bag; behavior is
   // safe (button-only props are simply ignored on the div path).
@@ -1458,7 +1458,7 @@ function GlobalAiTogglePill({
       />
       {config.label}
       {/* Power icon inside the pill so its interactivity is legible
-          at a glance — Alex specifically flagged that the plain
+          at a glance, Alex specifically flagged that the plain
           pill "still looks like a label." Only shown for super. */}
       {interactive && (
         <Icon as={FaPowerOff} boxSize={2.5} opacity={0.75} />
@@ -1599,7 +1599,7 @@ function ConversationList({
   conversations: ConversationSummary[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  /** Folded rail — drop the section chrome, it cannot fit in 76px. */
+  /** Folded rail, drop the section chrome, it cannot fit in 76px. */
   collapsed?: boolean;
 }) {
   const { t } = useAdminLang();
@@ -1631,7 +1631,7 @@ function ConversationList({
 
   // Marketing mail, cold pitches and review notifications all land in
   // the same inbox as real clients, because filtering them at ingest
-  // would mean silently losing anything misclassified — and a lost
+  // would mean silently losing anything misclassified, and a lost
   // client is far worse than a visible advert. So they're ingested,
   // classified, and folded out of the way HERE, where a mistake costs
   // one click instead of a booking.
@@ -1640,16 +1640,16 @@ function ConversationList({
   // yank the conversation she's reading out from under her.
   // Two signals, either one folds. The AI classification only exists for
   // threads that have been opened (summaries are generated on demand), so
-  // for the marketing mail Vero never opens — which is most of it — her
+  // for the marketing mail Vero never opens, which is most of it, her
   // manual flag is the one that actually does the work.
   // Vero's explicit choice wins; otherwise the AI classification decides.
-  // `?? ` rather than `||` matters — an explicit FALSE ("show this") has
+  // `?? ` rather than `||` matters, an explicit FALSE ("show this") has
   // to beat a spam-or-unrelated classification, which is the whole point
   // of the column being nullable.
   const isPromotional = (c: ConversationSummary) =>
     (c.is_promotional ?? c.classification === 'spam-or-unrelated') && c.id !== selectedId;
 
-  // Personal is checked FIRST and is a plain boolean — no classifier competes
+  // Personal is checked FIRST and is a plain boolean, no classifier competes
   // with it, so there is no nullable "no opinion" state like is_promotional has.
   // A thread can only be in one bucket; personal wins so a friend who also
   // trips the spam classifier still lands in Personal rather than Promotional.
@@ -1678,7 +1678,7 @@ function ConversationList({
         : null;
 
   if (collapsed) {
-    // Personal and promotional stay reachable — they are just not separated
+    // Personal and promotional stay reachable, they are just not separated
     // by headers, because a 76px rail has nowhere to put them.
     const all = [...primary, ...personal, ...closed, ...promotional];
     return (
@@ -1975,7 +1975,7 @@ function ConversationListRow({
                 {t.messages.aiDraftWaiting}
               </Badge>
             )}
-            {/* Quiet-thread marker. Hidden while a draft is waiting — the
+            {/* Quiet-thread marker. Hidden while a draft is waiting, the
                 draft IS the next action then, and two badges shouting about
                 the same thread is noise. */}
             {conv.closed_lead && conv.closed_reason && (
@@ -2112,7 +2112,7 @@ function PlatformAvatar({
         // image now, so a light background would render white-on-light the
         // moment a broken avatar reveals them. When the image loads it covers
         // this completely (objectFit cover at 100%/100%), so the fill is only
-        // ever visible when there is no usable image — which is exactly when
+        // ever visible when there is no usable image, which is exactly when
         // the initials need contrast.
         bg="gray.700"
         display="flex"
@@ -2127,7 +2127,7 @@ function PlatformAvatar({
 
             Instagram pre-signs these cdninstagram URLs and they expire in
             24-72h (as little as 1-3h during a CDN rotation). A daily cron now
-            refreshes them, but a URL can still die between runs — and with no
+            refreshes them, but a URL can still die between runs, and with no
             onError this rendered as a broken-image glyph, which is what Vero
             was seeing across the whole inbox.
 
@@ -2198,7 +2198,7 @@ function ConversationView({
   /** Open the refine panel beside this thread (desktop) instead of
    *  navigating away to the Assistant tab. */
   onRefine?: (tab?: AiPanelTab) => void;
-  /** A reply actually went out — the refine panel has served its purpose. */
+  /** A reply actually went out, the refine panel has served its purpose. */
   onReplySent?: () => void;
   /** Which AI tab the panel is showing. Drives what gets portalled. */
   panelTab?: AiPanelTab;
@@ -2249,7 +2249,7 @@ function ConversationView({
   const [duplicateText, setDuplicateText] = useState<string | null>(null);
 
   // The AI's unsent suggestion, if it left one. Only ever present on
-  // non-Instagram channels — see the dispatch in api/_ai-reply.ts.
+  // non-Instagram channels, see the dispatch in api/_ai-reply.ts.
   // The NEWEST outbound draft.
   //
   // This was `.find(m => m.status === 'draft')`, which takes the FIRST match in
@@ -2286,11 +2286,11 @@ function ConversationView({
   // The prompt names the person and quotes the draft, so Vero doesn't have
   // to re-explain which thread she means or paste anything. The assistant
   // already has list_conversations / read_thread / send_reply, so it can
-  // pull the real history, revise with her, and send when she approves —
+  // pull the real history, revise with her, and send when she approves
   // the loop she currently does by pasting into ChatGPT.
   /**
    * "Use this draft" flow. It used to copy the draft into the composer and
-   * flip the panel back to Summary — which on a desktop reads as "it's in
+   * flip the panel back to Summary, which on a desktop reads as "it's in
    * the box below", and on a phone, where the panel covers the thread, reads
    * as nothing happening at all: the composer it copied into is off-screen.
    * Vero pressed it, landed on the summary, and reasonably concluded the
@@ -2324,7 +2324,7 @@ function ConversationView({
         await loadDetail();
         onRefreshList();
         // Close the AI panel and land back on the thread, where the sent
-        // message and its delivery state are — the whole point of sending.
+        // message and its delivery state are, the whole point of sending.
         onReplySent?.();
       } else if (res.status === 409) {
         setUseDraftOpen(false);
@@ -2368,7 +2368,7 @@ function ConversationView({
     onOpenAssistant?.();
   };
 
-  // Is this thread currently folded out of the inbox — for EITHER reason?
+  // Is this thread currently folded out of the inbox, for EITHER reason?
   // The button used to reflect only the manual flag, so an
   // auto-classified thread showed "hide" while already hidden, and
   // pressing it appeared to do nothing.
@@ -2403,7 +2403,7 @@ function ConversationView({
   };
 
   // Personal is a plain boolean with one writer, so unlike isHidden there is no
-  // classifier to fall back to — detail?.is_personal is the whole truth.
+  // classifier to fall back to, detail?.is_personal is the whole truth.
   const isPersonalThread = !!detail?.is_personal;
 
   const handleTogglePersonal = async () => {
@@ -2606,13 +2606,13 @@ function ConversationView({
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   // Summary is EXPANDED by default when a conversation opens (per
-  // Alex's ask — the summary is the first thing you want to see, not
+  // Alex's ask, the summary is the first thing you want to see, not
   // the chat scroll). Vero taps the collapse chevron to reveal the
   // chat + composer. On mobile this drives "focus mode": when
   // expanded, the chat + composer are hidden entirely so the summary
   // gets the full viewport.
   // Collapsed on open. Expanded, the summary card owned most of the pane and
-  // pushed the actual conversation below the fold — the thread is what you
+  // pushed the actual conversation below the fold, the thread is what you
   // came to read. The header row stays visible with the one-line "asking"
   // gist, so nothing is hidden, just folded.
 
@@ -2623,7 +2623,7 @@ function ConversationView({
   // lost by it: the server writes BOTH locales on every summary (see
   // api/admin/_messages-summary.ts) and readSummaryLocale falls back through
   // the other one anyway.
-  // AI-off banner dismiss state — the banner auto-opens whenever a
+  // AI-off banner dismiss state, the banner auto-opens whenever a
   // conversation with AI disabled is opened, but Vero can dismiss it
   // for the current session (state resets when the ConversationView
   // remounts on selecting a different thread) so it stops eating
@@ -2790,7 +2790,7 @@ function ConversationView({
     // Pass force=true from the Regenerate button so the server
     // bypasses its cache and always makes a fresh OpenAI call.
     // The default (no arg / force=false) uses the cached summary
-    // whenever no new messages have arrived since it was made —
+    // whenever no new messages have arrived since it was made
     // makes conversation-open snappy instead of a 1-3s wait.
     async (opts?: { force?: boolean }): Promise<void> => {
       setAiSummaryLoading(true);
@@ -2880,7 +2880,7 @@ function ConversationView({
   //
   // The effect above only fires on summary.id, so a message arriving in
   // the conversation Vero is currently reading was invisible until she
-  // clicked away and back — the rail showed the unread badge while the
+  // clicked away and back, the rail showed the unread badge while the
   // thread beside it sat frozen.
   //
   // This rides the list's existing 30s poll (POLL_INTERVAL_MS) rather
@@ -2889,7 +2889,7 @@ function ConversationView({
   // "this thread has something new."
   //
   // The ref is keyed on id|timestamp so switching conversations does not
-  // masquerade as new mail — that case is already handled above, and
+  // masquerade as new mail, that case is already handled above, and
   // double-fetching would race the two loads.
   const lastSeenRef = useRef<string>(`${summary.id}|${summary.last_message_at ?? ''}`);
   useEffect(() => {
@@ -2911,7 +2911,7 @@ function ConversationView({
         });
         onRefreshList();
       } catch {
-        // silent — a stale badge is not worth surfacing an error for
+        // silent, a stale badge is not worth surfacing an error for
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2924,7 +2924,7 @@ function ConversationView({
     }
   }, [messages.length]);
 
-  // NOTE: `handleRefreshProfile` used to live here — see git history.
+  // NOTE: `handleRefreshProfile` used to live here, see git history.
   // Removed because profile refresh is a per-conversation nicety that
   // Vero would use approximately never (IG names/pfps rarely change),
   // and its icon looked like all the other refresh-y icons in the
@@ -2959,15 +2959,15 @@ function ConversationView({
     }
   };
 
-  // "Wipe conversation" — super-admin test-reset. Deletes every
+  // "Wipe conversation", super-admin test-reset. Deletes every
   // message on this thread and clears the AI summary cache, but leaves
   // the conversation row intact (external_user_id, contact_name, etc.)
   // so the next inbound DM from the same account lands right back here
   // and the AI reads a truly-fresh thread. Alex uses this to test the
   // assistant as if the customer just messaged for the first time.
   // Remove the conversation entirely. The eraser beside this only wipes
-  // MESSAGES and keeps the row — deliberate, so a re-test lands back in
-  // the same thread — but that leaves dead empty rows in the inbox with
+  // MESSAGES and keeps the row, deliberate, so a re-test lands back in
+  // the same thread, but that leaves dead empty rows in the inbox with
   // no way to clear them. This is the way out.
   const doDelete = async () => {
     setDeleteLoading(true);
@@ -2981,7 +2981,7 @@ function ConversationView({
       if (res.ok && data.success) {
         toast({ title: t.messages.deleted, status: 'success', duration: 3000 });
         setDeleteConfirmOpen(false);
-        // The thread we're looking at no longer exists — go back to the
+        // The thread we're looking at no longer exists, go back to the
         // list before refreshing it, or the detail pane renders a 404.
         // onBack is optional (desktop passes nothing; SelectPrompt takes
         // over there once the list no longer contains this id).
@@ -3050,7 +3050,7 @@ function ConversationView({
   // so the thread honestly shows one failed and one successful send
   // rather than a row that silently changes its mind.
   //
-  // Translation is skipped — the stored body is already in the
+  // Translation is skipped, the stored body is already in the
   // customer's language (it was translated on the first attempt), and
   // running it through again would translate a translation. The
   // signature is already on the stored text and appendSignatureText is
@@ -3074,7 +3074,7 @@ function ConversationView({
       if (res.ok && data.success) {
         // Same post-send bookkeeping as handleSend. Without it a confirmed
         // duplicate shipped the message but left the text sitting in the
-        // composer and the panel open, which reads as "it did not send" —
+        // composer and the panel open, which reads as "it did not send"
         // and with translate-on-send the composer holds the UNtranslated
         // text, so sending again produces a fresh translation that the
         // server-side duplicate check will not recognise.
@@ -3191,7 +3191,7 @@ function ConversationView({
         // The draft is out the door; the refine panel has nothing left to do.
         onReplySent?.();
       } else if (res.status === 409) {
-        // Not an error — the server noticed this repeats something just
+        // Not an error, the server noticed this repeats something just
         // sent. Ask rather than refuse; she may well mean it.
         setDuplicateText(outbound);
       } else {
@@ -3203,7 +3203,7 @@ function ConversationView({
         });
       }
     } catch {
-      // A network error here does NOT mean the message wasn't sent — the
+      // A network error here does NOT mean the message wasn't sent, the
       // request may have gone through and only the response been lost on
       // bad wifi or a backgrounded phone. Telling her "failed" would make
       // her re-send and the client receive it twice. Reload and let the
@@ -3237,13 +3237,13 @@ function ConversationView({
   //
   // Sending a reply while a draft is pending DELETES the draft row and
   // INSERTS the sent one, so the array length is identical before and
-  // after — the effect never re-ran, no poll ever started for the message
+  // after, the effect never re-ran, no poll ever started for the message
   // just sent, and the badge sat on "Sent" until switching conversations
   // remounted the component. Which looked exactly like "it only updates
   // when I navigate away and back".
   //
   // This changes precisely when there is a new outbound to track, and
-  // deliberately NOT when delivery_state updates — that would restart the
+  // deliberately NOT when delivery_state updates, that would restart the
   // poll on its own output.
   const newestOutboundEmailId =
     [...messages]
@@ -3256,7 +3256,7 @@ function ConversationView({
     // Delivery resolves in seconds, not instantly, so a single check on
     // open would almost always catch it mid-flight and leave a spinner
     // that never settles. Re-check on a short interval until every
-    // message reaches a terminal state, then stop — the endpoint caches
+    // message reaches a terminal state, then stop, the endpoint caches
     // terminal outcomes, so this cannot become a permanent poll.
     // 3s matches the thank-you page, which feels immediate. 5s felt
     // noticeably laggy against mail that had visibly already arrived.
@@ -3282,7 +3282,7 @@ function ConversationView({
           ),
         );
         // NOTE: [].every() is true, so an empty result would read as
-        // "everything settled" and stop the loop on its first tick —
+        // "everything settled" and stop the loop on its first tick
         // which is exactly the case right after a send, before the
         // delivery id has been written. Require at least one known state
         // before believing we're done.
@@ -3291,7 +3291,7 @@ function ConversationView({
           states.length > 0 && states.every((v) => DELIVERY_TERMINAL.includes(v));
         if (settled || Date.now() - startedAt >= MAX_WAIT_MS) return;
       } catch {
-        // Silent — a missing delivery badge is not worth an error toast.
+        // Silent, a missing delivery badge is not worth an error toast.
       }
       timer = setTimeout(check, POLL_MS);
     };
@@ -3334,8 +3334,8 @@ function ConversationView({
    * What this thread established, in the shape the full new-client form wants.
    *
    * Built here rather than in a chooser modal: converting a booking thread
-   * into a gallery-only portal was never the useful outcome — it is what
-   * produced a client with a CLIENT badge and no contract — so the button
+   * into a gallery-only portal was never the useful outcome, it is what
+   * produced a client with a CLIENT badge and no contract, so the button
    * goes straight to the full form and gallery-only stays available from the
    * Clients tab for the cases it was actually built for.
    */
@@ -3413,12 +3413,12 @@ function ConversationView({
 
   // The address / handle to show under the name.
   //
-  // For email, external_user_id IS the address — that's how the thread is
+  // For email, external_user_id IS the address, that's how the thread is
   // keyed. For Instagram it's the IGSID, an opaque number that means
   // nothing to Vero, so we use the handle and fall back to showing the
   // channel name rather than a meaningless id.
   //
-  // Skipped entirely when it would just repeat the heading — an email
+  // Skipped entirely when it would just repeat the heading, an email
   // thread with no contact_name already displays the address as its
   // title, and printing it twice looks like a bug.
   const rawIdentifier =
@@ -3440,7 +3440,7 @@ function ConversationView({
 
   return (
     <>
-      {/* Thread header — contact identity + per-convo AI toggle + Create client.
+      {/* Thread header, contact identity + per-convo AI toggle + Create client.
           Mobile: back button on the left (drill-down close), identity in the
           middle, AI switch on the right. Create-client + Linked-client status
           drops to a second row below so nothing gets squeezed off-screen. */}
@@ -3492,7 +3492,7 @@ function ConversationView({
                   {displayName}
                 </Text>
                 {/* NOTE: manual "refresh profile from Instagram"
-                    button was here in earlier commits — removed
+                    button was here in earlier commits, removed
                     because names/pfps rarely change, the webhook
                     already auto-fetches on new conversations, and
                     the backfill script covers existing rows. Too
@@ -3505,7 +3505,7 @@ function ConversationView({
               <HStack spacing={2} minW={0}>
                 {/* The actual identifier, not just the channel name.
                     "Email" under a display name tells Vero nothing she
-                    can act on — she needs to see WHICH address, because
+                    can act on, she needs to see WHICH address, because
                     display names repeat, get spoofed, and a client
                     writing from a work vs personal address is a
                     different thread. Instagram shows @handle; email
@@ -3541,7 +3541,7 @@ function ConversationView({
 
           {/* Right side of the header: Create-client icon (or "Linked
               client" badge if already linked) + AI toggle. Everything
-              lives on the top row now — the old second row was eating
+              lives on the top row now, the old second row was eating
               vertical space in the drill-down for a single button. */}
           <HStack spacing={2} flexShrink={0}>
             {detail.linked_client_portal_id ? (
@@ -3568,7 +3568,7 @@ function ConversationView({
                 _active={{ bg: 'green.100' }}
               />
             ) : (
-              // Small circular + user icon — replaces the old chunky
+              // Small circular + user icon, replaces the old chunky
               // "Create Client" pill that took up its own line in the
               // header. Same click target size (44×44) with a subtle
               // gold-tinted background so it reads as an action.
@@ -3730,7 +3730,7 @@ function ConversationView({
               </MenuList>
             </Menu>
 
-            {/* AI toggle — only wired for Instagram today. Email
+            {/* AI toggle, only wired for Instagram today. Email
                 conversations don't have an AI-reply pipeline yet
                 (deferred; the receiving side ships in this PR but
                 auto-reply-for-email is future work), so we HIDE
@@ -3761,11 +3761,11 @@ function ConversationView({
         </Flex>
 
         {/* The old second-row Create-client / Linked-client block is
-            gone — those two controls now live in the top header row
+            gone, those two controls now live in the top header row
             above, saving a full row of vertical space on mobile. */}
       </VStack>
 
-      {/* "Wipe conversation" confirm dialog — Vero's testing loop
+      {/* "Wipe conversation" confirm dialog, Vero's testing loop
           resets a conversation to a clean slate mid-tuning-session.
           Available to both admin + super. The safeguard is the
           per-invocation confirm modal with the specific contact
@@ -3775,7 +3775,7 @@ function ConversationView({
         title={t.messages.resetConfirmTitle}
         // Body includes the CONTACT NAME + MESSAGE COUNT so accidental
         // clicks can't confirm without seeing exactly what they're
-        // about to erase — the primary safeguard for an in-list
+        // about to erase, the primary safeguard for an in-list
         // destructive action that regular admins (not just super)
         // can trigger.
         body={t.messages.resetConfirmBody(displayName, messages.length)}
@@ -3787,7 +3787,7 @@ function ConversationView({
       />
 
       {/* Duplicate-send confirmation. Deliberately a question, not a
-          block — repeating yourself is occasionally correct (a nudge, a
+          block, repeating yourself is occasionally correct (a nudge, a
           resend after a bounce), and refusing outright would be worse
           than the duplicate. */}
       <ConfirmDialog
@@ -3886,7 +3886,7 @@ function ConversationView({
         </ModalContent>
       </Modal>
 
-      {/* "Use this draft" — ask, then act. Stacked full-width buttons on a
+      {/* "Use this draft", ask, then act. Stacked full-width buttons on a
           phone; the draft itself is visible right behind the dialog, so the
           body stays one line instead of repeating the text. */}
       <Modal
@@ -3943,12 +3943,12 @@ function ConversationView({
         </ModalContent>
       </Modal>
 
-      {/* Not-in-AI notice — one-line dismissible banner. Auto-opens
+      {/* Not-in-AI notice, one-line dismissible banner. Auto-opens
           for any conversation with AI disabled; Vero can close it
           for the current session (state resets on remount when she
           picks a different thread) so it stops occupying screen
           space once she's acknowledged it.
-          Suppressed for email conversations — email doesn't have an
+          Suppressed for email conversations, email doesn't have an
           AI reply pipeline yet, so a "AI is off" banner would be
           misleading (implies it could be on). Same for WhatsApp,
           which has no auto-reply on purpose: the banner would report
@@ -3987,13 +3987,13 @@ function ConversationView({
         </Flex>
       )}
 
-      {/* Pinned AI summary — sits above the scroll area on desktop
+      {/* Pinned AI summary, sits above the scroll area on desktop
           so it stays visible while Vero reads through the thread. On
           mobile, when expanded, it enters FOCUS MODE and takes over
           the viewport (chat + composer render only when collapsed) so
           Vero can read the summary comfortably without half of it
           being off-screen. When collapsed, only the header row shows
-          and the chat + composer become visible — a big obvious
+          and the chat + composer become visible, a big obvious
           "Show summary" button doubles as the collapse affordance. */}
       {/* Summary and the generated reply now live in the AI panel, which is a
           sibling of this pane rather than a child. They are rendered here,
@@ -4132,7 +4132,7 @@ function ConversationView({
         </Flex>
       </Flex>
 
-      {/* Message history — hidden on mobile when the summary is
+      {/* Message history, hidden on mobile when the summary is
           expanded (focus mode). On desktop it always renders. */}
       <Box
         ref={scrollRef}
@@ -4146,7 +4146,7 @@ function ConversationView({
               header at the top of the thread so Vero can see what
               the email is about at a glance without scrolling
               through the body. Uses the OLDEST message's subject
-              (the original thread starter) — subsequent replies'
+              (the original thread starter), subsequent replies'
               subjects just chain "Re: " prefixes and would be
               noise. IG conversations skip this entirely (no
               subjects). */}
@@ -4182,7 +4182,7 @@ function ConversationView({
           {messages
             // A draft is a suggestion, not something the customer
             // received. Rendering it as an ordinary outbound bubble would
-            // read as "already replied" — the exact wrong impression.
+            // read as "already replied", the exact wrong impression.
             // It surfaces in the banner above the composer instead.
             .filter((m) => m.status !== 'draft')
             .map((m) => (
@@ -4197,10 +4197,10 @@ function ConversationView({
         </VStack>
       </Box>
 
-      {/* Composer — sticky at the bottom of the pane on mobile so it
+      {/* Composer, sticky at the bottom of the pane on mobile so it
           stays above the OS keyboard. Safe-area padding clears the iOS
           home indicator. Hidden on mobile when the summary is expanded
-          (focus mode) — the collapse affordance is Vero's way back to
+          (focus mode), the collapse affordance is Vero's way back to
           the composer. */}
 
 
@@ -4209,7 +4209,7 @@ function ConversationView({
         // Clear the FIXED bottom nav, not just the iOS home indicator.
         //
         // On mobile this pane is position:fixed at h=100dvh / bottom=0 with
-        // z-index 25, and the admin bottom nav is z-index 30 at bottom=0 —
+        // z-index 25, and the admin bottom nav is z-index 30 at bottom=0
         // so the nav paints over the last ~80px of the pane. That is
         // exactly where the Send button sits, so Vero could type a reply
         // and have nowhere to tap. Matches the clearance the main admin
@@ -4398,7 +4398,7 @@ function ConversationView({
 /**
  * Delivery badge for outbound email.
  *
- * Instagram needs nothing here — Vero can open the app and see the
+ * Instagram needs nothing here, Vero can open the app and see the
  * message. Email is opaque: the composer clears and she has to trust it
  * went. Worse, "Resend accepted it" and "the client received it" are
  * different facts, and a bounce is exactly the case where she needs to
@@ -4442,7 +4442,7 @@ function DeliveryBadge({
         color={failed ? 'red.600' : delivered ? 'green.600' : 'gray.500'}
         fontWeight={failed ? '500' : '400'}
         // A bounce is the one state that needs Vero to DO something, and
-        // retrying is usually futile — a hard bounce means the address
+        // retrying is usually futile, a hard bounce means the address
         // doesn't accept mail, and Resend suppresses it after one.
         title={failed ? t.messages.deliveryBouncedHelp : undefined}
       >
@@ -4453,7 +4453,7 @@ function DeliveryBadge({
           : t.messages.deliverySent}
       </Text>
       {/* Retry only on failure, and only because the common bounce here
-          is TRANSIENT — a busy or filtering receiver, or a shared
+          is TRANSIENT, a busy or filtering receiver, or a shared
           sending IP briefly on a blocklist. Those clear on their own,
           so a second attempt genuinely works. Re-sends the same text
           through the normal send path, so it picks up whatever IP the
@@ -4496,7 +4496,7 @@ function MessageBubble({
   const bg = isInbound ? 'white' : isAi ? '#fdf9f0' : '#c9a96e';
   const color = isInbound || isAi ? 'gray.800' : 'white';
   // The inbound eyebrow names the channel rather than always saying
-  // "They said" — that phrasing suits a DM but reads wrong on a formal
+  // "They said", that phrasing suits a DM but reads wrong on a formal
   // email, and a contact-form submission was never "said" at all.
   const senderLabel = isInbound
     ? msg.channel === 'form'
@@ -4565,7 +4565,7 @@ function MessageBubble({
           {msg.body}
         </Box>
 
-        {/* Translation panel — only shown once Vero clicks Translate */}
+        {/* Translation panel, only shown once Vero clicks Translate */}
         {(translation || translateError) && (
           <Box
             mt={1.5}
@@ -4624,7 +4624,7 @@ function MessageBubble({
             {msg.ai_model && ` · ${msg.ai_model}`}
           </Text>
         </Flex>
-        {/* Outbound email only — Instagram doesn't need it and inbound
+        {/* Outbound email only, Instagram doesn't need it and inbound
             has nothing to report. */}
         {!isInbound && msg.channel === 'email' && (
           <DeliveryBadge
@@ -4757,7 +4757,7 @@ function DraftPanel({
           {t.messages.aiNoDraft}
         </Text>
         {/* The automatic pipeline goes quiet on purpose once payment or
-            contract talk starts — which is exactly when Vero most wants a
+            contract talk starts, which is exactly when Vero most wants a
             starting point. Asking is different from the AI acting alone, so
             an explicit request works even where auto-drafting stops. */}
         <CTAButton
@@ -4886,7 +4886,7 @@ function DraftPanel({
 }
 
 /**
- * AI-generated summary of the conversation so far — pinned above the
+ * AI-generated summary of the conversation so far, pinned above the
  * message thread so Vero can see what the customer wants, what
  * she's gathered, what to do next, and (critically) whether it's
  * actually worth her time (booking vs. spam solicitation) at a
@@ -5118,7 +5118,7 @@ function SummaryCard({
       // remaining viewport height so the body has room to breathe.
       minH={{ base: collapsed ? 'auto' : 'auto', lg: 'auto' }}
     >
-      {/* Header row — always visible. Tap anywhere on the row to
+      {/* Header row, always visible. Tap anywhere on the row to
           toggle collapse; the chevron and the label both grow on
           mobile so the affordance is obvious. */}
       <Flex justify="space-between" align="center" gap={2}>
@@ -5173,7 +5173,7 @@ function SummaryCard({
           )}
           {collapsed && localized.asking && (
             <Text fontSize="xs" color="gray.500" noOfLines={1} minW={0}>
-              — {formatPhoneNumbersInText(localized.asking)}
+{formatPhoneNumbersInText(localized.asking)}
             </Text>
           )}
           {/* The row was clickable with nothing to say so. A rotating chevron
@@ -5207,7 +5207,7 @@ function SummaryCard({
             language control living inside a panel that already follows the
             global one, and the two could disagree. */}
 
-        {/* Regenerate — 44×44 tap target. */}
+        {/* Regenerate, 44×44 tap target. */}
         <IconButton
           aria-label={t.messages.regenerateSummary}
           icon={<Icon as={FaSync} boxSize={3.5} />}
@@ -5225,7 +5225,7 @@ function SummaryCard({
         />
       </Flex>
 
-      {/* Body — hidden when collapsed */}
+      {/* Body, hidden when collapsed */}
       {!collapsed && (
         <Box mt={3}>
           {/* Above the model's own output on purpose: this is read straight
@@ -5510,12 +5510,12 @@ function SummaryCard({
         </Box>
       )}
 
-      {/* Big obvious toggle CTA — always visible below the body so
+      {/* Big obvious toggle CTA, always visible below the body so
           Vero can never miss the way back to (or into) the chat.
-          When expanded on mobile: "Close summary — open chat".
+          When expanded on mobile: "Close summary, open chat".
           When collapsed: "Open summary".
           On desktop the summary is a companion above the chat so the
-          "close for chat" affordance would be misleading — hide it
+          "close for chat" affordance would be misleading, hide it
           there and let the chevron alone drive collapse. */}
       <Box
         mt={collapsed ? 2 : 3}
@@ -5576,7 +5576,7 @@ const CLASSIFICATION_STYLE: Record<
     color: 'purple.800',
     borderColor: '#805AD5',
   },
-  // Warm neutral — a friend is neither a lead nor spam, and the badge should
+  // Warm neutral, a friend is neither a lead nor spam, and the badge should
   // not make Vero think either.
   personal: {
     bg: 'orange.100',
@@ -5610,7 +5610,7 @@ const CLASSIFICATION_STYLE: Record<
  *
  * Two fields because email is two formats: nearly every client renders
  * the HTML version, but the plaintext one still matters for the rare
- * text-only reader and — more practically — it's what gets quoted back
+ * text-only reader and, more practically, it's what gets quoted back
  * in reply chains. Keeping them in sync is Vero's call; we don't
  * generate one from the other, because guessing at her formatting is
  * worse than letting her write both.
@@ -5778,7 +5778,7 @@ function SignatureModal({
                   py={3}
                   fontSize="sm"
                   // The server rejects scripts/handlers on save, but this
-                  // preview renders UNSAVED input — so strip here too.
+                  // preview renders UNSAVED input, so strip here too.
                   // Otherwise pasting a signature from a generator could
                   // execute its tracking script inside the admin panel
                   // before validation ever sees it.
@@ -5819,14 +5819,14 @@ function SignatureModal({
 /**
  * Strip the constructs the server also rejects, so the live preview of
  * unsaved signature HTML can't execute anything. Deliberately mirrors
- * the UNSAFE_HTML list in api/admin/_messages-settings.ts — if you add a
+ * the UNSAFE_HTML list in api/admin/_messages-settings.ts, if you add a
  * rule there, add it here.
  */
 function sanitizeSignaturePreview(html: string): string {
   return html
     .replace(/<\s*(script|iframe|object|embed)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
     .replace(/<\s*(script|iframe|object|embed)\b[^>]*\/?>/gi, '')
-    // `[\s/]` not `\s` — HTML accepts a slash as an attribute separator,
+    // `[\s/]` not `\s`, HTML accepts a slash as an attribute separator,
     // so `<img src=x/onerror=…>` slips past a whitespace-only guard.
     // Replaced with a space so the separator isn't lost, which would
     // glue two attributes together.

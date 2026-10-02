@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     /**
      * The invite columns arrive with migration 030, which is applied by hand.
      * Between this code deploying and that migration running, they do not
-     * exist — and the first version of this change put them straight into the
+     * exist, and the first version of this change put them straight into the
      * SELECT, which made every portal detail request 500 and took down the
      * whole client screen. A missing nicety must degrade to null, never take
      * the page with it, so they are fetched separately and allowed to fail.
@@ -157,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `) as Array<typeof invite>;
       if (inviteRows.length > 0) invite = inviteRows[0];
     } catch {
-      /* pre-migration-030 database — the Account section simply shows no
+      /* pre-migration-030 database, the Account section simply shows no
          delivery line, which is exactly what it showed before this existed */
     }
     if (rows.length === 0) {
@@ -295,7 +295,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         charges_total: chargesTotal,
         complimentary,
         sales_tax: salesTax,
-        // We never return the raw blob URL — only whether a signed PDF
+        // We never return the raw blob URL, only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,
         contract_signed_pdf_url: undefined,
@@ -303,7 +303,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // whether the client has finished welcome (set_a_password) vs
         // is still pending an invite.
         // Reads the HASH. It used to read the plaintext column, which
-        // migration 025 emptied — so from that point every client reported
+        // migration 025 emptied, so from that point every client reported
         // "no password" and Vero saw a Resend invite button for people whose
         // accounts already worked.
         client_has_password: !!r.client_password_hash,

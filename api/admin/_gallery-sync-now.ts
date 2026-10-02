@@ -1,6 +1,6 @@
 /**
  * Admin: manually kick the gallery-sync cron. Same handler the
- * schedule runs — this endpoint just gives admins a "sync now"
+ * schedule runs, this endpoint just gives admins a "sync now"
  * button in the UI instead of waiting up to an hour for the next
  * scheduled tick.
  *
@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // reply, so we're done after this call.
   //
   // Inject ?trigger=manual so the guard writes a cron_runs row with
-  // trigger='manual' — otherwise this in-app sync would masquerade
+  // trigger='manual', otherwise this in-app sync would masquerade
   // as a scheduled Vercel Cron run in the history.
   req.query = { ...req.query, trigger: 'manual' };
   return gallerySync(req, res);

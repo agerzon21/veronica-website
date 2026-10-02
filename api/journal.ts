@@ -13,10 +13,10 @@
  *     → { success, post: PostFull }
  *     Returns a single post. The first photo in the Drive folder
  *     becomes the cover (shown as the hero above the body); the
- *     remaining photos form the gallery — no duplicate render of
+ *     remaining photos form the gallery, no duplicate render of
  *     the hero at the bottom.
  *
- * There is no separate cover_image_url field any more — Vero orders
+ * There is no separate cover_image_url field any more, Vero orders
  * her photos in Drive (prefixing filenames 01, 02, 03…) and the first
  * is treated as the cover. `cover_image_alt` is repurposed as alt
  * text for that first photo.
@@ -29,8 +29,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
 import { extractFolderId, listFolderMedia, type DriveFile } from './_drive.js';
 
-// How many photos to return per post in the list response — enough
-// for the timeline card's small cover thumb + a 4–5 photo preview
+// How many photos to return per post in the list response, enough
+// for the timeline card's small cover thumb + a 4-5 photo preview
 // grid shown when the card is expanded, without pulling the full
 // gallery for every post.
 const LIST_PREVIEW_PHOTOS = 5;
@@ -194,13 +194,13 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
     // Resolve the Drive folder to a photo list at request time. If the
     // folder isn't set or Drive is unreachable, we return an empty
-    // photo list rather than 500 — the post is still viewable (body
+    // photo list rather than 500, the post is still viewable (body
     // + no cover) and Vero can see the missing gallery.
     const allPhotos = await listAllPhotos(row.drive_folder_url, row.title);
     const coverPhoto = allPhotos[0] ?? null;
     if (coverPhoto && row.cover_image_alt) coverPhoto.alt = row.cover_image_alt;
     // Gallery photos = everything AFTER the cover. This is how we
-    // dedupe — the hero at the top is the same file as photos[0], so
+    // dedupe, the hero at the top is the same file as photos[0], so
     // if we included it in the grid too it'd render twice.
     const galleryPhotos = allPhotos.slice(1);
 
@@ -263,7 +263,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       series,
     };
 
-    // Shorter cache for individual posts than the list — Vero may
+    // Shorter cache for individual posts than the list, Vero may
     // tweak a paragraph and want to see it live quickly.
     res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
     return res.status(200).json({ success: true, post });
@@ -275,7 +275,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
 /**
  * List up to LIST_PREVIEW_PHOTOS photos from a Drive folder. Returns
- * empty array if the folder isn't set, invalid, or Drive fails — the
+ * empty array if the folder isn't set, invalid, or Drive fails, the
  * caller decides how to render that state. Silent on error so a Drive
  * hiccup on one post doesn't take down the whole list response.
  */
@@ -313,8 +313,8 @@ async function listAllPhotos(
 
 function driveFileToPhoto(f: DriveFile, postTitle: string): PhotoOut {
   return {
-    url: f.thumbnailUrl,   // sz=w800 — plenty for grid render
-    fullUrl: f.viewUrl,    // sz=w2000 — lightbox
+    url: f.thumbnailUrl,   // sz=w800, plenty for grid render
+    fullUrl: f.viewUrl,    // sz=w2000, lightbox
     // Drive doesn't give us alt text; use post title as a safe fallback
     // so screen readers get something meaningful instead of "image".
     alt: postTitle,

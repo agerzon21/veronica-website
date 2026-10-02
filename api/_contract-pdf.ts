@@ -9,7 +9,7 @@
  * to Google Drive and attaches it to the confirmation email.
  *
  * Authored with createElement instead of JSX so this file can stay as a
- * plain .ts module — Vercel's serverless bundler picks up .ts files in
+ * plain .ts module, Vercel's serverless bundler picks up .ts files in
  * the api directory but silently skips .tsx, which would break the
  * import at runtime.
  */
@@ -26,7 +26,7 @@ import {
 } from '@react-pdf/renderer';
 import type { ContractTemplate } from '../src/data/contract-template.js';
 
-// Brand palette — matches the website's gold + neutral palette.
+// Brand palette, matches the website's gold + neutral palette.
 const COLORS = {
   gold: '#c9a96e',
   text: '#2d2d2d',

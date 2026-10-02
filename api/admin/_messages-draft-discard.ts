@@ -12,7 +12,7 @@
  * Deletes rather than marking the row rejected. There is no product
  * question a rejected-draft archive answers today, and keeping them
  * would mean every query that walks a thread has to remember to exclude
- * them — the same footgun as leaving drafts visible to the reply
+ * them, the same footgun as leaving drafts visible to the reply
  * engine's dedup gate. If "why did the AI suggest that?" ever becomes a
  * real question, the right answer is an events table, not tombstones in
  * the message history.

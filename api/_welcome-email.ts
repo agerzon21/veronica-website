@@ -1,5 +1,5 @@
 /**
- * Welcome email — fired after an exit-intent popup signup.
+ * Welcome email, fired after an exit-intent popup signup.
  * Warm, short, includes a unique 10%-off code the recipient mentions at booking.
  *
  * Reuses the shared Resend sender from _auto-reply.ts so both transactional
@@ -21,7 +21,7 @@ export interface WelcomePayload {
 
 export function buildWelcomeHtml(data: WelcomePayload): string {
   const safeCode = escapeHtml(data.discountCode);
-  // Inline styles only — no <style> blocks — because email clients strip
+  // Inline styles only, no <style> blocks, because email clients strip
   // almost everything. Keep visual hierarchy with structure not CSS rules.
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:32px 16px;line-height:1.6;font-size:16px;background:#ffffff;">

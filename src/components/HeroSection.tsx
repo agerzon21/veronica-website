@@ -38,7 +38,7 @@ const ViewfinderCorner: React.FC<{
   // Bottom corners sit ~110px up on mobile so they clear iOS Safari and
   // Chrome's bottom toolbar (~50-90px) when chrome is visible. Sticky inner
   // is sized to 100lvh (chrome-hidden viewport), so anything measured from
-  // its bottom lands BEHIND the chrome bar when chrome is showing —
+  // its bottom lands BEHIND the chrome bar when chrome is showing
   // pushing them up gets them back into the visible viewport.
   // borderColor is declared AFTER the shorthands so it wins over the
   // currentColor the shorthand would otherwise imply. Only the two sides that
@@ -67,7 +67,7 @@ const ViewfinderCorner: React.FC<{
 // changes => fresh fetch, no manual cache-clear required by visitors.
 const CAMERA_IMAGE_SRC = '/assets/images/eos_r6_mark_ii_body_v2.webp';
 
-// Camera image (trimmed of transparent padding) is 1135x833 — aspect ~1.363.
+// Camera image (trimmed of transparent padding) is 1135x833, aspect ~1.363.
 // LCD_BOUNDS are percentages of the camera *container* (which matches the
 // image aspect), so they correspond directly to LCD pixel coordinates in
 // the image. Both sets eyeballed against the actual image; lcdCenterOf
@@ -86,7 +86,7 @@ const lcdCenterOf = (b: { left: number; top: number; width: number; height: numb
   y: b.top + b.height / 2,
 });
 
-// Final on-screen camera widths — the camera shrinks DOWN to this size at scroll
+// Final on-screen camera widths, the camera shrinks DOWN to this size at scroll
 // end. Capped per orientation, lower-bounded so it stays recognizable.
 const FINAL_WIDTH_LANDSCAPE_MAX = 540;
 const FINAL_WIDTH_PORTRAIT_MAX = 320;
@@ -105,7 +105,7 @@ const MAX_NATURAL_WIDTH = 6000;
 // HEADER_RESERVED has to include its height plus the hero header content plus a
 // small visual buffer. FOOTER_RESERVED only includes the footer content + a
 // buffer to the viewport bottom. SAFE_BUFFER sits between navbar/header and
-// footer/viewport-bottom — what reads as "breathing room", not whitespace.
+// footer/viewport-bottom, what reads as "breathing room", not whitespace.
 const NAVBAR_HEIGHT = 72;
 const SAFE_BUFFER = 16;
 const CAMERA_GAP = 24;
@@ -115,7 +115,7 @@ const CAMERA_GAP = 24;
 // instead of a second CAMERA_GAP, so the camera never grows into it.
 const FOOTER_GAP = 88;
 // Portrait phones get a tighter gap AND a reserved strip at the bottom of the
-// viewport. The sticky inner is sized to 100lvh — the CHROME-HIDDEN viewport —
+// viewport. The sticky inner is sized to 100lvh, the CHROME-HIDDEN viewport
 // so anything positioned near its bottom edge sits BEHIND iOS Safari's and
 // Chrome's toolbar whenever that toolbar is showing. The CTA was landing at
 // roughly lvh-32, i.e. fully underneath a ~90px bar. Reserving the strip pulls
@@ -125,7 +125,7 @@ const FOOTER_GAP = 88;
 const FOOTER_GAP_PORTRAIT = 56;
 // Strip reserved at the bottom of the viewport, BELOW the CTA. The CTA is
 // anchored to the camera's centre and the scroll cue to the viewport bottom,
-// so the space between them is only ever what is left over — reserve nothing
+// so the space between them is only ever what is left over, reserve nothing
 // and they collide, which is exactly what desktop was doing.
 //
 // Phones need more of it because the sticky is sized to 100lvh (the
@@ -154,7 +154,7 @@ const DESKTOP_CUE_RESERVE = 104;
 // The hero header is now the shared PageHeader (eyebrow → 40px rule →
 // pageTitle h1). pageTitle is 36 / 52 / 68px against the old hand-rolled
 // 18 / 24 / 30px, and it wraps to two lines inside PageHeader's 18ch measure,
-// so the reservation can no longer be one number — it has to step with
+// so the reservation can no longer be one number, it has to step with
 // Chakra's md (48em) and lg (62em) breakpoints the way the type does.
 // Each value = eyebrow (11) + rule (1) + two title lines + the two VStack
 // gaps (16 base / 20 md+), plus a couple of px of slack.
@@ -264,7 +264,7 @@ const headerContentFor = (vw: number) =>
 // The hero CTA is a camera focus point (Alex picked A3a): four gold brackets
 // that snap tight around the label on hover, the same mark the viewfinder
 // corners above make at viewport scale. Only the two edges each corner draws
-// carry a width — the other two are zeroed, or the bracket closes into a box.
+// carry a width, the other two are zeroed, or the bracket closes into a box.
 const FOCUS_CORNERS = [
   { corner: 'tl', hover: 'translate(13px, 10px)', edges: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 } },
   { corner: 'tr', hover: 'translate(-13px, 10px)', edges: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 } },
@@ -290,7 +290,7 @@ const CameraBody = React.forwardRef<
   const bounds = isPortrait ? LCD_BOUNDS.mobile : LCD_BOUNDS.desktop;
   // LCD width in CSS pixels at the natural camera size. We derive the LCD
   // corner radius + bezel shadow size from this so the effects scale with
-  // the camera — meaningful at scroll-end (small camera) and proportional
+  // the camera, meaningful at scroll-end (small camera) and proportional
   // when the LCD covers the viewport at scroll-start.
   const lcdNaturalWidth = (width * bounds.width) / 100;
   const lcdRadius = Math.round(lcdNaturalWidth * 0.035); // ~3.5% of LCD width
@@ -338,10 +338,10 @@ const CameraBody = React.forwardRef<
         // borderRadius scales with the LCD size so the curve is visibly
         // rounded at the small final state (where it really sells the
         // "this is an LCD" read) AND naturally proportional when the LCD
-        // fills the viewport. Without this it looked photoshopped — hard
+        // fills the viewport. Without this it looked photoshopped, hard
         // 90° corners on a screen that should have a small bezel curve.
         style={{ borderRadius: `${lcdRadius}px` }}
-        // Inset shadow gives the LCD a recessed bezel — the photo reads
+        // Inset shadow gives the LCD a recessed bezel, the photo reads
         // as "behind glass" instead of pasted on. Blur + spread also scale
         // with LCD size so the bezel weight stays visually consistent
         // regardless of how zoomed-in or zoomed-out the camera is.
@@ -358,7 +358,7 @@ const CameraBody = React.forwardRef<
           background="linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 20%, transparent 42%, transparent 62%, rgba(0,0,0,0.07) 100%)"
         />
         {/* Vignette: very subtle darkening toward the edges so the photo
-            doesn't hit the bezel at full brightness — same trick real
+            doesn't hit the bezel at full brightness, same trick real
             LCDs have because of the polarizer + glass at the edges. */}
         <Box
           position="absolute"
@@ -373,11 +373,11 @@ const CameraBody = React.forwardRef<
 });
 CameraBody.displayName = 'CameraBody';
 
-// Computes the camera's natural CSS size (huge — fills viewport + 1.2× buffer
+// Computes the camera's natural CSS size (huge, fills viewport + 1.2× buffer
 // so the LCD covers it at scroll start, allowing sharp iOS bitmap-downscaling)
 // and its final shrunken size (fits within the viewport with room reserved for
 // the header/footer). Orientation follows viewport aspect ratio, NOT a width
-// breakpoint — so iPhone landscape uses the landscape camera at a size that
+// breakpoint, so iPhone landscape uses the landscape camera at a size that
 // fits, not a fixed 480px that dwarfs the 393px-tall viewport.
 const computeCameraSize = (
   vw: number,
@@ -478,7 +478,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // visible animation tail extends past the moment the user's finger
   // stops moving. Lower stiffness = more lag = more visible animation on
   // fast flicks (where the raw scroll completes in 200ms but the spring
-  // takes ~250ms more to finish catching up — half a second of visible
+  // takes ~250ms more to finish catching up, half a second of visible
   // cinematic instead of a 200ms blur).
   const scrollYProgress = useSpring(rawProgress, {
     stiffness: 130,
@@ -487,7 +487,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     restDelta: 0.0005,
   });
 
-  // Viewport state — captured ONCE on mount and only refreshed on a real
+  // Viewport state, captured ONCE on mount and only refreshed on a real
   // resize (orientation flip / window drag). Mobile browsers fire constant
   // `resize` events as the chrome bar retracts/extends during scroll; those
   // are ~80-150px height jitters that we *deliberately* ignore. The 200px
@@ -508,7 +508,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
       const next = layoutViewport();
       // Real resize: width changed (window drag, orientation flip) OR the
       // height changed by more than 200px (only possible on orientation
-      // flip — chrome bars are smaller than that). Below 200px = ignore.
+      // flip, chrome bars are smaller than that). Below 200px = ignore.
       //
       // A pinch now produces no change in either number, so it cannot reach
       // this line at all, which is the point: the composition a visitor
@@ -543,7 +543,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // CSS-pixel offsets that determine header/footer positions at scroll end.
   // anchorOffset places them CAMERA_GAP px outside the camera's final edges;
   // verticalShiftPx pushes both DOWN equally to clear the navbar overlay on
-  // short viewports — header gap shrinks, footer gap grows by the same amount
+  // short viewports, header gap shrinks, footer gap grows by the same amount
   // so the two stay visually balanced around the (shifted) camera.
   const anchorOffset = size.finalHeight / 2 + CAMERA_GAP;
   const headerBottomOffset = anchorOffset - size.verticalShiftPx;
@@ -610,7 +610,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // ─── SCROLL CHOREOGRAPHY ───
   // Animation window stretched so the cinematic feels deliberate rather
   // than rushed at any scroll speed. CAMERA_ZOOM_VH is the dominant
-  // knob — it sets how many viewport-heights of scroll the camera takes
+  // knob, it sets how many viewport-heights of scroll the camera takes
   // to fully zoom out. Bigger value = slower cinematic = more scroll
   // required. At 160vh on iPhone (~1280px), even a fast 1500-2000px
   // swipe spends close to a full second inside the animation.
@@ -633,7 +633,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   const TEXT_FADE_END = (TEXT_FADE_START_VH + TEXT_FADE_DURATION_VH) / PINNED_SCROLL_VH;
 
   // Once the camera has settled the screen is completely still, and nothing
-  // says the page continues — the hero still has STABLE_SCROLL_VH of pinned
+  // says the page continues, the hero still has STABLE_SCROLL_VH of pinned
   // scroll left, plus everything below it. This cue fades in exactly when the
   // animations finish and rides out with the sticky.
   const ANIMATIONS_SETTLED = ANIMATIONS_END_VH / PINNED_SCROLL_VH;
@@ -698,7 +698,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     [0, 1, 1, 0],
   );
 
-  // Position of the moving thumb dot on the progress rail — tracks the
+  // Position of the moving thumb dot on the progress rail, tracks the
   // leading edge of the gold fill.
   const progressThumbTop = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
@@ -713,7 +713,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // suggest it does anything.
   //
   // This used to subtract a viewport height, which lands on the last frame of
-  // the PINNED range — where the sticky is still showing the settled camera.
+  // the PINNED range, where the sticky is still showing the settled camera.
   // The arrow therefore appeared to do nothing, or to snap back to the hero.
   //
   // The section's bottom edge is the top edge of what comes next, and the
@@ -750,7 +750,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
   // The stats row moved to the About page's closing band. What lands here
   // instead is deliberately NOT the gold slab CTAButton renders: after a
   // full-screen cinematic, a filled rectangle reads as a form control.
-  // This is the site's own vocabulary at hero scale — letterspaced label,
+  // This is the site's own vocabulary at hero scale, letterspaced label,
   // gold hairline, the rule drawing itself across on hover.
   const footerContent = (
     <VStack spacing={0} align="center">
@@ -839,7 +839,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         - `vh` on iOS Safari already maps to `lvh` (max viewport, chrome
           hidden) but isn't guaranteed on every browser.
         - `lvh` is explicitly the largest-possible viewport and is
-          stable across chrome state changes everywhere — supported in
+          stable across chrome state changes everywhere, supported in
           Chrome 108+, Safari 15.4+, Firefox 101+ (all 2022, universal
           today). This locks the hero's CSS dimensions for the entire
           session unless the device orientation actually flips. */}
@@ -858,7 +858,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         overflow="hidden"
         bg="white"
       >
-        {/* HEADER — anchored CAMERA_GAP px above the camera's top edge. Symmetric
+        {/* HEADER, anchored CAMERA_GAP px above the camera's top edge. Symmetric
             with the footer below, and now genuinely so: both stretch with
             left:0/right:0 and centre their own content. Whitespace between header and camera no longer
             balloons on tall viewports because the position tracks the camera's
@@ -905,12 +905,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
                 its own eyebrow tracking and its own rule; it is now the shared
                 PageHeader so it matches every other page's header exactly.
                 The vertical budget constants above were re-derived for the
-                larger pageTitle — see HEADER_CONTENT_*. */}
+                larger pageTitle, see HEADER_CONTENT_*. */}
             <PageHeader eyebrow="Veronika Polbina" title="Wedding & Portrait Photographer" />
           </MotionBox>
         </Box>
 
-        {/* CAMERA — absolutely positioned, centered. Natural CSS size is
+        {/* CAMERA, absolutely positioned, centered. Natural CSS size is
             viewport-fill (huge); CSS transform scale shrinks it DOWN during
             scroll. Wrapped in a centering Box so motion's x/y can be relative
             to own size on top of the -50% centering transform. */}
@@ -923,7 +923,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         >
           {/* transform-origin stays at element center (default). Shrinking
               toward LCD center would anchor the small camera at the LCD
-              position within the huge natural box — i.e. bottom-left of the
+              position within the huge natural box, i.e. bottom-left of the
               viewport. Scaling around the body center keeps the body centered
               at viewport center at scroll end. The motion x/y still puts the
               LCD at viewport center at scroll start. */}
@@ -939,7 +939,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             }}
           >
             <CameraBody isPortrait={size.isPortrait} width={size.natural}>
-              {/* hideDevIndicator intentionally omitted — ImageCarousel gates its
+              {/* hideDevIndicator intentionally omitted, ImageCarousel gates its
                   controls on isDevelopment internally, so they only appear in
                   `npm run dev` (Prev/Next/Pause for testing hero candidates) and
                   stay completely off in production. */}
@@ -953,11 +953,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           </MotionBox>
         </Box>
 
-        {/* FOOTER — when the camera + footer can fit inside the sticky
+        {/* FOOTER, when the camera + footer can fit inside the sticky
             viewport, anchor it just below the camera's bottom edge and let it
             fade in with the cinematic. When they can't (extracted mode, eg.
             landscape phone), the footer is rendered as a sibling AFTER the
-            sticky section instead — see below. */}
+            sticky section instead, see below. */}
         {!size.extractFooter && (
           <Box
             position="absolute"
@@ -975,7 +975,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
             // as far as the header did, but it still landed BELOW the row's
             // 543px max-content everywhere from 768px to 1055px. The row was
             // squeezed by 15-17px, which is enough to wrap "Scranton, PA" onto
-            // a second line while "12+ Years" and "Worldwide" stayed on one —
+            // a second line while "12+ Years" and "Worldwide" stayed on one
             // knocking the three stat blocks out of vertical alignment, the
             // exact misalignment the gap comment below describes fixing on
             // mobile. It also took the footer to 167px against FOOTER_RESERVED
@@ -1013,7 +1013,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
         <ViewfinderCorner corner="bl" opacity={cornerOpacity} />
         <ViewfinderCorner corner="br" opacity={cornerOpacity} />
 
-        {/* Scroll progress indicator — vertical rail on the right edge of
+        {/* Scroll progress indicator, vertical rail on the right edge of
             the viewport with a gold fill + travelling thumb dot, plus a
             small SCROLL label so it reads as a real UI element rather
             than a stray line. Fades in once scrolling starts and out as
@@ -1084,14 +1084,14 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           </Text>
         </MotionBox>
 
-        {/* "There is more below" — the mark Alex picked (B7). A hairline ring
+        {/* "There is more below", the mark Alex picked (B7). A hairline ring
             around a down arrow, bobbing, which is the one option in that set
             that also reads as tappable. That matters: it appears after the
             cinematic, on a completely still screen, and on a phone there is no
             hover to suggest it does anything. So it IS a button.
 
             Bottom offset matches the viewfinder corners for the same reason
-            they use it — the sticky is 100lvh, so anything nearer the bottom
+            they use it, the sticky is 100lvh, so anything nearer the bottom
             edge than ~100px sits behind iOS Safari's toolbar. Only rendered in
             the full layout: in extracted-footer mode the footer is already
             visible below the sticky, which makes the point by itself. */}
@@ -1167,7 +1167,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
           </MotionBox>
         )}
 
-        {/* Scroll hint — pinned higher on mobile (110px) so it clears the
+        {/* Scroll hint, pinned higher on mobile (110px) so it clears the
             iOS Safari / Chrome bottom toolbar; tighter on desktop where
             there's no chrome to worry about. Both the SCROLL text and the
             mouse outline were bumped to higher opacity + stronger shadows
@@ -1210,7 +1210,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
               label keeps its own marker so the rail knows how wide a gap to
               leave in the middle of the row. */}
           <VStack data-hero-scroll-block spacing={3} align="center">
-            {/* Same label, same token — only the colour differs because this
+            {/* Same label, same token, only the colour differs because this
                 one sits over the LCD photo. textShadow stays: it is a
                 legibility affordance, not a type treatment. */}
             <Text
@@ -1260,7 +1260,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ images }) => {
     </Box>
     {/* Extracted footer: sibling of the sticky section, not inside it. Once
         the sticky scrolls past the viewport, this block appears underneath as
-        a regular flow element — guaranteed to never overlap the next section
+        a regular flow element, guaranteed to never overlap the next section
         (Instagram) because it's part of the normal document flow, not pinned
         or offset. */}
     {size.extractFooter && (

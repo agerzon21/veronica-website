@@ -4,7 +4,7 @@ import { Link, Text } from '@chakra-ui/react';
 import PolicyLayout, { PolicySection, P, PolicyList, Term } from '../components/PolicyLayout';
 
 /**
- * Collaborate — for photographers and videographers, not for clients.
+ * Collaborate, for photographers and videographers, not for clients.
  *
  * WHY THIS PAGE EXISTS
  * Enquiries from second shooters and videographers were already arriving

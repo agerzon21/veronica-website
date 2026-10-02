@@ -67,7 +67,7 @@ interface Props {
   /**
    * Details lifted from a DM/email thread, when Vero got here from the inbox
    * rather than from the Clients tab. Everything is optional and everything
-   * stays editable — this seeds the form, it does not lock it.
+   * stays editable, this seeds the form, it does not lock it.
    */
   prefill?: ClientPrefill | null;
   /** Swap to the gallery-only form, carrying the same prefill. */
@@ -77,7 +77,7 @@ interface Props {
 // ─── Small formatting helpers ──────────────────────────────────────────
 
 // Titlecase a name, but preserve internal capitalization. Handles
-// McKenna, DeAndre, MacDonald, etc. — typing "McKenna" stays as
+// McKenna, DeAndre, MacDonald, etc., typing "McKenna" stays as
 // "McKenna" instead of being flattened to "Mckenna". Pure all-lower
 // or all-upper still gets normalized to "Capitalized".
 const cap = (s: string): string => {
@@ -508,7 +508,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const p2First = isCouple ? firstWord(partner2FullName) : '';
 
   // Auto-derived: display name, event title, gallery password.
-  // All overridable — once the user types something into the override
+  // All overridable, once the user types something into the override
   // box we stop syncing with the derived value (null means "not yet
   // overridden, use derived").
   const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null);
@@ -546,7 +546,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [eventEndTime, setEventEndTime] = useState(seededFields.end);
 
   // Coverage type covers the case where the booking is sold as a
-  // package (half-day, full-day) and exact times aren't known yet —
+  // package (half-day, full-day) and exact times aren't known yet
   // common for weddings booked months out where the timeline gets
   // finalized closer to the event.
   type Coverage = 'specific' | 'half-day' | 'full-day' | 'custom';
@@ -879,7 +879,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * It hides in the two places it would be noise or harm: while the panel is
    * on screen (its own button is right there) and while the submit button is
    * on screen, because a floating control must never sit on top of the
-   * primary action — especially on a phone, where it would land exactly under
+   * primary action, especially on a phone, where it would land exactly under
    * the thumb aiming for "Create".
    */
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -981,7 +981,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * The panel used to show only the two fields that happened to carry a source
    * quote, which read as an arbitrary two-item list next to a form holding
    * eight prefilled values. What is actually useful is the whole set at a
-   * glance, and — more so — which required ones are still blank, since those
+   * glance, and, more so, which required ones are still blank, since those
    * are the reason she cannot submit yet.
    *
    * Ordered the way the inbox's own "Still needed" list is ordered, so the two
@@ -1041,7 +1041,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const deliveryStatus = useEmailDelivery(inviteEmailId);
 
   // The original send counts as attempt 1, so this is the original plus two
-  // retries — the budget the owner asked for.
+  // retries, the budget the owner asked for.
   const MAX_SEND_ATTEMPTS = 3;
   const outOfRetries = sendAttempts >= MAX_SEND_ATTEMPTS;
 
@@ -1083,7 +1083,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   };
   const [error, setError] = useState('');
   // Set of field ids that failed the last submit attempt. Drives
-  // per-field red highlighting via <Field hasError={...}> — much
+  // per-field red highlighting via <Field hasError={...}>, much
   // faster to eyeball than reading "these fields are required: X, Y, Z"
   // and hunting them down manually in a form this long.
   const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
@@ -1390,7 +1390,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     setFieldErrors(new Set());
 
     // Collect ALL missing/invalid fields up front instead of
-    // early-returning on the first one — Vero shouldn't have to fix
+    // early-returning on the first one, Vero shouldn't have to fix
     // → submit → fix → submit → fix through a long form to discover
     // every missing piece one at a time.
     const missing: { id: string; label: string }[] = [];
@@ -1490,7 +1490,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     //
     // client_names uses FULL LEGAL NAMES (not the auto-display name).
     // For a wedding contract this needs to read like "Chrisann Bryan &
-    // Rajiv Thomas" not "Chrisann & Rajiv" — the legal binding is on
+    // Rajiv Thomas" not "Chrisann & Rajiv", the legal binding is on
     // the full identities, not the shorthand we use in greetings.
     const remaining = contractTotal - retainer;
     // Solo types have no second name to assemble, and the couple case already
@@ -1520,7 +1520,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     // notes (if any) come after, separated by a blank line.
     //
     // Full-day phrasing deliberately doesn't pin an hour count because
-    // it's the top-tier package — "major moments of the day from start
+    // it's the top-tier package, "major moments of the day from start
     // to finish" gives the same bounding implication (i.e. the contract
     // covers the wedding-day arc, not a 14-hour open-ended request)
     // without numerically capping what's included.
@@ -1529,7 +1529,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
         return 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 4 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.';
       }
       if (coverage === 'full-day') {
-        return 'At the time of signing, the exact event schedule is still being finalized. This is a full-day coverage booking — the Photographer will be present for the major moments of the Client’s day from start to finish, with the specific schedule to be confirmed by the Client in writing (email or text) prior to the event date.';
+        return 'At the time of signing, the exact event schedule is still being finalized. This is a full-day coverage booking, the Photographer will be present for the major moments of the Client’s day from start to finish, with the specific schedule to be confirmed by the Client in writing (email or text) prior to the event date.';
       }
       return '';
     })();
@@ -1556,7 +1556,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       // whole clause away and the contract renders exactly as it would have
       // before this feature existed.
       ...travelAtSubmit.variables,
-      // Responsible party — sent always so the substitute step has a
+      // Responsible party, sent always so the substitute step has a
       // value to swap in. Blank when the toggle is off, which causes
       // pruneEmptyOptionalSections to drop the section server-side.
       responsible_party_name: responsiblePartyEnabled ? responsiblePartyName.trim() : '',
@@ -1632,7 +1632,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
         setCreatedPortalId(data.portal_id ?? null);
         setSendAttempts(1);
         if (data.invite_email_id) {
-          // Hold here and poll — the portal exists, but she should not walk
+          // Hold here and poll, the portal exists, but she should not walk
           // away until we know the client actually received the link.
           setInviteEmailId(data.invite_email_id);
         } else {
@@ -1732,8 +1732,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                     </Text>
                   </Flex>
                   {/* The two values that cost money to get wrong carry the
-                      sentence they came from. Threads renegotiate — one in
-                      this inbox holds three different totals — so a figure
+                      sentence they came from. Threads renegotiate, one in
+                      this inbox holds three different totals, so a figure
                       sitting in a box on its own is not enough to trust. */}
                   {r.quote && (
                     <Text fontSize="2xs" color="gray.500" fontStyle="italic" lineHeight="1.45" mt={0.5}>
@@ -1761,8 +1761,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               {t.newClient.createEmailsClient}
             </Text>
             {/* Kept small and out of the way. Turning a booking thread into a
-                gallery-only portal is rarely what she wants — it is what
-                produced a CLIENT badge with no contract behind it — but the
+                gallery-only portal is rarely what she wants, it is what
+                produced a CLIENT badge with no contract behind it, but the
                 option still belongs somewhere, and here it keeps the
                 conversation link that the Clients tab route cannot. */}
             {onSwitchToGalleryOnly && (
@@ -2056,7 +2056,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               <Text fontSize="xs" color="gray.700" fontStyle="italic" lineHeight="1.6">
                 {coverage === 'half-day'
                   ? 'At the time of signing, the exact event start and end times are still being finalized. Both parties acknowledge that coverage will be approximately 4 hours, with specific times to be confirmed by the Client in writing (email or text) prior to the event date.'
-                  : 'At the time of signing, the exact event schedule is still being finalized. This is a full-day coverage booking — the Photographer will be present for the major moments of the Client’s day from start to finish, with the specific schedule to be confirmed by the Client in writing (email or text) prior to the event date.'}
+                  : 'At the time of signing, the exact event schedule is still being finalized. This is a full-day coverage booking, the Photographer will be present for the major moments of the Client’s day from start to finish, with the specific schedule to be confirmed by the Client in writing (email or text) prior to the event date.'}
               </Text>
               <Box mt={3} pt={3} borderTop="1px solid" borderColor="gray.200">
                 <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
@@ -2414,7 +2414,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               </Text>
 
               {/* Only claim the portal exists when we actually got an id back.
-                  Saying it unconditionally was wrong — Vero hit a bounce, went
+                  Saying it unconditionally was wrong, Vero hit a bounce, went
                   to the client list, and the client was not there. */}
               {deliveryStatus === 'failed' && createdPortalId && (
                 <Text fontSize="xs" color="gray.600">
@@ -3197,7 +3197,7 @@ const Field = ({
   // Accepts either a plain width string or a responsive object so callers
   // can stack two-column layouts on mobile (`{ base: '100%', md: '50%' }`).
   w?: string | { base?: string; md?: string; lg?: string };
-  // Surfaces a red dot next to the label — for fields that don't have
+  // Surfaces a red dot next to the label, for fields that don't have
   // a sensible auto-fill, so Vero can scan the form and spot what's
   // still missing before submitting.
   required?: boolean;

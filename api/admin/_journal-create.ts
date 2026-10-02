@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ success: true, post: rows[0] });
   } catch (err) {
-    // A unique violation is by far the most common failure here —
+    // A unique violation is by far the most common failure here
     // surface it as 409 naming the field that actually collided, so the
     // UI can nudge the user at the right control.
     const conflict = uniqueViolationMessage(err, v);

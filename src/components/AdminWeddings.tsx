@@ -28,27 +28,27 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * "Weddings" tab in /admin — everything the weddings page needs, in
+ * "Weddings" tab in /admin, everything the weddings page needs, in
  * four stacked cards (the Studio-group layout language):
  *
- *   1. Pinned photos — five POSITIONAL slots (three package cards, the
+ *   1. Pinned photos, five POSITIONAL slots (three package cards, the
  *      FAQ photo, the quote-section background) that must not reshuffle
  *      per visit, each with a draggable focal point; plus the Drive
  *      folder that feeds the background tapestry. Saved together via
  *      weddings-settings.
- *   2. From the Journal — the ordered featured-post list (max 6) for
+ *   2. From the Journal, the ordered featured-post list (max 6) for
  *      the page's slideshow, picked from published journal posts; each
  *      entry carries two drag-set focal points (big stage + thumbnail
  *      strip) so cover crops stop cutting faces. Saved via
  *      weddings-settings.
- *   3. Selected work — the ordered clickable mosaic (max 8), picked
+ *   3. Selected work, the ordered clickable mosaic (max 8), picked
  *      from published wedding gallery photos; each links to its
  *      /photo/weddings/<slug> page. Saved via weddings-settings.
- *   4. Recommended vendors — full CRUD following AdminReviews: list +
+ *   4. Recommended vendors, full CRUD following AdminReviews: list +
  *      inline Active toggle + MobileSheetModal editor + super-only
  *      delete behind ConfirmDialog.
  *
- * Available to BOTH admin (Vero) and super (Alex) — weddings-page
+ * Available to BOTH admin (Vero) and super (Alex), weddings-page
  * curation is photography-adjacent work. Only vendor Delete is
  * super-gated, matching the API's requireSuper on weddings-vendors-delete.
  */
@@ -61,7 +61,7 @@ interface Props {
 const MAX_PINNED = 5;
 const MAX_FEATURED = 6;
 const MAX_SELECTED_WORK = 8;
-// Add-picker page size — Alex refuses to scroll a 97-row list.
+// Add-picker page size, Alex refuses to scroll a 97-row list.
 const PICKER_PAGE_SIZE = 10;
 
 const DEFAULT_FOCUS = '50% 50%';
@@ -74,7 +74,7 @@ const ZOOM_STEP = 0.05;
 /** Nudge step, in focus percentage points. */
 const NUDGE = 2;
 
-// Focus values are CSS object-position strings — since the drag
+// Focus values are CSS object-position strings, since the drag
 // editors, percent pairs like "37% 62%"; the dropdown era's keywords
 // ('center', 'left top', ...) still render and still validate
 // server-side, so they pass through untouched.
@@ -105,7 +105,7 @@ function normalizeFocus(v: unknown): string {
 
 /**
  * Focus string → numeric pair for the drag math. Legacy keywords start
- * from center — the first drag replaces them with a percent pair.
+ * from center, the first drag replaces them with a percent pair.
  */
 function parseFocusPercent(focus: string): { x: number; y: number } {
   const m = focus.trim().match(FOCUS_PERCENT_RE);
@@ -225,7 +225,7 @@ const mosaicAspect = (index: number) => (isLargeMosaicTile(index) ? 2 : 1.52);
 // the public page actually crops each slot.
 // Each editor frame must be the SHAPE OF THE REAL PLACEMENT, or dragging
 // maps to something the visitor never sees. The package cards show a
-// landscape band (card width ~382 x 265), not a portrait — that mismatch
+// landscape band (card width ~382 x 265), not a portrait, that mismatch
 // is why the controls felt broken.
 const PINNED_SLOT_ASPECTS = [1.44, 1.44, 1.44, 3 / 4, 3.4] as const;
 
@@ -237,7 +237,7 @@ interface WeddingsSettings {
 }
 
 // Public gallery/list shape (the fields this card uses; the endpoint
-// returns more). `url` is served locally — usable as a thumb directly.
+// returns more). `url` is served locally, usable as a thumb directly.
 interface GalleryPhotoRow {
   slug: string;
   url: string;
@@ -293,7 +293,7 @@ const EMPTY_VENDOR_FORM: VendorForm = {
 
 type VendorEditorState = null | { mode: 'create' } | { mode: 'edit'; vendor: VendorRow };
 
-// Shared input styling — mirrors AdminReviews / AdminJournalEditor. The
+// Shared input styling, mirrors AdminReviews / AdminJournalEditor. The
 // { base: 'md', md: 'sm' } fontSize bump prevents iOS Safari from
 // zooming the viewport when a field gains focus.
 const inputStyles = {
@@ -358,7 +358,7 @@ const AdminWeddings = ({ adminPassword, adminLevel }: Props) => {
 
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header — same layout as AdminJournal/AdminReviews so the
+      {/* Header, same layout as AdminJournal/AdminReviews so the
           Studio-group tabs feel uniform: gold kicker, thin H1, subtitle,
           icon-only Refresh. */}
       <Flex align="flex-end" justify="space-between" mb={{ base: 5, md: 8 }} gap={3}>
@@ -468,7 +468,7 @@ function PinnedCard({
         body: JSON.stringify({
           password: adminPassword,
           action: 'set',
-          // All five slots in order — empty urls hold their POSITION
+          // All five slots in order, empty urls hold their POSITION
           // (slot index is the slot's job on the page).
           pinned: entries.map((e) => ({ url: e.url.trim(), focus: e.focus, zoom: e.zoom })),
           folderId: folderInput.trim(),
@@ -489,7 +489,7 @@ function PinnedCard({
 
   return (
     <SectionCard title={t.weddings.pinnedTitle}>
-      {/* What "pinned" means — Alex: these are the photos we DON'T
+      {/* What "pinned" means, Alex: these are the photos we DON'T
           want randomized, and they should say so explicitly. */}
       <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" mb={4}>
         {t.weddings.pinnedIntro}
@@ -568,7 +568,7 @@ function PinnedCard({
  * The preview IS the viewport: a box with the real slot's aspect ratio
  * showing the photo object-fit cover at the current focus, scaled by
  * the current zoom around that same focal point (exactly what the
- * public page does). Dragging pans, the slider zooms — what you see in
+ * public page does). Dragging pans, the slider zooms, what you see in
  * the box is the crop the page renders.
  */
 function DragFocusEditor({
@@ -590,7 +590,7 @@ function DragFocusEditor({
 }) {
   const { t } = useAdminLang();
   const [dragging, setDragging] = useState(false);
-  // Drag-start snapshot lives in a ref — pointermove math needs it but
+  // Drag-start snapshot lives in a ref, pointermove math needs it but
   // must not trigger renders itself (onChange already does).
   const dragRef = useRef<{
     pointerId: number;
@@ -793,7 +793,7 @@ function DragFocusEditor({
 
 /**
  * Small square preview beside a URL input. Hides itself entirely when
- * the URL doesn't load — the input is the source of truth, the thumb
+ * the URL doesn't load, the input is the source of truth, the thumb
  * is just feedback that the paste worked.
  */
 function UrlThumb({ url }: { url: string }) {
@@ -879,7 +879,7 @@ function JournalCard({
 
   const remove = (slug: string) => setEntries((cur) => cur.filter((e) => e.slug !== slug));
 
-  // Adding via the picker creates a centered entry — Vero adjusts the
+  // Adding via the picker creates a centered entry, Vero adjusts the
   // two anchors afterwards only when a crop actually cuts something.
   const add = (slug: string) =>
     setEntries((cur) =>
@@ -913,7 +913,7 @@ function JournalCard({
         body: JSON.stringify({
           password: adminPassword,
           action: 'set',
-          // Full objects, in display order — the API validates each
+          // Full objects, in display order, the API validates each
           // focus value (percent pair or legacy keyword).
           featured: entries,
         }),
@@ -956,7 +956,7 @@ function JournalCard({
         </Badge>
       }
     >
-      {/* What the drag editors are for — sits above the list so the
+      {/* What the drag editors are for, sits above the list so the
           controls below explain themselves. */}
       <Text fontSize="xs" color="gray.500" fontWeight="300" lineHeight="1.6" mb={4}>
         {t.weddings.focusHelp}
@@ -970,7 +970,7 @@ function JournalCard({
         </Flex>
       ) : (
         <>
-          {/* Featured list — ordered; a slug whose post got unpublished
+          {/* Featured list, ordered; a slug whose post got unpublished
               or deleted still renders (as "unavailable") so it can be
               removed rather than silently lingering in settings. */}
           {entries.length === 0 ? (
@@ -995,7 +995,7 @@ function JournalCard({
             </VStack>
           )}
 
-          {/* Add picker — the published posts not yet featured. */}
+          {/* Add picker, the published posts not yet featured. */}
           <SearchableAddPicker
             heading={t.weddings.addHeading}
             sourceIsEmpty={posts !== null && posts.length === 0}
@@ -1032,7 +1032,7 @@ function JournalCard({
 /**
  * One featured slideshow entry: title row with reorder/remove, plus a
  * per-row "Adjust photo position" disclosure hiding the two drag
- * editors — open, a row is ~700px of editors on mobile, so collapsed
+ * editors, open, a row is ~700px of editors on mobile, so collapsed
  * is the default and the list stays scannable.
  */
 function FeaturedRow({
@@ -1114,7 +1114,7 @@ function FeaturedRow({
         </HStack>
       </Flex>
 
-      {/* No cover, nothing to position — the disclosure only exists
+      {/* No cover, nothing to position, the disclosure only exists
           when there's an image to drag. */}
       {coverSrc && (
         <Box mt={1}>
@@ -1160,7 +1160,7 @@ function FeaturedRow({
   );
 }
 
-// Cover thumb — mirrors AdminJournal's PostRow fallback block.
+// Cover thumb, mirrors AdminJournal's PostRow fallback block.
 function PostThumb({ coverUrl }: { coverUrl: string | null }) {
   return (
     <Box
@@ -1188,7 +1188,7 @@ function PostThumb({ coverUrl }: { coverUrl: string | null }) {
 
 /**
  * The public gallery suffixes titles with " | Vero Photography" for
- * legacy consumers — strip it for the picker rows; fall back to the
+ * legacy consumers, strip it for the picker rows; fall back to the
  * slug when a photo has no title at all.
  */
 function displayPhotoTitle(photo: GalleryPhotoRow): string {
@@ -1219,7 +1219,7 @@ function SelectedWorkCard({
       setLoading(true);
       setError(null);
       try {
-        // Public endpoint — no password. Same data the live mosaic reads.
+        // Public endpoint, no password. Same data the live mosaic reads.
         const res = await fetch('/api/gallery/list?category=weddings');
         const data = await res.json();
         if (cancelled) return;
@@ -1274,7 +1274,7 @@ function SelectedWorkCard({
         body: JSON.stringify({
           password: adminPassword,
           action: 'set',
-          // Objects now, in display order — position decides the crop,
+          // Objects now, in display order, position decides the crop,
           // so order and framing travel together.
           selectedWork: entries,
         }),
@@ -1330,7 +1330,7 @@ function SelectedWorkCard({
         </Flex>
       ) : (
         <>
-          {/* Selection — ordered; a slug whose photo got unpublished or
+          {/* Selection, ordered; a slug whose photo got unpublished or
               recategorized still renders (as "unavailable") so it can be
               removed rather than silently lingering in settings. */}
           {entries.length === 0 ? (
@@ -1356,7 +1356,7 @@ function SelectedWorkCard({
             </VStack>
           )}
 
-          {/* Add picker — the published wedding photos not yet selected. */}
+          {/* Add picker, the published wedding photos not yet selected. */}
           <SearchableAddPicker
             heading={t.weddings.addPhotoHeading}
             sourceIsEmpty={photos !== null && photos.length === 0}
@@ -1478,7 +1478,7 @@ function SelectedRow({
         </HStack>
       </Flex>
 
-      {/* An unavailable slug has no photo to frame — only the row's
+      {/* An unavailable slug has no photo to frame, only the row's
           remove button is useful there. */}
       {photo && (
         <Box mt={1}>
@@ -1509,7 +1509,7 @@ function SelectedRow({
   );
 }
 
-// Gallery thumb — url is a locally served /assets path; the icon
+// Gallery thumb, url is a locally served /assets path; the icon
 // placeholder covers the "unavailable slug" row, which has no photo.
 function PhotoThumb({ url }: { url: string | null }) {
   return (
@@ -1538,10 +1538,10 @@ function PhotoThumb({ url }: { url: string | null }) {
 
 interface PickerItem {
   slug: string;
-  // Display title — already resolved by the caller (slug fallback done
+  // Display title, already resolved by the caller (slug fallback done
   // upstream) so the search + highlight here match exactly what's shown.
   title: string;
-  // Pre-rendered thumbnail node (PostThumb / PhotoThumb) — keeps this
+  // Pre-rendered thumbnail node (PostThumb / PhotoThumb), keeps this
   // component agnostic of where the image comes from.
   thumb: ReactNode;
 }
@@ -1551,7 +1551,7 @@ interface PickerItem {
  * case-insensitive substring filtering against the display title,
  * gold highlight on the matched substring, and 10-per-page
  * pagination so a 97-photo gallery never renders as one wall.
- * In-memory only — the lists are already fully fetched.
+ * In-memory only, the lists are already fully fetched.
  */
 function SearchableAddPicker({
   heading,
@@ -1566,7 +1566,7 @@ function SearchableAddPicker({
 }: {
   heading: string;
   items: PickerItem[];
-  // The SOURCE list (before removing already-added items) is empty —
+  // The SOURCE list (before removing already-added items) is empty
   // "publish something first" beats "everything is already added".
   sourceIsEmpty: boolean;
   sourceEmptyLabel: string;
@@ -1583,7 +1583,7 @@ function SearchableAddPicker({
   const q = query.trim().toLowerCase();
   const filtered = q ? items.filter((it) => it.title.toLowerCase().includes(q)) : items;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PICKER_PAGE_SIZE));
-  // Clamp instead of trusting `page` — adding an item can shrink the
+  // Clamp instead of trusting `page`, adding an item can shrink the
   // list under the current page without any query change.
   const safePage = Math.min(page, totalPages - 1);
   const visible = filtered.slice(
@@ -1716,7 +1716,7 @@ function SearchableAddPicker({
 /**
  * Split `text` on case-insensitive occurrences of `query` and wrap the
  * matches in a gold emphasis. Semantic <mark> with the browser's
- * default yellow suppressed — the gold weight carries the highlight.
+ * default yellow suppressed, the gold weight carries the highlight.
  */
 function highlightMatches(text: string, query: string): ReactNode {
   if (!query) return text;
@@ -1806,7 +1806,7 @@ function VendorsCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminPassword]);
 
-  // Inline Active toggle — optimistic: flip local state first, roll
+  // Inline Active toggle, optimistic: flip local state first, roll
   // back on failure (the AdminReviews toggleFlag pattern).
   const toggleActive = async (row: VendorRow, value: boolean) => {
     const prev = vendors;
@@ -1938,7 +1938,7 @@ function VendorsCard({
         </VStack>
       )}
 
-      {/* Editor modal — key-ed so create → edit → different edit always
+      {/* Editor modal, key-ed so create → edit → different edit always
           remounts with fresh form state (the AdminReviews pattern). */}
       {editor !== null && (
         <VendorEditorModal
@@ -2010,7 +2010,7 @@ function VendorCardRow({
               py={0.5}
               borderRadius="sm"
             >
-              {/* category is admin-authored DB data — not translated */}
+              {/* category is admin-authored DB data, not translated */}
               {row.category}
             </Badge>
             {!row.active && (
@@ -2036,7 +2036,7 @@ function VendorCardRow({
             </Text>
           )}
 
-          {/* Inline Active switch — thumb-reachable so Vero can hide a
+          {/* Inline Active switch, thumb-reachable so Vero can hide a
               vendor without opening the modal. */}
           <HStack spacing={2} pt={1}>
             <Switch
@@ -2157,7 +2157,7 @@ function VendorEditorModal({
       const parsedSort = Number(form.sortOrder);
       const payload = {
         password: adminPassword,
-        // camelCase keys on the wire — the upsert endpoint's contract
+        // camelCase keys on the wire, the upsert endpoint's contract
         // (the LIST endpoint returns snake_case; don't mix them up).
         vendor: {
           ...(vendor ? { id: vendor.id } : {}),

@@ -131,7 +131,7 @@ const AdminDashboard = ({
   onVisibleOrderChange,
 }: Props) => {
   const { t, lang } = useAdminLang();
-  // Fallback no-op — used only when a caller forgets to wire
+  // Fallback no-op, used only when a caller forgets to wire
   // onChangeViewMode (shouldn't happen in Admin.tsx, but keeps the
   // desktop view toggle from crashing if someone imports this in
   // isolation).
@@ -207,7 +207,7 @@ const AdminDashboard = ({
 
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header row — title kicker + h1 + count on the left, refresh
+      {/* Header row, title kicker + h1 + count on the left, refresh
           icon-button + primary CTA (+ New) on the right, ALL on the same
           row on every breakpoint. Desktop adds the Table/Calendar
           view toggle (mobile uses the bottom-nav sub-strip instead). */}
@@ -231,7 +231,7 @@ const AdminDashboard = ({
         </VStack>
         <HStack spacing={2} flexShrink={0}>
           {/* Desktop-only view toggle (Table / Calendar). Mobile uses
-              the bottom-nav sub-strip instead — no reason to show both. */}
+              the bottom-nav sub-strip instead, no reason to show both. */}
           <HStack
             spacing={0}
             border="1px solid"
@@ -267,7 +267,7 @@ const AdminDashboard = ({
             _hover={{ color: 'brand.accent' }}
             sx={{ WebkitTapHighlightColor: 'transparent' }}
           />
-          {/* + New — the flow creates either a full client portal OR a
+          {/* + New, the flow creates either a full client portal OR a
               gallery-only portal (chooser decides), so "New Client" was
               misleading. Just "+ New". */}
           <CTAButton onClick={onNewClient} icon={FaPlus} variant="solid" size="sm">
@@ -572,7 +572,7 @@ function TableView({
         </Box>
       )}
 
-      {/* Table — desktop */}
+      {/* Table, desktop */}
       {visible.length > 0 && (
         <Box display={{ base: 'none', md: 'block' }} bg="white" borderRadius="md" border="1px solid" borderColor="gray.200" overflow="hidden">
           {/* Header */}
@@ -604,7 +604,7 @@ function TableView({
         </Box>
       )}
 
-      {/* Cards — mobile */}
+      {/* Cards, mobile */}
       {visible.length > 0 && (
         <VStack spacing={3} align="stretch" display={{ base: 'flex', md: 'none' }}>
           {visible.map((p) => (
@@ -729,7 +729,7 @@ function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
         <HStack spacing={2} mt={0.5}>
           {portal.session_type && (
             // session_type is a DB enum value ('portrait', 'wedding', ...)
-            // that also travels over the wire — leaving it English + capitalized.
+            // that also travels over the wire, leaving it English + capitalized.
             <Text fontSize="2xs" color="gray.400" textTransform="capitalize">
               {portal.session_type}
             </Text>
@@ -812,7 +812,7 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
           </Text>
           <HStack spacing={2} mt={1} flexWrap="wrap">
             {portal.session_type && (
-              // See PortalRow — session_type stays as-is (English enum value).
+              // See PortalRow, session_type stays as-is (English enum value).
               <Text fontSize="xs" color="gray.500" textTransform="capitalize">
                 {portal.session_type}
               </Text>

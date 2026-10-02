@@ -5,11 +5,11 @@
  *   → 200 { success, ...summary }    valid + not expired
  *   → 410                            token used or expired
  *
- * The setup_token IS the auth — possession of a 32-byte token is treated
+ * The setup_token IS the auth, possession of a 32-byte token is treated
  * as proof of ownership of the email address it was sent to. The summary
  * is what the client sees on the welcome page before they pick a password.
  *
- * No PII beyond what's already in the invite email is returned — display
+ * No PII beyond what's already in the invite email is returned, display
  * name, event details. We don't return the contract body here; the
  * full contract appears post-login on the portal proper.
  */

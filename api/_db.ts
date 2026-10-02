@@ -5,7 +5,7 @@
  *   const sql = getDb();
  *   const rows = await sql`select * from client_galleries where password = ${pwd}`;
  *
- * Parameters interpolated via ${} are bound as Postgres parameters — no
+ * Parameters interpolated via ${} are bound as Postgres parameters, no
  * injection risk, no manual escaping needed.
  *
  * Underscore-prefixed filename so Vercel does not expose it as an HTTP route.

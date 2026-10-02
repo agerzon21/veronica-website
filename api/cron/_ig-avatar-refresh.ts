@@ -9,14 +9,14 @@ import { runGuarded, type CronTrigger } from './_guard.js';
  *
  * THE PROBLEM
  * Meta never gives out a stable image URL. `profile_pic` comes back as a
- * PRE-SIGNED cdninstagram link that expires in 24-72h — as little as 1-3h
+ * PRE-SIGNED cdninstagram link that expires in 24-72h, as little as 1-3h
  * during a CDN rotation (see api/_ig-profile.ts). We stored that string at
  * first contact and nothing ever renewed it, so every avatar in the admin
  * inbox eventually 403'd and rendered as a broken image. Nothing "broke": the
  * value was always on a timer.
  *
  * THE FIX, AND WHY IT IS THIS BORING
- * Download each avatar once, shrink it to 96px WebP (~2-4KB — they render in a
+ * Download each avatar once, shrink it to 96px WebP (~2-4KB, they render in a
  * 44px circle), and store it inline as a base64 data URI in the column. It
  * comes back with the conversation row and renders directly. Never expires.
  *
@@ -40,7 +40,7 @@ export const CRON_META = {
   path: '/api/cron/ig-avatar-refresh',
   schedule: 'chained daily after instagram-check',
   description:
-    'Mirrors Instagram contact avatars into our own storage so they stop expiring. Meta only hands out pre-signed URLs that die within 24-72h; this downloads each one once and serves a permanent copy. Drains to zero work once every contact is mirrored — a run reporting "0 mirrored" means everything is already done, not that it failed.',
+    'Mirrors Instagram contact avatars into our own storage so they stop expiring. Meta only hands out pre-signed URLs that die within 24-72h; this downloads each one once and serves a permanent copy. Drains to zero work once every contact is mirrored, a run reporting "0 mirrored" means everything is already done, not that it failed.',
 } as const;
 
 // Bounded so this shares instagram-check's 60s invocation safely. The queue
@@ -50,7 +50,7 @@ const DEADLINE_MS = 35_000;
 const PROFILE_TIMEOUT_MS = 2_000;
 const DOWNLOAD_TIMEOUT_MS = 4_000;
 const MAX_FAILURES = 3;
-// Meta avatars are ~8-14KB. Anything wildly larger is not an avatar — refuse it
+// Meta avatars are ~8-14KB. Anything wildly larger is not an avatar, refuse it
 // rather than storing whatever we were handed.
 const MAX_BYTES = 512 * 1024;
 
@@ -87,7 +87,7 @@ export async function refreshIgAvatars(): Promise<{
   let failed = 0;
 
   // Only rows with no permanent avatar yet. Once mirrored, a row leaves this
-  // queue forever — which is why this job trends to zero.
+  // queue forever, which is why this job trends to zero.
   const rows = (await sql`
     SELECT id, external_user_id, contact_profile_pic_url
     FROM conversations
@@ -136,7 +136,7 @@ export async function refreshIgAvatars(): Promise<{
       // No Blob store, no CDN, no proxy endpoint, no dashboard setup. The
       // earlier Blob attempt failed because access is a STORE-level setting and
       // this store is private (it holds signed contracts, which must stay
-      // private) — so it would have needed a second store just to hold a
+      // private), so it would have needed a second store just to hold a
       // handful of thumbnails. That was the wrong amount of machinery for the
       // problem.
       const resized = await sharp(buf)

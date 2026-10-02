@@ -21,7 +21,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * "Gallery" tab in /admin — table of every photo in the public
+ * "Gallery" tab in /admin, table of every photo in the public
  * gallery, with the sync-now trigger and per-row editing.
  *
  * The sync cron drops new photos here as drafts. Vero reviews the
@@ -109,7 +109,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
         setSettings({ folderId: data.folderId, folderIdSource: data.folderIdSource });
       }
     } catch {
-      // Non-fatal — settings row is a nice-to-have for the header,
+      // Non-fatal, settings row is a nice-to-have for the header,
       // the photos list still loads without it.
     }
   }, [adminPassword]);
@@ -285,7 +285,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
 
   return (
     <Box maxW="1400px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Tab header — title on the left with kicker + count; Settings +
+      {/* Tab header, title on the left with kicker + count; Settings +
           Sync inline to the right as compact icon-button pair on
           mobile, full-labeled on desktop. Keeps the space above the
           filter/grid tight instead of stacking three chunky rows. */}
@@ -332,11 +332,11 @@ const AdminGallery = ({ adminPassword }: Props) => {
 
       {/* Publishing photos writes to the database; the pages search engines
           read are a build-time snapshot, so gallery edits do not reach them
-          until a rebuild. Nothing in the gallery flow triggers one — the
+          until a rebuild. Nothing in the gallery flow triggers one, the
           nightly Drive sync does, but a publish/unpublish/delete made here
           does not. This row is where that becomes visible: it reports what is
           waiting and is the only prompt to finish the job.
-          Its own row, not the header cluster above — that Flex gives the
+          Its own row, not the header cluster above, that Flex gives the
           title column minW={0} against a flexShrink={0} button group, so a
           third control there collapses the heading on phones. */}
       <Box mb={{ base: 4, md: 6 }}>
@@ -392,7 +392,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
         </Flex>
       )}
 
-      {/* Sync-result banner (transient — dismisses on next sync or reload) */}
+      {/* Sync-result banner (transient, dismisses on next sync or reload) */}
       {lastSync && (
         <Box
           mb={4}
@@ -420,7 +420,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
               </HStack>
               {lastSync.insertFailures.slice(0, 5).map((f, i) => (
                 <Text key={i} fontSize="2xs" color="gray.600">
-                  {f.file} — {f.error}
+                  {f.file}, {f.error}
                 </Text>
               ))}
             </VStack>
@@ -428,7 +428,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
         </Box>
       )}
 
-      {/* Filters — two Selects side by side on every breakpoint (each
+      {/* Filters, two Selects side by side on every breakpoint (each
           takes 50% on mobile, capped width on desktop). Count sits
           below on its own compact line. */}
       <VStack align="stretch" mb={4} spacing={2}>
@@ -473,7 +473,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
                   size="sm"
                   onClick={() =>
                     // "All shown" means the current filter, not the whole
-                    // library — selecting 227 photos behind a Drafts filter
+                    // library, selecting 227 photos behind a Drafts filter
                     // would be a nasty surprise.
                     setSelectedIds(new Set(filtered.map((r) => r.id)))
                   }
@@ -685,7 +685,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
 };
 
 /**
- * Settings modal — currently just the Drive folder ID. Kept as a
+ * Settings modal, currently just the Drive folder ID. Kept as a
  * separate modal (not inline) because it's a rare operation and
  * clutters the header otherwise. Room to grow (auto-publish
  * toggle, sync-schedule override, etc.) without bloating the tab.
@@ -820,7 +820,7 @@ function SettingsModal({
 }
 
 /**
- * One photo card in the grid — thumbnail, metadata, action buttons.
+ * One photo card in the grid, thumbnail, metadata, action buttons.
  * Draft photos get a prominent "Draft" badge and a bordered
  * highlight so they visually pull for review.
  */
@@ -861,7 +861,7 @@ function PhotoCard({
       {/* Thumbnail */}
       <Box
         position="relative" pb="66%" bg="gray.100" overflow="hidden"
-        // In select mode the whole thumbnail is the hit target — checkbox-sized
+        // In select mode the whole thumbnail is the hit target, checkbox-sized
         // taps on a phone are miserable.
         onClick={selectMode ? onToggleSelected : undefined}
         cursor={selectMode ? 'pointer' : undefined}
@@ -925,7 +925,7 @@ function PhotoCard({
           {row.description || <Text as="span" fontStyle="italic">{t.gallery.noDescription}</Text>}
         </Text>
 
-        {/* Actions — bumped touch targets on mobile so Edit / Open /
+        {/* Actions: bumped touch targets on mobile so Edit / Open /
             Delete are 44×44 hits with breathing room between them. */}
         <HStack spacing={{ base: 3, md: 2 }} pt={2} mt="auto">
           <Box
@@ -1003,7 +1003,7 @@ function PhotoCard({
 }
 
 /**
- * Edit modal — all fields for one row. Save patches the specific
+ * Edit modal, all fields for one row. Save patches the specific
  * fields that changed (server does a COALESCE-based partial update).
  */
 function EditModal({

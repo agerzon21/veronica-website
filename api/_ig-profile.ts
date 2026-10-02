@@ -11,12 +11,12 @@
  *     ?fields=name,username,profile_pic
  *     &access_token=<IG_ACCESS_TOKEN>
  *
- * Auth: uses IG_ACCESS_TOKEN — the long-lived Instagram User Access
+ * Auth: uses IG_ACCESS_TOKEN, the long-lived Instagram User Access
  * Token issued via Instagram Business Login. Must have the scopes
  * `instagram_business_basic` and `instagram_business_manage_messages`
  * (both approved for Advanced Access).
  *
- * IMPORTANT — `profile_pic` URL expires. Meta pre-signs it against
+ * IMPORTANT, `profile_pic` URL expires. Meta pre-signs it against
  * `cdninstagram.com` / `fbcdn.net` and the URL dies in 24-72h (as
  * little as 1-3h during CDN rotations). We store what Meta gave us
  * verbatim for now; if we ever start rendering avatars in emails or
@@ -24,13 +24,13 @@
  * and store OUR CDN URL alongside it.
  *
  * Failure policy: NEVER throws. Callers wrap this in short-timeout
- * fire-and-forget from the webhook path — a slow / failing profile
+ * fire-and-forget from the webhook path, a slow / failing profile
  * fetch cannot block the 5s Meta webhook SLA. Errors are logged with
  * `[ig-profile]` prefix so they're grep-able in Vercel logs, then
  * the function returns null. The caller then knows "don't clobber
  * existing name/pic with nulls".
  *
- * No retries here — that's the caller's call. Retrying inside a
+ * No retries here, that's the caller's call. Retrying inside a
  * webhook path is pointless because Meta will re-deliver on 500
  * anyway; retrying inside the manual-refresh admin button is
  * pointless because the user just clicks it again.
@@ -41,7 +41,7 @@ const IG_API_VERSION = 'v25.0';
 
 // Fields we actually store on `conversations`. We deliberately don't
 // request follower_count / is_verified_user / is_user_follow_business
-// yet — no UI surface for them, and every extra field is one more
+// yet, no UI surface for them, and every extra field is one more
 // thing Meta could deprecate. Add them here when the admin UI grows
 // a place to show them.
 const PROFILE_FIELDS = ['name', 'username', 'profile_pic'].join(',');
@@ -60,7 +60,7 @@ export interface IgProfile {
  * var, malformed response). Errors are logged; the caller does NOT
  * need to try/catch.
  *
- * The `null` return means "leave existing name/pic alone" — do not
+ * The `null` return means "leave existing name/pic alone", do not
  * overwrite good data with empty fields.
  */
 export async function fetchIgProfile(igsid: string): Promise<IgProfile | null> {
@@ -72,7 +72,7 @@ export async function fetchIgProfile(igsid: string): Promise<IgProfile | null> {
 
   const token = process.env.IG_ACCESS_TOKEN;
   if (!token) {
-    console.error('[ig-profile] IG_ACCESS_TOKEN env var missing — cannot fetch profile');
+    console.error('[ig-profile] IG_ACCESS_TOKEN env var missing, cannot fetch profile');
     return null;
   }
 
@@ -84,7 +84,7 @@ export async function fetchIgProfile(igsid: string): Promise<IgProfile | null> {
   try {
     res = await fetch(url.toString(), { method: 'GET' });
   } catch (err) {
-    // DNS / TCP / TLS. Transient — but we don't retry here; caller
+    // DNS / TCP / TLS. Transient, but we don't retry here; caller
     // will pick it up on the next natural trigger (next DM or manual
     // refresh click).
     console.warn(
@@ -108,7 +108,7 @@ export async function fetchIgProfile(igsid: string): Promise<IgProfile | null> {
     return null;
   }
 
-  // Successful response — cherry-pick the fields we asked for. Any
+  // Successful response, cherry-pick the fields we asked for. Any
   // absent field is fine (Meta omits fields the user has hidden);
   // we just store null.
   const b = body as { name?: unknown; username?: unknown; profile_pic?: unknown };
@@ -121,7 +121,7 @@ export async function fetchIgProfile(igsid: string): Promise<IgProfile | null> {
   };
 
   // If Meta returned 200 but every field was empty, treat as "nothing
-  // useful" — don't return a shell of an object the caller has to
+  // useful", don't return a shell of an object the caller has to
   // check field-by-field.
   if (!profile.name && !profile.username && !profile.profilePicUrl) {
     console.warn(`[ig-profile] empty profile returned for igsid=${trimmed}`);
@@ -133,7 +133,7 @@ export async function fetchIgProfile(igsid: string): Promise<IgProfile | null> {
 
 /**
  * Categorize and log the Meta error envelope so we can grep for
- * specific failure modes in Vercel logs. Non-fatal — the caller
+ * specific failure modes in Vercel logs. Non-fatal, the caller
  * always gets null and moves on.
  *
  * Envelope shape: { error: { message, type, code, error_subcode, fbtrace_id } }
@@ -155,7 +155,7 @@ function logIgError(igsid: string, status: number, body: unknown): void {
   // failure_modes table in the research doc.
   let category = 'other';
   if (code === 10 || /consent is required/i.test(message)) {
-    // User hasn't messaged us yet — shouldn't happen from the
+    // User hasn't messaged us yet, shouldn't happen from the
     // webhook path (they just did), but we're seeing it in the
     // manual-refresh path if the caller's on a stale IGSID.
     category = 'no-consent';
@@ -175,7 +175,7 @@ function logIgError(igsid: string, status: number, body: unknown): void {
   ) {
     category = 'rate-limited';
   } else if (status === 403 && code === 200) {
-    // Missing scope — token was issued before we added the messaging
+    // Missing scope, token was issued before we added the messaging
     // scope. Re-run OAuth.
     category = 'missing-scope';
   } else if (status >= 500) {

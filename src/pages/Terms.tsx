@@ -3,13 +3,13 @@ import { Text } from '@chakra-ui/react';
 import PolicyLayout, { PolicySection, P, PolicyList, Term } from '../components/PolicyLayout';
 
 /**
- * Terms of Service — governs a visitor's use of the Site, includes the
+ * Terms of Service, governs a visitor's use of the Site, includes the
  * copyright / image-rights disclosure, and describes the process for
  * requesting removal of an image.
  *
  * Also serves as the "User Agreement URL" required by Meta's Instagram
  * Graph API app registration (currently pointing at facebook.com in the
- * form, which is wrong — should point here after this page ships).
+ * form, which is wrong, should point here after this page ships).
  *
  * Photo-copyright language mirrors the contract template Vero uses with
  * clients (Section X: COPYRIGHT & USAGE) so client-signed contracts and
@@ -125,7 +125,7 @@ const Terms = () => {
             We aim to complete removal from the Site within 5 business
             days of your request. Note that we cannot control copies
             that may have been made by third parties before removal (for
-            example, cached Google Image results — those typically clear
+            example, cached Google Image results, those typically clear
             within a few weeks). Removal from the Site does not delete
             the underlying image file from the Photographer&rsquo;s
             private archive; it removes the image from public display.
@@ -152,7 +152,7 @@ const Terms = () => {
             If you become a client, we&rsquo;ll issue you access to a
             private Client Portal for your booking. Any signed
             photography contract between you and Vero Photography governs
-            the substantive terms of the engagement — deliverables,
+            the substantive terms of the engagement, deliverables,
             payment schedule, cancellation, model release, retention
             windows, and so on. These Site Terms do not modify that
             contract; where the two speak to the same topic, the signed

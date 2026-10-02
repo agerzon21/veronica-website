@@ -12,7 +12,7 @@ import CTAButton from './ui/CTAButton';
 
 /**
  * Lightbox modal for Instagram posts. Opens when a user taps a tile
- * in the homepage IG grid — shows the full-size image (or reel
+ * in the homepage IG grid, shows the full-size image (or reel
  * thumbnail), the complete caption, engagement stats, timestamp,
  * and a canonical CTAButton to view the actual post on Instagram.
  *
@@ -97,7 +97,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
   );
   useEffect(() => {
     document.addEventListener('keydown', handleKey);
-    // Prevent body scroll while the modal is open — same idiom
+    // Prevent body scroll while the modal is open, same idiom
     // ImageModal uses.
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -135,7 +135,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
         }}
         onClick={onClose}
       >
-        {/* Close button — top-right of viewport */}
+        {/* Close button, top-right of viewport */}
         <Box
           as="button"
           type="button"
@@ -160,11 +160,11 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
           <CloseIcon boxSize={3} />
         </Box>
 
-        {/* Prev / Next chevrons — only rendered if the caller wired them */}
+        {/* Prev / Next chevrons, only rendered if the caller wired them */}
         {onPrev && <NavArrow direction="prev" onClick={onPrev} />}
         {onNext && <NavArrow direction="next" onClick={onNext} />}
 
-        {/* Modal card — click stops propagation so tapping inside
+        {/* Modal card, click stops propagation so tapping inside
             doesn't close */}
         <MotionDiv
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
@@ -184,7 +184,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
             maxH={{ base: '90vh', md: '85vh' }}
             boxShadow="0 20px 60px rgba(0, 0, 0, 0.6)"
           >
-            {/* Image column — full aspect on desktop, capped height on mobile */}
+            {/* Image column, full aspect on desktop, capped height on mobile */}
             <Box
               position="relative"
               bg="black"
@@ -222,7 +222,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
               )}
             </Box>
 
-            {/* Meta column — caption, engagement, CTA */}
+            {/* Meta column, caption, engagement, CTA */}
             <VStack
               flex={1}
               minW={0}
@@ -231,12 +231,12 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
               spacing={4}
               overflowY="auto"
             >
-              {/* Header: mini profile identity — matches the tone of
+              {/* Header: mini profile identity, matches the tone of
                   the widget below on the homepage so the modal reads
                   as part of the same visual language. */}
               <HStack spacing={2} pb={2} borderBottom="1px solid" borderColor="gray.100">
                 <Icon as={FaInstagram} color="brand.accent" boxSize={4} />
-                {/* eyebrow, not eyebrowOnDark — the meta column is white. */}
+                {/* eyebrow, not eyebrowOnDark, the meta column is white. */}
                 <Text textStyle="eyebrow">@vero.art.photo</Text>
 
                 {typeof index === 'number' && typeof total === 'number' && total > 1 && (
@@ -247,7 +247,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
 
                 {/* MOBILE ONLY. The bottom CTA sits after the caption, so on a
                     long post it is below the fold and reads as absent. This is
-                    a small ghost link pinned to the header instead — kept
+                    a small ghost link pinned to the header instead, kept
                     deliberately light (no fill, no border) so it does not
                     compete with the handle beside it. Desktop keeps the proper
                     button at the bottom, where there is room for it. */}
@@ -296,7 +296,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                 </HStack>
               )}
 
-              {/* Caption — full text, scrollable if long */}
+              {/* Caption, full text, scrollable if long */}
               {post.caption && (
                 <Text textStyle="bodyCopy" whiteSpace="pre-wrap">
                   {post.caption}
@@ -308,7 +308,7 @@ const IgPostModal = ({ post, onClose, onPrev, onNext, index, total }: Props) => 
                 <Text textStyle="metaCaption">{formatFullDate(post.timestamp)}</Text>
               )}
 
-              {/* CTA at the bottom — canonical CTAButton so it matches
+              {/* CTA at the bottom, canonical CTAButton so it matches
                   every other button on the site */}
               {post.permalink && (
                 // Centred, and desktop-only. CTAButton is display:inline-flex

@@ -1,25 +1,25 @@
 /**
- * Rebuild the site — POST the Vercel Deploy Hook so the prerendered static
+ * Rebuild the site, POST the Vercel Deploy Hook so the prerendered static
  * pages are regenerated from current database content.
  *
  * WHY THIS EXISTS
  * Prerendering is a BUILD-time step. scripts/prerender-photos.mjs reads
  * gallery_photos and journal_posts and writes one static HTML file per photo,
  * per category and per journal post, plus the sitemap. Publishing a photo or a
- * journal post writes to the database — it does not rebuild anything. So new
+ * journal post writes to the database, it does not rebuild anything. So new
  * content is live for visitors (the SPA fetches it at runtime) while remaining
  * absent from the static HTML that search engines actually read, until the next
  * deploy happens for some unrelated reason.
  *
  * api/cron/_gallery-sync.ts already calls the same hook after a photo sync, and
- * has been logging "VERCEL_DEPLOY_HOOK_URL not set — skipping redeploy trigger"
+ * has been logging "VERCEL_DEPLOY_HOOK_URL not set, skipping redeploy trigger"
  * ever since, because the variable was never created. This gives that variable
  * a second caller and, more usefully, a visible one: an unset hook now produces
  * an error on screen instead of one line in a log nobody reads.
  *
  * ACCESS
  * Admin, not super. Publishing content is the job this finishes, and it is
- * idempotent and non-destructive — the worst case is one wasted build.
+ * idempotent and non-destructive, the worst case is one wasted build.
  *
  * POST { password }
  *   → 200 { success, triggeredAt }        a build was started
@@ -42,7 +42,7 @@ const STATE_KEY = 'last_rebuild_trigger';
 
 // A production build takes roughly four minutes. Anything faster than this is
 // someone clicking twice, and each click is a real build against a finite free
-// tier — so refuse rather than queue.
+// tier, so refuse rather than queue.
 const COOLDOWN_MS = 3 * 60 * 1000;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

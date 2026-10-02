@@ -1,5 +1,5 @@
 /**
- * Admin: delete a review. Superadmin only — hard delete, no soft
+ * Admin: delete a review. Superadmin only, hard delete, no soft
  * fallback. Same principle as journal-delete / portal-delete: a
  * destructive irreversible action stays out of Vero's reach so an
  * accidental click can't wipe a testimonial.

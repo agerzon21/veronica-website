@@ -6,7 +6,7 @@
  *   → 401 on bad password
  *
  * Ordered so the newest/most-recently-published reviews rise to the
- * top — publish_date DESC with NULLs pushed to the bottom, then
+ * top, publish_date DESC with NULLs pushed to the bottom, then
  * created_at DESC as a stable tie-break. The admin table can offer
  * sort_order-based reordering later without changing this default.
  */

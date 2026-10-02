@@ -6,7 +6,7 @@
  *   mode: 'simple' | 'full',
  *   session_type: string,          // e.g. "wedding", "portrait", "family"
  *
- *   // 'full' mode only — required for the contract + portal flow:
+ *   // 'full' mode only, required for the contract + portal flow:
  *   client_display_name: string,   // e.g. "Chrisann & Rajiv"
  *   client_email: string,
  *   partner_1_first_name?: string,
@@ -22,7 +22,7 @@
  *   gallery_password: string,      // unique
  *   client_phone?: string,         // optional, never a contract variable
  *
- *   // optional — if this portal is being created from a DM conversation,
+ *   // optional, if this portal is being created from a DM conversation,
  *   // pass the conversation id and we'll link the two so the inbox
  *   // shows the "Client" badge and Vero can jump between them.
  *   link_to_conversation_id?: string,
@@ -336,7 +336,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         typeof body.client_display_name === 'string' && body.client_display_name.trim()
           ? body.client_display_name.trim()
           : null;
-      // Reused for the email greeting — "Hi {first_name}," reads better
+      // Reused for the email greeting, "Hi {first_name}," reads better
       // than parsing the display name (which now is "Portrait Alex 2026"
       // not "Alex"). Stored in the existing partner_1_first_name column.
       const simpleClientFirstName =
@@ -424,8 +424,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Send invite email for full-mode portals. Still non-blocking — a failed
-    // send must not lose the portal row — but the outcome is no longer
+    // Send invite email for full-mode portals. Still non-blocking, a failed
+    // send must not lose the portal row, but the outcome is no longer
     // swallowed. Previously a hard Resend rejection was logged server-side and
     // reported to Vero as success, so she had no way to know the client never
     // got their link. The id lets the admin UI poll /api/email-status and show
@@ -467,10 +467,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Optionally link this portal back to the DM conversation it was
-    // created from — the inbox uses conversations.linked_client_portal_id
+    // created from, the inbox uses conversations.linked_client_portal_id
     // to show the "Client" badge and jump into the portal from the
     // thread. Best-effort: if the FK update fails (bad convo id, race,
-    // etc.), we still return success — the portal itself exists.
+    // etc.), we still return success, the portal itself exists.
     const linkConvoId =
       typeof body.link_to_conversation_id === 'string' ? body.link_to_conversation_id.trim() : '';
     if (linkConvoId) {
@@ -566,7 +566,7 @@ function buildGalleryReadyHtml(
 ): string {
   const name = firstName || 'there';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  // Direct link with password encoded into the URL — /portal/pass auto-
+  // Direct link with password encoded into the URL, /portal/pass auto-
   // submits when it sees ?password=, so this is a true one-click open.
   // We surface the bare URL too as a fallback (in case the styled button
   // gets stripped by an email client), and the plain password as a third

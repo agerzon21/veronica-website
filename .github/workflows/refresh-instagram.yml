@@ -26,7 +26,7 @@ jobs:
       - name: Trigger Vercel deploy hook
         run: |
           if [ -z "${{ secrets.VERCEL_DEPLOY_HOOK }}" ]; then
-            echo "VERCEL_DEPLOY_HOOK secret is not set — skipping."
+            echo "VERCEL_DEPLOY_HOOK secret is not set, skipping."
             exit 0
           fi
           curl -fSs -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"

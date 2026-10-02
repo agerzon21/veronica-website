@@ -51,7 +51,7 @@ function getShootBlurb(shootType: string | undefined): string {
   if (!shootType || shootType === 'Other' || shootType === 'Collaboration') return '';
   // Special case: "Wedding Photography" doesn't pair with "a" + "session"
   if (shootType === 'Wedding Photography') return ' about your wedding';
-  // The rest are "X Session" — read naturally with "your"
+  // The rest are "X Session", read naturally with "your"
   return ` about your ${shootType.toLowerCase()}`;
 }
 
@@ -152,21 +152,21 @@ interface EmailMessage {
   html: string;
   text: string;
   // Optional Reply-To override. Default (undefined) keeps replies coming
-  // back to FROM_ADDRESS (Veronika herself) — correct for auto-replies to
+  // back to FROM_ADDRESS (Veronika herself), correct for auto-replies to
   // clients. Used by sendLeadNotification below to route Vero's Reply
   // straight to the lead's own inbox: she reads the notification, hits
   // Reply, Gmail addresses it to the lead. Set to a string address to
   // override; multiple reply-to addresses aren't supported by Resend.
   replyTo?: string;
   // Optional file attachments. Each entry is sent inline via Resend's
-  // attachments API — used by the contract-signing flow to deliver the
+  // attachments API, used by the contract-signing flow to deliver the
   // signed PDF to both the client and Veronika in one email.
   attachments?: Array<{
     filename: string;
     content: Buffer | string;  // Buffer or base64-encoded string
   }>;
   // Raw SMTP headers. Used to set an explicit Message-ID so the message
-  // can be threaded against later — see sendAutoReply.
+  // can be threaded against later, see sendAutoReply.
   headers?: Record<string, string>;
 }
 
@@ -216,7 +216,7 @@ export async function sendEmail(message: EmailMessage): Promise<{ id: string }> 
  * api/admin/_messages-send.ts builds In-Reply-To / References from the
  * external_message_ids stored on the thread. Resend's tracking id is not
  * an RFC 5322 msg-id and is deliberately filtered out there, so without
- * a real Message-ID here the reply would carry NO threading headers —
+ * a real Message-ID here the reply would carry NO threading headers
  * and the customer's mail client would show it as a brand-new
  * conversation, detached from the confirmation they just received.
  *
@@ -236,7 +236,7 @@ export async function sendAutoReply(
 
   // Read back the Message-ID Resend assigned. This is the FIRST message
   // in what becomes a real thread, so it's the anchor everything else
-  // references — if it's wrong, the customer sees loose emails no matter
+  // references, if it's wrong, the customer sees loose emails no matter
   // what the later sends do.
   //
   // Null is tolerated: population timing is undocumented, and the
@@ -254,7 +254,7 @@ export async function sendAutoReply(
 /**
  * Builds the Vero-facing "new lead came in" notification body.
  *
- * Design intent — designed to be REPLY-FRIENDLY in Gmail:
+ * Design intent, designed to be REPLY-FRIENDLY in Gmail:
  *
  * Vero reads this in Gmail and hits her mail client's native Reply
  * button (Reply-To is set to the lead's email, so Reply goes to
@@ -262,15 +262,15 @@ export async function sendAutoReply(
  * typed response. That means everything in this email will be
  * visible to the CUSTOMER (as quoted history) once Vero replies.
  * The body is therefore written to look reasonable from the
- * customer's POV when quoted — no internal-only jargon, no "New
+ * customer's POV when quoted, no internal-only jargon, no "New
  * lead" banner shouting at them, no Vero-only instructions above
  * the auto-collapse separator.
  *
  * Two structural elements make this work:
  *
- *   1. Customer-safe subject (`Wedding Photography Inquiry —
+ *   1. Customer-safe subject (`Wedding Photography Inquiry
  *      Sarah Johnson`) so Sarah sees `Re: Wedding Photography
- *      Inquiry — Sarah Johnson` when Vero replies. No `[New lead]`
+ *      Inquiry, Sarah Johnson` when Vero replies. No `[New lead]`
  *      prefix or other internal markers that would leak.
  *
  *   2. Everything below a `--` line on its own is collapsed by
@@ -295,7 +295,7 @@ function buildLeadNotificationHtml(data: ContactPayload): string {
   const trimmedMessage = (data.message || '').trim();
 
   // Customer-facing preamble: reads naturally as the first quoted
-  // line when Sarah receives Vero's reply. Kept generic — the shoot
+  // line when Sarah receives Vero's reply. Kept generic, the shoot
   // type shows up in the table below, so we don't need to grammar-
   // wrangle it here ("Sarah reached out about a Portrait Session
   // session" is a dup we can't have).
@@ -337,7 +337,7 @@ function buildLeadNotificationHtml(data: ContactPayload): string {
   // signature delimiter. Gmail / Apple Mail / Outlook collapse
   // everything below it when showing quoted history. Our internal-
   // only note lives there so Sarah's view of Vero's reply doesn't
-  // include "submitted via contact form — reply-to is set to their
+  // include "submitted via contact form, reply-to is set to their
   // address, not ours" which would be confusing to her.
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
@@ -370,7 +370,7 @@ function buildLeadNotificationText(data: ContactPayload): string {
     lines.push('Their message:');
     lines.push(trimmedMessage.split('\n').map((l) => `  ${l}`).join('\n'));
   }
-  // Signature delimiter — clients collapse below this in quoted history.
+  // Signature delimiter, clients collapse below this in quoted history.
   lines.push('');
   lines.push('-- ');
   lines.push(`Submitted via the contact form at vero.photography.`);
@@ -384,10 +384,10 @@ function buildLeadNotificationText(data: ContactPayload): string {
  * Destination: LOGIN_ADMIN_EMAIL env var (already the address Vero uses
  * to sign into /admin, i.e. her canonical owner identity in the system)
  * with FROM_ADDRESS as a fallback so a missing env var never silently
- * swallows the notification — worst case, Vero gets it at
+ * swallows the notification, worst case, Vero gets it at
  * vero@vero.photography and forwards to herself.
  *
- * Reply-to is the LEAD'S email, not Vero's — so hitting Reply in Gmail
+ * Reply-to is the LEAD'S email, not Vero's, so hitting Reply in Gmail
  * threads straight to the lead. This is the whole point of the sendEmail
  * `replyTo` override added alongside this function.
  *
@@ -401,13 +401,13 @@ export async function sendLeadNotification(data: ContactPayload): Promise<{ id: 
 
   // Subject is customer-safe: when Vero hits Reply in Gmail, the
   // customer receives `Re: <this subject>`. `[New lead] Sarah Johnson
-  // — Wedding Photography` looks internal and confusing to the
-  // customer as a Re: chain. `Wedding Photography Inquiry —
+  // Wedding Photography` looks internal and confusing to the
+  // customer as a Re: chain. `Wedding Photography Inquiry
   // Sarah Johnson` reads naturally from either side. Vero can still
-  // filter her inbox by "Inquiry —" to isolate leads.
+  // filter her inbox by "Inquiry, " to isolate leads.
   //
   // For unknown shoot types (or 'Other') we fall back to a generic
-  // "Photography Inquiry" so we never emit an odd `— Sarah Johnson`
+  // "Photography Inquiry" so we never emit an odd `, Sarah Johnson`
   // with no context.
   const shoot =
     data.shoot_type && data.shoot_type !== 'Other'
@@ -449,14 +449,14 @@ export type DeliveryEvent =
  * The SMTP Message-ID Resend actually put on the wire.
  *
  * We cannot choose this. Passing a `Message-ID` header to emails.send is
- * silently discarded — Resend assigns its own (an Amazon SES id), which
+ * silently discarded, Resend assigns its own (an Amazon SES id), which
  * is why every In-Reply-To/References we emitted from a self-minted id
  * pointed at a message that existed in nobody's mailbox, and mail
  * clients rendered loose emails instead of a thread.
  *
  * Resend added `message_id` to the retrieve endpoint in July 2026
  * specifically for this. Returns it normalized (no angle brackets) to
- * match how inbound ids are stored, or null if not yet populated — the
+ * match how inbound ids are stored, or null if not yet populated, the
  * docs don't state how soon after send it appears, so callers must
  * tolerate null and backfill later.
  */

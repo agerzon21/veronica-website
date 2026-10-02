@@ -145,7 +145,7 @@ function clearStoredSession(): void {
 
 type Tab = 'client' | 'gallery';
 
-// URL is the source of truth for the active tab — so Veronika can send
+// URL is the source of truth for the active tab, so Veronika can send
 // a guest a direct link to /portal/pass and they land on the right form
 // without having to be told "click the right tab." Switching tabs in
 // the UI updates the URL via replaceState, and browser back/forward
@@ -581,17 +581,17 @@ const Portal = () => {
     setTab((current) => (current === next ? current : next));
   }, [location.pathname]);
 
-  // Form state — shared error/submitting, separate field state per tab
+  // Form state, shared error/submitting, separate field state per tab
   // so switching tabs doesn't blow away what you typed.
   //
   // Email can be prefilled via ?email= so the welcome → portal handoff
   // doesn't make the client retype it.
   //
-  // On the gallery tab, ?password= ALSO pre-fills and auto-submits — that
+  // On the gallery tab?password= ALSO pre-fills and auto-submits, that
   // lets us send "one-click" gallery links in the delivery email. Same
   // security model as before: anyone with the URL has access, same as
   // anyone with the password did. We deliberately do NOT support
-  // ?password= on the client tab (full-portal login) — typing the
+  // ?password= on the client tab (full-portal login), typing the
   // password is the friction we want there.
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [clientPassword, setClientPassword] = useState('');
@@ -603,7 +603,7 @@ const Portal = () => {
   const [autoSubmittedGallery, setAutoSubmittedGallery] = useState(false);
   const [showClientPassword, setShowClientPassword] = useState(false);
 
-  // Forgot-password. This only became necessary once passwords were hashed —
+  // Forgot-password. This only became necessary once passwords were hashed
   // before that Vero could read a client's password in the admin panel and just
   // tell them. Now nobody can, and the only other recovery is her manually
   // overriding it, which requires the client to reach her first.
@@ -611,7 +611,7 @@ const Portal = () => {
   const [resetSending, setResetSending] = useState(false);
   const [showGalleryPassword, setShowGalleryPassword] = useState(false);
 
-  // Post-login state — one of these gets set on a successful auth, which
+  // Post-login state, one of these gets set on a successful auth, which
   // unmounts the form and renders the corresponding view.
   const handleForgotPassword = async () => {
     const trimmed = email.trim();
@@ -1147,7 +1147,7 @@ const Portal = () => {
                       Sign In
                     </CTAButton>
                   
-                    {/* Deliberately understated — it should be findable
+                    {/* Deliberately understated, it should be findable
                         when needed without competing with Sign In. */}
                     {resetRequested ? (
                       <Text
@@ -1331,7 +1331,7 @@ const Portal = () => {
   );
 };
 
-// Small reusable bits — extracted so the JSX above reads as flow, not noise.
+// Small reusable bits, extracted so the JSX above reads as flow, not noise.
 
 /**
  * The soft spots behind the words, four of them, one per line.

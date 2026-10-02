@@ -3,7 +3,7 @@
  *
  * Uses the same `me/messages` endpoint that Meta's messaging platform
  * expects. `me` resolves to whichever account owns the IG_ACCESS_TOKEN
- * — i.e., vero.art.photo in production.
+ * i.e., vero.art.photo in production.
  *
  * Meta enforces a 24-hour window: we can only send messages to users
  * who have messaged us within the last 24 hours (with a few narrow
@@ -24,7 +24,7 @@ const IG_GRAPH_BASE = 'https://graph.instagram.com/v21.0';
 //
 // Why this matters: the send is called from inside a waitUntil() in
 // api/inbox/_ig-webhook.ts. Meta's ACK of our webhook already went
-// out — but the outbound row is only INSERTed AFTER this send returns.
+// out, but the outbound row is only INSERTed AFTER this send returns.
 // If Meta hangs past Vercel's maxDuration:60 cap, the function is
 // killed with the outbound row uncommitted; the customer received the
 // reply but the admin thread is missing it, and Vero might reply
@@ -42,7 +42,7 @@ export interface IgSendResult {
 
 /**
  * Send a plain text message to a specific Instagram user (identified
- * by their IGSID — the scoped ID Meta gave us in the inbound webhook).
+ * by their IGSID, the scoped ID Meta gave us in the inbound webhook).
  *
  * Returns the message ID Meta assigns so we can store it on the
  * outbound row for dedup / correlation. On failure returns error
@@ -60,7 +60,7 @@ export async function sendIgTextMessage(args: {
   const url = `${IG_GRAPH_BASE}/me/messages?access_token=${encodeURIComponent(token)}`;
   const body = {
     recipient: { id: args.recipientIgsid },
-    // Message text — Meta will chunk into multiple bubbles if it's
+    // Message text, Meta will chunk into multiple bubbles if it's
     // longer than a certain threshold, but for AI replies we keep
     // them short anyway.
     message: { text: args.text },
@@ -98,7 +98,7 @@ export async function sendIgTextMessage(args: {
       externalMessageId: data.message_id,
     };
   } catch (err) {
-    // AbortSignal.timeout throws a TimeoutError DOMException — surface
+    // AbortSignal.timeout throws a TimeoutError DOMException, surface
     // it distinctly so callers see 'timeout' vs a generic network
     // error in the ai_reply action reason field.
     const isTimeout = err instanceof Error && err.name === 'TimeoutError';

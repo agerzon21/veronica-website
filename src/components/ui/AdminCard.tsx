@@ -8,7 +8,7 @@ import { Box, type BoxProps } from '@chakra-ui/react';
  * tighter treatment.
  *
  * Kept as a thin BoxProps wrapper so callers can still override
- * anything (padding, border, etc.) — it's an *ergonomic default*,
+ * anything (padding, border, etc.), it's an *ergonomic default*,
  * not a lockdown.
  */
 

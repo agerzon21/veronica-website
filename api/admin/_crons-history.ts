@@ -5,7 +5,7 @@
  *   → 200 { success, runs: [{ startedAt, finishedAt, status, trigger,
  *           durationMs, errorMessage, result }] }
  *
- * `result` is whatever the cron's work() returned — see migration 028. Null for
+ * `result` is whatever the cron's work() returned, see migration 028. Null for
  * runs recorded before that migration, and for crons that return nothing.
  *   → 400 missing/invalid input
  *   → 401 wrong password

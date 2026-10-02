@@ -4,7 +4,7 @@
  * WHY IT MATTERS BEYOND "REFRESH THE SEO PAGES"
  * Prerendered pages are a build-time snapshot served from the filesystem, which
  * Vercel resolves BEFORE any rewrite. So once /journal/<slug>.html exists, that
- * file answers the URL — the runtime API predicate
+ * file answers the URL, the runtime API predicate
  * (status = 'published' AND published_at IS NOT NULL) is no longer consulted.
  *
  * That makes a rebuild part of TAKEDOWN, not just publication. Unpublishing or
@@ -16,7 +16,7 @@
  * remaining copy of the text, which is the worst version of this.
  *
  * Every caller is therefore expected to trigger a build on REMOVAL as well as
- * on publish. Callers never fail their own request because of this — a hook
+ * on publish. Callers never fail their own request because of this, a hook
  * that is unset or down must not block deleting a post.
  */
 
@@ -28,12 +28,12 @@ export type DeployHookResult =
 
 /**
  * @param why short label for the log line, e.g. 'journal-delete'. Never
- *            include the hook URL itself — it is a credential.
+ *            include the hook URL itself, it is a credential.
  */
 export async function triggerDeployHook(why: string): Promise<DeployHookResult> {
   const url = process.env.VERCEL_DEPLOY_HOOK_URL;
   if (!url) {
-    console.log(`[deploy-hook] ${why}: VERCEL_DEPLOY_HOOK_URL not set — no rebuild triggered`);
+    console.log(`[deploy-hook] ${why}: VERCEL_DEPLOY_HOOK_URL not set, no rebuild triggered`);
     return { ok: false, reason: 'unconfigured' };
   }
 

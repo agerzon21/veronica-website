@@ -21,7 +21,7 @@
  * Relaxing a case here to make the build pass puts a wrong number on a
  * booking. Migration 037's column comment is explicit that this field is
  * "unverified by nature: it drives suggestions, never an automatic identity
- * merge" — these cases are what keeps the suggestion worth trusting.
+ * merge", these cases are what keeps the suggestion worth trusting.
  *
  * WHY IT DOES NOT USE tsx OR NODE'S TYPE STRIPPING. Same reason as
  * check-send-gate.mjs: Vercel builds on the pinned Node, and on Node 22 an

@@ -3,12 +3,12 @@
  *
  * GET /api/email-status?id=<resend-email-id>
  *   → 200 { success: true, status: DeliveryEvent }
- *   → 200 { success: false, status: 'unknown' }   (lookup failed — client keeps polling)
+ *   → 200 { success: false, status: 'unknown' }   (lookup failed, client keeps polling)
  *   → 400 { success: false }                       (malformed id)
  *
  * The Thank-You page polls this after submitting the contact form so it only
  * shows the green "delivered" state once the recipient's mail server has
- * actually accepted the message — not just when Resend queued it.
+ * actually accepted the message, not just when Resend queued it.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';

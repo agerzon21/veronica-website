@@ -87,8 +87,8 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
               as={RouterLink}
               to={item.path}
               // menuLink, not ctaLabel: this is a full-screen overlay, and a
-              // 13px navbar label inside it is both hard to read and — with no
-              // padding — a ~13px tap target. py gets it past 44px.
+              // 13px navbar label inside it is both hard to read and, with no
+              // padding, a ~13px tap target. py gets it past 44px.
               textStyle="menuLink"
               color="white"
               py={3}

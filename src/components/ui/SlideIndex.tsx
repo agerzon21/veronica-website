@@ -7,7 +7,7 @@ import { m, AnimatePresence } from 'framer-motion';
  * current numeral and the next one as the slide runs, so the wait is visible
  * rather than a surprise.
  *
- * This file owns the SLOT — the numeral plus its growing rule — and nothing
+ * This file owns the SLOT, the numeral plus its growing rule, and nothing
  * else. It was lifted out of ImageCarousel when the weddings journal
  * slideshow asked for the same language, because the alternative was a second
  * copy of numbers that had already been tuned three times (the rule widths,

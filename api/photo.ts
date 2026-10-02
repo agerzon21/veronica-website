@@ -1,5 +1,5 @@
 /**
- * Photo proxy — fetches a Drive file through our origin so the browser can
+ * Photo proxy, fetches a Drive file through our origin so the browser can
  * fetch() it without hitting CORS, AND so downloads can use a smaller
  * resized version instead of the 10-25MB originals.
  *
@@ -26,7 +26,7 @@
  *   /api/photo?id=X&full=1&filename=foo.jpg
  *     → original file, streamed with attachment disposition. Reserved
  *       for a future "download full-res via proxy" button if we ever
- *       want one — for now full-res downloads go to Drive directly.
+ *       want one, for now full-res downloads go to Drive directly.
  *
  * Why resize for the default path: Veronika's originals are 10-25MB.
  * Serving full-res to every gallery view + every mobile share pre-fetch
@@ -36,7 +36,7 @@
  *
  * Trust model: the file IDs we serve are already publicly accessible via
  * Drive's "anyone with link" sharing (set by Veronika on the parent folder).
- * Proxying them through our endpoint doesn't reduce security — we're just a
+ * Proxying them through our endpoint doesn't reduce security, we're just a
  * CORS-friendly middleman.
  */
 
@@ -89,7 +89,7 @@ const ALLOWED_PARAMS = new Set(['id', 'full', 'filename']);
  * The regex below only checks that an id LOOKS like a Drive id, not that it
  * belongs to us, and the service account holds drive.readonly across the whole
  * account. So without this check, anyone holding any readable file id could
- * pull it through the proxy — including a client gallery photo, bypassing the
+ * pull it through the proxy, including a client gallery photo, bypassing the
  * gallery password entirely.
  *
  * Two ways to qualify: it is a published public-gallery photo, or it lives in
@@ -175,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (filename) res.setHeader('Content-Disposition', attachmentHeader(filename));
 
     if (wantFull) {
-      // Originals path — stream through unchanged. No caller uses this
+      // Originals path, stream through unchanged. No caller uses this
       // today; kept as a hook in case we ever want "download full-res
       // via proxy" instead of sending users to Drive.
       const contentType = (file.headers['content-type'] as string) || 'image/jpeg';
@@ -185,7 +185,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    // Resized path — buffer + cache aggressively. Same bytes whether
+    // Resized path, buffer + cache aggressively. Same bytes whether
     // we serve inline or as attachment, so cache headers are identical.
     const original = await streamToBuffer(file.data as NodeJS.ReadableStream);
     const resized = await sharp(original)

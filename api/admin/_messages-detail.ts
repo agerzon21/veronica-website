@@ -8,7 +8,7 @@
  *   → 404 no such conversation
  *
  * Returns all messages in the conversation (oldest → newest, ready
- * for direct render). No pagination for MVP — conversations are
+ * for direct render). No pagination for MVP, conversations are
  * expected to be short; we'll add pagination if any grow past ~200
  * messages.
  */
@@ -59,7 +59,7 @@ interface MessageRow {
   // How the message arrived, distinct from the conversation's platform
   // (which is how we reply). 'form' for contact-form submissions.
   channel: string;
-  // 'sent' | 'draft' | 'failed' — a draft is an AI reply awaiting
+  // 'sent' | 'draft' | 'failed', a draft is an AI reply awaiting
   // Vero's approval, never delivered. See migration 019.
   status: string;
   // Resend's cached last_event for outbound email ('delivered',

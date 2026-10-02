@@ -1,5 +1,5 @@
 /**
- * Admin: update a lead — status flip and/or notes edit.
+ * Admin: update a lead, status flip and/or notes edit.
  *
  * POST { password, id, status?, notes?, contacted_at? }
  *   → 200 { success, lead }
@@ -10,14 +10,14 @@
  * Deliberately narrow surface: only the three fields Vero manages from
  * the admin panel are updatable. Immutable fields (name, email,
  * shoot_type, preferred_date, location, message, created_at) come from
- * the submitter and must never be edited — if they were, the audit
+ * the submitter and must never be edited, if they were, the audit
  * trail of what the lead actually said becomes fiction.
  *
  * All three fields are optional; a POST with only `id` is a no-op
  * (returns the row unchanged). This lets the UI send a partial patch
  * without stitching a full object.
  *
- * requireAdmin, NOT requireSuper — status flips + notes are Vero's
+ * requireAdmin, NOT requireSuper, status flips + notes are Vero's
  * daily workflow. Deletion is super-only (see _leads-delete.ts).
  */
 
@@ -27,7 +27,7 @@ import { requireAdmin, requireSuper } from '../_admin-auth.js';
 
 // App-level enum for the status field. Kept out of the DB CHECK constraint
 // (see 014-contact-submissions.sql header) so we can add new statuses
-// without a migration — but the API still enforces the allow-list so
+// without a migration, but the API still enforces the allow-list so
 // nobody smuggles arbitrary strings into the column via the admin UI.
 const ALLOWED_STATUSES = [
   'new',
@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const auth = await requireAdmin(req.body?.password);
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error });
-  // Leads is a super-only surface now — the page duplicates Vero's
+  // Leads is a super-only surface now, the page duplicates Vero's
   // inbox and was removed from her navigation, so the API matches.
   const superCheck = requireSuper(auth.level);
   if (!superCheck.ok) return res.status(superCheck.status).json({ success: false, error: superCheck.error });
@@ -71,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const id = typeof req.body?.id === 'string' ? req.body.id.trim() : '';
   if (!id) return res.status(400).json({ success: false, error: 'id is required' });
 
-  // Status — validate against the allow-list if present. Missing means
+  // Status, validate against the allow-list if present. Missing means
   // "don't touch this field."
   let nextStatus: Status | undefined;
   if (req.body?.status !== undefined) {
@@ -85,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     nextStatus = raw as Status;
   }
 
-  // Notes — empty string is a real value ("clear the notes"), not
+  // Notes, empty string is a real value ("clear the notes"), not
   // "leave alone." Only `undefined` means don't touch.
   const notesProvided = req.body?.notes !== undefined;
   const nextNotes: string | null = notesProvided
@@ -94,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : null
     : null;
 
-  // contacted_at — nullable timestamp. Accept ISO string OR the sentinel
+  // contacted_at, nullable timestamp. Accept ISO string OR the sentinel
   // 'now' (server-side NOW()) so the UI can set it without shipping a
   // timestamp from the browser (which would be in the visitor's clock).
   // Passing null clears it.
@@ -131,12 +131,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // set it manually.
     //
     // contacted_at semantics: "first outbound reply." Once set, we never
-    // overwrite it — otherwise a race between two admin tabs would let
+    // overwrite it, otherwise a race between two admin tabs would let
     // the later-saving tab clobber the first-contact timestamp with a
     // newer NOW(), which would poison the "average lead response time"
     // analytic this column exists to enable. The COALESCE(contacted_at,
     // NOW()) guard is the first-writer-wins invariant.
-    // Explicit-timestamp branch (contactedIso) is different — that's an
+    // Explicit-timestamp branch (contactedIso) is different, that's an
     // admin deliberately overriding, so we honor it verbatim.
     const rows = (await sql`
       UPDATE contact_submissions

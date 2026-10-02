@@ -2,7 +2,7 @@
  * Complete the setup flow: client picks a password.
  *
  * POST { token, password }
- *   → 200 { success, email }   on success — UI uses email to auto-login
+ *   → 200 { success, email }   on success, UI uses email to auto-login
  *   → 400                      password too short / missing
  *   → 410                      token used or expired
  *
@@ -27,8 +27,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   //
   // Login trims (api/portal/_client.ts:75) and so does the change-password
   // form, but these two set-a-password paths stored the raw value. A password
-  // ending in a space — a paste, or a mobile keyboard adding one after
-  // autocomplete — was therefore hashed WITH the space and compared WITHOUT it,
+  // ending in a space, a paste, or a mobile keyboard adding one after
+  // autocomplete, was therefore hashed WITH the space and compared WITHOUT it,
   // so it could never sign in. The client sees "Incorrect email or password"
   // for the password they just chose.
   //

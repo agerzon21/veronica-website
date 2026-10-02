@@ -9,7 +9,7 @@
  *   → 401 wrong password
  *   → 405 non-POST
  *
- * Deliberately does NOT call Meta's debug_token endpoint — that path
+ * Deliberately does NOT call Meta's debug_token endpoint, that path
  * required us to store IG_APP_SECRET in Vercel just so we could check
  * expiry, and Alex correctly pointed out the simpler path is: assume
  * every rotation lasts exactly 60 days, track when the last one
@@ -18,11 +18,11 @@
  *
  * `status` maps to badge colors in the UI:
  *   fresh    → green   (rotated <40 days ago; plenty of runway)
- *   aging    → amber   (40–50 days; getting close, cron may fire soon)
- *   overdue  → red     (>50 days; rotate NOW — cron already emailed)
+ *   aging    → amber   (40-50 days; getting close, cron may fire soon)
+ *   overdue  → red     (>50 days; rotate NOW, cron already emailed)
  *   unknown  → grey    (never marked; run migration or click the button)
  *
- * Accepts either admin OR super — read-only.
+ * Accepts either admin OR super, read-only.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -31,7 +31,7 @@ import { getDb } from '../_db.js';
 import { detectAndMarkRotation } from '../_ig-detect.js';
 
 // A long-lived Instagram token is 60 days from the moment it's minted.
-// We alert at day 50 (10 days before expiry) — plenty of runway to
+// We alert at day 50 (10 days before expiry), plenty of runway to
 // notice + rotate.
 const TOKEN_LIFETIME_DAYS = 60;
 const AGING_THRESHOLD_DAYS = 40;
@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // match the hash we stored last time, someone rotated it outside
     // the admin flow. This call transparently updates the timestamp
     // + hash so the card below reads "0 days ago" instead of stale
-    // pre-rotation info. Failure is non-fatal — we log and fall
+    // pre-rotation info. Failure is non-fatal, we log and fall
     // through to the normal read.
     try {
       await detectAndMarkRotation();
@@ -110,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('[admin/instagram-status] DB read failed:', err);
     // If the table doesn't exist yet (migration not run), report that
-    // specifically instead of a generic 500 — the admin UI can prompt
+    // specifically instead of a generic 500, the admin UI can prompt
     // Alex to run the migration.
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('system_state') && msg.toLowerCase().includes('does not exist')) {

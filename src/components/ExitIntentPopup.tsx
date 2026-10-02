@@ -17,8 +17,8 @@ const STORAGE_KEY = 'vero_exit_popup_shown_at';
 // Don't re-show the popup within this many days of a previous show.
 // 30 days = roughly "you've already seen this, stop bugging them."
 const REPEAT_DELAY_DAYS = 30;
-// Mobile: no real "exit intent" signal — fall back to a generous timer.
-// 3 minutes = "you've been browsing a while, here's a thank-you" — short
+// Mobile: no real "exit intent" signal, fall back to a generous timer.
+// 3 minutes = "you've been browsing a while, here's a thank-you", short
 // enough to catch engaged users, long enough not to feel pushy.
 const MOBILE_TIME_THRESHOLD_MS = 3 * 60 * 1000;
 
@@ -36,7 +36,7 @@ const DESKTOP_ARM_DELAY_MS = 20 * 1000;
 
 // Routes where the popup is suppressed entirely.
 //
-//   /portal             already paying customers — offering them a discount
+//   /portal             already paying customers, offering them a discount
 //                       for a new shoot reads weirdly.
 //   /contact/thank-you  they have just submitted the enquiry. "Get 10% off"
 //                       is an offer to do the thing they have already done,
@@ -44,7 +44,7 @@ const DESKTOP_ARM_DELAY_MS = 20 * 1000;
 //                       confirm the form worked.
 //
 // Matching is prefix-based (exact, or followed by "/"), so the real route
-// path matters: the thank-you page is /contact/thank-you, NOT /thank-you —
+// path matters: the thank-you page is /contact/thank-you, NOT /thank-you
 // a wrong prefix here fails silently and looks like the popup is just broken.
 // Note this does NOT suppress /contact itself; adding '/contact' would, via
 // the startsWith arm.
@@ -110,7 +110,7 @@ const ExitIntentPopup = () => {
   }, [isSuppressedRoute]);
 
   // Desktop: mouse leaves top edge of viewport → likely going to close tab
-  // or hit the URL bar. Trigger the popup — but only once the visit is old
+  // or hit the URL bar. Trigger the popup, but only once the visit is old
   // enough to be a visit, and only if the cursor has genuinely been in the
   // page. See DESKTOP_ARM_DELAY_MS.
   useEffect(() => {
@@ -177,7 +177,7 @@ const ExitIntentPopup = () => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        // Generic success display — we don't reveal the code in-popup, the
+        // Generic success display, we don't reveal the code in-popup, the
         // email does. Keeps the discount valuable (only people who can receive
         // mail at that address get it) and keeps the popup uncluttered.
         setSubmittedCode(data.alreadySubscribed ? 'already' : 'new');
@@ -288,7 +288,7 @@ const ExitIntentPopup = () => {
               ) : (
                 <VStack spacing={5} textAlign="center" pt={3}>
                   {/* eyebrow → rule → h2 → lead. Deliberately NOT PageHeader:
-                      its title sizes are page scale (30–68px) and would swamp
+                      its title sizes are page scale (30-68px) and would swamp
                       a 460px modal. Same tokens, modal-appropriate step. */}
                   <Text textStyle="eyebrow">Before you go</Text>
                   <Box w="40px" h="1px" bg="brand.accent" />

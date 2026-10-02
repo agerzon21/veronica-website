@@ -66,7 +66,7 @@ interface ImageModalProps {
   downloadUrl?: string;
   downloadFilename?: string;
   // On touch devices, "download" goes to the phone's Files app, which is the
-  // wrong destination — clients want photos in Photos / Camera Roll. When
+  // wrong destination: clients want photos in Photos / Camera Roll. When
   // mobileSaveUrl is provided (and we detect a touch device), the bottom CTA
   // pre-fetches the photo and shares via Web Share API → "Save to Photos".
   mobileSaveUrl?: string;
@@ -74,7 +74,7 @@ interface ImageModalProps {
   // files where pre-fetching through our proxy would either time out the
   // Vercel function, exhaust mobile browser memory, or just waste a lot of
   // bandwidth. Above the threshold (LARGE_FILE_THRESHOLD), the mobile CTA
-  // becomes "Open in Drive" — links to Drive's native viewer where the
+  // becomes "Open in Drive", links to Drive's native viewer where the
   // user gets a proper download button regardless of file size.
   fileSize?: number;
   driveViewUrl?: string;
@@ -96,25 +96,25 @@ interface ImageModalProps {
   // of the user). These URLs go direct to Drive (not our proxy), so
   // preloading costs nothing on our origin. Silently no-ops if omitted.
   getViewUrl?: (index: number) => string | null | undefined;
-  // Favorites — when onToggleFavorite is provided, a heart button
+  // Favorites, when onToggleFavorite is provided, a heart button
   // appears in the modal top bar. Reflects isFavorite state and calls
   // the toggle on click. Only wired up for full-portal users; guests
   // on /portal/pass leave both props undefined.
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   // Close-animation flavor. Default (undefined / false) is the
-  // "precise landing" behavior — image shrinks to its actual thumb
+  // "precise landing" behavior, image shrinks to its actual thumb
   // rect at full opacity so it feels like it goes back INTO its
   // spot. That looks best when thumbs match photo aspects (public
   // masonry gallery). Set to true for the client gallery where
   // thumbs are uniform squares and the aspect mismatch at the end
-  // of a full-opacity landing looks awkward — fading to invisibility
+  // of a full-opacity landing looks awkward, fading to invisibility
   // during the shrink hides the mismatch entirely.
   fadeOnClose?: boolean;
 }
 
-// 40 MB. Reasoning: typical wedding/portrait JPEGs are 5–25 MB (well
-// under), high-end JPEGs hit 20–50 MB (just above), TIFFs/RAWs/videos
+// 40 MB. Reasoning: typical wedding/portrait JPEGs are 5-25 MB (well
+// under), high-end JPEGs hit 20-50 MB (just above), TIFFs/RAWs/videos
 // start at 50+ MB (clearly above). 40 MB keeps the Save-to-Photos flow
 // for ~95% of real photos and gracefully degrades the rest to Drive's
 // native viewer where size isn't a problem.
@@ -257,7 +257,7 @@ function sizedViewUrl(url: string, width: number): string {
 // Primary option is platform-specific (anchor download on desktop,
 // Web Share API call on mobile) so the caller passes either
 // `primaryHref` or `onPrimary`. Secondary option is always Drive's
-// viewer for the full-res original — same link in both contexts.
+// viewer for the full-res original, same link in both contexts.
 interface DownloadMenuProps {
   triggerLabel: string;
   primaryTitle: string;
@@ -266,7 +266,7 @@ interface DownloadMenuProps {
   primaryDownload?: string | boolean;
   onPrimary?: () => void;
   // When true, the primary item is greyed out + non-clickable. Used on the
-  // mobile flow while the photo blob is still being pre-fetched — the
+  // mobile flow while the photo blob is still being pre-fetched, the
   // share API needs the blob in hand at click time.
   primaryDisabled?: boolean;
   // Called when the dropdown opens. The mobile flow uses this to kick off
@@ -292,12 +292,12 @@ const DownloadMenu = ({
   driveViewUrl,
 }: DownloadMenuProps) => {
   // Chakra's MenuButton owns the popper reference ref and the aria-expanded
-  // wiring, and CTAButton is not a forwardRef component — passing it as
+  // wiring, and CTAButton is not a forwardRef component, passing it as
   // `as={CTAButton}` drops the ref and the menu loses its anchor. So this
   // trigger stays a MenuButton, but every value below is now the CTAButton
   // `variant="outline" tone="dark" size="sm"` recipe verbatim (plus the one
   // thing CTAButton has no concept of, `_expanded`), so it renders identically
-  // to the CTAButtons sitting beside it in the bottom bar — including the
+  // to the CTAButtons sitting beside it in the bottom bar, including the
   // 44px mobile touch target it was previously missing.
   const triggerStyles = {
     display: 'inline-flex',
@@ -385,7 +385,7 @@ const DownloadMenu = ({
         {/* Second option: full-res original via Drive's viewer. The
             per-photo optimize-vs-original decision that used to make
             every click feel weighty is now framed as "save now" vs
-            "see original in Drive" — different-shaped choices instead
+            "see original in Drive", different-shaped choices instead
             of two-download-formats. Only renders when the caller
             passes a driveViewUrl (i.e. gallery contexts, not the
             public portfolio). */}
@@ -402,7 +402,7 @@ const DownloadMenu = ({
                 View original in Drive
               </Text>
               <Text color="whiteAlpha.600" fontSize="xs">
-                Print-quality — opens Google Drive
+                Print-quality, opens Google Drive
               </Text>
             </Box>
           </MenuItem>
@@ -468,12 +468,12 @@ const ImageModal = ({
     isTouchDevice && isLargeFile && Boolean(driveViewUrl);
 
   // Pre-fetch the photo file lazily, only when the user opens the share
-  // dropdown. Previously we fetched on every modal open — wasteful, since
+  // dropdown. Previously we fetched on every modal open, wasteful, since
   // most modal opens never trigger a share, and each fetch is ~1.5MB of
   // Vercel Origin Transfer we don't get back.
   //
   // Why pre-fetch at all (vs fetching inside the share click):
-  //   iOS Safari's `navigator.share()` requires "transient activation" —
+  //   iOS Safari's `navigator.share()` requires "transient activation"
   //   the user gesture must still be valid when share() is called. After
   //   an `await fetch(...)`, the gesture is consumed and share silently
   //   fails. So we fetch ahead of time, and the share button just calls
@@ -553,7 +553,7 @@ const ImageModal = ({
 
   // Preload a sliding window of neighbours around the current
   // index. Cheap for us (viewUrl → Drive direct, not our proxy) and huge
-  // for perceived speed — arrow-key mashing hits pre-warmed browser cache
+  // for perceived speed, arrow-key mashing hits pre-warmed browser cache
   // instead of triggering fresh Drive fetches per click.
   //
   // Each preload uses `new Image()`; the browser dedupes identical URLs
@@ -574,7 +574,7 @@ const ImageModal = ({
       img.src = sizedViewUrl(url, width);
       preloaders.push(img);
     }
-    // No cleanup needed — the Image instances get GC'd naturally when
+    // No cleanup needed, the Image instances get GC'd naturally when
     // out of scope. Cancelling in-flight requests isn't worth the effort
     // (browser will just abandon them if we navigate away).
   }, [currentIndex, getViewUrl]);
@@ -604,7 +604,7 @@ const ImageModal = ({
   }, [useMobileSaveFlow, mobileSaveUrl, photoBlob, isFetchingBlob]);
 
   const handleMobileSave = useCallback(() => {
-    // Inside the click handler — must stay synchronous up to the point where
+    // Inside the click handler, must stay synchronous up to the point where
     // we hand off to navigator.share() to preserve the user gesture.
     if (!mobileSaveUrl) return;
     const filename = downloadFilename || 'photo.jpg';
@@ -623,7 +623,7 @@ const ImageModal = ({
         });
         return;
       }
-      // Browser doesn't support file sharing — fall through to the
+      // Browser doesn't support file sharing, fall through to the
       // open-in-new-tab path so user can long-press to save manually.
     }
 
@@ -646,7 +646,7 @@ const ImageModal = ({
   const scrollLockedRef = useRef(false);
   // Ref to the actual displayed <img> element so we can measure its
   // ACTUAL rect at close time. The container is a fixed openPos
-  // rectangle but the img inside is object-fit: contain — so its
+  // rectangle but the img inside is object-fit: contain, so its
   // displayed rect can be much smaller (e.g., a portrait photo in a
   // landscape container is letterboxed). Landing math needs the img
   // rect, not the container rect, to end exactly on the thumbnail.
@@ -669,7 +669,7 @@ const ImageModal = ({
   }, [navigate, photoPageUrl]);
 
   // The m.div lives at a FIXED base rect (centered in viewport)
-  // and we animate CSS TRANSFORMS on top of it — scaleX/scaleY/x/y —
+  // and we animate CSS TRANSFORMS on top of it, scaleX/scaleY/x/y
   // instead of animating top/left/width/height directly. Transforms
   // are composited on the GPU and don't trigger layout on each frame;
   // animating the layout properties on a page with hundreds of grid
@@ -701,7 +701,7 @@ const ImageModal = ({
   // scaleX/scaleY so the image inside doesn't distort while the aspect
   // ratio of the container is changing. That means the shrunk image
   // sits inside the target rect (letterboxed on one axis if the
-  // aspects differ) rather than filling it — but no distortion is
+  // aspects differ) rather than filling it, but no distortion is
   // vastly better than an exact-fit-but-warped animation. With
   // aspect-matched thumbnails (masonry layout) the image lands
   // exactly on the thumb; with mismatched aspects there's a tiny
@@ -731,14 +731,14 @@ const ImageModal = ({
     borderRadius: 0,
   };
 
-  // Animation target — starts at the open state, changes to close target
+  // Animation target, starts at the open state, changes to close target
   const [animTarget, setAnimTarget] = useState(openTransform);
   const [animTransition, setAnimTransition] = useState({
     duration: 0.55,
     ease: [0.16, 1, 0.3, 1] as number[],
   });
 
-  // Initial state — computed once on mount from the thumbnail rect
+  // Initial state, computed once on mount from the thumbnail rect
   // the user clicked, so the open animation flies FROM the thumb TO
   // fullscreen. Lazy useState so the window-dims computation happens
   // once and the value is stable across renders.
@@ -751,7 +751,7 @@ const ImageModal = ({
 
   // Update the scroll position the page will be restored to on modal
   // close. Because the scroll lock uses body: fixed; top: -scrollY, we
-  // adjust body.top in lockstep — that way the page VISUALLY tracks
+  // adjust body.top in lockstep, that way the page VISUALLY tracks
   // arrow-key nav underneath the backdrop, so by the time the user
   // closes, the current thumbnail is already centered on screen and
   // the close animation has a real place to fly back to. Without this,
@@ -770,7 +770,7 @@ const ImageModal = ({
     setShowUI(false);
 
     // Thumbnail is already centered on-screen (the arrow-nav effect
-    // keeps it there while the modal is open) — so we just capture
+    // keeps it there while the modal is open), so we just capture
     // its rect and animate. No scroll juggling, no double-jump.
     // The scroll-lock cleanup runs when the modal unmounts and lands
     // the page cleanly on the last position we tracked.
@@ -827,7 +827,7 @@ const ImageModal = ({
         borderRadius: 0,
       });
     } else if (targetRect) {
-      // Fallback (image not yet measurable) — container-based scale.
+      // Fallback (image not yet measurable), container-based scale.
       // Slightly less precise landing but no worse than what we had.
       setAnimTarget(rectToTransform(targetRect));
     } else {
@@ -853,7 +853,7 @@ const ImageModal = ({
     [onNext, onPrevious, handleClose]
   );
 
-  // Scroll lock — only depends on isOpen so it won't re-run mid-animation
+  // Scroll lock, only depends on isOpen so it won't re-run mid-animation
   useEffect(() => {
     if (isOpen) {
       scrollYRef.current = window.scrollY;
@@ -875,7 +875,7 @@ const ImageModal = ({
     }
   }, [isOpen]);
 
-  // Keyboard listener — separate so handler changes don't re-lock scroll
+  // Keyboard listener, separate so handler changes don't re-lock scroll
   useEffect(() => {
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
@@ -885,10 +885,10 @@ const ImageModal = ({
 
   // Center the current thumbnail in the viewport whenever the user
   // arrows to a new photo. Runs UNDER the still-opaque backdrop so
-  // the scroll shift is invisible — the only reason we do it is to
+  // the scroll shift is invisible, the only reason we do it is to
   // set the page up for a smooth close animation later. Skip the
   // first render (the user just clicked a thumb they were already
-  // looking at, so it's already in view — scrolling now would create
+  // looking at, so it's already in view, scrolling now would create
   // a visible jump behind the fading-in backdrop).
   const skipFirstScrollRef = useRef(true);
   useEffect(() => {
@@ -917,7 +917,7 @@ const ImageModal = ({
     scrollLockTo(target);
   }, [currentIndex, isOpen, isClosing, getImageRect, scrollLockTo]);
 
-  // Resize listener — recompute the image's fullscreen rect when the viewport
+  // Resize listener, recompute the image's fullscreen rect when the viewport
   // changes. Without this the image stays pinned at the size/position it had
   // when the modal opened, while the rest of the UI (top bar, bottom CTA,
   // arrows) follows the new viewport, looking visibly broken. Uses an instant
@@ -1273,7 +1273,7 @@ const ImageModal = ({
       sx={{ touchAction: 'none' }}
     >
       {/* Dark backdrop. Fade-out matches the image close animation so
-          the two motions land together — otherwise the backdrop finished
+          the two motions land together, otherwise the backdrop finished
           fading first and the user could see the still-shrinking image
           floating over the underlying page, which read as ghostly. */}
       <m.div
@@ -1323,7 +1323,7 @@ const ImageModal = ({
 
         <Flex gap={5} align="center" onClick={(e) => e.stopPropagation()}>
           {/* Favorite action moved to the bottom bar as a labeled
-              pill button next to Save — see FavoriteButton usage
+              pill button next to Save, see FavoriteButton usage
               below. Discoverable there than a tiny top-corner heart
               that users kept missing. */}
           {photoData && category && !hideShare && (
@@ -1356,7 +1356,7 @@ const ImageModal = ({
         </Flex>
       </Flex>
 
-      {/* Bottom bar — photo title (left) + action CTA (right). The action is
+      {/* Bottom bar, photo title (left) + action CTA (right). The action is
           "Download" for client-portal galleries (downloadUrl set) or "View
           Photo Page" for the public gallery (photoPageUrl set). Same showUI
           gating as the top bar so both fade in together once the open
@@ -1383,7 +1383,7 @@ const ImageModal = ({
             <Text
               // bodyCopy, not cardTitle: this sits in a fixed-height control
               // bar beside the Favourite and Save pills. At 20px the title had
-              // roughly 110px on a 375px screen — about seven characters.
+              // roughly 110px on a 375px screen, about seven characters.
               textStyle="bodyCopy"
               color="whiteAlpha.900"
               noOfLines={1}
@@ -1393,13 +1393,13 @@ const ImageModal = ({
               {photoTitle}
             </Text>
           )}
-          {/* Right-side action cluster — labeled Favorite pill (when
+          {/* Right-side action cluster, labeled Favorite pill (when
               the parent wired up onToggleFavorite) sits to the left of
               the Save/Download/Open action. Same-shape pills side by
               side so users see them as peer choices: "keep this one"
               vs "download this one." Previously the favorite was a
               small heart icon in the top-right of the modal which
-              nobody noticed — the label + peer-with-Save placement
+              nobody noticed, the label + peer-with-Save placement
               is the fix. */}
           <Flex gap={2} align="center" flexShrink={0}>
           {onToggleFavorite && (
@@ -1437,13 +1437,13 @@ const ImageModal = ({
               </CTAButton>
             ) : useMobileSaveFlow ? (
               // Mobile path: two-option menu. The dropdown mechanic
-              // is still required by iOS — Web Share needs a *synchronous*
+              // is still required by iOS, Web Share needs a *synchronous*
               // user gesture, which we get from the MenuItem click; the
               // prefetch fires when the menu opens, so by the time the
               // user taps the item the blob is usually ready. If it's
               // not, the item shows "Preparing…" and stays disabled.
               //
-              // Second option: "View original in Drive" — full-res escape
+              // Second option: "View original in Drive", full-res escape
               // hatch. Framed as a different kind of action (see in Drive)
               // rather than a second download format so users don't have
               // to make an image-quality decision every time.
@@ -1606,11 +1606,11 @@ const ImageModal = ({
         </Flex>
       )}
 
-      {/* Image container — animates between thumbnail rect and centered rect.
+      {/* Image container, animates between thumbnail rect and centered rect.
           Base rect is fixed (openPos); scaleX/scaleY/x/y transforms shrink
           the container to the thumb rect on close. transform-origin: top-left
           means scaleX shrinks the width from the left edge and x=0 is
-          "aligned to left edge of openPos" — so the transform math is
+          "aligned to left edge of openPos", so the transform math is
           intuitive (see rectToTransform). will-change hints the browser to
           composite this layer on the GPU. */}
       <m.div

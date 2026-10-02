@@ -236,13 +236,13 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 type Slide = ImageCarouselProps['images'][number];
 
 // Filter for the viewport, then shuffle. Fisher-Yates, not
-// sort(() => Math.random() - 0.5) — the latter isn't a uniform shuffle and
+// sort(() => Math.random() - 0.5), the latter isn't a uniform shuffle and
 // biases elements toward staying near their original position.
 //
 // The WHOLE list is shuffled, slot 0 included, so which photo greets a
 // visitor stays random exactly as it always has. (Pinning slot 0 would let
 // us preload the first photo as the LCP image, but that makes every visit
-// open on the same shot — a product call for Vero, not a perf tweak.)
+// open on the same shot, a product call for Vero, not a perf tweak.)
 const arrange = (imgs: Slide[], mobile: boolean): Slide[] => {
   const shuffled = imgs.filter((img) => (mobile ? !img.mobileSkip : !img.desktopSkip));
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -362,8 +362,8 @@ const IndexRail: React.FC<{
    * One numeral, plus its growing rule, from the shared slot.
    *
    * The slot moved to ui/SlideIndex.tsx when the weddings journal slideshow
-   * asked for the same rail. Everything that was tuned here — the rule
-   * widths, the 44px phone target, the reduced-motion fallback, the colours —
+   * asked for the same rail. Everything that was tuned here, the rule
+   * widths, the 44px phone target, the reduced-motion fallback, the colours
    * moved with it unchanged; what stayed behind is this rail's LAYOUT, which
    * the journal has no use for.
    *
@@ -470,7 +470,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
   };
   const slideBoxRef = useRef<HTMLDivElement>(null);
   const railPlacement = useRailPlacement(slideBoxRef);
-  // `fallback: 'base'` is load-bearing — without it useBreakpoint returns
+  // `fallback: 'base'` is load-bearing, without it useBreakpoint returns
   // undefined on the first pass and the mobileSkip/desktopSkip filter
   // silently does nothing. ssr:false because main.tsx uses createRoot, never
   // hydrateRoot, and prerender-photos.mjs does no React rendering.
@@ -479,7 +479,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
 
   // Seed from the ARRANGED list, not initialImages. Seeding raw meant React
   // committed initialImages[0] and the browser started fetching a ~960KB
-  // photo that the shuffle effect then replaced ~122ms later — one full
+  // photo that the shuffle effect then replaced ~122ms later, one full
   // wasted image download on every single homepage load.
   const [images, setImages] = useState<Slide[]>(() => arrange(initialImages, isMobile));
   // Portal target only safe after mount (SSR + first-paint guard)
@@ -499,7 +499,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
 
   // The rotation used to start immediately and never stop, pulling a fresh
   // full-resolution original every 5s (~8MB/minute) while the page was still
-  // loading — it held the load event open to 19.2s. Now it waits for load,
+  // loading, it held the load event open to 19.2s. Now it waits for load,
   // pauses when the tab is hidden, and respects reduced-m.
   useEffect(() => {
     if (isPaused || images.length <= 1) return; // % 0 would be NaN
@@ -514,7 +514,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
     let id: number | undefined;
     const tick = () => setCurrentIndex((prev) => (prev + 1) % images.length);
     const start = () => {
-      // Never rotate a hidden tab — it burns bandwidth advancing slides nobody
+      // Never rotate a hidden tab, it burns bandwidth advancing slides nobody
       // is looking at, which is most of what this effect exists to stop.
       if (document.hidden) return;
       if (id === undefined) id = window.setInterval(tick, SLIDE_MS);
@@ -529,7 +529,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
     };
     const onVisibility = () => (document.hidden ? stop() : start());
 
-    // readyState check FIRST — no load event fires when the user navigates
+    // readyState check FIRST, no load event fires when the user navigates
     // back to / within the SPA, which would leave the carousel frozen.
     if (document.readyState === 'complete') start();
     else window.addEventListener('load', start, { once: true });
@@ -547,7 +547,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
   }, [images.length, isPaused, cycleKey]);
 
   // ChunkErrorBoundary would catch a throw here, but it renders a full-page
-  // error screen — on the homepage that is still a dead front door. Guard the
+  // error screen, on the homepage that is still a dead front door. Guard the
   // index rather than relying on the boundary to make it survivable.
   const currentImage: Slide | undefined = images[currentIndex] ?? images[0];
 
@@ -571,7 +571,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
     exit: { opacity: 0 }
   };
 
-  // Empty list (every slide filtered out at this breakpoint) — render the
+  // Empty list (every slide filtered out at this breakpoint), render the
   // sized shell rather than throwing. Keeps the hero's layout box intact,
   // so CLS stays at 0.
   if (!currentImage) {
@@ -653,7 +653,7 @@ const ImageCarousel: React.FC<ImageCarouselProps> = ({
         />
       )}
 
-      {/* Dev controls — rendered via a Portal to document.body so they escape
+      {/* Dev controls, rendered via a Portal to document.body so they escape
           the parent's CSS transform scaling (the camera MotionBox uses scale
           transforms, which would otherwise make these buttons huge or tiny
           depending on scroll position). Fixed-position relative to viewport. */}

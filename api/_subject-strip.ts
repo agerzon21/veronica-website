@@ -3,7 +3,7 @@
  *
  * Replies in this system ALWAYS continue an existing thread: email delivery
  * derives "Re: <thread subject>" itself, and Instagram has no subjects. A
- * "Subject:" line in a reply body is therefore never correct — it arrives as
+ * "Subject:" line in a reply body is therefore never correct, it arrives as
  * literal text in the middle of an email chain.
  *
  * This exists because asking the model to stop doing it did not work. Vero
@@ -39,14 +39,14 @@ export function stripSubjectHeader(text: string): string {
  *
  * stripSubjectHeader above guards what reaches the customer (drafts, sends).
  * This one guards what Vero SEES: the assistant presents drafts inside its
- * chat bubbles as plain prose — "Here's a follow-up for Nicole: Subject: …" —
+ * chat bubbles as plain prose, "Here's a follow-up for Nicole: Subject: …"
  * which goes through no tool and so passed no guard. Vero was then staring
  * at a subject line in the chat while the actual draft underneath was clean,
  * which is indistinguishable from the rule not working at all.
  *
  * Line-level and format-anchored on purpose: only lines SHAPED like an email
  * header die ("Subject: X" / "**Тема: X**" alone on a line). Prose that
- * mentions the word — "the subject of her email was…" — is untouched.
+ * mentions the word, "the subject of her email was…", is untouched.
  */
 export function scrubSubjectLines(text: string): string {
   return text

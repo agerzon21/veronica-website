@@ -1,10 +1,10 @@
-# Vero Photography — Active Transitions & Phase Tracker
+# Vero Photography, Active Transitions & Phase Tracker
 
 Ongoing infrastructure + feature work with concrete checklists. Update this file whenever a phase moves, a step is done, or a new dependency is added.
 
 ## Website work phases
 
-### Phase 1: Reviews tab + sign-in autofill — DONE
+### Phase 1: Reviews tab + sign-in autofill, DONE
 - [x] DB migration 012-reviews.sql applied to prod
 - [x] 9 hardcoded testimonials seeded from GoogleReviewsSection.tsx
 - [x] Admin CRUD endpoints (reviews-list, reviews-upsert, reviews-delete)
@@ -15,21 +15,21 @@ Ongoing infrastructure + feature work with concrete checklists. Update this file
 - [x] GoogleReviewsSection refactored to read from API (with fallback constants)
 - [x] Sign-in autofill quick win (localStorage last-email)
 
-### Phase 2: Own contact form (replaces Web3Forms) — DONE 2026-08-20
+### Phase 2: Own contact form (replaces Web3Forms), DONE 2026-08-20
 
-Original scope note was wrong — `contact_submissions` and `/api/contact` already
+Original scope note was wrong, `contact_submissions` and `/api/contact` already
 existed in prod. Delivered in two PRs.
 
-**PR 1 — dual-run:**
-- [x] 014-contact-submissions.sql — retro-baseline + `notes`, `contacted_at`, `updated_at`+trigger, indexes
+**PR 1, dual-run:**
+- [x] 014-contact-submissions.sql, retro-baseline + `notes`, `contacted_at`, `updated_at`+trigger, indexes
 - [x] `sendLeadNotification()` + `replyTo` support in `api/_auto-reply.ts`
-- [x] api/contact.ts — lead notification as a third Promise.allSettled
+- [x] api/contact.ts, lead notification as a third Promise.allSettled
 - [x] admin leads-list / leads-update / leads-delete + AdminLeads.tsx + i18n
 
-**PR 2 — cut the Web3Forms cord:**
-- [x] `src/pages/Contact.tsx` — POST directly to `/api/contact` and AWAIT it before
+**PR 2, cut the Web3Forms cord:**
+- [x] `src/pages/Contact.tsx`, POST directly to `/api/contact` and AWAIT it before
       navigating; dropped the Web3Forms fetch and the hardcoded key
-- [x] `src/pages/ThankYou.tsx` — removed the duplicate `/api/contact` fetch, the
+- [x] `src/pages/ThankYou.tsx`, removed the duplicate `/api/contact` fetch, the
       sessionStorage send-dedup, and the now-unreachable sending/pending/failed
       status branches. The page only reports an outcome that already happened.
 - [x] DATABASE.md + this file updated
@@ -37,7 +37,7 @@ existed in prod. Delivered in two PRs.
 **What PR 2 actually fixed.** During dual-run the DB insert, Vero notification, and
 auto-reply all fired from ThankYou.tsx's `useEffect` AFTER the client navigated away
 from /contact. Closing the tab, backgrounding on mobile, or a flaky connection in
-that window aborted the request — Web3Forms had emailed Vero, but no
+that window aborted the request, Web3Forms had emailed Vero, but no
 `contact_submissions` row existed, no notification fired, and (later) no inbox
 conversation was created. The Leads panel therefore under-reported and was NOT
 authoritative. Awaiting the request before navigation closes that hole, and a
@@ -48,50 +48,50 @@ stranding them on a thank-you page.
 Web3Forms notification mail out of the inbox. Harmless to keep as insurance against
 queued mail, but it can be deleted once no Web3Forms mail has arrived for a while.
 
-### Phase 3: Session cookies (auto sign-in) — planned
+### Phase 3: Session cookies (auto sign-in), planned
 - [ ] Admin HttpOnly session cookie (JWT signed with env-var secret)
 - [ ] /api/admin/session endpoint (validates cookie, returns level)
 - [ ] Auto sign-in flow on /admin page load
 - [ ] Extend same pattern to client portal auth
 
-### Phase 4: Unified inbox — email + contact form — SHIPPED 2026-08-19
+### Phase 4: Unified inbox, email + contact form, SHIPPED 2026-08-19
 
 Scope changed materially from the original plan. The plan assumed Resend Inbound
 on a `inbox.` subdomain behind a Resend Pro upgrade. Research killed that: Resend
 Free allows **1 domain, not 3**, and inbound counts against the **same 100/day
-quota as sending** — so a spam wave on a catch-all MX would stop contract and
+quota as sending**, so a spam wave on a catch-all MX would stop contract and
 portal emails. ImprovMX Premium ($9/mo, already being paid) already includes
 webhooks and fans one alias out to **both** Gmail and an HTTP webhook, which
 needs zero DNS changes and keeps Gmail as an independent fallback.
 
-- [x] 016 — `messages.subject`, `messages.in_reply_to`
-- [x] 017 — `messages.channel` (NOT NULL), `messages.from_address`,
+- [x] 016, `messages.subject`, `messages.in_reply_to`
+- [x] 017, `messages.channel` (NOT NULL), `messages.from_address`,
       `contact_submissions.conversation_id`, signature seeds, backfill of 31 past
       submissions into 26 conversations (`ai_enabled=FALSE`)
-- [x] 017a — hotfix: `channel` DEFAULT 'instagram'. **Required** because three
+- [x] 017a, hotfix: `channel` DEFAULT 'instagram'. **Required** because three
       pre-existing INSERT sites (`_ig-webhook.ts`, `_ai-reply.ts` x2) omitted the
       column; without it every inbound IG DM fails to persist between applying
       017 and deploying the fix.
-- [x] `api/inbox/_email-webhook.ts` — provider-adapter inbound. ImprovMX active,
+- [x] `api/inbox/_email-webhook.ts`, provider-adapter inbound. ImprovMX active,
       Resend standby. Routes by **sender address**, not In-Reply-To.
-- [x] `api/_inbox-record.ts` + `api/contact.ts` — form submissions become
+- [x] `api/_inbox-record.ts` + `api/contact.ts`, form submissions become
       conversations; the auto-reply is recorded as the first outbound
-- [x] `api/_email-signature.ts` + `api/admin/_messages-settings.ts` — signature in
+- [x] `api/_email-signature.ts` + `api/admin/_messages-settings.ts`, signature in
       `system_state`, editable from the Messages header
 - [x] Reply flow via Resend, From and Reply-To both `vero@vero.photography`
-- [x] **017b — drop the `channel` default.** Applied and verified.
-- [x] Configure the ImprovMX alias to append the webhook URL — live and delivering.
-- [x] Verify `In-Reply-To` is present in ImprovMX's real payload — YES. 5 of 8
+- [x] **017b, drop the `channel` default.** Applied and verified.
+- [x] Configure the ImprovMX alias to append the webhook URL, live and delivering.
+- [x] Verify `In-Reply-To` is present in ImprovMX's real payload, YES. 5 of 8
       real inbound emails carried it (the 3 without are thread openers, which
       correctly have no parent). Threading has a real anchor, not just the
       sender-address fallback.
-- [ ] `_messages-list.ts` does not expose `channel` — no "from the form" hint in
+- [ ] `_messages-list.ts` does not expose `channel`, no "from the form" hint in
       the conversation rail until you open the thread
 - [ ] Strip web3forms metadata from quoted history
 
 **Known gap (accepted):** replies Vero sends from Gmail directly are not captured.
 Only the Gmail API closes this, and for the product that means restricted scopes
-+ CASA Tier 2 at $500–$4,500/yr recurring. Every shared-inbox product ships with
++ CASA Tier 2 at $500 to $4,500/yr recurring. Every shared-inbox product ships with
 this caveat.
 
 **Long-term direction (decided 2026-08-19):** the system is intended to be sold to
@@ -102,78 +102,78 @@ quotas shared across tenants, bounce-on-overage, 30/100 domain caps, unsigned
 webhooks). Preferred onboarding is registering the customer's domain for them
 (Porkbun API, `.photography` ≈ $29/yr) so they do zero DNS work.
 
-### Phase 5: Assistant upgrade — DONE 2026-08-20
+### Phase 5: Assistant upgrade, DONE 2026-08-20
 
 All three parts shipped. Built on the existing Assistant tool loop rather than
 as new subsystems.
 
-- [x] **5a — Reply co-pilot.** `list_conversations` / `read_thread` /
+- [x] **5a, Reply co-pilot.** `list_conversations` / `read_thread` /
       `send_reply` on the assistant. Replaces Vero's screenshot-into-ChatGPT
       loop. Sending goes through `api/_reply-delivery.ts`, extracted from
       `_messages-send.ts` so the Send button and the assistant are ONE
       implementation (threading chain, signature, persist-before-send). Requires
       `confirmed=true`, and the model is told never to set it in the turn it
       first proposes a draft.
-- [x] **5b — System knowledge.** 32 entries seeded from the codebase and
+- [x] **5b, System knowledge.** 32 entries seeded from the codebase and
       adversarially verified against it (27 needed correcting). Migration 018
       adds `source='system'`; excluded from the customer-facing prompt and
       protected from edit/delete in the Context tab AND in the assistant's own
-      tools — it has a delete tool and would otherwise erase its own docs.
-- [x] **5c — AI on email.** `_email-webhook.ts` now invokes the reply engine
+      tools, it has a delete tool and would otherwise erase its own docs.
+- [x] **5c, AI on email.** `_email-webhook.ts` now invokes the reply engine
       (ack-first + waitUntil, same as IG). On email the engine **drafts and
-      stops** — migration 019 adds `messages.status`. Vero sees the draft above
+      stops**, migration 019 adds `messages.status`. Vero sees the draft above
       the composer, uses or discards it. Every guardrail applies unchanged.
       Drafts are excluded from the dedup and rate-limit gates, or one unactioned
       draft would silence the thread forever.
 - [x] **Promotional collapse.** Threads classified `spam-or-unrelated` fold
       behind a "Show N promotional" toggle. Classified and stored, never
-      filtered at ingest — a misclassification costs a click, not a client.
+      filtered at ingest, a misclassification costs a click, not a client.
 
 **Follow-ups worth knowing:**
 - The assistant's prompt now carries ~54k chars of panel documentation per turn
   (~$0.002/turn at gpt-4o-mini). Fine for now; if replies get slow, move system
   knowledge behind a search tool instead of inlining it.
-- `messages.status` has a `'failed'` value nothing writes yet — a failed send
+- `messages.status` has a `'failed'` value nothing writes yet, a failed send
   currently deletes its row instead. Reserved so the alternative needs no
   migration.
 
-### Phase 6: Reviews auto-ingest — STARTED 2026-08-20
+### Phase 6: Reviews auto-ingest, STARTED 2026-08-20
 
 Unblocked now that Phase 4 has landed. The prerequisites were already done
-(vero@ Google account, GBP manager access, review notifications enabled) —
+(vero@ Google account, GBP manager access, review notifications enabled)
 the notification emails have been arriving all along.
 
 - [x] **Stop discarding them.** The auto-responder filter added with the email
       inbox drops `Precedence: bulk` / `Auto-Submitted: auto-generated`, which
-      is exactly what Google Business Profile and Yelp notifications carry —
+      is exactly what Google Business Profile and Yelp notifications carry
       so every review email was being received and thrown away. Now allowlisted
       by sender domain AND a review-ish subject (a bare domain allowlist would
       also pull in Google security alerts and Workspace billing).
 - [ ] **Capture a real notification** and write the parser against its actual
-      body. Deliberately not guessing at Google's HTML — that parser only gets
+      body. Deliberately not guessing at Google's HTML, that parser only gets
       one chance to be right and there is no way to test it without a sample.
 - [ ] Parse reviewer name, star rating, review text
 - [ ] Auto-create the review as a DRAFT (`visible=false`) for Vero to approve,
       same pattern as the gallery sync
-- [ ] Route review notifications out of the Messages inbox — they should not
+- [ ] Route review notifications out of the Messages inbox, they should not
       sit there looking like client conversations. Same work as collapsing
       promotional mail.
 
 **Known limitation to verify with the first real sample:** Google's email may
 carry only a snippet of the review rather than the full text. If so the draft
-gets name + rating + partial text and Vero pastes the rest — still far better
+gets name + rating + partial text and Vero pastes the rest, still far better
 than typing it from scratch, but not hands-off.
 
 **Not in scope:** the "5.0 · 16 reviews" Google Aggregate card stays MANUAL.
-That was a logged decision — the Places API needs a Cloud project, billing
+That was a logged decision, the Places API needs a Cloud project, billing
 card and per-SKU quota policing for two numbers that change monthly.
 
 ## Near-term security/quality fixes (parallel to phases above)
 
-- [ ] **Hash client_password with bcrypt** — transitional migration; test on Neon branch first
-- [x] **001-baseline.sql** — retroactive DDL for the three god tables
-- [ ] **Reconcile contract-body freeze** — frozen at creation, docs said "at signing" (comments wrong); pick a rule, enforce, update docs
-- [ ] **Session cookies for client portal** — bundle with Phase 3
+- [ ] **Hash client_password with bcrypt**, transitional migration; test on Neon branch first
+- [x] **001-baseline.sql**, retroactive DDL for the three god tables
+- [ ] **Reconcile contract-body freeze**, frozen at creation, docs said "at signing" (comments wrong); pick a rule, enforce, update docs
+- [ ] **Session cookies for client portal**, bundle with Phase 3
 
 ## IG webhook follow-ups (identified by 2026-08-16 diagnostic + refactor)
 
@@ -182,9 +182,9 @@ within-invocation double-reply race and moved AI work off Meta's ACK
 path. Remaining gaps identified by the adversarial review, ordered by
 priority:
 
-- [ ] **Cross-invocation race — sentinel INSERT with UNIQUE constraint**. When Meta sends two POSTs milliseconds apart (routine, not just retries), each lands on its own Vercel lambda. Both run dedup + rate-limit SELECTs concurrently before either persists an outbound — both pass, both send, customer gets two AI replies. The within-invocation fix (single waitUntil + sequential for-await) doesn't help here since the two lambdas share no state. Fix: add a `messages.in_reply_to_message_id` column with UNIQUE constraint (migration 015), have `processInboundMessage` INSERT a "pending" outbound row keyed on the inbound mid at the very start of the pipeline — losing the race → ON CONFLICT → skip. Only the winner proceeds to OpenAI/send/finalize. Adds one DB roundtrip per reply and requires the messages queries elsewhere in the app to tolerate a brief `body=NULL, status='pending'` state (or use `direction='outbound_pending'` and filter in list queries). Real work but the cleanest concurrency primitive available on neon-serverless HTTP (advisory locks require a persistent session which the HTTP driver doesn't have).
-- [ ] **Surface AI failures in the admin panel**. Today when the AI silently fails (generation error, IG send error, spam-filter skip, rate-limit skip), it's logged but not visible to Vero — she can't distinguish "AI decided not to reply" from "AI tried and errored." Add `conversations.ai_last_error` (text) + `ai_last_error_at` (timestamptz) columns, populate from processInboundMessage's error branches, render as a small red banner on the conversation card in AdminMessages. Migration 016.
-- [ ] **Fold echo-webhook self-healing into the ack path**. If the primary send-and-INSERT flow ever fails at the INSERT step (e.g. Vercel kills mid-flight past maxDuration), Meta will echo the message back via `is_echo=true` on the webhook, and our persist loop stores it correctly. But there's a window between "customer received reply" and "admin thread shows the reply" where Vero could reply manually → double-send. Consider persisting a `sending` sentinel BEFORE calling sendIgTextMessage, then UPDATE-to-`sent` after — the admin panel would render `sending` as a spinner so Vero waits.
+- [ ] **Cross-invocation race, sentinel INSERT with UNIQUE constraint**. When Meta sends two POSTs milliseconds apart (routine, not just retries), each lands on its own Vercel lambda. Both run dedup + rate-limit SELECTs concurrently before either persists an outbound, both pass, both send, customer gets two AI replies. The within-invocation fix (single waitUntil + sequential for-await) doesn't help here since the two lambdas share no state. Fix: add a `messages.in_reply_to_message_id` column with UNIQUE constraint (migration 015), have `processInboundMessage` INSERT a "pending" outbound row keyed on the inbound mid at the very start of the pipeline, losing the race → ON CONFLICT → skip. Only the winner proceeds to OpenAI/send/finalize. Adds one DB roundtrip per reply and requires the messages queries elsewhere in the app to tolerate a brief `body=NULL, status='pending'` state (or use `direction='outbound_pending'` and filter in list queries). Real work but the cleanest concurrency primitive available on neon-serverless HTTP (advisory locks require a persistent session which the HTTP driver doesn't have).
+- [ ] **Surface AI failures in the admin panel**. Today when the AI silently fails (generation error, IG send error, spam-filter skip, rate-limit skip), it's logged but not visible to Vero, she can't distinguish "AI decided not to reply" from "AI tried and errored." Add `conversations.ai_last_error` (text) + `ai_last_error_at` (timestamptz) columns, populate from processInboundMessage's error branches, render as a small red banner on the conversation card in AdminMessages. Migration 016.
+- [ ] **Fold echo-webhook self-healing into the ack path**. If the primary send-and-INSERT flow ever fails at the INSERT step (e.g. Vercel kills mid-flight past maxDuration), Meta will echo the message back via `is_echo=true` on the webhook, and our persist loop stores it correctly. But there's a window between "customer received reply" and "admin thread shows the reply" where Vero could reply manually → double-send. Consider persisting a `sending` sentinel BEFORE calling sendIgTextMessage, then UPDATE-to-`sent` after, the admin panel would render `sending` as a spinner so Vero waits.
 
 ## Infrastructure transitions
 
@@ -210,7 +210,7 @@ priority:
 ## Pending human tasks
 
 - [ ] Add passkey/authenticator app to vero@vero.photography Google account (Google pushing away from SMS-only auth in 2026)
-- [x] ~~Upgrade Resend to Pro~~ — not needed; ImprovMX webhooks cover inbound.
+- [x] ~~Upgrade Resend to Pro~~, not needed; ImprovMX webhooks cover inbound.
 - [ ] Decide which other domains to add to Resend (gerz.dev? spysocial.app?)
 
 ## Decisions logged

@@ -1,5 +1,5 @@
 /**
- * Admin: delete a Journal post. Superadmin only — same principle as
+ * Admin: delete a Journal post. Superadmin only, same principle as
  * portal-delete: destructive irreversible action, keep it out of
  * Vero's reach so an accidental click doesn't lose weeks of writing.
  *
@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // The post is gone from the database, but /journal/<slug> is answered by a
     // prerendered file that Vercel serves from the filesystem before any
-    // rewrite — so without a rebuild the deleted article keeps returning 200
+    // rewrite, so without a rebuild the deleted article keeps returning 200
     // with its full text, title and link preview. After a hard delete that file
     // is the only remaining copy. Deleting must therefore also rebuild.
     // Never allowed to fail the delete: an unset or unreachable hook must not

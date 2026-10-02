@@ -1,14 +1,14 @@
 /**
- * Admin auth check — used by every /api/admin/* endpoint.
+ * Admin auth check, used by every /api/admin/* endpoint.
  *
  * Two-part story:
  *   - LOGIN: the client sends { email, password }. We check that pair
  *     matches ONE of the two env-var pairs (Vero = admin, Alex = super).
- *     Requiring email raises the brute-force cost dramatically — an
+ *     Requiring email raises the brute-force cost dramatically, an
  *     attacker who finds /admin needs to guess both fields.
  *   - AFTER LOGIN: the password alone is stored in React state and sent
  *     with every subsequent API call as the "session token." No email
- *     re-check on those calls — the password itself is the secret.
+ *     re-check on those calls, the password itself is the secret.
  *     Refreshing the tab boots back to the login screen.
  *
  * The 750ms delay on failure is the same anti-brute-force pattern used
@@ -32,7 +32,7 @@ export interface AdminAuthFail {
 }
 
 /**
- * Login check — requires BOTH email and password.
+ * Login check, requires BOTH email and password.
  *   - LOGIN_ADMIN_EMAIL + ADMIN_PASSWORD       → level 'admin' (Vero)
  *   - LOGIN_SUPER_EMAIL + SUPER_ADMIN_PASSWORD → level 'super' (Alex)
  *
@@ -86,7 +86,7 @@ async function resolveSession(
     return { level: row.level, userId: row.user_id };
   } catch (err) {
     // The tables may not exist yet (migration 026 not applied). Fail closed on
-    // the token path — the env-password path below still works, so this can
+    // the token path, the env-password path below still works, so this can
     // never lock anyone out.
     console.error('[admin] session lookup failed:', err);
     return null;
@@ -190,7 +190,7 @@ export async function loginAdmin(
 
   // Database first. If admin_users has this person, that is the source of
   // truth. Falls through to the env vars when the table is empty, missing, or
-  // does not know them — which is what makes the migration a non-event.
+  // does not know them, which is what makes the migration a non-event.
   const dbUser = await loginFromDb(emailLc, password);
   if (dbUser) {
     return { ok: true, level: dbUser.level, userId: dbUser.userId };
@@ -245,7 +245,7 @@ export async function requireAdmin(
     return { ok: false, status: 401, error: 'Password required' };
   }
 
-  // A session token looks like 64 hex chars. Try that first — but ONLY as an
+  // A session token looks like 64 hex chars. Try that first, but ONLY as an
   // additional path. If it does not resolve we fall straight through to the
   // env-var comparison below, so a missing table, an expired row or a botched
   // seed can never lock anyone out of their own admin panel.

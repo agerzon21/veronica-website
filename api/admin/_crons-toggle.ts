@@ -11,7 +11,7 @@
  *
  * The next invocation of the affected cron sees the new value via
  * runGuarded() and either does work or writes a 'skipped' run.
- * There's no separate deploy step — the toggle is live immediately.
+ * There's no separate deploy step, the toggle is live immediately.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';

@@ -3,7 +3,7 @@
 // each file's natural pixel dimensions via sharp, and writes the
 // results as JSON to src/data/photo-dims.json. Runs as part of the
 // build so the frontend can compute a justified/masonry layout with
-// real aspects at first paint — no reflow while thumbnails load,
+// real aspects at first paint, no reflow while thumbnails load,
 // no square-cropping of portraits or landscapes.
 //
 // The output is keyed by filename (which matches the CSV's
@@ -36,7 +36,7 @@ async function walk(dir) {
 const files = await walk(PHOTOS_DIR);
 const dims = {};
 
-// Read dimensions in parallel — sharp's metadata is cheap (just reads
+// Read dimensions in parallel, sharp's metadata is cheap (just reads
 // the header, doesn't decode the pixels).
 await Promise.all(
   files.map(async (path) => {

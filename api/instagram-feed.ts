@@ -6,7 +6,7 @@
  *   → 500 { error }                       (creds missing or upstream failed)
  *
  * Why this exists: Instagram's Graph API returns media URLs that point at
- * `scontent-iad-X.cdninstagram.com` with a signed query string that expires —
+ * `scontent-iad-X.cdninstagram.com` with a signed query string that expires
  * typically within hours. Our previous setup baked those URLs into the
  * bundle at build time (scripts/fetch-instagram.mjs), so a few hours after
  * each deploy the production site's Instagram tiles silently start 403'ing.
@@ -24,7 +24,7 @@ const POST_LIMIT = 9;
 const MEDIA_FIELDS = [
   'id',
   'media_type',
-  // Signals whether this is a REEL vs a normal FEED post — lets us
+  // Signals whether this is a REEL vs a normal FEED post, lets us
   // show a "reel" badge on video tiles instead of a generic play
   // icon.
   'media_product_type',
@@ -33,7 +33,7 @@ const MEDIA_FIELDS = [
   'permalink',
   'caption',
   'timestamp',
-  // Engagement metrics — available with the same
+  // Engagement metrics, available with the same
   // instagram_business_basic permission we already have. Some posts
   // (very recent, or comments-off) return null; we tolerate that.
   'like_count',
@@ -120,7 +120,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         url: p.media_type === 'VIDEO' ? p.thumbnail_url! : p.media_url!,
         permalink: p.permalink,
         // Longer caption cap now that the on-site modal shows the full
-        // text — the old 280-char limit was tuned for a hover overlay.
+        // text, the old 280-char limit was tuned for a hover overlay.
         caption: (p.caption ?? '').slice(0, 1400),
         timestamp: p.timestamp,
         // Video posts include reels; media_product_type disambiguates

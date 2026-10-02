@@ -6,14 +6,14 @@
  *
  * Runs automatically before `vite build` (see package.json). On Vercel, the
  * env vars below are set in the project settings; locally they're optional
- * — if missing or the fetch fails, we leave whatever instagram.json is
+ * if missing or the fetch fails, we leave whatever instagram.json is
  * already in the repo so dev never breaks.
  *
  * Required env vars (set in Vercel → Project → Settings → Environment
  * Variables):
- *   IG_ACCESS_TOKEN — long-lived Instagram Graph API token (60-day, must be
+ *   IG_ACCESS_TOKEN, long-lived Instagram Graph API token (60-day, must be
  *                     refreshed periodically; see refresh-instagram-token.mjs)
- *   IG_USER_ID      — her Instagram User ID (numeric string from /me)
+ *   IG_USER_ID, her Instagram User ID (numeric string from /me)
  *
  * The token can be refreshed any time before expiry by hitting:
  *   GET https://graph.instagram.com/refresh_access_token
@@ -36,7 +36,7 @@ const userId = process.env.IG_USER_ID;
 
 if (!token || !userId) {
   console.log(
-    '[fetch-instagram] IG_ACCESS_TOKEN / IG_USER_ID not set — skipping ' +
+    '[fetch-instagram] IG_ACCESS_TOKEN / IG_USER_ID not set, skipping ' +
     'fetch and keeping the existing src/data/instagram.json (if any). ' +
     'This is expected in local dev; set both in Vercel for production.',
   );
@@ -88,7 +88,7 @@ try {
     console.error(`[fetch-instagram] API responded ${failing.status}: ${await failing.text()}`);
     console.error(
       '[fetch-instagram] Leaving existing instagram.json in place. ' +
-      'Token may have expired — refresh it and redeploy.',
+      'Token may have expired, refresh it and redeploy.',
     );
     process.exit(0); // intentionally exit 0 so build still succeeds
   }

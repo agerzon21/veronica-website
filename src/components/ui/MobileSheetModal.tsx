@@ -15,7 +15,7 @@ import { type ReactNode } from 'react';
 /**
  * Thin wrapper over Chakra Modal that goes full-screen on mobile and
  * behaves like a normal centered modal on desktop. Every admin modal
- * with a form should use this — the raw Chakra Modal with size="md"/"lg"
+ * with a form should use this, the raw Chakra Modal with size="md"/"lg"
  * gets cramped on 375px viewports and the on-screen keyboard covers
  * half of it when Textarea gets focus.
  *
@@ -38,7 +38,7 @@ interface Props extends Omit<ModalProps, 'children' | 'size'> {
   children: ReactNode;
   // Desktop-only size. On mobile we always go full-screen.
   desktopSize?: ModalProps['size'];
-  // Rare escape hatch — some modals don't want a close X (e.g. a
+  // Rare escape hatch, some modals don't want a close X (e.g. a
   // confirmation flow where you must pick an action).
   hideCloseButton?: boolean;
   /**
@@ -196,7 +196,7 @@ const MobileSheetModal = ({
 };
 
 /**
- * Footer helper — buttons stack full-width column-reverse on mobile
+ * Footer helper, buttons stack full-width column-reverse on mobile
  * (primary CTA above cancel/back) and row on desktop. Consumers pass
  * buttons as children; this component just arranges them.
  */

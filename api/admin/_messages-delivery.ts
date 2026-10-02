@@ -6,12 +6,12 @@
  *   → 400 missing conversationId
  *   → 401 wrong password
  *
- * Instagram gives Vero this for free — she opens the app and the message
+ * Instagram gives Vero this for free, she opens the app and the message
  * is either in the thread or it isn't. Email gives her nothing: the
  * composer clears and she has to trust us.
  *
  * A message being VISIBLE in the thread already means Resend accepted it
- * (a rejected send deletes its own row). But accepted is not delivered —
+ * (a rejected send deletes its own row). But accepted is not delivered
  * the address can be wrong, the mailbox full, the domain can reject us.
  * Those all look identical to success without this.
  *
@@ -21,9 +21,9 @@
  * this would be one Resend API call per message per render, permanently,
  * for outcomes that stopped changing days ago.
  *
- * Fails soft, deliberately. If the lookup breaks — most likely because
+ * Fails soft, deliberately. If the lookup breaks, most likely because
  * RESEND_API_KEY is sending-access rather than full-access, which can
- * send but cannot call emails.get — we return whatever we last knew
+ * send but cannot call emails.get, we return whatever we last knew
  * rather than an error. A missing delivery badge is a small loss; a
  * thread that won't load because a status lookup failed is a large one.
  */
@@ -36,7 +36,7 @@ import { getDeliveryStatus, getResendMessageId } from '../_auto-reply.js';
 /** Outcomes that can't change, so they're never re-polled. */
 const TERMINAL_STATES = ['delivered', 'bounced', 'complained'];
 
-/** Bound the work per request — a long thread shouldn't fan out forever. */
+/** Bound the work per request, a long thread shouldn't fan out forever. */
 const MAX_LOOKUPS_PER_REQUEST = 10;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -76,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // soon it appears on the retrieve endpoint, so a send can legitimately
     // finish before it exists. A row left holding a 'pending:' placeholder
     // can't be referenced by the next reply and can't be matched against
-    // the customer's In-Reply-To — i.e. the thread silently breaks. This
+    // the customer's In-Reply-To, i.e. the thread silently breaks. This
     // poller already talks to Resend per message, so it repairs them.
     for (const r of rows) {
       if (!r.external_message_id?.startsWith('pending:')) continue;
@@ -101,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Newest first — if we hit the cap, the message she just sent is the
+    // Newest first, if we hit the cap, the message she just sent is the
     // one she's actually looking at.
     for (const r of pending.slice(0, MAX_LOOKUPS_PER_REQUEST)) {
       try {

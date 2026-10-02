@@ -1,9 +1,9 @@
 /**
  * Admin: send a manual reply from Vero to a specific conversation.
  *
- * Thin HTTP wrapper. All of the actual work — channel dispatch, RFC 5322
+ * Thin HTTP wrapper. All of the actual work, channel dispatch, RFC 5322
  * threading headers, the synthetic-message-id filter, signature append,
- * and the persist-before-send idempotency ordering — lives in
+ * and the persist-before-send idempotency ordering, lives in
  * api/_reply-delivery.ts, so the in-panel AI assistant's send_reply tool
  * goes through the identical path rather than a parallel implementation
  * that would slowly drift from this one.

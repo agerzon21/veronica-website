@@ -43,7 +43,7 @@
          - `index, follow` is the default but explicit here so it's not lost
            if some crawler reads a default-deny.
          - `max-image-preview:large` is one of Google's two officially
-           documented levers for SERP thumbnail behavior — it doesn't pick
+           documented levers for SERP thumbnail behavior, it doesn't pick
            the image but ensures whatever Google picks gets rendered at
            full size (vs the smaller default). Per Google's own case
            studies this can lift CTR substantially.
@@ -54,12 +54,12 @@
     <!-- Homepage canonical in STATIC html, so a crawler that does not execute
          JS sees one. React Helmet renders a duplicate at runtime, and
          prerender-photos.mjs strips every canonical before injecting its own
-         per-photo one — so /photo/* pages never end up with two. -->
+         per-photo one, so /photo/* pages never end up with two. -->
     <link rel="canonical" href="https://vero.photography/" />
 
     <!-- The camera-body preload used to live here. Removed: at scroll 0 the LCD
          overshoots the viewport by 1.2x, so the camera body is 100% occluded on
-         every viewport up to ~2940 CSS px wide — we were spending 182KB at
+         every viewport up to ~2940 CSS px wide, we were spending 182KB at
          fetchpriority=high on an image nobody sees, on EVERY route, because the
          SPA rewrite serves this HTML for /gallery, /about, /portal and /admin
          too. The <img> in HeroSection.tsx keeps its own fetchPriority="high"
@@ -70,7 +70,7 @@
          it. No crossorigin: react-ga4 injects gtag as a plain non-CORS
          <script async src>, so an anonymous preconnect socket would land in a
          different pool, get no reuse, and log a "preconnect was not used"
-         warning. Only googletagmanager — the analytics.google.com and
+         warning. Only googletagmanager, the analytics.google.com and
          doubleclick beacons fire past Chrome's ~10s idle-socket timeout.
          MUST stay above the Open Graph comment below: prerender-photos.mjs
          strips from that comment onward when building each photo page. -->
@@ -80,9 +80,9 @@
     <!-- Typefaces. Self-hosted rather than Google-hosted: a third-party font
          origin costs a DNS+TCP+TLS handshake inside the render path, which is
          the same cost we deliberately avoided for the Instagram avatar.
-         Variable woff2, latin subset — 37KB + 26KB. Filenames carry a
+         Variable woff2, latin subset, 37KB + 26KB. Filenames carry a
          content hash because vercel.json serves /assets/* as
-         "immutable, max-age=31536000" — an unhashed font could never be
+         "immutable, max-age=31536000", an unhashed font could never be
          replaced for returning visitors. Vite hashes its own output; these
          live in public/ and bypass that, so the hash is manual.
 
@@ -113,7 +113,7 @@
     </style>
 
     <!-- The mobile LCP element. It lived only inside the JSON-LD below, so it
-         could not be fetched until React had rendered the navbar — the
+         could not be fetched until React had rendered the navbar, the
          waterfall showed the request starting at 3558ms, at Low priority,
          with the main bundle already finished at 2274ms. Preloading moves
          discovery into the first HTML pass. 11KB, so the cost is trivial and
@@ -145,7 +145,7 @@
          instead of waiting for the second-pass JS render that picks up
          the React-Helmet-rendered version. The homepage's hero camera
          image was winning Google's automated picker on visual prominence
-         alone — this gives Google an explicit pointer to contact-bg.webp
+         alone, this gives Google an explicit pointer to contact-bg.webp
          as the page's representative image. -->
     <!-- The homepage's WebPage entity. Prerendered pages emit their own and
          strip this one (see scripts/prerender-photos.mjs): without that, every
@@ -169,7 +169,7 @@
     </script>
 
     <!-- Structured Data: ProfessionalService is the correct schema.org type
-         for a service business — "Photographer" was not a valid @type and
+         for a service business, "Photographer" was not a valid @type and
          was triggering validation errors across every page. -->
     <script type="application/ld+json">
     {
@@ -271,7 +271,7 @@
     </script>
   </head>
   <body>
-    <!-- VG-HOME-NOSCRIPT:START — stripped from /photo/* by prerender-photos.mjs,
+    <!-- VG-HOME-NOSCRIPT:START, stripped from /photo/* by prerender-photos.mjs,
          which injects its own per-photo noscript after the root div. Without
          this, a crawler or AI agent that does not execute JS sees a completely
          empty body on every route except /photo/*, which is most of why

@@ -1,5 +1,5 @@
 /**
- * Route smoke test — asserts what the build-time reachability check cannot.
+ * Route smoke test, asserts what the build-time reachability check cannot.
  *
  * WHY THIS EXISTS
  * scripts/prerender-photos.mjs verifies every sitemap URL is LINKED. It cannot
@@ -78,7 +78,7 @@ const fillParams = (route) => {
   if (route === '/gallery/:category') return sample(/^\/gallery\/[^/]+$/);
   if (route === '/photo/:category/:photoId') return sample(/^\/photo\//);
   if (route === '/journal/:slug') return sample(/^\/journal\/[^/]+$/);
-  return null; // portal/reset etc. need tokens — not smoke-testable
+  return null; // portal/reset etc. need tokens, not smoke-testable
 };
 
 const routes = new Set();
@@ -96,7 +96,7 @@ routes.add('/sitemap.xml');
  * nothing routes to them, and every URL 200s while serving the homepage shell.
  */
 const mustHaveOwnTitle = [
-  // Every category and every journal page — both are small sets and both are
+  // Every category and every journal page, both are small sets and both are
   // exactly where "generated but not routed" hides. Plus a sample of photo
   // pages, which are numerous and all built by the same loop.
   ...sitemapPaths.filter((p) => /^\/gallery\/[^/]+$/.test(p)),

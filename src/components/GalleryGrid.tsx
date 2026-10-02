@@ -52,7 +52,7 @@ interface GalleryImage {
   alt: string;
   title: string;
   description: string;
-  // Natural pixel dimensions — the DB-backed /api/gallery endpoints
+  // Natural pixel dimensions, the DB-backed /api/gallery endpoints
   // return these from Drive's imageMediaMetadata (nullable when
   // Drive didn't report them; falls back to 3:2 in the layout).
   width?: number | null;
@@ -67,7 +67,7 @@ interface GalleryGridProps {
 const MotionBox = m(Box);
 
 // Justified-layout tuning. Target row height is what each row
-// approaches when items don't have to be squished/stretched — bigger
+// approaches when items don't have to be squished/stretched, bigger
 // = fewer items per row, each item larger. Gap controls the whitespace
 // between photos. Sized so a typical landscape shows 2-3 per row on
 // desktop (matching the bumagaz reference), portraits fit 3-4.
@@ -75,8 +75,8 @@ const TARGET_ROW_HEIGHT_DESKTOP = 470;
 const TARGET_ROW_HEIGHT_MOBILE = 260;
 // The main gallery. 20/12px put visible cream between every photograph, so a
 // wall of work read as a scatter of cards. The reference site the owner keeps
-// citing runs its grid near-flush — "minimal spacing between grid items,
-// creating a dense, compact presentation" — which is what makes a portfolio
+// citing runs its grid near-flush, "minimal spacing between grid items,
+// creating a dense, compact presentation", which is what makes a portfolio
 // read as a body of work rather than a list of files.
 //
 // Not zero: a hairline keeps two adjacent photographs from bleeding into each
@@ -264,7 +264,7 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
           {row.items.map((tile) => {
             // Look up the original index in `images` so refs, modal
             // navigation, and URL sync all stay consistent with the
-            // flat images array — regardless of layout row order.
+            // flat images array, regardless of layout row order.
             const index = images.findIndex(
               (img, i) => (img.id ?? String(i)) === tile.id,
             );
@@ -307,7 +307,7 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
               >
                 {/* sizes is the tile's EXACT rendered width, which this
                     layout happens to know: justifyLayout returns it in px.
-                    That is the ideal case for srcset — the browser multiplies
+                    That is the ideal case for srcset, the browser multiplies
                     by device pixel ratio and picks a rung, with no vw
                     arithmetic to get wrong on a masonry whose tiles are
                     different widths in every row. */}
@@ -354,8 +354,8 @@ const GalleryGrid = ({ images, category }: GalleryGridProps) => {
  * gold spinner centered in the tile while the Drive-proxy request
  * is in flight. Parent tile provides the warm-cream background +
  * position:relative anchoring; this component adds the spinner and
- * the img on top. The two cross-fade — spinner opacity 1→0 as img
- * opacity 0→1 — so the transition reads as intentional loading
+ * the img on top. The two cross-fade, spinner opacity 1→0 as img
+ * opacity 0→1, so the transition reads as intentional loading
  * rather than a hard pop.
  */
 function GalleryImg({

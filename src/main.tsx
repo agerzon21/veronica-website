@@ -15,7 +15,7 @@ window.addEventListener('vite:preloadError', (event) => {
 // NOTE: there was a `document.title = 'Vero Photography v1.0.1'` here. It ran at
 // module scope and stomped the route-specific <title> that index.html and
 // prerender-photos.mjs write, so every page showed the version string until
-// Helmet caught up — including for GA4's auto-collected page_title, since gtag
+// Helmet caught up, including for GA4's auto-collected page_title, since gtag
 // loads inside that window. It never did any cache busting either; that's
 // Vite's content hash. Removed.
 

@@ -26,7 +26,7 @@
  * is caught by --check before the bundle is written.
  *
  * OUTPUT LOCATION
- * public/assets/grid/<category>/<slug>-g<width>.webp — deliberately NOT under
+ * public/assets/grid/<category>/<slug>-g<width>.webp, deliberately NOT under
  * public/assets/photos/, which scripts/measure-photos.mjs walks keyed by bare
  * filename to build photo-dims.json. Derivatives there would collide with
  * their own originals in that map and ship the wrong aspect ratios to the

@@ -14,7 +14,7 @@ import { ensureAnalytics } from '../utils/analytics';
  *   2. The connection dropped mid-navigation.
  *
  * Without a boundary, either one throws during render and React 18 unmounts
- * the entire tree — a white screen. Before this existed there was no
+ * the entire tree, a white screen. Before this existed there was no
  * ErrorBoundary anywhere in src/, so any such throw took the whole site down.
  *
  * The recovery path is deliberately conservative:
@@ -94,7 +94,7 @@ export function isChunkLoadError(error: unknown): boolean {
 
 // Speculative prefetches (warming a route the user has NOT navigated to) must
 // never trigger a reload. A failed background fetch is harmless; reloading
-// because of one would discard whatever the visitor was typing — the Contact
+// because of one would discard whatever the visitor was typing, the Contact
 // form warms ThankYou while someone is mid-message.
 let speculativeDepth = 0;
 
@@ -128,7 +128,7 @@ export function attemptChunkRecovery(): boolean {
   try {
     sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
   } catch {
-    // Non-fatal — worst case we lose loop protection for this tab.
+    // Non-fatal, worst case we lose loop protection for this tab.
   }
   reloadFresh();
   return true;
@@ -151,7 +151,7 @@ class ChunkErrorBoundary extends React.Component<Props, State> {
     console.error('[ChunkErrorBoundary]', error, info?.componentStack);
     // Surface it in analytics so this shows up in a report instead of only in
     // a frustrated text message. gtag is deferred site-wide, so it usually
-    // does NOT exist yet at the moment a chunk fails — boot it first or this
+    // does NOT exist yet at the moment a chunk fails, boot it first or this
     // telemetry is silently dropped in exactly the window it matters.
     ensureAnalytics();
     if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {

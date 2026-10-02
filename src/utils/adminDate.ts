@@ -2,7 +2,7 @@
  * Date rendering that follows the ADMIN PANEL language, never the device.
  *
  * The panel's chrome comes from its own language toggle, but a bare
- * `toLocaleString()` follows the phone's system language — so an English
+ * `toLocaleString()` follows the phone's system language, so an English
  * admin panel on a Russian-system phone showed Russian dates in the middle
  * of English UI. Native `<input type="date">` widgets have the same issue
  * and cannot be forced (browsers render them per device settings), which is

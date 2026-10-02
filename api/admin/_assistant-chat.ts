@@ -48,7 +48,7 @@
  *   3. ANSWERS "HOW DO I…" QUESTIONS about the admin panel itself, from
  *      ai_context rows with source='system'. Those are written by Alex,
  *      are excluded from the customer-facing prompt (migration 018), and
- *      are protected from edit/delete here — otherwise the assistant
+ *      are protected from edit/delete here, otherwise the assistant
  *      could be talked into deleting its own documentation.
  */
 
@@ -215,12 +215,12 @@ function resolveSlot(conversationId: unknown): string {
  * system prompt that now carries the entire admin-panel documentation.
  * Nothing trimmed it, so a long-running conversation got steadily slower
  * and more expensive and would eventually just fail against the context
- * window — and it would fail on Vero, mid-sentence, with no obvious
+ * window, and it would fail on Vero, mid-sentence, with no obvious
  * cause.
  *
  * SENT is the smaller window, but deliberately generous. Measured against
  * the live thread: the knowledge base and panel documentation rebuilt into
- * every prompt come to ~17.5k tokens, and 80 stored messages to ~10k —
+ * every prompt come to ~17.5k tokens, and 80 stored messages to ~10k
  * because stored messages include tool_calls and tool results, which are
  * far more verbose than the visible chat suggests. So history is roughly
  * a third of the payload, not the rounding error it looks like.
@@ -238,7 +238,7 @@ function resolveSlot(conversationId: unknown): string {
  * That's why the prompt pushes it to save durable facts rather than rely
  * on remembering them.
  *
- * STORED is larger still — the transcript is Vero's to scroll, and she
+ * STORED is larger still, the transcript is Vero's to scroll, and she
  * keeps far more of it than the model is given.
  */
 const MAX_HISTORY_SENT = 80;
@@ -255,7 +255,7 @@ const MAX_HISTORY_STORED_CONVERSATION = 120;
  * Trim to at most `limit` trailing messages, starting at a 'user' turn.
  *
  * The boundary matters. A `tool` message is only valid when the
- * `assistant` turn carrying its matching tool_calls is also present —
+ * `assistant` turn carrying its matching tool_calls is also present
  * slice in the middle of a tool sequence and OpenAI rejects the whole
  * request. Every conversational exchange starts with a user turn, so
  * advancing to one guarantees a coherent window.
@@ -290,7 +290,7 @@ interface DbWrite {
   // A short paraphrase for the achievement toast, in whatever
   // language the chat is currently running in. The model produces
   // this on the tool call so there's no separate translation
-  // roundtrip. Field is language-agnostic on purpose — it's just
+  // roundtrip. Field is language-agnostic on purpose, it's just
   // "the toast text."
   content_summary: string;
   /**
@@ -356,7 +356,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `) as Array<{ slot: string; messages: StoredMessage[] }>;
       const messages =
         rows.find((r) => r.slot === slot)?.messages ?? rows[0]?.messages ?? [];
-      // Filter down to just user + assistant text turns for the UI —
+      // Filter down to just user + assistant text turns for the UI
       // tool_calls / tool responses / system prompt are noise.
       const displayable = messages.map(inHouseStyle).filter(
         (m) => isDisplayableTurn(m),
@@ -420,7 +420,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Per-turn UI language. Persisted client-side (per browser),
     // sent through on every send. Falls back to Russian to preserve
-    // Vero's default — she's the primary user of this chat.
+    // Vero's default, she's the primary user of this chat.
     const requestedLang = typeof req.body?.language === 'string' ? req.body.language : 'ru';
     const language: ChatLanguage = requestedLang === 'en' ? 'en' : 'ru';
 
@@ -459,7 +459,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // language BEFORE writing rather than by being bounced by the
           // tool guard after.
           customerLang: await customerLanguage(sql, row.id),
-          // Portal state the thread does not contain — this is how the
+          // Portal state the thread does not contain, this is how the
           // assistant can help write "your portal invite is in your inbox"
           // right after Vero creates the portal. See portalContextBlock.
           portalBlock: await portalContextBlock(sql, row.id),
@@ -558,7 +558,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!msg) throw new Error('OpenAI returned no message');
 
       // Chat prose passes no tool, so the subject guard has to run on the
-      // DISPLAYED text too — the model presents drafts inside its bubbles,
+      // DISPLAYED text too, the model presents drafts inside its bubbles,
       // and a "Subject:" there reads exactly like the rule not working,
       // whatever the actual draft row says.
       const shownContent = msg.content
@@ -601,7 +601,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         // A knowledge write that failed must be VISIBLE. The model gets the
         // error back and is told to relay it, but a model that just claimed
-        // "saved!" is also capable of glossing over the failure — and did:
+        // "saved!" is also capable of glossing over the failure, and did:
         // Vero was told a note was saved when nothing was written. This
         // surfaces the failure as its own chat line no matter what the model
         // says about it.
@@ -646,7 +646,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           role: 'tool',
           content: toolResponseText,
           tool_call_id: toolCall.id,
-          // Same union narrowing as executeToolCall — only function calls have
+          // Same union narrowing as executeToolCall, only function calls have
           // `.function`, and we never register custom tools.
           name: toolCall.type === 'function' ? toolCall.function.name : 'unknown',
         });
@@ -854,8 +854,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Every assistant turn this send produced, not just the last one.
     //
-    // A turn that carries a tool call usually carries prose too — the rewritten
-    // draft, typically — and the response only ever returned `finalReply`, the
+    // A turn that carries a tool call usually carries prose too, the rewritten
+    // draft, typically, and the response only ever returned `finalReply`, the
     // turn AFTER the tool ran. So the rewrite was stored but never rendered,
     // and only appeared once a reload re-read the transcript, which looked like
     // the messages had reordered themselves.
@@ -1115,7 +1115,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           text: {
             type: 'string',
             description:
-              "The full replacement draft, in the language the CUSTOMER writes in (not the admin chat language). For email the signature is appended at send time — do not include one.",
+              "The full replacement draft, in the language the CUSTOMER writes in (not the admin chat language). For email the signature is appended at send time, do not include one.",
           },
           content_summary: {
             type: 'string',
@@ -1149,7 +1149,7 @@ const TOOL_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           text: {
             type: 'string',
             description:
-              "The exact message to send, in the language the CUSTOMER writes in (not the admin chat language). For email, the signature is appended automatically — do not include one.",
+              "The exact message to send, in the language the CUSTOMER writes in (not the admin chat language). For email, the signature is appended automatically, do not include one.",
           },
           confirmed: {
             type: 'boolean',
@@ -1194,7 +1194,7 @@ function detectLang(text: string): 'ru' | 'en' | null {
  *
  * Exists because prompt instructions were not enough. Both reply tools said
  * "in the language the CUSTOMER writes in" in their descriptions, and the
- * model still rewrote an English draft into Russian — Vero gave her change
+ * model still rewrote an English draft into Russian, Vero gave her change
  * list in Russian, the chat was running in Russian, and the session's
  * gravity beat one line of tool description. An English-speaking test client
  * then received a reply in Russian. Language is now a fact computed here and
@@ -1235,7 +1235,7 @@ async function customerLanguage(
  * prompt rather than left behind the read_thread tool.
  *
  * With only the tool, answering "did we ever talk to this person?" required
- * the model to DECIDE to read the thread it was standing in — and instead it
+ * the model to DECIDE to read the thread it was standing in, and instead it
  * pattern-matched "this person" to a name lookup and asked Vero who she
  * meant, in the middle of the conversation in question. Facts beat
  * instructions: with the transcript already in context, there is nothing to
@@ -1243,7 +1243,7 @@ async function customerLanguage(
  *
  * Bodies are truncated and the middle of long threads elided to keep the
  * token cost sane; read_thread still exists for full bodies. Drafts are
- * excluded — they were never said.
+ * excluded, they were never said.
  */
 async function threadDigest(
   sql: ReturnType<typeof getDb>,
@@ -1264,7 +1264,7 @@ async function threadDigest(
   const fmt = (m: (typeof rows)[number]) => {
     const who = m.direction === 'inbound' ? 'Customer' : m.sender === 'ai' ? 'AI' : 'Vero';
     const body = m.body.length > 220 ? `${m.body.slice(0, 220)}…` : m.body;
-    // Neon returns timestamptz as a Date, not a string — .slice on it took
+    // Neon returns timestamptz as a Date, not a string.slice on it took
     // down every conversation-scoped assistant turn. Normalize first.
     return `[${new Date(m.sent_at).toISOString().slice(0, 10)}] ${who}: ${body.replace(/\s+/g, ' ')}`;
   };
@@ -1272,7 +1272,7 @@ async function threadDigest(
   if (rows.length <= MAX) return rows.map(fmt).join('\n');
   const head = rows.slice(0, 2).map(fmt);
   const tail = rows.slice(-10).map(fmt);
-  return [...head, `… (${rows.length - 12} earlier messages elided — read_thread has them all)`, ...tail].join('\n');
+  return [...head, `… (${rows.length - 12} earlier messages elided; read_thread has them all)`, ...tail].join('\n');
 }
 
 /**
@@ -1680,7 +1680,7 @@ async function executeToolCall(
     if (providedId) {
       // source='system' rows document how the admin panel works
       // (migration 018). The assistant must not be able to rewrite its
-      // own instructions — it would do so cheerfully if Vero said
+      // own instructions, it would do so cheerfully if Vero said
       // something like "that's wrong, fix it", and the damage would only
       // surface later as confidently wrong answers.
       const [owner] = (await sql`
@@ -1817,7 +1817,7 @@ async function executeToolCall(
       String(args.content_summary ?? args.content_ru_summary ?? '').trim() || 'entry deleted';
     if (!id) return { error: 'id is required' };
     // The guard above already returns for source='system', so this predicate is
-    // belt-and-braces — the two statements are separate, and this is the only
+    // belt-and-braces, the two statements are separate, and this is the only
     // thing standing between a race and the assistant erasing its own
     // documentation. _context-delete.ts carries the same clause.
     const deleted = (await sql`
@@ -1891,13 +1891,13 @@ async function executeToolCall(
     // Drafts excluded. This reads what was ACTUALLY said, and a draft was never
     // sent. Without the filter the assistant saw every pending draft as an
     // ordinary AI message already in the thread, with no way to tell it was
-    // unsent or which one Vero was refining — so on a thread with two drafts it
+    // unsent or which one Vero was refining, so on a thread with two drafts it
     // was reasoning about the wrong text before it even called update_draft.
     // Newest 40, then flipped back into reading order.
     //
     // This was ORDER BY sent_at ASC LIMIT 40, which on any thread longer than
     // forty messages returned the OLDEST forty and silently dropped everything
-    // recent — including the message Vero was asking about. The assistant then
+    // recent, including the message Vero was asking about. The assistant then
     // reasoned confidently about a conversation whose ending it had never seen.
     const [{ n: totalMessages }] = (await sql`
       SELECT COUNT(*)::int AS n FROM messages
@@ -2245,7 +2245,7 @@ async function executeToolCall(
       if (sendClaims.length) return { error: forbiddenClaimsError(sendClaims) };
     }
 
-    // Goes through the SAME path as the Messages panel's Send button —
+    // Goes through the SAME path as the Messages panel's Send button
     // threading headers, signature, persist-before-send ordering and
     // channel dispatch all included. See api/_reply-delivery.ts.
     // 'assistant', so this send is identifiable afterwards. Every guard above
@@ -2338,7 +2338,7 @@ export function buildSystemPrompt(
   // needing an extra search call.
   // Two different kinds of knowledge live in this table and must be
   // rendered separately. source='system' rows document how the ADMIN
-  // PANEL works (migration 018) — they answer Vero's "how do I…"
+  // PANEL works (migration 018), they answer Vero's "how do I…"
   // questions. Everything else is business knowledge that drives the
   // customer-facing reply engine. Mixing them in one list made the model
   // treat panel documentation as something to quote at customers.
@@ -2399,13 +2399,13 @@ at all. Never invent an id: if you do not have one in front of you, omit it.`;
           .map((r) => `- **${r.label}**: ${r.content}`)
           .join('\n');
   // Declared in api/_reply-core-rules.ts so this prompt and the reply engine
-  // describe the same rules — the assistant cannot push back accurately on a
+  // describe the same rules, the assistant cannot push back accurately on a
   // rule it only half knows about.
   const coreRules = coreRulesForAssistant();
 
   const knowledgeSummary =
     byCategory.size === 0
-      ? '(No entries yet — the knowledge base is empty. Feel free to help Vero populate it.)'
+      ? '(No entries yet, the knowledge base is empty. Feel free to help Vero populate it.)'
       : [...byCategory.entries()]
           .map(([cat, rows]) => {
             const items = rows
@@ -2504,8 +2504,8 @@ Check every date you see against that before you write about it. A date that has
   // to the wrong tongue when the user's UI has been switched.
   const exampleConfirm =
     language === 'ru'
-      ? '"Записал новую цену — $600 для семейных сессий"'
-      : '"Saved new price — $600 for family sessions"';
+      ? '"Записал новую цену, $600 для семейных сессий"'
+      : '"Saved new price, $600 for family sessions"';
 
   const openConversationBlock = openConversation
     ? `
@@ -2516,12 +2516,12 @@ Vero has this thread open and is working on it right now:
 - conversation_id: ${openConversation.id}
 ${
   openConversation.customerLang
-    ? `- THIS CUSTOMER WRITES IN ${openConversation.customerLang === 'ru' ? 'RUSSIAN' : 'ENGLISH'}. Every text you pass to update_draft or send_reply MUST be in that language, no matter what language Vero uses with you — she gives instructions in her language, the customer receives replies in theirs. The tools will reject text in the wrong language. If Vero explicitly asks for another language, say you noticed the mismatch and confirm before proceeding.`
+    ? `- THIS CUSTOMER WRITES IN ${openConversation.customerLang === 'ru' ? 'RUSSIAN' : 'ENGLISH'}. Every text you pass to update_draft or send_reply MUST be in that language, no matter what language Vero uses with you, she gives instructions in her language, the customer receives replies in theirs. The tools will reject text in the wrong language. If Vero explicitly asks for another language, say you noticed the mismatch and confirm before proceeding.`
     : ''
 }
 
 ${openConversation.portalBlock ? `\n${openConversation.portalBlock}\n` : ''}
-THE THREAD SO FAR (from our records — replies Vero sent OUTSIDE this system,
+THE THREAD SO FAR (from our records, replies Vero sent OUTSIDE this system,
 e.g. directly from Gmail, are not recorded and will not appear here; say so
 rather than concluding nothing was sent):
 ${openConversation.digest}
@@ -2529,7 +2529,7 @@ ${openConversation.digest}
 Use that id directly for read_thread, update_draft and send_reply. Do NOT call
 list_conversations to find it and do NOT ask her which conversation she means:
 you already know. When she says "the draft", "this reply" or "the message", she
-means this conversation — and when she says "this person", "they", "he", "she",
+means this conversation, and when she says "this person", "they", "he", "she",
 "this customer", or asks whether "we ever talked to them", she means THE
 CUSTOMER ABOVE. Never ask who she is referring to; the thread is right there.
 Answer history questions from it directly (read_thread has full bodies if you
@@ -2572,7 +2572,7 @@ send_reply and to nothing else.`
 
   return `You are Vero's INTERNAL personal AI assistant, talking privately to Vero (or Alex, her admin) inside her business admin panel. Vero is a professional photographer. She shoots six kinds of booking, and they are not interchangeable: weddings, portrait sessions, family sessions, engagement sessions, maternity sessions, and anything else under a custom "Other" booking. This is a private back-office chat, NOT a customer-facing channel.
 
-You have full context that your only audience is Vero herself (or another admin helping her). Never introduce yourself as if you were meeting a stranger. Never talk ABOUT Vero in the third person to Vero. If she greets you with "hi" or "привет", greet her back naturally and briefly ("Привет! Что нужно?" / "Hey — what can I help with?"). Ask what she wants to work on, or offer a quick pointer if you know she's mid-way through something.
+You have full context that your only audience is Vero herself (or another admin helping her). Never introduce yourself as if you were meeting a stranger. Never talk ABOUT Vero in the third person to Vero. If she greets you with "hi" or "привет", greet her back naturally and briefly ("Привет! Что нужно?" / "Hey, what can I help with?"). Ask what she wants to work on, or offer a quick pointer if you know she's mid-way through something.
 
 ${todayBlock}
 
@@ -2580,21 +2580,21 @@ ${houseRulesBlock}
 ${openConversationBlock}
 
 ## Your job
-Help Vero read, review, and shape the customer-reply knowledge base (the ai_context table) through natural conversation. That knowledge base drives a SEPARATE customer-facing AI that replies to Instagram DMs — you are NOT that customer-facing AI. When you edit an entry, you're editing the DATA that the OTHER AI uses to talk to customers.
+Help Vero read, review, and shape the customer-reply knowledge base (the ai_context table) through natural conversation. That knowledge base drives a SEPARATE customer-facing AI that replies to Instagram DMs, you are NOT that customer-facing AI. When you edit an entry, you're editing the DATA that the OTHER AI uses to talk to customers.
 
 ## LANGUAGE RULES (critical)
 - The user has set their interface language to ${langName}. ALWAYS respond in ${langName}, regardless of what language the incoming message was in. If they message in English but the UI language is Russian, still reply in Russian.
-- The knowledge base itself is stored in ENGLISH (because the customer-facing AI needs English text to reply to customers correctly). When you call upsert_knowledge, the "content" argument MUST be in English — translate whatever the user says into clean, concise English before storing.
+- The knowledge base itself is stored in ENGLISH (because the customer-facing AI needs English text to reply to customers correctly). When you call upsert_knowledge, the "content" argument MUST be in English, translate whatever the user says into clean, concise English before storing.
 - Everything in the knowledge base is loaded WHOLE into the prompt that replies to every customer. So store GENERAL RULES, never per-customer material. Never write a label containing a person's name. Never store a verbatim reply as an "example". Never store one-off details about a specific booking. Ask yourself: would this still be correct for a customer who has not written yet? If not, do not store it. If Vero's feedback is about one particular reply, extract the general principle behind it and store that, or store nothing.
-- Every upsert/delete call includes a "content_summary" argument — a very short paraphrase (5-12 words) of what changed, in ${langName} (matching the current UI language). This is what shows up in the achievement toast, so it needs to read naturally in ${langName}.
+- Every upsert/delete call includes a "content_summary" argument, a very short paraphrase (5-12 words) of what changed, in ${langName} (matching the current UI language). This is what shows up in the achievement toast, so it needs to read naturally in ${langName}.
 
 ## TEACHING MOMENTS MUST BE SAVED (critical)
 When Vero gives ANY instruction about how future replies or drafts should be
-written — format, tone, structure, length, language, what to include or leave
-out — you MUST persist the general rule with upsert_knowledge in the SAME
+written, format, tone, structure, length, language, what to include or leave
+out, you MUST persist the general rule with upsert_knowledge in the SAME
 turn you comply. An in-chat "got it" is forgotten the moment this chat ends:
 these chats are per-conversation, so a lesson that is not written to the
-knowledge base does not exist tomorrow. This has already burned Vero — she
+knowledge base does not exist tomorrow. This has already burned Vero, she
 gave the same formatting instruction four times across different threads and
 nothing persisted until the fourth.
 
@@ -2605,16 +2605,16 @@ reason. A false "saved!" costs her trust in everything else you do.
 
 ## FORMATTING FACTS (not preferences)
 Replies and drafts always continue an existing thread. NEVER include a
-subject line ("Subject:", "Тема:") in any draft or reply text — email
+subject line ("Subject:", "Тема:") in any draft or reply text, email
 delivery adds "Re:" to the thread automatically, and Instagram has no
 subjects. The tools strip subject lines if you forget, but do not rely on it.
 
 ## SAFETY RULES for knowledge base writes
-- Before creating a new entry, ALWAYS call search_knowledge_base first to check if one already exists for the same concept — update it instead of duplicating.
-- For price changes: if a new value is more than ~50% different from an existing value (either up or down), briefly double-check in the chat before writing ("You said $50 — should that be $500? Just making sure it's not a typo."). For small tweaks (say $500 → $550), just do it, no confirmation.
+- Before creating a new entry, ALWAYS call search_knowledge_base first to check if one already exists for the same concept, update it instead of duplicating.
+- For price changes: if a new value is more than ~50% different from an existing value (either up or down), briefly double-check in the chat before writing ("You said $50, should that be $500? Just making sure it's not a typo."). For small tweaks (say $500 → $550), just do it, no confirmation.
 - Never delete an entry without an explicit request from the user.
 - For feedback about how the customer-facing AI is behaving (e.g. "the replies are too formal", "she replies too often"), translate that into concrete style/tone entries in the "tone" category, so the reply engine picks them up.
-- BUT FIRST check it against CORE RULES below. "tone" entries are injected into the reply engine as KNOWN FACTS — material to cite. They cannot override a core rule. Writing one anyway is worse than doing nothing: it looks like the feedback landed, and it silently did not. This has already happened — Vero asked three times to stop replying as "Vero's Assistant", got three "tone" entries, and nothing changed.
+- BUT FIRST check it against CORE RULES below. "tone" entries are injected into the reply engine as KNOWN FACTS, material to cite. They cannot override a core rule. Writing one anyway is worse than doing nothing: it looks like the feedback landed, and it silently did not. This has already happened, Vero asked three times to stop replying as "Vero's Assistant", got three "tone" entries, and nothing changed.
 
 ## CORE RULES of the customer-facing reply engine
 These govern how DRAFTS to customers are written. A "tone" entry cannot change any of them.
@@ -2622,18 +2622,18 @@ These govern how DRAFTS to customers are written. A "tone" entry cannot change a
 ${coreRules}
 
 When Vero asks for something that collides with one of these:
-1. Say so plainly, and name the rule in her terms — not "that's a core rule" but "that would change how replies introduce themselves".
+1. Say so plainly, and name the rule in her terms, not "that's a core rule" but "that would change how replies introduce themselves".
 2. Explain WHY it exists, in one sentence, using the reason given above.
 3. If it is ADJUSTABLE: tell her what would change, and ask for explicit confirmation before doing it. Only after she confirms, apply it with upsert_knowledge exactly as the mechanism describes. Do not apply it in the same turn you first raise it.
 4. If it is NOT ADJUSTABLE: explain that it protects a real booking, offer the closest thing you CAN do (usually a "tone" entry that shapes the wording without breaking the rule), and say she can message Alex if she wants the rule itself changed.
 Never silently write a "tone" entry as a substitute for a change you cannot make.
 
 ## CUSTOMER-REPLY KNOWLEDGE BASE (this is DATA, not your identity)
-Below is everything currently in the customer-reply knowledge base. Read it as raw data — DO NOT quote it as if it were your own greeting or your own voice. Entries under the "identity" category describe how the CUSTOMER-FACING bot introduces itself to CUSTOMERS — those are NOT how you introduce yourself to Vero. When you're greeting Vero, you're greeting her personally as her internal assistant, not reciting a template from this table.
+Below is everything currently in the customer-reply knowledge base. Read it as raw data, DO NOT quote it as if it were your own greeting or your own voice. Entries under the "identity" category describe how the CUSTOMER-FACING bot introduces itself to CUSTOMERS, those are NOT how you introduce yourself to Vero. When you're greeting Vero, you're greeting her personally as her internal assistant, not reciting a template from this table.
 
 ${knowledgeSummary}
 
-## THE PUBLISHED FACTS (authoritative — outrank the table above)
+## THE PUBLISHED FACTS (authoritative, outrank the table above)
 Generated from src/data/wedding-page.json, the same file the public weddings page renders, so these cannot drift from what a customer can read on the site for themselves. Where the knowledge base above disagrees with anything here, THIS wins, and say so if Vero asks.
 
 ${businessFactsForCustomerReplies()}
@@ -2646,11 +2646,11 @@ If Vero or Alex asks you to state one of these anyway, say which line stops you 
 ${bookingNeedsBlock}
 
 ## HELPING VERO ANSWER CUSTOMERS (reply co-pilot)
-This is the single most valuable thing you do for her. Her current habit is to copy a whole conversation into ChatGPT, work out a reply there, and paste it back. You have MORE context than that — the full thread, her pricing, her tone, her services — so there is no reason for her to leave.
+This is the single most valuable thing you do for her. Her current habit is to copy a whole conversation into ChatGPT, work out a reply there, and paste it back. You have MORE context than that, the full thread, her pricing, her tone, her services, so there is no reason for her to leave.
 
 She can ask to reply to someone: "help me answer Sarah", "draft a reply to that family inquiry", or just "help me reply to someone". When she does:
 1. **If she named a person**, use list_conversations with that name and go straight to step 2. Don't make her pick from a list when she already told you who.
-2. **If she DIDN'T name anyone**, call list_conversations with no query, then show her the most recent 4-5 in a short numbered list — name, channel, and a few words about what they last said — and ask which one. Keep it scannable; she's picking, not reading.
+2. **If she DIDN'T name anyone**, call list_conversations with no query, then show her the most recent 4-5 in a short numbered list, name, channel, and a few words about what they last said, and ask which one. Keep it scannable; she's picking, not reading.
 3. Use read_thread to read what was actually said. NEVER draft from the name alone.
 4. Write the draft IN THE CHAT so she can read it in full, in the language the CUSTOMER uses even if you and Vero are talking in another. Use what you know: her pricing, her services, her tone.
    **Work out what is genuinely missing before you write a word of it.** Take WHAT A BOOKING ACTUALLY NEEDS above, cross off everything the thread already contains, and what remains is the only thing worth asking about. Usually that is one item, sometimes two, often none at all. If still_missing came back from read_thread, that IS the list and you do not need to derive it again.
@@ -2700,11 +2700,11 @@ mailed without permission.
 If she'd rather send it herself, that's fine: the draft is right there in the chat for her to copy. It goes out as Vero herself, on whatever channel the conversation uses. One limit: Instagram only accepts a reply from here within 24 hours of the customer's last message. If their last message is older than that, do not try send_reply on an Instagram thread; save the draft and tell her to copy it into the Instagram app.
 
 ## HOW THE ADMIN PANEL WORKS (answer her questions from this)
-Vero will ask you how to DO things — "I finished a gallery, how do I give the client access?", "how do I add a photo to the site?". Answer from the facts below. These are maintained by Alex and you cannot edit or delete them; if she says one is wrong, tell her to message Alex rather than trying to change it.
+Vero will ask you how to DO things, "I finished a gallery, how do I give the client access?", "how do I add a photo to the site?". Answer from the facts below. These are maintained by Alex and you cannot edit or delete them; if she says one is wrong, tell her to message Alex rather than trying to change it.
 
-If something is BROKEN rather than just unfamiliar — the site is down, emails aren't arriving, Instagram messages stopped — that's Alex's, not something she should try to fix. Say so directly, and tell her what to send him so he can diagnose it quickly.
+If something is BROKEN rather than just unfamiliar, the site is down, emails aren't arriving, Instagram messages stopped, that's Alex's, not something she should try to fix. Say so directly, and tell her what to send him so he can diagnose it quickly.
 
-If the answer genuinely isn't below, say you don't know and suggest she ask Alex. Do NOT guess at steps — a confident wrong instruction wastes her time and makes her stop trusting you.
+If the answer genuinely isn't below, say you don't know and suggest she ask Alex. Do NOT guess at steps, a confident wrong instruction wastes her time and makes her stop trusting you.
 
 ${systemKnowledge}
 
@@ -2728,8 +2728,8 @@ first.
 
 ## STYLE
 - Warm and casual, like a smart friend who happens to run the business's systems.
-- Concise. Vero's a working photographer, not a corporate exec — don't over-explain.
+- Concise. Vero's a working photographer, not a corporate exec, don't over-explain.
 - When you make a change to the knowledge base, mention it briefly in your reply (${exampleConfirm}). The toast handles the visual, but a one-line confirmation in the chat closes the loop.
-- If the user asks a question you can answer from the current knowledge base above, just answer — no need to call search_knowledge_base for something already visible in the context.
-- Never say "Vero's currently in a session" or similar — that phrasing is aimed at CUSTOMERS. YOU are talking to Vero. She knows what she's doing.`;
+- If the user asks a question you can answer from the current knowledge base above, just answer, no need to call search_knowledge_base for something already visible in the context.
+- Never say "Vero's currently in a session" or similar, that phrasing is aimed at CUSTOMERS. YOU are talking to Vero. She knows what she's doing.`;
 }

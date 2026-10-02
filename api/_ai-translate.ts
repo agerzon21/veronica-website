@@ -4,7 +4,7 @@
  * for the inbox) and can be extended to composer translate-before-send
  * without duplicating OpenAI plumbing.
  *
- * We use GPT-4o-mini for both — fast, cheap (< $0.001 per translation),
+ * We use GPT-4o-mini for both, fast, cheap (< $0.001 per translation),
  * strong on the major languages Vero encounters (English, Russian,
  * Spanish, occasionally others). If we start seeing quality issues for
  * a specific language we can bump to gpt-4o.
@@ -42,7 +42,7 @@ function getOpenAI(): OpenAI {
 
 /**
  * Translate `text` into the target language. Returns just the
- * translation — no explanations, no wrapping. If the text is already
+ * translation, no explanations, no wrapping. If the text is already
  * in the target language, GPT-4o-mini usually returns it unchanged,
  * which is what we want (caller can compare == input to detect
  * "already in target").
@@ -55,7 +55,7 @@ export async function translateText(text: string, targetLang: string): Promise<s
     messages: [
       {
         role: 'system',
-        content: `You are a professional translator. Translate the user's message into ${targetName}. Return ONLY the translation — no quotes, no explanation, no preamble. Preserve emojis, punctuation, and line breaks. If the text is already in ${targetName}, return it unchanged. Never editorialize.`,
+        content: `You are a professional translator. Translate the user's message into ${targetName}. Return ONLY the translation, no quotes, no explanation, no preamble. Preserve emojis, punctuation, and line breaks. If the text is already in ${targetName}, return it unchanged. Never editorialize.`,
       },
       { role: 'user', content: text },
     ],

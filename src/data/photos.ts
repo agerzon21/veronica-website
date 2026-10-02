@@ -17,7 +17,7 @@ export interface Photo {
   status: PhotoStatus;
   // Natural pixel dimensions of the source file, extracted at build
   // time by scripts/measure-photos.mjs. Used by the gallery grid to
-  // build a justified/masonry layout — no square-cropping, aspects
+  // build a justified/masonry layout, no square-cropping, aspects
   // known at first paint.
   width: number;
   height: number;

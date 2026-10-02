@@ -3,8 +3,8 @@
  *
  * The link you get from Drive's "Share" button points at a viewer PAGE, not at
  * the file: dropping it into an <img src> renders a broken image every time.
- * Vero is pasting these in for review author photos — usually a frame from the
- * client's own session, which is a much better portrait than a Google avatar —
+ * Vero is pasting these in for review author photos, usually a frame from the
+ * client's own session, which is a much better portrait than a Google avatar
  * so the admin should just accept what the Share button gives her.
  *
  * Handled forms, all of which carry the same file id:
@@ -14,7 +14,7 @@
  *   https://docs.google.com/uc?id=<ID>
  *
  * They become https://drive.google.com/thumbnail?id=<ID>&sz=w<size>, which
- * serves a real image and lets Google do the downscaling — worth having when
+ * serves a real image and lets Google do the downscaling, worth having when
  * the source is a full-resolution photograph and the destination is a 96px
  * square.
  *

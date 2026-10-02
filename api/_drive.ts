@@ -1,5 +1,5 @@
 /**
- * Google Drive API helpers — list files in a folder + build URLs for display
+ * Google Drive API helpers, list files in a folder + build URLs for display
  * and download. Uses a service-account JSON credential stored in the
  * GOOGLE_SERVICE_ACCOUNT_JSON env var.
  *
@@ -42,17 +42,17 @@ export type DriveFile = {
   name: string;
   mimeType: string;
   // File size in bytes. May be null for files Drive doesn't report size on
-  // (rare for images/video — mostly affects Google-native docs). Used on
+  // (rare for images/video, mostly affects Google-native docs). Used on
   // the frontend to route huge files away from the in-app save flow.
   size: number | null;
   // Natural image dimensions from Drive's imageMediaMetadata (or
   // videoMediaMetadata for videos). Null when Drive doesn't return them
-  // (rare — mainly non-standard file types). The gallery uses these to
+  // (rare, mainly non-standard file types). The gallery uses these to
   // build a justified/masonry layout so aspects are known at first
-  // paint — no reflow as thumbnails load in.
+  // paint, no reflow as thumbnails load in.
   width: number | null;
   height: number | null;
-  // Drive's thumbnail endpoint — server-side resized, fast loads in the grid.
+  // Drive's thumbnail endpoint, server-side resized, fast loads in the grid.
   // sz=w800 is plenty for typical thumbnail rendering at any reasonable
   // viewport width.
   thumbnailUrl: string;
@@ -66,7 +66,7 @@ export type DriveFile = {
   // "Download image" (Android), getting the file into the phone's gallery
   // rather than its Files app.
   originalUrl: string;
-  // Drive's native viewer URL — for files too large to safely pull through
+  // Drive's native viewer URL, for files too large to safely pull through
   // our proxy + Web Share API on mobile. Opens Drive's file viewer where
   // the user gets a proper download button regardless of file size.
   driveViewUrl: string;
@@ -103,7 +103,7 @@ function toDriveFile(f: {
   videoMediaMetadata?: { width?: number | null; height?: number | null } | null;
 }): DriveFile {
   // For the optimized download path, the file is served as webp so the
-  // filename should reflect that — strip the original extension and
+  // filename should reflect that, strip the original extension and
   // append .webp. The user-facing "Open original" link still gets them
   // to the unmodified file via Drive's viewer.
   const baseName = f.name.replace(/\.[^.]+$/, '');
@@ -111,7 +111,7 @@ function toDriveFile(f: {
 
   // Natural dims: prefer imageMediaMetadata (photos), fall back to
   // videoMediaMetadata (videos). Either may be missing for exotic file
-  // types — the frontend has an onLoad-based backup for those cases.
+  // types, the frontend has an onLoad-based backup for those cases.
   const meta = f.imageMediaMetadata ?? f.videoMediaMetadata ?? null;
   const width = typeof meta?.width === 'number' ? meta.width : null;
   const height = typeof meta?.height === 'number' ? meta.height : null;
@@ -130,7 +130,7 @@ function toDriveFile(f: {
     // Download = optimized 2400px webp via our proxy. ~1-2MB, in-page Save
     // dialog (Content-Disposition: attachment), no virus-scan interstitial.
     // Print-quality originals are available via the "Open original" link
-    // (driveViewUrl) — that path goes straight to Drive and doesn't count
+    // (driveViewUrl), that path goes straight to Drive and doesn't count
     // against our Vercel Origin Transfer quota.
     downloadUrl: `/api/photo?id=${f.id}&filename=${encodeURIComponent(optimizedFilename)}`,
     // Same-origin proxy so the browser can fetch() the bytes without
@@ -157,7 +157,7 @@ const naturalNameCompare = (a: { name: string }, b: { name: string }) =>
 /**
  * Drains every page of a Drive files.list query.
  *
- * pageSize maxes out at 1000 and Drive does NOT error when there is more — it
+ * pageSize maxes out at 1000 and Drive does NOT error when there is more, it
  * just returns a nextPageToken. Ignoring that token silently truncates the
  * listing, and for the public gallery sync a short listing is indistinguishable
  * from "those files were deleted from Drive", which soft-deletes them. So this
@@ -208,7 +208,7 @@ async function listMediaInFolder(
  * Lists media in the gallery's root folder AND each immediate subfolder.
  * Returns a tree with one section per subfolder, in name-sorted order.
  * Photographers commonly deliver weddings as a parent folder with subfolders
- * for each part of the day (Bride, Groom, Ceremony, etc.) — this preserves
+ * for each part of the day (Bride, Groom, Ceremony, etc.), this preserves
  * that organization in the client portal.
  *
  * Supports ONE level of nesting. Deeper structures (Bride/Hair/closeups)
@@ -243,7 +243,7 @@ export async function listFolderTree(parentFolderId: string): Promise<FolderTree
       }),
     );
 
-  // 2. For each subfolder, fetch its media in parallel. Bounded fanout —
+  // 2. For each subfolder, fetch its media in parallel. Bounded fanout
   //    typical weddings have <20 subfolders, well under Drive's quota.
   const sections = await Promise.all(
     subFolders
@@ -266,7 +266,7 @@ export async function listFolderTree(parentFolderId: string): Promise<FolderTree
 }
 
 /**
- * Legacy flat listing — kept for code paths that don't care about folder
+ * Legacy flat listing, kept for code paths that don't care about folder
  * structure. New callers should use listFolderTree.
  */
 export async function listFolderMedia(folderId: string): Promise<DriveFile[]> {
@@ -319,7 +319,7 @@ export function normalizeImageUrl(input: string | null | undefined): string | nu
   if (!input) return input ?? null;
   const s = input.trim();
   if (!s) return null;
-  // Only rewrite Drive viewer URLs — leave thumbnail URLs, direct
+  // Only rewrite Drive viewer URLs, leave thumbnail URLs, direct
   // image URLs, and non-Drive URLs alone.
   if (/drive\.google\.com\/thumbnail\?/.test(s)) return s;
   const id = extractFileId(s);

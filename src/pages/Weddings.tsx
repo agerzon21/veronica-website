@@ -27,10 +27,10 @@ import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
  *
  * WHY PACKAGES NOW, WHEN THIS PAGE FAMOUSLY HAD NONE
  * The page used to argue "publishing tiers would be a lie". Vero's call
- * (2026-09) is the middle path: BROAD tiers with "from" pricing — high-end
+ * (2026-09) is the middle path: BROAD tiers with "from" pricing, high-end
  * couples see there is room to build up, budget couples see there is room
  * to trim, and the final number is always confirmed before booking. The
- * package/FAQ copy lives in src/data/wedding-page.json — one source shared
+ * package/FAQ copy lives in src/data/wedding-page.json, one source shared
  * with the prerender script (noscript + FAQPage schema), so page and
  * crawler can never drift apart.
  *
@@ -40,12 +40,12 @@ import { pageHeroSrcSet, pageHeroFallback } from '../utils/heroSrcSet';
  *   and the closing CTA background.
  * - SPRINKLES: everything in the admin-configured Drive folder. Shuffled
  *   client-side once per visit and dealt into fixed layout slots between
- *   sections — so the page recomposes itself on every reload without
+ *   sections, so the page recomposes itself on every reload without
  *   costing anything at build or render time (transform of an in-memory
  *   array). Prerendered HTML is unaffected; crawlers see the static copy.
  *
  * FALLBACK: with no folder configured (or Drive down), sprinkle bands
- * simply don't render and the page leans on FEATURED — the six curated
+ * simply don't render and the page leans on FEATURED, the six curated
  * gallery slugs below, which also keep real internal links to the photo
  * pages. The build guards FEATURED against renames
  * (scripts/prerender-photos.mjs).
@@ -462,7 +462,7 @@ function SeriesSlide({
   );
 }
 
-/** Fisher-Yates. Runtime-only (inside an effect) — never at module init. */
+/** Fisher-Yates. Runtime-only (inside an effect), never at module init. */
 function shuffled<T>(arr: T[]): T[] {
   const out = [...arr];
   for (let i = out.length - 1; i > 0; i--) {
@@ -486,7 +486,7 @@ const coverHalf = (url: string | null): string =>
   url ? url.replace(/([?&]sz=)w\d+/, '$1w1200') : '';
 
 /**
- * The type chip over a slide. Width hugs the text — the box ends where
+ * The type chip over a slide. Width hugs the text, the box ends where
  * the words end (Alex's screenshot note), never stretching to the title
  * width. Gold-filled for advice articles, hairline-outlined for real
  * weddings.
@@ -546,7 +546,7 @@ const Weddings = () => {
   // POSITIONAL pinned slots: 0-2 package cards, 3 FAQ, 4 quote background.
   const [pinned, setPinned] = useState<Array<PinnedPhoto | null>>([]);
   // The whole tapestry is planned once per visit (photos AND geometry) in
-  // the fetch effect — never at module scope, where a random call would
+  // the fetch effect, never at module scope, where a random call would
   // run during prerender.
   const [tapestry, setTapestry] = useState<Tapestry>(EMPTY_TAPESTRY);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -739,7 +739,7 @@ const Weddings = () => {
           at 45% so the groom's head clears the top edge. ─── */}
       {/* One hero height across the whole site. These were 45/53 here, 46/50
           on the journal, 45/50 and 40/45 across the two gallery views and
-          52/58 on weddings — five different first impressions for one site.
+          52/58 on weddings, five different first impressions for one site.
           About's is the reference. */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
         {/* srcSet carries ONLY the two derivatives, never the original.
@@ -807,7 +807,7 @@ const Weddings = () => {
         </Flex>
       </Box>
 
-      {/* ─── Approach — tapestry prints live behind the words ─── */}
+      {/* ─── Approach, tapestry prints live behind the words ─── */}
       <Box bg="white" py={{ base: 16, md: 24 }} px={{ base: 8, md: 12 }} position="relative" overflow="hidden" sx={{ isolation: 'isolate' }}>
         <DecorPrints items={tapestry.approach} />
         <Flex justify="center" ref={introRef}>
@@ -818,7 +818,7 @@ const Weddings = () => {
                   margin to nothing, so the tag is semantics with no paint. */}
               <Text as="h2" textStyle="eyebrow">My Approach</Text>
               <Box w="35px" h="1px" bg="brand.accent" />
-              {/* The pitch as a statement, not a paragraph — set in the
+              {/* The pitch as a statement, not a paragraph, set in the
                   serif display face so it reads as her voice, with the
                   accent phrase in italic. */}
               <Text
@@ -853,7 +853,7 @@ const Weddings = () => {
 
       <MobilePrintSeam photos={tapestry.seams[0]} />
 
-      {/* ─── Packages — cream section keeps its rhythm; prints peek from
+      {/* ─── Packages, cream section keeps its rhythm; prints peek from
           the gutters behind the cards ─── */}
       {/* id is the deep-link target: the contact page's package plate links
           back to /wedding-photography#packages so someone can change their
@@ -924,7 +924,7 @@ const Weddings = () => {
                 >
                   {pin ? (
                     /* Photo across the top, the package NAME over it (no
-                       box — a scrim and a shadow carry legibility), then
+                       box, a scrim and a shadow carry legibility), then
                        the image dissolves into the card body. Zoom and
                        focal point both come from the admin drag editor. */
                     <Box position="relative" h={{ base: '230px', md: '265px' }} overflow="hidden" flexShrink={0}>
@@ -1088,7 +1088,7 @@ const Weddings = () => {
 
       <MobilePrintSeam photos={tapestry.seams[1]} />
 
-      {/* ─── From the Journal — the slow slideshow (Alex's pick), with
+      {/* ─── From the Journal, the slow slideshow (Alex's pick), with
           tapestry prints behind it. Per-entry focal points from the
           admin keep faces in frame on stage and thumbs alike. ─── */}
       {featured.length > 0 && (
@@ -1294,7 +1294,7 @@ const Weddings = () => {
                   // ~300ms to see whether a second one arrives, and a fast pair
                   // is taken as double-tap-to-zoom. Once the page zooms, the
                   // visual viewport moves under the finger and the NEXT tap
-                  // lands at different document coordinates — the nearest thing
+                  // lands at different document coordinates, the nearest thing
                   // below this strip being the FAQ's "Ask me directly" button,
                   // which goes to /contact. `manipulation` opts these targets
                   // out of double-tap zoom (pinch-zoom is untouched, so this
@@ -1409,7 +1409,7 @@ const Weddings = () => {
 
       <MobilePrintSeam photos={tapestry.seams[2]} />
 
-      {/* ─── FAQ — editorial split: a sticky intro column (with one ambient
+      {/* ─── FAQ, editorial split: a sticky intro column (with one ambient
           photograph and the ask-me-directly path) beside the numbered
           questions. On mobile the intro stacks above the list. ─── */}
       <Box bg="brand.surface" py={{ base: 16, md: 24 }} px={{ base: 6, md: 12 }} position="relative" overflowX="clip" sx={{ isolation: 'isolate' }}>
@@ -1490,7 +1490,7 @@ const Weddings = () => {
               <Box w="35px" h="1px" bg="brand.accent" />
               <Text textStyle="bodyCopy" color="gray.600" maxW="620px">
                 Local wedding businesses I know and trust. No commissions, no
-                sponsorships — just people whose work I have seen up close.
+                sponsorships, just people whose work I have seen up close.
               </Text>
             </VStack>
             <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={{ base: 4, md: 5 }}>
@@ -1641,13 +1641,13 @@ const Weddings = () => {
           })}
 
           {/* The mosaic's dense packing always leaves the last cell open at
-              eight photos — so the gallery invitation lives there instead
+              eight photos, so the gallery invitation lives there instead
               of floating under the grid. */}
           {/* Desktop only. On a phone this cell inherits the mosaic's row
               height (34vw, ~130px) no matter what is inside it, which is why
               restyling the contents last time changed nothing: the BOX was the
               problem, not the type. The phone gets the same invitation as a
-              46px bar under the grid instead — identical to the journal
+              46px bar under the grid instead, identical to the journal
               strip's. */}
           <GridItem colSpan={2} rowSpan={1} display={{ base: 'none', md: 'block' }}>
             <Flex
@@ -1850,7 +1850,7 @@ function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
 
 /**
  * A tapestry slot: the base geometry of one background print inside a
- * section. Every value is a STARTING POINT — planTapestry jitters all of
+ * section. Every value is a STARTING POINT, planTapestry jitters all of
  * them per visit, so reloading redeals both which photo appears and
  * exactly where, how big, and at what angle it sits.
  */
@@ -2048,7 +2048,7 @@ function useViewportWidth() {
  * the slot's percentage of the GUTTER rather than of the section, and its
  * width is capped so it can never reach the text column. Below MIN_GUTTER
  * there is nowhere for a print to be, so none are drawn and the in-flow seams
- * carry the collage instead — the same argument MobilePrintSeam already makes
+ * carry the collage instead, the same argument MobilePrintSeam already makes
  * for phones, applied at every width where it is true.
  */
 function DecorPrints({ items }: { items: PlacedPrint[] }) {

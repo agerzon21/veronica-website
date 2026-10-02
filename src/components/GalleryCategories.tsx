@@ -88,7 +88,7 @@ const GalleryCategories = () => {
           direction={{ base: 'column', md: 'row' }}
           // Near-flush, deliberately. The reference the owner keeps citing
           // runs "minimal spacing between grid items, creating a dense,
-          // compact presentation" — at 16/20px these read as four detached
+          // compact presentation", at 16/20px these read as four detached
           // cards; at 2px they read as one band of work.
           gap={{ base: 2, md: 3 }}
           justify="center"
@@ -159,7 +159,7 @@ const GalleryCategories = () => {
                     spacing={3}
                     zIndex={1}
                   >
-                    {/* These tiles are 65vh panels, not cards in a grid — the
+                    {/* These tiles are 65vh panels, not cards in a grid, the
                         title carries the whole section, so it takes the
                         sectionTitle ramp. Colour is the only override.
                         The old hover animated letterSpacing 0.2em → 0.3em,

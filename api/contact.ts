@@ -16,7 +16,7 @@ import { getDb } from './_db.js';
  *
  * Returns the new row's id so the inbox mirror can key its message on it
  * (and link the lead row back to the conversation). Returns null on
- * failure — non-fatal: Web3Forms still delivered the inquiry email and
+ * failure, non-fatal: Web3Forms still delivered the inquiry email and
  * the auto-reply still sends. We just lose the database row.
  */
 async function logSubmission(data: ContactPayload): Promise<string | null> {
@@ -51,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const data = (req.body || {}) as ContactPayload;
 
-  // Honeypot — bots fill this; humans never see it
+  // Honeypot, bots fill this; humans never see it
   if (data.botcheck && data.botcheck.length > 0) {
     return res.status(200).json({ success: true });
   }
@@ -69,15 +69,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Three parallel best-effort operations. allSettled (not all) so one
   // rejection doesn't cancel the others.
   //
-  // 1. logSubmission     — DB row for the admin Leads view. Non-fatal;
+  // 1. logSubmission, DB row for the admin Leads view. Non-fatal;
   //                         a lost row doesn't break the customer flow.
-  // 2. sendAutoReply     — CRITICAL PATH. Customer expects a confirmation
+  // 2. sendAutoReply, CRITICAL PATH. Customer expects a confirmation
   //                         email. A rejection here is the only condition
   //                         that returns 500.
-  // 3. sendLeadNotification — pings Vero ("new lead came in") so she
+  // 3. sendLeadNotification, pings Vero ("new lead came in") so she
   //                         actually knows to look at the Admin panel.
   //                         Replaces the Web3Forms notification we're
-  //                         cutting in PR 2. Non-fatal — if her ping
+  //                         cutting in PR 2. Non-fatal, if her ping
   //                         fails, the customer STILL got their reply.
   const [logResult, autoReplyResult, notifyResult] = await Promise.allSettled([
     logSubmission(data),
@@ -109,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   //    both the submission id (to key the message) and the auto-reply's
   //    id + body (to record it as the first outbound in the thread).
   //    Storing that outbound is also what keeps the AI assistant from
-  //    immediately sending a second message on top of the auto-reply —
+  //    immediately sending a second message on top of the auto-reply
   //    _ai-reply.ts skips any conversation whose newest inbound is
   //    already followed by an outbound.
   //
@@ -124,14 +124,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // 5. Have the AI draft a real follow-up for Vero.
   //
-  // The templated auto-reply above is a RECEIPT — "got it, I'll reply
+  // The templated auto-reply above is a RECEIPT, "got it, I'll reply
   // within 24 hours". It's the same for everyone and answers nothing. But
   // a contact-form submission is the most qualified lead the business
   // gets: it arrives with shoot type, date, location and a message. That
   // is exactly the material the assistant should be working from.
   //
   // Nothing here reaches the customer. On email the reply engine DRAFTS
-  // (migration 019) — the draft waits above Vero's composer for her to
+  // (migration 019), the draft waits above Vero's composer for her to
   // use, edit, or discard. So the client receives one message, the
   // receipt, and Vero gets a prepared reply that already references their
   // date and session type.

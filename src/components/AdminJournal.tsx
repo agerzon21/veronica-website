@@ -13,7 +13,7 @@ import AdminJournalEditor from './AdminJournalEditor';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * "Journal" tab in /admin — the entry point for creating + managing
+ * "Journal" tab in /admin, the entry point for creating + managing
  * weekly recap posts.
  *
  * Two internal views:
@@ -24,7 +24,7 @@ import { useAdminLang } from '../i18n/admin';
  * top-level view state) so navigating between tabs doesn't lose
  * the editor session mid-write.
  *
- * Available to BOTH admin (Vero) and super (Alex) — journal editing
+ * Available to BOTH admin (Vero) and super (Alex), journal editing
  * is Vero-facing work. Only delete is superadmin-gated (on the API
  * side).
  */
@@ -109,7 +109,7 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
 
   return (
     <Box maxW="1200px" mx="auto" px={{ base: 0, md: 0 }}>
-      {/* Header — title on the left with kicker + count, primary CTA
+      {/* Header, title on the left with kicker + count, primary CTA
           (+ New) inline to the right on every breakpoint. Refresh sits
           as an icon-only round button next to New so both actions stay
           reachable with a thumb. */}
@@ -160,7 +160,7 @@ const AdminJournal = ({ adminPassword, adminLevel }: Props) => {
       {/* Rebuild sits on its own row rather than in the header group above.
           That header is `justify="space-between"` with a flexShrink={0} button
           cluster and a minW={0} title column, so every pixel the buttons need
-          is taken from the title — a third control collapsed the h1 and post
+          is taken from the title, a third control collapsed the h1 and post
           count to nothing on phones, and worse between 480-767px where the
           longer labels appear before the smaller type does. AdminDashboard
           solves the same squeeze by hiding its third control below md; hiding
@@ -214,7 +214,7 @@ function PostRow({
     });
 
   return (
-    // The entire card is a button on every breakpoint — on mobile the Edit
+    // The entire card is a button on every breakpoint, on mobile the Edit
     // CTA is hidden (redundant tap target on a small screen), so the card
     // itself must be the tappable surface. textAlign="left" keeps the
     // multi-line meta reading naturally instead of centered.
@@ -235,7 +235,7 @@ function PostRow({
       cursor="pointer"
       sx={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      {/* Cover thumb — falls back to a placeholder icon block if
+      {/* Cover thumb, falls back to a placeholder icon block if
           no cover set yet */}
       <Box
         w={{ base: '56px', md: '72px' }}
@@ -280,7 +280,7 @@ function PostRow({
               py={0.5}
               borderRadius="sm"
             >
-              {/* session_type is user-authored / DB data — not translated */}
+              {/* session_type is user-authored / DB data, not translated */}
               {post.session_type}
             </Badge>
           )}
@@ -336,7 +336,7 @@ function PostRow({
         </Wrap>
       </VStack>
 
-      {/* Actions — the whole card triggers Edit, so:
+      {/* Actions, the whole card triggers Edit, so:
            - View is an icon-only link with stopPropagation so tapping it
              opens the live page instead of the editor.
            - Edit CTA is desktop-only; on mobile the card IS the button. */}

@@ -6,7 +6,7 @@ import { extendTheme } from '@chakra-ui/react';
  * WHY THIS FILE EXISTS (AGAIN)
  * There was a src/theme/index.ts before. It was never passed to
  * <ChakraProvider>, so it silently did nothing for its entire life and was
- * deleted as dead code in 26426d0. This one IS wired — see src/App.tsx. If you
+ * deleted as dead code in 26426d0. This one IS wired, see src/App.tsx. If you
  * are editing this file, confirm the `theme` prop is still there before
  * assuming a change had no effect.
  *
@@ -16,12 +16,12 @@ import { extendTheme } from '@chakra-ui/react';
  *
  * WHAT PROBLEM THIS SOLVES
  * An audit found TWENTY-ONE distinct gold-family hex values across 606
- * occurrences — including #8a6e35 and #8f7239, two near-identical darks doing
+ * occurrences, including #8a6e35 and #8f7239, two near-identical darks doing
  * the same job. Same button type rendered differently depending on which file
  * you were in. These tokens are the single source of truth so a colour can be
  * changed in one place.
  *
- * NAMES ARE SEMANTIC, NOT VISUAL. `brand.accentText`, not `brand.darkGold` —
+ * NAMES ARE SEMANTIC, NOT VISUAL. `brand.accentText`, not `brand.darkGold`
  * so a future palette change does not leave every token lying about itself.
  *
  * ── ACCESSIBILITY ──
@@ -34,22 +34,22 @@ import { extendTheme } from '@chakra-ui/react';
 
 // ── Raw palette ────────────────────────────────────────────────────────────
 // Measured contrast against white is noted for anything used as text.
-const GOLD = '#c9a96e'; //  2.24:1 — decorative only, never text
-const GOLD_TEXT = '#8a6e35'; //  4.81:1 — passes AA. Already used 39x in the codebase.
+const GOLD = '#c9a96e'; //  2.24:1, decorative only, never text
+const GOLD_TEXT = '#8a6e35'; //  4.81:1, passes AA. Already used 39x in the codebase.
 // 4.87:1 on brand.surfaceFold, where GOLD_TEXT is 3.96:1 and fails AA at 11px.
 const GOLD_TEXT_DEEP = '#7a602f';
-const GOLD_STRONG = '#b8964f'; //  2.79:1 — hover/active FILLS only, never text
-const GOLD_SOFT = '#d4b87a'; //  1.92:1 — hover fill on dark
-const GOLD_BORDER = '#e8d9a8'; //  1.41:1 — borders on cream
+const GOLD_STRONG = '#b8964f'; //  2.79:1, hover/active FILLS only, never text
+const GOLD_SOFT = '#d4b87a'; //  1.92:1, hover fill on dark
+const GOLD_BORDER = '#e8d9a8'; //  1.41:1, borders on cream
 const CREAM = '#fdf9f0';
 const CREAM_SUNKEN = '#f5efe4';
 // The underside of the footer's fold. Deeper than CREAM_SUNKEN on purpose: the
 // footer prints a near-white watermark on it, and against #f5efe4 that mark is
 // too faint to read as the tonal inversion it is meant to be.
 const CREAM_FOLD = '#f1e8d7';
-const GOLD_FIELD = '#a58b58'; //  ~3.0:1 on cream — input borders, WCAG 1.4.11
-const STATUS_OK = '#2f7a4d'; //  ~4.6:1 on cream — validated / confirmation sent
-const STATUS_WARN = '#a9631a'; //  ~4.6:1 on cream — confirmation could not send
+const GOLD_FIELD = '#a58b58'; //  ~3.0:1 on cream, input borders, WCAG 1.4.11
+const STATUS_OK = '#2f7a4d'; //  ~4.6:1 on cream, validated / confirmation sent
+const STATUS_WARN = '#a9631a'; //  ~4.6:1 on cream, confirmation could not send
 // ~5.6:1 on cream. Chakra's gray.600 (#4a5568) is 7.1:1 and technically
 // safer, but it is a COOL blue-grey and everything else on these pages is
 // warm, so beside cream and gold it reads as a different family rather than
@@ -75,7 +75,7 @@ export const brand = {
   accentBorder: GOLD_BORDER,
   /** Warm page/card surface. */
   surface: CREAM,
-  /** Recessed surface — inputs, wells. */
+  /** Recessed surface, inputs, wells. */
   surfaceSunken: CREAM_SUNKEN,
   /** The footer's folded underside. The one surface a watermark is printed on. */
   surfaceFold: CREAM_FOLD,
@@ -98,7 +98,7 @@ const theme = extendTheme({
     // Cormorant Garamond for display, Jost for everything else. Loaded in
     // index.html; see the note there on why they are self-hosted and preloaded.
     //
-    // The serif fallback on `heading` is deliberate — if the webfont is slow,
+    // The serif fallback on `heading` is deliberate, if the webfont is slow,
     // Georgia shifts the layout far less than the system sans would, which
     // protects a CLS of 0.
     heading: `'Cormorant Garamond', Georgia, 'Times New Roman', serif`,
@@ -110,7 +110,7 @@ const theme = extendTheme({
   },
 
   /**
-   * Gold focus rings and bezels were written as raw CSS strings at 41 sites —
+   * Gold focus rings and bezels were written as raw CSS strings at 41 sites
    * `boxShadow: '0 0 0 1px #c9a96e'`. A colour token cannot reach inside a CSS
    * string, so those need their own scale or they silently keep the hardcoded
    * hex while everything around them is tokenised.
@@ -136,12 +136,12 @@ const theme = extendTheme({
    * That is what "the site feels unsynched" was describing.
    *
    * SCALE CONTRAST IS DELIBERATE. The old range ran 48px down to 12px, roughly
-   * 4:1, with everything bunched in the middle — which reads as unfinished
+   * 4:1, with everything bunched in the middle, which reads as unfinished
    * rather than minimal. pageTitle now runs 40 / 64 / 80px against an 11px
    * eyebrow, about 7:1. The white space is unchanged; the commitment is not.
    *
    * Sized down twice from the first attempt at 44/72/92. 80px still read as
-   * "exactly the same" as 92 — which it nearly is, a 13% step. Now 36/52/68,
+   * "exactly the same" as 92, which it nearly is, a 13% step. Now 36/52/68,
    * a 26% cut from 92 at the top and a real reduction at every breakpoint.
    *
    * Worth knowing when judging this: Chakra's lg breakpoint is 62em/992px, so
@@ -159,8 +159,8 @@ const theme = extendTheme({
   /**
    * Layout scale. The audit found seven text-column widths (400 / 440 / 480 /
    * 500 / 620 / 720 / 820px), four header top-paddings (80 / 96 / 112 / 128px)
-   * and section padding chosen per page. Contact and ThankYou — the same flow,
-   * one click apart — used 400px and 440px.
+   * and section padding chosen per page. Contact and ThankYou, the same flow,
+   * one click apart, used 400px and 440px.
    *
    * Measures are in `ch` so the column follows the type size rather than
    * approximating it in pixels.
@@ -177,7 +177,7 @@ const theme = extendTheme({
    * Vertical rhythm. Two section sizes and one page-top, applied everywhere,
    * so the eye learns the interval instead of meeting a new one per page.
    *
-   * `pageTop` clears the fixed 72px navbar with room to spare — that height
+   * `pageTop` clears the fixed 72px navbar with room to spare, that height
    * was hardcoded in three separate files and halved in a fourth.
    */
   layerStyles: {
@@ -300,7 +300,7 @@ const theme = extendTheme({
     },
     ctaLabel: {
       fontFamily: 'body',
-      // Larger on mobile, smaller on desktop — deliberate, and already correct
+      // Larger on mobile, smaller on desktop, deliberate, and already correct
       // in CTAButton. It buys the 44px touch target without a shouty desktop
       // label.
       fontSize: { base: '0.8125rem', md: '0.75rem' },
@@ -315,7 +315,7 @@ const theme = extendTheme({
      *
      * The sweep initially reused ctaLabel here, which is a 13px desktop-navbar
      * treatment. In a full-screen overlay that shrinks content inside an
-     * already-empty column — the opposite of the brief — and, with no padding
+     * already-empty column, the opposite of the brief, and, with no padding
      * on the links, left roughly 13px tap targets against a 44px minimum.
      *
      * Sentence case, not uppercase: at this size tracked caps read as shouting.

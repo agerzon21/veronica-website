@@ -16,7 +16,7 @@ import AdminCard from './ui/AdminCard';
 import { useAdminLang } from '../i18n/admin';
 
 /**
- * "Admin users" super-admin panel — who can sign in, at what level, and the
+ * "Admin users" super-admin panel, who can sign in, at what level, and the
  * one place to rotate your own password. Lives behind the Menu drawer next to
  * Crons and Integrations because it's operator-only.
  *
@@ -39,8 +39,8 @@ import { useAdminLang } from '../i18n/admin';
  *
  * The screen renders for EVERY admin level, but shows different things. A
  * super sees the account list and the add-someone form; everyone sees their own
- * password and their own sessions. That split is not the security boundary —
- * the API enforces the real one — it just avoids rendering a list that would
+ * password and their own sessions. That split is not the security boundary
+ * the API enforces the real one, it just avoids rendering a list that would
  * come back 403.
  *
  * A non-super has to be able to get here, or someone issued a one-time password
@@ -61,7 +61,7 @@ interface UserRow {
   last_login_at: string | null;
   created_at: string;
   active_sessions: number;
-  /** Tied to a Vercel env credential. Disable-only — see the API's delete branch. */
+  /** Tied to a Vercel env credential. Disable-only, see the API's delete branch. */
   env_backed?: boolean;
 }
 
@@ -334,7 +334,7 @@ const AdminUsers = ({ adminPassword, adminLevel }: Props) => {
         </Box>
       )}
 
-      {/* One-time password. Shown once, dismissed by hand — deliberately not a
+      {/* One-time password. Shown once, dismissed by hand, deliberately not a
           toast, which would time out and take the only copy with it. */}
       {tempPassword && (
         <AdminCard emphasize mb={4}>

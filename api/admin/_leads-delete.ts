@@ -1,5 +1,5 @@
 /**
- * Admin: delete a lead. Superadmin only — same principle as
+ * Admin: delete a lead. Superadmin only, same principle as
  * reviews-delete / journal-delete / portal-delete: an irreversible
  * destructive action stays out of Vero's reach so an accidental click
  * can't wipe an inquiry we might still want to reference.
@@ -12,7 +12,7 @@
  *   → 404 no such lead
  *
  * Vero's normal workflow for "this lead is done" is to flip its status
- * to 'booked' / 'ghosted' / 'spam' via _leads-update — that keeps the
+ * to 'booked' / 'ghosted' / 'spam' via _leads-update, that keeps the
  * row for history/analytics. Delete is only for genuine junk (test
  * submissions Alex fires while developing, obvious spam that slipped
  * past the honeypot, etc.).
