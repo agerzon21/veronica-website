@@ -20,11 +20,9 @@ export type TaxKind = 'sales' | 'federal' | 'pa' | 'local' | 'records';
  * Taxes page switches off every date in the series at once, including the
  * ones added next autumn, so a tax that is not hers stops emailing Alex.
  */
-export type TaxSeries = 'lst' | 'ppt' | 'estimates';
+export type TaxSeries = 'estimates';
 
 export const TAX_SERIES: Record<TaxSeries, L> = {
-  lst: { en: 'Scranton Local Services Tax', ru: 'Местный налог Скрантона (LST)' },
-  ppt: { en: 'Scranton Payroll Preparation Tax', ru: 'Налог Скрантона PPT' },
   estimates: { en: 'Federal estimated tax', ru: 'Федеральный авансовый налог' },
 };
 
@@ -69,64 +67,26 @@ const salesReturn = (period: string, due: string, months: L): TaxDeadline => ({
 
 const IRS_PAY = { label: { en: 'IRS Direct Pay', ru: 'IRS Direct Pay' }, href: 'https://www.irs.gov/payments/direct-pay' };
 const BERKHEIMER = { label: { en: 'Berkheimer', ru: 'Berkheimer' }, href: 'https://www.hab-inc.com' };
-const SCRANTON_TAX_OFFICE = { label: { en: 'Scranton Single Tax Office', ru: 'Налоговый офис Скрантона' }, href: 'https://scrantontaxoffice.org' };
-const PPT_FORMS = { label: { en: 'PPT forms (Berkheimer)', ru: 'Формы PPT (Berkheimer)' }, href: 'https://www.hab-inc.com/pptforms/' };
-
-// She lives and works from home in Clifton Township (North Pocono School
-// District): 1% earned income tax, and no LST or business tax of its own
-// (DCED register and the township code, checked 2026-10-02). Scranton's two
-// taxes reach only the sessions she does inside the city.
-const WORKS_IN_SCRANTON_LST: L = {
-  en: 'she works inside Scranton city. Clifton Township has no LST, and whether Scranton collects for occasional sessions is unconfirmed: ask the Single Tax Office, (570) 963-6756 ext. 3112. With Scranton earnings under $15,600 a year, the exemption certificate leaves only the school district\'s $5.',
-  ru: 'она работает в черте Скрантона. В Clifton Township налога LST нет, а берёт ли его Скрантон за отдельные съёмки, не подтверждено: спроси в Single Tax Office, (570) 963-6756 доб. 3112. Если заработок в Скрантоне меньше $15,600 за год, заявление об освобождении оставляет только $5 школьного округа.',
-};
-const SHOOTS_IN_SCRANTON: L = {
-  en: 'she photographs clients inside Scranton city limits. The city counts even one day of work there, and the tax is only on the profit from that work. Ask Berkheimer, (610) 599-3140, how to split it out and whether a quarter with no Scranton work needs a zero return.',
-  ru: 'она снимает клиентов в черте Скрантона. Город считает даже один день работы, а налог берётся только с прибыли от этой работы. Спроси в Berkheimer, (610) 599-3140, как её выделять и нужна ли нулевая декларация за квартал без работы в Скрантоне.',
-};
+// Home and work are both Clifton Township (North Pocono School District):
+// 1% earned income tax, and no Local Services or business tax of its own
+// (DCED register and the township code, checked 2026-10-02). Scranton's own
+// taxes reach only work done inside the city, so they are not listed here;
+// the guide (tax-guide.ts) says what to ask if she photographs clients there.
 const OWES_1000: L = {
   en: 'your joint federal tax, less withholding, will reach $1,000 or more. Either way there is no penalty if withholding from your pay this year covers your total tax for last year (110% of it if last year\'s income passed $150,000).',
   ru: 'ваш совместный федеральный налог за вычетом удержаний составит $1,000 или больше. В любом случае штрафа нет, если удержания из твоей зарплаты в этом году покрывают весь налог за прошлый год (110%, если доход за прошлый год больше $150,000).',
 };
 
-const lstQuarter = (key: string, due: string, quarter: L): TaxDeadline => ({
-  key,
-  due,
-  kind: 'local',
-  title: { en: `Scranton Local Services Tax, ${quarter.en}`, ru: `Местный налог Скрантона (LST), ${quarter.ru}` },
-  detail: {
-    en: '$39 for the quarter ($156 a year), mailed with the self-employed quarterly form to Collector of Taxes, PO Box 20111, Scranton PA 18502.',
-    ru: '$39 за квартал ($156 в год), по почте с квартальной формой для самозанятых: Collector of Taxes, PO Box 20111, Scranton PA 18502.',
-  },
-  link: SCRANTON_TAX_OFFICE,
-  onlyIf: WORKS_IN_SCRANTON_LST,
-  series: 'lst',
-});
-
 const eitEstimate = (key: string, due: string, quarter: L): TaxDeadline => ({
   key,
   due,
   kind: 'local',
-  title: { en: `Local earned income tax estimate, ${quarter.en}`, ru: `Местный налог на доход, авансовый платёж, ${quarter.ru}` },
+  title: { en: `Clifton Township earned income tax estimate, ${quarter.en}`, ru: `Налог на заработок Clifton Township, авансовый платёж, ${quarter.ru}` },
   detail: {
-    en: 'Berkheimer form DQ-1 on her net profit, at 1% (Clifton Township 0.5% plus North Pocono School District 0.5%), with PSD code 350601 for both home and work. Sessions in Scranton don\'t change it. There is no income threshold, and a $0 estimate avoids interest. Berkheimer\'s form says the end of the month, the statute says the 15th: paying by the 15th satisfies both.',
-    ru: 'Форма Berkheimer DQ-1 на чистую прибыль по ставке 1% (Clifton Township 0.5% и North Pocono School District 0.5%), код PSD 350601 и для дома, и для работы. Съёмки в Скрантоне ставку не меняют. Порога дохода нет, а нулевая декларация избавляет от процентов. Berkheimer пишет «конец месяца», закон пишет «15 число»: заплатить до 15-го подходит для обоих.',
+    en: 'Berkheimer form DQ-1 on her net profit, at 1% (Clifton Township 0.5% plus North Pocono School District 0.5%), with PSD code 350601 for both home and work. Sessions elsewhere don\'t change it. There is no income threshold, and a $0 estimate avoids interest. Berkheimer\'s form says the end of the month, the statute says the 15th: paying by the 15th satisfies both.',
+    ru: 'Форма Berkheimer DQ-1 на чистую прибыль по ставке 1% (Clifton Township 0.5% и North Pocono School District 0.5%), код PSD 350601 и для дома, и для работы. Съёмки в других местах ставку не меняют. Порога дохода нет, а нулевая декларация избавляет от процентов. Berkheimer пишет «конец месяца», закон пишет «15 число»: заплатить до 15-го подходит для обоих.',
   },
   link: BERKHEIMER,
-});
-
-const pptQuarter = (key: string, due: string, quarter: L): TaxDeadline => ({
-  key,
-  due,
-  kind: 'local',
-  title: { en: `Scranton Payroll Preparation Tax, ${quarter.en}`, ru: `Налог Скрантона PPT, ${quarter.ru}` },
-  detail: {
-    en: '1.034% (city 0.2787% plus school district 0.7553%) of the profit from work done inside Scranton, or of her draws if those are less. It replaced the city\'s Business Privilege and Mercantile taxes in 2022 and covers a sole proprietor working alone. Register once with Berkheimer, then file each quarter.',
-    ru: '1.034% (город 0.2787% и школьный округ 0.7553%) от прибыли с работы в черте Скрантона или от изъятий, если они меньше. Заменил городские налоги на деловые привилегии и торговлю в 2022 и касается ИП, работающего в одиночку. Один раз зарегистрироваться в Berkheimer, затем подавать каждый квартал.',
-  },
-  link: PPT_FORMS,
-  onlyIf: SHOOTS_IN_SCRANTON,
-  series: 'ppt',
 });
 
 const estimates = (key: string, due: string, quarter: L, withPA: boolean): TaxDeadline => ({
@@ -158,18 +118,14 @@ export const TAX_DEADLINES: TaxDeadline[] = [
   salesReturn('2027-Q2', '2027-07-20', { en: 'April to June 2027', ru: 'апрель, май и июнь 2027' }),
   salesReturn('2027-Q3', '2027-10-20', { en: 'July to September 2027', ru: 'июль, август и сентябрь 2027' }),
 
-  // ── Scranton and local ──
+  // ── Local: Clifton Township, through Berkheimer ──
   eitEstimate('local-eit-2026-q3', '2026-10-15', { en: 'Q3 2026', ru: '3 квартал 2026' }),
-  lstQuarter('local-lst-2026-q3', '2026-10-30', { en: 'Q3 2026', ru: '3 квартал 2026' }),
-  pptQuarter('local-ppt-2026-q3', '2026-11-30', { en: 'Q3 2026', ru: '3 квартал 2026' }),
   eitEstimate('local-eit-2026-q4', '2027-01-15', { en: 'Q4 2026', ru: '4 квартал 2026' }),
-  lstQuarter('local-lst-2026-q4', '2027-01-29', { en: 'Q4 2026', ru: '4 квартал 2026' }),
-  pptQuarter('local-ppt-2026-q4', '2027-02-26', { en: 'Q4 2026', ru: '4 квартал 2026' }),
   {
     key: 'local-eit-return-2026',
     due: '2027-04-15',
     kind: 'local',
-    title: { en: '2026 local earned income tax return (Berkheimer F-1)', ru: 'Годовая декларация по местному налогу на доход за 2026 (Berkheimer F-1)' },
+    title: { en: '2026 Clifton Township earned income tax return (Berkheimer F-1)', ru: 'Годовая декларация по налогу на заработок Clifton Township за 2026 (Berkheimer F-1)' },
     detail: {
       en: 'Due even if no tax is owed. Attach the PA Schedule C: local tax is figured on the PA profit, not the federal one. It can be filed jointly with yours, but the two incomes are not combined.',
       ru: 'Подаётся, даже если налог не причитается. Приложить PA Schedule C: местный налог считается от прибыли по правилам PA, а не федеральной. Можно подать вместе с твоей, но доходы не складываются.',
@@ -177,14 +133,8 @@ export const TAX_DEADLINES: TaxDeadline[] = [
     link: BERKHEIMER,
   },
   eitEstimate('local-eit-2027-q1', '2027-04-15', { en: 'Q1 2027', ru: '1 квартал 2027' }),
-  lstQuarter('local-lst-2027-q1', '2027-04-30', { en: 'Q1 2027', ru: '1 квартал 2027' }),
-  pptQuarter('local-ppt-2027-q1', '2027-05-28', { en: 'Q1 2027', ru: '1 квартал 2027' }),
   eitEstimate('local-eit-2027-q2', '2027-07-15', { en: 'Q2 2027', ru: '2 квартал 2027' }),
-  lstQuarter('local-lst-2027-q2', '2027-07-30', { en: 'Q2 2027', ru: '2 квартал 2027' }),
-  pptQuarter('local-ppt-2027-q2', '2027-08-31', { en: 'Q2 2027', ru: '2 квартал 2027' }),
   eitEstimate('local-eit-2027-q3', '2027-10-15', { en: 'Q3 2027', ru: '3 квартал 2027' }),
-  lstQuarter('local-lst-2027-q3', '2027-10-29', { en: 'Q3 2027', ru: '3 квартал 2027' }),
-  pptQuarter('local-ppt-2027-q3', '2027-11-30', { en: 'Q3 2027', ru: '3 квартал 2027' }),
 
   // ── Federal and Pennsylvania income tax ──
   {
@@ -249,7 +199,7 @@ export const TAX_DEADLINES: TaxDeadline[] = [
   estimates('est-2027-q4', '2028-01-18', { en: 'Q4 2027', ru: '4 квартал 2027' }, true),
 ];
 
-/** Today in Scranton, YYYY-MM-DD: a UTC date is tomorrow from 8 PM Eastern. */
+/** Today in Eastern time, YYYY-MM-DD: a UTC date is tomorrow from 8 PM Eastern. */
 export function easternToday(now: Date = new Date()): string {
   return now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }

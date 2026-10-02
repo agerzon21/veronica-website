@@ -3,9 +3,10 @@
  *
  * SOURCED, AND DATED. Checked on 2026-10-01 against the IRS (Rev. Proc. 2025-32,
  * the 2026 Form 1040-ES, Notice 2026-10, the Schedule C and 2210 instructions),
- * PA Revenue (REV-413(I) 2026, PA-40 Schedule C, REV-717, the PIT Guide), the
- * City of Scranton and Berkheimer (PPT FAQ, EIT forms) and DCED's 2026 local
- * tax register. Anything the research could not confirm is left out or says
+ * PA Revenue (REV-413(I) 2026, PA-40 Schedule C, REV-717, the PIT Guide),
+ * Berkheimer (EIT forms and FAQs), Clifton Township's code, the City of
+ * Scranton's PPT FAQ and DCED's 2026 local tax register (rechecked for
+ * Clifton Township on 2026-10-02). Anything the research could not confirm is left out or says
  * "ask the preparer". Refresh it each autumn with the deadlines in
  * tax-calendar.ts.
  *
@@ -31,15 +32,11 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
     {
       title: { en: 'Possibly missed earlier in 2026', ru: 'Что могли пропустить ранее в 2026' },
       points: [
-        { en: 'Scranton Payroll Preparation Tax for Q2 2026 (due Aug 31), only if she photographed anyone inside Scranton from April to June: 1.034% of the profit from those sessions, so a few dollars. Register with Berkheimer, then file it.' },
         { en: 'Local earned income tax estimates for 2026: her 2025 local tax was $0, and the statute\'s safe harbor (100% of last year\'s tax) rules out an underpayment penalty. Starting with the Oct 15 estimate is enough; Berkheimer may still add a little interest.' },
         { en: 'Federal estimated tax for 2026: filing jointly, withholding from your pay counts. If this year\'s withholding covers your total 2025 tax (110% of it if your 2025 income passed $150,000), there is no penalty. If it doesn\'t, raising your W-4 withholding before December fixes it, because withholding counts as paid evenly through the year.' },
         { en: 'A small bill for the late Q2 2026 sales tax return may still come by mail: about 15% of the $45 plus interest.' },
       ],
-      links: [
-        { label: { en: 'Scranton PPT FAQ', ru: 'Вопросы о PPT Скрантона' }, href: 'https://scrantonpa.gov/payroll-prep-tax-information/' },
-        { label: { en: 'Berkheimer', ru: 'Berkheimer' }, href: 'https://www.hab-inc.com' },
-      ],
+      links: [{ label: { en: 'Berkheimer', ru: 'Berkheimer' }, href: 'https://www.hab-inc.com' }],
     },
     {
       title: { en: 'Federal', ru: 'Федеральный налог' },
@@ -68,18 +65,15 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
       links: [{ label: { en: 'PA Schedule C instructions', ru: 'Инструкция к PA Schedule C' }, href: 'https://www.pa.gov/content/dam/copapwp-pagov/en/revenue/documents/formsandpublications/formsforindividuals/pit/documents/pa-40c.pdf' }],
     },
     {
-      title: { en: 'Local: Clifton Township and Scranton', ru: 'Местные налоги: Clifton Township и Скрантон' },
+      title: { en: 'Local: Clifton Township', ru: 'Местные налоги: Clifton Township' },
       points: [
-        { en: 'Earned income tax: 1% of her PA profit (Clifton Township 0.5% plus North Pocono School District 0.5%), collected by Berkheimer, PSD code 350601 for both home and work. Sessions in Scranton don\'t change it: Scranton charges nonresidents 1% too.' },
+        { en: 'Earned income tax: 1% of her PA profit (Clifton Township 0.5% plus North Pocono School District 0.5%), collected by Berkheimer, PSD code 350601 for both home and work.' },
         { en: 'Quarterly estimates on Berkheimer\'s DQ-1, then the annual F-1 by April 15, 2027, even if nothing is owed. It can be filed jointly with yours, but the two incomes are not combined.' },
-        { en: 'Clifton Township and North Pocono levy nothing else on her: no Local Services Tax, business privilege, mercantile, per capita or occupation tax.' },
-        { en: 'Scranton Payroll Preparation Tax: likely due on the profit from sessions inside the city, at 1.034%, even for a single day\'s work there (the city\'s FAQ, Q17). On $5,000 of Scranton profit that is $51.70 a year. Returns are due May 31, Aug 31, Nov 30 and Feb 28; ask Berkheimer, (610) 599-3140, how to split the profit out.' },
-        { en: 'Scranton Local Services Tax: may apply to work done in the city, unconfirmed for occasional sessions. With Scranton earnings under $15,600 a year, the exemption certificate leaves only the school district\'s $5. Ask the Single Tax Office, (570) 963-6756 ext. 3112.' },
-        { en: 'Lackawanna County itself has no income or business tax.' },
+        { en: 'That is the whole local list: Clifton Township and North Pocono levy no Local Services Tax, business privilege, mercantile, per capita or occupation tax, and Lackawanna County has no income or business tax.' },
+        { en: 'One exception to keep in mind: a city can tax work done inside it. If she photographs clients inside Scranton city limits, Scranton\'s Payroll Preparation Tax (1.034% of the profit from that work) probably applies, and its Local Services Tax may. Ask Berkheimer, (610) 599-3140.' },
       ],
       links: [
         { label: { en: 'Berkheimer EIT questions', ru: 'Berkheimer: вопросы об EIT' }, href: 'https://www.hab-inc.com/eitfaq/' },
-        { label: { en: 'Scranton Single Tax Office', ru: 'Налоговый офис Скрантона' }, href: 'https://scrantontaxoffice.org' },
         { label: { en: 'Find your municipality\'s taxes', ru: 'Налоги по адресу' }, href: 'https://apps.dced.pa.gov/Munstats-Public/FindLocalTax.aspx' },
       ],
     },
@@ -130,7 +124,7 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
     },
   ],
   disclaimer: {
-    en: 'A checklist from the IRS, PA Revenue and the City of Scranton\'s own pages, checked October 1, 2026. It is not tax advice: a preparer who knows her filing status and address should confirm the numbers.',
-    ru: 'Список по материалам IRS, налоговой Пенсильвании и города Скрантон, проверено 1 октября 2026. Это не налоговая консультация: цифры должен подтвердить бухгалтер, который знает её семейное положение и адрес.',
+    en: 'A checklist from the IRS, PA Revenue, Berkheimer, Clifton Township\'s code and the state\'s local tax register, checked October 2, 2026. It is not tax advice: a preparer should confirm the numbers.',
+    ru: 'Список по материалам IRS, налоговой Пенсильвании, Berkheimer, кодекса Clifton Township и реестра местных налогов штата, проверено 2 октября 2026. Это не налоговая консультация: цифры должен подтвердить бухгалтер.',
   },
 };

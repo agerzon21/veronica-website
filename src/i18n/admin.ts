@@ -4243,7 +4243,7 @@ const dict = {
       sales: { en: 'PA sales tax', ru: 'Налог с продаж PA' },
       federal: { en: 'Federal', ru: 'Федеральный' },
       pa: { en: 'Pennsylvania', ru: 'Пенсильвания' },
-      local: { en: 'Scranton', ru: 'Скрантон' },
+      local: { en: 'Clifton Township', ru: 'Clifton Township' },
       records: { en: 'Records', ru: 'Документы' },
     },
     overdue: { en: (n: number) => `${n} day${n === 1 ? '' : 's'} late`, ru: (n: number) => `Просрочено на ${n} дн.` },
@@ -4253,7 +4253,7 @@ const dict = {
     markOnCard: { en: 'Marked filed on the licence card below.', ru: 'Отмечается поданной в карточке лицензии ниже.' },
     markDone: { en: 'Mark done', ru: 'Отметить выполненным' },
     // Switches off every date of a tax that applies only in some cases.
-    notApplicable: { en: "Doesn't apply to her", ru: 'Её не касается' },
+    notApplicable: { en: "Doesn't apply", ru: 'Не касается' },
     seriesOff: {
       en: (name: string) => `${name}: doesn't apply, every date hidden`,
       ru: (name: string) => `${name}: не касается, все сроки скрыты`,

@@ -64,8 +64,8 @@ export const DRONE_INTRO: { lead: L[]; facts: Array<{ label: L; value: L }> } = 
     {
       label: { en: 'Where', ru: 'Где' },
       value: {
-        en: 'PSI Scranton, 1125 Lackawanna Trail, Clarks Summit, 5 miles away',
-        ru: 'PSI Scranton, 1125 Lackawanna Trail, Clarks Summit, в 8 км',
+        en: 'PSI Scranton, 1125 Lackawanna Trail, Clarks Summit, about 25 miles (40 minutes) from home',
+        ru: 'PSI Scranton, 1125 Lackawanna Trail, Clarks Summit, около 40 км (40 минут) от дома',
       },
     },
     {
@@ -228,7 +228,7 @@ export const DRONE_STEP_TEXT: Record<DroneStepKey, DroneStepText> = {
 
   book: {
     title: { en: 'Book the test with PSI', ru: 'Записаться на тест в PSI' },
-    summary: { en: 'PSI Scranton is 5 miles away; book before Oct 26', ru: 'PSI Scranton в 8 км; запишись на дату до 26 октября' },
+    summary: { en: 'PSI in Clarks Summit, 40 minutes from home; book before Oct 26', ru: 'PSI в Clarks Summit, 40 минут от дома; запишись на дату до 26 октября' },
     time: { en: '10 minutes', ru: '10 минут' },
     cost: { en: '$175 (plus tax, if PSI adds it)', ru: '$175 (плюс налог, если PSI его добавит)' },
     todo: [
@@ -262,8 +262,8 @@ export const DRONE_STEP_TEXT: Record<DroneStepKey, DroneStepText> = {
     ],
     notes: [
       {
-        en: 'Other centers if Scranton is full: Commonwealth University, Bloomsburg (49 mi); AVNA Learning Center, Johnson City NY (52 mi); BCY Testing Solution, Allentown (56 mi). If no seats show, PSI\'s site has "request a seat".',
-        ru: 'Если в Скрантоне нет мест: Commonwealth University, Bloomsburg (80 км); AVNA Learning Center, Johnson City NY (84 км); BCY Testing Solution, Allentown (90 км). Если мест нет вообще, на сайте PSI есть «request a seat».',
+        en: 'Other centers if Clarks Summit is full, by drive from home: BCY Testing Solution, Allentown (61 mi); Commonwealth University, Bloomsburg (63 mi); AVNA Learning Center, Johnson City NY (79 mi). If no seats show, PSI\'s site has "request a seat".',
+        ru: 'Если в Clarks Summit нет мест, по расстоянию от дома: BCY Testing Solution, Allentown (98 км); Commonwealth University, Bloomsburg (101 км); AVNA Learning Center, Johnson City NY (127 км). Если мест нет вообще, на сайте PSI есть «request a seat».',
       },
       {
         en: 'Rescheduling or cancelling needs at least 24 hours\' notice. PSI\'s phone: 844-704-1487.',
