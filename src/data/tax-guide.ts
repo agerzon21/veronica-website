@@ -30,11 +30,11 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
   },
   sections: [
     {
-      title: { en: 'Possibly missed earlier in 2026', ru: 'Что могли пропустить ранее в 2026' },
+      title: { en: 'Paying once a year instead of quarterly', ru: 'Платить раз в год, а не поквартально' },
       points: [
-        { en: 'Local earned income tax estimates for 2026: her 2025 local tax was $0, and the statute\'s safe harbor (100% of last year\'s tax) rules out an underpayment penalty. Starting with the Oct 15 estimate is enough; Berkheimer may still add a little interest.' },
-        { en: 'Federal estimated tax for 2026: filing jointly, withholding from your pay counts. If this year\'s withholding covers your total 2025 tax (110% of it if your 2025 income passed $150,000), there is no penalty. If it doesn\'t, raising your W-4 withholding before December fixes it, because withholding counts as paid evenly through the year.' },
-        { en: 'A small bill for the late Q2 2026 sales tax return may still come by mail: about 15% of the $45 plus interest.' },
+        { en: 'Income tax can legally be prepaid quarterly while the year runs; you pay it once a year with the April returns instead. Here is what that costs.' },
+        { en: 'Local (Clifton Township): nothing for 2026. Her 2025 local tax was $0, and the statute\'s safe harbor (100% of last year\'s tax) rules out a penalty. From 2027, at most a little interest, and Berkheimer has to warn by letter, with 30 days to fix it, before any penalty.' },
+        { en: 'Federal: nothing, as long as the tax withheld from your pay this year covers your total 2025 tax (line 24 of your 2025 Form 1040; 110% of it if your 2025 income passed $150,000). Filing jointly, your withholding counts for both of you. If it falls short, raising your W-4 withholding before December fixes it, because withholding counts as paid evenly through the year.' },
       ],
       links: [{ label: { en: 'Berkheimer', ru: 'Berkheimer' }, href: 'https://www.hab-inc.com' }],
     },
@@ -50,7 +50,6 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
       ],
       links: [
         { label: { en: 'Schedule C instructions', ru: 'Инструкция к Schedule C' }, href: 'https://www.irs.gov/instructions/i1040sc' },
-        { label: { en: 'Form 1040-ES (2026)', ru: 'Форма 1040-ES (2026)' }, href: 'https://www.irs.gov/pub/irs-pdf/f1040es.pdf' },
       ],
     },
     {
@@ -68,7 +67,7 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
       title: { en: 'Local: Clifton Township', ru: 'Местные налоги: Clifton Township' },
       points: [
         { en: 'Earned income tax: 1% of her PA profit (Clifton Township 0.5% plus North Pocono School District 0.5%), collected by Berkheimer, PSD code 350601 for both home and work.' },
-        { en: 'Quarterly estimates on Berkheimer\'s DQ-1, then the annual F-1 by April 15, 2027, even if nothing is owed. It can be filed jointly with yours, but the two incomes are not combined.' },
+        { en: 'Paid once a year, with Berkheimer\'s F-1 by April 15, even if nothing is owed. It can be filed jointly with yours, but the two incomes are not combined.' },
         { en: 'That is the whole local list: Clifton Township and North Pocono levy no Local Services Tax, business privilege, mercantile, per capita or occupation tax, and Lackawanna County has no income or business tax.' },
         { en: 'One exception to keep in mind: a city can tax work done inside it. If she photographs clients inside Scranton city limits, Scranton\'s Payroll Preparation Tax (1.034% of the profit from that work) probably applies, and its Local Services Tax may. Ask Berkheimer, (610) 599-3140.' },
       ],
@@ -83,6 +82,7 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
         { en: 'She stays quarterly for 2027: monthly filing starts only when a third quarter\'s tax reaches $600, and Q3 2026 was $165.30. Q3 2027 decides 2028.' },
         { en: 'On time, the vendor discount is 1% of the tax, up to $75 a quarter. Late: 5% a month up to 25% (at least $2) plus 7% interest, and no discount.' },
         { en: 'A return is due every quarter even with no sales. Payments of $1,000 or more must be electronic.' },
+        { en: 'A small bill for the late Q2 2026 return may still come by mail: about 15% of the $45 plus interest.' },
         { en: 'Use tax: gear bought online without PA tax owes 6% on the same return.' },
       ],
     },
@@ -90,7 +90,7 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
       title: { en: 'Deductions to keep records for', ru: 'Вычеты, для которых нужны записи' },
       points: [
         { en: 'Mileage: 72.5 cents a mile Jan 1 to Jun 30, 2026, and 76 cents Jul 1 to Dec 31, plus parking and tolls. A log of date, destination, purpose and miles for each trip, made as she goes.' },
-        { en: 'Gear: up to $2,500 per item can be expensed outright (de minimis election); larger items through Section 179 (PA allows it) or 100% bonus depreciation (federal only). A camera also used personally needs more than 50% business use for either.' },
+        { en: 'Gear counts for the year only if it is bought and in use by Dec 31; keep each invoice with that date. Up to $2,500 per item can be expensed outright (de minimis election); larger items through Section 179 (PA allows it) or 100% bonus depreciation (federal only). A camera also used personally needs more than 50% business use for either.' },
         { en: 'Google Ads, software, gallery hosting and subscriptions: deductible when paid.' },
         { en: 'Home office: $5 a square foot up to 300 (max $1,500) federally, for space used only for the business. PA uses actual costs, so keep the home\'s bills too.' },
         { en: 'Health insurance she pays for herself: deductible federally, not in PA, and not for months she could join a plan through your job.' },
@@ -118,7 +118,7 @@ export const TAX_GUIDE: { title: L; intro: L; sections: TaxGuideSection[]; discl
         { en: 'The 2026 ledger from this admin (payments by date and method, tax and tips listed separately, retainers for 2027 shoots), the Stripe annual summary, Venmo business statements, and bank statements for Zelle deposits.' },
         { en: 'Google Ads invoices, software receipts, gear invoices with the date each went into use, the mileage log, travel and meal receipts with the purpose, home office square footage and home bills, phone and internet bills.' },
         { en: 'For anyone she paid: totals, how they were paid, W-9s.' },
-        { en: 'Payments already made: sales tax returns, any estimates, Berkheimer, LST and PPT, and any notices from PA Revenue.' },
+        { en: 'Payments already made: the sales tax returns, and any notices from PA Revenue (for example about the late Q2 return).' },
         { en: 'Logins for myPATH and Berkheimer.' },
       ],
     },

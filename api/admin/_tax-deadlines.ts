@@ -4,9 +4,6 @@
  * POST { password }                               → { success, done, lastFiledPeriod }
  * POST { password, action: 'mark', key, done }    → the same, after the change
  *
- * `key` is a deadline's key, or `series:<name>` to mark a whole recurring tax
- * (TAX_SERIES in the calendar) as not applying.
- *
  * The deadlines themselves are a list in src/data/tax-calendar.ts; this keeps
  * only which of them have been dealt with, keyed by their stable keys, in one
  * system_state row like the sales tax licence. A sales tax return is NOT
@@ -21,7 +18,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAdmin, requireSuper } from '../_admin-auth.js';
 import { getDb } from '../_db.js';
 import { actorName } from '../_money-history.js';
-import { TAX_DEADLINES, TAX_SERIES, seriesKey, type TaxSeries } from '../../src/data/tax-calendar.js';
+import { TAX_DEADLINES } from '../../src/data/tax-calendar.js';
 
 export const DONE_KEY = 'tax_deadlines_done';
 
@@ -59,9 +56,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.body?.action === 'mark') {
       const key = String(req.body?.key ?? '');
       const deadline = TAX_DEADLINES.find((d) => d.key === key);
-      const series = (Object.keys(TAX_SERIES) as TaxSeries[]).some((s) => seriesKey(s) === key);
-      if (!deadline && !series) return res.status(400).json({ success: false, error: 'Unknown deadline' });
-      if (deadline?.salesPeriod) {
+      if (!deadline) return res.status(400).json({ success: false, error: 'Unknown deadline' });
+      if (deadline.salesPeriod) {
         return res.status(400).json({ success: false, error: 'Sales tax returns are marked filed on the licence card.' });
       }
       if (req.body?.done === true) {

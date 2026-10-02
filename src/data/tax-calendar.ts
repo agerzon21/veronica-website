@@ -1,7 +1,14 @@
 /**
- * Every tax deadline that applies to Vero Photography, with what to do for
- * each: the Taxes page (src/components/AdminTax.tsx) lists them, and the daily
- * reminder job (api/cron/_tax-reminders.ts) emails Alex before each one.
+ * The tax dates Vero Photography files on, with what to do for each: the
+ * Taxes page (src/components/AdminTax.tsx) lists them, and the daily reminder
+ * job (api/cron/_tax-reminders.ts) emails Alex before each one.
+ *
+ * ONLY WHAT HAS TO BE FILED. The quarterly PA sales tax return is required
+ * (late fees otherwise), and the yearly returns are due in April. Quarterly
+ * income tax prepayments (federal 1040-ES, local DQ-1) are deliberately NOT
+ * listed: Alex pays income tax once a year with the returns (decided
+ * 2026-10-02), and the guide (tax-guide.ts) says what that costs. Don't add
+ * them back, or a 1099 or gear reminder, without asking him.
  *
  * DATED, NOT DERIVED. Due dates move for weekends and holidays and some only
  * apply in some cases, so each is written out with its source checked
@@ -13,21 +20,7 @@
  */
 
 export type L = { en: string; ru: string };
-export type TaxKind = 'sales' | 'federal' | 'pa' | 'local' | 'records';
-
-/**
- * A recurring tax that applies only in some cases. "Doesn't apply" on the
- * Taxes page switches off every date in the series at once, including the
- * ones added next autumn, so a tax that is not hers stops emailing Alex.
- */
-export type TaxSeries = 'estimates';
-
-export const TAX_SERIES: Record<TaxSeries, L> = {
-  estimates: { en: 'Federal estimated tax', ru: 'Федеральный авансовый налог' },
-};
-
-/** How a switched-off series is kept among the done marks. */
-export const seriesKey = (s: TaxSeries): string => `series:${s}`;
+export type TaxKind = 'sales' | 'federal' | 'pa' | 'local';
 
 export interface TaxDeadline {
   /** Stable: the done marks and the reminders are kept against it. */
@@ -43,8 +36,6 @@ export interface TaxDeadline {
   salesPeriod?: string;
   /** When it applies only in some cases, the case. */
   onlyIf?: L;
-  /** Part of a recurring tax that can be switched off as a whole. */
-  series?: TaxSeries;
 }
 
 const MYPATH = { label: { en: 'myPATH', ru: 'myPATH' }, href: 'https://mypath.pa.gov' };
@@ -65,46 +56,14 @@ const salesReturn = (period: string, due: string, months: L): TaxDeadline => ({
   link: MYPATH,
 });
 
-const IRS_PAY = { label: { en: 'IRS Direct Pay', ru: 'IRS Direct Pay' }, href: 'https://www.irs.gov/payments/direct-pay' };
 const BERKHEIMER = { label: { en: 'Berkheimer', ru: 'Berkheimer' }, href: 'https://www.hab-inc.com' };
 // Home and work are both Clifton Township (North Pocono School District):
-// 1% earned income tax, and no Local Services or business tax of its own
-// (DCED register and the township code, checked 2026-10-02). Scranton's own
-// taxes reach only work done inside the city, so they are not listed here;
-// the guide (tax-guide.ts) says what to ask if she photographs clients there.
-const OWES_1000: L = {
-  en: 'your joint federal tax, less withholding, will reach $1,000 or more. Either way there is no penalty if withholding from your pay this year covers your total tax for last year (110% of it if last year\'s income passed $150,000).',
-  ru: 'ваш совместный федеральный налог за вычетом удержаний составит $1,000 или больше. В любом случае штрафа нет, если удержания из твоей зарплаты в этом году покрывают весь налог за прошлый год (110%, если доход за прошлый год больше $150,000).',
-};
-
-const eitEstimate = (key: string, due: string, quarter: L): TaxDeadline => ({
-  key,
-  due,
-  kind: 'local',
-  title: { en: `Clifton Township earned income tax estimate, ${quarter.en}`, ru: `Налог на заработок Clifton Township, авансовый платёж, ${quarter.ru}` },
-  detail: {
-    en: 'Berkheimer form DQ-1 on her net profit, at 1% (Clifton Township 0.5% plus North Pocono School District 0.5%), with PSD code 350601 for both home and work. Sessions elsewhere don\'t change it. There is no income threshold, and a $0 estimate avoids interest. Berkheimer\'s form says the end of the month, the statute says the 15th: paying by the 15th satisfies both.',
-    ru: 'Форма Berkheimer DQ-1 на чистую прибыль по ставке 1% (Clifton Township 0.5% и North Pocono School District 0.5%), код PSD 350601 и для дома, и для работы. Съёмки в других местах ставку не меняют. Порога дохода нет, а нулевая декларация избавляет от процентов. Berkheimer пишет «конец месяца», закон пишет «15 число»: заплатить до 15-го подходит для обоих.',
-  },
-  link: BERKHEIMER,
-});
-
-const estimates = (key: string, due: string, quarter: L, withPA: boolean): TaxDeadline => ({
-  key,
-  due,
-  kind: 'federal',
-  title: {
-    en: `Estimated income tax, ${quarter.en}${withPA ? ': federal, and PA if required' : ''}`,
-    ru: `Авансовый налог на доход, ${quarter.ru}${withPA ? ': федеральный, и PA если требуется' : ''}`,
-  },
-  detail: {
-    en: `Federal Form 1040-ES, paid through IRS Direct Pay.${withPA ? ' PA (PA-40 ES) only if her PA income not withheld is $17,000 or more for 2027.' : ''}`,
-    ru: `Федеральная форма 1040-ES, оплата через IRS Direct Pay.${withPA ? ' PA (PA-40 ES) только если её доход без удержаний в PA за 2027 будет $17,000 или больше.' : ''}`,
-  },
-  link: IRS_PAY,
-  onlyIf: OWES_1000,
-  series: 'estimates',
-});
+// 1% earned income tax, paid once a year with the F-1 (Alex's choice,
+// 2026-10-02, over quarterly DQ-1 prepayments), and no Local Services or
+// business tax of its own (DCED register and the township code, checked
+// 2026-10-02). Scranton's own taxes reach only work done inside the city, so
+// they are not listed here; the guide (tax-guide.ts) says what to ask if she
+// photographs clients there.
 
 export const TAX_DEADLINES: TaxDeadline[] = [
   // ── Pennsylvania sales tax ──
@@ -118,59 +77,7 @@ export const TAX_DEADLINES: TaxDeadline[] = [
   salesReturn('2027-Q2', '2027-07-20', { en: 'April to June 2027', ru: 'апрель, май и июнь 2027' }),
   salesReturn('2027-Q3', '2027-10-20', { en: 'July to September 2027', ru: 'июль, август и сентябрь 2027' }),
 
-  // ── Local: Clifton Township, through Berkheimer ──
-  eitEstimate('local-eit-2026-q3', '2026-10-15', { en: 'Q3 2026', ru: '3 квартал 2026' }),
-  eitEstimate('local-eit-2026-q4', '2027-01-15', { en: 'Q4 2026', ru: '4 квартал 2026' }),
-  {
-    key: 'local-eit-return-2026',
-    due: '2027-04-15',
-    kind: 'local',
-    title: { en: '2026 Clifton Township earned income tax return (Berkheimer F-1)', ru: 'Годовая декларация по налогу на заработок Clifton Township за 2026 (Berkheimer F-1)' },
-    detail: {
-      en: 'Due even if no tax is owed. Attach the PA Schedule C: local tax is figured on the PA profit, not the federal one. It can be filed jointly with yours, but the two incomes are not combined.',
-      ru: 'Подаётся, даже если налог не причитается. Приложить PA Schedule C: местный налог считается от прибыли по правилам PA, а не федеральной. Можно подать вместе с твоей, но доходы не складываются.',
-    },
-    link: BERKHEIMER,
-  },
-  eitEstimate('local-eit-2027-q1', '2027-04-15', { en: 'Q1 2027', ru: '1 квартал 2027' }),
-  eitEstimate('local-eit-2027-q2', '2027-07-15', { en: 'Q2 2027', ru: '2 квартал 2027' }),
-  eitEstimate('local-eit-2027-q3', '2027-10-15', { en: 'Q3 2027', ru: '3 квартал 2027' }),
-
-  // ── Federal and Pennsylvania income tax ──
-  {
-    key: 'records-gear-2026',
-    due: '2026-12-31',
-    kind: 'records',
-    title: { en: 'Gear for 2026 in use by Dec 31', ru: 'Оборудование для 2026 в работе до 31 декабря' },
-    detail: {
-      en: 'Equipment counts for the 2026 return only if it is bought AND in use by the end of the year. Keep each invoice with the date it went into use.',
-      ru: 'Оборудование учитывается в декларации за 2026, только если куплено И начало использоваться до конца года. Храни каждый счёт с датой начала использования.',
-    },
-  },
-  {
-    key: 'fed-est-2026-q4',
-    due: '2027-01-15',
-    kind: 'federal',
-    title: { en: 'Federal estimated tax, Q4 2026', ru: 'Федеральный авансовый налог, 4 квартал 2026' },
-    detail: {
-      en: 'Form 1040-ES through IRS Direct Pay. It can be skipped by filing the 2026 return and paying in full by Feb 1, 2027.',
-      ru: 'Форма 1040-ES через IRS Direct Pay. Можно пропустить, если подать декларацию за 2026 и заплатить всё до 1 февраля 2027.',
-    },
-    link: IRS_PAY,
-    onlyIf: OWES_1000,
-    series: 'estimates',
-  },
-  {
-    key: 'fed-1099nec-2026',
-    due: '2027-01-29',
-    kind: 'federal',
-    title: { en: '1099-NEC for second shooters, 2026', ru: '1099-NEC для вторых фотографов за 2026' },
-    detail: {
-      en: 'To each person paid $2,000 or more in 2026 by Zelle, cash or check, and to the IRS, by Feb 1 (filed through IRIS); a copy to PA through myPATH by Jan 29. Card and Venmo business payments are reported by the platform instead. Get a W-9 before paying anyone.',
-      ru: 'Каждому, кому заплатили $2,000 или больше за 2026 через Zelle, наличными или чеком, и в IRS до 1 февраля (через IRIS); копия в PA через myPATH до 29 января. Платежи картой и деловым Venmo отчитывает сама платформа. Перед оплатой бери у человека W-9.',
-    },
-    onlyIf: { en: 'she paid one person $2,000 or more that way in 2026.', ru: 'она заплатила одному человеку $2,000 или больше таким способом за 2026.' },
-  },
+  // ── The yearly returns, April 15 ──
   {
     key: 'fed-return-2026',
     due: '2027-04-15',
@@ -193,10 +100,17 @@ export const TAX_DEADLINES: TaxDeadline[] = [
     },
     link: MYPATH,
   },
-  estimates('est-2027-q1', '2027-04-15', { en: 'Q1 2027', ru: '1 квартал 2027' }, true),
-  estimates('est-2027-q2', '2027-06-15', { en: 'Q2 2027', ru: '2 квартал 2027' }, true),
-  estimates('est-2027-q3', '2027-09-15', { en: 'Q3 2027', ru: '3 квартал 2027' }, true),
-  estimates('est-2027-q4', '2028-01-18', { en: 'Q4 2027', ru: '4 квартал 2027' }, true),
+  {
+    key: 'local-eit-return-2026',
+    due: '2027-04-15',
+    kind: 'local',
+    title: { en: '2026 Clifton Township earned income tax return (Berkheimer F-1)', ru: 'Годовая декларация по налогу на заработок Clifton Township за 2026 (Berkheimer F-1)' },
+    detail: {
+      en: 'The whole year\'s local tax in one go: 1% of her PA profit (Clifton Township 0.5% plus North Pocono School District 0.5%), PSD code 350601. Due even if nothing is owed. Attach the PA Schedule C, since local tax is figured on the PA profit, not the federal one. It can be filed jointly with yours, but the two incomes are not combined.',
+      ru: 'Местный налог за весь год сразу: 1% от прибыли по правилам PA (Clifton Township 0.5% и North Pocono School District 0.5%), код PSD 350601. Подаётся, даже если налог не причитается. Приложить PA Schedule C: местный налог считается от прибыли по правилам PA, а не федеральной. Можно подать вместе с твоей, но доходы не складываются.',
+    },
+    link: BERKHEIMER,
+  },
 ];
 
 /** Today in Eastern time, YYYY-MM-DD: a UTC date is tomorrow from 8 PM Eastern. */
@@ -210,9 +124,8 @@ export function daysBetween(fromIso: string, toIso: string): number {
 }
 
 /**
- * Done when it was marked done, or its whole series was marked as not
- * applying, or, for a sales tax return, when the licence card's "Mark filed"
- * has reached its quarter ("2026-Q4" sorts after "2026-Q3", so a plain
+ * Done when it was marked done or, for a sales tax return, when the licence
+ * card's "Mark filed" has reached its quarter ("2026-Q4" sorts after "2026-Q3", so a plain
  * comparison is right).
  */
 export function deadlineIsDone(
@@ -221,6 +134,5 @@ export function deadlineIsDone(
   lastFiledPeriod: string | null,
 ): boolean {
   if (d.salesPeriod) return Boolean(lastFiledPeriod && lastFiledPeriod >= d.salesPeriod);
-  if (d.series && done[seriesKey(d.series)]) return true;
   return Boolean(done[d.key]);
 }

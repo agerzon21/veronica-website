@@ -21,16 +21,7 @@ import FaCheck from '../icons/fa/FaCheck';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
 import FaSyncAlt from '../icons/fa/FaSyncAlt';
 import { SalesTaxLicenseCard, SalesTaxReportCard } from './AdminTaxCards';
-import {
-  TAX_DEADLINES,
-  TAX_SERIES,
-  daysBetween,
-  deadlineIsDone,
-  easternToday,
-  seriesKey,
-  type TaxDeadline,
-  type TaxSeries,
-} from '../data/tax-calendar';
+import { TAX_DEADLINES, daysBetween, deadlineIsDone, easternToday, type TaxDeadline } from '../data/tax-calendar';
 import { TAX_GUIDE } from '../data/tax-guide';
 
 type DoneMap = Record<string, { at: string; by: string }>;
@@ -112,15 +103,14 @@ export default function AdminTax({ adminPassword }: { adminPassword: string }) {
   const today = easternToday();
   const open = useMemo(
     () =>
-      TAX_DEADLINES.filter((d) => !deadlineIsDone(d, done, lastFiled)).sort((a, b) => (a.due < b.due ? -1 : 1)),
+      // Same-day dates keep the calendar's order: federal, PA, then local.
+      TAX_DEADLINES.filter((d) => !deadlineIsDone(d, done, lastFiled)).sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0)),
     [done, lastFiled],
   );
-  // A series marked as not applying is one line in Done, not one per date.
-  const seriesOff = (Object.keys(TAX_SERIES) as TaxSeries[]).filter((s) => done[seriesKey(s)]);
   const finished = useMemo(
     () =>
-      TAX_DEADLINES.filter((d) => !(d.series && done[seriesKey(d.series)]) && deadlineIsDone(d, done, lastFiled)).sort((a, b) =>
-        a.due < b.due ? 1 : -1,
+      TAX_DEADLINES.filter((d) => deadlineIsDone(d, done, lastFiled)).sort((a, b) =>
+        a.due < b.due ? 1 : a.due > b.due ? -1 : 0,
       ),
     [done, lastFiled],
   );
@@ -185,8 +175,6 @@ export default function AdminTax({ adminPassword }: { adminPassword: string }) {
                 lang={lang}
                 busy={busy === d.key}
                 onDone={() => void mark(d.key, true)}
-                seriesBusy={!!d.series && busy === seriesKey(d.series)}
-                onNotApplicable={d.series ? () => void mark(seriesKey(d.series as TaxSeries), true) : undefined}
               />
             ))}
           </VStack>
@@ -203,23 +191,12 @@ export default function AdminTax({ adminPassword }: { adminPassword: string }) {
             {t.tax.listRunsOut(fmtDate(lastListed, lang))}
           </Text>
         )}
-        {(finished.length > 0 || seriesOff.length > 0) && (
+        {finished.length > 0 && (
           <Box mt={5} pt={4} borderTop="1px solid" borderColor="gray.100">
             <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.500" letterSpacing="0.08em" textTransform="uppercase" mb={2}>
               {t.tax.doneHeading}
             </Text>
             <VStack align="stretch" spacing={1}>
-              {seriesOff.map((s) => (
-                <Flex key={s} justify="space-between" align="center" gap={3} flexWrap="wrap" data-testid={`series-off-${s}`}>
-                  <Text fontSize="sm" color="gray.500">
-                    <Icon as={FaCheck} boxSize={3} color="green.600" mr={2} />
-                    {t.tax.seriesOff(TAX_SERIES[s][lang])}
-                  </Text>
-                  <CTAButton variant="ghost" size="sm" onClick={() => void mark(seriesKey(s), false)} isLoading={busy === seriesKey(s)}>
-                    {t.tax.seriesUndo}
-                  </CTAButton>
-                </Flex>
-              ))}
               {finished.map((d) => (
                 <Flex key={d.key} justify="space-between" align="center" gap={3} flexWrap="wrap">
                   <Text fontSize="sm" color="gray.500">
@@ -287,17 +264,12 @@ function DeadlineRow({
   lang,
   busy,
   onDone,
-  seriesBusy,
-  onNotApplicable,
 }: {
   d: TaxDeadline;
   today: string;
   lang: 'en' | 'ru';
   busy: boolean;
   onDone: () => void;
-  seriesBusy: boolean;
-  /** For a tax that applies only in some cases: switch off every date in it. */
-  onNotApplicable?: () => void;
 }) {
   const { t } = useAdminLang();
   const left = daysBetween(today, d.due);
@@ -338,11 +310,6 @@ function DeadlineRow({
         ) : (
           <CTAButton variant="ghost" size="sm" icon={FaCheck} onClick={onDone} isLoading={busy}>
             {t.tax.markDone}
-          </CTAButton>
-        )}
-        {onNotApplicable && (
-          <CTAButton variant="ghost" size="sm" onClick={onNotApplicable} isLoading={seriesBusy}>
-            {t.tax.notApplicable}
           </CTAButton>
         )}
       </Flex>

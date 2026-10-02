@@ -19,7 +19,7 @@ bookings default to `added`).
 | Change | Where | Database |
 |---|---|---|
 | Drone licence page, both admin levels | `src/components/AdminDroneLicense.tsx`, `api/admin/_drone-license.ts`, content in `src/data/drone-license-content.ts` | `system_state.drone_license_path` |
-| Taxes page, super only: 30 deadlines to Jan 2028 (sales, Scranton, federal, PA), reminder emails, "Doesn't apply to her" per conditional tax, sales tax cards (moved from Integrations), 2026 return guide | `src/components/AdminTax.tsx`, `src/data/tax-calendar.ts`, `src/data/tax-guide.ts`, `api/cron/_tax-reminders.ts` | `system_state.tax_deadlines_done`, `tax_reminders_sent` |
+| Taxes page, super only: the quarterly sales tax returns and the three yearly returns (federal, PA, Clifton Township) and nothing else, reminder emails, sales tax cards (moved from Integrations), 2026 return guide | `src/components/AdminTax.tsx`, `src/data/tax-calendar.ts`, `src/data/tax-guide.ts`, `api/cron/_tax-reminders.ts` | `system_state.tax_deadlines_done`, `tax_reminders_sent` |
 | Licence card fixes: "Last return filed" on the form, an edit keeps it (it used to wipe it, so filed quarters nagged again), an empty number keeps the saved one, a running quarter can't be marked filed | `api/admin/_license-status.ts`, `src/components/AdminTaxCards.tsx` | none |
 | Signing race (audit M10) | `_portal-update.ts` guarded transaction, `api/_contract-fingerprint.ts`, `_sign-contract.ts` | none |
 | Money history (audit M11) | `api/_money-history.ts`, every money writer, "Show change history" on the client screen | **migration 052** |
@@ -45,16 +45,20 @@ shows, set `STRIPE_API_VERSION` to it, ship that with the next batch.
 - **Next sales return: Q4 2026, due 2027-01-20.** The Taxes page lists every
   deadline, and the `tax-reminders` job emails Alex 14 and 3 days before each
   one, and once if one passes, until it is marked done (sales tax: "Mark
-  filed" on the licence card). The first email after the deploy will be the
-  **Oct 15 local earned income tax estimate** (Berkheimer DQ-1).
+  filed" on the licence card).
+- **Alex pays income tax once a year** (decided 2026-10-02): no quarterly
+  prepayments, federal (1040-ES) or local (DQ-1), and none on the Taxes
+  page. Only the sales tax return is quarterly, because it is mandatory. The
+  guide's first section says what skipping prepayments costs (nothing for
+  2026). Don't add prepayment, 1099 or gear rows back without asking him.
 - **The licence is saved** (Alex, 2026-10-02): issued Sep 30, 2026 as entered
   (registered Sep 29; a day either way changes nothing), last return filed
   2026-Q3. The number is the 8-digit License Number on the
   myPATH Summary tab; only its last 4 digits are stored.
 - **Local taxes: Clifton Township, not Scranton.** Home and business are
   55 Ash Gap Road, Clifton Township 18424 (North Pocono School District).
-  Earned income tax is 1% through Berkheimer (PSD 350601): first estimate
-  on DQ-1 by Oct 15, then the F-1 by Apr 15. The township levies nothing
+  Earned income tax is 1% through Berkheimer (PSD 350601), paid once a
+  year with the F-1 by Apr 15. The township levies nothing
   else. Scranton's Payroll Preparation Tax only reaches sessions inside the
   city (ask Berkheimer, (610) 599-3140); it is not on the deadline list.
   Vero and Alex file jointly; she had no income in 2025 and has paid no
