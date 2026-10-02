@@ -47,16 +47,18 @@ shows, set `STRIPE_API_VERSION` to it, ship that with the next batch.
   one, and once if one passes, until it is marked done (sales tax: "Mark
   filed" on the licence card). The first email after the deploy will be the
   **Oct 15 local earned income tax estimate** (Berkheimer DQ-1).
-- **Production has no licence saved yet** (read 2026-10-01). After the deploy:
-  Menu, Taxes, Save licence, with the number (the last 4 digits are enough),
-  the issue date, and **Last return filed: 2026-Q3**. Until then the Q3
-  return reads as open and its reminder fires on Oct 6.
-- **Local taxes nobody has filed yet.** Scranton's earned income tax wants
-  quarterly estimates from the self-employed; the Local Services Tax and the
-  Payroll Preparation Tax may apply too. All hinge on facts only Vero has:
-  does she live inside Scranton city limits, is she married and filing
-  jointly, and did she pay anyone $2,000 or more this year by Zelle, cash or
-  check. Switch off what doesn't apply on the Taxes page.
+- **The licence is saved** (Alex, 2026-10-02): issued Sep 30, 2026 as entered
+  (registered Sep 29; a day either way changes nothing), last return filed
+  2026-Q3. The number is the 8-digit License Number on the
+  myPATH Summary tab; only its last 4 digits are stored.
+- **Local taxes: Clifton Township, not Scranton.** Home and business are
+  55 Ash Gap Road, Clifton Township 18424 (North Pocono School District).
+  Earned income tax is 1% through Berkheimer (PSD 350601): first estimate
+  on DQ-1 by Oct 15, then the F-1 by Apr 15. The township levies nothing
+  else. Scranton's Payroll Preparation Tax only reaches sessions inside the
+  city (ask Berkheimer, (610) 599-3140); it is not on the deadline list.
+  Vero and Alex file jointly; she had no income in 2025 and has paid no
+  contractors, so the 2026 1099-NEC row can be marked done.
 - **The ledger is a floor**, not a record of income (memory note "sales tax
   ledger gaps"). Check Vero's own records before any figure is filed.
 - The paper licence arrives by mail around Oct 8 to 13. If its issue date
