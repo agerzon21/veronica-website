@@ -10,9 +10,11 @@
  *   added     6% on top of the price. The default for a new booking, and the
  *             tax is stated as its own line on the contract, the portal and
  *             the card checkout.
- *   absorbed  Grandfathered: every booking made before 2026-10-01 keeps the
- *             price it was agreed at. The sale is still taxable, so Vero
- *             remits 6% of what she receives out of it.
+ *   absorbed  The agreed price stands, and Vero remits 6% of what she
+ *             receives out of it, since the sale is still taxable. Every
+ *             booking made before 2026-10-01 (grandfathered), and the
+ *             default for a gallery-only booking, which is quoted before it
+ *             is entered (Alex, 2026-10-03).
  *   exempt    Delivered outside Pennsylvania, so not a PA sale at all.
  *
  * THE TAX IS 6% OF WHAT THE CLIENT ACTUALLY PAYS. The contract price is the

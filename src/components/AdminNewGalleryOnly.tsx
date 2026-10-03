@@ -79,9 +79,11 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
   const [retentionMonths, setRetentionMonths] = useState('3');
   const [totalAmount, setTotalAmount] = useState(prefill?.total_amount ?? '');
   const [retainerAmount, setRetainerAmount] = useState(prefill?.retainer_amount ?? '');
-  // Pennsylvania sales tax: a new booking adds it unless the photos go out of
-  // state (src/data/sales-tax.ts). The same three choices as a full booking.
-  const [salesTax, setSalesTax] = useState<SalesTaxMode>('added');
+  // Pennsylvania sales tax (src/data/sales-tax.ts). A gallery-only booking is
+  // made after the shoot, for a price already quoted, so the tax comes out of
+  // that price unless Vero picks otherwise: Alex's rule, 2026-10-03, "in these
+  // cases we eat the tax". The same three choices as a full booking.
+  const [salesTax, setSalesTax] = useState<SalesTaxMode>('absorbed');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');

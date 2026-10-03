@@ -2454,7 +2454,7 @@ const dict = {
     salesTaxLabel: { en: 'Pennsylvania sales tax', ru: 'Налог с продаж (Пенсильвания)' },
     salesTaxModes: {
       added: { en: '6% added on top of the price', ru: '6% сверху цены' },
-      absorbed: { en: 'Included in the price (booked before Oct 1, 2026)', ru: 'Входит в цену (бронь до 1 октября 2026)' },
+      absorbed: { en: 'Included in the price (Vero pays the 6% out of it)', ru: 'Входит в цену (6% Вера платит из неё)' },
       exempt: { en: 'Not a PA sale (photos delivered outside Pennsylvania)', ru: 'Не продажа в PA (фото переданы за пределы штата)' },
     },
     salesTaxHelp: {

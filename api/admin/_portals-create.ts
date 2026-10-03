@@ -129,11 +129,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let retainerAmount: number | null = null;
   /**
    * Pennsylvania sales tax for this booking (migration 049, src/data/sales-tax.ts).
-   * A new booking adds 6% unless the form says otherwise: Alex's rule from
+   * A full booking adds 6% unless the form says otherwise: Alex's rule from
    * 2026-10-01 is that new work is taxed and only what existed before is
-   * grandfathered. 'exempt' is for photos delivered outside Pennsylvania.
+   * grandfathered. A gallery-only booking is made after the shoot, for a price
+   * already quoted, so its default is 'absorbed': the client pays the quote
+   * and Vero remits the 6% out of it (Alex, 2026-10-03). 'exempt' is for
+   * photos delivered outside Pennsylvania.
    */
-  const salesTax: SalesTaxMode = isSalesTaxMode(body.sales_tax) ? body.sales_tax : 'added';
+  const salesTax: SalesTaxMode = isSalesTaxMode(body.sales_tax) ? body.sales_tax : mode === 'simple' ? 'absorbed' : 'added';
   let contractBody: string | null = null;
   let contractVariables: Record<string, string> = {};
   let setupToken: string | null = null;
