@@ -240,12 +240,8 @@ const Welcome = () => {
                         {summary.contract_retainer_amount !== null && (
                           <SummaryLine
                             label="Retainer"
-                            value={money(withSalesTax(summary.contract_retainer_amount, salesTaxModeOf(summary.sales_tax)))}
-                            note={
-                              summary.sales_tax === 'added'
-                                ? 'Paid up front, tax included · part of the total above'
-                                : 'Paid up front · part of the total above'
-                            }
+                            value={money(summary.contract_retainer_amount)}
+                            note="Paid up front · part of the total above"
                           />
                         )}
                       </VStack>

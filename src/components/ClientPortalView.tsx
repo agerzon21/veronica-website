@@ -371,7 +371,7 @@ const ClientPortalView = ({
           Math.round(data.contract_total_amount * 100) -
           Math.round(chargesTotal * 100)) / 100
       : 0;
-  // The retainer as they pay it, tax included when the booking adds it.
+  // The retainer as they pay it: the agreed amount, never taxed on its own.
   const retainerDue = retainerOwed(data.contract_retainer_amount, salesTax);
   /**
    * Floored, like every other consumer of this number.
@@ -1294,7 +1294,7 @@ const ClientPortalView = ({
                 <BalanceStat
                   label="Retainer"
                   value={formatMoney(retainerDue ?? data.contract_retainer_amount)}
-                  note={salesTaxAmount > 0 ? 'With tax, part of the total' : 'Part of total'}
+                  note="Part of total"
                 />
               )}
               {/* Sits between Total and Paid so the column order reads as

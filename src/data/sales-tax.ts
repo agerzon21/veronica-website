@@ -98,10 +98,17 @@ export function bookingOwedTotal(
   return withSalesTax(pre, mode);
 }
 
-/** The retainer as the client pays it, tax included when this booking adds it. */
-export function retainerOwed(retainer: number | null | undefined, mode: SalesTaxMode): number | null {
+/**
+ * The retainer as the client pays it: the agreed amount, a round number, in
+ * every tax mode. On a booking that adds tax, the tax is on the whole sale and
+ * the retainer is simply the first part of the total with tax ("the retainer
+ * should just be a nice even number", Alex, 2026-10-04). The tax return reads
+ * each payment back as price plus tax either way (saleAndTaxOf), so the tax
+ * reported over the booking is still exactly 6% of the price.
+ */
+export function retainerOwed(retainer: number | null | undefined, _mode: SalesTaxMode): number | null {
   if (retainer === null || retainer === undefined || !Number.isFinite(retainer)) return null;
-  return withSalesTax(retainer, mode);
+  return retainer;
 }
 
 /**
@@ -199,14 +206,15 @@ export function salesTaxContractVariables(
   }
   const r = retainer !== null && Number.isFinite(retainer) ? Math.min(Math.max(retainer, 0), total) : 0;
   const totalWith = withSalesTax(total, mode);
-  const retainerWith = withSalesTax(r, mode);
+  // The retainer carries no tax of its own (retainerOwed); the key keeps its
+  // old name so contracts already on file keep rendering.
   return {
     sales_tax_enabled: 'yes',
     sales_tax_percent: PA_SALES_TAX_LABEL,
     sales_tax_amount: format(salesTaxOn(total, mode)),
     total_with_tax: format(totalWith),
-    retainer_with_tax: format(retainerWith),
-    remaining_with_tax: format((toCents(totalWith) - toCents(retainerWith)) / 100),
+    retainer_with_tax: format(r),
+    remaining_with_tax: format((toCents(totalWith) - toCents(r)) / 100),
   };
 }
 

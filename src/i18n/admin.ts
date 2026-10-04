@@ -1855,10 +1855,10 @@ const dict = {
     },
     salesTaxLabel: { en: 'Pennsylvania sales tax', ru: 'Налог с продаж (Пенсильвания)' },
     salesTaxSummary: {
-      en: (withTax: string, price: string, tax: string, retainerWithTax: string | null) =>
-        `The client pays ${withTax}: ${price} plus ${tax} tax.${retainerWithTax ? ` Retainer with tax: ${retainerWithTax}.` : ''}`,
-      ru: (withTax: string, price: string, tax: string, retainerWithTax: string | null) =>
-        `Клиент платит ${withTax}: ${price} плюс налог ${tax}.${retainerWithTax ? ` Задаток с налогом: ${retainerWithTax}.` : ''}`,
+      en: (withTax: string, price: string, tax: string, retainer: string | null) =>
+        `The client pays ${withTax}: ${price} plus ${tax} tax.${retainer ? ` The ${retainer} retainer counts toward it.` : ''}`,
+      ru: (withTax: string, price: string, tax: string, retainer: string | null) =>
+        `Клиент платит ${withTax}: ${price} плюс налог ${tax}.${retainer ? ` Задаток ${retainer} входит в эту сумму.` : ''}`,
     },
     retainerLabel: { en: 'Retainer (USD)', ru: 'Задаток (USD)' },
     retainerHelp: {

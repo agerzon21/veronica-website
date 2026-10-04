@@ -2147,9 +2147,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                 formatContractMoneyExact(withSalesTax(travelApplication.contractTotal, 'added')),
                 formatContractMoneyExact(travelApplication.contractTotal),
                 formatContractMoneyExact(salesTaxOn(travelApplication.contractTotal, 'added')),
-                Number.isFinite(parseFloat(retainerAmount))
-                  ? formatContractMoneyExact(withSalesTax(parseFloat(retainerAmount), 'added'))
-                  : null,
+                Number.isFinite(parseFloat(retainerAmount)) ? formatContractMoneyExact(parseFloat(retainerAmount)) : null,
               )}
             </Text>
           )}

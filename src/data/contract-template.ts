@@ -498,14 +498,14 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
       paragraphs: [
         {
           kind: 'text',
-          text: 'Pennsylvania sales tax of {{sales_tax_percent}} is added to the amounts in PAYMENT above and is paid with them, so each payment includes its own tax.',
+          text: 'Pennsylvania sales tax of {{sales_tax_percent}} is added to the Total Payment in PAYMENT above. The retainer stays as stated there and counts toward the total with tax.',
         },
         {
           kind: 'fields',
           items: [
             { label: 'Sales Tax on the Total Payment', value: '{{sales_tax_amount}}' },
             { label: 'Total Payment with Tax', value: '{{total_with_tax}}' },
-            { label: 'Retainer with Tax', value: '{{retainer_with_tax}} (due at signing)' },
+            { label: 'Retainer', value: '{{retainer_with_tax}} (due at signing)' },
             { label: 'Remaining Balance with Tax', value: '{{remaining_with_tax}}' },
           ],
         },
@@ -1365,14 +1365,14 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
     paragraphs: [
       {
         kind: 'text',
-        text: 'Pennsylvania sales tax of {{sales_tax_percent}} is added to the amounts in PAYMENT above and is paid with them, so each payment includes its own tax.',
+        text: 'Pennsylvania sales tax of {{sales_tax_percent}} is added to the Total Payment in PAYMENT above. The retainer stays as stated there and counts toward the total with tax.',
       },
       {
         kind: 'fields',
         items: [
           { label: 'Sales Tax on the Total Payment', value: '{{sales_tax_amount}}' },
           { label: 'Total Payment with Tax', value: '{{total_with_tax}}' },
-          { label: 'Retainer with Tax', value: '{{retainer_with_tax}} (due at signing)' },
+          { label: 'Retainer', value: '{{retainer_with_tax}} (due at signing)' },
           { label: 'Remaining Balance with Tax', value: '{{remaining_with_tax}}' },
         ],
       },
