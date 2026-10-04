@@ -48,14 +48,19 @@ import sharp from 'sharp';
 import { readdirSync, existsSync, mkdirSync, statSync, writeFileSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { GALLERY_CATEGORIES } from './gallery-categories.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const photosDir = join(root, 'public', 'assets', 'photos');
 const outRoot = join(root, 'public', 'assets', 'grid');
 
-/** The four folders the public gallery draws from. `site` is not one. */
-const CATEGORIES = ['portraits', 'weddings', 'family', 'maternity'];
+/**
+ * The folders the public gallery draws from: every category, coming-soon ones
+ * included, so a category opens with its variants already built. `site` is
+ * not one. From src/data/gallery-categories.ts.
+ */
+const CATEGORIES = GALLERY_CATEGORIES;
 
 /**
  * The ladder.

@@ -25,8 +25,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from './_db.js';
 import weddingPageHandler from './_weddings-page.js';
 
-type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
-const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'maternity'] as const;
+import {
+  GALLERY_CATEGORIES as CATEGORIES,
+  isPublicGalleryCategory,
+  type GalleryCategory as Category,
+} from '../src/data/gallery-categories.js';
 
 type PublicPhoto = {
   id: string;               // = slug, the URL identifier the frontend uses everywhere
@@ -97,7 +100,9 @@ async function handleList(req: VercelRequest, res: VercelResponse) {
           ORDER BY sort_order DESC, published_at DESC NULLS LAST
         `) as Row[]);
 
-    const photos = rows.filter(hasStatic).map(rowToPublic);
+    // A coming-soon category's photos stay off the public site even once
+    // published (src/data/gallery-categories.ts).
+    const photos = rows.filter((r) => hasStatic(r) && isPublicGalleryCategory(r.category)).map(rowToPublic);
 
     // 5-minute edge cache with generous SWR. Gallery pages get lots
     // of traffic; hitting the DB per view is unnecessary. Vero's
@@ -152,7 +157,10 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
         `) as Row[]);
 
     const row = rows[0];
-    if (!row) return res.status(404).json({ success: false, error: 'Photo not found' });
+    // A coming-soon category's photo is not public yet, however it is linked.
+    if (!row || !isPublicGalleryCategory(row.category)) {
+      return res.status(404).json({ success: false, error: 'Photo not found' });
+    }
 
     // Shorter cache for individual posts than the list, Vero may
     // tweak a caption and want to see it live quickly.
@@ -200,13 +208,13 @@ async function handleRelated(req: VercelRequest, res: VercelResponse) {
     `) as Row[];
 
     const target = rows.find((r) => r.slug === slug);
-    if (!target) {
+    if (!target || !isPublicGalleryCategory(target.category)) {
       return res.status(404).json({ success: false, error: 'Photo not found' });
     }
     const targetKeywords = new Set(target.keywords);
 
     const scored = rows
-      .filter((r) => r.slug !== target.slug)
+      .filter((r) => r.slug !== target.slug && isPublicGalleryCategory(r.category))
       .map((r) => {
         let overlap = 0;
         for (const k of r.keywords) if (targetKeywords.has(k)) overlap++;

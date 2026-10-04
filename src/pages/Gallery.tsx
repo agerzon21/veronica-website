@@ -10,12 +10,13 @@ import Reveal from '../components/ui/Reveal';
 import GalleryGrid from '../components/GalleryGrid';
 import NotFound from './NotFound';
 import { useSmartBack } from '../components/ui/useSmartBack';
+import { GALLERY_COMING_SOON, isGalleryCategory, type GalleryCategory } from '../data/gallery-categories';
 
 // Match the shape /api/gallery returns, kept local here (rather
 // than a shared type file) since the API is the source of truth and
 // the extra fields (originalUrl, driveViewUrl) are optional for
 // consumers that don't need them.
-export type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
+export type Category = GalleryCategory;
 
 interface PublicPhoto {
   id: string;
@@ -34,10 +35,14 @@ interface PublicPhoto {
 
 const GALLERY_HERO_IMAGE = '/assets/photos/portraits/sunset-sunflower-field-joy.webp';
 
+/**
+ * Each category's page: its hero, and the copy behind it. A coming-soon
+ * category (src/data/gallery-categories.ts) has no hero yet, and no page.
+ */
 export const categoryDetails: Record<Category, {
   title: string;
   description: string;
-  image: string;
+  image: string | null;
   backgroundPosition: string;
 }> = {
   portraits: {
@@ -63,6 +68,18 @@ export const categoryDetails: Record<Category, {
     description: 'Celebrating the beauty of pregnancy with elegant maternity photography.',
     image: '/assets/photos/maternity/couples-beach-baby-bump-moment.webp',
     backgroundPosition: 'center 35%',
+  },
+  proposals: {
+    title: 'Proposals',
+    description: 'The question, the answer, and the first photographs as an engaged couple.',
+    image: null,
+    backgroundPosition: 'center 40%',
+  },
+  aerial: {
+    title: 'Aerial',
+    description: 'Sessions and celebrations photographed from above.',
+    image: null,
+    backgroundPosition: 'center 50%',
   },
 };
 
@@ -158,19 +175,21 @@ const Gallery = () => {
     );
   }
 
-  const categoryInfo = categoryDetails[category as Category];
+  const categoryInfo = isGalleryCategory(category) ? categoryDetails[category] : null;
 
-  if (!categoryInfo) {
+  if (!categoryInfo || categoryInfo.image === null || GALLERY_COMING_SOON.includes(category as Category)) {
     // An unknown category used to render a blank 200 page with no meta at
     // all, indexable nothing. NotFound brings the standard 404 UI and its
-    // noindex with it.
+    // noindex with it. A coming-soon category gets the same: its tile on
+    // /gallery says so, and there is nothing behind it yet.
     return <NotFound />;
   }
+  const heroImage = categoryInfo.image;
 
   return (
     <Box minH="100vh" bg="white">
       <Helmet>
-        <meta property="og:image" content={`https://vero.photography${categoryInfo.image}`} />
+        <meta property="og:image" content={`https://vero.photography${heroImage}`} />
       </Helmet>
       {/* Category Hero */}
       <Box position="relative" h={{ base: '45vh', md: '53vh' }} overflow="hidden">
@@ -179,8 +198,8 @@ const Gallery = () => {
             one full-bleed hero on the site still serving its original: a
             3500x2333 file into a 390px window. */}
         <Image
-          src={pageHeroFallback(categoryInfo.image)}
-          srcSet={pageHeroSrcSet(categoryInfo.image)}
+          src={pageHeroFallback(heroImage)}
+          srcSet={pageHeroSrcSet(heroImage)}
           sizes="100vw"
           alt={categoryInfo.title}
           objectFit="cover"

@@ -19,10 +19,11 @@
 import { readdir, stat, writeFile, rename } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { GALLERY_CATEGORIES } from './gallery-categories.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PHOTOS_DIR = join(__dirname, '..', 'public', 'assets', 'photos');
-const CATEGORIES = ['portraits', 'weddings', 'family', 'maternity'];
+const CATEGORIES = GALLERY_CATEGORIES;
 
 const TARGET_KB = 300;
 const MAX_DIM = 2400;

@@ -19,6 +19,7 @@ import CTAButton from './ui/CTAButton';
 import RebuildSiteButton from './ui/RebuildSiteButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useAdminLang } from '../i18n/admin';
+import { GALLERY_CATEGORIES as CATEGORIES, GALLERY_COMING_SOON, type GalleryCategory as Category } from '../data/gallery-categories';
 
 /**
  * "Gallery" tab in /admin, table of every photo in the public
@@ -32,9 +33,6 @@ import { useAdminLang } from '../i18n/admin';
  * Editing goes through a modal (not inline) so slow-typing on a
  * description doesn't accidentally save mid-word.
  */
-
-type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
-const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'maternity'];
 
 interface Props {
   adminPassword: string;
@@ -444,7 +442,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
           >
             <option value="all">{t.gallery.allCategories}</option>
             {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{t.gallery.categoryNames[c]}</option>
+              <option key={c} value={c}>{t.gallery.categoryNames[c]}{GALLERY_COMING_SOON.includes(c) ? ` ${t.gallery.notPublicYet}` : ''}</option>
             ))}
           </Select>
           <Select
@@ -623,7 +621,7 @@ const AdminGallery = ({ adminPassword }: Props) => {
               >
                 <option value="">{t.gallery.bulkMoveTo}</option>
                 {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{t.gallery.categoryNames[c]}</option>
+                  <option key={c} value={c}>{t.gallery.categoryNames[c]}{GALLERY_COMING_SOON.includes(c) ? ` ${t.gallery.notPublicYet}` : ''}</option>
                 ))}
               </Select>
               <CTAButton
@@ -913,6 +911,7 @@ function PhotoCard({
         <HStack spacing={2}>
           <Badge fontSize="2xs" colorScheme="gray">
             {t.gallery.categoryNames[row.category]}
+            {GALLERY_COMING_SOON.includes(row.category) ? ` ${t.gallery.notPublicYet}` : ''}
           </Badge>
           <Text fontSize="2xs" color="gray.500" fontFamily="mono" noOfLines={1} flex={1}>
             /{row.slug}
@@ -1128,7 +1127,7 @@ function EditModal({
                   bg="white"
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{t.gallery.categoryNames[c]}</option>
+                    <option key={c} value={c}>{t.gallery.categoryNames[c]}{GALLERY_COMING_SOON.includes(c) ? ` ${t.gallery.notPublicYet}` : ''}</option>
                   ))}
                 </Select>
               </FormControl>

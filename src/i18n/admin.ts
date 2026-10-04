@@ -1301,12 +1301,12 @@ const dict = {
       ru: 'Папка галереи в Google Drive',
     },
     driveFolderHelp: {
-      en: 'Paste the shareable link (or just the folder ID) of the parent Drive folder that holds the four category subfolders (portraits, weddings, family, maternity). The service account this site uses must have Viewer access to that folder.',
+      en: 'Paste the shareable link (or just the folder ID) of the parent Drive folder that holds one subfolder per category (portraits, weddings, family, maternity, proposals, aerial). The service account this site uses must have Viewer access to that folder.',
       // Split into three shorter sentences, the English is one long
       // block, easier to read in Russian as separate thoughts. Category
       // slugs stay English because that's what the actual folders are
       // named in Drive.
-      ru: 'Вставь ссылку на папку (или просто её ID). Это должна быть родительская папка, в которой лежат четыре подпапки категорий (portraits, weddings, family, maternity). Сервисный аккаунт сайта должен иметь доступ на просмотр этой папки.',
+      ru: 'Вставь ссылку на папку (или просто её ID). Это должна быть родительская папка, в которой лежит по подпапке на каждую категорию (portraits, weddings, family, maternity, proposals, aerial). Сервисный аккаунт сайта должен иметь доступ на просмотр этой папки.',
     },
     envLegacyNotice: {
       en: 'Currently loaded from an env var (legacy setup). Saving here moves it to the database so future edits can happen from this page without touching Vercel.',
@@ -1348,7 +1348,12 @@ const dict = {
       weddings: { en: 'Weddings', ru: 'Свадьбы' },
       family: { en: 'Family', ru: 'Семейные' },
       maternity: { en: 'Maternity', ru: 'Беременность' },
+      proposals: { en: 'Proposals', ru: 'Предложения' },
+      aerial: { en: 'Aerial', ru: 'Аэросъёмка' },
     },
+    // After a category name whose gallery has not opened yet
+    // (GALLERY_COMING_SOON): its photos can be published but stay off the site.
+    notPublicYet: { en: '(not public yet)', ru: '(пока не на сайте)' },
   },
 
   newGallery: {

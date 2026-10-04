@@ -23,8 +23,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 
-type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
-const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'maternity'];
+import { GALLERY_CATEGORIES as CATEGORIES, type GalleryCategory as Category } from '../../src/data/gallery-categories.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

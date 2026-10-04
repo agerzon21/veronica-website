@@ -30,8 +30,7 @@ import { requireAdmin } from '../_admin-auth.js';
  * changes, and the UI says so.
  */
 
-const CATEGORIES = ['portraits', 'weddings', 'family', 'maternity'] as const;
-type Category = (typeof CATEGORIES)[number];
+import { GALLERY_CATEGORIES as CATEGORIES, type GalleryCategory as Category } from '../../src/data/gallery-categories.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

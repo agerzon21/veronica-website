@@ -1,8 +1,18 @@
 # Project notes for Claude / AI agents
 
+## Gallery categories
+
+The list is [src/data/gallery-categories.ts](src/data/gallery-categories.ts): `portraits`, `weddings`, `family`, `maternity`, `proposals`, `aerial`. The public gallery API, the Drive sync, the admin Gallery tab and the tiles all import it; the build scripts read the same file through [scripts/gallery-categories.mjs](scripts/gallery-categories.mjs); the database CHECKs it (`gallery_photos.category`, migration 053). A photo's category is the name of the Drive subfolder it was synced from.
+
+- **Coming soon** (`GALLERY_COMING_SOON`): a tile that says so and has no gallery. Its photos sync, get reviewed and can be published, but stay off the public site, the sitemap and related photos until it opens. The admin shows "(not public yet)" next to its name.
+- **Opening one**: take it off `GALLERY_COMING_SOON`; give it a cover in `src/components/GalleryCategories.tsx` and `src/pages/Gallery.tsx` (and add that photo to `PAGE_HEROES` in `scripts/build-hero-variants.mjs`, then `npm run hero-variants` and commit the output); add its `/gallery/<cat>` entry to `ROUTE_META` in `src/components/SEO.tsx` and to `CATEGORY_HEROES` in `scripts/prerender-photos.mjs`; add it to the `/gallery/:category(...)` rewrite in `vercel.json` (the prerender refuses to build a live category vercel.json does not route); and list it in the no-JS nav in `index.html` and in `public/llms.txt`.
+- **Adding one**: a migration widening the CHECK, the list, `CATEGORY_META` in the prerender (the build refuses without it), and `gallery.categoryNames` in `src/i18n/admin.ts`. It starts on `GALLERY_COMING_SOON`.
+
 ## Photos data model
 
-The gallery is driven by a single CSV: [src/data/photos.csv](src/data/photos.csv).
+**The live gallery is the database**, `gallery_photos`, filled from Google Drive by the sync (Admin → Gallery → Sync from Drive). The CSV described here is the older pipeline for photos kept in git, still used for the files under `public/assets/photos/`.
+
+The CSV is [src/data/photos.csv](src/data/photos.csv).
 There is no inline image data anywhere else: Gallery, IndividualPhoto, and the
 prerender script all read this file (directly or via [src/data/photos.ts](src/data/photos.ts)).
 
@@ -11,14 +21,14 @@ prerender script all read this file (directly or via [src/data/photos.ts](src/da
 | Column | Notes |
 |---|---|
 | `filename` | Slug-based filename, e.g. `sunset-palm-tree-portrait.webp`. The slug (filename minus `.webp`) is also the URL slug at `/photo/<category>/<slug>`. |
-| `category` | One of `portraits`, `weddings`, `family`, `maternity` (gallery), or `site` (non-gallery assets like `home-cta-bg`). |
+| `category` | One of the gallery categories (`portraits`, `weddings`, `family`, `maternity`, `proposals`, `aerial`), or `site` (non-gallery assets like `home-cta-bg`). |
 | `alt` | Short, descriptive alt text. Screen-reader-friendly. |
 | `title` | Page title without the suffix: `\| Vero Photography` is auto-appended in [photos.ts](src/data/photos.ts). |
 | `description` | 1 to 2 sentences. Used for meta description, OG tags, and body copy. |
 | `keywords` | Comma-separated, drawn from the canonical vocabulary below. |
 | `status` | `new` = needs the frankenstein pass. `done` = finalized. |
 
-A row is **rendered in the gallery** only if `category` is one of the four gallery categories AND `title` is non-empty. Empty-title rows act as silent placeholders (e.g. for photos awaiting metadata from Veronika).
+A row is **rendered in the gallery** only if `category` is one of the gallery categories AND `title` is non-empty. Empty-title rows act as silent placeholders (e.g. for photos awaiting metadata from Veronika).
 
 ### Filename convention
 
@@ -34,6 +44,8 @@ public/assets/photos/
   weddings/
   family/
   maternity/
+  proposals/
+  aerial/
   site/         ← non-gallery assets (page backgrounds, etc.)
 ```
 
@@ -80,7 +92,7 @@ This is *standardization*, not fabrication. Deriving keywords from an alt text V
 
 ### Style rules (non-negotiable)
 
-- **No long dashes.** Not em (`—` U+2014), not en (`–` U+2013), nor U+2012/2015/2212/2010/2011. Use a comma, a colon, parentheses, or two sentences. A plain ASCII hyphen in a slug or a compound word is fine. This is the owner's strongest standing rule and it applies to every field here, because `alt`/`title`/`description` render on the public site. 95 rows had accumulated one before anybody wrote it down. **Detect them by codepoint in JS, never with `grep`** — a bracket expression over multibyte characters matches byte by byte in the C locale and reports hits that are not there. And remember this file is **CRLF**: strip `\r` before comparing a line, put it back before writing, or every match silently misses by one invisible character.
+- **No long dashes.** Not em (`—` U+2014), not en (`–` U+2013), nor U+2012/2015/2212/2010/2011. Use a comma, a colon, parentheses, or two sentences. A plain ASCII hyphen in a slug or a compound word is fine. This is the owner's strongest standing rule and it applies to every field here, because `alt`/`title`/`description` render on the public site. 95 rows had accumulated one before anybody wrote it down. **Detect them by codepoint in JS, never with `grep`**: a bracket expression over multibyte characters matches byte by byte in the C locale and reports hits that are not there. And remember this file is **CRLF**: strip `\r` before comparing a line, put it back before writing, or every match silently misses by one invisible character.
 - **No location names** in alt/title/description: not "Punta Cana," not "Scranton," not "Almaty," nothing. Veronika's business should be portable.
 - **No generic praise words**: avoid "stunning," "beautiful," "captivating," "vibrant," "joyful," "magical," "enchanting."
 - **No people-name references in keywords**: "Monica Bellucci" can appear in a description if it's the photo's literal concept, but never as a keyword.
@@ -101,7 +113,7 @@ Stick to this list. Add a new keyword only when something genuinely doesn't fit 
 
 **Things:** flowers, lotus, sunflowers, palm-trees, swimsuit, dress, rings, bouquet, veil, vintage, tropical, autumn, christmas
 
-**Always include the category** (`portraits`/`weddings`/`family`/`maternity`) as the first keyword.
+**Always include the category** (`portraits`/`weddings`/`family`/`maternity`/`proposals`/`aerial`) as the first keyword. `aerial` is also a style keyword; on a photo in the aerial category it appears once, as the category.
 
 **Drop these from the canonical list** (they're either redundant or useless for filtering): `pregnant-woman` (just `pregnant`), `wedding-rings` (just `rings`), `lace-dress` / `red-dress` / etc. (just `dress`), `bikini` / `red-bikini` (just `swimsuit`), `photography`, `outdoor`, `nature`, `moments`, `special-day`, `memories`, generic praise.
 

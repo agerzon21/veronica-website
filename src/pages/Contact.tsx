@@ -42,6 +42,7 @@ const SHOOT_TYPES = [
   { value: 'Portrait Session', label: 'Portrait' },
   { value: 'Family Session', label: 'Family' },
   { value: 'Maternity Session', label: 'Maternity' },
+  { value: 'Proposal Session', label: 'Proposal' },
   { value: 'Other', label: 'Other' },
   // Not a session. Photographers and videographers applying to work with us
   // were already arriving through this form and landing among the couples,

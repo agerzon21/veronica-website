@@ -19,6 +19,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { neon } from '@neondatabase/serverless';
 import { config as loadEnv } from 'dotenv';
+import { GALLERY_CATEGORIES, PUBLIC_GALLERY_CATEGORIES } from './gallery-categories.mjs';
 
 // This script previously read no env file at all, so a local `npm run build`
 // always took the skip path even with credentials sitting in .env.local.
@@ -169,8 +170,10 @@ function ringNeighbours(photo, all) {
   return prev.id === next.id ? [prev] : [prev, next];
 }
 
+// A coming-soon category's photos get no pages until it opens, published or
+// not (src/data/gallery-categories.ts), the same rule api/gallery.ts applies.
 const photos = rows
-  .filter((r) => r.title && r.title.length > 0)
+  .filter((r) => r.title && r.title.length > 0 && PUBLIC_GALLERY_CATEGORIES.includes(r.category))
   .map((r) => ({
     id: r.slug,
     category: r.category,
@@ -190,6 +193,26 @@ const photos = rows
     // published_at is set once and left alone.
     publishedAt: r.published_at || r.created_at,
   }));
+
+/**
+ * The categories with a public page: open, and with at least one published
+ * photo. Every "Browse" list, the category pages and the sitemap read this,
+ * in the gallery's own order, so a coming-soon or empty category is never
+ * linked. vercel.json must route each of them (checked below, by name).
+ */
+const LIVE_CATEGORIES = PUBLIC_GALLERY_CATEGORIES.filter((c) => photos.some((p) => p.category === c));
+const categoryLabel = (c) => c.charAt(0).toUpperCase() + c.slice(1);
+{
+  const vercel = JSON.parse(readFileSync(join(__dirname, '..', 'vercel.json'), 'utf-8'));
+  const rule = (vercel.rewrites ?? []).find((r) => /^\/gallery\/:category\(/.test(r.source));
+  const routed = rule ? rule.source.match(/\(([^)]*)\)/)[1].split('|') : [];
+  const unrouted = LIVE_CATEGORIES.filter((c) => !routed.includes(c));
+  if (unrouted.length) {
+    console.error(`\n[prerender] FATAL: /gallery/${unrouted.join(', /gallery/')} would be prerendered but vercel.json does not route it.`);
+    console.error('  Add it to the /gallery/:category(...) rewrite in vercel.json when the category opens.');
+    process.exit(1);
+  }
+}
 
 // index.html carries a homepage <noscript> (site blurb + nav) so non-JS
 // crawlers and AI agents see something on every SPA route. Photo pages get
@@ -323,10 +346,7 @@ ${ringNeighbours(photo, photos)
         <h2>Browse</h2>
         <ul>
           <li><a href="/gallery">All work</a></li>
-          <li><a href="/gallery/weddings">Weddings</a></li>
-          <li><a href="/gallery/portraits">Portraits</a></li>
-          <li><a href="/gallery/family">Family</a></li>
-          <li><a href="/gallery/maternity">Maternity</a></li>
+${LIVE_CATEGORIES.map((c) => `          <li><a href="/gallery/${c}">${categoryLabel(c)}</a></li>`).join('\n')}
         </ul>
       </div>
     </noscript>`;
@@ -379,7 +399,24 @@ const CATEGORY_META = {
     heading: 'Maternity Photography',
     description: 'Maternity sessions, in the studio and outdoors.',
   },
+  proposals: {
+    heading: 'Proposal Photography',
+    description: 'Proposals, from the moment of the question to the first photographs as an engaged couple.',
+  },
+  aerial: {
+    heading: 'Aerial Photography',
+    description: 'Sessions and celebrations photographed from above, by drone.',
+  },
 };
+
+// Every category needs its page copy before it can have a page.
+{
+  const missing = GALLERY_CATEGORIES.filter((c) => !CATEGORY_META[c]);
+  if (missing.length) {
+    console.error(`\n[prerender] FATAL: no CATEGORY_META for ${missing.join(', ')} (src/data/gallery-categories.ts lists it).`);
+    process.exit(1);
+  }
+}
 
 /**
  * LCP HERO PRELOADS.
@@ -472,7 +509,8 @@ const esc = (t) =>
   String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 let categoryPages = 0;
-for (const [category, meta] of Object.entries(CATEGORY_META)) {
+for (const category of LIVE_CATEGORIES) {
+  const meta = CATEGORY_META[category];
   const inCategory = photos.filter((p) => p.category === category);
   // An empty category would ship a page advertising nothing. Skip it rather
   // than publish a dead end, and let the reachability check below complain.
@@ -541,7 +579,7 @@ ${inCategory
   html = html.replace(/\s*<link\s+rel="canonical"[^>]*>/g, '');
   html = stripDefaultWebPage(html).replace('</head>', `${categoryMeta}\n  </head>`);
 
-  const others = Object.keys(CATEGORY_META).filter((c) => c !== category);
+  const others = LIVE_CATEGORIES.filter((c) => c !== category);
   const noscriptContent = `
     <noscript>
       <div style="max-width:800px;margin:0 auto;padding:40px 20px;font-family:sans-serif;">
@@ -1134,9 +1172,7 @@ for (const pg of STATIC_PAGES) {
         <ul>
           <li><a href="/">Home</a></li>
           <li><a href="/gallery">All work</a></li>
-${Object.entries(CATEGORY_META)
-  .map(([c, m]) => `          <li><a href="/gallery/${c}">${esc(m.heading)}</a></li>`)
-  .join('\n')}
+${LIVE_CATEGORIES.map((c) => `          <li><a href="/gallery/${c}">${esc(CATEGORY_META[c].heading)}</a></li>`).join('\n')}
           <li><a href="/wedding-photography">Wedding photography services</a></li>
           <li><a href="/journal">Journal</a></li>
           <li><a href="/about">About Veronika</a></li>
@@ -1207,10 +1243,7 @@ const staticUrls = [
   // should never outrank the pages a couple is looking for.
   { loc: '/collaborate', changefreq: 'yearly', priority: '0.3' },
   { loc: '/gallery', changefreq: 'weekly', priority: '0.9' },
-  { loc: '/gallery/portraits', changefreq: 'weekly', priority: '0.85' },
-  { loc: '/gallery/weddings', changefreq: 'weekly', priority: '0.85' },
-  { loc: '/gallery/family', changefreq: 'weekly', priority: '0.85' },
-  { loc: '/gallery/maternity', changefreq: 'weekly', priority: '0.85' },
+  ...LIVE_CATEGORIES.map((c) => ({ loc: `/gallery/${c}`, changefreq: 'weekly', priority: '0.85' })),
 ];
 
 // Real per-URL <lastmod> from the DB, date-only. Google ignores changefreq and

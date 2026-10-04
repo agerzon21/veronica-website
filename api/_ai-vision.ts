@@ -17,6 +17,7 @@
  */
 
 import OpenAI from 'openai';
+import { GALLERY_CATEGORIES, type GalleryCategory } from '../src/data/gallery-categories.js';
 
 const MODEL = 'gpt-4o-mini';
 
@@ -53,7 +54,7 @@ export interface VisionResult {
  */
 export async function describePhoto(
   imageUrl: string,
-  category: 'portraits' | 'weddings' | 'family' | 'maternity',
+  category: GalleryCategory,
 ): Promise<VisionResult> {
   const client = getOpenAI();
 
@@ -120,7 +121,7 @@ function normalizeSlug(input: string): string {
  */
 function normalizeKeywords(
   raw: unknown[],
-  category: 'portraits' | 'weddings' | 'family' | 'maternity',
+  category: GalleryCategory,
 ): string[] {
   const cleaned = raw
     .filter((k): k is string => typeof k === 'string')
@@ -170,6 +171,6 @@ Style/Mood: black-and-white, portrait, close-up, aerial, collage, artistic, eleg
 
 Things: flowers, lotus, sunflowers, palm-trees, swimsuit, dress, rings, bouquet, veil, vintage, tropical, autumn, christmas
 
-The category (portraits / weddings / family / maternity) is ALWAYS the first keyword, the caller adds it, don't include it yourself.
+The category (${GALLERY_CATEGORIES.join(' / ')}) is ALWAYS the first keyword, the caller adds it, don't include it yourself.
 
 Reply with ONLY the JSON object, no preamble, no markdown code fences, no explanation.`;

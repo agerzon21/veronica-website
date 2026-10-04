@@ -19,17 +19,21 @@
  * is what the harness serves.
  */
 
+import { GALLERY_CATEGORIES } from '../data/gallery-categories';
+
 /** Must match WIDTHS in scripts/build-grid-variants.mjs. */
 const WIDTHS = [400, 800, 1600];
 
 /**
- * Only the four public-gallery folders, and only a bare `.webp` slug.
+ * Only the gallery's category folders (src/data/gallery-categories.ts, the
+ * same list scripts/build-grid-variants.mjs builds), and only a bare `.webp`
+ * slug.
  *
  * Anything else, a Drive thumbnail, a site asset, a URL carrying a query
  * gets no srcset and keeps its own src. The gallery has had photographs from
  * more than one source before and will again.
  */
-const GALLERY_PHOTO = /^\/assets\/photos\/(portraits|weddings|family|maternity)\/([^/?#]+)\.webp$/;
+const GALLERY_PHOTO = new RegExp(`^/assets/photos/(${GALLERY_CATEGORIES.join('|')})/([^/?#]+)\\.webp$`);
 
 /**
  * `originalWidth` drops the rungs that are not really that wide.

@@ -62,8 +62,7 @@ const CRON_META = {
     'Daily at 2:00 UTC: reconciles gallery_photos against the Drive Gallery folder. New photos get AI-drafted metadata; removed ones are soft-deleted.',
 } as const;
 
-type Category = 'portraits' | 'weddings' | 'family' | 'maternity';
-const CATEGORIES: readonly Category[] = ['portraits', 'weddings', 'family', 'maternity'] as const;
+import { GALLERY_CATEGORIES as CATEGORIES, type GalleryCategory as Category } from '../../src/data/gallery-categories.js';
 
 // How many new photos to process per cron run. Bounded so a big
 // initial import doesn't blow past Vercel's function timeout in

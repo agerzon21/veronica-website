@@ -24,6 +24,7 @@ import { useSmartBack } from '../components/ui/useSmartBack';
 import { Helmet } from 'react-helmet-async';
 import { m, AnimatePresence } from 'framer-motion';
 import { gridSrcSet } from '../utils/gridSrcSet';
+import type { GalleryCategory } from '../data/gallery-categories';
 
 // Photo shape mirrors what /api/gallery/post returns. Kept local so
 // this component doesn't need photos.ts at all (which used to
@@ -31,7 +32,7 @@ import { gridSrcSet } from '../utils/gridSrcSet';
 interface Photo {
   id: string;
   slug: string;
-  category: 'portraits' | 'weddings' | 'family' | 'maternity';
+  category: GalleryCategory;
   url: string;
   originalUrl?: string;
   driveViewUrl?: string;
