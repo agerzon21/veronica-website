@@ -480,6 +480,7 @@ const CATEGORY_HEROES = {
   weddings: '/assets/photos/weddings/newlyweds-running-sea.webp',
   family: '/assets/photos/family/elegant-family-studio-portrait-black.webp',
   maternity: '/assets/photos/maternity/couples-beach-baby-bump-moment.webp',
+  proposals: '/assets/photos/proposals/lantern-release-proposal.webp',
 };
 
 // Drift guard, the same shape as the ROUTE_META one below: these paths are

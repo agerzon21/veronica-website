@@ -229,7 +229,7 @@
       "destination": "/photo/:category/:photoId.html"
     },
     {
-      "source": "/gallery/:category(portraits|weddings|family|maternity)",
+      "source": "/gallery/:category(portraits|weddings|family|maternity|proposals)",
       "destination": "/gallery/:category.html"
     },
     {

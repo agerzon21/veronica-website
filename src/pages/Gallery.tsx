@@ -72,8 +72,10 @@ export const categoryDetails: Record<Category, {
   proposals: {
     title: 'Proposals',
     description: 'The question, the answer, and the first photographs as an engaged couple.',
-    image: null,
-    backgroundPosition: 'center 40%',
+    image: '/assets/photos/proposals/lantern-release-proposal.webp',
+    // The couple and their lantern, not just the sky above them: the date sits
+    // above the title and the kiss below it.
+    backgroundPosition: 'center 55%',
   },
   aerial: {
     title: 'Aerial',

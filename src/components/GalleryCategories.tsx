@@ -72,9 +72,12 @@ const BANDS: Tile[] = [
   {
     name: 'proposals',
     title: 'Proposals',
-    image: null,
-    sourceWidth: 0,
-    objectPosition: 'center 40%',
+    // 1536px wide, the best file there is for now. The band shows about two
+    // fifths of its height, so the crop sits on the lantern with the date on
+    // it and the kiss below it, with the sky of lanterns still around them.
+    image: '/assets/photos/proposals/lantern-release-proposal.webp',
+    sourceWidth: 1536,
+    objectPosition: 'center 59%',
   },
   {
     name: 'aerial',

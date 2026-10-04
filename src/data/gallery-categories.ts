@@ -38,7 +38,7 @@ export function isGalleryCategory(v: unknown): v is GalleryCategory {
  * variants, scripts/build-hero-variants.mjs), add its SEO entry, and add it to
  * the /gallery/:category rewrite in vercel.json.
  */
-export const GALLERY_COMING_SOON: readonly GalleryCategory[] = ['proposals', 'aerial'];
+export const GALLERY_COMING_SOON: readonly GalleryCategory[] = ['aerial'];
 
 /** A category whose gallery the public can see. */
 export function isPublicGalleryCategory(v: unknown): v is GalleryCategory {
