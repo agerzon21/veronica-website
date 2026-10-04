@@ -1862,8 +1862,8 @@ const dict = {
     },
     retainerLabel: { en: 'Retainer (USD)', ru: 'Задаток (USD)' },
     retainerHelp: {
-      en: 'Non-refundable deposit. Due at signing, reserves the date.',
-      ru: 'Невозвратный задаток. Оплачивается при подписании и бронирует дату.',
+      en: 'Non-refundable deposit. Due at signing, reserves the date. Filled in from the total: 15% to the nearest $50, at least $100.',
+      ru: 'Невозвратный задаток. Оплачивается при подписании и бронирует дату. Считается от суммы: 15%, округлено до $50, не меньше $100.',
     },
 
     // Gallery password

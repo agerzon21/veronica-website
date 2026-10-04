@@ -180,19 +180,59 @@ const defaultEventTitle = (p1First: string, p2First: string, sessionType: string
   return `${names}'s ${type}${needsNoun ? ' Session' : ''}`;
 };
 
+const roundTo = (amount: number, step: number): number => Math.round(amount / step) * step;
+
 /**
  * The suggested retainer for a given total.
  *
- * 15% of the total, but never below $100 and never above the total itself.
- * A flat 15% put a $30 retainer on a small session, which is not enough to be
- * worth holding a date for, and the floor still has to bend for a booking
- * that costs less than the floor, hence the Math.min.
+ * 15% of the total to the nearest $50, but never below $100 and never above
+ * the total itself. A flat 15% put a $30 retainer on a small session, which is
+ * not enough to be worth holding a date for, and the floor still has to bend
+ * for a booking that costs less than the floor, hence the Math.min. The $50
+ * steps are Alex's rule (2026-10-04): a retainer is a number somebody says out
+ * loud, so $1,000 asks for $150 and $1,500 for $250, never $225.
+ *
+ * The total typed here is the price before tax, which is what the 15% is of,
+ * and the retainer is never taxed on its own (sales-tax.ts, retainerOwed).
  */
 const RETAINER_RATE = 0.15;
 const RETAINER_FLOOR = 100;
+const RETAINER_STEP = 50;
 const suggestedRetainer = (total: number): string => {
   if (!Number.isFinite(total) || total <= 0) return '';
-  return String(Math.min(total, Math.max(RETAINER_FLOOR, Math.round(total * RETAINER_RATE))));
+  return String(Math.min(total, Math.max(RETAINER_FLOOR, roundTo(total * RETAINER_RATE, RETAINER_STEP))));
+};
+
+/**
+ * The suggested event insurance cap for a given total: 15% of it to the
+ * nearest $10, between $70 and $150. Alex's rule (2026-10-04), so a $500
+ * wedding is not asked to accept $150 of possible insurance.
+ *
+ * The floor is the cheapest real case, a $59 event policy plus $5 for the
+ * venue as additional insured. The ceiling is the template's old flat
+ * default, policy plus drone cover (contract-template.ts, insurance_cap).
+ * No total means no suggestion, and the template's default stands.
+ */
+const INSURANCE_CAP_RATE = 0.15;
+const INSURANCE_CAP_MIN = 70;
+const INSURANCE_CAP_MAX = 150;
+const INSURANCE_CAP_STEP = 10;
+const suggestedInsuranceCap = (total: number): string | null => {
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const cap = Math.min(INSURANCE_CAP_MAX, Math.max(INSURANCE_CAP_MIN, roundTo(total * INSURANCE_CAP_RATE, INSURANCE_CAP_STEP)));
+  return `$${cap}`;
+};
+const INSURANCE_CAP_KEY = 'insurance_cap';
+
+/** `vars` with the cap set from the total, when this contract type has one. */
+const withSuggestedInsuranceCap = (
+  vars: Record<string, string>,
+  total: number,
+  fields: readonly { key: string; defaultValue?: string }[],
+): Record<string, string> => {
+  const field = fields.find((f) => f.key === INSURANCE_CAP_KEY);
+  if (!field) return vars;
+  return { ...vars, [INSURANCE_CAP_KEY]: suggestedInsuranceCap(total) ?? field.defaultValue ?? '' };
 };
 
 // Session labels are stored lowercase-hyphenated so they round-trip through
@@ -662,8 +702,16 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * prefilled one starts out overridden rather than being recalculated.
    */
   const [retainerTouched, setRetainerTouched] = useState(Boolean(prefill?.retainer_amount));
+  /**
+   * The insurance cap follows the total the same way, until it is typed in
+   * or cleared (clearing it drops the clause, so that has to stick too).
+   */
+  const [insuranceCapTouched, setInsuranceCapTouched] = useState(false);
   const applyTotal = (next: string) => {
     setTotalAmount(next);
+    if (!insuranceCapTouched) {
+      setVariables((prev) => withSuggestedInsuranceCap(prev, parseFloat(next), fields));
+    }
     if (retainerTouched) return;
     setRetainerAmount(suggestedRetainer(parseFloat(next)));
   };
@@ -753,7 +801,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   }, [priceReviewApplies, offeredClauses, clauseFlags]);
 
   const [variables, setVariables] = useState<Record<string, string>>(() =>
-    Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ''])),
+    withSuggestedInsuranceCap(
+      Object.fromEntries(fields.map((f) => [f.key, f.defaultValue ?? ''])),
+      parseFloat(moneyDigits(prefill?.total_amount) ?? ''),
+      fields,
+    ),
   );
 
   // Default the effective_date to today, and fold in anything the thread told
@@ -808,7 +860,9 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
         next[field.key] = untouched ? (field.defaultValue ?? '') : current;
       }
       if (!next.effective_date) next.effective_date = todayYmd();
-      return next;
+      // A type that offers the cap where the last one did not would otherwise
+      // arrive with the flat default, whatever the total says.
+      return insuranceCapTouched ? next : withSuggestedInsuranceCap(next, parseFloat(totalAmount), nextFields);
     });
     // Half-day and full-day exist only where the presets are offered. Leaving
     // a stale 'half-day' selected would put wedding-package wording on a
@@ -1097,6 +1151,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   };
 
   const handleVarChange = (key: string, value: string) => {
+    if (key === INSURANCE_CAP_KEY) setInsuranceCapTouched(true);
     setVariables((prev) => ({ ...prev, [key]: value }));
   };
 

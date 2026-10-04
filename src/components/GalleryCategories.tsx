@@ -284,11 +284,16 @@ function PhotoTile({
 }
 
 /**
- * A category with no gallery yet. Cream, not a dimmed photograph: next to four
- * dark panels it reads at once as "not yet", which is the point, and it stays
- * inside the palette (there is no dark token in the theme to borrow). The gold
- * line work is the one thing specific to each: contour lines for aerial (land
- * seen from above, the way a map draws it), rings for proposals.
+ * A category with no gallery yet: a dark panel with gold line work, no photo.
+ *
+ * It was cream first, to read as "not yet" beside the dark photo panels. Under
+ * the Proposals band that backfired: a pale band next to a dark one of the
+ * same size looks taller, and Alex saw it as longer although the two measured
+ * identical. Dark matches the photo panels' weight, and the line work plus
+ * "Coming soon" still say it is not open (2026-10-04, his pick of two).
+ *
+ * The line work is the one thing specific to each: contour lines for aerial
+ * (land seen from above, the way a map draws it), rings for proposals.
  */
 function ComingSoonTile({ tile, h, minH }: { tile: Tile; h: ResponsiveValue<string>; minH?: ResponsiveValue<string> }) {
   return (
@@ -297,12 +302,10 @@ function ComingSoonTile({ tile, h, minH }: { tile: Tile; h: ResponsiveValue<stri
       h={h}
       minH={minH}
       overflow="hidden"
-      bg="brand.surfaceSunken"
-      border="1px solid"
-      borderColor="brand.accentBorder"
+      bg="brand.surfaceDark"
       data-testid={`coming-soon-${tile.name}`}
     >
-      <Box position="absolute" inset={0} color="brand.accent" opacity={0.55} aria-hidden>
+      <Box position="absolute" inset={0} color="brand.accent" opacity={0.45} aria-hidden>
         {tile.name === 'aerial' ? <Contours /> : <Rings />}
       </Box>
       {/* A soft clearing behind the title, so no line runs through the type. */}
@@ -312,15 +315,15 @@ function ComingSoonTile({ tile, h, minH }: { tile: Tile; h: ResponsiveValue<stri
         aria-hidden
         sx={{
           background:
-            'radial-gradient(ellipse 30% 42% at 50% 50%, var(--chakra-colors-brand-surfaceSunken) 45%, transparent 100%)',
+            'radial-gradient(ellipse 30% 42% at 50% 50%, var(--chakra-colors-brand-surfaceDark) 45%, transparent 100%)',
         }}
       />
       <VStack position="absolute" inset={0} justify="center" align="center" spacing={3} zIndex={1}>
-        <Text textStyle="sectionTitle" color="brand.mutedText" textAlign="center">
+        <Text textStyle="sectionTitle" color="white" textAlign="center">
           {tile.title}
         </Text>
-        <Box w="40px" h="1px" bg="brand.accent" />
-        <Text textStyle="eyebrow">Coming soon</Text>
+        <Box w="40px" h="1px" bg="brand.accent" opacity={0.8} />
+        <Text textStyle="eyebrowOnDark">Coming soon</Text>
       </VStack>
     </Box>
   );

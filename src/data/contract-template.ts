@@ -864,6 +864,11 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
    * certificate for a wedding that also wants aerials, near $125. Above that
    * the cost is foreseeable and belongs in a quote, not in a clause.
    *
+   * $150 is now the ceiling, not the usual value: the New Client form fills
+   * the cap in from the total, 15% to the nearest $10 between $70 and $150
+   * (AdminNewClient.tsx, suggestedInsuranceCap). This default stands only when
+   * there is no total yet.
+   *
    * Defaulted rather than left blank, unlike overtime_rate, because this
    * protects against a cost nobody can predict at signing and the safe
    * direction is on. Clearing it prunes the whole clause, which is how a
@@ -875,7 +880,7 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
     placeholder: 'e.g. $150',
     defaultValue: '$150',
     helpText:
-      'The most the client can be charged for insurance bought after signing, at cost, when a venue requires it or they ask for something that needs it. Clear it to drop the clause entirely.',
+      'The most the client can be charged for insurance bought after signing, at cost, when a venue requires it or they ask for something that needs it. Clear it to drop the clause entirely. Filled in from the total: 15% to the nearest $10, between $70 and $150.',
   },
   {
     key: 'payment_methods',
@@ -1637,6 +1642,11 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
    * certificate for a wedding that also wants aerials, near $125. Above that
    * the cost is foreseeable and belongs in a quote, not in a clause.
    *
+   * $150 is now the ceiling, not the usual value: the New Client form fills
+   * the cap in from the total, 15% to the nearest $10 between $70 and $150
+   * (AdminNewClient.tsx, suggestedInsuranceCap). This default stands only when
+   * there is no total yet.
+   *
    * Defaulted rather than left blank, unlike overtime_rate, because this
    * protects against a cost nobody can predict at signing and the safe
    * direction is on. Clearing it prunes the whole clause, which is how a
@@ -1648,7 +1658,7 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
     labelRu: '\u041b\u0438\u043c\u0438\u0442 \u043d\u0430 \u0441\u0442\u0440\u0430\u0445\u043e\u0432\u043a\u0443',
     defaultValue: '$150',
     helpText:
-      'The most the client can be charged for insurance bought after signing, at cost, when a venue requires it or they ask for something that needs it. Clearing this removes the whole clause.',
+      'The most the client can be charged for insurance bought after signing, at cost, when a venue requires it or they ask for something that needs it. Clearing this removes the whole clause. Filled in from the total: 15% to the nearest $10, between $70 and $150.',
   },
   {
     key: 'payment_methods',

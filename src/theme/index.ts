@@ -47,6 +47,9 @@ const CREAM_SUNKEN = '#f5efe4';
 // footer prints a near-white watermark on it, and against #f5efe4 that mark is
 // too faint to read as the tonal inversion it is meant to be.
 const CREAM_FOLD = '#f1e8d7';
+// A warm near-black, about the tone of a gallery panel's photograph under its
+// 0.6 brightness filter, so a panel with no photo sits beside them as a pair.
+const INK = '#1d1a17';
 const GOLD_FIELD = '#a58b58'; //  ~3.0:1 on cream, input borders, WCAG 1.4.11
 const STATUS_OK = '#2f7a4d'; //  ~4.6:1 on cream, validated / confirmation sent
 const STATUS_WARN = '#a9631a'; //  ~4.6:1 on cream, confirmation could not send
@@ -79,6 +82,8 @@ export const brand = {
   surfaceSunken: CREAM_SUNKEN,
   /** The footer's folded underside. The one surface a watermark is printed on. */
   surfaceFold: CREAM_FOLD,
+  /** A dark panel among photographs: the gallery's coming-soon bands. Light text only. */
+  surfaceDark: INK,
   /**
    * Input borders on cream. accentBorder is 1.41:1 and decorative, which is
    * below the 3:1 WCAG 1.4.11 asks of a control's boundary, so a field
