@@ -1850,10 +1850,17 @@ const dict = {
     // Pricing
     totalLabel: { en: 'Total (USD)', ru: 'Общая сумма (USD)' },
     totalHelp: {
-      en: 'Total project cost across the whole booking, before sales tax.',
-      ru: 'Полная стоимость всей съёмки, без налога.',
+      en: 'Total project cost across the whole booking, before sales tax. What Vero keeps: paying by card costs the client more.',
+      ru: 'Полная стоимость всей съёмки, без налога. Столько получает Веро: оплата картой обходится клиенту дороже.',
     },
     salesTaxLabel: { en: 'Pennsylvania sales tax', ru: 'Налог с продаж (Пенсильвания)' },
+    // The card prices a new booking's contract will state (migration 054).
+    cardSummary: {
+      en: (retainer: string, balance: string, total: string) =>
+        `By card: ${retainer} retainer and ${balance} balance, ${total} in all. Vero keeps the same either way: Stripe's share comes out of the card price.`,
+      ru: (retainer: string, balance: string, total: string) =>
+        `Картой: задаток ${retainer} и остаток ${balance}, всего ${total}. Веро получает одинаково: доля Stripe входит в цену по карте.`,
+    },
     salesTaxSummary: {
       en: (withTax: string, price: string, tax: string, retainer: string | null) =>
         `The client pays ${withTax}: ${price} plus ${tax} tax.${retainer ? ` The ${retainer} retainer counts toward it.` : ''}`,
@@ -2499,6 +2506,22 @@ const dict = {
     stripRetainer: { en: 'Retainer', ru: 'Предоплата' },
     stripPaid: { en: 'Paid', ru: 'Оплачено' },
     tipBadge: { en: 'Tip', ru: 'Чаевые' },
+    // A dual-priced booking's remaining balance, as a card payer is charged it.
+    remainingByCard: {
+      en: (card: string) => `Paid by card, the remaining balance is ${card}. Zelle, Venmo, Cash App or cash pay the amount above.`,
+      ru: (card: string) => `Картой остаток составит ${card}. Через Zelle, Venmo, Cash App или наличными: сумма выше.`,
+    },
+    // A card payment on a dual-priced booking (migration 054): what it settled,
+    // and what the card processor kept.
+    cardCredited: {
+      en: (credited: string, kept: string) => `Counts as ${credited} toward the balance. The other ${kept} is what Stripe keeps.`,
+      ru: (credited: string, kept: string) => `Засчитано ${credited} в счёт оплаты. Остальные ${kept} забирает Stripe.`,
+    },
+    // A refund or chargeback of such a payment: the share of the balance it takes back.
+    cardCreditedReversal: {
+      en: (credited: string) => `Takes ${credited} back off what counts toward the balance.`,
+      ru: (credited: string) => `Вычитает ${credited} из суммы, засчитанной в оплату.`,
+    },
     tipNotInBalance: {
       en: 'Tips are not counted toward what this booking owes.',
       ru: 'Чаевые не учитываются в сумме к оплате по этой брони.',
@@ -2517,12 +2540,6 @@ const dict = {
       en: 'Anything paid above the contract and its charges is a tip, unless it is a fee you added separately.',
       ru: 'Всё, что оплачено сверх договора и доплат, считается чаевыми, если это не отдельная доплата.',
     },
-    settleDiscountTitle: { en: 'They paid directly', ru: 'Оплатили напрямую' },
-    settleDiscountBody: {
-      en: 'Paying directly saved them the card fee, so their payment counts for more than it says. Waive that part to credit it in full.',
-      ru: 'Оплата напрямую сэкономила им комиссию за карту, поэтому платёж стоит больше указанной суммы. Спишите эту часть, чтобы засчитать его полностью.',
-    },
-    settleDiscountAction: { en: 'Waive the card fee', ru: 'Списать комиссию' },
     history: { en: 'History', ru: 'История' },
     // The money history (migration 052): one line per change a person made.
     moneyHistoryShow: { en: 'Show change history', ru: 'Показать историю изменений' },

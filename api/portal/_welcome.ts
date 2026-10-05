@@ -17,6 +17,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
 
 type Row = {
   id: string;
@@ -103,6 +104,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       /* migration 049 not applied */
     }
+    // Who pays the card fee (migration 054), so the card prices the contract
+    // below states can be shown beside these.
+    let cardPricing: CardPricing = 'single';
+    try {
+      const c = (await sql`select card_pricing from client_portals where id = ${row.id}`) as Array<{ card_pricing: string }>;
+      cardPricing = cardPricingOf(c[0]?.card_pricing);
+    } catch {
+      /* migration 054 not applied */
+    }
 
     return res.status(200).json({
       success: true,
@@ -117,6 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contract_total_amount: !complimentary && row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
       contract_retainer_amount: !complimentary && row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,
       sales_tax: salesTax,
+      card_pricing: cardPricing,
     });
   } catch (err) {
     console.error('[portal/welcome] handler failed:', err);

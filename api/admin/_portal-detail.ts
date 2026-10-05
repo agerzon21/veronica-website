@@ -14,6 +14,7 @@ import { makeGalleryPreviewToken } from '../portal/_gallery-gate.js';
 import { isStripeTestMode } from '../_stripe.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
 
 type PortalRow = {
   id: string;
@@ -85,6 +86,11 @@ type PaymentRow = {
   kind: 'payment' | 'tip';
   /** How it arrived and whether it cleared: what decides which payments were DIRECT. */
   source: 'manual' | 'stripe';
+  /**
+   * What the row settled when not all of it: a card payment on a dual-priced
+   * booking (migration 054). Null: the whole amount counts.
+   */
+  credited_amount: string | null;
   status: string;
 };
 
@@ -200,7 +206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const payments = (await sql`
       select id, amount, method, note, paid_at, created_at,
              coalesce(kind, 'payment') as kind,
-             coalesce(source, 'manual') as source, status
+             coalesce(source, 'manual') as source, status, credited_amount
       from payment_entries
       where client_portal_id = ${id}
       order by paid_at desc, created_at desc
@@ -256,6 +262,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-049 database: no booking adds tax */
     }
 
+    /** Who pays the card fee (migration 054). Allowed to fail the same way. */
+    let cardPricing: CardPricing = 'single';
+    try {
+      const pricingRows = (await sql`
+        select card_pricing from client_portals where id = ${id}
+      `) as Array<{ card_pricing: string }>;
+      cardPricing = cardPricingOf(pricingRows[0]?.card_pricing);
+    } catch {
+      /* pre-migration-054 database: one price for every method */
+    }
+
     /**
      * Five fields the CLIENT portal view renders that this endpoint never
      * needed, added so the admin panel can render that exact component in a
@@ -295,6 +312,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         charges_total: chargesTotal,
         complimentary,
         sales_tax: salesTax,
+        card_pricing: cardPricing,
         // We never return the raw blob URL, only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,
@@ -333,6 +351,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // delete control the server refuses on a card row.
         source: p.source === 'stripe' ? ('stripe' as const) : ('manual' as const),
         status: p.status ?? null,
+        // What the row settled, when not all of it (migration 054).
+        credited_amount: p.credited_amount === null ? null : parseFloat(p.credited_amount),
       })),
       charges: charges.map((c) => ({
         id: c.id,

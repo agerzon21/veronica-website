@@ -515,6 +515,35 @@ export const WEDDING_CONTRACT_TEMPLATE: ContractTemplate = {
         },
       ],
     },
+    // PRICES BY CARD. Optional and unnumbered, gated on card_total_amount, which
+    // the server writes only on a 'dual' booking (migration 054), so every
+    // contract already on file renders byte for byte as it did. Both prices,
+    // stated as prices: the words fee and surcharge never appear, because a fee
+    // added for using a card is a surcharge, which Visa and Mastercard forbid on
+    // debit cards (src/data/payment-handles.ts).
+    {
+      title: 'PRICES BY CARD',
+      optional: true,
+      requireVariables: ['card_total_amount'],
+      paragraphs: [
+        {
+          kind: 'text',
+          text: 'The amounts in PAYMENT above, with sales tax where it applies, are the prices for paying by Zelle, Venmo, Cash App or cash. Each payment also has a card price, which is higher because the card processor keeps a share of every card payment:',
+        },
+        {
+          kind: 'fields',
+          items: [
+            { label: 'Retainer by Card', value: '{{card_retainer_amount}} (due at signing)' },
+            { label: 'Remaining Balance by Card', value: '{{card_remaining_amount}}' },
+            { label: 'Total by Card', value: '{{card_total_amount}}' },
+          ],
+        },
+        {
+          kind: 'text',
+          text: 'The Client may pay either way, payment by payment, and the Photographer receives the same amount whichever is used. A charge added later under this Agreement, such as additional time, has a card price worked out the same way.',
+        },
+      ],
+    },
     // PRICE REVIEW. Unnumbered and optional, so a booking without it renders
     // byte for byte as every wedding contract already on file does, and the
     // I to XIII numbering never shifts.
@@ -896,10 +925,10 @@ export const WEDDING_TEMPLATE_FIELDS: ContractTemplateField[] = [
      * edited here reaches new contracts only and cannot touch a signed one.
      * Same reasoning as overtime_rate above, checked the same way.
      *
-     * Note what this does NOT say: that paying another way is cheaper.
-     * src/data/payment-handles.ts prices a card payment as the contract total
-     * and discounts the rest, and whether that belongs in the contract or
-     * stays a conversation is the owner's call, not a default's.
+     * The prices for each method are not here. On a booking made from
+     * 2026-10-05 ('dual', migration 054) the PRICES BY CARD section states the
+     * card prices beside the amounts in PAYMENT, which are the prices for
+     * paying any other way; an older booking has one price for every method.
      */
     defaultValue: 'Card, cash, Venmo, Cash App or Zelle',
     helpText: 'Comma-separated payment methods the client can use.',
@@ -1387,6 +1416,35 @@ const SESSION_CONTRACT_SECTIONS: ContractSection[] = [
       },
     ],
   },
+  // PRICES BY CARD. Optional and unnumbered, gated on card_total_amount, which
+  // the server writes only on a 'dual' booking (migration 054), so every
+  // contract already on file renders byte for byte as it did. Both prices,
+  // stated as prices: the words fee and surcharge never appear, because a fee
+  // added for using a card is a surcharge, which Visa and Mastercard forbid on
+  // debit cards (src/data/payment-handles.ts).
+  {
+    title: 'PRICES BY CARD',
+    optional: true,
+    requireVariables: ['card_total_amount'],
+    paragraphs: [
+      {
+        kind: 'text',
+        text: 'The amounts in PAYMENT above, with sales tax where it applies, are the prices for paying by Zelle, Venmo, Cash App or cash. Each payment also has a card price, which is higher because the card processor keeps a share of every card payment:',
+      },
+      {
+        kind: 'fields',
+        items: [
+          { label: 'Retainer by Card', value: '{{card_retainer_amount}} (due at signing)' },
+          { label: 'Remaining Balance by Card', value: '{{card_remaining_amount}}' },
+          { label: 'Total by Card', value: '{{card_total_amount}}' },
+        ],
+      },
+      {
+        kind: 'text',
+        text: 'The Client may pay either way, payment by payment, and the Photographer receives the same amount whichever is used. A charge added later under this Agreement, such as additional time, has a card price worked out the same way.',
+      },
+    ],
+  },
   // PRICE REVIEW. Optional, unnumbered, gated on price_review_enabled exactly
   // as the wedding copy is, so a session contract without it renders byte for
   // byte as every one already on file does and the numbering never shifts.
@@ -1675,10 +1733,10 @@ const SESSION_BASE_FIELDS: ContractTemplateField[] = [
      * edited here reaches new contracts only and cannot touch a signed one.
      * Same reasoning as overtime_rate above, checked the same way.
      *
-     * Note what this does NOT say: that paying another way is cheaper.
-     * src/data/payment-handles.ts prices a card payment as the contract total
-     * and discounts the rest, and whether that belongs in the contract or
-     * stays a conversation is the owner's call, not a default's.
+     * The prices for each method are not here. On a booking made from
+     * 2026-10-05 ('dual', migration 054) the PRICES BY CARD section states the
+     * card prices beside the amounts in PAYMENT, which are the prices for
+     * paying any other way; an older booking has one price for every method.
      */
     defaultValue: 'Card, cash, Venmo, Cash App or Zelle',
     helpText: 'Comma-separated payment methods the client can use.',

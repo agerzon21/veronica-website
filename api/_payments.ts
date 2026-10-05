@@ -60,6 +60,21 @@ export type RecordPaymentInput = {
   feeAmount?: number | null;
   cardBrand?: string | null;
   cardLast4?: string | null;
+  /**
+   * How much of `amount` counts toward the balance, when not all of it does.
+   *
+   * Only a card payment on a dual-priced booking (migration 054) sets this: a
+   * $103.30 card retainer is credited $100.00, and the $3.30 is what Stripe
+   * keeps. Omitted or null, the whole amount counts, as it always has. A
+   * reversal (refund, chargeback) passes its share, from reversalCredit below.
+   */
+  creditedAmount?: number | null;
+  /**
+   * On a refund, a chargeback, or the undoing of one: the processor id of the
+   * PAYMENT it reverses (migration 054), so the shares of several partial
+   * reversals are worked out from their running total and sum exactly.
+   */
+  reversesPaymentId?: string | null;
 };
 
 export type RecordPaymentResult = {
@@ -98,10 +113,13 @@ function lockPortal(sql: ReturnType<typeof getDb>, portalId: string) {
  * forever, and the error is somebody's money.
  */
 export function paidToDateUpdate(sql: ReturnType<typeof getDb>, portalId: string) {
+  // credited_amount, not amount, where a payment carries one: on a dual-priced
+  // booking a card payment includes what Stripe takes, and that part settles
+  // nothing (migration 054). The one place that decides, for all eight readers.
   return sql`
     update client_portals
     set paid_to_date = (
-          select coalesce(sum(amount), 0)
+          select coalesce(sum(coalesce(credited_amount, amount)), 0)
           from payment_entries
           where client_portal_id = ${portalId}
             and status = 'succeeded'
@@ -133,6 +151,69 @@ export function chargesTotalUpdate(sql: ReturnType<typeof getDb>, portalId: stri
     where id = ${portalId}
     returning charges_total
   `;
+}
+
+type CreditedRow = { amount: number | string | null; credited_amount: number | string | null };
+
+/**
+ * A reversal's share of the balance credit, given the reversals of the same
+ * payment already recorded. Pure, so it can be tested on its own.
+ *
+ * A refund of $51.65 on a $103.30 card payment that was credited $100.00
+ * takes back $50.00 of the balance, not $51.65: the client gets back what
+ * they paid, and the booking owes again what that payment had settled.
+ *
+ * FROM THE RUNNING TOTAL, not refund by refund. Rounding each share on its own
+ * let two $25.90 halves of a $51.80 payment credited $49.99 take back $25.00
+ * each, $50.00 in all, and the booking read a cent short for good. Here the
+ * credit due back after ALL reversals so far is worked out once, and this one
+ * takes the difference, so any sequence of partial refunds, chargebacks and
+ * their undoing lands on exactly the original credit. Never more than it.
+ *
+ * Null when the original counted in full, so a reversal of it does too.
+ */
+export function cumulativeCreditedShare(
+  amount: number,
+  original: CreditedRow | null | undefined,
+  prior: { gross: number; credited: number },
+): number | null {
+  if (!original || original.credited_amount === null || original.credited_amount === undefined) return null;
+  const toCents = (d: number) => Math.round(d * 100);
+  const grossC = toCents(Number(original.amount));
+  const creditedC = toCents(Number(original.credited_amount));
+  if (!Number.isFinite(grossC) || grossC === 0 || !Number.isFinite(creditedC)) return null;
+  const reversedC = toCents(prior.gross) + toCents(amount);
+  const cap = Math.abs(creditedC);
+  const targetC = Math.max(-cap, Math.min(cap, Math.round((creditedC * reversedC) / grossC)));
+  return (targetC - toCents(prior.credited)) / 100;
+}
+
+/**
+ * The same, reading the reversals already recorded against the payment.
+ *
+ * Two reversals of one payment landing in the same instant can both read the
+ * total from before either, and then sum a cent off; the alternative, locking
+ * here, would put a second lock order beside the booking lock recordPayment
+ * takes, which is how deadlocks start. A cent, on a coincidence that needs two
+ * refunds of one card payment within milliseconds, is the better trade.
+ */
+export async function reversalCredit(
+  sql: ReturnType<typeof getDb>,
+  paymentId: string,
+  amount: number,
+  original: CreditedRow | null | undefined,
+): Promise<number | null> {
+  if (!original || original.credited_amount === null || original.credited_amount === undefined) return null;
+  const rows = (await sql`
+    select coalesce(sum(amount), 0)::text as gross,
+           coalesce(sum(coalesce(credited_amount, amount)), 0)::text as credited
+    from payment_entries
+    where reverses_payment_id = ${paymentId} and status = 'succeeded'
+  `) as Array<{ gross: string; credited: string }>;
+  return cumulativeCreditedShare(amount, original, {
+    gross: Number(rows[0]?.gross ?? 0),
+    credited: Number(rows[0]?.credited ?? 0),
+  });
 }
 
 /** Re-sum paid_to_date on its own, under the lock. Exported for deletes and repairs. */
@@ -223,10 +304,20 @@ export async function recordPayment(
     feeAmount = null,
     cardBrand = null,
     cardLast4 = null,
+    creditedAmount = null,
+    reversesPaymentId = null,
   } = input;
 
   if (!Number.isFinite(amount)) {
     throw new Error('recordPayment: amount must be a finite number of dollars');
+  }
+  // Never more than the payment itself, and the same sign, so a bad figure
+  // cannot credit a booking with money nobody paid.
+  if (
+    creditedAmount !== null &&
+    (!Number.isFinite(creditedAmount) || Math.abs(creditedAmount) > Math.abs(amount) || creditedAmount * amount < 0)
+  ) {
+    throw new Error('recordPayment: creditedAmount must be within the amount and of the same sign');
   }
 
   const when = paidAt ?? new Date().toISOString();
@@ -244,12 +335,12 @@ export async function recordPayment(
       insert into payment_entries (
         client_portal_id, amount, method, note, paid_at,
         source, status, kind, processor_payment_id, processor_account_id,
-        fee_amount, card_brand, card_last4
+        fee_amount, card_brand, card_last4, credited_amount, reverses_payment_id
       )
       values (
         ${portalId}, ${amount}, ${method}, ${note}, ${when},
         ${source}, ${status}, ${kind}, ${processorPaymentId}, ${processorAccountId},
-        ${feeAmount}, ${cardBrand}, ${cardLast4}
+        ${feeAmount}, ${cardBrand}, ${cardLast4}, ${creditedAmount}, ${reversesPaymentId}
       )
       on conflict (processor_payment_id) where processor_payment_id is not null
       do nothing

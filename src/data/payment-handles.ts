@@ -53,19 +53,23 @@ export type CardPaymentsMode = 'off' | 'preview' | 'on';
 export const CARD_PAYMENTS_MODE: CardPaymentsMode = 'on';
 
 /**
- * What a card payment costs us, and therefore what sending money directly saves.
+ * What a card payment costs us: Stripe's US card rate.
  *
- * WHY A DISCOUNT AND NOT A SURCHARGE. Adding a fee on top of the price when a
- * client pays by card is legally a surcharge, and the Durbin Amendment forbids
- * surcharging DEBIT cards outright, even when the customer runs one as credit.
- * Stripe Checkout accepts debit and the card's funding type is not knowable
- * until after it is entered, so a flat "card costs more" rule would break
- * federal law on an unknown share of payments. A discount for paying another
- * way is the same arithmetic from the other end, is explicitly permitted, needs
- * no registration with the card networks, and has no debit exception.
+ * WHO PAYS IT (migration 054, 2026-10-05). On a 'dual' booking, every booking
+ * created from that date, the amounts Vero sets are what she KEEPS, and a card
+ * payment is grossed up so Stripe's cut comes out of the card payer: $100 is
+ * $103.30 by card. Before that, the stored price WAS the card price and Zelle
+ * was offered the fee off, which made every card payment land about 3% short
+ * of the price Vero had quoted ($18.30 on the first $600). Those bookings are
+ * 'single': one price whatever the method, because their contracts state one
+ * total and a card payer cannot be asked for more than a signed contract says.
  *
- * So the contract total IS the card price. Zelle, Venmo and Cash App get money
- * off, and the round number on the contract stays round.
+ * WHY BOTH PRICES ARE STATED, CARD FIRST, and never as "a fee for paying by
+ * card". A fee added for using a card is a surcharge, and Visa and Mastercard
+ * forbid surcharging DEBIT cards (their network rules, not federal law), while
+ * Stripe Checkout cannot tell debit from credit before the card is entered. A
+ * lower price for paying another way is a cash discount, which every network
+ * allows on every card with no registration. Same money, said that way round.
  */
 export const CARD_FEE = {
   /** Stripe's US card rate. */
@@ -92,51 +96,20 @@ export function cardFeeOn(amount: number): number {
 }
 
 /**
- * What to send by Zelle, Venmo or Cash App instead, to leave us the same money.
- *
- * Never more than the card price, and never below zero, so a tiny balance
- * cannot invert into the client being owed money.
- */
-export function cashPrice(cardPrice: number): number {
-  if (!Number.isFinite(cardPrice) || cardPrice <= 0) return 0;
-  const cents = toCents(cardPrice) - toCents(cardFeeOn(cardPrice));
-  return Math.max(cents, 0) / 100;
-}
-
-/** What the client saves by not using a card. Zero when there is nothing to save. */
-export function cashSaving(cardPrice: number): number {
-  if (!Number.isFinite(cardPrice) || cardPrice <= 0) return 0;
-  return (toCents(cardPrice) - toCents(cashPrice(cardPrice))) / 100;
-}
-
-/**
  * The card price that leaves us EXACTLY `direct` after Stripe takes its cut.
  *
- * The inverse of cardFeeOn, and the piece that lets the number a client sends
- * directly be the clean one. Vero decides she wants $750 in hand; this says
- * the card price has to be $772.45, because Stripe takes 2.9% of THAT plus 30
- * cents, not 2.9% of $750.
+ * The inverse of cardFeeOn, and the card price of a 'dual' booking. Vero wants
+ * $100 in hand; this says the card price has to be $103.30, because Stripe
+ * takes 2.9% of THAT plus 30 cents, not 2.9% of $100 (which would be $103.20
+ * and leave her ten cents short).
  *
  *   direct = card - (card * rate + fixed)
  *   card   = (direct + fixed) / (1 - rate)
  *
- * WHY THE PRICE IS STORED THIS WAY ROUND, and it is not a detail.
- *
- * Adding a fee on top of a stated price when somebody pays by card is a
- * SURCHARGE. Surcharging a debit card is prohibited outright by the Durbin
- * Amendment, federally, in every state, and Stripe Checkout accepts debit
- * cards without telling us which is which. Surcharging credit cards is legal
- * in most states but carries conditions: advance notice to the card networks,
- * a cap at the cost of acceptance, and disclosure at the point of sale.
- *
- * Offering a DISCOUNT for not using a card is permitted everywhere, on every
- * card type, with no notice and no registration. It is the same arithmetic
- * seen from the other end.
- *
- * So the contract's total is the CARD price, and paying directly is
- * discounted by the fee. The client still reads what the owner wanted them to
- * read, "send $750, or $772.45 by card", and we are on the legal side of the
- * line rather than the one that ends in a Stripe account review.
+ * Tax included or not, the same: on a booking that adds sales tax, `direct`
+ * already includes it, and what Stripe pays out is exactly what a Zelle payer
+ * would have sent. The tax due on the slightly higher card sale is a few cents
+ * per hundred dollars, and Vero carries it ("aside from taxes", Alex).
  *
  * Rounded UP to the cent, because rounding down leaves us short.
  */
@@ -147,34 +120,38 @@ export function cardPriceFor(direct: number): number {
 }
 
 /**
- * The card fee a booking's DIRECT payments have earned the right to have
- * waived, minus what has already been waived.
+ * How a booking prices card payments (migration 054). See CARD_FEE above.
  *
- * Each Zelle, Venmo, cash or Cash App payment of X stands in for a card
- * payment of cardPriceFor(X), so it earns exactly the difference: a $485.20
- * retainer sent by Zelle earns $14.80, which is what turns it back into the
- * $500 the contract asked for.
- *
- * WHY PER PAYMENT. The waiver used to be capped at the card fee on the WHOLE
- * booking and offered only once the remainder was under it, which went wrong
- * both ways: a retainer paid directly could not be squared until the very end
- * (and with two direct payments, never), while a booking paid entirely BY
- * CARD could have a later overtime charge "waived" as a fee nobody avoided.
- * Earned this way, a card-only booking earns nothing and every direct payment
- * earns exactly its own discount.
- *
- * Shared by the server, which enforces it, and the admin screen, which offers
- * it, so the two can never disagree about the number.
+ *   single  one price for every method; Vero absorbs the card fee.
+ *   dual    the stated amounts are what Vero keeps; a card costs more.
  */
-export function earnedDirectDiscount(directPayments: number[], alreadyWaived: number): number {
-  let cents = 0;
-  for (const x of directPayments) {
-    if (Number.isFinite(x) && x > 0) cents += toCents(cardPriceFor(x)) - toCents(x);
-  }
-  return Math.max(cents - toCents(alreadyWaived), 0) / 100;
+export type CardPricing = 'single' | 'dual';
+
+/**
+ * A stored value read back. Anything but 'dual' is 'single', the safe reading:
+ * on a database migration 054 has not reached, every booking predates dual
+ * pricing, and charging a client more than their signed contract states is the
+ * one mistake this must not make.
+ */
+export function cardPricingOf(v: unknown): CardPricing {
+  return v === 'dual' ? 'dual' : 'single';
 }
 
-/** The method label a waiver row carries, which is how it is recognised. */
+/** What paying `direct` costs by card on this booking. */
+export function cardAmountFor(direct: number, pricing: CardPricing): number {
+  if (!Number.isFinite(direct) || direct <= 0) return 0;
+  return pricing === 'dual' ? cardPriceFor(direct) : direct;
+}
+
+/**
+ * The method label a waiver row carries, which is how it is recognised.
+ *
+ * NO LONGER OFFERED (2026-10-05). A waiver was the card fee given back to a
+ * client who paid a card-priced booking directly. A 'dual' booking's stated
+ * price is already the direct one, and a 'single' booking is one price however
+ * it is paid, so there is nothing to give back. No waiver row was ever written
+ * in production; the label stays so an old row would still be recognised.
+ */
 export const CARD_FEE_DISCOUNT_METHOD = 'Card fee discount';
 
 /** True when cards are real for ordinary clients. */
@@ -220,7 +197,15 @@ retainer or balance amount. They are the same for every client.
       ? `
 - Credit or debit card: the client pays from their own portal, there is no
   handle to give out. Card payments appear in the payments list automatically
-  and must not be deleted, because the money really moved.`
+  and must not be deleted, because the money really moved.
+CARD PRICES. On a booking made from October 5, 2026 the amounts are what Vero
+keeps, and paying by card costs the client more, by exactly what Stripe takes
+(2.9% plus 30 cents of the card price): a $100 retainer is $103.30 by card.
+The contract, the portal and the card checkout all show both prices, so the
+client is never surprised. Older bookings have one price whatever the method,
+because their signed contracts say so, and Vero absorbs the card fee on them.
+Never call the difference a "fee" or a "surcharge" to a client: it is the card
+price, and paying by Zelle, Venmo, Cash App or cash is the lower price.`
       : CARD_PAYMENTS_MODE === 'preview'
         ? `
 - Credit or debit card: BEING TESTED, not live for clients yet. If Vero asks,
@@ -253,5 +238,8 @@ export function paymentFactsForCustomerReplies(): string {
   const methods = CARD_PAYMENTS_ENABLED
     ? 'by credit or debit card straight from their client portal, or by Venmo, Zelle or Cash App'
     : 'by Venmo, Zelle or Cash App';
-  return `Payment: clients pay ${methods}, and the exact details appear in their own client portal once a contract is signed. Never put a payment handle in a message: point them at their portal instead. A date is not held until the retainer arrives.`;
+  const cardPrice = CARD_PAYMENTS_ENABLED
+    ? ' On bookings made from October 2026, paying by card costs a little more than the other methods, because the card processor keeps a share; each client portal shows exactly what that client pays, so point them there rather than quoting a card price.'
+    : '';
+  return `Payment: clients pay ${methods}, and the exact details appear in their own client portal once a contract is signed.${cardPrice} Never put a payment handle in a message: point them at their portal instead. A date is not held until the retainer arrives.`;
 }

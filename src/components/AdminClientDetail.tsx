@@ -1,10 +1,10 @@
 import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton, Spinner } from '@chakra-ui/react';
-import { CARD_FEE_DISCOUNT_METHOD } from '../data/payment-handles';
+import { CARD_FEE_DISCOUNT_METHOD, cardAmountFor, cardPricingOf, type CardPricing } from '../data/payment-handles';
 import {
   SALES_TAX_CONTRACT_KEYS,
+  CARD_PRICE_CONTRACT_KEYS,
   SALES_TAX_MODES,
   bookingOwedTotal,
-  earnedDirectDiscountTaxed,
   isSalesTaxMode,
   salesTaxModeOf,
   type SalesTaxMode,
@@ -106,6 +106,8 @@ interface PortalDetail {
   complimentary?: boolean;
   /** Pennsylvania sales tax for this booking (migration 049, src/data/sales-tax.ts). */
   sales_tax?: SalesTaxMode;
+  /** Who pays the card fee (migration 054, src/data/payment-handles.ts). Absent reads as 'single'. */
+  card_pricing?: CardPricing;
   drive_url: string | null;
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
@@ -160,6 +162,11 @@ interface PaymentEntry {
   /** 'manual' is money Vero logged (Zelle, cash); 'stripe' came by card. */
   source?: 'manual' | 'stripe';
   status?: string;
+  /**
+   * What the row settled, when not all of it: a card payment on a dual-priced
+   * booking, where $103.30 by card settles $100.00 (migration 054).
+   */
+  credited_amount?: number | null;
 }
 
 /** A charge reason, as stored. The table CHECKs these same three values. */
@@ -247,6 +254,7 @@ const DERIVED_MONEY_KEYS = new Set<string>([
   'retainer_amount',
   'remaining_balance',
   ...SALES_TAX_CONTRACT_KEYS,
+  ...CARD_PRICE_CONTRACT_KEYS,
 ]);
 
 const formatMoney = (amount: number | null): string => {
@@ -825,26 +833,6 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   const tipsTotal = payments
     .filter((p) => p.kind === 'tip')
     .reduce((sum, p) => sum + p.amount, 0);
-  /**
-   * The card fee this booking's DIRECT payments have earned the right to have
-   * waived, net of what already was (payment-handles.ts, earnedDirectDiscount).
-   * The server enforces this same number; here it only decides whether to
-   * OFFER the waiver, and how much to show on the button.
-   */
-  const waivableDiscount = earnedDirectDiscountTaxed(
-    payments
-      .filter(
-        (p) =>
-          p.kind === 'payment' &&
-          (p.source ?? 'manual') === 'manual' &&
-          (p.status ?? 'succeeded') === 'succeeded' &&
-          p.method !== CARD_FEE_DISCOUNT_METHOD &&
-          p.amount > 0,
-      )
-      .map((p) => p.amount),
-    payments.filter((p) => p.method === CARD_FEE_DISCOUNT_METHOD).reduce((sum, p) => sum + p.amount, 0),
-    salesTax,
-  );
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
 
   /**
@@ -1487,19 +1475,13 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               )}
             </SimpleGrid>
 
-            {/* Offered when a DIRECT payment earned a discount that has not been
-                applied yet, for exactly that much and never more than is owed.
-                A client who sent Zelle paid the discounted price, so the
-                booking reads a few dollars short by design. A booking paid only
-                by card earns nothing, so a later overtime charge can never be
-                waived as a "card fee" nobody avoided. */}
-            {balanceRemaining !== null && balanceRemaining > 0 && waivableDiscount > 0 && (
-              <SettleDiscountCallout
-                portalId={portalId}
-                adminPassword={adminPassword}
-                amount={Math.min(balanceRemaining, waivableDiscount)}
-                onSettled={reload}
-              />
+            {/* On a dual booking the remaining balance is what Vero keeps; a
+                client paying it by card is charged more. Said here so the
+                number a client quotes back from their portal is recognisable. */}
+            {cardPricingOf(portal.card_pricing) === 'dual' && balanceRemaining !== null && balanceRemaining > 0 && (
+              <Text fontSize="xs" color="gray.500">
+                {t.clientDetail.remainingByCard(formatMoney(cardAmountFor(balanceRemaining, 'dual')))}
+              </Text>
             )}
 
             <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} remaining={balanceRemaining} />
@@ -3544,61 +3526,6 @@ function MoneyHistory({
   );
 }
 
-function SettleDiscountCallout({
-  portalId,
-  adminPassword,
-  amount,
-  onSettled,
-}: {
-  portalId: string;
-  adminPassword: string;
-  amount: number;
-  onSettled: () => void;
-}) {
-  const { t } = useAdminLang();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const settle = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const res = await fetch('/api/admin/payment-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword, id: portalId, action: 'settle-discount' }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        onSettled();
-        return;
-      }
-      setError(data.error || t.clientDetail.serverErrorStatus(res.status));
-    } catch {
-      setError(t.common.couldNotReach);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Box bg="green.50" border="1px solid" borderColor="green.200" borderRadius="md" p={3}>
-      <Text fontSize="sm" fontWeight="600" color="gray.800">
-        {t.clientDetail.settleDiscountTitle}
-      </Text>
-      <Text fontSize="xs" color="gray.600" mt={1} mb={2} lineHeight="1.6">
-        {t.clientDetail.settleDiscountBody}
-      </Text>
-      <CTAButton onClick={settle} isLoading={busy} size="sm" variant="outline" fullWidth>
-        {t.clientDetail.settleDiscountAction} ({formatMoney(amount)})
-      </CTAButton>
-      {error && (
-        <Text fontSize="xs" color="red.600" mt={2}>
-          {error}
-        </Text>
-      )}
-    </Box>
-  );
-}
-
 function AddPaymentForm({
   portalId,
   adminPassword,
@@ -3890,6 +3817,15 @@ function PaymentRow({
           </HStack>
           {entry.note && (
             <Text fontSize="xs" color="gray.500" mt={0.5}>{entry.note}</Text>
+          )}
+          {/* Paid stays the credited figure, so a card row on a dual booking
+              says how much of it that is, or Paid reads short of the log. */}
+          {typeof entry.credited_amount === 'number' && entry.credited_amount !== entry.amount && (
+            <Text fontSize="xs" color="gray.500" mt={0.5}>
+              {entry.amount > 0
+                ? t.clientDetail.cardCredited(formatMoney(entry.credited_amount), formatMoney(entry.amount - entry.credited_amount))
+                : t.clientDetail.cardCreditedReversal(formatMoney(Math.abs(entry.credited_amount)))}
+            </Text>
           )}
         </Box>
       {confirming ? (

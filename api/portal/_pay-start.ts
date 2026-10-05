@@ -31,7 +31,7 @@ import { getDb } from '../_db.js';
 import { checkPortalPassword } from './_password.js';
 import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { createCheckoutSession, isStripeConfigured, isStripeTestMode } from '../_stripe.js';
-import { CARD_PAYMENTS_MODE } from '../../src/data/payment-handles.js';
+import { CARD_PAYMENTS_MODE, cardAmountFor, cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
 import {
   PA_SALES_TAX_LABEL,
   bookingOwedTotal,
@@ -254,6 +254,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     /**
+     * Who pays Stripe's fee (migration 054). On a 'dual' booking every amount
+     * below is what Vero keeps, and the card payment is grossed up from it.
+     * Same pattern as the tax: its own statement, allowed to fail, and absent
+     * reads as 'single', so a client is never charged more than a contract
+     * that predates this says.
+     */
+    let cardPricing: CardPricing = 'single';
+    try {
+      const p = (await sql`
+        select card_pricing from client_portals where id = ${row.id}
+      `) as Array<{ card_pricing: string }>;
+      cardPricing = cardPricingOf(p[0]?.card_pricing);
+    } catch {
+      /* migration 054 not applied: every booking is single-priced */
+    }
+
+    /**
      * What is actually owed right now.
      *
      * The balance is the same arithmetic every other place uses: total plus
@@ -318,6 +335,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    /**
+     * What the card is actually charged. A tip is never grossed up: the client
+     * chose the number, and a $50 tip that came out as $51.80 would be a
+     * surprise. Everything else, on a dual booking, costs what leaves Vero the
+     * amount above after Stripe's cut, and that amount travels in metadata so
+     * the payment is credited exactly it (api/_checkout-record.ts).
+     */
+    const directAmount = kind !== 'tip' && cardPricing === 'dual' ? amount : null;
+    const cardAmount = directAmount !== null ? cardAmountFor(directAmount, cardPricing) : amount;
+
     const origin =
       process.env.SITE_ORIGIN ||
       (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
@@ -337,7 +364,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const session = await createCheckoutSession({
       portalId: row.id,
       kind,
-      amount,
+      amount: cardAmount,
+      directAmount,
       /**
        * Part of the idempotency key: once money lands, a later payment of the
        * same amount must open a NEW session rather than replay this one.
@@ -354,7 +382,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       description: label,
       // Its own line on the Stripe page and receipt. A tip is not a sale, so
       // it never carries tax.
-      salesTax: kind !== 'tip' && salesTax === 'added' ? (cents(amount) - cents(preTaxOf(amount, salesTax))) / 100 : 0,
+      // On a dual booking the card price is the sale, so the tax line is read
+      // off the card amount, the same way the tax return reads the payment.
+      salesTax: kind !== 'tip' && salesTax === 'added' ? (cents(cardAmount) - cents(preTaxOf(cardAmount, salesTax))) / 100 : 0,
       salesTaxLabel: `Pennsylvania sales tax (${PA_SALES_TAX_LABEL})`,
       // The portal reads its own state on load, so returning to it is enough
       // for the client to see the payment reflected. The query flag only
@@ -374,7 +404,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cancelUrl: `${origin}/portal?paid=0${preview}`,
     });
 
-    return res.status(200).json({ success: true, url: session.url, amount });
+    return res.status(200).json({ success: true, url: session.url, amount: cardAmount });
   } catch (err) {
     console.error('[portal/pay-start] failed:', err);
     return res.status(500).json({ success: false, error: 'Could not start the payment.' });

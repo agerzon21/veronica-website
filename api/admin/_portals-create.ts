@@ -52,7 +52,12 @@ import {
   stripForeignTypeVariables,
   type ContractTemplateSpec,
 } from '../../src/data/contract-template.js';
-import { isSalesTaxMode, salesTaxContractVariables, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import {
+  cardPriceContractVariables,
+  isSalesTaxMode,
+  salesTaxContractVariables,
+  type SalesTaxMode,
+} from '../../src/data/sales-tax.js';
 
 function generateToken(): string {
   // 32 bytes → 64 hex chars. Plenty of entropy for a single-use setup link.
@@ -229,6 +234,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       retainer_amount: formatContractMoney(retainerAmount),
       remaining_balance: formatContractMoney(Math.max(totalAmount - retainerAmount, 0)),
       ...salesTaxContractVariables(totalAmount, retainerAmount, salesTax, formatContractMoneyExact),
+      // Every full booking created from now on is 'dual' (written explicitly
+      // in the insert below), so its contract states the card prices.
+      ...cardPriceContractVariables(totalAmount, retainerAmount, salesTax, 'dual', formatContractMoneyExact),
     };
 
     // Render the template body now so it's frozen at creation time.
@@ -278,7 +286,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           gallery_password, gallery_enabled,
           contract_status, contract_template_key, contract_body, contract_variables,
           contract_total_amount, contract_retainer_amount, paid_to_date,
-          sales_tax,
+          sales_tax, card_pricing,
           setup_token, setup_token_expires_at
         ) values (
           ${mode}, ${sessionType},
@@ -289,7 +297,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${galleryPassword}, true,
           'pending', ${templateKey}, ${contractBody}, ${JSON.stringify(contractVariables)},
           ${totalAmount}, ${retainerAmount}, 0,
-          ${salesTax},
+          -- Written here, never left to the column default (migration 054 keeps
+          -- that at 'single'): only this code also writes the PRICES BY CARD
+          -- section, so only it may promise a client the card prices checkout
+          -- will charge. A gallery-only booking below stays 'single'; it has no
+          -- card checkout at all.
+          ${salesTax}, 'dual',
           ${setupToken}, ${setupTokenExpiresAt}
         )
         returning id

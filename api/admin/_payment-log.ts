@@ -43,12 +43,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
-import { CARD_FEE_DISCOUNT_METHOD } from '../../src/data/payment-handles.js';
 import { writeWithRecompute } from '../_payments.js';
 import { actorName, historyInsert, historyReady, readHistory } from '../_money-history.js';
 import {
   bookingOwedTotal,
-  earnedDirectDiscountTaxed,
   salesTaxModeOf,
   type SalesTaxMode,
 } from '../../src/data/sales-tax.js';
@@ -372,89 +370,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     /**
-     * Close the gap left by a client who paid directly instead of by card.
+     * The card fee waiver, retired on 2026-10-05 (migration 054).
      *
-     * The contract total is the CARD price (payment-handles.ts explains why the
-     * discount runs this way round rather than as a surcharge). A client who
-     * sends Zelle pays the smaller number, so the booking is left owing exactly
-     * the fee Stripe never took, and without this it reads as underpaid forever.
+     * It closed the gap left when a client paid a CARD-priced booking directly:
+     * the contract total was the card price, so a Zelle payer who took the
+     * offered discount left the booking owing the fee Stripe never took. That
+     * pricing is gone. A 'dual' booking's stated amounts are the direct price
+     * already, and a 'single' booking is one price however it is paid, so there
+     * is never a gap of that kind to close. No waiver row was ever written.
      *
-     * Recorded as a payment row rather than a negative charge, because
-     * portal_charges CHECKs amount > 0, and because this genuinely does settle
-     * the obligation. Labelled so the ledger never pretends cash arrived: the
-     * line says exactly what it is.
-     *
-     * THE AMOUNT IS COMPUTED HERE, never accepted from the caller, and it is
-     * the discount the booking's DIRECT payments actually earned
-     * (earnedDirectDiscount), not the fee on the whole price. The old cap went
-     * wrong both ways: a booking paid entirely by card could have a later
-     * overtime charge waived as a "card fee" nobody avoided, and a retainer
-     * paid directly could not be squared until the very end, and with two
-     * direct payments, never.
+     * Answered explicitly rather than falling through to "unknown action", so an
+     * admin page still open from before the deploy gets a sentence, not a shrug.
      */
     if (action === 'settle-discount') {
-      const rows = (await sql`
-        select contract_total_amount::text t, paid_to_date::text p,
-               (select coalesce(sum(amount), 0) from portal_charges where client_portal_id = ${id})::text c
-        from client_portals where id = ${id} limit 1
-      `) as Array<{ t: string | null; c: string; p: string | null }>;
-      if (rows.length === 0) {
-        return res.status(404).json({ success: false, error: 'No such booking' });
-      }
-      const salesTax = await salesTaxFor(sql, id);
-      const owedTotal = bookingOwedTotal(parseFloat(rows[0].t ?? '0'), parseFloat(rows[0].c ?? '0'), salesTax) ?? 0;
-      const paidCents = Math.round(parseFloat(rows[0].p ?? '0') * 100);
-      const outstandingCents = Math.round(owedTotal * 100) - paidCents;
-
-      if (outstandingCents <= 0) {
-        return res.status(409).json({
-          success: false,
-          error: 'This booking is already settled, there is nothing to waive.',
-        });
-      }
-
-      const entries = (await sql`
-        select amount::text a, method
-        from payment_entries
-        where client_portal_id = ${id}
-          and coalesce(source, 'manual') = 'manual'
-          and status = 'succeeded'
-          and kind = 'payment'
-      `) as Array<{ a: string; method: string | null }>;
-      const direct = entries
-        .filter((e) => e.method !== CARD_FEE_DISCOUNT_METHOD && parseFloat(e.a) > 0)
-        .map((e) => parseFloat(e.a));
-      const waived = entries
-        .filter((e) => e.method === CARD_FEE_DISCOUNT_METHOD)
-        .reduce((sum, e) => sum + parseFloat(e.a), 0);
-      // On a taxed booking each direct payment is read back as price plus tax
-      // (src/data/sales-tax.ts), so the waiver lands it on the taxed total.
-      const earnedCents = Math.round(earnedDirectDiscountTaxed(direct, waived, salesTax) * 100);
-
-      if (earnedCents <= 0) {
-        return res.status(409).json({
-          success: false,
-          error:
-            'Nothing on this booking was paid directly, so there is no card fee to waive. ' +
-            'What is still owed is owed.',
-        });
-      }
-      const waiverCents = Math.min(outstandingCents, earnedCents);
-
-      const { paidToDate } = await writeWithRecompute(
-        sql,
-        id,
-        [
-          sql`
-            insert into payment_entries (client_portal_id, amount, method, note, paid_at)
-            values (${id}, ${waiverCents / 100}, ${CARD_FEE_DISCOUNT_METHOD},
-                    'Paid directly, so the card processing fee was waived', now())
-          `,
-          ...(recording ? [historyInsert(sql, id, actor, 'discount_waived', { amount: waiverCents / 100 })] : []),
-        ],
-        { paid: true },
-      );
-      return respondWithPayments(sql, id, res, paidToDate, { waived: waiverCents / 100 });
+      return res.status(410).json({
+        success: false,
+        error: 'Card fee waivers are no longer used: a booking now states what a direct payment owes.',
+      });
     }
 
     if (action === 'delete-charge') {
@@ -541,7 +473,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res
       .status(400)
-      .json({ success: false, error: 'action must be add, delete, settle-discount, add-charge, delete-charge or history' });
+      .json({ success: false, error: 'action must be add, delete, add-charge, delete-charge or history' });
   } catch (err) {
     console.error('[admin/payment-log] handler failed:', err);
     return res.status(500).json({ success: false, error: 'Server error' });

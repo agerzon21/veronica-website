@@ -17,7 +17,14 @@ import {
   formatContractMoneyExact,
   type ContractTemplateField,
 } from '../data/contract-template';
-import { SALES_TAX_MODES, isSalesTaxMode, salesTaxOn, withSalesTax, type SalesTaxMode } from '../data/sales-tax';
+import {
+  SALES_TAX_MODES,
+  cardPriceContractVariables,
+  isSalesTaxMode,
+  salesTaxOn,
+  withSalesTax,
+  type SalesTaxMode,
+} from '../data/sales-tax';
 import { useAdminLang } from '../i18n/admin';
 import {
   type ClientPrefill,
@@ -2206,6 +2213,25 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               )}
             </Text>
           )}
+          {/* And what a card payer pays. Every new booking is dual-priced
+              (migration 054): the amounts above are what Vero keeps, and the
+              contract states these card prices beside them. Worked out by the
+              same function the server uses to write them, so the two match. */}
+          {(() => {
+            const card = cardPriceContractVariables(
+              travelApplication.contractTotal,
+              Number.isFinite(parseFloat(retainerAmount)) ? parseFloat(retainerAmount) : 0,
+              salesTax,
+              'dual',
+              formatContractMoneyExact,
+            );
+            if (!card.card_total_amount) return null;
+            return (
+              <Text fontSize="sm" color="gray.700" mt={-2} data-testid="new-client-card-summary">
+                {t.newClient.cardSummary(card.card_retainer_amount, card.card_remaining_amount, card.card_total_amount)}
+              </Text>
+            );
+          })()}
 
           {/* ─── Gallery Pass ─── */}
           <SectionHeading>{t.newClient.sectionGalleryPass}</SectionHeading>

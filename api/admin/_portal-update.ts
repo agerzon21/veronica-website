@@ -30,7 +30,14 @@ import { requireAdmin } from '../_admin-auth.js';
 // api/ reaches kills the whole admin API at runtime while the build passes.
 // See scripts/check-api-imports.mjs.
 import { formatSchedule, parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
-import { isSalesTaxMode, salesTaxContractVariables, salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import {
+  cardPriceContractVariables,
+  isSalesTaxMode,
+  salesTaxContractVariables,
+  salesTaxModeOf,
+  type SalesTaxMode,
+} from '../../src/data/sales-tax.js';
+import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
 import { actorName, historyInsert, historyReady } from '../_money-history.js';
 import {
   CONTRACT_TEMPLATES,
@@ -266,6 +273,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       storedSalesTax = salesTaxModeOf(taxRows[0]?.sales_tax);
     } catch {
       /* pre-migration-049 database */
+    }
+    // Who pays the card fee (migration 054), for the contract's card prices.
+    // Read, never patched: it is decided when the booking is created.
+    let storedCardPricing: CardPricing = 'single';
+    try {
+      const pricingRows = (await sql`
+        select card_pricing from client_portals where id = ${id}
+      `) as Array<{ card_pricing: string }>;
+      storedCardPricing = cardPricingOf(pricingRows[0]?.card_pricing);
+    } catch {
+      /* pre-migration-054 database: every booking is single-priced */
     }
     let nextSalesTax: SalesTaxMode | null = null;
     if (patch.sales_tax !== undefined) {
@@ -559,6 +577,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // booking's tax setting. Empty unless it adds tax, which prunes
             // the PENNSYLVANIA SALES TAX section away.
             ...salesTaxContractVariables(total, retainer, nextSalesTax ?? storedSalesTax, formatContractMoneyExact),
+            // And the card prices, which follow the same columns on a dual
+            // booking and prune the PRICES BY CARD section on a single one.
+            ...cardPriceContractVariables(
+              total,
+              retainer,
+              nextSalesTax ?? storedSalesTax,
+              storedCardPricing,
+              formatContractMoneyExact,
+            ),
           };
         }
       }

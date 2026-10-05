@@ -40,12 +40,14 @@ import type { ContractTemplate } from '../data/contract-template';
 import {
   PAYMENT_HANDLES,
   CARD_PAYMENTS_MODE,
+  cardAmountFor,
   cardPaymentsVisible,
+  cardPricingOf,
+  type CardPricing,
 } from '../data/payment-handles';
 import {
   PA_SALES_TAX_LABEL,
   bookingOwedTotal,
-  directAmountFor,
   retainerOwed,
   salesTaxModeOf,
   type SalesTaxMode,
@@ -103,6 +105,12 @@ export interface ClientPortalData {
    * figure below includes it. Absent reads as 'absorbed', which adds nothing.
    */
   sales_tax?: SalesTaxMode;
+  /**
+   * Who pays the card fee (migration 054). 'dual': every amount here is what
+   * Vero keeps and a card payment costs more. Absent reads as 'single', one
+   * price for every method.
+   */
+  card_pricing?: CardPricing;
   paid_to_date: number;
   payment_plan_enabled: boolean;
   installments: Array<{
@@ -126,6 +134,11 @@ export interface ClientPortalData {
      * Migration 043.
      */
     kind: 'payment' | 'tip';
+    /**
+     * What this row settled, when not all of it: a card payment on a 'dual'
+     * booking, where $103.30 by card settles $100.00. Migration 054.
+     */
+    credited_amount?: number | null;
   }>;
   /** Already excluded from paid_to_date. Shown as thanks, never as credit. */
   tips_total: number;
@@ -1205,6 +1218,7 @@ const ClientPortalView = ({
           paidToDate={data.paid_to_date}
           chargesTotal={chargesTotal}
           salesTax={salesTax}
+          cardPricing={cardPricingOf(data.card_pricing)}
           wording={wording}
           // Once photos land, the "All Set / awaiting delivery" state
           // is no longer relevant, client isn't waiting anymore.
@@ -1468,6 +1482,16 @@ const ClientPortalView = ({
                         {p.note && (
                           <Text fontSize="xs" color="gray.600" fontWeight="300">
                             {p.note}
+                          </Text>
+                        )}
+                        {/* A card payment on a dual-priced booking settles less
+                            than it cost, by what the card processor kept. Said
+                            here, or Paid above reads $3.30 short of this row. */}
+                        {typeof p.credited_amount === 'number' && p.credited_amount !== p.amount && (
+                          <Text fontSize="xs" color="gray.600" fontWeight="300">
+                            {p.amount > 0
+                              ? `Counts as ${formatMoney(p.credited_amount)} toward your balance: ${formatMoney(p.amount)} is its card price.`
+                              : `Takes ${formatMoney(Math.abs(p.credited_amount))} off what you have paid toward your balance.`}
                           </Text>
                         )}
                       </VStack>
@@ -2106,6 +2130,7 @@ function NextStepsPanel({
   paidToDate,
   chargesTotal,
   salesTax,
+  cardPricing,
   wording,
   photosDelivered,
   credentials,
@@ -2123,6 +2148,8 @@ function NextStepsPanel({
   chargesTotal: number;
   /** Pennsylvania sales tax for this booking; 'added' puts 6% on everything owed. */
   salesTax: SalesTaxMode;
+  /** 'dual': the amounts below are what Vero keeps, and a card costs more. */
+  cardPricing: CardPricing;
   // Needed to start a card payment: the portal re-proves ownership on every
   // request rather than holding a session, so the pay endpoint is exactly as
   // protected as the one that showed this balance.
@@ -2191,8 +2218,8 @@ function NextStepsPanel({
               </Text>
             </VStack>
 
-            <PayByCardButton kind="retainer" amount={retainerToSend} credentials={credentials} testMode={cardTestMode} />
-            <PaymentMethodsStack amount={retainerToSend} salesTax={salesTax} />
+            <PayByCardButton kind="retainer" amount={retainerToSend} cardPricing={cardPricing} credentials={credentials} testMode={cardTestMode} />
+            <PaymentMethodsStack amount={retainerToSend} cardPricing={cardPricing} />
 
             <Text fontSize="xs" color="gray.500" fontWeight="300" textAlign="center" maxW="440px" lineHeight="1.7">
               Once you've sent it, reply to this booking's email or message Veronika so she can confirm receipt. <Text as="span" fontWeight="500" color="gray.700">If she's already confirmed and this page hasn't updated, tap "Refresh Portal" up top.</Text>
@@ -2258,8 +2285,8 @@ function NextStepsPanel({
               </Text>
             </Box>
 
-            <PayByCardButton kind="balance" amount={balanceToSend} credentials={credentials} testMode={cardTestMode} />
-            <PaymentMethodsStack amount={balanceToSend} salesTax={salesTax} />
+            <PayByCardButton kind="balance" amount={balanceToSend} cardPricing={cardPricing} credentials={credentials} testMode={cardTestMode} />
+            <PaymentMethodsStack amount={balanceToSend} cardPricing={cardPricing} />
 
             <VStack spacing={2} maxW="440px" textAlign="center">
               <Text fontSize="xs" color="gray.600" fontWeight="400" lineHeight="1.7">
@@ -2606,11 +2633,14 @@ function TipPanel({
 function PayByCardButton({
   kind,
   amount,
+  cardPricing,
   credentials,
   testMode,
 }: {
   kind: 'retainer' | 'balance';
+  /** What is owed, as Vero keeps it. The button shows what a card is charged. */
   amount: number;
+  cardPricing: CardPricing;
   credentials: { email: string; password: string };
   /** The KEYS are test keys, which is not the same as the rollout being in preview. */
   testMode: boolean;
@@ -2662,8 +2692,8 @@ function PayByCardButton({
     <VStack spacing={2} w="100%" maxW="380px" mb={2}>
       <CTAButton onClick={start} variant="solid" isLoading={busy} loadingText="Opening" fullWidth>
         {kind === 'retainer'
-          ? `Pay ${formatMoney(amount)} retainer by card`
-          : `Pay ${formatMoney(amount)} balance by card`}
+          ? `Pay ${formatMoney(cardAmountFor(amount, cardPricing))} retainer by card`
+          : `Pay ${formatMoney(cardAmountFor(amount, cardPricing))} balance by card`}
       </CTAButton>
       {error && (
         <Text fontSize="xs" color="red.600" textAlign="center">
@@ -2684,63 +2714,48 @@ function PayByCardButton({
         </Text>
       )}
       <Text fontSize="2xs" color="gray.500" textAlign="center">
-        Secure payment by Stripe. Or send it directly below, which costs us nothing.
+        Secure payment by Stripe. Or send it directly below.
       </Text>
     </VStack>
   );
 }
 
 /**
- * The ways to send money directly, and what doing so saves.
+ * The ways to send money directly.
  *
- * The contract total is the CARD price, so these three are cheaper by exactly
- * what Stripe would have taken. That direction is deliberate and is explained
- * in payment-handles.ts: a fee added for paying by card is a surcharge, and
- * surcharging a debit card is not allowed, while a discount for paying another
- * way is the same arithmetic with none of that problem.
+ * On a 'dual' booking (migration 054) the amount owed IS the direct price,
+ * what Vero keeps, and the card button above shows the higher card price. So
+ * this says plainly what to send and why the card number is different, as two
+ * prices: never "a fee for paying by card", which would be a surcharge, and a
+ * surcharge on a debit card is something Visa and Mastercard forbid
+ * (payment-handles.ts). Only when the card button is actually on the page:
+ * with no card option there is nothing to compare with.
  *
- * The saving is only shown when the card button is actually on the page. With
- * no card option there is nothing to be cheaper THAN, and a discount off a
- * price nobody was offered is just a confusing second number.
+ * On a 'single' booking there is one price whatever the method, so there is
+ * nothing to explain and only the handles show. These used to offer the card
+ * fee off, when the stored price was the card price; nobody ever took it, and
+ * no signed contract promised it.
  */
-function PaymentMethodsStack({ amount, salesTax }: { amount?: number; salesTax: SalesTaxMode }) {
+function PaymentMethodsStack({ amount, cardPricing }: { amount?: number; cardPricing: CardPricing }) {
   const cardsVisible = cardPaymentsVisible(
     typeof window === 'undefined' ? '' : window.location.search,
   );
   const owed = typeof amount === 'number' ? amount : 0;
-  // On a taxed booking the fee comes off the price and the tax is charged on
-  // what is left (src/data/sales-tax.ts), so this is not cashPrice(owed).
-  const discounted = directAmountFor(owed, salesTax);
-  const saving = Math.max(Math.round(owed * 100) - Math.round(discounted * 100), 0) / 100;
-  const showSaving = cardsVisible && saving > 0;
+  const byCard = cardAmountFor(owed, cardPricing);
+  const difference = Math.max(Math.round(byCard * 100) - Math.round(owed * 100), 0) / 100;
+  const showPrices = cardsVisible && cardPricing === 'dual' && difference > 0;
 
   return (
     <VStack spacing={2} w="100%" maxW="380px">
-      {/* THE DIRECT PRICE LEADS, and the card price is the one with something
-          added to it. Same arithmetic as before, read from the other end: the
-          contract's total is the card price and this is the discount off it,
-          which is what keeps it a discount rather than a surcharge. See
-          cardPriceFor in payment-handles.ts for why that distinction is not
-          cosmetic. */}
-      {showSaving && (
+      {showPrices && (
         <VStack spacing={0} w="100%" pb={1} textAlign="center">
           <Text fontSize="sm" color="gray.800">
-            Send <strong>{formatMoney(discounted)}</strong> by any of these
+            Or send <strong>{formatMoney(owed)}</strong> by any of these
           </Text>
-          {salesTax === 'added' ? (
-            // The saving is the card fee AND the tax that would have been
-            // charged on it, so "the processor takes" this much would be
-            // a few cents wrong. Said as what it is.
-            <Text fontSize="xs" color="gray.600" fontWeight="300">
-              That is the whole amount, tax included. Paying by card is {formatMoney(owed)}: the
-              card processor's fee, and the tax on it, add {formatMoney(saving)}.
-            </Text>
-          ) : (
-            <Text fontSize="xs" color="gray.600" fontWeight="300">
-              That is the whole amount, and all of it reaches Veronika. Paying by card is{' '}
-              {formatMoney(owed)}, because the card processor takes {formatMoney(saving)} of it.
-            </Text>
-          )}
+          <Text fontSize="xs" color="gray.600" fontWeight="300">
+            That is the whole amount, and all of it reaches Veronika. By card the same payment is{' '}
+            {formatMoney(byCard)}, because the card processor keeps {formatMoney(difference)} of it.
+          </Text>
         </VStack>
       )}
       <PaymentMethodRow label="Zelle" value={PAYMENT_HANDLES.zelle} />

@@ -40,7 +40,7 @@ import {
   type StripeRefund,
   type StripeCheckoutSession,
 } from '../_stripe.js';
-import { recordPayment, type PaymentKind } from '../_payments.js';
+import { recordPayment, reversalCredit, type PaymentKind } from '../_payments.js';
 import { recordPaidCheckoutSession } from '../_checkout-record.js';
 import { reportPaymentIssue } from '../_payment-alerts.js';
 
@@ -276,7 +276,7 @@ async function originalOrRetry(
   paymentIntentId: string,
   event: StripeEvent,
   what: string,
-): Promise<{ portalId: string; kind: PaymentKind } | null> {
+): Promise<OriginalPayment | null> {
   const original = await originalForPaymentIntent(sql, paymentIntentId);
   if (original) return original;
   const portalId = await portalIdForPaymentIntent(paymentIntentId, event.account ?? null);
@@ -304,19 +304,61 @@ const DEAD_REFUND = new Set(['failed', 'canceled']);
  * Null means we have never recorded the original payment, which for a refund
  * means there is nothing to reverse.
  */
+/**
+ * The payment a refund or dispute reverses. amount and credited_amount come
+ * along so the reversal takes back the same SHARE of the balance the payment
+ * settled (migration 054): refunding a $103.30 card payment credited $100.00
+ * puts $100.00 back on the balance, not $103.30.
+ */
+type OriginalPayment = {
+  portalId: string;
+  kind: PaymentKind;
+  amount: string | null;
+  credited_amount: string | null;
+};
+
+/**
+ * The credit for undoing a recorded reversal (a refund that then failed, a
+ * chargeback won back), migration 054. Worked out from the running total of
+ * that payment's reversals, like the reversal itself, so the two cancel to the
+ * cent. A reversal row recorded before 054 has no link to its payment; then it
+ * is the same share of that row, which for the usual case of the same amount
+ * is exactly its credit, given back.
+ */
+async function undoCredit(
+  sql: ReturnType<typeof getDb>,
+  row: { amount: string | null; credited_amount: string | null; reverses_payment_id: string | null },
+  amount: number,
+): Promise<number | null> {
+  if (row.credited_amount === null) return null;
+  if (row.reverses_payment_id) {
+    const original = await originalForPaymentIntent(sql, row.reverses_payment_id);
+    if (original) return reversalCredit(sql, row.reverses_payment_id, amount, original);
+  }
+  const gross = Number(row.amount);
+  const credited = Number(row.credited_amount);
+  if (!Number.isFinite(gross) || gross === 0 || !Number.isFinite(credited)) return null;
+  return Math.round((amount * credited * 100) / gross) / 100;
+}
+
 async function originalForPaymentIntent(
   sql: ReturnType<typeof getDb>,
   paymentIntentId: string,
-): Promise<{ portalId: string; kind: PaymentKind } | null> {
+): Promise<OriginalPayment | null> {
   const rows = (await sql`
-    select client_portal_id, kind
+    select client_portal_id, kind, amount, credited_amount
     from payment_entries
     where processor_payment_id = ${paymentIntentId}
     limit 1
-  `) as Array<{ client_portal_id: string; kind: PaymentKind }>;
+  `) as Array<{ client_portal_id: string; kind: PaymentKind; amount: string | null; credited_amount: string | null }>;
   const row = rows[0];
   if (!row) return null;
-  return { portalId: row.client_portal_id, kind: row.kind === 'tip' ? 'tip' : 'payment' };
+  return {
+    portalId: row.client_portal_id,
+    kind: row.kind === 'tip' ? 'tip' : 'payment',
+    amount: row.amount,
+    credited_amount: row.credited_amount,
+  };
 }
 
 /** Stripe sends ids as a string or an expanded object depending on the call. */
@@ -419,7 +461,7 @@ async function handleChargeRefunded(event: StripeEvent): Promise<void> {
     }
     seen++;
     const result = await recordRefundRow(sql, {
-      portalId, originalKind, refund, accountId: event.account ?? null,
+      portalId, originalKind, original, paymentIntentId, refund, accountId: event.account ?? null,
     });
     if (result.inserted) recorded++;
   }
@@ -465,6 +507,8 @@ async function handleRefundCreated(event: StripeEvent): Promise<void> {
   await recordRefundRow(sql, {
     portalId: original.portalId,
     originalKind: original.kind,
+    original,
+    paymentIntentId,
     refund,
     accountId: event.account ?? null,
   });
@@ -491,10 +535,16 @@ async function handleRefundUpdated(event: StripeEvent): Promise<void> {
 
   if (refund.status && DEAD_REFUND.has(refund.status)) {
     const rows = (await sql`
-      select client_portal_id, kind from payment_entries
+      select client_portal_id, kind, amount, credited_amount, reverses_payment_id from payment_entries
       where processor_payment_id = ${refund.id}
       limit 1
-    `) as Array<{ client_portal_id: string; kind: PaymentKind }>;
+    `) as Array<{
+      client_portal_id: string;
+      kind: PaymentKind;
+      amount: string | null;
+      credited_amount: string | null;
+      reverses_payment_id: string | null;
+    }>;
     const negative = rows[0];
     if (!negative) {
       console.log(`[inbox/stripe-webhook] refund ${refund.id} ${refund.status} and was never recorded, nothing to undo`);
@@ -513,6 +563,9 @@ async function handleRefundUpdated(event: StripeEvent): Promise<void> {
       processorPaymentId: `${refund.id}:failed`,
       processorAccountId: event.account ?? null,
       feeAmount: null,
+      // The refund's share, given back, and linked to the same payment.
+      creditedAmount: await undoCredit(sql, negative, refund.amount / 100),
+      reversesPaymentId: negative.reverses_payment_id,
     });
     console.log(
       result.inserted
@@ -527,6 +580,8 @@ async function handleRefundUpdated(event: StripeEvent): Promise<void> {
   await recordRefundRow(sql, {
     portalId: original.portalId,
     originalKind: original.kind,
+    original,
+    paymentIntentId,
     refund,
     accountId: event.account ?? null,
   });
@@ -535,9 +590,17 @@ async function handleRefundUpdated(event: StripeEvent): Promise<void> {
 /** The one place a refund becomes a negative row, shared by both events. */
 async function recordRefundRow(
   sql: ReturnType<typeof getDb>,
-  input: { portalId: string; originalKind: PaymentKind; refund: StripeRefund; accountId: string | null },
+  input: {
+    portalId: string;
+    originalKind: PaymentKind;
+    original: OriginalPayment;
+    /** The payment refunded, linked on the row so partial refunds share its credit exactly. */
+    paymentIntentId: string;
+    refund: StripeRefund;
+    accountId: string | null;
+  },
 ): Promise<{ inserted: boolean }> {
-  const { portalId, originalKind, refund, accountId } = input;
+  const { portalId, originalKind, original, paymentIntentId, refund, accountId } = input;
   // Belt and braces: every caller already skips these, and this is the last
   // place a failed refund could still become money that went back.
   if (refund.status && DEAD_REFUND.has(refund.status)) return { inserted: false };
@@ -554,6 +617,8 @@ async function recordRefundRow(
     processorPaymentId: refund.id ?? null,
     processorAccountId: accountId,
     feeAmount: null,
+    creditedAmount: await reversalCredit(sql, paymentIntentId, -(amount / 100), original),
+    reversesPaymentId: paymentIntentId,
   });
   if (result.inserted) {
     console.log(
@@ -621,6 +686,8 @@ async function recordDisputeWithdrawal(event: StripeEvent, dispute: DisputeObjec
   const result = await recordPayment(sql, {
     portalId,
     amount: -(dispute.amount / 100),
+    creditedAmount: await reversalCredit(sql, paymentIntentId, -(dispute.amount / 100), original),
+    reversesPaymentId: paymentIntentId,
     method: 'Chargeback',
     note: dispute.reason ? `Disputed with the bank (${dispute.reason})` : 'Disputed with the bank',
     paidAt: dispute.created ? new Date(dispute.created * 1000).toISOString() : null,
@@ -672,10 +739,16 @@ async function recordDisputeReinstated(event: StripeEvent, dispute: DisputeObjec
   if (!dispute.id || typeof dispute.amount !== 'number') return;
   const sql = getDb();
   const rows = (await sql`
-    select client_portal_id, kind from payment_entries
+    select client_portal_id, kind, amount, credited_amount, reverses_payment_id from payment_entries
     where processor_payment_id = ${dispute.id}
     limit 1
-  `) as Array<{ client_portal_id: string; kind: PaymentKind }>;
+  `) as Array<{
+    client_portal_id: string;
+    kind: PaymentKind;
+    amount: string | null;
+    credited_amount: string | null;
+    reverses_payment_id: string | null;
+  }>;
   const withdrawal = rows[0];
   if (!withdrawal) {
     console.warn(`[inbox/stripe-webhook] dispute ${dispute.id} returned funds that were never recorded as taken, nothing added back`);
@@ -700,6 +773,8 @@ async function recordDisputeReinstated(event: StripeEvent, dispute: DisputeObjec
     processorPaymentId: `${dispute.id}:reinstated`,
     processorAccountId: event.account ?? null,
     feeAmount: null,
+    creditedAmount: await undoCredit(sql, withdrawal, dispute.amount / 100),
+    reversesPaymentId: withdrawal.reverses_payment_id,
   });
   console.log(
     result.inserted

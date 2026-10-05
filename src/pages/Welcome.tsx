@@ -6,7 +6,14 @@ import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
 import Reveal from '../components/ui/Reveal';
-import { PA_SALES_TAX_LABEL, salesTaxModeOf, withSalesTax, type SalesTaxMode } from '../data/sales-tax';
+import {
+  PA_SALES_TAX_LABEL,
+  cardPriceContractVariables,
+  salesTaxModeOf,
+  withSalesTax,
+  type SalesTaxMode,
+} from '../data/sales-tax';
+import { cardPricingOf, type CardPricing } from '../data/payment-handles';
 
 interface WelcomeSummary {
   client_display_name: string | null;
@@ -24,11 +31,27 @@ interface WelcomeSummary {
   contract_retainer_amount: number | null;
   /** Pennsylvania sales tax for this booking (src/data/sales-tax.ts). */
   sales_tax?: SalesTaxMode;
+  /** Who pays the card fee (migration 054). Absent reads as 'single'. */
+  card_pricing?: CardPricing;
 }
 
 /** Cents only when there are some: "$530", "$121.90". */
 const money = (n: number): string =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * The card prices the contract below states, on a dual-priced booking
+ * (migration 054). Empty strings otherwise, and then nothing extra is shown.
+ * The same function the server writes them with, so the two always agree.
+ */
+const cardPricesOf = (s: WelcomeSummary) =>
+  cardPriceContractVariables(
+    s.contract_total_amount,
+    s.contract_retainer_amount,
+    salesTaxModeOf(s.sales_tax),
+    cardPricingOf(s.card_pricing),
+    money,
+  );
 
 const Welcome = () => {
   const [searchParams] = useSearchParams();
@@ -231,9 +254,16 @@ const Welcome = () => {
                             label="Total"
                             value={money(withSalesTax(summary.contract_total_amount, salesTaxModeOf(summary.sales_tax)))}
                             note={
-                              summary.sales_tax === 'added'
-                                ? `${money(summary.contract_total_amount)} plus ${PA_SALES_TAX_LABEL} Pennsylvania sales tax`
-                                : undefined
+                              [
+                                summary.sales_tax === 'added'
+                                  ? `${money(summary.contract_total_amount)} plus ${PA_SALES_TAX_LABEL} Pennsylvania sales tax`
+                                  : null,
+                                cardPricesOf(summary).card_total_amount
+                                  ? `${cardPricesOf(summary).card_total_amount} by card`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ') || undefined
                             }
                           />
                         )}
@@ -241,7 +271,11 @@ const Welcome = () => {
                           <SummaryLine
                             label="Retainer"
                             value={money(summary.contract_retainer_amount)}
-                            note="Paid up front · part of the total above"
+                            note={
+                              cardPricesOf(summary).card_retainer_amount
+                                ? `Paid up front · part of the total above · ${cardPricesOf(summary).card_retainer_amount} by card`
+                                : 'Paid up front · part of the total above'
+                            }
                           />
                         )}
                       </VStack>

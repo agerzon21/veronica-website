@@ -216,6 +216,13 @@ export type CreateCheckoutInput = {
   salesTax?: number;
   /** The tax line's label, e.g. "Pennsylvania sales tax (6%)". */
   salesTaxLabel?: string;
+  /**
+   * On a dual-priced booking (migration 054), the amount Vero keeps, which
+   * `amount` was grossed up from so Stripe's fee comes out of the card payer.
+   * Carried in metadata so the recorder credits exactly this toward the
+   * balance (api/_checkout-record.ts). Absent: the whole amount counts.
+   */
+  directAmount?: number | null;
 };
 
 export type CheckoutSession = { id: string; url: string };
@@ -235,7 +242,7 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
   const {
     portalId, kind, amount, clientEmail, description,
     successUrl, cancelUrl, stripeAccount = null, paidToDate = 0,
-    salesTax = 0, salesTaxLabel = 'Sales tax',
+    salesTax = 0, salesTaxLabel = 'Sales tax', directAmount = null,
   } = input;
   const paidToDateCents = Math.round(paidToDate * 100);
 
@@ -262,6 +269,14 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
    * still returns the one session. A click in the next window opens a new one,
    * which is what a client coming back after the old one died needs.
    */
+  // Dollars as a fixed two-place string, or nothing at all: encodeForm drops
+  // undefined, so a single-priced booking's session is byte-identical to the
+  // ones created before this existed.
+  const directMeta =
+    typeof directAmount === 'number' && Number.isFinite(directAmount) && directAmount > 0 && directAmount <= amount
+      ? directAmount.toFixed(2)
+      : undefined;
+
   const WINDOW_SECONDS = 1800;
   const slot = Math.floor(Date.now() / 1000 / WINDOW_SECONDS);
   const expiresAt = (slot + 1) * WINDOW_SECONDS + 2400;
@@ -302,9 +317,9 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
        * PaymentIntent, because some events carry the intent and not the
        * session.
        */
-      metadata: { portal_id: portalId, kind },
+      metadata: { portal_id: portalId, kind, direct_amount: directMeta },
       payment_intent_data: {
-        metadata: { portal_id: portalId, kind },
+        metadata: { portal_id: portalId, kind, direct_amount: directMeta },
         description,
       },
   };

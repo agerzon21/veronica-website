@@ -5,6 +5,7 @@ import {
 } from '@chakra-ui/react';
 import ClientPortalView, { type ClientPortalData } from './ClientPortalView';
 import { salesTaxModeOf } from '../data/sales-tax';
+import { cardPricingOf } from '../data/payment-handles';
 import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
 
 /**
@@ -127,6 +128,8 @@ export default function AdminPortalPreview({
     // Pennsylvania sales tax, so the preview asks for the taxed figures the
     // client's own portal does.
     sales_tax: salesTaxModeOf(portal.sales_tax),
+    // And who pays the card fee, so the preview shows the card prices too.
+    card_pricing: cardPricingOf(portal.card_pricing),
     // Nothing in api/ writes payment_installments yet, so the admin endpoint
     // has none to return. Empty is the truthful value, not a placeholder.
     installments: [],
@@ -137,6 +140,7 @@ export default function AdminPortalPreview({
       note: str(p.note),
       paid_at: String(p.paid_at),
       kind: p.kind === 'tip' ? 'tip' : 'payment',
+      credited_amount: p.credited_amount == null ? null : num(p.credited_amount),
     })),
     tips_total: num(portal.tips_total),
     charges_total: free ? 0 : num(portal.charges_total),

@@ -110,6 +110,24 @@ export async function recordPaidCheckoutSession(
    */
   const paidAt = ctx.paidAtSeconds ? new Date(ctx.paidAtSeconds * 1000).toISOString() : null;
 
+  /**
+   * What this payment settles, on a dual-priced booking (migration 054): the
+   * amount Vero keeps, which _pay-start.ts put in metadata when it grossed the
+   * card price up from it. A $103.30 card retainer settles $100.00.
+   *
+   * Metadata is the browser's request, and the rule above is never to trust
+   * it for what was COLLECTED. This is not that: amount_total is still what
+   * was collected and is what gets recorded. The metadata only says how much
+   * of it counts toward the balance, it is written by our server, never by the
+   * browser, and it is clamped to what was collected, so the worst a bad value
+   * can do is credit less than was paid, never more. Absent (a single-priced
+   * booking, a tip, a session opened before this shipped), the whole amount
+   * counts, exactly as before.
+   */
+  const askedDirect = Number(session.metadata?.direct_amount);
+  const creditedAmount =
+    kind !== 'tip' && Number.isFinite(askedDirect) && askedDirect > 0 ? Math.min(askedDirect, amount) : null;
+
   /*
    * The fee is NOT read here, and is left to api/cron/_stripe-fee-backfill.ts.
    * Payments are created with capture_method automatic_async, so the fee lives
@@ -136,6 +154,7 @@ export async function recordPaidCheckoutSession(
     processorPaymentId: paymentIntentId,
     processorAccountId: ctx.accountId ?? null,
     feeAmount: null,
+    creditedAmount,
   });
 
   return {

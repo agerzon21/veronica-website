@@ -17,14 +17,14 @@
  *             is entered (Alex, 2026-10-03).
  *   exempt    Delivered outside Pennsylvania, so not a PA sale at all.
  *
- * THE TAX IS 6% OF WHAT THE CLIENT ACTUALLY PAYS. The contract price is the
- * card price (payment-handles.ts explains why: a card surcharge is illegal on
- * debit cards, a discount for paying directly is legal everywhere). A client
- * who pays directly is given the card fee off first, as always, and the tax is
- * charged on what remains. On a $500 booking: $530.00 by card, or
- * $485.20 + $29.11 = $514.31 by Zelle, Venmo, Cash App or cash. Taxing the
- * $500 and then discounting would charge a direct payer tax on money they never
- * paid, which is over-collecting tax.
+ * THE TAX IS 6% OF WHAT THE CLIENT ACTUALLY PAYS. On a 'dual' booking
+ * (payment-handles.ts, migration 054), every booking made from 2026-10-05, the
+ * amounts are what Vero keeps and a card payment is grossed up from them: a
+ * $500 booking is $530.00 by Zelle, Venmo, Cash App or cash, and by card
+ * $103.30 + $443.16 = $546.46. The tax return reads each payment back as price
+ * plus tax (saleAndTaxOf), so a card sale is taxed on the card price, which is
+ * what was charged. On a 'single' booking, every one made before, there is one
+ * price whatever the method.
  *
  * ONE RATE. Philadelphia (8%) and Allegheny County (7%) add local tax on work
  * delivered there. Nothing here handles that, and nothing booked so far needs it.
@@ -33,7 +33,10 @@
  * dollars as floats are how 2500 + 256.22 comes out larger than 2756.22.
  */
 
-import { cardPriceFor, cashPrice, earnedDirectDiscount } from './payment-handles.js';
+import {
+  cardAmountFor,
+  type CardPricing,
+} from './payment-handles.js';
 
 export type SalesTaxMode = 'added' | 'absorbed' | 'exempt';
 
@@ -112,48 +115,6 @@ export function retainerOwed(retainer: number | null | undefined, _mode: SalesTa
 }
 
 /**
- * What to send by Zelle, Venmo, Cash App or cash instead of paying `cardAmount`
- * by card, where `cardAmount` already includes any tax. The card fee comes off
- * the PRICE and the tax is charged on what is left, so for an 'added' booking
- * $530.00 by card is $514.31 directly, not cashPrice(530) = $514.33.
- */
-export function directAmountFor(cardAmount: number, mode: SalesTaxMode): number {
-  if (!Number.isFinite(cardAmount) || cardAmount <= 0) return 0;
-  if (mode !== 'added') return cashPrice(cardAmount);
-  return withSalesTax(cashPrice(preTaxOf(cardAmount, mode)), mode);
-}
-
-/**
- * The card fee a booking's direct payments have earned the right to have
- * waived, tax included, net of what was already waived. For an 'added' booking
- * each direct payment is read back as price plus tax, the price is turned into
- * its card equivalent, and the tax goes back on: $514.31 sent by Zelle stands
- * for $530.00 by card and so earns $15.69. Otherwise it is exactly
- * earnedDirectDiscount, because nothing about those bookings changed.
- *
- * NEVER SHORT, SOMETIMES A CENT OR TWO OVER. cardPriceFor rounds up, so about
- * 40% of prices already earn one cent more than the exact difference, with or
- * without tax (cashPrice(56) is $54.08, and cardPriceFor($54.08) is $56.01). A
- * sweep of 170,000 amounts found no case that falls short, which is the only
- * direction that would matter: the waiver is capped at what is still owed, so
- * an extra cent is never paid out and a booking never reads "owes $0.01".
- */
-export function earnedDirectDiscountTaxed(
-  directPayments: number[],
-  alreadyWaived: number,
-  mode: SalesTaxMode,
-): number {
-  if (mode !== 'added') return earnedDirectDiscount(directPayments, alreadyWaived);
-  let cents = 0;
-  for (const x of directPayments) {
-    if (!Number.isFinite(x) || x <= 0) continue;
-    const cardEquivalent = withSalesTax(cardPriceFor(preTaxOf(x, mode)), mode);
-    cents += toCents(cardEquivalent) - toCents(x);
-  }
-  return Math.max(cents - toCents(alreadyWaived), 0) / 100;
-}
-
-/**
  * One payment, split for the tax return: the sale, and the tax owed on it.
  *
  *   added     the payment carried its own tax: sale = price part, tax = the rest
@@ -227,3 +188,42 @@ export const SALES_TAX_CONTRACT_KEYS = [
   'retainer_with_tax',
   'remaining_with_tax',
 ] as const;
+
+/**
+ * The contract's card prices, on a 'dual' booking (migration 054): what the
+ * retainer and the remaining balance cost by card, grossed up from the amounts
+ * Vero keeps, tax included when the booking adds it. Empty strings otherwise,
+ * which prunes the PRICES BY CARD section, so a single-priced contract renders
+ * exactly as every one already on file does.
+ *
+ * Per payment, because Stripe's 30 cents is per payment: the card total is
+ * the two card prices added up ($103.30 + $443.16 = $546.46 on a $500 booking
+ * that adds tax), which is what a client paying both by card is charged.
+ */
+export function cardPriceContractVariables(
+  total: number | null,
+  retainer: number | null,
+  mode: SalesTaxMode,
+  pricing: CardPricing,
+  format: (amount: number) => string,
+): Record<string, string> {
+  const none = { card_total_amount: '', card_retainer_amount: '', card_remaining_amount: '' };
+  // Not gated on CARD_PAYMENTS_MODE: checkout grosses up every dual booking
+  // whatever the rollout switch says, so the contract must state the card
+  // prices whatever it says too, or the two could disagree.
+  if (pricing !== 'dual' || total === null || !Number.isFinite(total) || total <= 0) {
+    return none;
+  }
+  const r = retainer !== null && Number.isFinite(retainer) ? Math.min(Math.max(retainer, 0), total) : 0;
+  const remaining = (toCents(withSalesTax(total, mode)) - toCents(r)) / 100;
+  const cardRetainer = cardAmountFor(r, pricing);
+  const cardRemaining = cardAmountFor(remaining, pricing);
+  return {
+    card_total_amount: format((toCents(cardRetainer) + toCents(cardRemaining)) / 100),
+    card_retainer_amount: format(cardRetainer),
+    card_remaining_amount: format(cardRemaining),
+  };
+}
+
+/** The variable keys above, derived and never typed, like the tax keys. */
+export const CARD_PRICE_CONTRACT_KEYS = ['card_total_amount', 'card_retainer_amount', 'card_remaining_amount'] as const;

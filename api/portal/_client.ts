@@ -29,6 +29,7 @@ import { isGalleryReleased } from './_gallery-gate.js';
 import { getDb } from '../_db.js';
 import { isStripeTestMode } from '../_stripe.js';
 import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
 import { contractFingerprint } from '../_contract-fingerprint.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
@@ -178,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // via Zelle, Jun 25"). This is separate from `installments`,
     // which is for the planned Stripe-managed payment-plan flow.
     const paymentRows = (await sql`
-      select id, amount, method, note, paid_at, kind
+      select id, amount, method, note, paid_at, kind, credited_amount
       from payment_entries
       where client_portal_id = ${row.id}
       order by paid_at desc, created_at desc
@@ -189,6 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       note: string | null;
       paid_at: string;
       kind: string | null;
+      credited_amount: string | null;
     }>;
     /**
      * Tips are in this list but are NOT part of the balance.
@@ -207,6 +209,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       note: p.note,
       paid_at: p.paid_at,
       kind: p.kind === 'tip' ? ('tip' as const) : ('payment' as const),
+      // What this row settled, when that is not the whole of it: a card
+      // payment on a dual-priced booking (migration 054). Null otherwise.
+      credited_amount: p.credited_amount === null ? null : parseFloat(p.credited_amount),
     }));
     const tipsTotal = payments
       .filter((p) => p.kind === 'tip')
@@ -320,6 +325,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       /* migration 049 not applied: no booking adds tax */
     }
+    /**
+     * Who pays the card fee (migration 054). On a 'dual' booking the amounts
+     * are what Vero keeps and the card button shows the higher card price.
+     */
+    let cardPricing: CardPricing = 'single';
+    try {
+      const c = (await sql`
+        select card_pricing from client_portals where id = ${row.id}
+      `) as Array<{ card_pricing: string }>;
+      cardPricing = cardPricingOf(c[0]?.card_pricing);
+    } catch {
+      /* migration 054 not applied: one price for every method */
+    }
 
     return res.status(200).json({
       success: true,
@@ -384,6 +402,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payments,
       charges: complimentary ? [] : charges,
       sales_tax: salesTax,
+      card_pricing: cardPricing,
       // What the client has tipped, already excluded from paid_to_date. Sent
       // so the portal can thank them for it without the number having to be
       // re-derived in the browser.
