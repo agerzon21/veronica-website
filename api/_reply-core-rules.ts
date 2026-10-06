@@ -35,6 +35,13 @@ export interface CoreRule {
   adjustable: boolean;
   /** How to change it, when adjustable. Shown to the assistant verbatim. */
   mechanism?: string;
+  /**
+   * How the rule reads when VERO is the one asking, in the admin panel's
+   * assistant, as opposed to the unreviewed customer-facing engine. Shown to
+   * the assistant only. Without it a rule that exists to leave a decision to
+   * Vero was enforced against Vero herself.
+   */
+  inPanel?: string;
 }
 
 export const CORE_RULES: CoreRule[] = [
@@ -54,6 +61,12 @@ export const CORE_RULES: CoreRule[] = [
     rationale:
       'A draft that says "that date works" reads as a held date to the customer. Vero is the only one who knows her real calendar, and a wrongly implied hold costs a booking.',
     adjustable: false,
+    // 2026-10-06: Alex told the assistant "tell him the 14th of August is
+    // available" and got "While I can't confirm specific availability" twice,
+    // then a lecture about it being standard practice. The rule leaves the
+    // calendar to Vero; it was being held against the one person it serves.
+    inPanel:
+      'In this chat you are talking TO Vero, or to Alex. When either of them says a date is open, free or available, that IS Vero confirming it, which is the one thing this rule leaves to her. Write it plainly in the draft ("August 14, 2027 is open"), with no "I can\'t confirm", no hedging, and no warning to her about it. What stays off-limits: deciding a date is open when neither of them has said so, and calling it reserved, held or booked. It is reserved once the contract is signed and the retainer arrives, so say that when it helps.',
   },
   {
     id: 'pricing-ranges',
@@ -73,9 +86,11 @@ export const CORE_RULES: CoreRule[] = [
 /** Rendered into the in-panel assistant's prompt so it can push back accurately. */
 export function coreRulesForAssistant(): string {
   return CORE_RULES.map((r) => {
-    const head = `- **${r.id}**, ${r.summary}\n  Why: ${r.rationale}`;
+    const head = `- **${r.id}**, ${r.summary}\n  Why: ${r.rationale}${r.inPanel ? `\n  When Vero or Alex is the one telling you: ${r.inPanel}` : ''}`;
     return r.adjustable
       ? `${head}\n  ADJUSTABLE. To change it: ${r.mechanism}`
-      : `${head}\n  NOT ADJUSTABLE by you or by Vero through this chat, it protects a real booking. Explain it and suggest she message Alex if she genuinely wants it changed.`;
+      : `${head}\n  NOT ADJUSTABLE by you or by Vero through this chat, it protects a real booking. Explain it and suggest she message Alex if she genuinely wants it changed.${
+          r.inPanel ? ' Doing what the line above describes is NOT a change to the rule and needs no explanation.' : ''
+        }`;
   }).join('\n');
 }
