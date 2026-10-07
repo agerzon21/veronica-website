@@ -358,6 +358,44 @@ export function forbiddenClaims(text: string): ForbiddenClaim[] {
 }
 
 /**
+ * A price quoted for a kind of session that nothing prices.
+ *
+ * On 2026-10-07 the Instagram bot told a customer, unreviewed, "For proposal
+ * photography, the starting price is typically around $500 for up to 1.5
+ * hours". No proposal price exists anywhere it reads: $500 is the published
+ * wedding starting price and 1.5 hours is the family session. It stitched the
+ * two together, and the no-invented-facts rule was in its prompt the whole time.
+ *
+ * Narrow on purpose: only the session types with no price anywhere, and only a
+ * sentence that names the type AND states a dollar figure. It switches itself
+ * off for a type the moment the knowledge base prices it (any active entry
+ * naming the type beside a dollar figure), so adding "Proposal sessions start
+ * at $X" in the panel is all it takes to let the bot quote proposals.
+ */
+const UNPRICED_TYPES: Array<{ name: string; word: RegExp }> = [
+  { name: 'proposal', word: /\bproposals?\b|предложени/i },
+  { name: 'engagement', word: /\bengagements?\b|помолвк/i },
+];
+const DOLLARS = /\$\s?\d/;
+
+export function borrowedPrices(text: string, knowledge: readonly string[]): ForbiddenClaim[] {
+  const hits: ForbiddenClaim[] = [];
+  for (const type of UNPRICED_TYPES) {
+    if (knowledge.some((k) => type.word.test(k) && DOLLARS.test(k))) continue;
+    for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+      if (!type.word.test(sentence) || !DOLLARS.test(sentence)) continue;
+      const frag = sentence.trim();
+      hits.push({
+        what: `A price for a ${type.name} session, which nothing prices`,
+        found: frag.length > 160 ? `${frag.slice(0, 160)}…` : frag,
+        instead: `There is no ${type.name} price to give, and borrowing another session's figure (a wedding's $500, a family session's 1.5 hours) invents one. Say Vero will quote it from the location, the date and how long they would like, and ask for whichever of those is still missing. Give no dollar figure in that sentence.`,
+      });
+    }
+  }
+  return hits;
+}
+
+/**
  * The blocked-tool message, shaped like languageMismatch's so the model gets
  * a specific fix rather than a refusal it has to guess its way around.
  */

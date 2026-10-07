@@ -43,9 +43,13 @@ import { stripSubjectHeader } from './_subject-strip.js';
 import { applyHouseStyle, WRITING_RULES_CATEGORY } from './_house-style.js';
 import { paymentFactsForCustomerReplies } from '../src/data/payment-handles.js';
 import {
+  borrowedPrices,
   businessFactsForCustomerReplies,
+  forbiddenClaims,
   unknownsForCustomerReplies,
+  type ForbiddenClaim,
 } from './_business-facts.js';
+import { datesBlock, easternToday, falsePastClaim, mentionedDates, type MentionedDate } from './_date-check.js';
 import { getDb } from './_db.js';
 import { sendIgTextMessage } from './_ig-send.js';
 
@@ -217,6 +221,11 @@ export interface ReplyResult {
     // POSTs milliseconds apart to two different lambdas). See
     // db/migrations/015-ai-reply-intents.sql for the mechanism.
     | 'skipped-concurrent-run'
+    // The reply said something it must not (a date wrongly called past, a
+    // borrowed price, an invented photo count...) twice running, so instead
+    // of sending it the handoff went out and Vero takes over. See
+    // replyProblems.
+    | 'escalated-blocked-reply'
     | 'error-send-failed'
     | 'error-generation-failed';
   reason?: string;
@@ -636,6 +645,12 @@ export async function processInboundMessage(args: {
           extraSystemContext: inboundExtraContext,
         });
       } catch (err) {
+        // Wrong twice: say nothing wrong, hand the thread to Vero with the
+        // polite wrap-up instead, and switch the bot off for it.
+        if (err instanceof BlockedReplyError) {
+          console.error('[ai-reply] reply blocked twice, handing over to Vero:', err.message);
+          return await sendBridgeAndEscalate(sql, convo, 'escalation_wrap_up', 'escalated-blocked-reply', err.message);
+        }
         console.error('[ai-reply] generation failed:', err);
         return {
           action: 'error-generation-failed',
@@ -1149,6 +1164,13 @@ export async function draftOnDemand(
       extraSystemContext,
     });
   } catch (err) {
+    if (err instanceof BlockedReplyError) {
+      console.error('[ai-reply] on-demand draft blocked twice:', err.message);
+      return {
+        ok: false,
+        error: `The draft kept saying something it must not (${err.problems.map((p) => p.what.toLowerCase()).join('; ')}). Write this one yourself, or ask the assistant.`,
+      };
+    }
     console.error('[ai-reply] on-demand generation failed:', err);
     return { ok: false, error: 'Generation failed' };
   }
@@ -1428,8 +1450,59 @@ interface GenerateArgs {
   reviewedBeforeSending: boolean;
 }
 
-async function generateReply(args: GenerateArgs): Promise<string> {
+/**
+ * A reply that failed replyProblems twice. The caller does not send it.
+ */
+export class BlockedReplyError extends Error {
+  constructor(readonly problems: ForbiddenClaim[]) {
+    super(`reply blocked: ${problems.map((p) => p.what).join('; ')}`);
+  }
+}
+
+/**
+ * What is wrong with a reply, checked in CODE on its way out.
+ *
+ * Every one of these was already a rule in the prompt, and the model broke it
+ * anyway, to a real customer, with nobody reviewing: a 17-day-away date called
+ * "already past", and a proposal price stitched from a wedding's $500 and a
+ * family session's 1.5 hours. The same checks already guarded the in-panel
+ * assistant (forbiddenClaims in api/_business-facts.ts); this engine, which
+ * auto-sends on Instagram, had none. Exported for tests.
+ */
+export function replyProblems(
+  reply: string,
+  dates: MentionedDate[],
+  knowledge: readonly string[],
+): ForbiddenClaim[] {
+  const problems = [...forbiddenClaims(reply), ...borrowedPrices(reply, knowledge)];
+  const past = falsePastClaim(reply, dates);
+  if (past) {
+    problems.push({
+      what: 'A date called past, which is not',
+      found: past,
+      instead:
+        dates.length > 0
+          ? `None of their dates has passed: ${dates.map((d) => `${d.text} is ${d.daysFromToday} days away`).join(', ')}. Treat it as the future date it is.`
+          : 'Nothing they said is a past date. Do not tell them their date has passed.',
+    });
+  }
+  return problems;
+}
+
+// Exported for tests: the retry and the block are what stop a wrong reply.
+export async function generateReply(args: GenerateArgs): Promise<string> {
   const client = getOpenAI();
+
+  // The customer's dates, worked out here and handed over as facts. The last
+  // few inbound messages, because "is it not enough notice?" arrives a message
+  // after the date it is about.
+  const recentInbound = args.history
+    .filter((m) => m.direction === 'inbound')
+    .slice(-4)
+    .map((m) => m.body)
+    .join('\n');
+  const dates = mentionedDates(recentInbound, easternToday());
+  const knowledge = args.contextRows.map((r) => r.content);
 
   const systemPrompt =
     buildSystemPrompt(
@@ -1437,7 +1510,9 @@ async function generateReply(args: GenerateArgs): Promise<string> {
       args.aiMessageCount,
       args.mentionsDate,
       args.reviewedBeforeSending,
-    ) + (args.extraSystemContext ? `\n\n${args.extraSystemContext}` : '');
+    ) +
+    (args.extraSystemContext ? `\n\n${args.extraSystemContext}` : '') +
+    (datesBlock(dates) ? `\n\n${datesBlock(dates)}` : '');
 
   // Feed conversation history as alternating user/assistant messages.
   // 'contact' = user, 'ai' = assistant, 'human' = assistant too
@@ -1456,19 +1531,43 @@ async function generateReply(args: GenerateArgs): Promise<string> {
     });
   }
 
-  const response = await client.chat.completions.create({
-    model: OPENAI_MODEL,
-    messages: chatMessages,
-    // Keep replies short and warm, the tone context also asks for
-    // this but the parameter enforces it as a hard cap.
-    max_tokens: 300,
-    temperature: 0.7,
-  });
+  const complete = async () => {
+    const response = await client.chat.completions.create({
+      model: OPENAI_MODEL,
+      messages: chatMessages,
+      // Keep replies short and warm, the tone context also asks for
+      // this but the parameter enforces it as a hard cap.
+      max_tokens: 300,
+      temperature: 0.7,
+    });
+    // Enforced here, not asked for above: the rules are also in the prompt, but
+    // the prompt has been telling it "no long dashes" for months and one still
+    // reaches a customer every few drafts. See api/_house-style.ts.
+    return applyHouseStyle(response.choices[0]?.message?.content?.trim() ?? '');
+  };
 
-  // Enforced here, not asked for above: the rules are also in the prompt, but
-  // the prompt has been telling it "no long dashes" for months and one still
-  // reaches a customer every few drafts. See api/_house-style.ts.
-  return applyHouseStyle(response.choices[0]?.message?.content?.trim() ?? '');
+  // Checked, and given ONE chance to fix itself with the specific problem
+  // named. A second failure is not sent: the caller hands over to Vero.
+  let reply = await complete();
+  let problems = replyProblems(reply, dates, knowledge);
+  if (problems.length > 0) {
+    console.warn(`[ai-reply] reply blocked, retrying once: ${problems.map((p) => p.what).join('; ')}`);
+    chatMessages.push(
+      { role: 'assistant', content: reply },
+      {
+        role: 'system',
+        content: [
+          'That reply was NOT sent. It said something this business must not say:',
+          ...problems.map((p) => `- ${p.what}: "${p.found}". Instead: ${p.instead}`),
+          'Write the whole reply again from the facts, without those. Do not mention this note.',
+        ].join('\n'),
+      },
+    );
+    reply = await complete();
+    problems = replyProblems(reply, dates, knowledge);
+    if (problems.length > 0) throw new BlockedReplyError(problems);
+  }
+  return reply;
 }
 
 // Exported for testing: it is a pure function of the knowledge base, and the
@@ -1589,14 +1688,17 @@ Then, in the same message, briefly address whatever the customer actually asked.
    * usually missed, which is that the date they typed is today, tomorrow, or
    * behind us.
    */
-  const now = new Date();
-  const todayBlock = `## TODAY IS ${now.toLocaleDateString('en-US', {
+  // In Eastern time, where the business is. The server runs in UTC, so after
+  // 8pm in the evening the old toLocaleDateString said it was already tomorrow.
+  const today = easternToday();
+  const todayBlock = `## TODAY IS ${new Date(`${today}T12:00:00Z`).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  })} (${now.toISOString().slice(0, 10)})
-Check any date the customer gives against that before you write about it. If the date they asked for is today, tomorrow, or already past, say so plainly and ask whether they meant a different one. Do not quietly repeat it back as though it were a normal future booking. This does NOT change rule 1: you still never say whether a date is free.`;
+    timeZone: 'UTC',
+  })} (${today})
+Do NOT work out for yourself whether a customer's date has passed or how far away it is: you got that wrong once, and told a customer a date 17 days away was "already past". When they name a date, the system works it out and lists it under DATES THE CUSTOMER NAMED. Only if that list says a date is in the past or today, say so plainly and ask which date they meant. Otherwise treat it as the future date it is. This does NOT change rule 1: you still never say whether a date is free.`;
 
   // The two personas differ ONLY in voice. Every safety rail below applies
   // identically either way, see api/_reply-core-rules.ts for which of these
