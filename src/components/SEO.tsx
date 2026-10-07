@@ -93,7 +93,7 @@ const ROUTE_META: Record<string, RouteMeta> = {
     title: 'Proposal Photography Portfolio | Vero Photography',
     description:
       'Proposal photography portfolio: the question, the answer, and the first photographs as an engaged couple, by Veronika Polbina.',
-    image: `${SITE_URL}/assets/photos/proposals/lantern-release-proposal.webp`,
+    image: `${SITE_URL}/assets/photos/proposals/lantern-festival-kiss.webp`,
   },
   // The two policy routes were absent, so they fell through to the '/' entry
   // and every social card, canonical and WebPage JSON-LD on /privacy and

@@ -27,9 +27,9 @@
     "srcset": "/assets/hero/couples-beach-baby-bump-moment-m1280.webp 1280w, /assets/hero/couples-beach-baby-bump-moment-m.webp 1600w, /assets/hero/couples-beach-baby-bump-moment-d1680.webp 1680w, /assets/hero/couples-beach-baby-bump-moment-d1920.webp 1920w, /assets/hero/couples-beach-baby-bump-moment-d2560.webp 2560w, /assets/hero/couples-beach-baby-bump-moment-d2880.webp 2880w, /assets/photos/maternity/couples-beach-baby-bump-moment.webp 3000w",
     "src": "/assets/hero/couples-beach-baby-bump-moment-m.webp"
   },
-  "/assets/photos/proposals/lantern-release-proposal.webp": {
-    "srcset": "/assets/hero/lantern-release-proposal-m1280.webp 1280w, /assets/photos/proposals/lantern-release-proposal.webp 1536w",
-    "src": "/assets/hero/lantern-release-proposal-m1280.webp"
+  "/assets/photos/proposals/lantern-festival-kiss.webp": {
+    "srcset": "/assets/hero/lantern-festival-kiss-m1280.webp 1280w, /assets/hero/lantern-festival-kiss-m.webp 1600w, /assets/hero/lantern-festival-kiss-d1680.webp 1680w, /assets/hero/lantern-festival-kiss-d1920.webp 1920w, /assets/photos/proposals/lantern-festival-kiss.webp 2400w",
+    "src": "/assets/hero/lantern-festival-kiss-m.webp"
   },
   "/assets/photos/site/weddings-hero.webp": {
     "srcset": "/assets/hero/weddings-hero-m1280.webp 1280w, /assets/hero/weddings-hero-m.webp 1600w, /assets/hero/weddings-hero-d1680.webp 1680w, /assets/hero/weddings-hero-d1920.webp 1920w, /assets/photos/site/weddings-hero.webp 2400w",

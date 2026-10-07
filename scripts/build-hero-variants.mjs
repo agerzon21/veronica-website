@@ -125,9 +125,10 @@ const PAGE_HEROES = {
   '/assets/photos/weddings/newlyweds-running-sea.webp': {},
   '/assets/photos/family/elegant-family-studio-portrait-black.webp': {},
   '/assets/photos/maternity/couples-beach-baby-bump-moment.webp': {},
-  // Proposals, opened 2026-10-04. A 1536px file (the best one there is for
-  // now), so the ladder stops at its own width: the script never enlarges.
-  '/assets/photos/proposals/lantern-release-proposal.webp': {},
+  // Proposals, opened 2026-10-04; its cover replaced 2026-10-07 by Vero's
+  // full-size edit (2400px here), under a new name because /assets is cached
+  // as immutable.
+  '/assets/photos/proposals/lantern-festival-kiss.webp': {},
   // The weddings page's DESKTOP hero. Its mobile twin was fixed first and
   // this one was missed, which is exactly the trap the mobileOnly flag above
   // describes in reverse: they are two elements, so fixing one says nothing

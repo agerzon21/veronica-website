@@ -72,11 +72,13 @@ const BANDS: Tile[] = [
   {
     name: 'proposals',
     title: 'Proposals',
-    // 1536px wide, the best file there is for now. The band shows about two
-    // fifths of its height, so the crop sits on the lantern with the date on
-    // it and the kiss below it, with the sky of lanterns still around them.
-    image: '/assets/photos/proposals/lantern-release-proposal.webp',
-    sourceWidth: 1536,
+    // Vero's full-size edit of the lantern kiss (2026-10-07), replacing the
+    // 1536px stand-in. A NEW filename, not the old one overwritten: /assets is
+    // cached for a year as immutable, so a returning visitor would have kept
+    // the old picture. The band shows about two fifths of its height, so the
+    // crop sits on the lantern with the date on it and the kiss below it.
+    image: '/assets/photos/proposals/lantern-festival-kiss.webp',
+    sourceWidth: 2400,
     objectPosition: 'center 59%',
   },
   {
