@@ -26,6 +26,9 @@ import FaClipboardList from '../icons/fa/FaClipboardList';
 import FaUser from '../icons/fa/FaUser';
 import FaCog from '../icons/fa/FaCog';
 import FaCopy from '../icons/fa/FaCopy';
+import FaPaperPlane from '../icons/fa/FaPaperPlane';
+import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBadge';
+import { deliveryFirstName, deliveryMessageText } from '../data/delivery-message';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
 import {
@@ -36,6 +39,7 @@ import {
   primaryAddress,
   directionsUrl,
 } from '../data/sessionLocations';
+import { parseCoverageWindow } from './clientPrefill';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaTimes from '../icons/fa/FaTimes';
@@ -87,6 +91,8 @@ interface PortalDetail {
   session_type: string | null;
   partner_1_full_name: string | null;
   partner_2_full_name: string | null;
+  // Who the photos-are-ready message greets; the display name is a label.
+  partner_1_first_name?: string | null;
   client_display_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -200,6 +206,14 @@ const contractDateString = (iso: string | null): string => {
     day: 'numeric',
     timeZone: 'UTC',
   });
+};
+
+// "15:00" to "3:00 PM", the way the New Client form writes a time
+// (fmtTime12h there), so a seeded Starts box reads like one typed by hand.
+const to12h = (hhmm: string): string => {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return '';
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 };
 
 const formatDate = (iso: string | null): string => {
@@ -556,6 +570,9 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   const patch = async (patch: Record<string, unknown>, label: string): Promise<boolean> => {
     setSavingField(label);
     setError('');
+    // Only gallery saves report under the gallery buttons; anything else
+    // failing is said at the top, where it always was.
+    if (!GALLERY_SAVE_LABELS.has(label)) setGalleryActive(false);
     try {
       const res = await fetch('/api/admin/portal-update', {
         method: 'POST',
@@ -580,6 +597,14 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   const [resendingDelivery, setResendingDelivery] = useState(false);
   const [undeliverArmed, setUndeliverArmed] = useState(false);
   const [undelivering, setUndelivering] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
+  /**
+   * A gallery button was the last thing pressed, so its failure is also said
+   * under those buttons. The page-level error box sits at the top of a long
+   * screen, out of sight of the button that caused it.
+   */
+  const [galleryActive, setGalleryActive] = useState(false);
+  const GALLERY_SAVE_LABELS = new Set(['deliver', 'drive_url', 'gallery_email', 'gallery_expires_at']);
 
   /**
    * Take a delivery back.
@@ -642,6 +667,29 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
     } finally {
       setResendingDelivery(false);
     }
+  };
+
+  /**
+   * The one-step send: an address if she typed one, the Drive link if it
+   * changed, then delivery, which releases the photos and sends the email.
+   * Each save stops the chain if it fails, so a bad address never ends in a
+   * delivery she thinks was emailed. The unpaid-balance check inside
+   * markDelivered still runs, with the link already saved behind it.
+   */
+  const sendGallery = async (url: string, email: string) => {
+    setGalleryActive(true);
+    if (email && !(await patch({ client_email: email }, 'deliver'))) return;
+    if (url !== (portal?.drive_url ?? '') && !(await patch({ drive_url: url }, 'deliver'))) return;
+    await markDelivered();
+  };
+
+  /** Send the email again, first saving the address when there was none. */
+  const emailGallery = async (newEmail: string | null) => {
+    setGalleryActive(true);
+    // Its own label, not 'client_email': that one is the Client Email field
+    // above, whose save must not spin these buttons or land its error here.
+    if (newEmail && !(await patch({ client_email: newEmail }, 'gallery_email'))) return;
+    await resendDeliveryEmail();
   };
 
   const markDelivered = async (confirmUnpaid = false) => {
@@ -714,10 +762,32 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
    */
   const sessionLocationsValue = useMemo(() => {
     if (!portal) return [];
+    // A booking from before the places editor was given its address as a
+    // single place with no times, and the contract's time line ("3:00 PM to
+    // 6:00 PM (approximately 3 hours)") was never carried over, so Starts and
+    // Ends sat empty under a WHEN that showed them. Read with the same parser
+    // the New Client form trusts, which returns nothing rather than a guess,
+    // and only into a lone place with no times of its own: anything Vero has
+    // entered is never overwritten.
+    //
+    // Only from a line that says AM or PM. The parser reads a bare "4-8" as
+    // a 24-hour clock, which suits a form Vero checks before saving and not
+    // a screen that shows it as if she had typed it: "2 to 3 hours of
+    // coverage" came out as 2:00 AM to 3:00 AM.
+    const eventTime =
+      typeof portal.contract_variables?.event_time === 'string' ? portal.contract_variables.event_time : '';
+    const coverage = /\d\s*[ap]\.?\s?m\b/i.test(eventTime)
+      ? parseCoverageWindow(eventTime)
+      : { start: null, end: null };
+    const times = coverage.start && coverage.end ? { starts_at: to12h(coverage.start), ends_at: to12h(coverage.end) } : null;
     const stored = parseLocations(portal.session_locations);
-    if (stored.length) return stored;
+    if (stored.length) {
+      return stored.length === 1 && times && !stored[0].starts_at && !stored[0].ends_at
+        ? [{ ...stored[0], ...times }]
+        : stored;
+    }
     const one = effectiveAddress(portal);
-    return one ? [{ ...EMPTY_LOCATION, address: one }] : [];
+    return one || times ? [{ ...EMPTY_LOCATION, address: one ?? '', ...(times ?? {}) }] : [];
   }, [portal]);
 
   if (loading && !portal) {
@@ -1080,14 +1150,26 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       {/* ─── Gallery section ─── */}
       <Section title={t.clientDetail.sectionPhotoGallery} icon={FaImages} hue="purple">
         <VStack align="stretch" spacing={4}>
-          <InlineField
-            label={t.clientDetail.driveUrlLabel}
-            value={portal.drive_url ?? ''}
-            placeholder={t.clientDetail.driveUrlPlaceholder}
-            helpText={t.clientDetail.driveUrlHelp}
-            saving={savingField === 'drive_url'}
-            onSave={(v) => patch({ drive_url: v }, 'drive_url')}
-          />
+          {portal.gallery_delivered_at ? (
+            // Delivered: the link can still be corrected (a wrong folder),
+            // which changes what the client sees without sending anything.
+            <InlineField
+              label={t.clientDetail.driveUrlLabel}
+              value={portal.drive_url ?? ''}
+              placeholder={t.clientDetail.driveUrlPlaceholder}
+              helpText={t.clientDetail.driveUrlHelp}
+              saving={savingField === 'drive_url'}
+              onSave={(v) => patch({ drive_url: v }, 'drive_url')}
+            />
+          ) : (
+            <SendGallery
+              driveUrl={portal.drive_url ?? ''}
+              clientEmail={portal.client_email ?? ''}
+              busy={savingField === 'deliver' || savingField === 'drive_url'}
+              onSend={sendGallery}
+              onSaveOnly={(url) => { setGalleryActive(true); return patch({ drive_url: url }, 'drive_url'); }}
+            />
+          )}
 
           {/* Once the gallery URL is set, surface the client-facing
               delivery link, /portal/pass with the password encoded
@@ -1179,41 +1261,46 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                   {t.clientDetail.notDelivered}
                 </Badge>
               )}
-              {/* Whether the client was actually TOLD. The send used to be
-                  caught, logged to console and reported as success, on the one
-                  email in this system with no stored id, no status lookup and
-                  no resend, behind a button that hides itself once pressed.
-                  So the gallery went out, the client was never told, and the
-                  screen showed a clean delivery. */}
+              {/* Whether the client was actually TOLD, with the same check the
+                  Messages thread shows. The send used to be caught, logged to
+                  console and reported as success, so the gallery went out, the
+                  client was never told, and the screen showed a clean delivery. */}
               {portal.gallery_delivered_at && (
-                <DeliveryEmail
-                  emailId={portal.delivery_email_id ?? null}
-                  sentAt={portal.delivery_email_sent_at ?? null}
-                  hasEmail={Boolean(portal.client_email)}
-                  resending={resendingDelivery}
-                  onResend={resendDeliveryEmail}
-                />
+                portal.client_email ? (
+                  portal.delivery_email_id ? (
+                    <GalleryEmailStatus
+                      emailId={portal.delivery_email_id}
+                      sentAt={portal.delivery_email_sent_at ?? null}
+                      email={portal.client_email}
+                    />
+                  ) : (
+                    <Text fontSize="2xs" color="orange.700" mt={1}>
+                      {t.clientDetail.deliveryEmailNoRecord}
+                    </Text>
+                  )
+                ) : (
+                  <Text fontSize="2xs" color="gray.500" mt={1}>
+                    {t.clientDetail.deliveryEmailNoAddress}
+                  </Text>
+                )
               )}
-              {/* Recovery for delivering to the wrong client. Before this the
-                  only undo was the Danger Zone delete, which cascades to
-                  payments and charges. */}
-              {portal.gallery_delivered_at && !undeliverArmed && (
-                <Box mt={1}>
-                  <Box
-                    as="button"
-                    type="button"
-                    onClick={() => setUndeliverArmed(true)}
-                    fontSize="xs"
-                    color="gray.500"
-                    textDecoration="underline"
-                    bg="transparent"
-                    border="none"
-                    px={0}
-                    minH="44px"
-                    cursor="pointer"
-                  >
-                    {t.clientDetail.undeliverLink}
-                  </Box>
+              {portal.gallery_delivered_at && (
+                <Box mt={4}>
+                  <DeliveredGalleryActions
+                    clientEmail={portal.client_email ?? ''}
+                    message={deliveryMessageText({
+                      mode: portal.mode === 'full' ? 'full' : 'simple',
+                      firstName: deliveryFirstName(portal.client_display_name, portal.partner_1_first_name),
+                      expiresIso: portal.gallery_expires_at,
+                      galleryPassword: portal.gallery_password,
+                      replyTo: 'message',
+                    })}
+                    resending={resendingDelivery || savingField === 'gallery_email'}
+                    extendOpen={extendOpen}
+                    onEmail={emailGallery}
+                    onToggleExtend={() => { setGalleryActive(true); setExtendOpen((v) => !v); }}
+                    onUndo={() => { setGalleryActive(true); setUndeliverArmed(true); }}
+                  />
                 </Box>
               )}
               {portal.gallery_delivered_at && undeliverArmed && (
@@ -1258,33 +1345,20 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               {/* The only route to a live gallery's expiry. Without it the
                   countdown turned orange and then the gallery went dark with
                   nothing anyone could do about it. */}
-              {portal.gallery_delivered_at && portal.gallery_expires_at && (
+              {portal.gallery_delivered_at && portal.gallery_expires_at && extendOpen && (
                 <ExtendGallery
                   expiresAt={portal.gallery_expires_at}
-                  daysLeft={galleryDaysLeft}
                   saving={savingField === 'gallery_expires_at'}
                   onExtend={(iso) => patch({ gallery_expires_at: iso }, 'gallery_expires_at')}
+                  onClose={() => setExtendOpen(false)}
                 />
               )}
+              {galleryActive && error && (
+                <Text fontSize="xs" color="red.600" mt={2} data-testid="gallery-error">
+                  {error}
+                </Text>
+              )}
             </Box>
-            {!portal.gallery_delivered_at && portal.drive_url && !unpaidConfirm && (
-              <Box w={{ base: '100%', md: 'auto' }}>
-                <CTAButton
-                  // Arrow, not a bare reference: markDelivered's first
-                  // parameter is confirmUnpaid, and handing it the click
-                  // event straight would make every press a truthy
-                  // "deliver anyway" and skip the guard rail entirely.
-                  onClick={() => markDelivered()}
-                  variant="solid"
-                  size="sm"
-                  isLoading={savingField === 'deliver'}
-                  loadingText={t.clientDetail.delivering}
-                  fullWidth={{ base: true, md: false }}
-                >
-                  {t.clientDetail.markAsDelivered}
-                </CTAButton>
-              </Box>
-            )}
           </Stack>
 
           {/* Outstanding-balance confirmation. Replaces the button rather
@@ -1337,7 +1411,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               precisely the ones who text her asking for the link again. */}
           <ShareGallery
             galleryPassword={portal.gallery_password}
-            firstName={(portal.client_display_name ?? '').trim().split(/\s+/)[0] ?? ''}
+            firstName={deliveryFirstName(portal.client_display_name, portal.partner_1_first_name)}
             expiresIso={portal.gallery_expires_at}
           />
           <InlineField
@@ -1780,7 +1854,13 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           <InlineField
             label={t.clientDetail.eventDateLabel}
             type="date"
-            value={portal.event_date ?? ''}
+            // The date part only. event_date is a DATE column, but it reaches
+            // the screen as a full timestamp ("2026-10-07T00:00:00.000Z"), and
+            // a date input shows nothing at all for anything but YYYY-MM-DD:
+            // every booking's Event Date looked empty while the heading, which
+            // already cuts at the T (formatDate), showed the date. Clearing that
+            // empty-looking box and saving would have wiped a real date.
+            value={portal.event_date ? portal.event_date.split('T')[0] : ''}
             saving={savingField === 'event_date'}
             onSave={(v) => patch({ event_date: v }, 'event_date')}
           />
@@ -2652,17 +2732,17 @@ function ShareGallery({
  */
 function ExtendGallery({
   expiresAt,
-  daysLeft,
   saving,
   onExtend,
+  onClose,
 }: {
   expiresAt: string;
-  daysLeft: number | null;
   saving: boolean;
   onExtend: (iso: string) => Promise<boolean>;
+  /** Opened and closed by the Extend gallery button in the actions row. */
+  onClose: () => void;
 }) {
   const { t } = useAdminLang();
-  const [open, setOpen] = useState(false);
 
   // Same clamping rule as the server: 31 January plus a month is 28 February,
   // not 3 March. Two implementations of one rule is a smell, but this one is
@@ -2682,31 +2762,6 @@ function ExtendGallery({
   // extended by "+1 month" should be live for a month, not for whatever is
   // left of a month that already ended.
   const base = new Date(Math.max(Date.now(), new Date(expiresAt).getTime()));
-  const urgent = daysLeft !== null && daysLeft < 7;
-
-  if (!open) {
-    return (
-      <Box mt={2}>
-        <Box
-          as="button"
-          type="button"
-          onClick={() => setOpen(true)}
-          fontSize="xs"
-          color={urgent ? 'orange.700' : 'gray.500'}
-          fontWeight={urgent ? '500' : '400'}
-          textDecoration="underline"
-          bg="transparent"
-          border="none"
-          px={0}
-          minH="44px"
-          cursor="pointer"
-        >
-          {t.clientDetail.extendGallery}
-        </Box>
-      </Box>
-    );
-  }
-
   return (
     <Box mt={2} p={3} bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="sm">
       <Text fontSize="xs" color="gray.600" mb={2}>
@@ -2718,7 +2773,7 @@ function ExtendGallery({
             key={m}
             onClick={async () => {
               const ok = await onExtend(plusMonths(base, m).toISOString());
-              if (ok) setOpen(false);
+              if (ok) onClose();
             }}
             variant="outline"
             size="sm"
@@ -2732,7 +2787,7 @@ function ExtendGallery({
       <Box
         as="button"
         type="button"
-        onClick={() => setOpen(false)}
+        onClick={onClose}
         mt={2}
         fontSize="xs"
         color="gray.500"
@@ -2832,66 +2887,344 @@ function InviteDelivery({ emailId, sentAt }: { emailId: string; sentAt: string |
 }
 
 /**
- * Did the client actually get told their photos are ready?
- *
- * Three honest states, because "we have no record" and "it failed" are
- * different facts and conflating them is how the original bug read as fine:
- *   - an id exists, so ask Resend what became of it
- *   - no id but the gallery is delivered: either it failed, or this gallery
- *     predates the column. Say that, and offer to send it now.
- *   - no email address at all: nothing to send, and no amount of pressing
- *     will change that.
+ * Is this a plausible email address? The server is the real judge; this only
+ * stops an obvious typo before it is saved onto the booking and mailed.
  */
-function DeliveryEmail({
-  emailId,
-  sentAt,
-  hasEmail,
-  resending,
-  onResend,
+const looksLikeEmail = (v: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
+/**
+ * Before delivery: the Drive link and the send, as ONE step.
+ *
+ * It used to be a text box with a bare Save, and then, somewhere to the right,
+ * a separate Mark as Delivered that actually released the photos and emailed
+ * the client. Vero pasted the link, pressed Save, and was left wondering
+ * whether anything had happened (2026-10-09). Now the main button says what
+ * it does: Save and send when there is an address to send to, Save and
+ * deliver when there is not.
+ *
+ * No address on file is the moment to ask for one, so a box appears for it,
+ * optional: an empty one never blocks delivery, it only means nothing is
+ * emailed and she sends the link herself with Copy message afterwards. Full
+ * accounts always have an address (it is their login), so the box only ever
+ * shows on gallery-only bookings.
+ *
+ * Save without sending stays, for previewing the gallery before releasing it.
+ */
+function SendGallery({
+  driveUrl,
+  clientEmail,
+  busy,
+  onSend,
+  onSaveOnly,
 }: {
-  emailId: string | null;
-  sentAt: string | null;
-  hasEmail: boolean;
-  resending: boolean;
-  onResend: () => void;
+  driveUrl: string;
+  clientEmail: string;
+  busy: boolean;
+  onSend: (url: string, email: string) => Promise<void>;
+  onSaveOnly: (url: string) => Promise<boolean>;
 }) {
   const { t } = useAdminLang();
+  const [url, setUrl] = useState(driveUrl);
+  const [email, setEmail] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
 
-  if (!hasEmail) {
-    return (
-      <Text fontSize="2xs" color="gray.500" mt={1}>
-        {t.clientDetail.deliveryEmailNoAddress}
-      </Text>
-    );
-  }
+  useEffect(() => { setUrl(driveUrl); }, [driveUrl]);
+
+  const trimmedUrl = url.trim();
+  const urlChanged = trimmedUrl !== driveUrl;
+  const sendTo = clientEmail || email.trim();
+  const emailing = Boolean(sendTo);
+  // The URL is what the gallery IS, so a dirty box warns before leaving.
+  // A typed email counts only while its box is showing: once Save and send
+  // has stored it, the box hides but still holds the text.
+  useDirtyFlag(urlChanged || (!clientEmail && Boolean(email.trim())), t.clientDetail.driveUrlLabel);
+
+  const primaryLabel = urlChanged || !driveUrl
+    ? emailing ? t.clientDetail.gallerySaveAndSend : t.clientDetail.gallerySaveAndDeliver
+    : emailing ? t.clientDetail.gallerySend : t.clientDetail.galleryDeliver;
+
+  const send = async () => {
+    setProblem(null);
+    if (!clientEmail && email.trim() && !looksLikeEmail(email)) {
+      setProblem(t.clientDetail.galleryEmailInvalid);
+      return;
+    }
+    await onSend(trimmedUrl, clientEmail ? '' : email.trim());
+  };
+
+  const fieldLabel = (text: string) => (
+    <Text fontSize={{ base: 'xs', md: '2xs' }} fontWeight="500" color="brand.accent" letterSpacing={{ base: '0.15em', md: '0.2em' }} textTransform="uppercase" mb={2}>
+      {text}
+    </Text>
+  );
 
   return (
-    <Box mt={1}>
-      {emailId ? (
-        <InviteDelivery emailId={emailId} sentAt={sentAt} />
-      ) : (
-        <Text fontSize="2xs" color="orange.700" mt={1}>
-          {t.clientDetail.deliveryEmailNoRecord}
+    <Box data-testid="send-gallery">
+      {fieldLabel(t.clientDetail.driveUrlLabel)}
+      <Input
+        value={url}
+        onChange={(e) => { setUrl(e.target.value); setProblem(null); }}
+        placeholder={t.clientDetail.driveUrlPlaceholder}
+        h="44px"
+        bg="white"
+        border="1px solid"
+        borderColor={urlChanged ? 'brand.accent' : 'gray.300'}
+        borderRadius="sm"
+        fontSize={{ base: 'md', md: 'sm' }}
+        _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+      />
+      <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+        {t.clientDetail.driveUrlHelp}
+      </Text>
+
+      {!clientEmail && (
+        <Box mt={4}>
+          {fieldLabel(t.clientDetail.galleryEmailOptionalLabel)}
+          <Input
+            type="email"
+            inputMode="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setProblem(null); }}
+            placeholder="client@example.com"
+            h="44px"
+            bg="white"
+            border="1px solid"
+            borderColor={problem ? 'red.400' : 'gray.300'}
+            borderRadius="sm"
+            fontSize={{ base: 'md', md: 'sm' }}
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+          />
+          <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+            {t.clientDetail.galleryEmailOptionalHelp}
+          </Text>
+        </Box>
+      )}
+
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={2} mt={4} align={{ base: 'stretch', md: 'center' }}>
+        <CTAButton
+          onClick={send}
+          variant="solid"
+          size="sm"
+          icon={emailing ? FaPaperPlane : FaCheck}
+          isLoading={busy}
+          loadingText={t.clientDetail.delivering}
+          isDisabled={!trimmedUrl}
+          fullWidth={{ base: true, md: false }}
+        >
+          {primaryLabel}
+        </CTAButton>
+        {urlChanged && trimmedUrl && (
+          <CTAButton
+            onClick={() => { void onSaveOnly(trimmedUrl); }}
+            variant="outline"
+            size="sm"
+            isDisabled={busy}
+            fullWidth={{ base: true, md: false }}
+          >
+            {t.clientDetail.gallerySaveOnly}
+          </CTAButton>
+        )}
+      </Stack>
+      {trimmedUrl && (
+        <Text fontSize="xs" color="gray.500" mt={2} fontWeight="300">
+          {emailing ? t.clientDetail.gallerySendHelp(sendTo) : t.clientDetail.galleryDeliverHelp}
         </Text>
       )}
-      <Box mt={1}>
-        <Box
-          as="button"
-          type="button"
-          onClick={onResend}
-          fontSize="xs"
-          color="gray.500"
-          textDecoration="underline"
-          bg="transparent"
-          border="none"
-          px={0}
-          minH="44px"
-          cursor={resending ? 'wait' : 'pointer'}
-          disabled={resending}
+      {problem && (
+        <Text fontSize="xs" color="red.600" mt={2}>
+          {problem}
+        </Text>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Did the photos-are-ready email arrive? The same spinner, green check or red
+ * warning the Messages thread shows (DeliveryBadge), so "sent" and
+ * "delivered" read the same everywhere. It used to ask Resend once, on load,
+ * and print the raw word; right after a send that word was "sent" and stayed
+ * "sent" until the page was reloaded. Now it keeps asking, every few seconds,
+ * until Resend has a final answer or two minutes have passed.
+ */
+const EMAIL_STATUS_POLL_MS = 4000;
+const EMAIL_STATUS_MAX_MS = 120_000;
+
+function GalleryEmailStatus({ emailId, sentAt, email }: { emailId: string; sentAt: string | null; email: string }) {
+  const { t, lang } = useAdminLang();
+  const [state, setState] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const started = Date.now();
+    // Send email again brings a new id: the last email's Bounced or
+    // Delivered must not sit beside the new send time.
+    setState(null);
+    const ask = async () => {
+      let next: string | null = null;
+      try {
+        const res = await fetch(`/api/email-status?id=${encodeURIComponent(emailId)}`);
+        const data = await res.json();
+        next = typeof data?.status === 'string' ? data.status : null;
+      } catch {
+        next = null;
+      }
+      if (cancelled) return;
+      // Nothing known yet reads as sent: Resend accepted it, which is true.
+      setState(next ?? 'sent');
+      const settled = next !== null && DELIVERY_TERMINAL.includes(deliveryStateOf(next) ?? '');
+      if (!settled && Date.now() - started < EMAIL_STATUS_MAX_MS) timer = setTimeout(ask, EMAIL_STATUS_POLL_MS);
+    };
+    void ask();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [emailId]);
+
+  if (!state) return null;
+  return (
+    <Box data-testid="gallery-email-status">
+      <DeliveryBadge
+        state={state}
+        align="start"
+        detail={t.clientDetail.galleryEmailTo(email, sentAt ? fmtAdminDateTime(sentAt, lang) : '')}
+      />
+    </Box>
+  );
+}
+
+/**
+ * After delivery: what can be done with a delivered gallery, as four buttons
+ * like the rest of the panel. They were three small underlined links, easy
+ * to miss and easy to mis-tap on a phone.
+ *
+ * Copy message is new (2026-10-09): the exact words the email sends, ending
+ * "reply to this message", for WhatsApp, Instagram or a partner, from the
+ * same module as the email so the two cannot drift (src/data/delivery-message.ts).
+ *
+ * With no address on file, the email button offers to take one there and
+ * then, the same offer the send step makes.
+ */
+function DeliveredGalleryActions({
+  clientEmail,
+  message,
+  resending,
+  extendOpen,
+  onEmail,
+  onToggleExtend,
+  onUndo,
+}: {
+  clientEmail: string;
+  message: string;
+  resending: boolean;
+  extendOpen: boolean;
+  onEmail: (newEmail: string | null) => Promise<void>;
+  onToggleExtend: () => void;
+  onUndo: () => void;
+}) {
+  const { t } = useAdminLang();
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const [askEmail, setAskEmail] = useState(false);
+  const [email, setEmail] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const copy = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(message);
+      setCopyFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyFailed(true);
+    }
+  };
+
+  return (
+    <Box data-testid="gallery-actions">
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={2} wrap="wrap">
+        <CTAButton
+          onClick={() => (clientEmail ? void onEmail(null) : setAskEmail((v) => !v))}
+          variant="outline"
+          size="sm"
+          icon={FaEnvelope}
+          isLoading={resending}
+          loadingText={t.common.sending}
+          fullWidth={{ base: true, md: false }}
         >
-          {resending ? t.clientDetail.saving : t.clientDetail.deliveryEmailResend}
-        </Box>
-      </Box>
+          {clientEmail ? t.clientDetail.galleryEmailAgain : t.clientDetail.galleryEmailIt}
+        </CTAButton>
+        <CTAButton
+          onClick={copy}
+          variant="outline"
+          size="sm"
+          icon={copied ? FaCheck : FaCopy}
+          fullWidth={{ base: true, md: false }}
+        >
+          {copied ? t.clientDetail.shareCopied : t.clientDetail.galleryCopyMessage}
+        </CTAButton>
+        <CTAButton
+          onClick={onToggleExtend}
+          variant={extendOpen ? 'solid' : 'outline'}
+          size="sm"
+          icon={FaClock}
+          fullWidth={{ base: true, md: false }}
+        >
+          {t.clientDetail.galleryExtend}
+        </CTAButton>
+        <CTAButton onClick={onUndo} variant="outline" size="sm" icon={FaUndo} fullWidth={{ base: true, md: false }}>
+          {t.clientDetail.galleryUndo}
+        </CTAButton>
+      </Stack>
+      <Text fontSize="xs" color="gray.500" mt={1.5} fontWeight="300">
+        {t.clientDetail.galleryCopyHelp}
+      </Text>
+      {copyFailed && (
+        <Text fontSize="xs" color="red.500" mt={1.5}>
+          {t.clientDetail.shareCopyFailed}
+        </Text>
+      )}
+      {!clientEmail && askEmail && (
+        <Stack direction={{ base: 'column', md: 'row' }} spacing={2} mt={3} align={{ base: 'stretch', md: 'center' }}>
+          <Input
+            type="email"
+            inputMode="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setProblem(null); }}
+            placeholder="client@example.com"
+            h="44px"
+            bg="white"
+            border="1px solid"
+            borderColor={problem ? 'red.400' : 'gray.300'}
+            borderRadius="sm"
+            fontSize={{ base: 'md', md: 'sm' }}
+            maxW={{ md: '320px' }}
+            _focus={{ borderColor: 'brand.accent', boxShadow: '0 0 0 1px #c9a96e' }}
+          />
+          <CTAButton
+            onClick={async () => {
+              if (!looksLikeEmail(email)) { setProblem(t.clientDetail.galleryEmailInvalid); return; }
+              await onEmail(email.trim());
+            }}
+            variant="solid"
+            size="sm"
+            icon={FaPaperPlane}
+            isLoading={resending}
+            loadingText={t.common.sending}
+            fullWidth={{ base: true, md: false }}
+          >
+            {t.clientDetail.galleryEmailSend}
+          </CTAButton>
+        </Stack>
+      )}
+      {problem && (
+        <Text fontSize="xs" color="red.600" mt={2}>
+          {problem}
+        </Text>
+      )}
     </Box>
   );
 }

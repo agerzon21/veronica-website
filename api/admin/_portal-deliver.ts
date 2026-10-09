@@ -42,6 +42,7 @@ import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { sendEmail } from '../_auto-reply.js';
 import { bookingOwedTotal, salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
+import { deliveryFirstName, deliveryMessageText } from '../../src/data/delivery-message.js';
 
 /**
  * Add calendar months, the way a person counting months on a calendar does.
@@ -72,6 +73,8 @@ type DeliverPortal = {
   id: string;
   mode: 'simple' | 'full';
   client_display_name: string | null;
+  // The greeting. The display name is a label like "Proposal Maria 2026".
+  partner_1_first_name: string | null;
   client_email: string | null;
   gallery_password: string;
 };
@@ -89,24 +92,31 @@ type EmailOutcome = { sent: boolean; id?: string; error?: string };
 async function sendDeliveryEmail(
   sql: ReturnType<typeof getDb>,
   portal: DeliverPortal,
-  expiresAt: string,
+  expiresAt: string | Date,
   siteOrigin: string,
 ): Promise<EmailOutcome> {
   if (!portal.client_email) {
     return { sent: false, error: 'No email address on this booking.' };
   }
+  const firstName = deliveryFirstName(portal.client_display_name, portal.partner_1_first_name);
   try {
     const sent = await sendEmail({
       to: portal.client_email,
       subject: 'Your photos are ready, from Vero Photography',
-      text:
-        portal.mode === 'full'
-          ? buildFullDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
-          : buildSimpleDeliveryText(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
+      // The same words Vero gets from Copy message on the client screen,
+      // from one module, so the email and the pasted text cannot drift.
+      text: deliveryMessageText({
+        mode: portal.mode === 'full' ? 'full' : 'simple',
+        firstName,
+        expiresIso: expiresAt || null,
+        galleryPassword: portal.gallery_password,
+        origin: siteOrigin,
+        replyTo: 'email',
+      }),
       html:
         portal.mode === 'full'
-          ? buildFullDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password)
-          : buildSimpleDeliveryHtml(portal.client_display_name, expiresAt, siteOrigin, portal.gallery_password),
+          ? buildFullDeliveryHtml(firstName, expiresAt, siteOrigin, portal.gallery_password)
+          : buildSimpleDeliveryHtml(firstName, expiresAt, siteOrigin, portal.gallery_password),
     });
     // Recorded separately from the delivery stamp so a resend can update it
     // without touching gallery_delivered_at, which is the release switch and
@@ -153,7 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, mode, client_display_name, client_email, drive_url, gallery_password, gallery_delivered_at,
+      select id, mode, client_display_name, partner_1_first_name, client_email, drive_url, gallery_password, gallery_delivered_at,
              gallery_expires_at, contract_status, contract_total_amount, paid_to_date, contract_variables
       from client_portals
       where id = ${id}
@@ -162,11 +172,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       id: string;
       mode: 'simple' | 'full';
       client_display_name: string | null;
+      partner_1_first_name: string | null;
       client_email: string | null;
       drive_url: string | null;
       gallery_password: string;
       gallery_delivered_at: string | null;
-      gallery_expires_at: string | null;
+      // A DATE column: the driver returns a Date, not text.
+      gallery_expires_at: string | Date | null;
       contract_status: 'none' | 'pending' | 'signed' | 'void';
       // The contract's own promise about how long the gallery stays up. It is
       // a contract VARIABLE, not a column, which is why the lookup this
@@ -400,59 +412,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-/**
- * The full-portal client gets their own login link AND the Gallery Pass link,
- * because those are two different doors: /portal is theirs alone (email +
- * password), while /portal/pass is the one they forward to family and guests
- * without handing over their login. The pass link is the same one-click shape
- * the simple builders below and _share-gallery.ts use.
- *
- * The line about changing the password is verified, not aspirational: the
- * Gallery Pass section of the portal calls /api/portal/gallery-pass with
- * action 'rotate' or 'set', authenticated by the client's own credentials.
- */
-function buildFullDeliveryText(
-  clientLabel: string | null,
-  expiresAt: string,
-  siteOrigin: string,
-  galleryPassword: string,
-): string {
-  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
-  const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const shareUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
-  return `${greeting}
-
-Your photos are ready. You can view and download them at:
-
-${siteOrigin}/portal
-
-Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.
-
-${shareUrl}
-
-You can change that gallery password any time from your portal, so the link stays yours to control.
-
-The gallery will stay online until ${exp}. Please download and back up your favourites before then.
-
-If you have any questions or want to order prints, just reply to this email.
-
-Warmly,
-Veronika`;
-}
 
 function buildFullDeliveryHtml(
-  clientLabel: string | null,
-  expiresAt: string,
+  firstName: string,
+  expiresAt: string | Date,
   siteOrigin: string,
   galleryPassword: string,
 ): string {
-  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const shareUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
-<p>Hi ${firstName},</p>
+<p>Hi ${firstName || 'there'},</p>
 <p>Your photos are ready ✨ View them anytime in your portal:</p>
 <p style="margin:24px 0;"><a href="${siteOrigin}/portal" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open My Gallery</a></p>
 <p style="font-size:14px;color:#666;">Want to share these with family or friends? Anyone with the link below can view the gallery, no account needed.</p>
@@ -464,47 +436,19 @@ function buildFullDeliveryHtml(
 </body></html>`;
 }
 
-function buildSimpleDeliveryText(
-  clientLabel: string | null,
-  expiresAt: string,
-  siteOrigin: string,
-  galleryPassword: string,
-): string {
-  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
-  const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const directUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
-  return `${greeting}
-
-Your photos are ready ✨
-
-Open your gallery (one-click access):
-${directUrl}
-
-If that link doesn't work, you can also go to ${siteOrigin}/portal/pass and enter the password manually:
-
-Password: ${galleryPassword}
-
-The gallery will stay online until ${exp}. Please download and back up your favourites before then.
-
-If you have any questions or want to order prints, just reply to this email.
-
-Warmly,
-Veronika`;
-}
 
 function buildSimpleDeliveryHtml(
-  clientLabel: string | null,
-  expiresAt: string,
+  firstName: string,
+  expiresAt: string | Date,
   siteOrigin: string,
   galleryPassword: string,
 ): string {
-  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
   const exp = new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const directUrl = `${siteOrigin}/portal/pass?password=${encodeURIComponent(galleryPassword)}`;
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
-<p>Hi ${firstName},</p>
+<p>Hi ${firstName || 'there'},</p>
 <p>Your photos are ready ✨</p>
 <p style="margin:24px 0;"><a href="${directUrl}" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open my gallery</a></p>
 <p style="font-size:13px;color:#888;margin-top:-8px;">If the button doesn't work, paste this into your browser:<br><span style="word-break:break-all;color:#c9a96e;font-family:monospace;font-size:12px;">${directUrl}</span></p>

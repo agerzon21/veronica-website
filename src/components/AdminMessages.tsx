@@ -31,7 +31,6 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
-import FaCheckCircle from '../icons/fa/FaCheckCircle';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
@@ -69,6 +68,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import VoiceInput from './ui/VoiceInput';
 import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
+import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBadge';
 import { moneyDigits, type ClientPrefill, type PrefillBooking } from './clientPrefill';
 import { readWeddingPackage } from '../data/formMessage';
 import { findPhonesInText, formatPhone, formatWaId, type FoundPhone } from '../utils/phoneFromText';
@@ -3288,7 +3288,7 @@ function ConversationView({
         // before believing we're done.
         const states = Object.values(data.states) as string[];
         const settled =
-          states.length > 0 && states.every((v) => DELIVERY_TERMINAL.includes(v));
+          states.length > 0 && states.every((v) => DELIVERY_TERMINAL.includes(deliveryStateOf(v) ?? ''));
         if (settled || Date.now() - startedAt >= MAX_WAIT_MS) return;
       } catch {
         // Silent, a missing delivery badge is not worth an error toast.
@@ -4392,89 +4392,6 @@ function ConversationView({
         onCancel={() => setSendConfirmOpen(false)}
       />
     </>
-  );
-}
-
-/**
- * Delivery badge for outbound email.
- *
- * Instagram needs nothing here, Vero can open the app and see the
- * message. Email is opaque: the composer clears and she has to trust it
- * went. Worse, "Resend accepted it" and "the client received it" are
- * different facts, and a bounce is exactly the case where she needs to
- * know and would otherwise never find out.
- */
-const DELIVERY_TERMINAL = ['delivered', 'bounced', 'complained', 'failed', 'canceled'];
-
-function DeliveryBadge({
-  state,
-  onRetry,
-  retrying,
-}: {
-  state: string | null | undefined;
-  onRetry?: () => void;
-  retrying?: boolean;
-}) {
-  const { t } = useAdminLang();
-  if (!state) return null;
-
-  const failed =
-    state === 'bounced' || state === 'complained' || state === 'failed' || state === 'canceled';
-  const delivered = state === 'delivered';
-  const inFlight = !DELIVERY_TERMINAL.includes(state);
-
-  return (
-    <Flex align="center" gap={1} justify="flex-end" mt={1}>
-      {/* In-flight gets a spinner rather than a static icon: the state is
-          genuinely still resolving, and a motionless "Sent" reads as the
-          final answer. Sized to the text so it's a hint, not a widget. */}
-      {inFlight ? (
-        <Spinner size="xs" boxSize={2.5} thickness="1.5px" speed="0.9s" color="gray.400" />
-      ) : (
-        <Icon
-          as={delivered ? FaCheckCircle : FaExclamationTriangle}
-          boxSize={2.5}
-          color={delivered ? 'green.500' : 'red.500'}
-        />
-      )}
-      <Text
-        fontSize="2xs"
-        color={failed ? 'red.600' : delivered ? 'green.600' : 'gray.500'}
-        fontWeight={failed ? '500' : '400'}
-        // A bounce is the one state that needs Vero to DO something, and
-        // retrying is usually futile, a hard bounce means the address
-        // doesn't accept mail, and Resend suppresses it after one.
-        title={failed ? t.messages.deliveryBouncedHelp : undefined}
-      >
-        {failed
-          ? t.messages.deliveryBounced
-          : delivered
-          ? t.messages.deliveryDelivered
-          : t.messages.deliverySent}
-      </Text>
-      {/* Retry only on failure, and only because the common bounce here
-          is TRANSIENT, a busy or filtering receiver, or a shared
-          sending IP briefly on a blocklist. Those clear on their own,
-          so a second attempt genuinely works. Re-sends the same text
-          through the normal send path, so it picks up whatever IP the
-          pool hands out next. */}
-      {failed && onRetry && (
-        <Box
-          as="button"
-          type="button"
-          onClick={onRetry}
-          disabled={retrying}
-          ml={1}
-          fontSize="2xs"
-          fontWeight="500"
-          color="brand.accentText"
-          textDecoration="underline"
-          sx={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          {retrying ? t.common.sending : t.messages.deliveryBouncedRetry}
-        </Box>
-      )}
-    </Flex>
   );
 }
 

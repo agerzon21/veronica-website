@@ -1513,8 +1513,8 @@ const dict = {
       ru: 'Email клиента не указан, скопируй сообщение и отправь любым удобным способом.',
     },
     notDeliveredBody: {
-      en: "The gallery is set up but no Drive URL was provided yet. Open the client's detail view to paste the URL and mark as delivered when ready.",
-      ru: 'Галерея создана, но ссылка на Drive пока не добавлена. Открой карточку клиента, вставь ссылку и отметь как отправленную, когда будешь готова.',
+      en: "The gallery is set up but no Drive URL was provided yet. Open the client's detail view, paste the URL into Photo Gallery and press Save and send when ready.",
+      ru: 'Галерея создана, но ссылка на Drive пока не добавлена. Открой карточку клиента, вставь ссылку в «Фотогалерею» и нажми «Сохранить и отправить», когда будешь готова.',
     },
     copyMessage: { en: 'Copy message', ru: 'Копировать сообщение' },
 
@@ -2300,9 +2300,44 @@ const dict = {
     },
     expired: { en: 'Expired', ru: 'Истекла' },
     notDelivered: { en: 'Not delivered yet', ru: 'Ещё не отправлена' },
-    markAsDelivered: { en: 'Mark as Delivered', ru: 'Отметить как отправленную' },
+    // The Drive link and the send are one step (2026-10-09): Vero pasted the
+    // link, pressed Save, and then had to find a second button that actually
+    // released the photos. "Save" told her nothing about that.
+    gallerySaveAndSend: { en: 'Save and send', ru: 'Сохранить и отправить' },
+    gallerySaveAndDeliver: { en: 'Save and deliver', ru: 'Сохранить и открыть галерею' },
+    gallerySend: { en: 'Send to client', ru: 'Отправить клиенту' },
+    galleryDeliver: { en: 'Deliver gallery', ru: 'Открыть галерею' },
+    gallerySaveOnly: { en: 'Save without sending', ru: 'Сохранить без отправки' },
+    gallerySendHelp: {
+      en: (email: string) => `Releases the photos to the client and emails the link to ${email}.`,
+      ru: (email: string) => `Открывает клиенту доступ к фото и отправляет ссылку на ${email}.`,
+    },
+    galleryDeliverHelp: {
+      en: 'Releases the photos to the client. No email is sent: use Copy message afterwards to send it yourself.',
+      ru: 'Открывает клиенту доступ к фото. Письмо не отправляется: потом нажми «Скопировать сообщение» и отправь сама.',
+    },
+    galleryEmailOptionalLabel: { en: 'Client email (optional)', ru: 'Почта клиента (необязательно)' },
+    galleryEmailOptionalHelp: {
+      en: 'Add one and the client is emailed the gallery link. Leave it empty to send it yourself.',
+      ru: 'Если указать, клиенту придёт письмо со ссылкой на галерею. Можно оставить пустым и отправить самой.',
+    },
+    galleryEmailInvalid: { en: "That email address doesn't look right.", ru: 'Адрес почты выглядит неправильно.' },
+    galleryEmailTo: {
+      en: (email: string, when: string) => `to ${email}${when ? ` · ${when}` : ''}`,
+      ru: (email: string, when: string) => `на ${email}${when ? ` · ${when}` : ''}`,
+    },
+    galleryEmailAgain: { en: 'Send email again', ru: 'Отправить письмо ещё раз' },
+    galleryEmailIt: { en: 'Email it to the client', ru: 'Отправить клиенту письмо' },
+    galleryEmailSend: { en: 'Send', ru: 'Отправить' },
+    galleryCopyMessage: { en: 'Copy message', ru: 'Скопировать сообщение' },
+    galleryCopyHelp: {
+      en: 'Copy message puts the words of the email on your clipboard, to paste into WhatsApp, Instagram or anywhere else.',
+      ru: '«Скопировать сообщение» копирует текст письма, чтобы вставить его в WhatsApp, Instagram или куда угодно.',
+    },
+    galleryExtend: { en: 'Extend gallery', ru: 'Продлить галерею' },
+    galleryUndo: { en: 'Undo delivery', ru: 'Отменить отправку' },
     delivering: { en: 'Delivering...', ru: 'Отправляю...' },
-    // Inline confirmation shown in place of the Mark as Delivered button
+    // Inline confirmation shown in place of the send button
     // when there's still a balance. Was a window.confirm; it is a panel now
     // because delivering is what actually releases the photos to the client,
     // so the warning should sit on the screen rather than in a browser popup
@@ -2723,8 +2758,8 @@ const dict = {
     },
     clientEmailLabel: { en: 'Client Email', ru: 'Email клиента' },
     clientEmailHelpSimple: {
-      en: 'Optional. If you add one, "Mark as Delivered" will email the client.',
-      ru: 'Необязательно. Если добавишь, при нажатии «Отметить как отправленную» клиенту придёт письмо.',
+      en: 'Optional. If you add one, Save and send in Photo Gallery emails them the link.',
+      ru: 'Необязательно. Если добавишь, «Сохранить и отправить» в «Фотогалерее» отправит клиенту ссылку.',
     },
     eventDateLabel: { en: 'Event Date', ru: 'Дата события' },
     sessionTypeLabel: { en: 'Session Type', ru: 'Тип съёмки' },
