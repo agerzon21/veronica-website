@@ -28,7 +28,8 @@ import FaCog from '../icons/fa/FaCog';
 import FaCopy from '../icons/fa/FaCopy';
 import FaPaperPlane from '../icons/fa/FaPaperPlane';
 import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBadge';
-import { deliveryFirstName, deliveryMessageText } from '../data/delivery-message';
+import { deliveryMessageText } from '../data/delivery-message';
+import { greetingName } from '../data/client-greeting';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
 import {
@@ -1290,7 +1291,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                     clientEmail={portal.client_email ?? ''}
                     message={deliveryMessageText({
                       mode: portal.mode === 'full' ? 'full' : 'simple',
-                      firstName: deliveryFirstName(portal.client_display_name, portal.partner_1_first_name),
+                      firstName: greetingName(portal.client_display_name, portal.partner_1_first_name),
                       expiresIso: portal.gallery_expires_at,
                       galleryPassword: portal.gallery_password,
                       replyTo: 'message',
@@ -1411,7 +1412,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               precisely the ones who text her asking for the link again. */}
           <ShareGallery
             galleryPassword={portal.gallery_password}
-            firstName={deliveryFirstName(portal.client_display_name, portal.partner_1_first_name)}
+            firstName={greetingName(portal.client_display_name, portal.partner_1_first_name)}
             expiresIso={portal.gallery_expires_at}
           />
           <InlineField

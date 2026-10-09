@@ -22,32 +22,6 @@ export const SITE_ORIGIN = 'https://vero.photography';
 
 export type DeliveryMode = 'full' | 'simple';
 
-// Words a booking's display name carries that are not anybody's name.
-const NOT_A_NAME = /^(wedding|weddings|proposal|engagement|elopement|anniversary|portraits?|family|maternity|newborn|couples?|session|photoshoot|shoot|minis?|aerial|christmas|\d+)$/i;
-
-/**
- * Who the message greets. Empty greets "there".
- *
- * The stored first name wins. Display names are labels for Vero's list
- * ("Wedding Sam & Alex 2026", "Proposal Sam 2026"), and until
- * 2026-10-09 the photos-are-ready email greeted with the display name, so
- * gallery-only clients got greetings like "Hi Proposal Sam 2026," although the
- * first name had been stored at creation for exactly this greeting
- * (partner_1_first_name, 24 of 26 bookings). The label is only read when
- * that is empty: before any "&" or ",", minus the session words and the
- * year, first word left.
- */
-export function deliveryFirstName(
-  clientLabel: string | null | undefined,
-  storedFirstName?: string | null,
-): string {
-  const stored = storedFirstName?.trim();
-  if (stored) return stored;
-  if (!clientLabel) return '';
-  const words = clientLabel.split(/[&,]/)[0].trim().split(/\s+/).filter((w) => w && !NOT_A_NAME.test(w));
-  return words[0] ?? '';
-}
-
 /**
  * "January 7, 2027", from a plain yyyy-mm-dd, a full timestamp, or a Date,
  * read so it cannot slip a day. An unparseable string comes back as given
@@ -85,7 +59,7 @@ export function galleryPassUrl(galleryPassword: string, origin: string = SITE_OR
 
 export function deliveryMessageText(input: {
   mode: DeliveryMode;
-  /** Already reduced to a first name (deliveryFirstName). Empty greets "there". */
+  /** Already reduced to a first name (greetingName, client-greeting.ts). Empty greets "there". */
   firstName: string;
   /** When the gallery goes offline. Null leaves the line out. */
   expiresIso: string | Date | null;

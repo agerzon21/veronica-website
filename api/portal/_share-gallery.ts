@@ -26,6 +26,7 @@ import { checkPortalPassword } from './_password.js';
 import { galleryKeys, portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { getDb } from '../_db.js';
 import { sendEmail } from '../_auto-reply.js';
+import { welcomeNames } from '../../src/data/client-greeting.js';
 
 const INVITE_LIMIT_PER_24H = 5;
 const WRONG_AUTH_DELAY_MS = 750;
@@ -36,6 +37,8 @@ type PortalRow = {
   client_password_hash: string | null;
   id: string;
   client_display_name: string | null;
+  partner_1_first_name: string | null;
+  partner_2_first_name: string | null;
   gallery_password: string;
   gallery_enabled: boolean;
   gallery_expires_at: string | null;
@@ -79,14 +82,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const rows = galleryPassword
       ? ((await sql`
-          select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at
+          select id, client_display_name, partner_1_first_name, partner_2_first_name,
+                 gallery_password, gallery_enabled, gallery_expires_at
           from client_portals
           where gallery_password = ${galleryPassword}
           limit 1
         `) as PortalRow[])
       : ((await sql`
-          select id, client_display_name, gallery_password, gallery_enabled, gallery_expires_at,
-                 client_password_hash
+          select id, client_display_name, partner_1_first_name, partner_2_first_name,
+                 gallery_password, gallery_enabled, gallery_expires_at, client_password_hash
           from client_portals
           where mode = 'full'
             and lower(client_email) = ${email}
@@ -142,11 +146,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
 
     try {
+      // "Sam & Alex", not the display name, which is Vero's label for the
+      // booking: a friend was told "Wedding Sam & Alex 2026 shared a photo
+      // gallery with you".
+      const from = welcomeNames(portal.client_display_name, portal.partner_1_first_name, portal.partner_2_first_name) || null;
       await sendEmail({
         to: targetEmail,
-        subject: `${portal.client_display_name ?? 'A friend'} shared a photo gallery with you`,
-        text: buildInviteText(portal.client_display_name, siteOrigin, portal.gallery_password, portal.gallery_expires_at),
-        html: buildInviteHtml(portal.client_display_name, siteOrigin, portal.gallery_password, portal.gallery_expires_at),
+        subject: `${from ?? 'A friend'} shared a photo gallery with you`,
+        text: buildInviteText(from, siteOrigin, portal.gallery_password, portal.gallery_expires_at),
+        html: buildInviteHtml(from, siteOrigin, portal.gallery_password, portal.gallery_expires_at),
       });
     } catch (err) {
       console.error('[portal/share-gallery] email send failed:', err);

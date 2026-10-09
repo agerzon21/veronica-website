@@ -41,6 +41,7 @@ import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
 import { sendEmail } from '../_auto-reply.js';
+import { greetingName } from '../../src/data/client-greeting.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
@@ -457,8 +458,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const sent = await sendEmail({
           to: clientEmail,
           subject: 'Your client portal is ready, from Vero Photography',
-          text: buildInviteText(clientDisplayName, inviteUrl),
-          html: buildInviteHtml(clientDisplayName, inviteUrl),
+          // Greets the first name typed into the form, not the display
+          // name, which is Vero's label ("Senior Photos").
+          text: buildInviteText(greetingName(clientDisplayName, partner1), inviteUrl),
+          html: buildInviteHtml(greetingName(clientDisplayName, partner1), inviteUrl),
         });
         inviteEmailId = sent?.id ?? null;
         // Persist it so the delivery state stays answerable after this
@@ -516,8 +519,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-function buildInviteText(clientLabel: string | null, inviteUrl: string): string {
-  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
+function buildInviteText(firstName: string, inviteUrl: string): string {
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
   return `${greeting}
 
 Your client portal with Vero Photography is ready. Click the link below to confirm your booking details and pick a password:
@@ -532,12 +535,11 @@ Looking forward to working with you,
 Veronika`;
 }
 
-function buildInviteHtml(clientLabel: string | null, inviteUrl: string): string {
-  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
+function buildInviteHtml(firstName: string, inviteUrl: string): string {
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
-<p>Hi ${firstName},</p>
+<p>Hi ${firstName || 'there'},</p>
 <p>Your client portal is ready. Click below to confirm your booking details and pick a password:</p>
 <p style="margin:24px 0;"><a href="${inviteUrl}" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Set up your portal</a></p>
 <p style="font-size:14px;color:#666;">This link is valid for 14 days. If the button doesn't work, paste this URL into your browser:<br><span style="word-break:break-all;color:#c9a96e;">${inviteUrl}</span></p>

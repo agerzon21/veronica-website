@@ -42,7 +42,8 @@ import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { sendEmail } from '../_auto-reply.js';
 import { bookingOwedTotal, salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
-import { deliveryFirstName, deliveryMessageText } from '../../src/data/delivery-message.js';
+import { deliveryMessageText } from '../../src/data/delivery-message.js';
+import { greetingName } from '../../src/data/client-greeting.js';
 
 /**
  * Add calendar months, the way a person counting months on a calendar does.
@@ -98,7 +99,7 @@ async function sendDeliveryEmail(
   if (!portal.client_email) {
     return { sent: false, error: 'No email address on this booking.' };
   }
-  const firstName = deliveryFirstName(portal.client_display_name, portal.partner_1_first_name);
+  const firstName = greetingName(portal.client_display_name, portal.partner_1_first_name);
   try {
     const sent = await sendEmail({
       to: portal.client_email,

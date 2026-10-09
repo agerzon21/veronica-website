@@ -31,6 +31,7 @@ import { isStripeTestMode } from '../_stripe.js';
 import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
 import { contractFingerprint } from '../_contract-fingerprint.js';
+import { welcomeNames } from '../../src/data/client-greeting.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
@@ -45,6 +46,8 @@ type ClientPortalRow = {
   // below; neither field appears in it.
   client_password_hash: string | null;
   client_display_name: string | null;
+  partner_1_first_name: string | null;
+  partner_2_first_name: string | null;
   client_email: string | null;
   drive_url: string | null;
   // Session metadata, shown in the portal header so the client sees
@@ -109,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
     }
     const rows = (await sql`
-      select id, mode, client_display_name, client_email, drive_url,
+      select id, mode, client_display_name, partner_1_first_name, partner_2_first_name, client_email, drive_url,
              event_date, session_type, contract_template_key, contract_variables,
              contract_status, contract_signed_at, contract_body, contract_signed_pdf_url,
              contract_total_amount, contract_retainer_amount, paid_to_date, payment_plan_enabled,
@@ -355,7 +358,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        * behind it, so the server answers it instead.
        */
       card_test_mode: isStripeTestMode(),
-      client_name: row.client_display_name,
+      // "Welcome, Sam & Alex": the names, never the display name, which is
+      // Vero's label for the booking ("Senior Photos").
+      client_name: welcomeNames(row.client_display_name, row.partner_1_first_name, row.partner_2_first_name) || null,
       client_email: row.client_email,
       // Null until release, not "present but hidden": the Drive URL is the
       // photos. tree stays empty for the same reason, because it is never

@@ -1706,12 +1706,12 @@ const dict = {
     // Display name
     displayNameLabel: { en: 'Display Name', ru: 'Отображаемое имя' },
     displayNameHelpCustom: {
-      en: 'Custom, clear the field to go back to the auto-generated name.',
-      ru: 'Ты ввела своё значение. Очисти поле, чтобы вернуться к автоматическому имени.',
+      en: 'Custom, clear the field to go back to the auto-generated name. Your label only: the client is greeted by first name.',
+      ru: 'Ты ввела своё значение. Очисти поле, чтобы вернуться к автоматическому имени. Это только твоё название: к клиенту обращаются по имени.',
     },
     displayNameHelpAuto: {
-      en: 'Auto-generated from the partner first names. Type to override.',
-      ru: 'Собирается автоматически из имён партнёров. Напиши своё, чтобы переопределить.',
+      en: 'Auto-generated from the partner first names. Type to override. Your label only: the client is greeted by first name.',
+      ru: 'Собирается автоматически из имён партнёров. Напиши своё, чтобы переопределить. Это только твоё название: к клиенту обращаются по имени.',
     },
     displayNamePlaceholder: { en: 'e.g. Chrisann & Rajiv', ru: 'например, Chrisann & Rajiv' },
 
@@ -2752,9 +2752,11 @@ const dict = {
 
     // ─── Details section ──────────────────────────────
     displayNameLabel: { en: 'Display Name', ru: 'Имя для отображения' },
+    // It said "What we'll greet them by in the portal", and it was, until
+    // 2026-10-09: "Hi Senior Photos". Greetings use the first names now.
     displayNameHelp: {
-      en: "What we'll greet them by in the portal.",
-      ru: 'Как мы будем обращаться к клиенту в портале.',
+      en: 'Your label for this booking in the client list. Clients are greeted by their first name, not by this.',
+      ru: 'Твоё название брони в списке клиентов. К клиенту обращаются по имени, а не так.',
     },
     clientEmailLabel: { en: 'Client Email', ru: 'Email клиента' },
     clientEmailHelpSimple: {

@@ -17,6 +17,8 @@ import { cardPricingOf, type CardPricing } from '../data/payment-handles';
 
 interface WelcomeSummary {
   client_display_name: string | null;
+  // The first name to greet; the display name is Vero's label for the booking.
+  greeting_name?: string;
   client_email: string;
   partner_1_full_name: string | null;
   partner_2_full_name: string | null;
@@ -188,7 +190,7 @@ const Welcome = () => {
                   letterSpacing="0.02em"
                   m={0}
                 >
-                  {loading ? 'Loading…' : summary?.client_display_name ? `Hi ${summary.client_display_name.split(/[&,]/)[0].trim()}` : 'Let’s get you set up'}
+                  {loading ? 'Loading…' : summary?.greeting_name ? `Hi ${summary.greeting_name}` : 'Let’s get you set up'}
                 </Text>
               </VStack>
 

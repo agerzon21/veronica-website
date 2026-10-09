@@ -29,6 +29,7 @@ import {
   GALLERY_WITHHELD_MESSAGE,
 } from './_gallery-gate.js';
 import { getDb } from '../_db.js';
+import { welcomeNames } from '../../src/data/client-greeting.js';
 import { galleryKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
 
@@ -39,6 +40,8 @@ type GalleryRow = {
   // Needed to verify an admin preview token, which is signed per portal.
   id: string;
   client_display_name: string | null;
+  partner_1_first_name: string | null;
+  partner_2_first_name: string | null;
   drive_url: string | null;
   gallery_enabled: boolean;
   gallery_expires_at: string | null;
@@ -73,7 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(429).json({ success: false, error: tooManyAttempts(gate.retryAfterSec) });
     }
     const rows = (await sql`
-      select id, client_display_name, drive_url, gallery_enabled, gallery_expires_at,
+      select id, client_display_name, partner_1_first_name, partner_2_first_name,
+             drive_url, gallery_enabled, gallery_expires_at,
              mode, gallery_delivered_at
       from client_portals
       where gallery_password = ${password}
@@ -86,7 +90,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ success: false, error: 'Incorrect password' });
     }
 
-    const { client_display_name, drive_url, gallery_expires_at } = rows[0];
+    const { drive_url, gallery_expires_at } = rows[0];
+    // "Welcome, Sam & Alex" at the top of the gallery. It showed the display
+    // name, Vero's label: "Welcome, Wedding Sam & Alex 2026".
+    const client_name =
+      welcomeNames(rows[0].client_display_name, rows[0].partner_1_first_name, rows[0].partner_2_first_name) || null;
 
     // The release gate, before anything else is computed: a full portal's
     // photos are served only after Vero marks the gallery delivered.
@@ -141,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!drive_url) {
       return res.status(200).json({
         success: true,
-        client_name: client_display_name,
+        client_name,
         drive_url: null,
         rootFiles: [],
         sections: [],
@@ -163,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[portal/gallery] Drive API failed:', err);
       return res.status(200).json({
         success: true,
-        client_name: client_display_name,
+        client_name,
         drive_url,
         rootFiles: [],
         sections: [],
@@ -174,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       success: true,
-      client_name: client_display_name,
+      client_name,
       drive_url,
       rootFiles: tree.rootFiles,
       sections: tree.sections,

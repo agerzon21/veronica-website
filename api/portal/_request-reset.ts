@@ -3,6 +3,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { getDb } from '../_db.js';
 import { recordFailure, resetKeys, throttled, tooManyAttempts } from './_throttle.js';
 import { sendEmail } from '../_auto-reply.js';
+import { greetingName } from '../../src/data/client-greeting.js';
 
 /**
  * Client portal: request a password reset link.
@@ -78,11 +79,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     await recordFailure(sql, throttleKeys);
     const rows = (await sql`
-      SELECT id, client_display_name, client_email
+      SELECT id, client_display_name, partner_1_first_name, client_email
       FROM client_portals
       WHERE mode = 'full' AND lower(client_email) = ${email}
       LIMIT 1
-    `) as Array<{ id: string; client_display_name: string | null; client_email: string | null }>;
+    `) as Array<{ id: string; client_display_name: string | null; partner_1_first_name: string | null; client_email: string | null }>;
 
     const portal = rows[0];
     if (!portal || !portal.client_email) {
@@ -105,7 +106,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       process.env.SITE_ORIGIN ||
       (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
     const resetUrl = `${siteOrigin}/portal/reset?token=${token}`;
-    const name = portal.client_display_name || 'there';
+    // The first name, not the display name: that is Vero's label for the
+    // booking ("Senior Photos"), and this used to greet with all of it.
+    const name = greetingName(portal.client_display_name, portal.partner_1_first_name) || 'there';
 
     await sendEmail({
       to: portal.client_email,

@@ -36,6 +36,7 @@ import { renderContractPdf, type AuditRecord } from '../_contract-pdf.js';
 import { contractFingerprint } from '../_contract-fingerprint.js';
 import { reportPaymentIssue } from '../_payment-alerts.js';
 import type { ContractTemplate } from '../../src/data/contract-template.js';
+import { greetingName } from '../../src/data/client-greeting.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,6 +48,7 @@ type ClientRow = {
   client_password_hash: string | null;
   id: string;
   client_display_name: string | null;
+  partner_1_first_name: string | null;
   client_email: string;
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_body: string | null;
@@ -122,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 1. Auth + load contract body
     const rows = (await sql`
-      select id, client_display_name, client_email, contract_status, contract_body,
+      select id, client_display_name, partner_1_first_name, client_email, contract_status, contract_body,
              client_password_hash
       from client_portals
       where mode = 'full'
@@ -265,8 +267,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         to: portal.client_email,
         cc: FROM_ADDRESS,
         subject: `Signed: ${filledTemplate.title}, from Vero Photography`,
-        text: buildSignedEmailText(portal.client_display_name, signerName),
-        html: buildSignedEmailHtml(portal.client_display_name, signerName),
+        text: buildSignedEmailText(greetingName(portal.client_display_name, portal.partner_1_first_name), signerName),
+        html: buildSignedEmailHtml(greetingName(portal.client_display_name, portal.partner_1_first_name), signerName),
         attachments: [
           {
             filename: pdfFilename,
@@ -337,8 +339,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 // Simple confirmation email, kept short and personal, no marketing tone.
-function buildSignedEmailText(clientLabel: string | null, signerName: string): string {
-  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
+function buildSignedEmailText(firstName: string, signerName: string): string {
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
   return `${greeting}
 
 Thank you for signing your contract, you are officially on the books.
@@ -353,12 +355,11 @@ Veronika
 Signed electronically by ${signerName}`;
 }
 
-function buildSignedEmailHtml(clientLabel: string | null, signerName: string): string {
-  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
+function buildSignedEmailHtml(firstName: string, signerName: string): string {
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
-<p>Hi ${firstName},</p>
+<p>Hi ${firstName || 'there'},</p>
 <p>Thank you for signing your contract, you're officially on the books.</p>
 <p>Your signed copy is attached to this email for your records. You can also access it any time from your <a href="https://vero.photography/portal" style="color:#c9a96e">Client Portal</a>.</p>
 <p>If anything looks off or you have questions, just reply to this email.</p>

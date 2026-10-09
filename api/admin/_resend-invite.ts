@@ -20,6 +20,7 @@ import { randomBytes } from 'node:crypto';
 import { getDb } from '../_db.js';
 import { requireAdmin } from '../_admin-auth.js';
 import { sendEmail } from '../_auto-reply.js';
+import { greetingName } from '../../src/data/client-greeting.js';
 
 function generateToken(): string {
   return randomBytes(32).toString('hex');
@@ -29,6 +30,7 @@ type Row = {
   id: string;
   mode: 'simple' | 'full';
   client_display_name: string | null;
+  partner_1_first_name: string | null;
   client_email: string | null;
   client_password_hash: string | null;
 };
@@ -48,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, mode, client_display_name, client_email, client_password_hash
+      select id, mode, client_display_name, partner_1_first_name, client_email, client_password_hash
       from client_portals where id = ${id} limit 1
     `) as Row[];
     if (rows.length === 0) return res.status(404).json({ success: false, error: 'Portal not found' });
@@ -86,8 +88,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const sent = await sendEmail({
         to: portal.client_email,
         subject: 'Your client portal is ready, from Vero Photography',
-        text: buildInviteText(portal.client_display_name, inviteUrl),
-        html: buildInviteHtml(portal.client_display_name, inviteUrl),
+        text: buildInviteText(greetingName(portal.client_display_name, portal.partner_1_first_name), inviteUrl),
+        html: buildInviteHtml(greetingName(portal.client_display_name, portal.partner_1_first_name), inviteUrl),
       });
       sentId = sent?.id ?? null;
       if (sentId) {
@@ -115,8 +117,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-function buildInviteText(clientLabel: string | null, inviteUrl: string): string {
-  const greeting = clientLabel ? `Hi ${clientLabel.split(/[&,]/)[0].trim()},` : 'Hi there,';
+function buildInviteText(firstName: string, inviteUrl: string): string {
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
   return `${greeting}
 
 Your client portal with Vero Photography is ready. Click the link below to confirm your booking details and pick a password:
@@ -131,12 +133,11 @@ Looking forward to working with you,
 Veronika`;
 }
 
-function buildInviteHtml(clientLabel: string | null, inviteUrl: string): string {
-  const firstName = clientLabel ? clientLabel.split(/[&,]/)[0].trim() : 'there';
+function buildInviteHtml(firstName: string, inviteUrl: string): string {
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
-<p>Hi ${firstName},</p>
+<p>Hi ${firstName || 'there'},</p>
 <p>Your client portal is ready. Click below to confirm your booking details and pick a password:</p>
 <p style="margin:24px 0;"><a href="${inviteUrl}" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Set up your portal</a></p>
 <p style="font-size:14px;color:#666;">This link is valid for 14 days. If the button doesn't work, paste this URL into your browser:<br><span style="word-break:break-all;color:#c9a96e;">${inviteUrl}</span></p>

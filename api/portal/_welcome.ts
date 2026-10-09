@@ -18,10 +18,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
+import { greetingName } from '../../src/data/client-greeting.js';
 
 type Row = {
   id: string;
   client_display_name: string | null;
+  partner_1_first_name: string | null;
   client_email: string;
   partner_1_full_name: string | null;
   partner_2_full_name: string | null;
@@ -53,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sql = getDb();
     const rows = (await sql`
-      select id, client_display_name, client_email,
+      select id, client_display_name, partner_1_first_name, client_email,
              partner_1_full_name, partner_2_full_name,
              session_type, contract_template_key, event_date, contract_variables,
              contract_total_amount, contract_retainer_amount, setup_token_expires_at
@@ -117,6 +119,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       client_display_name: row.client_display_name,
+      // "Hi Ashley" at the top of the page. The display name is Vero's label.
+      greeting_name: greetingName(row.client_display_name, row.partner_1_first_name),
       client_email: row.client_email,
       partner_1_full_name: row.partner_1_full_name,
       partner_2_full_name: row.partner_2_full_name,
