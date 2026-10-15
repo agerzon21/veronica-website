@@ -65,10 +65,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       limit 1
     `) as Row[];
 
+    // Not found almost always means USED: setting the password clears the
+    // token, and the email still holds the link. It said "Reach out to
+    // Veronika to get a new one" to a client who already had an account and
+    // only needed to sign in (2026-10-15). A resent invite also replaces the
+    // token, so the page covers that too. `used` lets it offer the sign-in.
     if (rows.length === 0) {
       return res.status(410).json({
         success: false,
-        error: 'This setup link is no longer valid. Reach out to Veronika to get a new one.',
+        used: true,
+        error: 'This setup link has already been used, or a newer one has been sent since.',
       });
     }
 

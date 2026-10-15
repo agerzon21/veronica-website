@@ -158,8 +158,8 @@ const Pay = () => {
                     <>
                       <Box w="100%" h="1px" bg="gray.100" />
                       <Text textStyle="bodyCopy" color="gray.500" textAlign="center">
-                        Prefer to pay by card? Sign in to your client portal and
-                        the balance is payable there.
+                        Prefer to pay by card? Sign in to your client portal. Once
+                        your contract is signed, you can pay there.
                       </Text>
                     </>
                   )}

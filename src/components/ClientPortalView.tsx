@@ -10,6 +10,7 @@ import FaHeart from '../icons/fa/FaHeart';
 import { m } from 'framer-motion';
 import { prefersReducedMotion } from '../utils/motion';
 import FaUndo from '../icons/fa/FaUndo';
+import FaFileSignature from '../icons/fa/FaFileSignature';
 import SignatureCanvas from 'react-signature-canvas';
 import type SignatureCanvasType from 'react-signature-canvas';
 import ClientGallery, {
@@ -1349,6 +1350,28 @@ const ClientPortalView = ({
                 />
               )}
             </SimpleGrid>
+
+            {/* Before signing, this section shows what is owed and nothing to
+                pay it with, because the payment options live in the next-steps
+                panel, which opens on signing. Nothing said so, and a client
+                who came here to pay found no button and wrote in to ask how
+                (2026-10-15). */}
+            {data.contract_status === 'pending' && (
+              <VStack spacing={4} pt={2} data-testid="pay-after-signing">
+                <Text fontSize="sm" color="gray.600" fontWeight="300" lineHeight="1.7">
+                  Payment opens here as soon as your contract is signed:{' '}
+                  {CARD_PAYMENTS_MODE === 'on' ? 'card, Zelle, Venmo or Cash App.' : 'Zelle, Venmo or Cash App.'}
+                </Text>
+                <CTAButton
+                  onClick={() => handleNavSelect('contract-section')}
+                  icon={FaFileSignature}
+                  variant="outline"
+                  size="sm"
+                >
+                  Sign the contract
+                </CTAButton>
+              </VStack>
+            )}
 
             {/* Itemized charges: extra time, and costs paid on the day.
                 A receipt, not a demand: each line says what it was for and

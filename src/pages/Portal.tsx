@@ -25,31 +25,13 @@ import { prefersReducedMotion } from '../utils/motion';
 // back to the lazy chunks declared below.
 import type { ClientPortalData } from '../components/ClientPortalView';
 import type { GalleryData } from '../components/PortalGalleryView';
+import {
+  clearStoredSession,
+  readStoredSession,
+  storeSession,
+  type StoredSession,
+} from '../components/portalSession';
 
-/**
- * The portal session, kept for the length of the browser tab.
- *
- * Until now the credentials lived in React state and nowhere else, so ANY
- * reload signed the client out. That was mostly invisible, until it was not:
- * the chunk error boundary reloads the page by design when a lazily loaded
- * route fails, which on a phone with a flaky connection happens when you tap a
- * photo and the lightbox chunk does not arrive. The client was then dumped at
- * the login form mid gallery with no explanation, which is what was reported
- * as "it randomly logs me out".
- *
- * sessionStorage rather than localStorage on purpose: it is scoped to this tab
- * and dies when the tab closes, so a shared or borrowed phone does not keep a
- * client signed in. It does mean the portal password sits in tab storage for
- * the length of the visit. That is a real trade off, and the right one here:
- * every call this page makes already re-sends the same credential, the gallery
- * password is by design a bearer token in a shareable link, and anything able
- * to read sessionStorage on this origin could read the page itself anyway.
- */
-const SESSION_KEY = 'vg:portalSession';
-
-type StoredSession =
-  | { kind: 'client'; email: string; password: string }
-  | { kind: 'gallery'; password: string };
 
 /**
  * THE TWO SIGNED-IN VIEWS ARE LAZY, AND THIS PAGE IS MOSTLY A PASSWORD FORM.
@@ -107,35 +89,6 @@ const warmSignedInChunk = (kind: StoredSession['kind']): void => {
   void load().catch(() => {});
 };
 
-function storeSession(session: StoredSession): void {
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  } catch {
-    // Private mode can throw. The visit still works, it just will not
-    // survive a reload, which is exactly the old behaviour.
-  }
-}
-
-function readStoredSession(): StoredSession | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredSession;
-    if (parsed?.kind === 'client' && parsed.email && parsed.password) return parsed;
-    if (parsed?.kind === 'gallery' && parsed.password) return parsed;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function clearStoredSession(): void {
-  try {
-    sessionStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* nothing to do */
-  }
-}
 
 
 /* The tab strip's cross-fade lived here, with MotionDiv and TAB_FADE_SEC.
@@ -593,7 +546,12 @@ const Portal = () => {
   // anyone with the password did. We deliberately do NOT support
   // ?password= on the client tab (full-portal login), typing the
   // password is the friction we want there.
-  const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
+  // The welcome page hands the address over in router state, not the URL:
+  // ?email= put a client's address in the address bar and the access logs.
+  // It is only the fallback for a tab that cannot keep the session.
+  const [email, setEmail] = useState(
+    () => searchParams.get('email') ?? (location.state as { email?: string } | null)?.email ?? '',
+  );
   const [clientPassword, setClientPassword] = useState('');
   const [galleryPassword, setGalleryPassword] = useState(
     () => (tabFromPath(location.pathname) === 'gallery' ? searchParams.get('password') ?? '' : ''),

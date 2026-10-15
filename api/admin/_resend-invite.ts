@@ -119,13 +119,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 function buildInviteText(firstName: string, inviteUrl: string): string {
   const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
+  const portalUrl = `${new URL(inviteUrl).origin}/portal`;
   return `${greeting}
 
 Your client portal with Vero Photography is ready. Click the link below to confirm your booking details and pick a password:
 
 ${inviteUrl}
 
-This link is valid for 14 days.
+This link is valid for 14 days and works once, to set your password. After that, sign in any time at ${portalUrl} with this email and your password.
 
 Inside, you'll be able to review and sign your contract, track your balance, and (once it's ready) view your photo gallery.
 
@@ -134,6 +135,9 @@ Veronika`;
 }
 
 function buildInviteHtml(firstName: string, inviteUrl: string): string {
+  // The setup link works once. Saying where to go AFTER it is what was missing
+  // when a client came back to this email to pay and found it dead (2026-10-15).
+  const portalUrl = `${new URL(inviteUrl).origin}/portal`;
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
@@ -141,6 +145,7 @@ function buildInviteHtml(firstName: string, inviteUrl: string): string {
 <p>Your client portal is ready. Click below to confirm your booking details and pick a password:</p>
 <p style="margin:24px 0;"><a href="${inviteUrl}" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Set up your portal</a></p>
 <p style="font-size:14px;color:#666;">This link is valid for 14 days. If the button doesn't work, paste this URL into your browser:<br><span style="word-break:break-all;color:#c9a96e;">${inviteUrl}</span></p>
+<p style="font-size:14px;color:#666;">The link works once, to set your password. After that, sign in any time at <a href="${portalUrl}" style="color:#c9a96e;">${portalUrl.replace(/^https?:\/\//, '')}</a> with this email and your password.</p>
 <p>Inside you'll be able to review and sign your contract, track your balance, and (once it's ready) view your photo gallery.</p>
 <p>Looking forward to working with you,<br><em>Veronika</em></p>
 </body></html>`;

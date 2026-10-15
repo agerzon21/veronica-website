@@ -5,6 +5,7 @@ import { Helmet } from 'react-helmet-async';
 import FaEye from '../icons/fa/FaEye';
 import FaEyeSlash from '../icons/fa/FaEyeSlash';
 import CTAButton from '../components/ui/CTAButton';
+import { storeSession } from '../components/portalSession';
 import Reveal from '../components/ui/Reveal';
 import {
   PA_SALES_TAX_LABEL,
@@ -63,6 +64,8 @@ const Welcome = () => {
   const [summary, setSummary] = useState<WelcomeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  // The link was used (or replaced), so the likely next step is signing in.
+  const [offerSignIn, setOfferSignIn] = useState(false);
 
   // partner_2 is NULL for every booking type except wedding and engagement, so
   // a solo client must not be shown a plural "Names" row or an ampersand.
@@ -80,6 +83,7 @@ const Welcome = () => {
   useEffect(() => {
     if (!token) {
       setLoadError('This link is missing its setup token. Reach out to Veronika for a new one.');
+      setOfferSignIn(true);
       setLoading(false);
       return;
     }
@@ -95,6 +99,7 @@ const Welcome = () => {
           setSummary(data);
         } else {
           setLoadError(data.error || 'This link is no longer valid.');
+          setOfferSignIn(data.used === true);
         }
       } catch {
         setLoadError('Could not reach the server. Please try again.');
@@ -125,12 +130,17 @@ const Welcome = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         setDone(true);
-        // Brief pause so the success state is visible, then push to /portal
-        // with the email prefilled. The client will still need to type their
-        // password, we deliberately do NOT auto-login because the password
-        // they just chose isn't held in any session yet.
+        // Straight into the portal, signed in. This used to stop at the
+        // sign-in form with the email filled in, to type the password just
+        // chosen a second time, and "You're all set" read as finished: a
+        // client set her password, left, and came back days later to a setup
+        // link that no longer worked, with the contract still unsigned
+        // (2026-10-15). The portal restores a session from this tab's storage
+        // on arrival, the same way it survives a reload. If the tab cannot
+        // store it (private mode), the address still arrives prefilled.
+        storeSession({ kind: 'client', email: data.email, password });
         setTimeout(() => {
-          navigate(`/portal?email=${encodeURIComponent(data.email)}`);
+          navigate('/portal', { state: { email: data.email } });
         }, 1200);
       } else {
         setSubmitError(data.error || 'Could not save. Please try again.');
@@ -212,6 +222,20 @@ const Welcome = () => {
                   <Text color="red.300" fontSize="sm" textAlign="center" fontWeight="300">
                     {loadError}
                   </Text>
+                  {offerSignIn && (
+                    <VStack spacing={5} mt={5}>
+                      <Text fontSize="sm" color="whiteAlpha.800" textAlign="center" fontWeight="300" lineHeight="1.7">
+                        Already chose a password? Sign in with your email and that password. If you haven't yet, use the
+                        newest email from Veronika, or reach out and she'll send a new link.
+                      </Text>
+                      <CTAButton variant="solid" size="lg" fullWidth onClick={() => navigate('/portal')}>
+                        Sign in to your portal
+                      </CTAButton>
+                      <Text fontSize="xs" color="whiteAlpha.600" textAlign="center" fontWeight="300">
+                        Forgot your password? There's a reset link on the sign-in page.
+                      </Text>
+                    </VStack>
+                  )}
                 </Box>
               )}
 
@@ -368,7 +392,7 @@ const Welcome = () => {
                     You're all set ✓
                   </Text>
                   <Text fontSize="sm" color="whiteAlpha.700">
-                    Redirecting you to sign in…
+                    Opening your portal…
                   </Text>
                 </Box>
               )}
