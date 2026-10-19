@@ -66,6 +66,7 @@ import {
   type TravelStatus,
 } from '../data/travel-fee';
 import { travelCopy } from './travelCopy';
+import { suggestedRetainer } from '../data/retainer';
 
 interface Props {
   adminPassword: string;
@@ -189,26 +190,6 @@ const defaultEventTitle = (p1First: string, p2First: string, sessionType: string
 
 const roundTo = (amount: number, step: number): number => Math.round(amount / step) * step;
 
-/**
- * The suggested retainer for a given total.
- *
- * 15% of the total to the nearest $50, but never below $100 and never above
- * the total itself. A flat 15% put a $30 retainer on a small session, which is
- * not enough to be worth holding a date for, and the floor still has to bend
- * for a booking that costs less than the floor, hence the Math.min. The $50
- * steps are Alex's rule (2026-10-04): a retainer is a number somebody says out
- * loud, so $1,000 asks for $150 and $1,500 for $250, never $225.
- *
- * The total typed here is the price before tax, which is what the 15% is of,
- * and the retainer is never taxed on its own (sales-tax.ts, retainerOwed).
- */
-const RETAINER_RATE = 0.15;
-const RETAINER_FLOOR = 100;
-const RETAINER_STEP = 50;
-const suggestedRetainer = (total: number): string => {
-  if (!Number.isFinite(total) || total <= 0) return '';
-  return String(Math.min(total, Math.max(RETAINER_FLOOR, roundTo(total * RETAINER_RATE, RETAINER_STEP))));
-};
 
 /**
  * The suggested event insurance cap for a given total: 15% of it to the
