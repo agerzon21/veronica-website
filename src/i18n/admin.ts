@@ -2756,8 +2756,22 @@ const dict = {
     // It said "What we'll greet them by in the portal", and it was, until
     // 2026-10-09: "Hi Senior Photos". Greetings use the first names now.
     displayNameHelp: {
-      en: 'Your label for this booking in the client list. Clients are greeted by their first name, not by this.',
-      ru: 'Твоё название брони в списке клиентов. К клиенту обращаются по имени, а не так.',
+      en: 'Your label for this booking in the client list. Clients never see it: they are greeted by First Name, just below.',
+      ru: 'Твоё название брони в списке клиентов. Клиенты его не видят: к ним обращаются по имени, оно ниже.',
+    },
+    firstNameLabel: { en: 'First Name', ru: 'Имя' },
+    // The live result, so the field explains itself: what the emails and the
+    // client's own pages actually say right now.
+    greetingPreview: {
+      en: (hi: string, welcome: string) =>
+        `What they're called: emails say "Hi ${hi || 'there'}," and their portal and gallery say "${welcome ? `Welcome, ${welcome}` : 'Welcome'}".`,
+      ru: (hi: string, welcome: string) =>
+        `Как к ним обращаемся: в письмах «Hi ${hi || 'there'},», в портале и галерее «${welcome ? `Welcome, ${welcome}` : 'Welcome'}».`,
+    },
+    partnerFirstNameLabel: { en: 'Partner First Name', ru: 'Имя партнёра' },
+    partnerFirstNameHelp: {
+      en: 'Shown with the first name on their portal and gallery, "Welcome, Sam & Alex". Emails greet the first name only.',
+      ru: 'Показывается вместе с первым именем в портале и галерее: «Welcome, Sam & Alex». В письмах только первое имя.',
     },
     clientEmailLabel: { en: 'Client Email', ru: 'Email клиента' },
     clientEmailHelpSimple: {

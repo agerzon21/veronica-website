@@ -827,6 +827,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const v = patch.partner_2_full_name.trim() || null;
       await sql`update client_portals set partner_2_full_name = ${v}, updated_at = now() where id = ${id}`;
     }
+    // The names a client is GREETED by (src/data/client-greeting.ts): "Hi
+    // Megan," in every email and "Welcome, Megan" on the portal and gallery.
+    // Set at creation and, until 2026-10-19, shown and editable nowhere, so
+    // the screen said "Welcome, Megan" with no visible field behind it.
+    if (typeof patch.partner_1_first_name === 'string') {
+      const v = patch.partner_1_first_name.trim() || null;
+      await sql`update client_portals set partner_1_first_name = ${v}, updated_at = now() where id = ${id}`;
+    }
+    if (typeof patch.partner_2_first_name === 'string') {
+      const v = patch.partner_2_first_name.trim() || null;
+      await sql`update client_portals set partner_2_first_name = ${v}, updated_at = now() where id = ${id}`;
+    }
 
     // Admin override of the client's portal password. Used when the
     // client forgets their password and needs to be unblocked, set a

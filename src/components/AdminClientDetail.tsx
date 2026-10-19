@@ -29,7 +29,7 @@ import FaCopy from '../icons/fa/FaCopy';
 import FaPaperPlane from '../icons/fa/FaPaperPlane';
 import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBadge';
 import { deliveryMessageText } from '../data/delivery-message';
-import { greetingName } from '../data/client-greeting';
+import { greetingName, welcomeNames } from '../data/client-greeting';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
 import {
@@ -94,6 +94,7 @@ interface PortalDetail {
   partner_2_full_name: string | null;
   // Who the photos-are-ready message greets; the display name is a label.
   partner_1_first_name?: string | null;
+  partner_2_first_name?: string | null;
   client_display_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -1796,6 +1797,30 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             saving={savingField === 'client_display_name'}
             onSave={(v) => patch({ client_display_name: v }, 'client_display_name')}
           />
+          {/* What the client is called, on screen and in every email. Stored
+              at creation and shown nowhere until 2026-10-19, so "Welcome,
+              Megan" on a gallery had no visible field behind it. The help
+              line is the actual result, worked out by the same functions the
+              emails and the portal use, so what it says is what they see. */}
+          <InlineField
+            label={t.clientDetail.firstNameLabel}
+            value={portal.partner_1_first_name ?? ''}
+            helpText={t.clientDetail.greetingPreview(
+              greetingName(portal.client_display_name, portal.partner_1_first_name),
+              welcomeNames(portal.client_display_name, portal.partner_1_first_name, portal.partner_2_first_name),
+            )}
+            saving={savingField === 'partner_1_first_name'}
+            onSave={(v) => patch({ partner_1_first_name: v }, 'partner_1_first_name')}
+          />
+          {(portal.partner_2_full_name || portal.partner_2_first_name) && (
+            <InlineField
+              label={t.clientDetail.partnerFirstNameLabel}
+              value={portal.partner_2_first_name ?? ''}
+              helpText={t.clientDetail.partnerFirstNameHelp}
+              saving={savingField === 'partner_2_first_name'}
+              onSave={(v) => patch({ partner_2_first_name: v }, 'partner_2_first_name')}
+            />
+          )}
           {/* The phone the whole top-of-screen Call button depends on. There
               was no phone number anywhere in this system until now. */}
           <InlineField

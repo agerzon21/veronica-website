@@ -38,7 +38,8 @@ export function greetingName(clientLabel: string | null | undefined, storedFirst
   const stored = storedFirstName?.trim();
   if (stored) return stored;
   if (!clientLabel) return '';
-  return nameFromLabel(clientLabel.split(/[&,]/)[0]).split(/\s+/)[0] ?? '';
+  // "Megan's 30th Birthday Party" names Megan, not "Megan's".
+  return (nameFromLabel(clientLabel.split(/[&,]/)[0]).split(/\s+/)[0] ?? '').replace(/['’]s$/i, '');
 }
 
 /**
