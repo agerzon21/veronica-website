@@ -43,6 +43,18 @@ export function greetingName(clientLabel: string | null | undefined, storedFirst
 }
 
 /**
+ * The heading at the top of a client's gallery page. Its own title when Vero
+ * set one ("Megan's 30th Birthday", migration 055), otherwise the greeting.
+ * The gallery page and the admin's preview of it both read this, so the
+ * preview cannot show something the client does not.
+ */
+export function galleryHeading(title: string | null | undefined, names: string | null | undefined): string {
+  const own = title?.trim();
+  if (own) return own;
+  return names ? `Welcome, ${names}` : 'Your Photos';
+}
+
+/**
  * Everyone on the booking, for "Welcome, Sam & Alex" on their portal and
  * "Sam & Alex has shared their photo gallery". Both stored first names when
  * there are two. A gallery-only booking stores only the first, so its label

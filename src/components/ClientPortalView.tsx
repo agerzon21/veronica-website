@@ -60,6 +60,8 @@ import {
 export interface ClientPortalData {
   mode: 'full';
   client_name: string | null;
+  // Vero's own heading for the gallery (migration 055), instead of "Welcome, X".
+  gallery_title?: string | null;
   client_email: string;
   drive_url: string | null;
   rootFiles: DriveFile[];
@@ -1674,6 +1676,7 @@ const ClientPortalView = ({
                   />
                 }
                 clientName={data.client_name}
+                galleryTitle={data.gallery_title ?? null}
                 driveUrl={data.drive_url!}
                 rootFiles={data.rootFiles}
                 sections={data.sections}

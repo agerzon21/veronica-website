@@ -342,6 +342,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* migration 054 not applied: one price for every method */
     }
 
+    /** Vero's own title for the gallery page (migration 055). Allowed to fail. */
+    let galleryTitle: string | null = null;
+    try {
+      const g = (await sql`select gallery_title from client_portals where id = ${row.id}`) as Array<{ gallery_title: string | null }>;
+      galleryTitle = g[0]?.gallery_title ?? null;
+    } catch {
+      /* migration 055 not applied: no gallery has a title */
+    }
+
     return res.status(200).json({
       success: true,
       mode: 'full',
@@ -408,6 +417,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       charges: complimentary ? [] : charges,
       sales_tax: salesTax,
       card_pricing: cardPricing,
+      gallery_title: galleryTitle,
       // What the client has tipped, already excluded from paid_to_date. Sent
       // so the portal can thank them for it without the number having to be
       // re-derived in the browser.

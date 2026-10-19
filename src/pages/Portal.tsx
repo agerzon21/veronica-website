@@ -659,6 +659,7 @@ const Portal = () => {
             setGalleryPassword(stored.password);
             setGalleryData({
               clientName: data.client_name ?? null,
+              galleryTitle: data.gallery_title ?? null,
               driveUrl: data.drive_url,
               rootFiles: data.rootFiles ?? [],
               sections: data.sections ?? [],
@@ -823,6 +824,7 @@ const Portal = () => {
         storeSession({ kind: 'gallery', password: galleryPassword.trim() });
         setGalleryData({
           clientName: data.client_name ?? null,
+          galleryTitle: data.gallery_title ?? null,
           driveUrl: data.drive_url,
           rootFiles: data.rootFiles ?? [],
           sections: data.sections ?? [],

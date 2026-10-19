@@ -839,6 +839,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const v = patch.partner_2_first_name.trim() || null;
       await sql`update client_portals set partner_2_first_name = ${v}, updated_at = now() where id = ${id}`;
     }
+    // The gallery page's own title (migration 055): replaces "Welcome, Megan"
+    // when set, empty restores it. Capped because it is a heading.
+    if (typeof patch.gallery_title === 'string') {
+      const v = patch.gallery_title.trim().slice(0, 80) || null;
+      await sql`update client_portals set gallery_title = ${v}, updated_at = now() where id = ${id}`;
+    }
 
     // Admin override of the client's portal password. Used when the
     // client forgets their password and needs to be unblocked, set a

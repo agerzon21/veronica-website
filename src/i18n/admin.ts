@@ -2760,6 +2760,15 @@ const dict = {
       ru: 'Твоё название брони в списке клиентов. Клиенты его не видят: к ним обращаются по имени, оно ниже.',
     },
     firstNameLabel: { en: 'First Name', ru: 'Имя' },
+    galleryPreviewLabel: { en: 'What the client sees', ru: 'Что видит клиент' },
+    galleryTitleLabel: { en: 'Gallery Title (optional)', ru: 'Заголовок галереи (необязательно)' },
+    galleryTitlePlaceholder: { en: "e.g. Megan's 30th Birthday", ru: "например, Megan's 30th Birthday" },
+    galleryTitleHelp: {
+      en: (greeting: string) =>
+        `Replaces "${greeting}" at the top of the gallery, for an event the guests will open too. Leave it empty to keep the greeting, which comes from First Name.`,
+      ru: (greeting: string) =>
+        `Заменяет «${greeting}» вверху галереи, для события, которое откроют и гости. Оставь пустым, чтобы осталось приветствие по имени (поле «Имя»).`,
+    },
     // The live result, so the field explains itself: what the emails and the
     // client's own pages actually say right now.
     greetingPreview: {

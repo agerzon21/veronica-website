@@ -11,7 +11,6 @@ import {
 import { useState, useRef, useCallback, useEffect, useMemo, Fragment, type ReactNode } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaChevronUp from '../icons/fa/FaChevronUp';
-import FaClock from '../icons/fa/FaClock';
 import FaCopy from '../icons/fa/FaCopy';
 import FaDownload from '../icons/fa/FaDownload';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
@@ -33,6 +32,8 @@ import ImageModal from './ImageModal';
 // strip uses the same one rather than a second copy of it, so a phone reads
 // both navs identically.
 import { ScrollStrip, useNavSelectionLock } from './PortalHeader';
+import { ExpiryRibbon, GalleryTitle } from './GalleryHeading';
+import { galleryHeading } from '../data/client-greeting';
 import { driveThumbSrcSet, thumbAt } from '../utils/driveImage';
 import {
   AT_BOTTOM_THRESHOLD,
@@ -80,6 +81,8 @@ interface ClientGalleryProps {
    */
   tipSlot?: ReactNode;
   clientName: string | null;
+  /** Vero's own heading for the page (migration 055); replaces "Welcome, X". */
+  galleryTitle?: string | null;
   driveUrl: string;
   // Files placed directly in the gallery's root folder (no subfolder).
   rootFiles: DriveFile[];
@@ -424,6 +427,7 @@ const GridTile = ({ file, index, onSelect, setRef, isFavorite, onToggleFavorite 
 const ClientGallery = ({
   tipSlot,
   clientName,
+  galleryTitle,
   driveUrl,
   rootFiles,
   sections,
@@ -659,28 +663,7 @@ const ClientGallery = ({
         pb={{ base: 6, md: 8 }}
         textAlign="center"
       >
-        <Text
-          fontSize="xs"
-          fontWeight="500"
-          textTransform="uppercase"
-          letterSpacing="0.25em"
-          color="brand.accent"
-          mb={3}
-        >
-          Private Gallery
-        </Text>
-        <Box w="40px" h="1px" bg="brand.accent" mx="auto" mb={5} />
-        <Text
-          as="h1"
-          fontSize={{ base: '2xl', md: '3xl' }}
-          fontWeight="200"
-          color="gray.800"
-          letterSpacing="0.02em"
-          mb={2}
-          m={0}
-        >
-          {clientName ? `Welcome, ${clientName}` : 'Your Photos'}
-        </Text>
+        <GalleryTitle heading={galleryHeading(galleryTitle, clientName)} />
         {totalCount > 0 && (
           // Count line, always reports the TOTAL number of photos.
           // When favorites are enabled and non-zero, tacks on the
@@ -1261,23 +1244,6 @@ function ActionBarDivider() {
   return <Box w="1px" h="18px" bg="rgba(201, 169, 110, 0.35)" flexShrink={0} />;
 }
 
-/**
- * Format the gallery expiration date. Same UTC-safe idiom used
- * elsewhere in the app (see ClientPortalView.formatDate) so the
- * displayed day matches what Veronika typed regardless of the
- * viewer's timezone.
- */
-function formatGalleryExpiry(iso: string): string {
-  const datePart = iso.split('T')[0];
-  const [y, m, d] = datePart.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
 
 /**
  * One item in the "How to save your photos" card. Renders as a
@@ -1331,69 +1297,6 @@ function SaveTip({
   );
 }
 
-/**
- * Ribbon-style banner for the gallery-expiry callout. Renders as a
- * warm gold ribbon with chevron-notched ends so it visually reads as
- * an actual banner (not just a text line). The date is bolded inside
- * the ribbon; a small footnote sits below (contact-Veronika / download-
- * by) so the two feel like one grouped object.
- *
- * Kept as its own component so if we ever want to reuse this ribbon
- * treatment elsewhere (e.g. contract-signed banner) we can just call
- * it, please don't duplicate the clip-path values by hand.
- */
-function ExpiryRibbon({
-  expiresAt,
-  footnote,
-}: {
-  expiresAt: string;
-  footnote: string;
-}) {
-  return (
-    <Box mt={5} textAlign="center">
-      <Flex
-        as="span"
-        display="inline-flex"
-        align="center"
-        justify="center"
-        gap={2}
-        bgGradient="linear(to-r, #f3e6bf, #ecd8a3)"
-        color="#5f4a12"
-        // Chevron-notched ends. 10px points give a subtle ribbon feel
-        // without looking like a Christmas ornament. The extra outer
-        // padding compensates for the visual "eating" the notches do.
-        px={{ base: 8, md: 12 }}
-        py={2}
-        fontSize={{ base: 'xs', md: 'sm' }}
-        fontWeight="400"
-        letterSpacing="0.04em"
-        sx={{
-          clipPath:
-            'polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%)',
-          WebkitClipPath:
-            'polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%)',
-        }}
-      >
-        <Icon as={FaClock} boxSize={3} />
-        <Box as="span">
-          Available until{' '}
-          <Text as="span" fontWeight="700">
-            {formatGalleryExpiry(expiresAt)}
-          </Text>
-        </Box>
-      </Flex>
-      <Text
-        mt={1.5}
-        fontSize="2xs"
-        color="gray.500"
-        fontWeight="300"
-        lineHeight="1.5"
-      >
-        {footnote}
-      </Text>
-    </Box>
-  );
-}
 
 /**
  * Favorites info section at the bottom of the gallery grid. NOT a

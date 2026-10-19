@@ -95,6 +95,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // name, Vero's label: "Welcome, Wedding Sam & Alex 2026".
     const client_name =
       welcomeNames(rows[0].client_display_name, rows[0].partner_1_first_name, rows[0].partner_2_first_name) || null;
+    // Vero's own title for the page, which replaces the greeting (migration
+    // 055). Its own statement and allowed to fail, like every later column.
+    let gallery_title: string | null = null;
+    try {
+      const t = (await sql`select gallery_title from client_portals where id = ${rows[0].id}`) as Array<{ gallery_title: string | null }>;
+      gallery_title = t[0]?.gallery_title ?? null;
+    } catch {
+      /* migration 055 not applied: no gallery has a title */
+    }
 
     // The release gate, before anything else is computed: a full portal's
     // photos are served only after Vero marks the gallery delivered.
@@ -150,6 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         success: true,
         client_name,
+        gallery_title,
         drive_url: null,
         rootFiles: [],
         sections: [],
@@ -172,6 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         success: true,
         client_name,
+        gallery_title,
         drive_url,
         rootFiles: [],
         sections: [],
@@ -183,6 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       client_name,
+      gallery_title,
       drive_url,
       rootFiles: tree.rootFiles,
       sections: tree.sections,

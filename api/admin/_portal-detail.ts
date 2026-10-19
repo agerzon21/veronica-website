@@ -273,6 +273,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-054 database: one price for every method */
     }
 
+    /** The gallery page's own title (migration 055). Allowed to fail the same way. */
+    let galleryTitle: string | null = null;
+    try {
+      const g = (await sql`select gallery_title from client_portals where id = ${id}`) as Array<{ gallery_title: string | null }>;
+      galleryTitle = g[0]?.gallery_title ?? null;
+    } catch {
+      /* pre-migration-055 database: no gallery has a title */
+    }
+
     /**
      * Five fields the CLIENT portal view renders that this endpoint never
      * needed, added so the admin panel can render that exact component in a
@@ -313,6 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         complimentary,
         sales_tax: salesTax,
         card_pricing: cardPricing,
+        gallery_title: galleryTitle,
         // We never return the raw blob URL, only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,

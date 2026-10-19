@@ -29,7 +29,8 @@ import FaCopy from '../icons/fa/FaCopy';
 import FaPaperPlane from '../icons/fa/FaPaperPlane';
 import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBadge';
 import { deliveryMessageText } from '../data/delivery-message';
-import { greetingName, welcomeNames } from '../data/client-greeting';
+import { galleryHeading, greetingName, welcomeNames } from '../data/client-greeting';
+import { ExpiryRibbon, GalleryTitle } from './GalleryHeading';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
 import {
@@ -95,6 +96,8 @@ interface PortalDetail {
   // Who the photos-are-ready message greets; the display name is a label.
   partner_1_first_name?: string | null;
   partner_2_first_name?: string | null;
+  // The gallery page's own heading (migration 055), instead of "Welcome, X".
+  gallery_title?: string | null;
   client_display_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -606,7 +609,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
    * screen, out of sight of the button that caused it.
    */
   const [galleryActive, setGalleryActive] = useState(false);
-  const GALLERY_SAVE_LABELS = new Set(['deliver', 'drive_url', 'gallery_email', 'gallery_expires_at']);
+  const GALLERY_SAVE_LABELS = new Set(['deliver', 'drive_url', 'gallery_email', 'gallery_expires_at', 'gallery_title']);
 
   /**
    * Take a delivery back.
@@ -1152,6 +1155,41 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       {/* ─── Gallery section ─── */}
       <Section title={t.clientDetail.sectionPhotoGallery} icon={FaImages} hue="purple">
         <VStack align="stretch" spacing={4}>
+          {/* What the client sees at the top of their gallery, drawn by the
+              SAME components the gallery page uses (GalleryHeading.tsx) from
+              the same fields, so it cannot disagree with the real page. Vero
+              asked to see it here rather than open the portal to check
+              (2026-10-19). */}
+          <Box data-testid="gallery-preview">
+            <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+              {t.clientDetail.galleryPreviewLabel}
+            </Text>
+            <Box
+              border="1px solid"
+              borderColor="gray.200"
+              borderRadius="md"
+              bg="white"
+              py={6}
+              px={4}
+              textAlign="center"
+              sx={{ zoom: 0.8 }}
+            >
+              <GalleryTitle heading={galleryHeading(portal.gallery_title, welcomeNames(portal.client_display_name, portal.partner_1_first_name, portal.partner_2_first_name))} />
+              {portal.gallery_expires_at && (
+                <ExpiryRibbon expiresAt={portal.gallery_expires_at} footnote="Contact Veronika if you need it extended." />
+              )}
+            </Box>
+          </Box>
+          <InlineField
+            label={t.clientDetail.galleryTitleLabel}
+            value={portal.gallery_title ?? ''}
+            placeholder={t.clientDetail.galleryTitlePlaceholder}
+            helpText={t.clientDetail.galleryTitleHelp(
+              galleryHeading(null, welcomeNames(portal.client_display_name, portal.partner_1_first_name, portal.partner_2_first_name)),
+            )}
+            saving={savingField === 'gallery_title'}
+            onSave={(v) => patch({ gallery_title: v }, 'gallery_title')}
+          />
           {portal.gallery_delivered_at ? (
             // Delivered: the link can still be corrected (a wrong folder),
             // which changes what the client sees without sending anything.

@@ -39,6 +39,8 @@ import ClientGallery, {
 /** What /api/portal/gallery hands back, as this view consumes it. */
 export type GalleryData = {
   clientName: string | null;
+  // Vero's own heading for the page (migration 055), shown instead of "Welcome, X".
+  galleryTitle?: string | null;
   driveUrl: string;
   rootFiles: DriveFile[];
   sections: FolderSection[];
@@ -86,7 +88,7 @@ export default function PortalGalleryView({
   return (
     <>
       <Helmet>
-        <title>{galleryData.clientName ? `${galleryData.clientName}, Gallery` : 'Gallery'} | Vero Photography</title>
+        <title>{galleryData.galleryTitle?.trim() || (galleryData.clientName ? `${galleryData.clientName}, Gallery` : 'Gallery')} | Vero Photography</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       {/* A guest on a shared gallery link has no contract and no balance,
@@ -128,6 +130,7 @@ export default function PortalGalleryView({
       <Box pt={HEADER_CLEARANCE}>
         <ClientGallery
           clientName={galleryData.clientName}
+          galleryTitle={galleryData.galleryTitle ?? null}
           driveUrl={galleryData.driveUrl}
           rootFiles={galleryData.rootFiles}
           sections={galleryData.sections}
