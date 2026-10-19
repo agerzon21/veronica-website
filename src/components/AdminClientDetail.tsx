@@ -1488,6 +1488,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       {!portal.complimentary && portal.contract_total_amount === null && (
         <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
           <VStack align="stretch" spacing={3}>
+            {/* First, on a booking with no price: a free one is the likeliest
+                reason there is none, and at the bottom, under the Total box
+                and the tax row, it went unfound (2026-10-19). */}
+            {complimentaryRow}
             <Text fontSize="sm" color="gray.600">
               {t.clientDetail.noTotalYetHelp}
             </Text>
@@ -1513,7 +1517,6 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               }}
             />
             {salesTaxRow}
-            {complimentaryRow}
             {moneyHistory}
           </VStack>
         </Section>

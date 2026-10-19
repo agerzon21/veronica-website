@@ -420,6 +420,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `) as Array<{ id: string }>;
       portalId = inserted[0].id;
 
+      // Friends and family, chosen on the form (2026-10-19); before, it could
+      // only be set from the record afterwards. Its own statement and allowed
+      // to fail, like every read of the column: migration 048 added it by hand.
+      if (body.complimentary === true) {
+        try {
+          await sql`update client_portals set complimentary = true where id = ${portalId}`;
+        } catch (err) {
+          console.error('[admin/portals-create] could not mark the booking free:', err);
+        }
+      }
+
       // Auto-send the gallery-ready email if we have both the Drive URL
       // (i.e. the gallery is actually viewable) AND a client email. Same
       // non-blocking semantics as the full-mode invite email below: log

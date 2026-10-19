@@ -73,6 +73,10 @@ interface Props {
 }
 
 const SORT_STORAGE_KEY = 'vg:clientsSort';
+// The filter chip is NOT remembered (it was, until 2026-10-19). A chip left on
+// "To deliver" or "Unsigned" from last week hid every booking that did not
+// fit it, and the list read as missing clients. The sort is still kept: a
+// different order never hides anyone. The old key is cleared on load.
 const FILTER_STORAGE_KEY = 'vg:clientsFilter';
 
 const FILTER_KEYS: ClientFilter[] = ['all', 'upcoming', 'owes', 'overpaid', 'unsigned', 'deliver'];
@@ -98,12 +102,11 @@ const COL = {
 const readStoredFilter = (): ClientFilter => {
   if (typeof window === 'undefined') return 'all';
   try {
-    const saved = window.localStorage.getItem(FILTER_STORAGE_KEY);
-    return FILTER_KEYS.includes(saved as ClientFilter) ? (saved as ClientFilter) : 'all';
+    window.localStorage.removeItem(FILTER_STORAGE_KEY);
   } catch {
     // Private-mode Safari throws on every storage access. The screen still works.
-    return 'all';
   }
+  return 'all';
 };
 
 const readStoredSort = (): ClientSort => {
@@ -141,14 +144,7 @@ const AdminDashboard = ({
   const [filter, setFilterState] = useState<ClientFilter>(readStoredFilter);
   const [sort, setSortState] = useState<ClientSort>(readStoredSort);
 
-  const setFilter = (f: ClientFilter) => {
-    setFilterState(f);
-    try {
-      window.localStorage.setItem(FILTER_STORAGE_KEY, f);
-    } catch {
-      // See readStoredFilter.
-    }
-  };
+  const setFilter = (f: ClientFilter) => setFilterState(f);
 
   const setSort = (s: ClientSort) => {
     setSortState(s);

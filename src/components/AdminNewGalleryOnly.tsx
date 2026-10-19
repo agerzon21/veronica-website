@@ -1,4 +1,4 @@
-import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea, Select } from '@chakra-ui/react';
+import { Box, VStack, Stack, Text, Input, Flex, Icon, Textarea, Select, Checkbox } from '@chakra-ui/react';
 import { SALES_TAX_MODES, isSalesTaxMode, type SalesTaxMode } from '../data/sales-tax';
 import { fmtAdminDate } from '../utils/adminDate';
 import type { ClientPrefill } from './clientPrefill';
@@ -84,6 +84,11 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
   // that price unless Vero picks otherwise: Alex's rule, 2026-10-03, "in these
   // cases we eat the tax". The same three choices as a full booking.
   const [salesTax, setSalesTax] = useState<SalesTaxMode>('absorbed');
+  // Friends and family. It existed only as a button deep in the record after
+  // creation, and a birthday shoot for a friend went in with no way to say so
+  // (2026-10-19). Here it is the first thing in Bookkeeping, and it hides the
+  // money fields, which a free booking has no use for.
+  const [complimentary, setComplimentary] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -127,8 +132,8 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
       setError(t.newGallery.errors.retentionMustBePositive);
       return;
     }
-    const totalNum = totalAmount ? Number(totalAmount) : null;
-    const retainerNum = retainerAmount ? Number(retainerAmount) : null;
+    const totalNum = !complimentary && totalAmount ? Number(totalAmount) : null;
+    const retainerNum = !complimentary && retainerAmount ? Number(retainerAmount) : null;
     if (totalNum !== null && (!Number.isFinite(totalNum) || totalNum < 0)) {
       setError(t.newGallery.errors.totalMustBeNonNegative);
       return;
@@ -163,6 +168,7 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
           contract_total_amount: totalNum,
           contract_retainer_amount: retainerNum,
           sales_tax: salesTax,
+          complimentary,
           // Keeps the portal ↔ conversation link when Vero got here from a
           // thread, so the inbox still shows the CLIENT badge.
           link_to_conversation_id: prefill?.conversationId ?? null,
@@ -364,6 +370,21 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
               {t.newGallery.bookkeepingHint}
             </Text>
             <VStack align="stretch" spacing={4}>
+              <Box>
+                <Checkbox
+                  isChecked={complimentary}
+                  onChange={(e) => setComplimentary(e.target.checked)}
+                  colorScheme="purple"
+                  data-testid="new-gallery-free"
+                >
+                  <Text fontSize="sm" color="gray.700">{t.newGallery.complimentaryLabel}</Text>
+                </Checkbox>
+                <Text fontSize="xs" color="gray.500" fontWeight="300" mt={1} pl={6}>
+                  {t.clientDetail.complimentaryOn}
+                </Text>
+              </Box>
+              {!complimentary && (
+              <>
               <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align="flex-start">
                 <Field label={t.newGallery.totalLabel} w={{ base: '100%', md: '50%' }} helpText={t.newGallery.totalHelp}>
                   <FormInput
@@ -405,6 +426,8 @@ const AdminNewGalleryOnly = ({ adminPassword, onCancel, onCreated, prefill }: Pr
               <Text fontSize="xs" color="gray.500" fontWeight="300">
                 {t.newGallery.paymentsNote}
               </Text>
+              </>
+              )}
             </VStack>
           </Box>
 

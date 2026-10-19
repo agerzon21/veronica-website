@@ -1437,6 +1437,7 @@ const dict = {
 
     // Bookkeeping section
     bookkeepingKicker: { en: 'Bookkeeping (optional)', ru: 'Учёт (необязательно)' },
+    complimentaryLabel: { en: 'Free, for friends & family', ru: 'Бесплатно, для своих' },
     bookkeepingHint: {
       en: "These are only visible to you in the admin. The client doesn't see them, gallery-only clients only see their photos.",
       ru: 'Эти поля видишь только ты в админке. Клиент их не видит, в режиме «только галерея» клиент видит только свои фото.',

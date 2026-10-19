@@ -467,6 +467,45 @@ const Admin = () => {
   }, [dashTab]);
 
   /**
+   * The Clients list is fetched again whenever it is opened, and when the
+   * browser tab comes back after a minute or more away.
+   *
+   * It loaded at sign-in, after creating a booking, on Back from a record and
+   * on Refresh, and at no other time. Switching to Clients from Messages
+   * showed the list as it was when the panel was opened, and the panel stays
+   * signed in for days, so bookings made since were simply not there: on
+   * 2026-10-19 a signed booking and a delivered one could only be reached
+   * through Messages. The first run is skipped because the session restore
+   * above already fetches on mount.
+   */
+  const firstTabRun = useRef(true);
+  useEffect(() => {
+    if (firstTabRun.current) {
+      firstTabRun.current = false;
+      return;
+    }
+    if (dashTab === 'clients' && portals && password) void loadPortals({ password });
+    // loadPortals closes over stable setters; password and portals are read
+    // at the moment the tab opens, which is the point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashTab]);
+
+  useEffect(() => {
+    if (dashTab !== 'clients' || !password) return;
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (hiddenAt && Date.now() - hiddenAt > 60_000) void loadPortals({ password });
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashTab, password]);
+
+  /**
    * The open client, in the URL.
    *
    * The panel held its screen in React state and never touched history, so a
