@@ -6,6 +6,8 @@ import FaCopy from '../icons/fa/FaCopy';
 import FaSignOutAlt from '../icons/fa/FaSignOutAlt';
 import FaSync from '../icons/fa/FaSync';
 import FaKey from '../icons/fa/FaKey';
+import FaArrowLeft from '../icons/fa/FaArrowLeft';
+import FaCalendarAlt from '../icons/fa/FaCalendarAlt';
 import FaHeart from '../icons/fa/FaHeart';
 import { m } from 'framer-motion';
 import { prefersReducedMotion } from '../utils/motion';
@@ -57,7 +59,36 @@ import {
 // Full client portal payload, mirrors the shape returned by
 // /api/portal/client. Each field group is annotated with which phase
 // of the rollout populates / consumes it.
+/**
+ * One session on the client's account, as the "Your sessions" page shows it
+ * (api/portal/_client.ts lists them; api/portal/_account.ts says what an
+ * account is). Money arrives as plain numbers.
+ */
+export interface AccountSession {
+  id: string;
+  session_type: string | null;
+  contract_template_key: string | null;
+  event_date: string | null;
+  session_location: string | null;
+  event_title: string | null;
+  event_location: string | null;
+  contract_status: 'none' | 'pending' | 'signed' | 'void';
+  contract_total_amount: number | null;
+  contract_retainer_amount: number | null;
+  paid_to_date: number;
+  charges_total: number;
+  sales_tax: string | null;
+  complimentary: boolean | null;
+  has_gallery: boolean;
+  gallery_delivered_at: string | null;
+  gallery_expires_at: string | null;
+  created_at: string;
+}
+
 export interface ClientPortalData {
+  /** Which session this is, and every session on the account (2026-10-22). */
+  portal_id?: string;
+  sessions?: AccountSession[];
   mode: 'full';
   client_name: string | null;
   // Vero's own heading for the gallery (migration 055), instead of "Welcome, X".
@@ -183,7 +214,7 @@ interface ClientPortalViewProps {
   // Portal page's React state only, never persisted to storage, so a
   // tab refresh boots the client back to the login form. Acceptable for
   // this MVP; sessions can come later.
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   onDataUpdate: (data: ClientPortalData) => void;
   // Fired after the client changes their password from the Account
   // section. Parent (Portal.tsx) uses this to keep its cached
@@ -197,9 +228,16 @@ interface ClientPortalViewProps {
   // and nowhere else, which is also why a plain page reload already signs the
   // client out.
   onLogout?: () => void;
+  /**
+   * Back to "Your sessions". Only passed when the account has more than one
+   * session; a one-session client never sees the button.
+   */
+  onAllSessions?: () => void;
+  /** "Book another session": opens the request form (BookSessionModal). */
+  onBookSession?: () => void;
 }
 
-const formatDate = (iso: string) => {
+export const formatDate = (iso: string) => {
   // event_date, due_date, and similar date-only fields come back from
   // Postgres as midnight-UTC timestamps. Without timeZone='UTC' the
   // formatter would render them in the viewer's local timezone, sliding
@@ -366,6 +404,8 @@ const ClientPortalView = ({
   onDataUpdate,
   onPasswordChanged,
   onLogout,
+  onAllSessions,
+  onBookSession,
 }: ClientPortalViewProps) => {
   // Every client-visible noun that used to assume a wedding reads out of here.
   const wording = bookingWording(data.contract_template_key, data.session_type);
@@ -766,6 +806,7 @@ const ClientPortalView = ({
         body: JSON.stringify({
           email: credentials.email,
           password: credentials.password,
+          portal_id: credentials.portalId,
           photo_id: photoId,
           action,
         }),
@@ -1168,6 +1209,25 @@ const ClientPortalView = ({
             </CTAButton>
           )}
         </HStack>
+
+        {/* Added 2026-10-22 on a line of its own, so the row above stays
+            exactly as it was at every width: a way to ask Veronika for
+            another shoot on the same login, and back to the account's
+            sessions when there is more than one. */}
+        {(onAllSessions || onBookSession) && (
+          <HStack mt={3} spacing={3} justify="center" flexWrap="wrap">
+            {onAllSessions && (
+              <CTAButton onClick={onAllSessions} icon={FaArrowLeft} variant="outline" size="sm">
+                All Sessions
+              </CTAButton>
+            )}
+            {onBookSession && (
+              <CTAButton onClick={onBookSession} icon={FaCalendarAlt} variant="outline" size="sm">
+                Book Another Session
+              </CTAButton>
+            )}
+          </HStack>
+        )}
 
         {/* Update-available notice, surfaces when Refresh detected a
             newer build. Non-blocking; the client keeps their session
@@ -2071,7 +2131,7 @@ const ClientPortalView = ({
  * type scale, and gold label treatment. Keep new header info coming
  * through this, do NOT hand-roll another Flex-label-value pair.
  */
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
+export const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <Flex
     direction={{ base: 'column', sm: 'row' }}
     align="center"
@@ -2179,7 +2239,7 @@ function NextStepsPanel({
   // Needed to start a card payment: the portal re-proves ownership on every
   // request rather than holding a session, so the pay endpoint is exactly as
   // protected as the one that showed this balance.
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   // Event vs session nouns, resolved once by the parent from the booking's
   // type. This panel is where the wedding assumptions were thickest: it
   // talked about reserving "the date" and paying cash on the day of "the
@@ -2411,7 +2471,7 @@ function TipPanel({
   alreadyTipped,
   bookingTotal,
 }: {
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   /** The KEYS are test keys, so a real card would be declined. */
   testMode: boolean;
   /** What this booking has been tipped already, so a second tip reads as a second. */
@@ -2472,6 +2532,7 @@ function TipPanel({
         body: JSON.stringify({
           email: credentials.email,
           password: credentials.password,
+          portal_id: credentials.portalId,
           kind: 'tip',
           tipAmount: amount,
           preview: CARD_PAYMENTS_MODE === 'preview',
@@ -2667,7 +2728,7 @@ function PayByCardButton({
   /** What is owed, as Vero keeps it. The button shows what a card is charged. */
   amount: number;
   cardPricing: CardPricing;
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   /** The KEYS are test keys, which is not the same as the rollout being in preview. */
   testMode: boolean;
 }) {
@@ -2689,6 +2750,7 @@ function PayByCardButton({
         body: JSON.stringify({
           email: credentials.email,
           password: credentials.password,
+          portal_id: credentials.portalId,
           kind,
           // Ask for the opt-in to be echoed into the return URL, so coming back
           // from Stripe during preview does not land on a portal with no button.
@@ -2881,7 +2943,7 @@ function SignedContractSection({
   signedAt,
   pdfAvailable,
 }: {
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   signedAt: string;
   pdfAvailable: boolean;
 }) {
@@ -2980,7 +3042,7 @@ function ContractSignSection({
   onSigned,
   onContractChanged,
 }: {
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   contractBody: string | null;
   /** What the server says this text is; sent back so a changed contract is refused. */
   contractHash: string | null;
@@ -3511,11 +3573,11 @@ function ContractBodyView({ contract }: { contract: ContractTemplate }) {
  * page can update the cached credentials, otherwise the next mutating
  * API call would still be sending the old password.
  */
-function ChangePasswordSection({
+export function ChangePasswordSection({
   credentials,
   onChanged,
 }: {
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   onChanged?: (newPassword: string) => void;
 }) {
   const [open, setOpen] = useState(false);

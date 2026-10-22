@@ -9,7 +9,9 @@ import {
   salesTaxModeOf,
   type SalesTaxMode,
 } from '../data/sales-tax';
-import { fmtAdminDateTime } from '../utils/adminDate';
+import { fmtAdminDate, fmtAdminDateTime } from '../utils/adminDate';
+import FaPlus from '../icons/fa/FaPlus';
+import type { SameClientSeed } from './AdminNewClient';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaUndo from '../icons/fa/FaUndo';
@@ -85,6 +87,10 @@ interface Props {
    */
   onPrev?: (() => void) | null;
   onNext?: (() => void) | null;
+  /** Open another booking's record (this client's other sessions). */
+  onOpenClient?: (id: string) => void;
+  /** "Add a session for this client": the New Client form, seeded with them. */
+  onAddSession?: (seed: SameClientSeed) => void;
 }
 
 interface PortalDetail {
@@ -104,6 +110,8 @@ interface PortalDetail {
   session_location: string | null;
   session_locations?: unknown;
   same_date_bookings?: Array<{ id: string; client_display_name: string | null; session_type: string | null }>;
+  // The same client's other sessions (same email, one login: portal/_account.ts).
+  same_client_bookings?: Array<{ id: string; client_display_name: string | null; session_type: string | null; event_date: string | null }>;
   event_date: string | null;
   gallery_password: string;
   /**
@@ -436,8 +444,8 @@ const daysUntil = (iso: string | null): number | null => {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 };
 
-const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext }: Props) => {
-  const { t } = useAdminLang();
+const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext, onOpenClient, onAddSession }: Props) => {
+  const { t, lang } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
@@ -1828,6 +1836,45 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       {/* ─── Editable details (admin can correct typos etc.) ─── */}
       <Section title={t.clientDetail.sectionDetails} icon={FaUser} hue="blue">
         <VStack align="stretch" spacing={4}>
+          {/* One client, several sessions (2026-10-22): every full booking on
+              this email shares the client's login. The others, with links,
+              and the way to add one more without a second account. */}
+          {portal.mode === 'full' && portal.client_email && (
+            <Box data-testid="client-sessions">
+              <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+                {t.clientDetail.sessionsOnLoginLabel}
+              </Text>
+              {(portal.same_client_bookings?.length ?? 0) > 0 ? (
+                <Flex gap={2} wrap="wrap" mb={3}>
+                  {(portal.same_client_bookings ?? []).map((b) => (
+                    <CTAButton key={b.id} onClick={() => onOpenClient?.(b.id)} variant="outline" size="sm">
+                      {[b.client_display_name || t.clientDetail.unnamed, b.event_date ? fmtAdminDate(b.event_date, lang) : null].filter(Boolean).join(' · ')}
+                    </CTAButton>
+                  ))}
+                </Flex>
+              ) : (
+                <Text fontSize="sm" color="gray.500" mb={3}>{t.clientDetail.sessionsOnLoginNone}</Text>
+              )}
+              {onAddSession && (
+                <CTAButton
+                  onClick={() =>
+                    onAddSession({
+                      label: portal.client_display_name || portal.partner_1_full_name || portal.client_email || '',
+                      fullName: portal.partner_1_full_name,
+                      partnerFullName: portal.partner_2_full_name,
+                      email: portal.client_email,
+                      phone: portal.client_phone,
+                    })
+                  }
+                  icon={FaPlus}
+                  variant="outline"
+                  size="sm"
+                >
+                  {t.clientDetail.addSessionForClient}
+                </CTAButton>
+              )}
+            </Box>
+          )}
           <InlineField
             label={t.clientDetail.displayNameLabel}
             value={portal.client_display_name ?? ''}

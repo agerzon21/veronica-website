@@ -35,7 +35,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import AdminNewClient from '../components/AdminNewClient';
+import AdminNewClient, { type SameClientSeed } from '../components/AdminNewClient';
 import type { ClientPrefill } from '../components/clientPrefill';
 import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
 import AdminModeChooser from '../components/AdminModeChooser';
@@ -116,7 +116,8 @@ type View =
   | { kind: 'mode-chooser' }
   // `prefill` is set when Vero came here from a conversation rather than from
   // the Clients tab, carrying what the thread already established.
-  | { kind: 'new-full'; prefill?: ClientPrefill }
+  // sameClient: "Add a session for this client" from a record (2026-10-22).
+  | { kind: 'new-full'; prefill?: ClientPrefill; sameClient?: SameClientSeed }
   | { kind: 'new-gallery'; prefill?: ClientPrefill }
   | { kind: 'detail'; id: string };
 
@@ -680,15 +681,17 @@ const Admin = () => {
             <AdminNewClient
               adminPassword={password}
               prefill={view.prefill ?? null}
+              sameClient={view.sameClient ?? null}
               onSwitchToGalleryOnly={
                 view.prefill
                   ? () => setView({ kind: 'new-gallery', prefill: view.prefill })
                   : undefined
               }
               // Back goes where she came from: the inbox if this started in a
-              // conversation, the mode chooser otherwise.
+              // conversation, the client list if from a client's record, the
+              // mode chooser otherwise.
               onCancel={() =>
-                setView(view.prefill ? { kind: 'dashboard' } : { kind: 'mode-chooser' })
+                setView(view.prefill || view.sameClient ? { kind: 'dashboard' } : { kind: 'mode-chooser' })
               }
               onCreated={handleCreated}
             />
@@ -724,6 +727,8 @@ const Admin = () => {
             <AdminClientDetail
               portalId={view.id}
               adminPassword={password}
+              onOpenClient={(id) => requestNav(() => setView({ kind: 'detail', id }))}
+              onAddSession={(seed) => requestNav(() => setView({ kind: 'new-full', sameClient: seed }))}
               adminLevel={adminLevel}
               onDirtyChange={setDetailDirty}
               {...(() => {

@@ -27,7 +27,9 @@
 export const SESSION_KEY = 'vg:portalSession';
 
 export type StoredSession =
-  | { kind: 'client'; email: string; password: string }
+  // portalId: which of the account's sessions is open (api/portal/_account.ts).
+  // Absent on the "Your sessions" page, and for every one-session client.
+  | { kind: 'client'; email: string; password: string; portalId?: string }
   | { kind: 'gallery'; password: string };
 
 export function storeSession(session: StoredSession): void {

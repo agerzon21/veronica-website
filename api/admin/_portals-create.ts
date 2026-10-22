@@ -42,6 +42,7 @@ import { requireAdmin } from '../_admin-auth.js';
 import { parseLocations, primaryAddress } from '../../src/data/sessionLocations.js';
 import { sendEmail } from '../_auto-reply.js';
 import { greetingName } from '../../src/data/client-greeting.js';
+import { accountPasswordHash } from '../portal/_account.js';
 import {
   CONTRACT_TEMPLATES,
   fillTemplate,
@@ -276,6 +277,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let portalId: string;
+    /**
+     * A session for a client who already has a portal (portal/_account.ts):
+     * the email is on another full booking that has a password. The new one
+     * takes that password, gets no setup link (they already chose a
+     * password, and a second link would let it be set again), and the client
+     * is told a session was added rather than invited to set up an account.
+     */
+    let accountHash: string | null = null;
+    if (mode === 'full' && clientEmail) {
+      accountHash = await accountPasswordHash(sql, clientEmail);
+      if (accountHash) {
+        setupToken = null;
+        setupTokenExpiresAt = null;
+      }
+    }
     if (mode === 'full') {
       const inserted = (await sql`
         insert into client_portals (
@@ -288,7 +304,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           contract_status, contract_template_key, contract_body, contract_variables,
           contract_total_amount, contract_retainer_amount, paid_to_date,
           sales_tax, card_pricing,
-          setup_token, setup_token_expires_at
+          setup_token, setup_token_expires_at,
+          client_password_hash
         ) values (
           ${mode}, ${sessionType},
           ${partner1}, ${partner2},
@@ -304,7 +321,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           -- will charge. A gallery-only booking below stays 'single'; it has no
           -- card checkout at all.
           ${salesTax}, 'dual',
-          ${setupToken}, ${setupTokenExpiresAt}
+          ${setupToken}, ${setupTokenExpiresAt},
+          -- The account's password when the client already has one (see
+          -- accountHash above), written with the row so a session can never
+          -- exist with neither a password nor a setup link.
+          ${accountHash}
         )
         returning id
       `) as Array<{ id: string }>;
@@ -496,6 +517,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // The client already has a portal: tell them a session was added, and
+    // record it the way the invite is recorded, so the record shows whether
+    // it arrived.
+    if (mode === 'full' && accountHash && clientEmail) {
+      try {
+        const siteOrigin =
+          process.env.SITE_ORIGIN ||
+          (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
+        const title = typeof contractVariables.event_title === 'string' ? contractVariables.event_title : '';
+        const sent = await sendEmail({
+          to: clientEmail,
+          subject: 'A new session is in your portal, from Vero Photography',
+          text: buildAddedSessionText(greetingName(clientDisplayName, partner1), title, `${siteOrigin}/portal`),
+          html: buildAddedSessionHtml(greetingName(clientDisplayName, partner1), title, `${siteOrigin}/portal`),
+        });
+        inviteEmailId = sent?.id ?? null;
+        if (inviteEmailId) {
+          await sql`UPDATE client_portals SET invite_email_id = ${inviteEmailId}, invite_sent_at = NOW() WHERE id = ${portalId}`;
+        }
+      } catch (err) {
+        inviteEmailError = err instanceof Error ? err.message : String(err);
+        console.error('[admin/portals-create] new-session email failed (the session was still added):', err);
+      }
+    }
+
     // Optionally link this portal back to the DM conversation it was
     // created from, the inbox uses conversations.linked_client_portal_id
     // to show the "Client" badge and jump into the portal from the
@@ -523,6 +569,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // invite_email_error disambiguates those two.
       invite_email_id: inviteEmailId,
       invite_email_error: inviteEmailError,
+      // True when this was added to a client's existing portal (same email,
+      // same password) rather than starting a new one.
+      added_to_account: Boolean(accountHash),
     });
   } catch (err) {
     console.error('[admin/portals-create] handler failed:', err);
@@ -618,4 +667,41 @@ function buildGalleryReadyHtml(
 <p>If you have any questions or want to order prints, just reply to this email.</p>
 <p>Warmly,<br><em>Veronika</em></p>
 </body></html>`;
+}
+
+
+/**
+ * For a client who already has a portal: their new session is in it, signed
+ * in with the same email and password. No setup link: they have a password.
+ */
+function buildAddedSessionText(firstName: string, eventTitle: string, portalUrl: string): string {
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
+  const what = eventTitle ? `${eventTitle} is` : 'Your new session is';
+  return `${greeting}
+
+${what} now in your client portal with Vero Photography, alongside your other sessions. Sign in with your usual email and password to review and sign the contract:
+
+${portalUrl}
+
+Forgot your password? There's a reset link on the sign-in page.
+
+Looking forward to it,
+Veronika`;
+}
+
+function buildAddedSessionHtml(firstName: string, eventTitle: string, portalUrl: string): string {
+  const what = eventTitle ? `${escapeAttr(eventTitle)} is` : 'Your new session is';
+  return `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
+<p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>
+<p>Hi ${escapeAttr(firstName) || 'there'},</p>
+<p>${what} now in your client portal, alongside your other sessions. Sign in with your usual email and password to review and sign the contract.</p>
+<p style="margin:24px 0;"><a href="${portalUrl}" style="display:inline-block;padding:14px 28px;background:#c9a96e;color:#fff;text-decoration:none;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;font-size:13px;">Open my portal</a></p>
+<p style="font-size:14px;color:#666;">Forgot your password? There's a reset link on the sign-in page.</p>
+<p>Looking forward to it,<br><em>Veronika</em></p>
+</body></html>`;
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

@@ -82,6 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SELECT id, client_display_name, partner_1_first_name, client_email
       FROM client_portals
       WHERE mode = 'full' AND lower(client_email) = ${email}
+      ORDER BY (client_password_hash IS NULL), created_at DESC
       LIMIT 1
     `) as Array<{ id: string; client_display_name: string | null; partner_1_first_name: string | null; client_email: string | null }>;
 

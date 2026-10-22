@@ -27,6 +27,7 @@ import { galleryKeys, portalKeys, recordFailure, throttled, tooManyAttempts } fr
 import { getDb } from '../_db.js';
 import { sendEmail } from '../_auto-reply.js';
 import { welcomeNames } from '../../src/data/client-greeting.js';
+import { requestedSession } from './_account.js';
 
 const INVITE_LIMIT_PER_24H = 5;
 const WRONG_AUTH_DELAY_MS = 750;
@@ -57,6 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Either way, the rate limit is per-portal so abuse is bounded
   // regardless of how widely the password gets shared.
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  // Which of the account's sessions this is about (_account.ts). None: the default.
+  const requestedId = requestedSession(req.body);
   const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
   const galleryPassword =
     typeof req.body?.gallery_password === 'string' ? req.body.gallery_password.trim() : '';
@@ -94,6 +97,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           from client_portals
           where mode = 'full'
             and lower(client_email) = ${email}
+            and (${requestedId}::uuid is null or id = ${requestedId}::uuid)
+          order by (client_password_hash is null), created_at desc
           limit 1
         `) as PortalRow[]);
 

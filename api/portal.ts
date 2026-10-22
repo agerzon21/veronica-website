@@ -36,6 +36,7 @@ import requestResetHandler from './portal/_request-reset.js';
 import resetPasswordHandler from './portal/_reset-password.js';
 import payStartHandler from './portal/_pay-start.js';
 import payConfirmHandler from './portal/_pay-confirm.js';
+import bookSessionHandler from './portal/_book-session.js';
 
 const HANDLERS: Record<
   string,
@@ -58,6 +59,8 @@ const HANDLERS: Record<
   // for a dollar.
   'pay-start': payStartHandler,
   'pay-confirm': payConfirmHandler,
+  // "Book another session": a signed-in client asks for another shoot.
+  'book-session': bookSessionHandler,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -80,6 +80,21 @@ interface Props {
   prefill?: ClientPrefill | null;
   /** Swap to the gallery-only form, carrying the same prefill. */
   onSwitchToGalleryOnly?: () => void;
+  /**
+   * "Add a session for this client" from a client's record (2026-10-22): the
+   * same people, email and phone, so the new session joins their existing
+   * login (api/portal/_account.ts). Seeds the fields; everything stays
+   * editable.
+   */
+  sameClient?: SameClientSeed | null;
+}
+
+export interface SameClientSeed {
+  label: string;
+  fullName: string | null;
+  partnerFullName: string | null;
+  email: string | null;
+  phone: string | null;
 }
 
 // ─── Small formatting helpers ──────────────────────────────────────────
@@ -482,7 +497,7 @@ const TravelLeg = ({
   </Box>
 );
 
-const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly }: Props) => {
+const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly, sameClient }: Props) => {
   const { t, lang } = useAdminLang();
   // Travel copy lives in its own module rather than in the admin dictionary,
   // because the arithmetic beside it is imported by an api/ handler and the
@@ -527,8 +542,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
   // Client full names. First names are extracted automatically for
   // derived fields (display name, gallery password, event title).
-  const [partner1FullName, setPartner1FullName] = useState(prefill?.client_full_name ?? '');
-  const [partner2FullName, setPartner2FullName] = useState(prefill?.partner_full_name ?? '');
+  const [partner1FullName, setPartner1FullName] = useState(prefill?.client_full_name ?? sameClient?.fullName ?? '');
+  const [partner2FullName, setPartner2FullName] = useState(prefill?.partner_full_name ?? sameClient?.partnerFullName ?? '');
   const p1First = firstWord(partner1FullName);
   // Ignored outright on a solo type, so a partner typed before the template
   // was switched cannot leak into the display name, the gallery password or
@@ -543,8 +558,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
   const [eventTitleOverride, setEventTitleOverride] = useState<string | null>(null);
   const [galleryPasswordOverride, setGalleryPasswordOverride] = useState<string | null>(null);
 
-  const [clientEmail, setClientEmail] = useState(prefill?.client_email ?? '');
-  const [clientPhone, setClientPhone] = useState(prefill?.client_phone ?? '');
+  const [clientEmail, setClientEmail] = useState(prefill?.client_email ?? sameClient?.email ?? '');
+  const [clientPhone, setClientPhone] = useState(prefill?.client_phone ?? sameClient?.phone ?? '');
   const [eventDateIso, setEventDateIso] = useState(prefill?.event_date ?? '');
   /**
    * The coverage window.
@@ -1727,6 +1742,12 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           </Text>
         </Box>
       </Flex>
+
+      {sameClient && (
+        <Box bg="purple.50" border="1px solid" borderColor="purple.100" borderRadius="md" px={{ base: 4, md: 5 }} py={3} mb={6} data-testid="same-client-note">
+          <Text fontSize="sm" color="gray.700">{t.newClient.sameClientNote(sameClient.label)}</Text>
+        </Box>
+      )}
 
       {prefill && (
         <Box

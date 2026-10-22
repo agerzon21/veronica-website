@@ -677,7 +677,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sql`update client_portals set client_display_name = ${setStr(patch.client_display_name)}, updated_at = now() where id = ${id}`;
     }
     if (typeof patch.client_email === 'string') {
-      await sql`update client_portals set client_email = ${setStr(patch.client_email)?.toLowerCase() ?? null}, updated_at = now() where id = ${id}`;
+      const newEmail = setStr(patch.client_email)?.toLowerCase() ?? null;
+      const [was] = (await sql`
+        select lower(client_email) as email, mode from client_portals where id = ${id}
+      `) as Array<{ email: string | null; mode: string }>;
+      await sql`update client_portals set client_email = ${newEmail}, updated_at = now() where id = ${id}`;
+      /**
+       * One login per email (portal/_account.ts), so the address IS the
+       * account, and moving a booking between addresses moves it between
+       * accounts. Reviewed 2026-10-22:
+       *  - Reset and setup links were sent to the OLD address; they stop
+       *    working, or redeeming one would set a password for the new one.
+       *  - Onto an email that has an account: it takes that password.
+       *  - Off an account that keeps other sessions: it drops the password it
+       *    shared with them, or the old client could still open it. It needs
+       *    an invite to the new address (Resend Invite on the record).
+       *  - A lone booking whose email is corrected keeps its password, as it
+       *    always did.
+       */
+      if (was && was.mode === 'full' && (was.email ?? null) !== newEmail) {
+        await sql`
+          update client_portals
+          set reset_token_hash = null, reset_token_expires_at = null,
+              setup_token = null, setup_token_expires_at = null
+          where id = ${id}
+        `;
+        const joined = newEmail
+          ? ((await sql`
+              select client_password_hash from client_portals
+              where mode = 'full' and lower(client_email) = ${newEmail} and id <> ${id} and client_password_hash is not null
+              order by created_at desc limit 1
+            `) as Array<{ client_password_hash: string }>)
+          : [];
+        if (joined[0]) {
+          await sql`update client_portals set client_password_hash = ${joined[0].client_password_hash} where id = ${id}`;
+        } else if (was.email) {
+          const left = (await sql`
+            select 1 from client_portals
+            where mode = 'full' and lower(client_email) = ${was.email} and id <> ${id}
+            limit 1
+          `) as Array<unknown>;
+          if (left.length > 0) {
+            await sql`update client_portals set client_password_hash = null where id = ${id}`;
+          }
+        }
+      }
     }
     // Stored as typed, not as parsed. A number she half-remembers is worth
     // more than a refusal: this field exists so she can reach a client from
@@ -866,6 +910,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (v.length < 6) {
         return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
       }
+      // This booking and every other session on the same account (full
+      // bookings with this email): they share one password (portal/_account.ts).
       await sql`
         update client_portals
         set client_password_hash = ${hashPortalPassword(v)},
@@ -873,6 +919,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             setup_token_expires_at = null,
             updated_at = now()
         where id = ${id}
+           or (mode = 'full' and client_email is not null
+               and lower(client_email) = (select lower(client_email) from client_portals where id = ${id} and mode = 'full'))
       `;
     }
 

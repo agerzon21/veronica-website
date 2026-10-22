@@ -37,6 +37,7 @@ import { contractFingerprint } from '../_contract-fingerprint.js';
 import { reportPaymentIssue } from '../_payment-alerts.js';
 import type { ContractTemplate } from '../../src/data/contract-template.js';
 import { greetingName } from '../../src/data/client-greeting.js';
+import { requestedSession } from './_account.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -62,6 +63,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const email =
     typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+
+  // Which of the account's sessions this is about (_account.ts). None: the default.
+  const requestedId = requestedSession(req.body);
   const password =
     typeof req.body?.password === 'string' ? req.body.password.trim() : '';
   const signerName =
@@ -129,6 +133,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
+        and (${requestedId}::uuid is null or id = ${requestedId}::uuid)
+      order by (client_password_hash is null), created_at desc
       limit 1
     `) as ClientRow[];
 

@@ -203,6 +203,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* never worth failing the page over */
     }
 
+    /**
+     * The client's other sessions: full bookings on the same email, which
+     * share one login (portal/_account.ts). Shown on the record with links,
+     * next to "Add a session for this client". Never worth failing over.
+     */
+    let sameClient: Array<{ id: string; client_display_name: string | null; session_type: string | null; event_date: string | null }> = [];
+    try {
+      if (rows[0].client_email && rows[0].mode === 'full') {
+        sameClient = (await sql`
+          select id, client_display_name, session_type, event_date
+          from client_portals
+          where mode = 'full' and lower(client_email) = lower(${rows[0].client_email}) and id <> ${id}
+          order by event_date asc nulls last, created_at asc
+        `) as typeof sameClient;
+      }
+    } catch {
+      /* never worth failing the page over */
+    }
+
     const payments = (await sql`
       select id, amount, method, note, paid_at, created_at,
              coalesce(kind, 'payment') as kind,
@@ -313,6 +332,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // somewhere by accident stops working on its own.
         gallery_preview_token: makeGalleryPreviewToken(r.id),
         same_date_bookings: sameDate,
+        same_client_bookings: sameClient,
         contract_total_amount: r.contract_total_amount ? parseFloat(r.contract_total_amount) : null,
         contract_retainer_amount: r.contract_retainer_amount ? parseFloat(r.contract_retainer_amount) : null,
         paid_to_date: parseFloat(r.paid_to_date),

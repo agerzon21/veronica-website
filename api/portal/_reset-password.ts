@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHash } from 'node:crypto';
 import { getDb } from '../_db.js';
 import { hashPortalPassword } from './_password.js';
+import { accountPasswordUpdate } from './_account.js';
 
 /**
  * Client portal: complete a password reset.
@@ -89,14 +90,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Set the new password and burn the token in one statement, so there is no
     // window where a replayed link could succeed.
+    const hash = hashPortalPassword(password);
     await sql`
       UPDATE client_portals
-      SET client_password_hash = ${hashPortalPassword(password)},
+      SET client_password_hash = ${hash},
           reset_token_hash = NULL,
           reset_token_expires_at = NULL,
           updated_at = NOW()
       WHERE id = ${portal.id}
     `;
+    // One password for the whole account: every other session with this
+    // email takes the new one too (_account.ts).
+    if (portal.client_email) await accountPasswordUpdate(sql, portal.client_email, hash);
 
     console.log(`[portal/reset-password] password reset for ${portal.client_email}`);
     return res.status(200).json({ success: true, email: portal.client_email });

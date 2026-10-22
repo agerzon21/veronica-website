@@ -33,6 +33,7 @@ import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.
 import { contractFingerprint } from '../_contract-fingerprint.js';
 import { welcomeNames } from '../../src/data/client-greeting.js';
 import { listFolderTree, extractFolderId, type FolderTree } from '../_drive.js';
+import { requestedSession } from './_account.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,6 +94,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const email =
     typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+
+  // Which of the account's sessions this is about (_account.ts). None: the default.
+  const requestedId = requestedSession(req.body);
   const password =
     typeof req.body?.password === 'string' ? req.body.password.trim() : '';
 
@@ -123,6 +127,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
+        and (${requestedId}::uuid is null or id = ${requestedId}::uuid)
+      order by (client_password_hash is null), created_at desc
       limit 1
     `) as ClientPortalRow[];
 
@@ -351,7 +357,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* migration 055 not applied: no gallery has a title */
     }
 
+    /**
+     * Every session on this account (_account.ts), for the "Your sessions"
+     * page a client with more than one sees after signing in. A summary per
+     * session, enough for its card and the "At a glance" list; opening one
+     * loads it in full through this same endpoint with its portal_id.
+     * Allowed to fail: the portal then simply shows this one session.
+     */
+    let sessions: Array<Record<string, unknown>> = [];
+    try {
+      sessions = (await sql`
+        select id, session_type, contract_template_key, event_date, session_location,
+               contract_variables->>'event_title' as event_title,
+               contract_variables->>'event_location' as event_location,
+               contract_status, contract_total_amount::float8 as contract_total_amount,
+               contract_retainer_amount::float8 as contract_retainer_amount,
+               paid_to_date::float8 as paid_to_date,
+               -- Summed from the rows, as the session's own Balance and pay-start do:
+               -- the stored charges_total has drifted before.
+               (select coalesce(sum(pc.amount), 0) from portal_charges pc where pc.client_portal_id = client_portals.id)::float8 as charges_total,
+               sales_tax, complimentary, drive_url is not null as has_gallery,
+               gallery_delivered_at, gallery_expires_at, created_at
+        from client_portals
+        where mode = 'full' and lower(client_email) = ${email}
+          -- A session with no password cannot be opened with this login yet.
+          and client_password_hash is not null
+        order by created_at
+      `) as Array<Record<string, unknown>>;
+    } catch (err) {
+      console.error('[portal/client] could not list the account sessions:', err);
+    }
+
     return res.status(200).json({
+      // Which session this is, and every session on the account.
+      portal_id: row.id,
+      sessions,
       success: true,
       mode: 'full',
 

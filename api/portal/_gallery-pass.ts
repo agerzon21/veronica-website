@@ -18,6 +18,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword } from './_password.js';
 import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { getDb } from '../_db.js';
+import { requestedSession } from './_account.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,6 +67,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const email =
     typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+
+  // Which of the account's sessions this is about (_account.ts). None: the default.
+  const requestedId = requestedSession(req.body);
   const password =
     typeof req.body?.password === 'string' ? req.body.password.trim() : '';
   const action = req.body?.action as Action | undefined;
@@ -105,6 +109,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       select id, client_password_hash from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
+        and (${requestedId}::uuid is null or id = ${requestedId}::uuid)
+      order by (client_password_hash is null), created_at desc
       limit 1
     `) as Array<{ id: string; client_password: string | null; client_password_hash: string | null }>;
 

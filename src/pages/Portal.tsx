@@ -72,6 +72,10 @@ import {
  */
 const ClientPortalView = lazy(() => import('../components/ClientPortalView'));
 const PortalGalleryView = lazy(() => import('../components/PortalGalleryView'));
+// "Your sessions", for an account with more than one, and the Book Another
+// Session form (2026-10-22). Lazy for the same reason as the two above.
+const ClientAccountHome = lazy(() => import('../components/ClientAccountHome'));
+const BookSessionModal = lazy(() => import('../components/BookSessionModal'));
 
 /**
  * Start the chunk downloading now, before anything renders that needs it.
@@ -179,7 +183,7 @@ function PaymentReturnBanner({
   data,
   onDataUpdate,
 }: {
-  credentials: { email: string; password: string };
+  credentials: { email: string; password: string; portalId?: string };
   data: ClientPortalData;
   onDataUpdate: (d: ClientPortalData) => void;
 }) {
@@ -218,6 +222,7 @@ function PaymentReturnBanner({
     url.searchParams.delete('paid');
     url.searchParams.delete('tip');
     url.searchParams.delete('session_id');
+    url.searchParams.delete('portal');
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
   }, [flag]);
 
@@ -264,7 +269,7 @@ function PaymentReturnBanner({
       const res = await fetch('/api/portal/client', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+        body: JSON.stringify({ email: credentials.email, password: credentials.password, portal_id: credentials.portalId }),
       });
       const next = await res.json();
       return res.ok && next.success ? (next as ClientPortalData) : null;
@@ -280,6 +285,7 @@ function PaymentReturnBanner({
           body: JSON.stringify({
             email: credentials.email,
             password: credentials.password,
+            portal_id: credentials.portalId,
             session_id: sessionId,
           }),
         });
@@ -597,6 +603,16 @@ const Portal = () => {
   };
 
   const [clientData, setClientData] = useState<ClientPortalData | null>(null);
+  /**
+   * An account with more than one session opens on "Your sessions"
+   * (ClientAccountHome); tapping one shows the portal for it. A one-session
+   * client never sees that page, so for them nothing here changes.
+   */
+  const [showSessions, setShowSessions] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
+  const hasManySessions = (clientData?.sessions?.length ?? 0) > 1;
+  // The session a card payment came back to (?portal=, set by pay-start).
+  const returningTo = searchParams.get('portal');
   const [galleryData, setGalleryData] = useState<GalleryData | null>(null);
   /**
    * True while we are trying a stored session, so the login form does not
@@ -639,9 +655,15 @@ const Portal = () => {
     (async () => {
       try {
         const endpoint = stored.kind === 'client' ? '/api/portal/client' : '/api/portal/gallery';
+        // The session to reopen: the one this tab had open, or the one a
+        // card payment just came back from (?portal=, set by pay-start).
+        const reopen =
+          stored.kind === 'client'
+            ? stored.portalId ?? new URLSearchParams(location.search).get('portal') ?? undefined
+            : undefined;
         const body =
           stored.kind === 'client'
-            ? { email: stored.email, password: stored.password }
+            ? { email: stored.email, password: stored.password, portal_id: reopen }
             : { password: stored.password };
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -655,6 +677,7 @@ const Portal = () => {
             setEmail(stored.email);
             setClientPassword(stored.password);
             setClientData(data as ClientPortalData);
+            if (!reopen && ((data as ClientPortalData).sessions?.length ?? 0) > 1) setShowSessions(true);
           } else {
             setGalleryPassword(stored.password);
             setGalleryData({
@@ -687,9 +710,52 @@ const Portal = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Open one of the account's sessions: the same portal a one-session client
+   * sees, loaded for that session. Remembered in this tab, so a reload or a
+   * card payment brings them back to it.
+   */
+  const openSession = async (portalId: string) => {
+    try {
+      const res = await fetch('/api/portal/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: clientPassword.trim(), portal_id: portalId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        storeSession({ kind: 'client', email: email.trim(), password: clientPassword.trim(), portalId });
+        setClientData(data as ClientPortalData);
+        setShowSessions(false);
+        window.scrollTo({ top: 0 });
+      }
+    } catch {
+      /* stays on Your sessions; tapping again retries */
+    }
+  };
+
+  /** Back to "Your sessions", with the list fetched fresh. */
+  const openAllSessions = async () => {
+    storeSession({ kind: 'client', email: email.trim(), password: clientPassword.trim() });
+    try {
+      const res = await fetch('/api/portal/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: clientPassword.trim(), portal_id: clientData?.portal_id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) setClientData(data as ClientPortalData);
+    } catch {
+      /* the list already on hand is shown */
+    }
+    setShowSessions(true);
+    window.scrollTo({ top: 0 });
+  };
+
   const handleLogout = () => {
     clearStoredSession();
     setClientData(null);
+    setShowSessions(false);
     setClientPassword('');
     setError('');
     setTab('client');
@@ -758,13 +824,17 @@ const Portal = () => {
         body: JSON.stringify({
           email: email.trim(),
           password: clientPassword.trim(),
+          // Back from a card payment with the tab's session lost: open the
+          // session that was paid for, not "Your sessions" (pay-start sets it).
+          portal_id: returningTo ?? undefined,
         }),
       });
       const data = await res.json();
 
       if (res.ok && data.success) {
-        storeSession({ kind: 'client', email: email.trim(), password: clientPassword.trim() });
+        storeSession({ kind: 'client', email: email.trim(), password: clientPassword.trim(), ...(returningTo ? { portalId: returningTo } : {}) });
         setClientData(data as ClientPortalData);
+        setShowSessions(!returningTo && ((data as ClientPortalData).sessions?.length ?? 0) > 1);
       } else if (res.status === 401) {
         setError("That email and password didn't match. Double-check and try again.");
       } else {
@@ -864,6 +934,40 @@ const Portal = () => {
   // Pass the credentials through so child sections (e.g. Gallery Pass
   // management) can re-authenticate against the API without us having to
   // mint a session token in this MVP.
+  const portalCredentials = { email: email.trim(), password: clientPassword.trim(), portalId: clientData?.portal_id };
+  // Mounted only while open, in its own Suspense: the portal never waits on
+  // this chunk, and a stale one could only fail the dialog, not the page.
+  const bookSessionModal = clientData && bookOpen ? (
+    <Suspense fallback={null}>
+      <BookSessionModal isOpen onClose={() => setBookOpen(false)} credentials={portalCredentials} />
+    </Suspense>
+  ) : null;
+
+  // An account with more than one session, between sessions: "Your sessions".
+  if (clientData && showSessions && hasManySessions) {
+    return (
+      <Suspense fallback={<PortalOpening />}>
+        <Helmet>
+          <title>{clientData.client_name ? `${clientData.client_name}, Portal` : 'Client Portal'} | Vero Photography</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
+        <ClientAccountHome
+          data={clientData}
+          credentials={portalCredentials}
+          onOpen={openSession}
+          onBook={() => setBookOpen(true)}
+          onLogout={handleLogout}
+          onPasswordChanged={(newPassword) => {
+            setClientPassword(newPassword);
+            storeSession({ kind: 'client', email: email.trim(), password: newPassword });
+          }}
+        />
+        {bookSessionModal}
+        <Footer />
+      </Suspense>
+    );
+  }
+
   if (clientData) {
     return (
       /**
@@ -885,21 +989,29 @@ const Portal = () => {
           <meta name="robots" content="noindex, nofollow" />
         </Helmet>
         <PaymentReturnBanner
-          credentials={{ email: email.trim(), password: clientPassword.trim() }}
+          credentials={portalCredentials}
           data={clientData}
           onDataUpdate={setClientData}
         />
         <ClientPortalView
           data={clientData}
-          credentials={{ email: email.trim(), password: clientPassword.trim() }}
+          credentials={portalCredentials}
+          // Added 2026-10-22: back to "Your sessions" (only for an account with
+          // more than one), and the Book Another Session form.
+          onAllSessions={hasManySessions ? openAllSessions : undefined}
+          onBookSession={() => setBookOpen(true)}
           onDataUpdate={setClientData}
           // Keep the cached credentials in sync when the client changes
           // their password from the Account section. Without this, the
           // next mutating API call (rotate gallery pass, sign contract,
           // etc.) would 401 because we'd still be sending the old one.
-          onPasswordChanged={(newPassword) => setClientPassword(newPassword)}
+          onPasswordChanged={(newPassword) => {
+            setClientPassword(newPassword);
+            storeSession({ kind: 'client', email: email.trim(), password: newPassword, ...(clientData.portal_id && hasManySessions ? { portalId: clientData.portal_id } : {}) });
+          }}
           onLogout={handleLogout}
         />
+        {bookSessionModal}
         {/* Only the NAVBAR was the problem here: it offered a signed-in client
             a link to the Client Portal they were already standing in. The
             footer carries contact and privacy, which a client has more reason

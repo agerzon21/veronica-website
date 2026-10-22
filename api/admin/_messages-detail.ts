@@ -113,17 +113,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        * made from the Clients tab has no link at all, so anything keyed on it
        * alone is silent for the other fifteen.
        *
-       * client_portals carries a UNIQUE index on LOWER(client_email) and an
-       * email conversation's external_user_id IS the sender's lowercased
-       * address (api/_inbox-record.ts lowercases before the upsert), so this
-       * join resolves to at most one row. Restricted to the email platform
-       * because an Instagram external_user_id is an opaque IGSID that must
-       * never be compared against an address.
+       * An email conversation's external_user_id IS the sender's lowercased
+       * address (api/_inbox-record.ts lowercases before the upsert).
+       * Restricted to the email platform because an Instagram external_user_id
+       * is an opaque IGSID that must never be compared against an address.
+       *
+       * One email can hold several bookings since migration 056 (one login,
+       * several sessions), so this picks one deliberately: a full booking
+       * before a gallery-only one, then the newest. It used to rely on the
+       * unique index that made it at most one row.
        */
-      LEFT JOIN client_portals cpe
-        ON cp.id IS NULL
-       AND c.platform = 'email'
-       AND LOWER(cpe.client_email) = LOWER(c.external_user_id)
+      LEFT JOIN LATERAL (
+        SELECT x.id, x.client_display_name, x.client_phone
+        FROM client_portals x
+        WHERE cp.id IS NULL
+          AND c.platform = 'email'
+          AND LOWER(x.client_email) = LOWER(c.external_user_id)
+        ORDER BY (x.mode = 'full') DESC, x.created_at DESC
+        LIMIT 1
+      ) cpe ON TRUE
       WHERE c.id = ${conversationId}
       LIMIT 1
     `) as ConversationRow[];

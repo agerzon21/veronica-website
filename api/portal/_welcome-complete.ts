@@ -51,9 +51,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     // Single statement: update only if the token matches AND isn't expired.
     // RETURNING gives us the email so the client UI can auto-login.
+    const hash = hashPortalPassword(password);
     const rows = (await sql`
       update client_portals
-      set client_password_hash = ${hashPortalPassword(password)},
+      set client_password_hash = ${hash},
           -- Explicitly null, not merely unset: a brand-new client should never
           -- have a plaintext password row at all.
           setup_token = null,
@@ -71,6 +72,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: 'This setup link is no longer valid. Reach out to Veronika to get a new one.',
       });
     }
+
+    // The account's other sessions, if any, take the same password, and any
+    // setup link one of them still carries stops working: the account is set
+    // up now, and a second link would set a second password (_account.ts).
+    await sql`
+      update client_portals
+      set client_password_hash = ${hash}, setup_token = null, setup_token_expires_at = null, updated_at = now()
+      where mode = 'full' and lower(client_email) = lower(${rows[0].client_email})
+    `;
 
     return res.status(200).json({ success: true, email: rows[0].client_email });
   } catch (err) {

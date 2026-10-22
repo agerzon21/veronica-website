@@ -1529,6 +1529,10 @@ const dict = {
   },
 
   newClient: {
+    sameClientNote: {
+      en: (name: string) => `A new session for ${name}. It joins their existing login: same email, same password, and they get a "new session in your portal" email. If they have not set a password yet, they get the usual setup link instead.`,
+      ru: (name: string) => `Новая съёмка для ${name}. Она попадёт в их существующий аккаунт: та же почта и пароль, и им придёт письмо о новой съёмке в портале. Если они ещё не задали пароль, придёт обычная ссылка для настройки.`,
+    },
 
     // ─── More than one place ──────────────────────────────────────────
     // A booking that happens in two places is one booking, one contract and
@@ -2760,6 +2764,14 @@ const dict = {
       ru: 'Твоё название брони в списке клиентов. Клиенты его не видят: к ним обращаются по имени, оно ниже.',
     },
     firstNameLabel: { en: 'First Name', ru: 'Имя' },
+    // One client, several sessions (2026-10-22): every full booking on one
+    // email shares the client's login.
+    sessionsOnLoginLabel: { en: 'Sessions on this login', ru: 'Съёмки на этом аккаунте' },
+    sessionsOnLoginNone: {
+      en: 'Only this one. Add another and it joins the same login: same email, same password.',
+      ru: 'Пока только эта. Добавь ещё одну, и она будет в том же аккаунте: та же почта и пароль.',
+    },
+    addSessionForClient: { en: 'Add a session for this client', ru: 'Добавить съёмку этому клиенту' },
     galleryPreviewLabel: { en: 'What the client sees', ru: 'Что видит клиент' },
     galleryTitleLabel: { en: 'Gallery Title (optional)', ru: 'Заголовок галереи (необязательно)' },
     galleryTitlePlaceholder: { en: "e.g. Megan's 30th Birthday", ru: "например, Megan's 30th Birthday" },

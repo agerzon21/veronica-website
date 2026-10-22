@@ -23,6 +23,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkPortalPassword, hashPortalPassword } from './_password.js';
 import { portalKeys, recordFailure, throttled, tooManyAttempts } from './_throttle.js';
 import { getDb } from '../_db.js';
+import { requestedSession } from './_account.js';
+import { accountPasswordUpdate } from './_account.js';
 
 const MIN_PASSWORD_LENGTH = 6;
 const WRONG_AUTH_DELAY_MS = 750;
@@ -36,6 +38,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const email =
     typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+
+  // Which of the account's sessions this is about (_account.ts). None: the default.
+  const requestedId = requestedSession(req.body);
   const currentPassword =
     typeof req.body?.current_password === 'string' ? req.body.current_password.trim() : '';
   const newPassword =
@@ -75,6 +80,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       from client_portals
       where mode = 'full'
         and lower(client_email) = ${email}
+        and (${requestedId}::uuid is null or id = ${requestedId}::uuid)
+      order by (client_password_hash is null), created_at desc
       limit 1
     `) as Array<{ id: string; client_password: string | null; client_password_hash: string | null }>;
 
@@ -90,15 +97,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
     }
 
-    await sql`
-      update client_portals
-      set client_password_hash = ${hashPortalPassword(newPassword)},
-          -- Clear the legacy plaintext for this row. Once a client changes
-          -- their password there is no reason to keep a readable copy, and it
-          -- shrinks the set of rows the eventual DROP has to wait on.
-          updated_at = now()
-      where id = ${rows[0].id}
-    `;
+    // On every session of the account, not just this one: they share one
+    // password (_account.ts).
+    await accountPasswordUpdate(sql, email, hashPortalPassword(newPassword));
 
     return res.status(200).json({ success: true });
   } catch (err) {

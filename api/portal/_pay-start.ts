@@ -40,6 +40,7 @@ import {
   salesTaxModeOf,
   type SalesTaxMode,
 } from '../../src/data/sales-tax.js';
+import { requestedSession } from './_account.js';
 
 const WRONG_AUTH_DELAY_MS = 750;
 
@@ -136,6 +137,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+
+  // Which of the account's sessions this is about (_account.ts). None: the default.
+  const requestedId = requestedSession(req.body);
   const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
   const asked = req.body?.kind;
   const kind: 'retainer' | 'balance' | 'tip' =
@@ -174,6 +178,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              ), 0) as tips_total
       from client_portals
       where lower(client_email) = ${email} and mode = 'full'
+        and (${requestedId}::uuid is null or id = ${requestedId}::uuid)
+      order by (client_password_hash is null), created_at desc
       limit 1
     `) as Row[];
 
@@ -400,8 +406,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // if the webhook that should have recorded it never arrives
       // (api/portal/_pay-confirm.ts). Query first and the #thanks hash LAST:
       // the preview flag used to follow the hash and never reached the page.
-      successUrl: `${origin}/portal?paid=1&session_id={CHECKOUT_SESSION_ID}${kind === 'tip' ? '&tip=1' : ''}${preview}${kind === 'tip' ? '#thanks' : ''}`,
-      cancelUrl: `${origin}/portal?paid=0${preview}`,
+      // portal=: which session was paid for, so a client with several lands
+      // back in that one (api/portal/_account.ts). An id, nothing personal.
+      successUrl: `${origin}/portal?paid=1&portal=${row.id}&session_id={CHECKOUT_SESSION_ID}${kind === 'tip' ? '&tip=1' : ''}${preview}${kind === 'tip' ? '#thanks' : ''}`,
+      cancelUrl: `${origin}/portal?paid=0&portal=${row.id}${preview}`,
     });
 
     return res.status(200).json({ success: true, url: session.url, amount: cardAmount });

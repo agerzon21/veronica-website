@@ -285,10 +285,15 @@ async function persist(payload: WaPayload): Promise<Stats> {
         if (!convoRows[0].linked_client_portal_id) {
           const e164 = toE164(waId);
           if (e164) {
+            // One row per CLIENT, not per booking: since migration 056 one
+            // client can have several sessions on one email and one phone, and
+            // that is still one person. Their newest booking is the link.
             const match = (await sql`
-              SELECT id FROM client_portals
+              SELECT DISTINCT ON (COALESCE(LOWER(client_email), id::text)) id
+                FROM client_portals
                WHERE client_phone IS NOT NULL
                  AND regexp_replace(client_phone, '[^0-9]', '', 'g') IN (${e164.slice(1)}, ${e164.slice(2)})
+               ORDER BY COALESCE(LOWER(client_email), id::text), created_at DESC
                LIMIT 2
             `) as Array<{ id: string }>;
             // Exactly one, or not at all. Two clients sharing a number is a
