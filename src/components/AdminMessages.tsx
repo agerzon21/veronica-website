@@ -3388,6 +3388,8 @@ function ConversationView({
       // an old cached row and a thread that never mentions a length look the
       // same here, and both mean the form leaves its end time blank.
       session_durations: b?.session_durations ?? [],
+      // The thread's other shoots, which seed the next sessions of a package.
+      more_sessions: b?.more_sessions ?? [],
       /**
        * NOT from the summary. Read straight out of the website submission's
        * own message body, which api/_inbox-record.ts wrote with the package

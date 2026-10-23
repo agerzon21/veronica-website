@@ -971,6 +971,18 @@ export async function conversationSummaryBlock(
           .filter(Boolean as unknown as (v: string | null) => v is string)
       : [];
 
+    // A second shoot booked in the same thread (an engagement and the
+    // wedding). Its facts are as settled as the first one's, so they are
+    // listed the same way, under the shoot they belong to.
+    const sessionKeys = new Set(['session_type', 'event_date', 'event_time', 'event_location', 'total_amount', 'retainer_amount', 'due_date', 'wedding_date', 'session_scope']);
+    const more = Array.isArray(booking.more_sessions) ? (booking.more_sessions as Array<Record<string, unknown>>) : [];
+    more.forEach((session, i) => {
+      const facts = FIELD_LABELS.filter(([k]) => sessionKeys.has(k) && session?.[k]).map(
+        ([k, label]) => `  - ${label}: ${String(session[k])}`,
+      );
+      if (facts.length) known.push(`- Another shoot booked in this thread (${i + 2}):`, ...facts);
+    });
+
     const lines: string[] = [
       'THREAD SUMMARY (system-generated from the FULL conversation, including messages older than the ones shown below).',
       'The message history you are given is only the most recent stretch of this thread. Everything in this block was established earlier and is still true.',

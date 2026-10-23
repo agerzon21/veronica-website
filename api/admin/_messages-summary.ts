@@ -53,6 +53,8 @@ import { FROM_ADDRESS } from '../_auto-reply.js';
 // does nothing when Vero clicks Create client.
 import {
   COUPLE_SESSION_TYPES,
+  SESSION_KEYS,
+  isCoupleSession,
   toSessionType,
   type DurationStatement,
   type SessionType,
@@ -79,8 +81,13 @@ const MODEL = 'gpt-4o-mini';
  * the end time blank on a thread that states one plainly. Nothing arrives to
  * invalidate that row either, since these are settled threads by the time
  * Vero converts them, which is the case this number exists for.
+ *
+ * 5 to 6: more_sessions. A couple booking an engagement AND a wedding in one
+ * thread came back as one booking with the wedding's type and the
+ * engagement's date, and the form opened on exactly that mix. A version 5 row
+ * is still that mix, so it has to be read again.
  */
-const SUMMARY_VERSION = 5;
+const SUMMARY_VERSION = 6;
 
 let cachedClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -204,10 +211,23 @@ export interface BookingFields {
    * prompt. The model's job is to find the sentences, not to pick one.
    */
   session_durations: DurationStatement[];
+  /**
+   * Every OTHER shoot this client is booking in the thread, earliest first,
+   * each holding only the keys that describe a shoot (SESSION_KEYS). The
+   * people are the client's, not a session's, so they live once, above.
+   *
+   * Before this the object above was the whole thread, and a wedding plus an
+   * engagement came back as one booking with the wedding's type and the
+   * engagement's date. Now the keys above are ONE shoot, consistently, and
+   * these seed the later sessions of a package in the new-client form.
+   */
+  more_sessions: SessionFields[];
 }
 
-/** Every key above except the list, which is the one that is not a string. */
-type BookingStringKey = Exclude<keyof BookingFields, 'session_durations'>;
+export type SessionFields = Pick<BookingFields, (typeof SESSION_KEYS)[number]>;
+
+/** Every key above except the two lists, the ones that are not strings. */
+type BookingStringKey = Exclude<keyof BookingFields, 'session_durations' | 'more_sessions'>;
 
 export const EMPTY_BOOKING: BookingFields = {
   session_type: null,
@@ -225,6 +245,7 @@ export const EMPTY_BOOKING: BookingFields = {
   total_amount_quote: null,
   event_date_quote: null,
   session_durations: [],
+  more_sessions: [],
 };
 
 /**
@@ -236,7 +257,7 @@ export const EMPTY_BOOKING: BookingFields = {
  * skip a key by name in the middle of its own body.
  */
 const BOOKING_STRING_KEYS = (Object.keys(EMPTY_BOOKING) as Array<keyof BookingFields>).filter(
-  (k): k is BookingStringKey => k !== 'session_durations',
+  (k): k is BookingStringKey => k !== 'session_durations' && k !== 'more_sessions',
 );
 
 /**
@@ -367,6 +388,41 @@ export function computeGaps(
     .filter((f) => !f.types || (type !== null && f.types.includes(type)))
     .filter((f) => !booking[f.key])
     .map((f) => f[locale]);
+}
+
+/** A session's type as a "Still needed" prefix, so two shoots' gaps stay apart. */
+const SESSION_TYPE_LABELS: Record<SessionType, { en: string; ru: string }> = {
+  wedding: { en: 'Wedding', ru: 'Свадьба' },
+  engagement: { en: 'Engagement', ru: 'Помолвка' },
+  maternity: { en: 'Maternity', ru: 'Беременность' },
+  family: { en: 'Family', ru: 'Семейная' },
+  portrait: { en: 'Portrait', ru: 'Портрет' },
+  other: { en: 'Other session', ru: 'Другая съёмка' },
+};
+
+/**
+ * The gaps of the later sessions, each prefixed with its type: "Wedding:
+ * Coverage hours". Only the keys that describe a shoot, because the client's
+ * name and email are already in the first session's list and asking for them
+ * twice would read as two different people.
+ */
+export function computeMoreSessionGaps(
+  booking: BookingFields,
+  classification: Classification,
+  locale: 'en' | 'ru',
+  source: 'client' | 'vero',
+): string[] {
+  const sessionKeys = SESSION_KEYS as readonly string[];
+  return booking.more_sessions.flatMap((session, i) => {
+    const type = toSessionType(session.session_type);
+    const prefix = type ? SESSION_TYPE_LABELS[type][locale] : locale === 'ru' ? `Съёмка ${i + 2}` : `Session ${i + 2}`;
+    return computeGaps({ ...booking, ...session, more_sessions: [] }, classification, locale, source)
+      .filter((label) => {
+        const f = BOOKING_REQUIREMENTS.find((r) => r[locale] === label);
+        return f ? sessionKeys.includes(f.key) : false;
+      })
+      .map((label) => `${prefix}: ${label}`);
+  });
 }
 
 interface Summary {
@@ -603,6 +659,12 @@ Fill "booking" BEFORE writing "gathered", decide the facts first, then describe 
   2. NEVER INVENT ONE. If nobody stated it, the key is null. Do not guess it, do not infer it from what is typical for this kind of shoot, do not carry it in from your own knowledge. A null is correct and useful; a made-up value ends up on a contract.
   Thread metadata at the top of the conversation (the channel, the address the customer writes from, their display name) is supplied by the platform rather than typed by anyone. It is a valid source of facts under rule 1, and nothing it contains may ever be reported as something still to ask the customer for.
   If the same key is given more than one value over the thread, use the MOST RECENT. Two exceptions. "session_durations" is a list and keeps every statement it finds, oldest first. And A CHOICE IS NOT A REVISION: when ONE message offers alternatives ("A costs this, or B costs that", "Saturday or Sunday"), it has not changed its mind between them, it has put two options on the table. Resolve it by what was actually taken, not by which came last in the sentence. See "total_amount" for the worked case.
+  ONE SHOOT PER OBJECT. Some clients book more than one shoot in the same thread, most often an engagement session and their wedding, sometimes a maternity shoot and a newborn one. Each shoot is a separate SESSION with its own contract. "booking" describes exactly ONE of them, and every other one goes in "more_sessions" (the last key below).
+    - The session keys of one object, "session_type", "event_date", "event_time", "event_location", "total_amount", "retainer_amount", "due_date", "wedding_date", "session_scope", "total_amount_quote", "event_date_quote" and "session_durations", must ALL describe the SAME shoot. Never take the type from one shoot and the date, time, place or price from another. A date, time, place or price said about the engagement belongs with the engagement even when the wedding is what the thread mostly talks about, and if a key was only ever said about the other shoot, it is null here.
+    - When there are several sessions, "booking" is the one that takes place FIRST: the earliest date, and a shoot with no date yet comes after every dated one.
+    - The people keys, "client_full_name", "partner_full_name" and "client_email", belong to the client, not to a shoot. They live in "booking" only, filled from anything said about any of the sessions.
+    - "Use the most recent" works within ONE shoot. The wedding's date is not a revision of the engagement's date, and the wedding's price is not a revision of the engagement's price.
+    - A price quoted for several sessions together ("both for $2,000") is not the price of either one. Leave each session's "total_amount" null unless its own price was named, and put the combined figure in "gathered".
     - "session_type": EXACTLY one of "wedding", "portrait", "family", "engagement", "maternity", "other". Those six are the only contracts that exist, so choose the closest one rather than inventing a word for the shoot. The tests below OVERLAP, so work down them in order and take the FIRST that fits: a wedding with children in it is still a wedding, and a pregnancy shoot of one adult is still maternity. (1) "wedding": a wedding, an elopement or a vow renewal, however many family members are in it. (2) "engagement": a proposal, a save-the-date or an engagement shoot. (3) "maternity": a bump or pregnancy shoot. (4) "other": a newborn, a birthday, an anniversary, or a branding, product or event shoot. (5) "family": children, or more than one generation, where none of the above was named. (6) "portrait": one adult on their own, including headshots, boudoir and graduation. (7) "other" again for anything that fits none of them. null only if the thread never says what kind of shoot this is.
     - "event_date": the day of the shoot as YYYY-MM-DD, four-digit year, two-digit month, two-digit day. A day counts as soon as either side names it, including a day the customer proposed while asking whether Vero is free when Vero has not answered yet. Every transcript line is prefixed with the date that message was sent; when a day is named without a year ("October 7", "Nov 8", "7 октября"), take the year from that prefix, choosing the first such day falling on or after the date of the message that names it. The month and the day themselves must come from the thread's own words: never supply those yourself. null only when no single day is named at all: "sometime in October", "next summer", "a weekend in the spring", or two or more candidate days with no choice made between them.
     - "event_time": the clock time the shoot starts, or the whole window if the thread gives both ends, worded as in the thread, e.g. "3:00 PM to 6:00 PM" or "11:30 AM". A start time on its own IS the value: do not hold it back for want of an end, and do not work one out yourself by adding a length to it. How long the session runs belongs in "session_durations" and never inside this string. null only if no clock time is named.
@@ -623,7 +685,8 @@ Fill "booking" BEFORE writing "gathered", decide the facts first, then describe 
     - "session_scope": "other" sessions only. A short phrase in the thread's own words saying what is being photographed, e.g. "branding session for a bakery" or "60th birthday party". null for every other session type, and null when nothing says what the shoot is.
     - "total_amount_quote": the sentence from the thread that names the total, copied word for word. Whenever "total_amount" is non-null this is the sentence it came from, so you must be able to produce it. null if "total_amount" is null.
     - "event_date_quote": the sentence that names the date, copied word for word, on the same terms. null if "event_date" is null.
-  "gathered" and this object are the same facts read two ways, so they can never disagree. Every fact you put in "gathered" must appear in its matching key here, and every key here that carries a value, including a "session_durations" list with anything in it, must show up in "gathered". If you are about to write a detail into "gathered" while its key is still null, the key is what is wrong: go back and fill it.
+    - "more_sessions": an array with one object for every OTHER shoot this same client is booking or asking to book in this thread, in date order (undated last). Each object has EXACTLY the session keys named under ONE SHOOT PER OBJECT, filled by the same rules as above, and none of the people keys. A shoot mentioned only in passing is NOT a session: a past shoot, a wedding another photographer is covering, a shoot for someone else. An empty array when the thread is about one shoot, which is the usual case.
+  "gathered" and this object are the same facts read two ways, so they can never disagree. Every fact you put in "gathered" must appear in its matching key here (for a second shoot, the matching key inside "more_sessions"), and when there is more than one shoot each gathered fact about one says which shoot it is about, e.g. "Engagement date: May 8, 2027". In the other direction, every key here that carries a value, including a "session_durations" list with anything in it, must show up in "gathered". If you are about to write a detail into "gathered" while its key is still null, the key is what is wrong: go back and fill it.
 
 - "en": an object with:
     - "asking": one English sentence describing what the customer is fundamentally asking for. If unclear, say "General inquiry, nothing specific asked yet." If spam, describe what they're pitching.
@@ -644,9 +707,10 @@ Facts and dates should be short, "Aug 12, 2026" not "the 12th of August 2026". I
     // 400 → 700 for the Russian copy when summaries went bilingual, then
     // → 1000 for the `booking` object and its verbatim source quotes, then
     // → 1500 once session_durations started carrying a sentence per speaker
-    // on top of that. A truncated response is unparseable JSON, so this has
-    // headroom.
-    max_tokens: 1500,
+    // on top of that, → 2500 for more_sessions, which can repeat most of the
+    // booking object once per extra shoot. A truncated response is
+    // unparseable JSON, so this has headroom.
+    max_tokens: 2500,
     temperature: 0.2,
     response_format: { type: 'json_object' },
   });
@@ -684,7 +748,7 @@ Facts and dates should be short, "Aug 12, 2026" not "the 12th of August 2026". I
    * writes "unknown", "TBD" or "n/a" instead of null would otherwise read as
    * a real value and quietly drop the field off the "Still needed" list.
    */
-  const readBooking = (src: any): BookingFields => {
+  const readOne = (src: any, keepPartner = false): BookingFields => {
     const out = { ...EMPTY_BOOKING };
     if (!src || typeof src !== 'object') return out;
     out.session_durations = readDurations(src.session_durations);
@@ -730,15 +794,42 @@ Facts and dates should be short, "Aug 12, 2026" not "the 12th of August 2026". I
     //
     // Only once the type is known: null means we have no information yet, not
     // that the field does not apply.
+    //
+    // The partner is the exception when another session in the thread is a
+    // couple's: a family shoot booked alongside a wedding still has a
+    // partner to name, on the wedding's contract.
     const type = toSessionType(out.session_type);
     if (type) {
       for (const f of BOOKING_REQUIREMENTS) {
+        if (keepPartner && f.key === 'partner_full_name') continue;
         if (f.types && !f.types.includes(type)) out[f.key] = null;
       }
     }
     // A quote with nothing to back up is noise.
     if (!out.total_amount) out.total_amount_quote = null;
     if (!out.event_date) out.event_date_quote = null;
+    return out;
+  };
+
+  /**
+   * The first session with the client's details, then the others with only
+   * their own. A later "session" with neither a type nor a date says nothing
+   * a form could use, so it is dropped rather than opened as a blank tab. The
+   * cap is the same guard as readDurations': a looping model cannot write an
+   * unbounded list into the cache.
+   */
+  const readBooking = (src: any): BookingFields => {
+    const more = (Array.isArray(src?.more_sessions) ? src.more_sessions : [])
+      .slice(0, 4)
+      .map((row: unknown) => readOne(row))
+      .filter((row: BookingFields) => row.session_type || row.event_date)
+      .map((row: BookingFields) => {
+        const session = {} as Record<string, unknown>;
+        for (const key of SESSION_KEYS) session[key] = row[key];
+        return session as SessionFields;
+      });
+    const out = readOne(src, more.some((m: SessionFields) => isCoupleSession(m.session_type)));
+    out.more_sessions = more;
     return out;
   };
 
@@ -767,6 +858,10 @@ Facts and dates should be short, "Aug 12, 2026" not "the 12th of August 2026". I
   ru.missing = computeGaps(booking, classification, 'ru', 'client');
   en.decide = computeGaps(booking, classification, 'en', 'vero');
   ru.decide = computeGaps(booking, classification, 'ru', 'vero');
+  en.missing.push(...computeMoreSessionGaps(booking, classification, 'en', 'client'));
+  ru.missing.push(...computeMoreSessionGaps(booking, classification, 'ru', 'client'));
+  en.decide.push(...computeMoreSessionGaps(booking, classification, 'en', 'vero'));
+  ru.decide.push(...computeMoreSessionGaps(booking, classification, 'ru', 'vero'));
 
   return {
     classification,

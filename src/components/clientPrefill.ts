@@ -55,7 +55,34 @@ export interface PrefillBooking {
    * DurationStatement for why this is a list and not one agreed number.
    */
   session_durations: DurationStatement[];
+  /**
+   * Every OTHER shoot the same client is booking in this thread, earliest
+   * first, each with only the per-session keys. An engagement and a wedding
+   * in one conversation used to come back as one booking with the wedding's
+   * type and the engagement's date, and that is the form Vero was handed.
+   * The top-level keys are now one shoot, and these seed the next sessions
+   * of a package. Optional because summaries cached before it lack it.
+   */
+  more_sessions?: PrefillSession[];
 }
+
+/** The keys that describe one shoot, as opposed to the client booking it. */
+export const SESSION_KEYS = [
+  'session_type',
+  'event_date',
+  'event_time',
+  'event_location',
+  'total_amount',
+  'retainer_amount',
+  'due_date',
+  'wedding_date',
+  'session_scope',
+  'total_amount_quote',
+  'event_date_quote',
+  'session_durations',
+] as const;
+
+export type PrefillSession = Pick<PrefillBooking, (typeof SESSION_KEYS)[number]>;
 
 /**
  * Something one side of the thread said about how long the session runs.
@@ -139,6 +166,32 @@ export interface ClientPrefill extends PrefillBooking {
    * model that can paraphrase digits. A phone Vero recorded by hand wins.
    */
   client_phone: string | null;
+}
+
+/**
+ * The prefill for a later session of a package: that shoot's own details
+ * from the thread, and the client's details as Vero left them on session 1.
+ *
+ * The people come from her form, not the thread, because she may have fixed
+ * a name there and a second session should not undo it. The wedding package
+ * the contact form resolved belongs to the wedding, so it only travels with
+ * a session that is one. No further sessions ride along: this one is filled.
+ */
+export function prefillForSession(
+  base: ClientPrefill,
+  session: PrefillSession,
+  people: { fullName: string | null; partnerFullName: string | null; email: string | null; phone: string | null },
+): ClientPrefill {
+  return {
+    ...base,
+    ...session,
+    client_full_name: people.fullName ?? base.client_full_name,
+    partner_full_name: people.partnerFullName ?? base.partner_full_name,
+    client_email: people.email ?? base.client_email,
+    client_phone: people.phone ?? base.client_phone,
+    wedding_package: toSessionType(session.session_type) === 'wedding' ? base.wedding_package : null,
+    more_sessions: [],
+  };
 }
 
 /** One clock reading found in a sentence, before anything is decided about it. */

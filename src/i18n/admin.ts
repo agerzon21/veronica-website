@@ -2050,6 +2050,10 @@ const dict = {
     submit: { en: 'Create Portal & Send Invite', ru: 'Создать портал и отправить приглашение' },
     // Booking several sessions together as a package (2026-10-22).
     addAnotherSession: { en: '+ Add another session (package)', ru: '+ Добавить ещё съёмку (пакет)' },
+    moreSessionsHint: {
+      en: (list: string) => `The conversation also books ${list}. Add another session and it opens filled in.`,
+      ru: (list: string) => `В переписке есть ещё съёмка: ${list}. Добавь ещё одну съёмку, и она откроется уже заполненной.`,
+    },
     addToPackage: { en: 'Save this session', ru: 'Сохранить эту съёмку' },
     submitting: { en: 'Creating...', ru: 'Создаю...' },
 
@@ -2519,6 +2523,16 @@ const dict = {
       en: (d: number) => `Not available: this date is ${d} days out. The clause states in its own first line that it only applies beyond 365 days, so on this booking it would contradict itself.`,
       ru: (d: number) => `Недоступно: до даты ${d} дней. Пункт применяется только при сроке больше 365 дней.`,
     },
+    // The client screen never ticks or unticks a clause on its own: that made
+    // a screen she had only looked at report an unsaved contract change.
+    priceReviewSuggestOn: {
+      en: (d: number) => `Off in the contract the client has. This date is ${d} days out, past the 365 the clause needs: tick it and Save to add it, or leave it off to lock the price.`,
+      ru: (d: number) => `В контракте клиента выключено. До даты ${d} дней, больше требуемых 365: отметь и сохрани, чтобы добавить, или оставь выключенным, чтобы зафиксировать цену.`,
+    },
+    priceReviewMustOff: {
+      en: (d: number) => `On in the contract, but this date is only ${d} days out. The clause's first line says it applies beyond 365 days, so here it contradicts itself: untick it and Save.`,
+      ru: (d: number) => `В контракте включено, но до даты всего ${d} дней. Пункт применяется только при сроке больше 365 дней: сними галочку и сохрани.`,
+    },
     priceReviewNoDate: {
       en: 'Set the event date first, then this decides itself.',
       ru: 'Сначала укажите дату съёмки, дальше решится само.',
@@ -2827,6 +2841,11 @@ const dict = {
     // One client, several sessions (2026-10-22): every full booking on one
     // email shares the client's login.
     sessionsOnLoginLabel: { en: 'Sessions on this login', ru: 'Съёмки на этом аккаунте' },
+    clientSessionsLabel: { en: "This client's sessions", ru: 'Все съёмки этого клиента' },
+    clientSessionsPackage: {
+      en: (price: string, regular: string, saving: string) => `Package: ${price} together, ${regular} separately, saving ${saving}.`,
+      ru: (price: string, regular: string, saving: string) => `Пакет: ${price} вместе, ${regular} по отдельности, экономия ${saving}.`,
+    },
     sessionsOnLoginNone: {
       en: 'Only this one. Add another and it joins the same login: same email, same password.',
       ru: 'Пока только эта. Добавь ещё одну, и она будет в том же аккаунте: та же почта и пароль.',

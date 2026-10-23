@@ -1870,7 +1870,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
           <Flex align="center" justify="space-between" gap={3} wrap="wrap">
             <Text fontSize="2xs" color="gray.600" lineHeight="1.5">
-              {t.newClient.createEmailsClient}
+              {/* In a package nothing is sent per form: the package sends one invite. */}
+              {!packageMode && t.newClient.createEmailsClient}
             </Text>
             {/* Kept small and out of the way. Turning a booking thread into a
                 gallery-only portal is rarely what she wants, it is what
@@ -2595,6 +2596,18 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
               {/* Booking several sessions together, at a package price. */}
               {!packageMode && onStartPackage && (
                 <Box mt={3}>
+                  {(prefill?.more_sessions?.length ?? 0) > 0 && (
+                    <Text fontSize="sm" color="gray.600" mb={2} data-testid="more-sessions-hint">
+                      {t.newClient.moreSessionsHint(
+                        (prefill?.more_sessions ?? [])
+                          .map((m) => {
+                            const type = toSessionType(m.session_type);
+                            return [type ? CONTRACT_TEMPLATES[type].name : null, m.event_date ? fmtDate(m.event_date) : null].filter(Boolean).join(', ');
+                          })
+                          .join('; '),
+                      )}
+                    </Text>
+                  )}
                   <CTAButton
                     type="submit"
                     variant="outline"

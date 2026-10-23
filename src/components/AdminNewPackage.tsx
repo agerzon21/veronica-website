@@ -7,7 +7,9 @@
  * switch between them, so any session can be changed until the package is
  * created. Session 1 keeps the thread it came from (prefill, its banner and
  * the floating "View conversation"); the others are seeded with the client's
- * details and get the same floating button.
+ * details and get the same floating button. When the thread booked more than
+ * one shoot (prefill.more_sessions), session 2 opens filled with the second
+ * shoot's details, session 3 with the third, and so on.
  *
  * Each form validates and builds its own request (packageMode.onAdd). On
  * Create every form is asked to do that again, so nothing typed after a save
@@ -23,7 +25,7 @@ import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import ConfirmDialog from './ui/ConfirmDialog';
 import AdminNewClient, { type PackageEntry, type SameClientSeed } from './AdminNewClient';
-import type { ClientPrefill } from './clientPrefill';
+import { prefillForSession, type ClientPrefill } from './clientPrefill';
 import { useAdminLang } from '../i18n/admin';
 import { splitPackage, type DiscountMode } from '../data/package';
 import { suggestedRetainer } from '../data/retainer';
@@ -67,6 +69,11 @@ export default function AdminNewPackage({
   const [error, setError] = useState('');
   const [leaveOpen, setLeaveOpen] = useState(false);
 
+  /** Per form, fixed when it opens: a form reads its prefill once, on mount. */
+  const prefillsRef = useRef<Record<number, ClientPrefill | null>>({ 1: prefill });
+  /** Which of prefill.more_sessions each later form was opened with. */
+  const shootOfRef = useRef<Record<number, number>>({});
+
   const record = (id: number, entry: PackageEntry) => {
     entriesRef.current = { ...entriesRef.current, [id]: entry };
     setEntries(entriesRef.current);
@@ -83,19 +90,28 @@ export default function AdminNewPackage({
     return after;
   };
 
-  const first = entries[1];
-  const fb = (first?.body ?? {}) as Record<string, string | null>;
-  const seed: SameClientSeed = {
-    label: String(fb.client_display_name ?? sameClient?.label ?? ''),
-    fullName: (fb.partner_1_full_name as string | null) ?? sameClient?.fullName ?? null,
-    partnerFullName: (fb.partner_2_full_name as string | null) ?? sameClient?.partnerFullName ?? null,
-    email: (fb.client_email as string | null) ?? sameClient?.email ?? null,
-    phone: (fb.client_phone as string | null) ?? sameClient?.phone ?? null,
+  const seedFrom = (first: PackageEntry | undefined): SameClientSeed => {
+    const fb = (first?.body ?? {}) as Record<string, string | null>;
+    return {
+      label: String(fb.client_display_name ?? sameClient?.label ?? ''),
+      fullName: (fb.partner_1_full_name as string | null) ?? sameClient?.fullName ?? null,
+      partnerFullName: (fb.partner_2_full_name as string | null) ?? sameClient?.partnerFullName ?? null,
+      email: (fb.client_email as string | null) ?? sameClient?.email ?? null,
+      phone: (fb.client_phone as string | null) ?? sameClient?.phone ?? null,
+    };
   };
+  const seed = seedFrom(entries[1]);
   const convo = prefill ? { conversationId: prefill.conversationId, displayName: prefill.displayName } : null;
 
   const addForm = () => {
     const id = Math.max(...forms) + 1;
+    // The next shoot the thread booked that no open form has yet, so removing
+    // a session hands its shoot to the next one opened.
+    const claimed = new Set(forms.map((f) => shootOfRef.current[f]));
+    const index = (prefill?.more_sessions ?? []).findIndex((_, i) => !claimed.has(i));
+    const shoot = index >= 0 ? prefill?.more_sessions?.[index] : undefined;
+    if (shoot) shootOfRef.current[id] = index;
+    prefillsRef.current[id] = prefill && shoot ? prefillForSession(prefill, shoot, seedFrom(entriesRef.current[1])) : null;
     setForms((list) => [...list, id]);
     setActive(id);
     window.scrollTo({ top: 0 });
@@ -192,7 +208,8 @@ export default function AdminNewPackage({
 
   const tabLabel = (id: number, n: number) => {
     const e = entries[id];
-    return t.newPackage.tabSession(n, e ? cap(e.summary.type) : t.newPackage.tabNew);
+    const fromThread = prefillsRef.current[id]?.session_type;
+    return t.newPackage.tabSession(n, e ? cap(e.summary.type) : fromThread ? cap(fromThread) : t.newPackage.tabNew);
   };
 
   return (
@@ -238,7 +255,7 @@ export default function AdminNewPackage({
           <AdminNewClient
             formId={formIdOf(id)}
             adminPassword={adminPassword}
-            prefill={id === 1 ? prefill : null}
+            prefill={prefillsRef.current[id] ?? null}
             sameClient={id === 1 ? sameClient : seed}
             peekConversation={id === 1 ? null : convo}
             onSwitchToGalleryOnly={id === 1 && !isPackage ? onSwitchToGalleryOnly : undefined}
