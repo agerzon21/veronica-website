@@ -12,7 +12,7 @@ import {
 import { fmtAdminDate, fmtAdminDateTime } from '../utils/adminDate';
 import FaPlus from '../icons/fa/FaPlus';
 import type { SameClientSeed } from './AdminNewClient';
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
 import FaUndo from '../icons/fa/FaUndo';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
@@ -114,7 +114,17 @@ interface PortalDetail {
   session_locations?: unknown;
   same_date_bookings?: Array<{ id: string; client_display_name: string | null; session_type: string | null }>;
   // The same client's other sessions (same email, one login: portal/_account.ts).
-  same_client_bookings?: Array<{ id: string; client_display_name: string | null; session_type: string | null; event_date: string | null }>;
+  same_client_bookings?: Array<{
+    id: string;
+    client_display_name: string | null;
+    session_type: string | null;
+    contract_template_key?: string | null;
+    event_date: string | null;
+    contract_status?: string | null;
+    contract_total_amount?: number | null;
+    regular_amount?: number | null;
+    package_id?: string | null;
+  }>;
   event_date: string | null;
   gallery_password: string;
   /**
@@ -1130,6 +1140,16 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         )}
       </Box>
 
+      {/* Every session this client has, this one included, in date order,
+          right under the header (2026-10-23). It used to be a row of buttons
+          half way down Details, and a client booked as a package opened on
+          one session with nothing in view saying there was another. Shown
+          only when there IS another, so a one-session client's page is
+          exactly what it was. */}
+      {(portal.same_client_bookings?.length ?? 0) > 0 && (
+        <ClientSessionsStrip portal={portal} onOpenClient={onOpenClient} />
+      )}
+
       {leaveConfirm && hasUnsaved && (
         <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm" p={4} mt={2} mb={4}>
           <Text fontSize="sm" fontWeight="500" color="orange.800" mb={1}>
@@ -1856,7 +1876,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 <Flex gap={2} wrap="wrap" mb={3}>
                   {(portal.same_client_bookings ?? []).map((b) => (
                     <CTAButton key={b.id} onClick={() => onOpenClient?.(b.id)} variant="outline" size="sm">
-                      {[b.client_display_name || t.clientDetail.unnamed, b.event_date ? fmtAdminDate(b.event_date, lang) : null].filter(Boolean).join(' · ')}
+                      {[typeLabel(b.contract_template_key ?? b.session_type) || b.client_display_name || t.clientDetail.unnamed, b.event_date ? fmtAdminDate(b.event_date, lang) : null].filter(Boolean).join(' · ')}
                     </CTAButton>
                   ))}
                 </Flex>
@@ -4859,6 +4879,75 @@ function AccountSection({
 }
 
 /**
+ * The client's sessions as tabs, the open one solid, and the package they
+ * were booked as when they all belong to one. Switching goes through
+ * onOpenClient, which Admin.tsx routes through its unsaved-work guard.
+ */
+function ClientSessionsStrip({
+  portal,
+  onOpenClient,
+}: {
+  portal: PortalDetail;
+  onOpenClient?: (id: string) => void;
+}) {
+  const { t, lang } = useAdminLang();
+  const all = [
+    {
+      id: portal.id,
+      type: portal.contract_template_key ?? null,
+      event_date: portal.event_date,
+      price: portal.contract_total_amount ?? null,
+      regular: portal.regular_amount ?? null,
+      package_id: portal.package_id ?? null,
+    },
+    ...(portal.same_client_bookings ?? []).map((b) => ({
+      id: b.id,
+      type: b.contract_template_key ?? b.session_type ?? null,
+      event_date: b.event_date,
+      price: b.contract_total_amount ?? null,
+      regular: b.regular_amount ?? null,
+      package_id: b.package_id ?? null,
+    })),
+  ].sort((a, b) => {
+    const da = a.event_date ? new Date(a.event_date).getTime() : Infinity;
+    const db = b.event_date ? new Date(b.event_date).getTime() : Infinity;
+    return da - db;
+  });
+  // Only when every session is in the same package and each knows both prices.
+  const pkg = portal.package_id;
+  const inPackage = pkg && all.every((s) => s.package_id === pkg && s.price !== null && s.regular !== null);
+  const price = all.reduce((sum, s) => sum + (s.price ?? 0), 0);
+  const regular = all.reduce((sum, s) => sum + (s.regular ?? 0), 0);
+
+  return (
+    <Box mt={4} mb={4} data-testid="client-sessions-strip">
+      <Text fontSize="xs" color="gray.500" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+        {t.clientDetail.clientSessionsLabel}
+      </Text>
+      <Flex gap={2} wrap="wrap">
+        {all.map((s) => (
+          <CTAButton
+            key={s.id}
+            variant={s.id === portal.id ? 'solid' : 'outline'}
+            size="sm"
+            onClick={() => {
+              if (s.id !== portal.id) onOpenClient?.(s.id);
+            }}
+          >
+            {[typeLabel(s.type) || t.clientDetail.unnamed, s.event_date ? fmtAdminDate(s.event_date, lang) : null].filter(Boolean).join(' · ')}
+          </CTAButton>
+        ))}
+      </Flex>
+      {inPackage && regular > price && (
+        <Text fontSize="sm" color="green.700" mt={2} data-testid="client-sessions-package">
+          {t.clientDetail.clientSessionsPackage(formatMoney(price), formatMoney(regular), formatMoney(regular - price))}
+        </Text>
+      )}
+    </Box>
+  );
+}
+
+/**
  * Editable form of the same contract variables that were collected at
  * portal-creation time. Shown only while contract_status === 'pending';
  * once signed, the contract body is frozen and this disappears.
@@ -4882,8 +4971,6 @@ function EditContractVariables({
   const { t } = useAdminLang();
   const [open, setOpen] = useState(false);
   const [vars, setVars] = useState<Record<string, string>>(portal.contract_variables ?? {});
-  // She unticked it deliberately; do not tick it back on under her finger.
-  const priceReviewTouched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   // Second step of the save, see the panel at the bottom of this component.
@@ -5044,20 +5131,13 @@ function EditContractVariables({
     ...strandedClauses.map((key) => ({ key, kind: 'stranded' as const })),
   ];
 
-  // Kept in step with the date rather than with memory. Only ever writes when
-  // the value is actually wrong for the date, so it never fights a deliberate
-  // choice made within the range where the clause is legitimate.
-  useEffect(() => {
-    if (!offeredClauses.includes(PRICE_REVIEW_KEY)) return;
-    const on = (vars[PRICE_REVIEW_KEY] ?? '').trim().length > 0;
-    if (priceReviewApplies && !on && !priceReviewTouched.current) {
-      setVars((v) => ({ ...v, [PRICE_REVIEW_KEY]: 'yes' }));
-    } else if (!priceReviewApplies && on) {
-      // Not a preference being overridden: the clause's own first sentence
-      // would be untrue on this date.
-      setVars((v) => ({ ...v, [PRICE_REVIEW_KEY]: '' }));
-    }
-  }, [priceReviewApplies, offeredClauses, vars]);
+  // This screen edits a contract that already exists, so it never ticks or
+  // unticks the box by itself. It used to, on load, and a client page Vero
+  // had only opened reported "1 contract field" unsaved and asked her to
+  // discard it (2026-10-23, a wedding 380 days out created with the box
+  // off). The New Client form still decides it from the date; here the
+  // mismatch is SAID, next to the box, and changing it is her click.
+  const priceReviewStoredOn = (savedVars[PRICE_REVIEW_KEY] ?? '').trim().length > 0;
 
   const handleSave = async () => {
     setSaving(true);
@@ -5197,9 +5277,10 @@ function EditContractVariables({
                       key={key}
                       isChecked={on}
                       isReadOnly={kind === 'forced'}
-                      isDisabled={key === PRICE_REVIEW_KEY && !priceReviewApplies}
+                      // Still possible to untick a clause the date has made
+                      // untrue, never possible to tick one on.
+                      isDisabled={key === PRICE_REVIEW_KEY && !priceReviewApplies && !on}
                       onChange={(e) => {
-                        if (key === PRICE_REVIEW_KEY) priceReviewTouched.current = true;
                         // isReadOnly already swallows this for a forced clause.
                         // Belt and braces anyway: the two clauses that are
                         // forced on by default are the minor and illness ones
@@ -5228,15 +5309,26 @@ function EditContractVariables({
                         {key === PRICE_REVIEW_KEY && (
                           <Text
                             fontSize="xs"
-                            color={priceReviewApplies ? 'green.600' : 'gray.400'}
+                            color={
+                              priceReviewDaysOut !== null && priceReviewApplies !== priceReviewStoredOn
+                                ? 'orange.600'
+                                : priceReviewApplies
+                                  ? 'green.600'
+                                  : 'gray.400'
+                            }
                             fontWeight="300"
                             mt={1}
+                            data-testid="price-review-note"
                           >
                             {priceReviewDaysOut === null
                               ? t.clientDetail.priceReviewNoDate
-                              : priceReviewApplies
-                                ? t.clientDetail.priceReviewOn(priceReviewDaysOut)
-                                : t.clientDetail.priceReviewOff(priceReviewDaysOut)}
+                              : priceReviewApplies && !priceReviewStoredOn
+                                ? t.clientDetail.priceReviewSuggestOn(priceReviewDaysOut)
+                                : !priceReviewApplies && priceReviewStoredOn
+                                  ? t.clientDetail.priceReviewMustOff(priceReviewDaysOut)
+                                  : priceReviewApplies
+                                    ? t.clientDetail.priceReviewOn(priceReviewDaysOut)
+                                    : t.clientDetail.priceReviewOff(priceReviewDaysOut)}
                           </Text>
                         )}
                         {kind === 'stranded' && (

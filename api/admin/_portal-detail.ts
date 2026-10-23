@@ -208,15 +208,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * share one login (portal/_account.ts). Shown on the record with links,
      * next to "Add a session for this client". Never worth failing over.
      */
-    let sameClient: Array<{ id: string; client_display_name: string | null; session_type: string | null; event_date: string | null }> = [];
+    let sameClient: Array<{
+      id: string;
+      client_display_name: string | null;
+      session_type: string | null;
+      contract_template_key: string | null;
+      event_date: string | null;
+      contract_status: string | null;
+      contract_total_amount: string | number | null;
+      regular_amount: string | number | null;
+      package_id: string | null;
+    }> = [];
     try {
       if (rows[0].client_email && rows[0].mode === 'full') {
         sameClient = (await sql`
-          select id, client_display_name, session_type, event_date
+          select id, client_display_name, session_type, contract_template_key, event_date,
+                 contract_status, contract_total_amount, regular_amount, package_id
           from client_portals
           where mode = 'full' and lower(client_email) = lower(${rows[0].client_email}) and id <> ${id}
           order by event_date asc nulls last, created_at asc
         `) as typeof sameClient;
+        // Numbers on the wire, like the booking's own amounts below.
+        for (const b of sameClient) {
+          b.contract_total_amount = b.contract_total_amount != null ? parseFloat(String(b.contract_total_amount)) : null;
+          b.regular_amount = b.regular_amount != null ? parseFloat(String(b.regular_amount)) : null;
+        }
       }
     } catch {
       /* never worth failing the page over */

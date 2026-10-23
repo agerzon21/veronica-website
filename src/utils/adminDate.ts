@@ -15,6 +15,13 @@ export const adminLocale = (lang: AdminLang): string => (lang === 'ru' ? 'ru-RU'
 
 /** "2026-10-07" → "October 7, 2026" / "7 октября 2026 г." per panel language. */
 export function fmtAdminDate(iso: string, lang: AdminLang): string {
+  // A timestamp column arrives as "2027-11-07T04:00:00.000Z", which is
+  // midnight in the studio's time zone. Read the day it is THERE, or the
+  // split below finds no day and the raw string reaches the screen.
+  if (/^\d{4}-\d{2}-\d{2}T/.test(iso)) {
+    const t = new Date(iso);
+    if (!Number.isNaN(t.getTime())) iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(t);
+  }
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(adminLocale(lang), {
