@@ -218,12 +218,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contract_total_amount: string | number | null;
       regular_amount: string | number | null;
       package_id: string | null;
+      // What the client's "Your sessions" page shows for it, so the admin's
+      // portal preview can draw that page (AdminPortalPreview).
+      contract_retainer_amount?: string | number | null;
+      paid_to_date?: string | number | null;
+      charges_total?: number;
+      sales_tax?: string | null;
+      complimentary?: boolean | null;
+      has_gallery?: boolean;
+      has_password?: boolean;
+      gallery_delivered_at?: string | null;
+      gallery_expires_at?: string | null;
+      created_at?: string;
+      event_title?: string | null;
+      event_location?: string | null;
+      session_location?: string | null;
     }> = [];
     try {
       if (rows[0].client_email && rows[0].mode === 'full') {
         sameClient = (await sql`
           select id, client_display_name, session_type, contract_template_key, event_date,
-                 contract_status, contract_total_amount, regular_amount, package_id
+                 contract_status, contract_total_amount, regular_amount, package_id,
+                 contract_retainer_amount, paid_to_date, sales_tax, complimentary,
+                 drive_url is not null as has_gallery, client_password_hash is not null as has_password,
+                 gallery_delivered_at, gallery_expires_at, created_at, session_location,
+                 contract_variables->>'event_title' as event_title,
+                 contract_variables->>'event_location' as event_location,
+                 (select coalesce(sum(pc.amount), 0) from portal_charges pc where pc.client_portal_id = client_portals.id)::float8 as charges_total
           from client_portals
           where mode = 'full' and lower(client_email) = lower(${rows[0].client_email}) and id <> ${id}
           order by event_date asc nulls last, created_at asc
@@ -232,6 +253,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const b of sameClient) {
           b.contract_total_amount = b.contract_total_amount != null ? parseFloat(String(b.contract_total_amount)) : null;
           b.regular_amount = b.regular_amount != null ? parseFloat(String(b.regular_amount)) : null;
+          b.contract_retainer_amount = b.contract_retainer_amount != null ? parseFloat(String(b.contract_retainer_amount)) : null;
+          b.paid_to_date = b.paid_to_date != null ? parseFloat(String(b.paid_to_date)) : 0;
         }
       }
     } catch {

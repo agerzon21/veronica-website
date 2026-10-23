@@ -1302,6 +1302,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             isOpen={portalPreviewOpen}
             onClose={() => setPortalPreviewOpen(false)}
             portal={portal as unknown as Record<string, unknown>}
+            adminPassword={adminPassword}
             payments={payments as unknown as Array<Record<string, unknown>>}
             charges={charges as unknown as Array<Record<string, unknown>>}
           />
