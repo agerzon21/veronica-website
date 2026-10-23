@@ -122,7 +122,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* migration 054 not applied */
     }
 
+    /**
+     * Booked as a package (migration 057): every session in it, so the page
+     * can show the discount the client was given. Allowed to fail.
+     */
+    let pkg: { names: string[]; regular: number; price: number } | null = null;
+    try {
+      const k = (await sql`select package_id from client_portals where id = ${row.id}`) as Array<{ package_id: string | null }>;
+      if (k[0]?.package_id) {
+        const members = (await sql`
+          select session_type, contract_template_key, regular_amount::float8 as regular, contract_total_amount::float8 as price
+          from client_portals where package_id = ${k[0].package_id}
+          order by event_date asc nulls last, created_at asc
+        `) as Array<{ session_type: string | null; contract_template_key: string | null; regular: number | null; price: number | null }>;
+        if (members.length > 1) {
+          pkg = {
+            names: members.map((m) => (m.session_type || m.contract_template_key || 'Session').replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())),
+            regular: members.reduce((sum, m) => sum + (m.regular ?? m.price ?? 0), 0),
+            price: members.reduce((sum, m) => sum + (m.price ?? 0), 0),
+          };
+        }
+      }
+    } catch {
+      /* migration 057 not applied: nothing was booked as a package */
+    }
+
     return res.status(200).json({
+      package: pkg,
       success: true,
       client_display_name: row.client_display_name,
       // "Hi Ashley" at the top of the page. The display name is Vero's label.

@@ -1,22 +1,29 @@
 /**
- * Several sessions booked together as a package (2026-10-22).
+ * New Client, with room for a package (2026-10-22, reworked 2026-10-23).
  *
- * Vero fills in the first session in the ordinary New Client form and presses
- * "+ Add another session". This screen then holds the package: the sessions so
- * far, the discount (dollars or percent), each session's regular price,
- * package price and retainer, and a fresh New Client form for the next
- * session with the client's details already in it. Every session is the
- * exact request that form builds and validates; this screen only sets each
- * one's package price, then creates them in order through the same endpoint.
- * The first one sends the client's invite; the rest join the same login
- * quietly (api/portal/_account.ts), so the client gets one email.
+ * Until "+ Add another session" is pressed this is exactly the New Client
+ * form, nothing around it. Pressing it turns the screen into a package:
+ * every session's form stays mounted with whatever was typed in it, and tabs
+ * switch between them, so any session can be changed until the package is
+ * created. Session 1 keeps the thread it came from (prefill, its banner and
+ * the floating "View conversation"); the others are seeded with the client's
+ * details and get the same floating button.
+ *
+ * Each form validates and builds its own request (packageMode.onAdd). On
+ * Create every form is asked to do that again, so nothing typed after a save
+ * is lost; a session that is not complete is opened with its errors showing.
+ * Then each is created in order through the same endpoint at its package
+ * price. The first sends the client's one email; the rest join quietly
+ * (api/portal/_account.ts).
  */
 
 import { Box, Flex, HStack, Input, Text, VStack } from '@chakra-ui/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
+import ConfirmDialog from './ui/ConfirmDialog';
 import AdminNewClient, { type PackageEntry, type SameClientSeed } from './AdminNewClient';
+import type { ClientPrefill } from './clientPrefill';
 import { useAdminLang } from '../i18n/admin';
 import { splitPackage, type DiscountMode } from '../data/package';
 import { suggestedRetainer } from '../data/retainer';
@@ -31,53 +38,119 @@ const uuid = (): string =>
         const r = (Math.random() * 16) | 0;
         return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
       });
+const formIdOf = (id: number) => `package-form-${id}`;
 
 export default function AdminNewPackage({
   adminPassword,
-  first,
+  prefill,
+  sameClient,
   onCancel,
   onCreated,
+  onSwitchToGalleryOnly,
 }: {
   adminPassword: string;
-  first: PackageEntry;
+  prefill: ClientPrefill | null;
+  sameClient: SameClientSeed | null;
   onCancel: () => void;
   onCreated: () => void;
+  onSwitchToGalleryOnly?: () => void;
 }) {
   const { t, lang } = useAdminLang();
-  const [sessions, setSessions] = useState<PackageEntry[]>([first]);
+  const [isPackage, setIsPackage] = useState(false);
+  const [forms, setForms] = useState<number[]>([1]);
+  const [active, setActive] = useState(1);
+  const entriesRef = useRef<Record<number, PackageEntry>>({});
+  const [entries, setEntries] = useState<Record<number, PackageEntry>>({});
   const [mode, setMode] = useState<DiscountMode>('usd');
   const [discount, setDiscount] = useState('');
-  const [formOpen, setFormOpen] = useState(true);
-  const [formKey, setFormKey] = useState(1);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
+  const [leaveOpen, setLeaveOpen] = useState(false);
 
-  const b = first.body as Record<string, string | null>;
-  const seed: SameClientSeed = {
-    label: String(b.client_display_name ?? ''),
-    fullName: (b.partner_1_full_name as string | null) ?? null,
-    partnerFullName: (b.partner_2_full_name as string | null) ?? null,
-    email: (b.client_email as string | null) ?? null,
-    phone: (b.client_phone as string | null) ?? null,
+  const record = (id: number, entry: PackageEntry) => {
+    entriesRef.current = { ...entriesRef.current, [id]: entry };
+    setEntries(entriesRef.current);
+  };
+  /** Ask a form to validate and hand over its request (synchronously, via its own submit). */
+  const collect = (id: number): PackageEntry | null => {
+    const before = entriesRef.current[id];
+    delete entriesRef.current[id];
+    const form = document.getElementById(formIdOf(id)) as HTMLFormElement | null;
+    form?.requestSubmit();
+    const after = entriesRef.current[id] ?? null;
+    if (!after && before) entriesRef.current[id] = before;
+    setEntries({ ...entriesRef.current });
+    return after;
   };
 
-  const split = splitPackage(sessions.map((s) => s.summary.regular), mode, parseFloat(discount) || 0);
+  const first = entries[1];
+  const fb = (first?.body ?? {}) as Record<string, string | null>;
+  const seed: SameClientSeed = {
+    label: String(fb.client_display_name ?? sameClient?.label ?? ''),
+    fullName: (fb.partner_1_full_name as string | null) ?? sameClient?.fullName ?? null,
+    partnerFullName: (fb.partner_2_full_name as string | null) ?? sameClient?.partnerFullName ?? null,
+    email: (fb.client_email as string | null) ?? sameClient?.email ?? null,
+    phone: (fb.client_phone as string | null) ?? sameClient?.phone ?? null,
+  };
+  const convo = prefill ? { conversationId: prefill.conversationId, displayName: prefill.displayName } : null;
+
+  const addForm = () => {
+    const id = Math.max(...forms) + 1;
+    setForms((list) => [...list, id]);
+    setActive(id);
+    window.scrollTo({ top: 0 });
+  };
+  const start = (entry: PackageEntry) => {
+    record(1, entry);
+    setIsPackage(true);
+    addForm();
+  };
+  const switchTo = (id: number) => {
+    if (id === active) return;
+    collect(active); // keeps the totals current; an incomplete form just shows its errors when reopened
+    setError('');
+    setActive(id);
+    window.scrollTo({ top: 0 });
+  };
+  const removeForm = (id: number) => {
+    setForms((list) => list.filter((x) => x !== id));
+    delete entriesRef.current[id];
+    setEntries({ ...entriesRef.current });
+    setActive(1);
+  };
+
+  const saved = forms.filter((id) => entries[id]);
+  const split = splitPackage(saved.map((id) => entries[id].summary.regular), mode, parseFloat(discount) || 0);
+  const priceOf = (id: number) => split.prices[saved.indexOf(id)] ?? 0;
   const saving = split.regularTotal - split.packageTotal;
   const pct = split.regularTotal ? (Math.round((saving / split.regularTotal) * 1000) / 10).toString() : '0';
 
   const create = async () => {
-    if (sessions.length < 2) {
+    setError('');
+    // Every form, again, so nothing typed after a save is left behind.
+    const list: Array<{ id: number; entry: PackageEntry }> = [];
+    for (const id of forms) {
+      const entry = collect(id);
+      if (!entry) {
+        setActive(id);
+        setError(t.newPackage.fixSession(forms.indexOf(id) + 1));
+        window.scrollTo({ top: 0 });
+        return;
+      }
+      list.push({ id, entry });
+    }
+    if (list.length < 2) {
       setError(t.newPackage.needTwo);
       return;
     }
-    setError('');
+    const fresh = splitPackage(list.map((x) => x.entry.summary.regular), mode, parseFloat(discount) || 0);
     const packageId = uuid();
-    const titles = sessions.map((s) => s.summary.title).filter(Boolean);
+    const titles = list.map((x) => x.entry.summary.title).filter(Boolean);
     const usedPasswords = new Set<string>();
-    for (let i = 0; i < sessions.length; i++) {
-      setProgress({ done: i, total: sessions.length });
-      const s = sessions[i];
-      const price = split.prices[i];
+    for (let i = 0; i < list.length; i++) {
+      setProgress({ done: i, total: list.length });
+      const s = list[i].entry;
+      const price = fresh.prices[i];
       // Each session needs its own gallery password; the form builds the same
       // one from the same names, so a repeat gets the session type added.
       let galleryPassword = String(s.body.gallery_password ?? '');
@@ -91,11 +164,8 @@ export default function AdminNewPackage({
         contract_retainer_amount: Number(suggestedRetainer(price) || 0),
         package_id: packageId,
         regular_amount: s.summary.regular,
-        // The first session's email (invite, or "new session" for an existing
-        // client) names them all; the rest add nothing to the client's inbox.
         quiet: i > 0,
         announce_titles: i === 0 ? titles : undefined,
-        // The conversation link goes on the first session only.
         link_to_conversation_id: i === 0 ? s.body.link_to_conversation_id ?? null : null,
       };
       try {
@@ -107,13 +177,12 @@ export default function AdminNewPackage({
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) {
           setProgress(null);
-          if (i === 0) setError(data.error || `Server error (${res.status})`);
-          else setError(t.newPackage.partialFail(i, sessions.length, data.error || `Server error (${res.status})`));
+          setError(i === 0 ? data.error || `Server error (${res.status})` : t.newPackage.partialFail(i, list.length, data.error || `Server error (${res.status})`));
           return;
         }
       } catch {
         setProgress(null);
-        setError(i === 0 ? t.common.couldNotReach : t.newPackage.partialFail(i, sessions.length, t.common.couldNotReach));
+        setError(i === 0 ? t.common.couldNotReach : t.newPackage.partialFail(i, list.length, t.common.couldNotReach));
         return;
       }
     }
@@ -121,84 +190,68 @@ export default function AdminNewPackage({
     onCreated();
   };
 
+  const tabLabel = (id: number, n: number) => {
+    const e = entries[id];
+    return t.newPackage.tabSession(n, e ? cap(e.summary.type) : t.newPackage.tabNew);
+  };
+
   return (
-    <Box maxW="760px" mx="auto">
-      <Flex align="flex-start" gap={4} mb={6}>
-        <AdminBackButton onClick={onCancel} label={t.common.back} />
-        <Box>
-          <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="brand.accentText">
-            {t.newPackage.kicker}
-          </Text>
-          <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mt={0.5}>
-            {t.newPackage.headline}
-          </Text>
-        </Box>
-      </Flex>
-
-      <VStack align="stretch" spacing={5} data-testid="package-screen">
-        <Text fontSize="sm" color="gray.600">{t.newPackage.intro}</Text>
-
-        <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" p={{ base: 4, md: 5 }}>
-          <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500" mb={3}>
-            {t.newPackage.sessionsLabel}
-          </Text>
-          <VStack align="stretch" spacing={2}>
-            {sessions.map((s, i) => (
-              <Flex key={i} justify="space-between" align="baseline" gap={3} wrap="wrap" borderBottom="1px solid" borderColor="gray.100" pb={2} data-testid="package-session">
-                <Box minW={0}>
-                  <Text fontSize="md" color="gray.800">{s.summary.title || cap(s.summary.type)}</Text>
-                  <Text fontSize="sm" color="gray.500">{cap(s.summary.type)}{s.summary.date ? ` · ${fmtAdminDate(s.summary.date, lang)}` : ''}</Text>
-                </Box>
-                <HStack spacing={3}>
-                  <Text fontSize="sm" color="gray.700" sx={{ fontVariantNumeric: 'tabular-nums' }}>{money(s.summary.regular)}</Text>
-                  {/* The first session stays (it is the one the form started with);
-                      its row keeps the same space so the prices line up. */}
-                  <Box visibility={i > 0 ? 'visible' : 'hidden'} aria-hidden={i === 0}>
-                    <CTAButton variant="ghost" size="sm" onClick={() => setSessions((list) => list.filter((_, j) => j !== i))}>
-                      {t.newPackage.remove}
-                    </CTAButton>
-                  </Box>
-                </HStack>
-              </Flex>
-            ))}
-          </VStack>
-        </Box>
-
-        {formOpen ? (
-          <Box border="1px dashed" borderColor="brand.accent" borderRadius="md" p={{ base: 2, md: 3 }} data-testid="package-next-form">
-            <Flex justify="space-between" align="center" px={2} pt={1} pb={2}>
+    <Box>
+      {isPackage && (
+        <Box maxW="760px" mx="auto" mb={6}>
+          <Flex align="flex-start" gap={4} mb={5}>
+            <AdminBackButton onClick={() => setLeaveOpen(true)} label={t.common.back} />
+            <Box>
               <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="brand.accentText">
-                {t.newPackage.nextSession}
+                {t.newPackage.kicker}
               </Text>
-              {sessions.length > 1 && (
-                <CTAButton variant="ghost" size="sm" onClick={() => setFormOpen(false)}>
-                  {t.newPackage.cancelSession}
-                </CTAButton>
-              )}
-            </Flex>
-            <AdminNewClient
-              key={formKey}
-              adminPassword={adminPassword}
-              sameClient={seed}
-              packageMode={{
-                onAdd: (entry) => {
-                  setSessions((list) => [...list, entry]);
-                  setFormOpen(false);
-                  setFormKey((k) => k + 1);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                },
-              }}
-              onCancel={() => (sessions.length > 1 ? setFormOpen(false) : onCancel())}
-              onCreated={() => {}}
-            />
-          </Box>
-        ) : (
-          <CTAButton variant="outline" size="md" onClick={() => setFormOpen(true)}>
-            {t.newPackage.addAnother}
-          </CTAButton>
-        )}
+              <Text as="h1" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="300" color="gray.800" m={0} mt={0.5}>
+                {t.newPackage.headline}
+              </Text>
+            </Box>
+          </Flex>
+          <Text fontSize="sm" color="gray.600" mb={4}>{t.newPackage.intro}</Text>
+          <Flex gap={2} wrap="wrap" align="center" data-testid="package-tabs">
+            {forms.map((id, i) => (
+              <CTAButton key={id} variant={id === active ? 'solid' : 'outline'} size="sm" onClick={() => switchTo(id)}>
+                {tabLabel(id, i + 1)}
+              </CTAButton>
+            ))}
+            <CTAButton variant="ghost" size="sm" onClick={() => { collect(active); addForm(); }}>
+              {t.newPackage.addAnother}
+            </CTAButton>
+          </Flex>
+          {active !== 1 && (
+            <Box mt={2}>
+              <CTAButton variant="ghost" size="sm" onClick={() => removeForm(active)}>
+                {t.newPackage.remove}
+              </CTAButton>
+            </Box>
+          )}
+          {error && <Text fontSize="sm" color="red.600" role="alert" mt={3}>{error}</Text>}
+        </Box>
+      )}
 
-        {sessions.length > 1 && (
+      {/* Every session's form stays mounted with what was typed in it; only the open one shows. */}
+      {forms.map((id) => (
+        <Box key={id} display={id === active ? 'block' : 'none'} data-testid={`package-form-${id}`}>
+          <AdminNewClient
+            formId={formIdOf(id)}
+            adminPassword={adminPassword}
+            prefill={id === 1 ? prefill : null}
+            sameClient={id === 1 ? sameClient : seed}
+            peekConversation={id === 1 ? null : convo}
+            onSwitchToGalleryOnly={id === 1 && !isPackage ? onSwitchToGalleryOnly : undefined}
+            onCancel={onCancel}
+            onCreated={onCreated}
+            packageMode={isPackage ? { onAdd: (entry) => record(id, entry) } : undefined}
+            onStartPackage={!isPackage && id === 1 ? start : undefined}
+          />
+        </Box>
+      ))}
+
+      {isPackage && (
+        <VStack align="stretch" spacing={5} maxW="760px" mx="auto" mt={6} data-testid="package-screen">
           <Box bg="#fbf6ec" border="1px solid" borderColor="brand.accentBorder" borderRadius="md" p={{ base: 4, md: 5 }} data-testid="package-box">
             <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="brand.accentText" mb={3}>
               {t.newPackage.discountLabel}
@@ -244,14 +297,25 @@ export default function AdminNewPackage({
                   </tr>
                 </thead>
                 <tbody>
-                  {sessions.map((s, i) => (
-                    <tr key={i}>
-                      <td>{cap(s.summary.type)}</td>
-                      <td>{money(s.summary.regular)}</td>
-                      <td>{money(split.prices[i])}</td>
-                      <td>{money(Number(suggestedRetainer(split.prices[i]) || 0))}</td>
-                    </tr>
-                  ))}
+                  {forms.map((id, i) => {
+                    const e = entries[id];
+                    return (
+                      <tr key={id}>
+                        <td>
+                          {e ? `${cap(e.summary.type)}${e.summary.date ? ` · ${fmtAdminDate(e.summary.date, lang)}` : ''}` : tabLabel(id, i + 1)}
+                        </td>
+                        {e ? (
+                          <>
+                            <td>{money(e.summary.regular)}</td>
+                            <td>{money(priceOf(id))}</td>
+                            <td>{money(Number(suggestedRetainer(priceOf(id)) || 0))}</td>
+                          </>
+                        ) : (
+                          <Box as="td" colSpan={3} color="gray.400">{t.newPackage.notSaved}</Box>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr>
@@ -266,22 +330,33 @@ export default function AdminNewPackage({
             <Text fontSize="sm" color="green.700" fontWeight="500" mt={3}>{t.newPackage.saving(money(saving), pct)}</Text>
             <Text fontSize="xs" color="gray.500" mt={1.5}>{t.newPackage.splitNote}</Text>
           </Box>
-        )}
 
-        {error && <Text fontSize="sm" color="red.600" role="alert">{error}</Text>}
+          <CTAButton
+            variant="solid"
+            size="lg"
+            fullWidth
+            onClick={create}
+            isDisabled={forms.length < 2 || progress !== null}
+            isLoading={progress !== null}
+            loadingText={progress ? t.newPackage.creating(progress.done + 1, progress.total) : undefined}
+          >
+            {t.newPackage.create(forms.length)}
+          </CTAButton>
+        </VStack>
+      )}
 
-        <CTAButton
-          variant="solid"
-          size="lg"
-          fullWidth
-          onClick={create}
-          isDisabled={sessions.length < 2 || progress !== null}
-          isLoading={progress !== null}
-          loadingText={progress ? t.newPackage.creating(progress.done + 1, progress.total) : undefined}
-        >
-          {sessions.length < 2 ? t.newPackage.needTwo : t.newPackage.create(sessions.length)}
-        </CTAButton>
-      </VStack>
+      <ConfirmDialog
+        isOpen={leaveOpen}
+        title={t.newPackage.discardTitle}
+        body={t.newPackage.discardBody}
+        confirmLabel={t.newClient.discardConfirm}
+        cancelLabel={t.common.cancel}
+        onConfirm={() => {
+          setLeaveOpen(false);
+          onCancel();
+        }}
+        onCancel={() => setLeaveOpen(false)}
+      />
     </Box>
   );
 }

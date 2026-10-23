@@ -94,6 +94,14 @@ interface Props {
   packageMode?: { onAdd: (entry: PackageEntry) => void };
   /** "+ Add another session": start a package with this session as its first. */
   onStartPackage?: (entry: PackageEntry) => void;
+  /**
+   * The conversation this booking came from, for the floating "View
+   * conversation" button on a package's later sessions, which are seeded from
+   * the client rather than from the thread (prefill is null for them).
+   */
+  peekConversation?: { conversationId: string; displayName: string } | null;
+  /** The form element's id, so the package screen can ask it to validate. */
+  formId?: string;
 }
 
 /** One validated session, ready to create (the exact request body) or to package. */
@@ -510,7 +518,8 @@ const TravelLeg = ({
   </Box>
 );
 
-const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly, sameClient, packageMode, onStartPackage }: Props) => {
+const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly, sameClient, packageMode, onStartPackage, peekConversation, formId }: Props) => {
+  const peek = prefill ? { conversationId: prefill.conversationId, displayName: prefill.displayName } : peekConversation ?? null;
   // Which button submitted the form: Create, or "+ Add another session".
   const intentRef = useRef<'create' | 'package'>('create');
   const { t, lang } = useAdminLang();
@@ -1107,7 +1116,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     };
   }, [prefill, submitting]);
 
-  const showFloatingPeek = Boolean(prefill) && !panelVisible && !submitVisible;
+  const showFloatingPeek = Boolean(peek) && !panelVisible && !submitVisible;
   const [sendAttempts, setSendAttempts] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const deliveryStatus = useEmailDelivery(inviteEmailId);
@@ -1886,6 +1895,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
 
       <Box
         as="form"
+        id={formId}
         onSubmit={handleSubmit}
         bg="white"
         borderRadius="md"
@@ -2636,13 +2646,13 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
         </Button>
       )}
 
-      {prefill && (
+      {peek && (
         <ConversationPeek
           isOpen={peekOpen}
           onClose={() => setPeekOpen(false)}
           adminPassword={adminPassword}
-          conversationId={prefill.conversationId}
-          contactName={prefill.displayName}
+          conversationId={peek.conversationId}
+          contactName={peek.displayName}
         />
       )}
 

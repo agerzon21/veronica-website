@@ -36,6 +36,8 @@ interface WelcomeSummary {
   sales_tax?: SalesTaxMode;
   /** Who pays the card fee (migration 054). Absent reads as 'single'. */
   card_pricing?: CardPricing;
+  // Booked as a package (migration 057): every session's regular and package price, added up.
+  package?: { names: string[]; regular: number; price: number } | null;
 }
 
 /** Cents only when there are some: "$530", "$121.90". */
@@ -297,6 +299,13 @@ const Welcome = () => {
                                 .filter(Boolean)
                                 .join(' · ') || undefined
                             }
+                          />
+                        )}
+                        {summary.package && summary.package.regular > summary.package.price && (
+                          <SummaryLine
+                            label="Package discount"
+                            value={`${money(summary.package.regular - summary.package.price)} off`}
+                            note={`${summary.package.names.join(' + ')}: ${money(summary.package.regular)} booked separately, ${money(summary.package.price)} as a package, before tax`}
                           />
                         )}
                         {summary.contract_retainer_amount !== null && (

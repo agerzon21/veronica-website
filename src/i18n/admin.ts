@@ -1553,6 +1553,22 @@ const dict = {
     },
     addAnother: { en: '+ Add another session', ru: '+ Добавить ещё съёмку' },
     nextSession: { en: 'Next session', ru: 'Следующая съёмка' },
+    tabSession: {
+      en: (n: number, what: string) => `${n}. ${what}`,
+      ru: (n: number, what: string) => `${n}. ${what}`,
+    },
+    tabNew: { en: 'New session', ru: 'Новая съёмка' },
+    notSaved: { en: 'not saved yet', ru: 'ещё не сохранена' },
+    saved: { en: 'Saved', ru: 'Сохранено' },
+    fixSession: {
+      en: (n: number) => `Session ${n} still needs something filled in. It is open below.`,
+      ru: (n: number) => `В съёмке ${n} ещё не всё заполнено. Она открыта ниже.`,
+    },
+    discardTitle: { en: 'Leave this package?', ru: 'Выйти из пакета?' },
+    discardBody: {
+      en: 'Every session in it will be cleared. Nothing has been created and no email has been sent.',
+      ru: 'Все съёмки в нём будут очищены. Ничего не создано, писем не отправлено.',
+    },
     cancelSession: { en: 'Cancel this session', ru: 'Отменить эту съёмку' },
     create: {
       en: (n: number) => `Create ${n} sessions and send the invite`,
@@ -2034,7 +2050,7 @@ const dict = {
     submit: { en: 'Create Portal & Send Invite', ru: 'Создать портал и отправить приглашение' },
     // Booking several sessions together as a package (2026-10-22).
     addAnotherSession: { en: '+ Add another session (package)', ru: '+ Добавить ещё съёмку (пакет)' },
-    addToPackage: { en: 'Add to package', ru: 'Добавить в пакет' },
+    addToPackage: { en: 'Save this session', ru: 'Сохранить эту съёмку' },
     submitting: { en: 'Creating...', ru: 'Создаю...' },
 
     // Error-message field labels (lowercase inside the sentence:
