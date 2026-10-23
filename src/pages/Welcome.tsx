@@ -139,6 +139,10 @@ const Welcome = () => {
         // on arrival, the same way it survives a reload. If the tab cannot
         // store it (private mode), the address still arrives prefilled.
         storeSession({ kind: 'client', email: data.email, password });
+        // Out of the password field before this form unmounts: a password
+        // manager's inline menu (Bitwarden) stays open for a field that no
+        // longer exists, parked in the top-left corner (2026-10-22).
+        (document.activeElement as HTMLElement | null)?.blur?.();
         setTimeout(() => {
           navigate('/portal', { state: { email: data.email } });
         }, 1200);

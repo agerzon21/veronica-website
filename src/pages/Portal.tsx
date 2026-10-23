@@ -833,6 +833,9 @@ const Portal = () => {
 
       if (res.ok && data.success) {
         storeSession({ kind: 'client', email: email.trim(), password: clientPassword.trim(), ...(returningTo ? { portalId: returningTo } : {}) });
+        // Out of the password field before the form unmounts, or a password
+        // manager's inline menu is left floating in the corner (see Welcome).
+        (document.activeElement as HTMLElement | null)?.blur?.();
         setClientData(data as ClientPortalData);
         setShowSessions(!returningTo && ((data as ClientPortalData).sessions?.length ?? 0) > 1);
       } else if (res.status === 401) {
@@ -892,6 +895,7 @@ const Portal = () => {
         // That is the narrower half of the bug, and it is still the half a
         // guest hits after the link has been used once.
         storeSession({ kind: 'gallery', password: galleryPassword.trim() });
+        (document.activeElement as HTMLElement | null)?.blur?.();
         setGalleryData({
           clientName: data.client_name ?? null,
           galleryTitle: data.gallery_title ?? null,

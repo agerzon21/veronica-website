@@ -285,9 +285,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * is told a session was added rather than invited to set up an account.
      */
     let accountHash: string | null = null;
+    // Invited but not set up yet: the client already has a setup email, and
+    // choosing a password through it covers every session on the email
+    // (welcome-complete). A second setup email for the second of two sessions
+    // booked together was one too many (2026-10-22), so this one joins quietly.
+    let joinsPendingAccount = false;
     if (mode === 'full' && clientEmail) {
       accountHash = await accountPasswordHash(sql, clientEmail);
-      if (accountHash) {
+      if (!accountHash) {
+        const pending = (await sql`
+          select 1 from client_portals where mode = 'full' and lower(client_email) = lower(${clientEmail}) limit 1
+        `) as Array<unknown>;
+        joinsPendingAccount = pending.length > 0;
+      }
+      if (accountHash || joinsPendingAccount) {
         setupToken = null;
         setupTokenExpiresAt = null;
       }
@@ -571,7 +582,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       invite_email_error: inviteEmailError,
       // True when this was added to a client's existing portal (same email,
       // same password) rather than starting a new one.
-      added_to_account: Boolean(accountHash),
+      added_to_account: Boolean(accountHash) || joinsPendingAccount,
     });
   } catch (err) {
     console.error('[admin/portals-create] handler failed:', err);
