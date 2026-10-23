@@ -715,7 +715,13 @@ const Portal = () => {
    * sees, loaded for that session. Remembered in this tab, so a reload or a
    * card payment brings them back to it.
    */
-  const openSession = async (portalId: string) => {
+  const openSession = (portalId: string) => {
+    // A history step, so browser Back, the Mac swipe and the phone swipe
+    // return to "Your sessions" (the effect below loads what it names).
+    navigate('/portal', { state: { session: portalId } });
+  };
+
+  const loadSession = async (portalId: string) => {
     try {
       const res = await fetch('/api/portal/client', {
         method: 'POST',
@@ -734,8 +740,17 @@ const Portal = () => {
     }
   };
 
-  /** Back to "Your sessions", with the list fetched fresh. */
-  const openAllSessions = async () => {
+  /**
+   * "All Sessions": the same as browser Back when the session was opened from
+   * the list in this tab, so the history stays a straight line.
+   */
+  const openAllSessions = () => {
+    if ((location.state as { session?: string } | null)?.session) navigate(-1);
+    else void showAllSessions();
+  };
+
+  /** Show "Your sessions", with the list fetched fresh. */
+  const showAllSessions = async () => {
     storeSession({ kind: 'client', email: email.trim(), password: clientPassword.trim() });
     try {
       const res = await fetch('/api/portal/client', {
@@ -751,6 +766,28 @@ const Portal = () => {
     setShowSessions(true);
     window.scrollTo({ top: 0 });
   };
+
+  /**
+   * Follow the history: an entry naming a session shows that session, one
+   * without shows "Your sessions". Skipped on the first render, which the
+   * stored-session restore and sign-in already handle.
+   */
+  const firstHistoryRun = useRef(true);
+  useEffect(() => {
+    if (firstHistoryRun.current) {
+      firstHistoryRun.current = false;
+      return;
+    }
+    if (!clientData || !hasManySessions) return;
+    const wanted = (location.state as { session?: string } | null)?.session ?? null;
+    if (wanted) {
+      if (showSessions || clientData.portal_id !== wanted) void loadSession(wanted);
+    } else if (!showSessions) {
+      void showAllSessions();
+    }
+    // location.key: one run per history step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   const handleLogout = () => {
     clearStoredSession();

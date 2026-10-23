@@ -144,7 +144,9 @@ const Welcome = () => {
         // longer exists, parked in the top-left corner (2026-10-22).
         (document.activeElement as HTMLElement | null)?.blur?.();
         setTimeout(() => {
-          navigate('/portal', { state: { email: data.email } });
+          // replace: the setup link only works once, so Back must never
+          // land on it again (it did, and said the link was no longer valid).
+          navigate('/portal', { replace: true, state: { email: data.email } });
         }, 1200);
       } else {
         setSubmitError(data.error || 'Could not save. Please try again.');

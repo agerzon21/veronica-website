@@ -1125,6 +1125,16 @@ const ClientPortalView = ({
         py={{ base: 8, md: 10 }}
         textAlign="center"
       >
+        {/* An account with several sessions (onAllSessions is only passed
+            then): the way back, first thing on the page. Browser Back and the
+            swipe gesture go there too (Portal.tsx). */}
+        {onAllSessions && (
+          <Box mb={5}>
+            <CTAButton onClick={onAllSessions} icon={FaArrowLeft} variant="ghost" size="sm">
+              All Sessions
+            </CTAButton>
+          </Box>
+        )}
         <Text
           fontSize="xs"
           fontWeight="500"
@@ -1190,14 +1200,18 @@ const ClientPortalView = ({
               thing: something you do to your account rather than a place in
               the portal to read. It used to be a nav entry, which meant a
               dropdown existed to hold one item. */}
-          <CTAButton
-            onClick={() => handleNavSelect('password-section')}
-            icon={FaKey}
-            variant="outline"
-            size="sm"
-          >
-            Change Password
-          </CTAButton>
+          {/* The account's password is changed on "Your sessions" when there
+              are several sessions; for one session it lives here, as always. */}
+          {!onAllSessions && (
+            <CTAButton
+              onClick={() => handleNavSelect('password-section')}
+              icon={FaKey}
+              variant="outline"
+              size="sm"
+            >
+              Change Password
+            </CTAButton>
+          )}
           {onLogout && (
             <CTAButton
               onClick={() => setSignOutOpen(true)}
@@ -1214,18 +1228,11 @@ const ClientPortalView = ({
             exactly as it was at every width: a way to ask Veronika for
             another shoot on the same login, and back to the account's
             sessions when there is more than one. */}
-        {(onAllSessions || onBookSession) && (
+        {onBookSession && !onAllSessions && (
           <HStack mt={3} spacing={3} justify="center" flexWrap="wrap">
-            {onAllSessions && (
-              <CTAButton onClick={onAllSessions} icon={FaArrowLeft} variant="outline" size="sm">
-                All Sessions
-              </CTAButton>
-            )}
-            {onBookSession && (
-              <CTAButton onClick={onBookSession} icon={FaCalendarAlt} variant="outline" size="sm">
-                Book Another Session
-              </CTAButton>
-            )}
+            <CTAButton onClick={onBookSession} icon={FaCalendarAlt} variant="outline" size="sm">
+              Book Another Session
+            </CTAButton>
           </HStack>
         )}
 
@@ -1672,18 +1679,20 @@ const ClientPortalView = ({
           isn't a real problem in the new IA, Gallery Pass has moved
           into Share, so the two are far apart.
           id wrapper is the portal top nav's scroll target. */}
-      <Box
-        id="password-section"
-        bg="gray.50"
-        borderTop="1px solid"
-        borderColor="gray.100"
-        sx={{ scrollMarginTop: chrome.scrollMargin }}
-      >
-        <ChangePasswordSection
-          credentials={credentials}
-          onChanged={onPasswordChanged}
-        />
-      </Box>
+      {!onAllSessions && (
+        <Box
+          id="password-section"
+          bg="gray.50"
+          borderTop="1px solid"
+          borderColor="gray.100"
+          sx={{ scrollMarginTop: chrome.scrollMargin }}
+        >
+          <ChangePasswordSection
+            credentials={credentials}
+            onChanged={onPasswordChanged}
+          />
+        </Box>
+      )}
 
       {/* ─── Photos ───
           Three states, kept mutually exclusive:
