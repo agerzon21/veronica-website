@@ -343,6 +343,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       portalId = inserted[0].id;
 
       /**
+       * Booked as part of a package (migration 057): which package, and what
+       * this session costs on its own, so "Your sessions" can show the saving.
+       * The contract states contract_total_amount, the package price. Its own
+       * statement, allowed to fail, like every later column.
+       */
+      const packageId =
+        typeof body.package_id === 'string' && /^[0-9a-f-]{36}$/i.test(body.package_id) ? body.package_id : null;
+      const regular = Number(body.regular_amount);
+      const regularAmount =
+        packageId && Number.isFinite(regular) && totalAmount !== null && regular >= totalAmount ? regular : null;
+      if (packageId) {
+        try {
+          await sql`update client_portals set package_id = ${packageId}, regular_amount = ${regularAmount} where id = ${portalId}`;
+        } catch (err) {
+          console.error('[admin/portals-create] could not record the package (session still created):', err);
+        }
+      }
+
+      /**
        * The day-of list, when the booking happens in more than one place.
        *
        * A SEPARATE statement rather than two more columns on the insert
@@ -531,12 +550,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // The client already has a portal: tell them a session was added, and
     // record it the way the invite is recorded, so the record shows whether
     // it arrived.
-    if (mode === 'full' && accountHash && clientEmail) {
+    // quiet: the later sessions of a package; the first one's email names them all.
+    if (mode === 'full' && accountHash && clientEmail && body.quiet !== true) {
       try {
         const siteOrigin =
           process.env.SITE_ORIGIN ||
           (req.headers.host ? `https://${req.headers.host}` : 'https://vero.photography');
-        const title = typeof contractVariables.event_title === 'string' ? contractVariables.event_title : '';
+        const announced = Array.isArray(body.announce_titles)
+          ? (body.announce_titles as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '').slice(0, 6)
+          : [];
+        const title =
+          announced.length > 1
+            ? announced.join(' and ')
+            : typeof contractVariables.event_title === 'string'
+              ? contractVariables.event_title
+              : '';
         const sent = await sendEmail({
           to: clientEmail,
           subject: 'A new session is in your portal, from Vero Photography',
@@ -687,7 +715,7 @@ function buildGalleryReadyHtml(
  */
 function buildAddedSessionText(firstName: string, eventTitle: string, portalUrl: string): string {
   const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
-  const what = eventTitle ? `${eventTitle} is` : 'Your new session is';
+  const what = eventTitle ? `${eventTitle} ${/ and /.test(eventTitle) ? 'are' : 'is'}` : 'Your new session is';
   return `${greeting}
 
 ${what} now in your client portal with Vero Photography, alongside your other sessions. Sign in with your usual email and password to review and sign the contract:
@@ -701,7 +729,7 @@ Veronika`;
 }
 
 function buildAddedSessionHtml(firstName: string, eventTitle: string, portalUrl: string): string {
-  const what = eventTitle ? `${escapeAttr(eventTitle)} is` : 'Your new session is';
+  const what = eventTitle ? `${escapeAttr(eventTitle)} ${/ and /.test(eventTitle) ? 'are' : 'is'}` : 'Your new session is';
   return `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2d2d2d;max-width:560px;margin:0 auto;padding:24px 16px;line-height:1.6;font-size:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#c9a96e;margin:0 0 20px;">Vero Photography</p>

@@ -1528,6 +1528,47 @@ const dict = {
     backToDashboard: { en: 'Back to Dashboard', ru: 'К дашборду' },
   },
 
+  newPackage: {
+    kicker: { en: 'New package', ru: 'Новый пакет' },
+    headline: { en: 'Sessions booked together', ru: 'Съёмки одним пакетом' },
+    intro: {
+      en: 'Each session gets its own contract at its package price. The client gets one invite and sees every session, and what the package saves them, on one login.',
+      ru: 'У каждой съёмки свой контракт по пакетной цене. Клиенту придёт одно приглашение, и в одном аккаунте он увидит все съёмки и свою выгоду от пакета.',
+    },
+    sessionsLabel: { en: 'Sessions in this package', ru: 'Съёмки в пакете' },
+    remove: { en: 'Remove', ru: 'Убрать' },
+    discountLabel: { en: 'Package discount', ru: 'Скидка за пакет' },
+    colSession: { en: 'Session', ru: 'Съёмка' },
+    colRegular: { en: 'Regular', ru: 'Обычная цена' },
+    colPackage: { en: 'Package', ru: 'В пакете' },
+    colRetainer: { en: 'Retainer', ru: 'Предоплата' },
+    total: { en: 'Total', ru: 'Итого' },
+    saving: {
+      en: (amount: string, pct: string) => `The client saves ${amount} (${pct}%).`,
+      ru: (amount: string, pct: string) => `Клиент экономит ${amount} (${pct}%).`,
+    },
+    splitNote: {
+      en: "Split in proportion to each session's regular price, in whole dollars that add up exactly. Each package price is what that session's contract will say, before sales tax; its retainer follows the usual rule.",
+      ru: 'Делится пропорционально обычной цене каждой съёмки, в целых долларах, сумма сходится точно. Пакетная цена каждой съёмки и будет в её контракте, без налога; предоплата считается по обычному правилу.',
+    },
+    addAnother: { en: '+ Add another session', ru: '+ Добавить ещё съёмку' },
+    nextSession: { en: 'Next session', ru: 'Следующая съёмка' },
+    cancelSession: { en: 'Cancel this session', ru: 'Отменить эту съёмку' },
+    create: {
+      en: (n: number) => `Create ${n} sessions and send the invite`,
+      ru: (n: number) => `Создать съёмки (${n}) и отправить приглашение`,
+    },
+    creating: {
+      en: (i: number, n: number) => `Creating ${i} of ${n}...`,
+      ru: (i: number, n: number) => `Создаю ${i} из ${n}...`,
+    },
+    needTwo: { en: 'Add at least one more session to make a package.', ru: 'Добавь ещё хотя бы одну съёмку, чтобы получился пакет.' },
+    partialFail: {
+      en: (done: number, n: number, err: string) => `${done} of ${n} sessions were created; the next one failed: ${err}. Open the client and use "Add a session for this client" for the rest.`,
+      ru: (done: number, n: number, err: string) => `Создано ${done} из ${n}; следующая не создалась: ${err}. Открой клиента и добавь остальные кнопкой «Добавить съёмку этому клиенту».`,
+    },
+  },
+
   newClient: {
     sameClientNote: {
       en: (name: string) => `A new session for ${name}. It joins their existing login: same email, same password, and they get a "new session in your portal" email. If they have not set a password yet, they get the usual setup link instead.`,
@@ -1991,6 +2032,9 @@ const dict = {
 
     // Submit
     submit: { en: 'Create Portal & Send Invite', ru: 'Создать портал и отправить приглашение' },
+    // Booking several sessions together as a package (2026-10-22).
+    addAnotherSession: { en: '+ Add another session (package)', ru: '+ Добавить ещё съёмку (пакет)' },
+    addToPackage: { en: 'Add to package', ru: 'Добавить в пакет' },
     submitting: { en: 'Creating...', ru: 'Создаю...' },
 
     // Error-message field labels (lowercase inside the sentence:
@@ -2772,6 +2816,10 @@ const dict = {
       ru: 'Пока только эта. Добавь ещё одну, и она будет в том же аккаунте: та же почта и пароль.',
     },
     addSessionForClient: { en: 'Add a session for this client', ru: 'Добавить съёмку этому клиенту' },
+    packageNote: {
+      en: (regular: string, price: string) => `Booked as part of a package: ${price} here, ${regular} on its own.`,
+      ru: (regular: string, price: string) => `Забронировано в пакете: здесь ${price}, отдельно было бы ${regular}.`,
+    },
     galleryPreviewLabel: { en: 'What the client sees', ru: 'Что видит клиент' },
     galleryTitleLabel: { en: 'Gallery Title (optional)', ru: 'Заголовок галереи (необязательно)' },
     galleryTitlePlaceholder: { en: "e.g. Megan's 30th Birthday", ru: "например, Megan's 30th Birthday" },

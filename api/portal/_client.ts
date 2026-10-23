@@ -377,7 +377,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                -- the stored charges_total has drifted before.
                (select coalesce(sum(pc.amount), 0) from portal_charges pc where pc.client_portal_id = client_portals.id)::float8 as charges_total,
                sales_tax, complimentary, drive_url is not null as has_gallery,
-               gallery_delivered_at, gallery_expires_at, created_at
+               gallery_delivered_at, gallery_expires_at, created_at,
+               -- Booked together (migration 057): the package, and the price on its own.
+               package_id, regular_amount::float8 as regular_amount
         from client_portals
         where mode = 'full' and lower(client_email) = ${email}
           -- A session with no password cannot be opened with this login yet.

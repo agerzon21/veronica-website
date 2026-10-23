@@ -292,6 +292,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-054 database: one price for every method */
     }
 
+    /** Booked as part of a package (migration 057). Allowed to fail the same way. */
+    let packageInfo: { package_id: string | null; regular_amount: number | null } = { package_id: null, regular_amount: null };
+    try {
+      const k = (await sql`select package_id, regular_amount::float8 as regular_amount from client_portals where id = ${id}`) as Array<{ package_id: string | null; regular_amount: number | null }>;
+      if (k[0]) packageInfo = k[0];
+    } catch {
+      /* pre-migration-057 database: nothing was booked as a package */
+    }
+
     /** The gallery page's own title (migration 055). Allowed to fail the same way. */
     let galleryTitle: string | null = null;
     try {
@@ -343,6 +352,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sales_tax: salesTax,
         card_pricing: cardPricing,
         gallery_title: galleryTitle,
+        package_id: packageInfo.package_id,
+        regular_amount: packageInfo.regular_amount,
         // We never return the raw blob URL, only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,

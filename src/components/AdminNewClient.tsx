@@ -87,6 +87,19 @@ interface Props {
    * editable.
    */
   sameClient?: SameClientSeed | null;
+  /**
+   * Inside the package screen (AdminNewPackage): the submit button adds this
+   * session to the package instead of creating it.
+   */
+  packageMode?: { onAdd: (entry: PackageEntry) => void };
+  /** "+ Add another session": start a package with this session as its first. */
+  onStartPackage?: (entry: PackageEntry) => void;
+}
+
+/** One validated session, ready to create (the exact request body) or to package. */
+export interface PackageEntry {
+  body: Record<string, unknown>;
+  summary: { title: string; type: string; date: string; regular: number };
 }
 
 export interface SameClientSeed {
@@ -497,7 +510,9 @@ const TravelLeg = ({
   </Box>
 );
 
-const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly, sameClient }: Props) => {
+const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchToGalleryOnly, sameClient, packageMode, onStartPackage }: Props) => {
+  // Which button submitted the form: Create, or "+ Add another session".
+  const intentRef = useRef<'create' | 'package'>('create');
   const { t, lang } = useAdminLang();
   // Travel copy lives in its own module rather than in the admin dictionary,
   // because the arithmetic beside it is imported by an api/ handler and the
@@ -1642,48 +1657,69 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       }
     });
 
+    const body = {
+      password: adminPassword,
+      mode: 'full',
+      session_type: sessionType,
+      partner_1_first_name: p1First || null,
+      partner_2_first_name: p2First || null,
+      partner_1_full_name: partner1FullName.trim() || null,
+      partner_2_full_name: partner2Legal || null,
+      client_display_name: clientDisplayName.trim(),
+      client_email: clientEmail.trim().toLowerCase(),
+      client_phone: clientPhone.trim() || null,
+      event_date: eventDateIso,
+      contract_template_key: templateKey,
+      variables: finalVariables,
+      // Session price plus any accepted travel allowance. This is the
+      // number every balance on the client screen is derived from, so it
+      // has to match total_amount in the rendered contract exactly.
+      contract_total_amount: contractTotal,
+      contract_retainer_amount: retainer,
+      // Before tax, both of them. The server adds the tax lines.
+      sales_tax: salesTax,
+      gallery_password: galleryPassword.trim(),
+      // Links portal ↔ conversation so the inbox shows the CLIENT badge
+      // and Vero can jump between the two.
+      link_to_conversation_id: prefill?.conversationId ?? null,
+      /**
+       * The day-of list, for her own screen rather than the contract.
+       *
+       * Sent ONLY when the booking is genuinely in more than one place.
+       * A single-place booking sends null and the create handler skips
+       * the write entirely, so the row it produces is identical to one
+       * produced before this existed. The handler mirrors the first
+       * address into session_location, which the eight single-address
+       * readers keep using unchanged.
+       */
+      session_locations: multiPlace ? allPlaces : null,
+    };
+
+    /**
+     * A package (2026-10-22): the same validated booking, handed to the
+     * package screen instead of created on its own. It is created there,
+     * with every other session in the package, at its package price.
+     */
+    const entry: PackageEntry = {
+      body,
+      summary: { title: finalVariables.event_title || '', type: sessionType, date: eventDateIso, regular: contractTotal },
+    };
+    if (packageMode) {
+      packageMode.onAdd(entry);
+      return;
+    }
+    if (intentRef.current === 'package' && onStartPackage) {
+      intentRef.current = 'create';
+      onStartPackage(entry);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/admin/portals-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: adminPassword,
-          mode: 'full',
-          session_type: sessionType,
-          partner_1_first_name: p1First || null,
-          partner_2_first_name: p2First || null,
-          partner_1_full_name: partner1FullName.trim() || null,
-          partner_2_full_name: partner2Legal || null,
-          client_display_name: clientDisplayName.trim(),
-          client_email: clientEmail.trim().toLowerCase(),
-          client_phone: clientPhone.trim() || null,
-          event_date: eventDateIso,
-          contract_template_key: templateKey,
-          variables: finalVariables,
-          // Session price plus any accepted travel allowance. This is the
-          // number every balance on the client screen is derived from, so it
-          // has to match total_amount in the rendered contract exactly.
-          contract_total_amount: contractTotal,
-          contract_retainer_amount: retainer,
-          // Before tax, both of them. The server adds the tax lines.
-          sales_tax: salesTax,
-          gallery_password: galleryPassword.trim(),
-          // Links portal ↔ conversation so the inbox shows the CLIENT badge
-          // and Vero can jump between the two.
-          link_to_conversation_id: prefill?.conversationId ?? null,
-          /**
-           * The day-of list, for her own screen rather than the contract.
-           *
-           * Sent ONLY when the booking is genuinely in more than one place.
-           * A single-place booking sends null and the create handler skips
-           * the write entirely, so the row it produces is identical to one
-           * produced before this existed. The handler mirrors the first
-           * address into session_location, which the eight single-address
-           * readers keep using unchanged.
-           */
-          session_locations: multiPlace ? allPlaces : null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -1720,6 +1756,8 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           in white space with 32px of nothing under it. These three screens
           also render no tab strip and no bottom bar, so that chevron was the
           only navigation on the whole page. Same band as the client screen. */}
+      {/* Inside the package screen, which has its own heading and Back. */}
+      {!packageMode && (
       <Flex align="flex-start" gap={{ base: 2, md: 3 }} mb={6} pt={1}>
         {/* The button pulls itself 8px left to optically align its chevron;
             the band supplies the padding for that to cancel against. */}
@@ -1742,8 +1780,9 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           </Text>
         </Box>
       </Flex>
+      )}
 
-      {sameClient && (
+      {sameClient && !packageMode && (
         <Box bg="purple.50" border="1px solid" borderColor="purple.100" borderRadius="md" px={{ base: 4, md: 5 }} py={3} mb={6} data-testid="same-client-note">
           <Text fontSize="sm" color="gray.700">{t.newClient.sameClientNote(sameClient.label)}</Text>
         </Box>
@@ -2541,8 +2580,24 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                 isLoading={submitting}
                 loadingText={t.newClient.submitting}
               >
-                {t.newClient.submit}
+                {packageMode ? t.newClient.addToPackage : t.newClient.submit}
               </CTAButton>
+              {/* Booking several sessions together, at a package price. */}
+              {!packageMode && onStartPackage && (
+                <Box mt={3}>
+                  <CTAButton
+                    type="submit"
+                    variant="outline"
+                    size="md"
+                    fullWidth
+                    onClick={() => {
+                      intentRef.current = 'package';
+                    }}
+                  >
+                    {t.newClient.addAnotherSession}
+                  </CTAButton>
+                </Box>
+              )}
             </Box>
           )}
         </VStack>

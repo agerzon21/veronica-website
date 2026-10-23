@@ -83,6 +83,9 @@ export interface AccountSession {
   gallery_delivered_at: string | null;
   gallery_expires_at: string | null;
   created_at: string;
+  /** Booked together as a package (migration 057), and this session's price on its own. */
+  package_id?: string | null;
+  regular_amount?: number | null;
 }
 
 export interface ClientPortalData {

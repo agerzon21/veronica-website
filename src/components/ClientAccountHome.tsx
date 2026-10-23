@@ -50,6 +50,12 @@ const today = (): number => {
   return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
 };
 
+/** "Wedding", "Engagement": the kind of session, for the package line. */
+function typeName(s: AccountSession): string {
+  const t = (s.session_type || s.contract_template_key || 'Session').replace(/[-_]+/g, ' ');
+  return t.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /** "Wedding", "Engagement", or the booking's own title when it has one. */
 function titleOf(s: AccountSession): string {
   if (s.event_title?.trim()) return s.event_title.trim();
@@ -143,6 +149,33 @@ export default function ClientAccountHome({
     .sort((a, b) => (dayOf(b.event_date) ?? 0) - (dayOf(a.event_date) ?? 0));
   const glance = [...upcoming, ...past].flatMap((s) => statusOf(s).glance);
 
+  /**
+   * Sessions booked together (migration 057): what they would have cost on
+   * their own, what the package costs, and the saving. Shown here only, where
+   * all of them are; each session and its contract state just its own price.
+   */
+  const packages = Object.values(
+    sessions.reduce<Record<string, AccountSession[]>>((acc, s) => {
+      if (s.package_id) (acc[s.package_id] ??= []).push(s);
+      return acc;
+    }, {}),
+  )
+    .filter((group) => group.length > 1)
+    .map((group) => {
+      const ordered = [...group].sort((a, b) => (dayOf(a.event_date) ?? 0) - (dayOf(b.event_date) ?? 0));
+      const regular = ordered.reduce((sum, s) => sum + (s.regular_amount ?? s.contract_total_amount ?? 0), 0);
+      const price = ordered.reduce((sum, s) => sum + (s.contract_total_amount ?? 0), 0);
+      return {
+        key: ordered[0].package_id as string,
+        names: ordered.map((s) => typeName(s)).join(' + '),
+        regular,
+        price,
+        saving: Math.round((regular - price) * 100) / 100,
+        taxed: ordered.some((s) => salesTaxModeOf(s.sales_tax) === 'added'),
+      };
+    })
+    .filter((p) => p.saving > 0);
+
   const card = (s: AccountSession) => {
     const { chips } = statusOf(s);
     const where = s.event_location || s.session_location;
@@ -224,6 +257,31 @@ export default function ClientAccountHome({
               </VStack>
             </Box>
           )}
+
+          {packages.map((p) => (
+            <Box key={p.key} bg="brand.surface" border="1px solid" borderColor="brand.accentBorder" borderRadius="md" px={5} py={4} data-testid="package-box">
+              <Text fontSize="2xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="brand.accentText" mb={2.5}>
+                Your package: {p.names}
+              </Text>
+              <VStack align="stretch" spacing={1.5} sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                <Flex justify="space-between" gap={3}>
+                  <Text fontSize="sm" color="gray.600">Booked separately</Text>
+                  <Text fontSize="sm" color="gray.500" textDecoration="line-through">{formatMoney(p.regular)}</Text>
+                </Flex>
+                <Flex justify="space-between" gap={3}>
+                  <Text fontSize="md" color="gray.800">Your package price</Text>
+                  <Text fontSize="md" color="gray.800">{formatMoney(p.price)}</Text>
+                </Flex>
+                <Flex justify="space-between" gap={3}>
+                  <Text fontSize="sm" fontWeight="500" color="green.700">You save</Text>
+                  <Text fontSize="sm" fontWeight="500" color="green.700">{formatMoney(p.saving)}</Text>
+                </Flex>
+              </VStack>
+              <Text fontSize="xs" color="gray.500" mt={2.5}>
+                {p.taxed ? 'Plus 6% PA sales tax. ' : ''}Each session has its own contract and its own balance.
+              </Text>
+            </Box>
+          ))}
 
           {upcoming.length > 0 && (
             <VStack align="stretch" spacing={3}>

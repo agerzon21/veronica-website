@@ -35,7 +35,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AdminDashboard, { type AdminPortalSummary } from '../components/AdminDashboard';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import AdminNewClient, { type SameClientSeed } from '../components/AdminNewClient';
+import AdminNewClient, { type PackageEntry, type SameClientSeed } from '../components/AdminNewClient';
+import AdminNewPackage from '../components/AdminNewPackage';
 import type { ClientPrefill } from '../components/clientPrefill';
 import AdminNewGalleryOnly from '../components/AdminNewGalleryOnly';
 import AdminModeChooser from '../components/AdminModeChooser';
@@ -118,6 +119,9 @@ type View =
   // the Clients tab, carrying what the thread already established.
   // sameClient: "Add a session for this client" from a record (2026-10-22).
   | { kind: 'new-full'; prefill?: ClientPrefill; sameClient?: SameClientSeed }
+  // Several sessions booked together (2026-10-22): started from New Client's
+  // "+ Add another session" with the first one filled in.
+  | { kind: 'new-package'; first: PackageEntry; prefill?: ClientPrefill }
   | { kind: 'new-gallery'; prefill?: ClientPrefill }
   | { kind: 'detail'; id: string };
 
@@ -682,6 +686,7 @@ const Admin = () => {
               adminPassword={password}
               prefill={view.prefill ?? null}
               sameClient={view.sameClient ?? null}
+              onStartPackage={(first) => setView({ kind: 'new-package', first, prefill: view.prefill })}
               onSwitchToGalleryOnly={
                 view.prefill
                   ? () => setView({ kind: 'new-gallery', prefill: view.prefill })
@@ -693,6 +698,14 @@ const Admin = () => {
               onCancel={() =>
                 setView(view.prefill || view.sameClient ? { kind: 'dashboard' } : { kind: 'mode-chooser' })
               }
+              onCreated={handleCreated}
+            />
+          )}
+          {view.kind === 'new-package' && (
+            <AdminNewPackage
+              adminPassword={password}
+              first={view.first}
+              onCancel={() => setView(view.prefill ? { kind: 'dashboard' } : { kind: 'mode-chooser' })}
               onCreated={handleCreated}
             />
           )}

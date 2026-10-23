@@ -104,6 +104,9 @@ interface PortalDetail {
   partner_2_first_name?: string | null;
   // The gallery page's own heading (migration 055), instead of "Welcome, X".
   gallery_title?: string | null;
+  // Booked together as a package (migration 057), and the price on its own.
+  package_id?: string | null;
+  regular_amount?: number | null;
   client_display_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -1844,6 +1847,11 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
                 {t.clientDetail.sessionsOnLoginLabel}
               </Text>
+              {portal.package_id && portal.regular_amount != null && portal.contract_total_amount != null && (
+                <Text fontSize="sm" color="green.700" mb={2} data-testid="package-note">
+                  {t.clientDetail.packageNote(formatMoney(portal.regular_amount), formatMoney(portal.contract_total_amount))}
+                </Text>
+              )}
               {(portal.same_client_bookings?.length ?? 0) > 0 ? (
                 <Flex gap={2} wrap="wrap" mb={3}>
                   {(portal.same_client_bookings ?? []).map((b) => (
