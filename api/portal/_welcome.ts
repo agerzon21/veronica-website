@@ -19,6 +19,7 @@ import { getDb } from '../_db.js';
 import { salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 import { cardPricingOf, type CardPricing } from '../../src/data/payment-handles.js';
 import { greetingName } from '../../src/data/client-greeting.js';
+import { DEFAULT_DISCOUNT_LABEL } from '../../src/data/discount.js';
 
 type Row = {
   id: string;
@@ -127,28 +128,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * can show the discount the client was given. Allowed to fail.
      */
     let pkg: { names: string[]; regular: number; price: number } | null = null;
+    /**
+     * Each session's own discount (migration 058), this booking's or, in a
+     * package, every session's: Alex's rule is that a client sees every
+     * discount they were given. The package line above is then worked out
+     * from the prices AFTER these, so the two never count the same dollars.
+     */
+    const discounts: Array<{ label: string; off: number; regular: number; session: string | null }> = [];
     try {
       const k = (await sql`select package_id from client_portals where id = ${row.id}`) as Array<{ package_id: string | null }>;
-      if (k[0]?.package_id) {
-        const members = (await sql`
-          select session_type, contract_template_key, regular_amount::float8 as regular, contract_total_amount::float8 as price
-          from client_portals where package_id = ${k[0].package_id}
-          order by event_date asc nulls last, created_at asc
-        `) as Array<{ session_type: string | null; contract_template_key: string | null; regular: number | null; price: number | null }>;
-        if (members.length > 1) {
-          pkg = {
-            names: members.map((m) => (m.session_type || m.contract_template_key || 'Session').replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())),
-            regular: members.reduce((sum, m) => sum + (m.regular ?? m.price ?? 0), 0),
-            price: members.reduce((sum, m) => sum + (m.price ?? 0), 0),
-          };
+      const members = (await (k[0]?.package_id
+        ? sql`
+            select session_type, contract_template_key, regular_amount::float8 as regular, contract_total_amount::float8 as price,
+                   discount_amount::float8 as discount, discount_label
+            from client_portals where package_id = ${k[0].package_id}
+            order by event_date asc nulls last, created_at asc
+          `
+        : sql`
+            select session_type, contract_template_key, regular_amount::float8 as regular, contract_total_amount::float8 as price,
+                   discount_amount::float8 as discount, discount_label
+            from client_portals where id = ${row.id}
+          `)) as Array<{
+        session_type: string | null;
+        contract_template_key: string | null;
+        regular: number | null;
+        price: number | null;
+        discount: number | null;
+        discount_label: string | null;
+      }>;
+      const nameOf = (m: (typeof members)[number]) =>
+        (m.session_type || m.contract_template_key || 'Session').replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      for (const m of members) {
+        // Outside a package the whole gap is the discount, named or not.
+        const off = members.length > 1 ? (m.discount ?? 0) : m.discount ?? Math.max((m.regular ?? 0) - (m.price ?? 0), 0);
+        if (off > 0 && m.regular) {
+          discounts.push({ label: m.discount_label || DEFAULT_DISCOUNT_LABEL, off, regular: m.regular, session: members.length > 1 ? nameOf(m) : null });
         }
       }
+      if (members.length > 1) {
+        pkg = {
+          names: members.map(nameOf),
+          regular: members.reduce((sum, m) => sum + (m.regular ?? m.price ?? 0) - (m.discount ?? 0), 0),
+          price: members.reduce((sum, m) => sum + (m.price ?? 0), 0),
+        };
+      }
     } catch {
-      /* migration 057 not applied: nothing was booked as a package */
+      /* migration 057/058 not applied: no package and no discount to show */
     }
 
     return res.status(200).json({
       package: pkg,
+      discounts,
       success: true,
       client_display_name: row.client_display_name,
       // "Hi Ashley" at the top of the page. The display name is Vero's label.

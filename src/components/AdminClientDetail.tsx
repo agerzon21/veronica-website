@@ -32,6 +32,7 @@ import FaPaperPlane from '../icons/fa/FaPaperPlane';
 import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBadge';
 import { deliveryMessageText } from '../data/delivery-message';
 import { galleryHeading, greetingName, welcomeNames } from '../data/client-greeting';
+import { DEFAULT_DISCOUNT_LABEL } from '../data/discount';
 import { ExpiryRibbon, GalleryTitle } from './GalleryHeading';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
@@ -107,6 +108,9 @@ interface PortalDetail {
   // Booked together as a package (migration 057), and the price on its own.
   package_id?: string | null;
   regular_amount?: number | null;
+  // Its own discount (migration 058), before any package share.
+  discount_amount?: number | null;
+  discount_label?: string | null;
   client_display_name: string | null;
   client_email: string | null;
   client_phone: string | null;
@@ -1870,6 +1874,15 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
               {portal.package_id && portal.regular_amount != null && portal.contract_total_amount != null && (
                 <Text fontSize="sm" color="green.700" mb={2} data-testid="package-note">
                   {t.clientDetail.packageNote(formatMoney(portal.regular_amount), formatMoney(portal.contract_total_amount))}
+                </Text>
+              )}
+              {(portal.discount_amount ?? 0) > 0 && portal.regular_amount != null && (
+                <Text fontSize="sm" color="green.700" mb={2} data-testid="discount-note">
+                  {t.clientDetail.discountNote(
+                    portal.discount_label || DEFAULT_DISCOUNT_LABEL,
+                    formatMoney(portal.discount_amount ?? 0),
+                    formatMoney(portal.regular_amount),
+                  )}
                 </Text>
               )}
               {(portal.same_client_bookings?.length ?? 0) > 0 ? (

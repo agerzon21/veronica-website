@@ -1552,6 +1552,10 @@ const dict = {
       ru: 'Делится пропорционально обычной цене каждой съёмки, в целых долларах, сумма сходится точно. Пакетная цена каждой съёмки и будет в её контракте, без налога; предоплата считается по обычному правилу.',
     },
     addAnother: { en: '+ Add another session', ru: '+ Добавить ещё съёмку' },
+    sessionDiscount: {
+      en: (label: string, off: string, original: string) => `${label}: ${off} off ${original}`,
+      ru: (label: string, off: string, original: string) => `${label}: скидка ${off} от ${original}`,
+    },
     nextSession: { en: 'Next session', ru: 'Следующая съёмка' },
     tabSession: {
       en: (n: number, what: string) => `${n}. ${what}`,
@@ -1911,6 +1915,20 @@ const dict = {
 
     // Pricing
     totalLabel: { en: 'Total (USD)', ru: 'Общая сумма (USD)' },
+    discountLabel: { en: 'Discount (optional)', ru: 'Скидка (необязательно)' },
+    discountHelp: {
+      en: 'Type your normal price in Total, and the discount here. The contract, retainer and card prices use the discounted price, and the client sees the saving when they set up their portal and in it.',
+      ru: 'Обычную цену пиши в «Общая сумма», а скидку здесь. Контракт, предоплата и цены по карте считаются от цены со скидкой, а клиент видит экономию при настройке портала и в самом портале.',
+    },
+    discountPackageHelp: {
+      en: 'Only for an EXTRA discount on this session, like the website 10%. The package discount does not go here: put it in the package box at the bottom, after every session is saved.',
+      ru: 'Только для ДОПОЛНИТЕЛЬНОЙ скидки на эту съёмку, например 10% с сайта. Скидку за пакет сюда не пиши: она в блоке пакета внизу, после того как сохранишь все съёмки.',
+    },
+    discountNamePlaceholder: { en: 'Name it, e.g. Website 10% off', ru: 'Название, например «10% с сайта»' },
+    discountSummary: {
+      en: (price: string, off: string, regular: string) => `Client pays ${price}: ${off} off ${regular}, before tax.`,
+      ru: (price: string, off: string, regular: string) => `Клиент платит ${price}: скидка ${off} от ${regular}, без налога.`,
+    },
     totalHelp: {
       en: 'Total project cost across the whole booking, before sales tax. What Vero keeps: paying by card costs the client more.',
       ru: 'Полная стоимость всей съёмки, без налога. Столько получает Веро: оплата картой обходится клиенту дороже.',
@@ -1931,8 +1949,8 @@ const dict = {
     },
     retainerLabel: { en: 'Retainer (USD)', ru: 'Задаток (USD)' },
     retainerHelp: {
-      en: 'Non-refundable deposit. Due at signing, reserves the date. Filled in from the total: 15% to the nearest $50, at least $100.',
-      ru: 'Невозвратный задаток. Оплачивается при подписании и бронирует дату. Считается от суммы: 15%, округлено до $50, не меньше $100.',
+      en: 'Non-refundable deposit. Due at signing, reserves the date. Filled in from the total: 15% to the nearest $50, at least $50. With a discount, from the discounted price.',
+      ru: 'Невозвратный задаток. Оплачивается при подписании и бронирует дату. Считается от суммы: 15%, округлено до $50, не меньше $50. Со скидкой считается от цены со скидкой.',
     },
 
     // Gallery password
@@ -2842,6 +2860,10 @@ const dict = {
     // email shares the client's login.
     sessionsOnLoginLabel: { en: 'Sessions on this login', ru: 'Съёмки на этом аккаунте' },
     clientSessionsLabel: { en: "This client's sessions", ru: 'Все съёмки этого клиента' },
+    discountNote: {
+      en: (label: string, off: string, regular: string) => `${label}: ${off} off the regular ${regular}. The client sees this saving.`,
+      ru: (label: string, off: string, regular: string) => `${label}: скидка ${off} от обычной цены ${regular}. Клиент видит эту экономию.`,
+    },
     clientSessionsPackage: {
       en: (price: string, regular: string, saving: string) => `Package: ${price} together, ${regular} separately, saving ${saving}.`,
       ru: (price: string, regular: string, saving: string) => `Пакет: ${price} вместе, ${regular} по отдельности, экономия ${saving}.`,

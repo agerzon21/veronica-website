@@ -317,6 +317,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-057 database: nothing was booked as a package */
     }
 
+    /** This session's own discount (migration 058). Allowed to fail the same way. */
+    let discountInfo: { discount_amount: number | null; discount_label: string | null } = { discount_amount: null, discount_label: null };
+    try {
+      const d = (await sql`select discount_amount::float8 as discount_amount, discount_label from client_portals where id = ${id}`) as Array<typeof discountInfo>;
+      if (d[0]) discountInfo = d[0];
+    } catch {
+      /* pre-migration-058 database: nothing is discounted */
+    }
+
     /** The gallery page's own title (migration 055). Allowed to fail the same way. */
     let galleryTitle: string | null = null;
     try {
@@ -370,6 +379,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         gallery_title: galleryTitle,
         package_id: packageInfo.package_id,
         regular_amount: packageInfo.regular_amount,
+        discount_amount: discountInfo.discount_amount,
+        discount_label: discountInfo.discount_label,
         // We never return the raw blob URL, only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.
         contract_signed_pdf_available: !!r.contract_signed_pdf_url,

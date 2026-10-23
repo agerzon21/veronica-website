@@ -137,6 +137,11 @@ export interface ClientPortalData {
   contract_total_amount: number | null;
   contract_retainer_amount: number | null;
   /**
+   * What this booking would have cost and what it saves them, discount and
+   * package share together (migrations 057, 058). Null when nothing was off.
+   */
+  saving?: { regular: number; off: number; label: string | null } | null;
+  /**
    * Pennsylvania sales tax for this booking (src/data/sales-tax.ts). 'added'
    * puts 6% on top of the total, the retainer and any charges, and every
    * figure below includes it. Absent reads as 'absorbed', which adds nothing.
@@ -1376,7 +1381,16 @@ const ClientPortalView = ({
               spacing={{ base: 5, md: 8 }}
               w="100%"
             >
-              <BalanceStat label="Total" value={formatMoney(data.contract_total_amount)} />
+              <BalanceStat
+                label="Total"
+                value={formatMoney(data.contract_total_amount)}
+                note={
+                  data.saving
+                    ? `${data.saving.label ? `${data.saving.label}: ` : ''}${formatMoney(data.saving.off)} off ${formatMoney(data.saving.regular)}`
+                    : undefined
+                }
+                noteSaving={Boolean(data.saving)}
+              />
               {data.contract_retainer_amount !== null && data.contract_retainer_amount > 0 && (
                 <BalanceStat
                   label="Retainer"
@@ -2177,11 +2191,14 @@ const BalanceStat = ({
   value,
   emphasize,
   note,
+  noteSaving,
 }: {
   label: string;
   value: string;
   emphasize?: boolean;
   note?: string;
+  /** The note is a saving: green and upright, so it is read, not skimmed. */
+  noteSaving?: boolean;
 }) => (
   <VStack spacing={1}>
     <Text
@@ -2201,7 +2218,13 @@ const BalanceStat = ({
       {value}
     </Text>
     {note && (
-      <Text fontSize="2xs" color="gray.400" fontStyle="italic">
+      <Text
+        fontSize="2xs"
+        color={noteSaving ? 'green.700' : 'gray.400'}
+        fontStyle={noteSaving ? 'normal' : 'italic'}
+        fontWeight={noteSaving ? '500' : undefined}
+        data-testid={noteSaving ? 'balance-saving' : undefined}
+      >
         {note}
       </Text>
     )}

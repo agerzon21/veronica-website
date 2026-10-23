@@ -38,6 +38,8 @@ interface WelcomeSummary {
   card_pricing?: CardPricing;
   // Booked as a package (migration 057): every session's regular and package price, added up.
   package?: { names: string[]; regular: number; price: number } | null;
+  // Each session's own discount (migration 058), named as Vero named it.
+  discounts?: Array<{ label: string; off: number; regular: number; session: string | null }>;
 }
 
 /** Cents only when there are some: "$530", "$121.90". */
@@ -301,10 +303,27 @@ const Welcome = () => {
                             }
                           />
                         )}
+                        {/* Every discount they were given, by name, before the
+                            package one: Alex's rule is that a client always
+                            sees what they saved. */}
+                        {(summary.discounts ?? []).map((d, i) => (
+                          <SummaryLine
+                            key={`${d.label}-${i}`}
+                            label={d.label}
+                            value={`${money(d.off)} off`}
+                            highlight
+                            note={
+                              d.session
+                                ? `${d.session}: ${money(d.regular)} regular price, ${money(d.regular - d.off)} for you, before tax`
+                                : `${money(d.regular)} regular price, ${money(d.regular - d.off)} for you, before tax`
+                            }
+                          />
+                        ))}
                         {summary.package && summary.package.regular > summary.package.price && (
                           <SummaryLine
                             label="Package discount"
                             value={`${money(summary.package.regular - summary.package.price)} off`}
+                            highlight
                             note={`${summary.package.names.join(' + ')}: ${money(summary.package.regular)} booked separately, ${money(summary.package.price)} as a package, before tax`}
                           />
                         )}
@@ -464,13 +483,14 @@ const bookingLabel = (templateKey: string | null, sessionType: string | null): s
   return EVENT_BOOKING_TYPES.has(type) ? 'Event' : 'Session';
 };
 
-const SummaryLine = ({ label, value, note }: { label: string; value: string; note?: string }) => (
-  <Box>
+// highlight: a saving, in the accent colour, so it is noticed and not read past.
+const SummaryLine = ({ label, value, note, highlight }: { label: string; value: string; note?: string; highlight?: boolean }) => (
+  <Box data-testid={highlight ? 'summary-saving' : undefined}>
     <Flex justify="space-between" gap={4}>
-      <Text fontSize="xs" color="whiteAlpha.600" letterSpacing="0.15em" textTransform="uppercase">
+      <Text fontSize="xs" color={highlight ? 'brand.accent' : 'whiteAlpha.600'} letterSpacing="0.15em" textTransform="uppercase">
         {label}
       </Text>
-      <Text fontSize="sm" color="white" fontWeight="300" textAlign="right">
+      <Text fontSize="sm" color={highlight ? 'brand.accent' : 'white'} fontWeight={highlight ? '500' : '300'} textAlign="right">
         {value}
       </Text>
     </Flex>

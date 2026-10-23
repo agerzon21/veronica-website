@@ -351,13 +351,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const packageId =
         typeof body.package_id === 'string' && /^[0-9a-f-]{36}$/i.test(body.package_id) ? body.package_id : null;
       const regular = Number(body.regular_amount);
+      /**
+       * The session's own discount (migration 058): what it took off and what
+       * Vero called it. regular_amount is the price before ANY discount, so
+       * a discounted session records it even outside a package, and only
+       * when it is above what the contract states.
+       */
+      const discount = Number(body.discount_amount);
+      const discountAmount = Number.isFinite(discount) && discount > 0 ? Math.round(discount * 100) / 100 : null;
+      const discountLabel =
+        discountAmount && typeof body.discount_label === 'string' && body.discount_label.trim()
+          ? body.discount_label.trim().slice(0, 80)
+          : null;
       const regularAmount =
-        packageId && Number.isFinite(regular) && totalAmount !== null && regular >= totalAmount ? regular : null;
-      if (packageId) {
+        Number.isFinite(regular) && totalAmount !== null && (packageId ? regular >= totalAmount : regular > totalAmount)
+          ? regular
+          : null;
+      if (packageId || regularAmount !== null) {
         try {
           await sql`update client_portals set package_id = ${packageId}, regular_amount = ${regularAmount} where id = ${portalId}`;
         } catch (err) {
           console.error('[admin/portals-create] could not record the package (session still created):', err);
+        }
+      }
+      if (discountAmount && regularAmount !== null) {
+        try {
+          await sql`update client_portals set discount_amount = ${discountAmount}, discount_label = ${discountLabel} where id = ${portalId}`;
+        } catch (err) {
+          console.error('[admin/portals-create] could not record the discount (session still created):', err);
         }
       }
 

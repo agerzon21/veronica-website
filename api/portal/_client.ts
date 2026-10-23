@@ -311,6 +311,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * already made still list. Its own statement, allowed to fail, for a
      * database the migration has not reached.
      */
+    /**
+     * What this booking would have cost and its own discount (migrations 057
+     * and 058), so the Balance can say what they saved. Allowed to fail.
+     */
+    let saving: { regular: number; off: number; label: string | null } | null = null;
+    try {
+      const d = (await sql`
+        select regular_amount::float8 as regular, discount_amount::float8 as discount, discount_label, package_id
+        from client_portals where id = ${row.id}
+      `) as Array<{ regular: number | null; discount: number | null; discount_label: string | null; package_id: string | null }>;
+      const price = row.contract_total_amount ? parseFloat(row.contract_total_amount) : null;
+      if (d[0]?.regular && price !== null && d[0].regular > price) {
+        saving = { regular: d[0].regular, off: Math.round((d[0].regular - price) * 100) / 100, label: d[0].package_id ? null : d[0].discount_label };
+      }
+    } catch {
+      /* migration 058 not applied */
+    }
     let complimentary = false;
     try {
       const c = (await sql`
@@ -448,6 +465,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Payment
       contract_total_amount:
         !complimentary && row.contract_total_amount ? parseFloat(row.contract_total_amount) : null,
+      // Everything this booking saves them, package share included.
+      saving: complimentary ? null : saving,
       contract_retainer_amount:
         !complimentary && row.contract_retainer_amount ? parseFloat(row.contract_retainer_amount) : null,
       paid_to_date: parseFloat(row.paid_to_date),

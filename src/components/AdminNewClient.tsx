@@ -1,7 +1,24 @@
 import {
-  Box, VStack, Stack, SimpleGrid, Text, Input, InputGroup, InputRightElement, Select, Textarea,
-  Flex, Checkbox, Button, Icon,
-  Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverBody,
+  Box,
+  VStack,
+  Stack,
+  SimpleGrid,
+  Text,
+  Input,
+  InputGroup,
+  InputRightElement,
+  Select,
+  Textarea,
+  Flex,
+  Checkbox,
+  Button,
+  Icon,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverArrow,
+  PopoverBody,
+  HStack,
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import FaComments from '../icons/fa/FaComments';
@@ -67,6 +84,9 @@ import {
 } from '../data/travel-fee';
 import { travelCopy } from './travelCopy';
 import { suggestedRetainer } from '../data/retainer';
+import { discountOff } from '../data/discount';
+import type { DiscountMode } from '../data/package';
+import DiscountModeToggle from './ui/DiscountModeToggle';
 
 interface Props {
   adminPassword: string;
@@ -107,7 +127,12 @@ interface Props {
 /** One validated session, ready to create (the exact request body) or to package. */
 export interface PackageEntry {
   body: Record<string, unknown>;
-  summary: { title: string; type: string; date: string; regular: number };
+  /**
+   * regular: the session's price after its OWN discount, which is what the
+   * package discount is split over. original: before any discount, which is
+   * what the client is shown it would have cost (migration 058).
+   */
+  summary: { title: string; type: string; date: string; regular: number; original?: number; discountOff?: number; discountLabel?: string };
 }
 
 export interface SameClientSeed {
@@ -734,13 +759,29 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
    * or cleared (clearing it drops the clause, so that has to stick too).
    */
   const [insuranceCapTouched, setInsuranceCapTouched] = useState(false);
+  /**
+   * A discount on this session (migration 058). The Total above stays her
+   * normal price; this comes off it, and the contract, retainer, tax and card
+   * prices all use what is left. The client is shown both, because a
+   * discount nobody sees does nothing for the booking.
+   */
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountMode, setDiscountMode] = useState<DiscountMode>('usd');
+  const [discountLabel, setDiscountLabel] = useState('');
+  const afterDiscount = (price: number, value = discountValue, mode = discountMode): number =>
+    Number.isFinite(price) ? price - discountOff(price, mode, parseFloat(value)) : price;
+  const applyDiscount = (value: string, mode: DiscountMode) => {
+    setDiscountValue(value);
+    setDiscountMode(mode);
+    if (!retainerTouched) setRetainerAmount(suggestedRetainer(afterDiscount(parseFloat(totalAmount), value, mode)));
+  };
   const applyTotal = (next: string) => {
     setTotalAmount(next);
     if (!insuranceCapTouched) {
       setVariables((prev) => withSuggestedInsuranceCap(prev, parseFloat(next), fields));
     }
     if (retainerTouched) return;
-    setRetainerAmount(suggestedRetainer(parseFloat(next)));
+    setRetainerAmount(suggestedRetainer(afterDiscount(parseFloat(next))));
   };
 
   // ─── Travel ───
@@ -1342,7 +1383,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
           custom: travelOverride !== null,
         }
       : { status: travelStatus === 'declined' ? 'declined' : 'none', fee: 0, roundTripMiles: 0 };
-  const sessionTotalNumber = parseFloat(totalAmount);
+  const typedTotalNumber = parseFloat(totalAmount);
+  const discountDollars = Number.isFinite(typedTotalNumber)
+    ? discountOff(typedTotalNumber, discountMode, parseFloat(discountValue))
+    : 0;
+  const sessionTotalNumber = afterDiscount(typedTotalNumber);
   const travelApplication = applyTravelDecision(
     Number.isFinite(sessionTotalNumber) ? sessionTotalNumber : 0,
     travelDecision,
@@ -1546,7 +1591,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       return;
     }
 
-    if (retainer > total) {
+    // Her normal price less this session's discount: everything below, the
+    // contract included, is worked out from what the client actually pays.
+    const sessionOff = discountOff(total, discountMode, parseFloat(discountValue));
+    const priced = total - sessionOff;
+    if (retainer > priced) {
       setFieldErrors(new Set(['retainer']));
       setError(t.newClient.retainerExceedsTotal);
       return;
@@ -1562,7 +1611,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     // Recomputed here from the submitted session total rather than read off
     // the render, so the number posted and the number printed in the TRAVEL
     // clause come from one call.
-    const travelAtSubmit = applyTravelDecision(total, travelDecision);
+    const travelAtSubmit = applyTravelDecision(priced, travelDecision);
     const contractTotal = travelAtSubmit.contractTotal;
 
     // Build the variables object the contract template expects. Most
@@ -1684,6 +1733,11 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
       // number every balance on the client screen is derived from, so it
       // has to match total_amount in the rendered contract exactly.
       contract_total_amount: contractTotal,
+      // What it would have cost, and what came off (migration 058). Absent
+      // without a discount, so an undiscounted booking posts what it did.
+      ...(sessionOff > 0
+        ? { regular_amount: contractTotal + sessionOff, discount_amount: sessionOff, discount_label: discountLabel.trim() || null }
+        : {}),
       contract_retainer_amount: retainer,
       // Before tax, both of them. The server adds the tax lines.
       sales_tax: salesTax,
@@ -1711,7 +1765,15 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
      */
     const entry: PackageEntry = {
       body,
-      summary: { title: finalVariables.event_title || '', type: sessionType, date: eventDateIso, regular: contractTotal },
+      summary: {
+        title: finalVariables.event_title || '',
+        type: sessionType,
+        date: eventDateIso,
+        regular: contractTotal,
+        original: contractTotal + sessionOff,
+        discountOff: sessionOff,
+        discountLabel: discountLabel.trim() || undefined,
+      },
     };
     if (packageMode) {
       packageMode.onAdd(entry);
@@ -2236,6 +2298,42 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
             </Field>
           </Stack>
 
+          {/* A discount on this session (migration 058). In a package it is
+              an EXTRA one, on this session alone; the package discount is
+              the box under the sessions, and the note says so. */}
+          <Field label={t.newClient.discountLabel} helpText={packageMode ? t.newClient.discountPackageHelp : t.newClient.discountHelp}>
+            <Stack direction={{ base: 'column', md: 'row' }} spacing={3} align={{ base: 'stretch', md: 'center' }}>
+              <HStack spacing={2} align="stretch">
+                <Box w="120px" flexShrink={0}>
+                  <FormInput
+                    id="new-client-discount"
+                    inputMode="decimal"
+                    value={discountValue}
+                    onChange={(e) => applyDiscount(e.target.value.replace(/[^0-9.]/g, ''), discountMode)}
+                    placeholder="0"
+                  />
+                </Box>
+                <DiscountModeToggle mode={discountMode} onChange={(m) => applyDiscount(discountValue, m)} testIdPrefix="session-discount" />
+              </HStack>
+              <FormInput
+                id="new-client-discount-label"
+                value={discountLabel}
+                onChange={(e) => setDiscountLabel(e.target.value)}
+                placeholder={t.newClient.discountNamePlaceholder}
+                maxLength={80}
+              />
+            </Stack>
+          </Field>
+          {discountDollars > 0 && (
+            <Text fontSize="sm" color="green.700" mt={-2} data-testid="new-client-discount-summary">
+              {t.newClient.discountSummary(
+                formatContractMoneyExact(sessionTotalNumber),
+                formatContractMoneyExact(discountDollars),
+                formatContractMoneyExact(typedTotalNumber),
+              )}
+            </Text>
+          )}
+
           <Field label={t.newClient.salesTaxLabel} helpText={t.clientDetail.salesTaxHelp[salesTax]}>
             <Select
               id="new-client-sales-tax"
@@ -2390,7 +2488,7 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
                   onAccept={() => { cancelTravelCustom(); setTravelStatus('accepted'); }}
                   onDecline={() => { cancelTravelCustom(); setTravelStatus('declined'); }}
                   onReopen={() => { cancelTravelCustom(); setTravelStatus('none'); }}
-                  sessionTotal={totalAmount}
+                  sessionTotal={Number.isFinite(sessionTotalNumber) ? String(sessionTotalNumber) : totalAmount}
                   application={travelApplication}
                   fee={travelFee}
                   customOpen={travelCustomOpen}

@@ -24,11 +24,13 @@ import { useRef, useState } from 'react';
 import CTAButton from './ui/CTAButton';
 import AdminBackButton from './ui/AdminBackButton';
 import ConfirmDialog from './ui/ConfirmDialog';
+import DiscountModeToggle from './ui/DiscountModeToggle';
 import AdminNewClient, { type PackageEntry, type SameClientSeed } from './AdminNewClient';
 import { prefillForSession, type ClientPrefill } from './clientPrefill';
 import { useAdminLang } from '../i18n/admin';
 import { splitPackage, type DiscountMode } from '../data/package';
 import { suggestedRetainer } from '../data/retainer';
+import { DEFAULT_DISCOUNT_LABEL } from '../data/discount';
 import { fmtAdminDate } from '../utils/adminDate';
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -179,7 +181,9 @@ export default function AdminNewPackage({
         contract_total_amount: price,
         contract_retainer_amount: Number(suggestedRetainer(price) || 0),
         package_id: packageId,
-        regular_amount: s.summary.regular,
+        // Before ANY discount: the session's own discount came off first, then
+        // the package's share (migration 058).
+        regular_amount: s.summary.original ?? s.summary.regular,
         quiet: i > 0,
         announce_titles: i === 0 ? titles : undefined,
         link_to_conversation_id: i === 0 ? s.body.link_to_conversation_id ?? null : null,
@@ -284,25 +288,7 @@ export default function AdminNewPackage({
                 bg="white"
                 h="40px"
               />
-              <HStack spacing={0} border="1px solid" borderColor="gray.300" borderRadius="md" overflow="hidden">
-                {(['usd', 'pct'] as const).map((m) => (
-                  <Box
-                    key={m}
-                    as="button"
-                    type="button"
-                    onClick={() => setMode(m)}
-                    aria-pressed={mode === m}
-                    data-testid={`discount-${m}`}
-                    px={4}
-                    h="40px"
-                    bg={mode === m ? 'brand.accentText' : 'white'}
-                    color={mode === m ? 'white' : 'gray.600'}
-                    fontSize="sm"
-                  >
-                    {m === 'usd' ? '$' : '%'}
-                  </Box>
-                ))}
-              </HStack>
+              <DiscountModeToggle mode={mode} onChange={setMode} />
             </HStack>
             <Box overflowX="auto">
               <Box as="table" w="100%" fontSize="sm" sx={{ fontVariantNumeric: 'tabular-nums', 'th, td': { py: 1.5, px: 1, borderBottom: '1px solid', borderColor: 'brand.accentBorder', textAlign: 'right' }, 'th:first-of-type, td:first-of-type': { textAlign: 'left' } }} data-testid="package-table">
@@ -320,6 +306,12 @@ export default function AdminNewPackage({
                       <tr key={id}>
                         <td>
                           {e ? `${cap(e.summary.type)}${e.summary.date ? ` · ${fmtAdminDate(e.summary.date, lang)}` : ''}` : tabLabel(id, i + 1)}
+                          {/* Its own discount, already off the Regular column. */}
+                          {e && (e.summary.discountOff ?? 0) > 0 && (
+                            <Text as="span" display="block" fontSize="xs" color="green.700" data-testid="package-session-discount">
+                              {t.newPackage.sessionDiscount(e.summary.discountLabel || DEFAULT_DISCOUNT_LABEL, money(e.summary.discountOff ?? 0), money(e.summary.original ?? e.summary.regular))}
+                            </Text>
+                          )}
                         </td>
                         {e ? (
                           <>
