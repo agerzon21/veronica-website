@@ -31,7 +31,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDb } from '../_db.js';
 import { requireAdmin, requireSuper } from '../_admin-auth.js';
-import { CARD_FEE_DISCOUNT_METHOD } from '../../src/data/payment-handles.js';
+import { isNotMoneyReceived } from '../../src/data/payment-handles.js';
 import { saleAndTaxOf, salesTaxModeOf, type SalesTaxMode } from '../../src/data/sales-tax.js';
 
 type Row = {
@@ -97,7 +97,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const r of rows) {
       if ((r.status ?? 'succeeded') !== 'succeeded') continue;
       if ((r.kind ?? 'payment') === 'tip') continue;
-      if (r.method === CARD_FEE_DISCOUNT_METHOD) continue;
+      // A waiver or a courtesy credit closes a balance but is not money received.
+      if (isNotMoneyReceived(r.method)) continue;
       if (r.complimentary === true) continue;
       const amount = parseFloat(r.amount);
       if (!Number.isFinite(amount) || amount === 0) continue;

@@ -16,7 +16,7 @@ import {
   Spinner,
   Grid,
 } from '@chakra-ui/react';
-import { CARD_FEE_DISCOUNT_METHOD, cardAmountFor, cardPricingOf, type CardPricing } from '../data/payment-handles';
+import { CARD_FEE_DISCOUNT_METHOD, cardAmountFor, cardPricingOf, isNotMoneyReceived, type CardPricing } from '../data/payment-handles';
 import {
   SALES_TAX_CONTRACT_KEYS,
   CARD_PRICE_CONTRACT_KEYS,
@@ -4488,7 +4488,7 @@ function PaymentRow({
                 wear the same green check as a payment, reading "$-100". */}
             <Icon
               as={entry.amount < 0 ? FaUndo : FaCheck}
-              color={entry.amount < 0 ? 'orange.500' : entry.method === CARD_FEE_DISCOUNT_METHOD ? 'gray.400' : 'green.500'}
+              color={entry.amount < 0 ? 'orange.500' : isNotMoneyReceived(entry.method) ? 'gray.400' : 'green.500'}
               boxSize={2.5}
             />
             <Text fontSize="sm" fontWeight="500" color={entry.amount < 0 ? 'orange.600' : 'gray.800'}>

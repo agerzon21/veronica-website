@@ -154,6 +154,21 @@ export function cardAmountFor(direct: number, pricing: CardPricing): number {
  */
 export const CARD_FEE_DISCOUNT_METHOD = 'Card fee discount';
 
+/**
+ * A courtesy credit (2026-10-26): money Vero chose not to collect, written as
+ * a payment row so it closes the balance and the client sees it as a line,
+ * and recognised by this label everywhere money RECEIVED is counted (the
+ * sales-tax report). The first one forgave the $15 tax on a booking whose
+ * retainer was never chased before the shoot. Charges cannot be negative by
+ * design (migration 035), so this is the one way to give money back that is
+ * not a refund.
+ */
+export const COURTESY_CREDIT_METHOD = 'Courtesy credit';
+
+/** Rows that close a balance without being money that arrived. */
+export const isNotMoneyReceived = (method: string | null | undefined): boolean =>
+  method === CARD_FEE_DISCOUNT_METHOD || method === COURTESY_CREDIT_METHOD;
+
 /** True when cards are real for ordinary clients. */
 export const CARD_PAYMENTS_ENABLED = (CARD_PAYMENTS_MODE as CardPaymentsMode) === 'on';
 
