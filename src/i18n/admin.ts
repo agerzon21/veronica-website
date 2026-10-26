@@ -194,8 +194,23 @@ const dict = {
       session: { en: 'Session', ru: 'Съёмка' },
       eventDate: { en: 'Event date', ru: 'Дата события' },
       contract: { en: 'Contract', ru: 'Контракт' },
+      deposit: { en: 'Deposit', ru: 'Задаток' },
       balance: { en: 'Balance', ru: 'Баланс' },
       gallery: { en: 'Gallery', ru: 'Галерея' },
+    },
+    // The deposit column and the reason a row needs Vero (2026-10-25).
+    deposit: {
+      received: { en: 'Received', ru: 'Получен' },
+      partial: { en: 'Partly paid', ru: 'Частично' },
+      missing: { en: 'Not received', ru: 'Не получен' },
+      free: { en: 'Free', ru: 'Бесплатно' },
+    },
+    depositPendingLine: { en: 'Deposit not received', ru: 'Задаток не получен' },
+    needs: {
+      deposit: { en: (x: string) => `Needs: deposit ${x}`, ru: (x: string) => `Нужно: задаток ${x}` },
+      unsigned: { en: () => 'Needs: contract signed', ru: () => 'Нужно: подпись контракта' },
+      balance: { en: (x: string) => `Needs: balance ${x}`, ru: (x: string) => `Нужно: остаток ${x}` },
+      deliver: { en: () => 'Needs: photos delivered', ru: () => 'Нужно: отправить фото' },
     },
     status: {
       pendingInvite: { en: 'Pending invite', ru: 'Приглашение отправлено' },
@@ -247,6 +262,7 @@ const dict = {
     clearFilter: { en: 'Clear', ru: 'Сбросить' },
     filters: {
       all: { en: 'All', ru: 'Все' },
+      action: { en: 'Needs action', ru: 'Нужно действие' },
       upcoming: { en: 'Upcoming', ru: 'Ближайшие' },
       owes: { en: 'Owes', ru: 'Должны' },
       overpaid: { en: 'Overpaid', ru: 'Переплата' },
@@ -264,6 +280,10 @@ const dict = {
     // and for the column header's accessible name. Per column, because
     // "first to last" says nothing useful about a column of money.
     sortDir: {
+      action: {
+        asc: { en: 'most urgent first', ru: 'сначала самое срочное' },
+        desc: { en: 'least urgent first', ru: 'сначала наименее срочное' },
+      },
       agenda: {
         asc: { en: 'next shoot first', ru: 'сначала ближайшая съёмка' },
         desc: { en: 'oldest first', ru: 'сначала самые давние' },
@@ -282,6 +302,7 @@ const dict = {
       },
     },
     sortBy: {
+      action: { en: 'Needs action', ru: 'Срочное' },
       agenda: { en: 'Upcoming', ru: 'Ближайшие' },
       date: { en: 'Date', ru: 'Дата' },
       name: { en: 'Name', ru: 'Имя' },

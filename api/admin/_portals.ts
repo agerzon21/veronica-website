@@ -34,6 +34,7 @@ type Row = {
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
   contract_total_amount: string | null;
+  contract_retainer_amount: string | null;
   paid_to_date: string;
   drive_url: string | null;
   gallery_delivered_at: string | null;
@@ -85,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sql = getDb();
     const rows = (await sql`
       select id, mode, session_type, client_display_name, client_email, event_date,
-             contract_status, contract_signed_at, contract_total_amount, paid_to_date,
+             contract_status, contract_signed_at, contract_total_amount, contract_retainer_amount, paid_to_date,
              drive_url, gallery_delivered_at, gallery_expires_at,
              gallery_password, gallery_enabled, setup_token, created_at
       from client_portals
@@ -161,6 +162,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         contract_status: r.contract_status,
         contract_signed_at: r.contract_signed_at,
         contract_total_amount: r.contract_total_amount ? parseFloat(r.contract_total_amount) : null,
+        // The deposit the list checks against (2026-10-25): a signed contract
+        // with no retainer in is a date that is not actually reserved.
+        contract_retainer_amount: r.contract_retainer_amount ? parseFloat(r.contract_retainer_amount) : null,
         paid_to_date: parseFloat(r.paid_to_date),
         charges_total: chargesById.get(r.id) ?? 0,
         complimentary: complimentaryIds.has(r.id),

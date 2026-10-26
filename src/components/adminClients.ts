@@ -33,6 +33,8 @@ export interface AdminPortalSummary {
   contract_status: 'none' | 'pending' | 'signed' | 'void';
   contract_signed_at: string | null;
   contract_total_amount: number | null;
+  /** The retainer the contract asks for up front; the list checks the deposit against it. */
+  contract_retainer_amount?: number | null;
   paid_to_date: number;
   // Extra time and costs added after the booking. Owed on top of the
   // contract total, so the balance line has to add it in.
@@ -58,7 +60,7 @@ export interface AdminPortalSummary {
   created_at: string;
 }
 
-export type ClientFilter = 'all' | 'upcoming' | 'owes' | 'overpaid' | 'unsigned' | 'deliver';
+export type ClientFilter = 'all' | 'action' | 'upcoming' | 'owes' | 'overpaid' | 'unsigned' | 'deliver';
 /**
  * 'date' is the event date and nothing else: earliest to latest, or the
  * reverse. 'agenda' is the working view (the next shoot first, then the past
@@ -66,7 +68,7 @@ export type ClientFilter = 'all' | 'upcoming' | 'owes' | 'overpaid' | 'unsigned'
  * screen that put 2027 weddings above shoots from earlier in 2026 under the
  * word "Date" read as a broken sort.
  */
-export type ClientSortKey = 'agenda' | 'date' | 'name' | 'money';
+export type ClientSortKey = 'action' | 'agenda' | 'date' | 'name' | 'money';
 export type ClientSortDir = 'asc' | 'desc';
 export interface ClientSort {
   key: ClientSortKey;
@@ -76,6 +78,7 @@ export interface ClientSort {
 /** The chip counts, in the order the chips render. */
 export interface ClientCounts {
   all: number;
+  action: number;
   upcoming: number;
   owes: number;
   overpaid: number;
@@ -207,6 +210,48 @@ const isPastOrUndated = (p: AdminPortalSummary): boolean => {
   return at === null || at <= todayDayUtc();
 };
 
+/**
+ * THE DEPOSIT (2026-10-25). Payments are not tagged retainer or balance, so it
+ * is read the way the contract reads it: the retainer is the first money in.
+ * A signed contract with the deposit missing used to show a green "Signed",
+ * and a session was shot on a date that was never actually reserved.
+ */
+export type DepositState = 'received' | 'partial' | 'missing' | 'none' | 'free';
+export const depositOf = (p: AdminPortalSummary): { state: DepositState; amount: number } => {
+  if (p.complimentary) return { state: 'free', amount: 0 };
+  const retainer = p.contract_retainer_amount ?? 0;
+  if (p.contract_total_amount === null || retainer <= 0) return { state: 'none', amount: 0 };
+  if (p.paid_to_date >= retainer) return { state: 'received', amount: retainer };
+  return { state: p.paid_to_date > 0 ? 'partial' : 'missing', amount: retainer };
+};
+
+/**
+ * What a booking needs from Vero, most urgent first, or null when nothing:
+ *   1 deposit   contract signed, retainer not in: the date is not reserved
+ *   2 unsigned  contract not signed yet
+ *   3 balance   the session has happened and money is still owed
+ *   4 deliver   the session has happened and the photos have not gone out
+ * The "Needs action" sort and chip are this, and the row says the reason.
+ */
+export type ActionReason = 'deposit' | 'unsigned' | 'balance' | 'deliver';
+export const actionOf = (p: AdminPortalSummary): { rank: number; reason: ActionReason } | null => {
+  const deposit = depositOf(p).state;
+  if (p.mode === 'full' && p.contract_status === 'signed' && (deposit === 'missing' || deposit === 'partial')) {
+    return { rank: 1, reason: 'deposit' };
+  }
+  if (p.mode === 'full' && (p.contract_status === 'none' || p.contract_status === 'pending')) {
+    return { rank: 2, reason: 'unsigned' };
+  }
+  const at = eventDayUtc(p.event_date);
+  const happened = at !== null && at < todayDayUtc();
+  const owed = balanceOf(p);
+  if (happened && owed !== null && owed > 0) return { rank: 3, reason: 'balance' };
+  if (!p.gallery_delivered_at && isPastOrUndated(p) && at !== null && at < todayDayUtc()) {
+    return { rank: 4, reason: 'deliver' };
+  }
+  return null;
+};
+
 /** Does this booking belong under that chip? One predicate, used for the
  *  counts and for the filter, so a chip can never report a number it then
  *  fails to show. */
@@ -214,6 +259,8 @@ export const matchesFilter = (p: AdminPortalSummary, f: ClientFilter): boolean =
   switch (f) {
     case 'all':
       return true;
+    case 'action':
+      return actionOf(p) !== null;
     case 'upcoming': {
       const at = eventDayUtc(p.event_date);
       return at !== null && at >= todayDayUtc();
@@ -240,8 +287,9 @@ export const matchesFilter = (p: AdminPortalSummary, f: ClientFilter): boolean =
 };
 
 export const countFilters = (portals: AdminPortalSummary[]): ClientCounts => {
-  const counts: ClientCounts = { all: portals.length, upcoming: 0, owes: 0, overpaid: 0, unsigned: 0, deliver: 0 };
+  const counts: ClientCounts = { all: portals.length, action: 0, upcoming: 0, owes: 0, overpaid: 0, unsigned: 0, deliver: 0 };
   for (const p of portals) {
+    if (matchesFilter(p, 'action')) counts.action++;
     if (matchesFilter(p, 'upcoming')) counts.upcoming++;
     if (matchesFilter(p, 'owes')) counts.owes++;
     if (matchesFilter(p, 'overpaid')) counts.overpaid++;
@@ -288,7 +336,8 @@ export const selectVisible = (
   const unplaced: AdminPortalSummary[] = [];
   for (const p of rows) {
     const has =
-      sort.key === 'date' || sort.key === 'agenda' ? eventDayUtc(p.event_date) !== null
+      sort.key === 'action' ? true
+      : sort.key === 'date' || sort.key === 'agenda' ? eventDayUtc(p.event_date) !== null
       : sort.key === 'money' ? balanceOf(p) !== null
       : nameOf(p) !== '';
     (has ? placed : unplaced).push(p);
@@ -297,7 +346,32 @@ export const selectVisible = (
   const today = todayDayUtc();
   const collator = new Intl.Collator(lang === 'ru' ? 'ru' : 'en', { sensitivity: 'base', numeric: true });
 
+  /** Agenda order: the next shoot first, then the past with the most recent on top. Undated last. */
+  const agenda = (a: AdminPortalSummary, b: AdminPortalSummary): number => {
+    const av = eventDayUtc(a.event_date);
+    const bv = eventDayUtc(b.event_date);
+    if (av === null || bv === null) return av === null ? (bv === null ? 0 : 1) : -1;
+    const aFuture = av >= today;
+    const bFuture = bv >= today;
+    if (aFuture !== bFuture) return aFuture ? -1 : 1;
+    return aFuture ? av - bv : bv - av;
+  };
+
   placed.sort((a, b) => {
+    if (sort.key === 'action') {
+      // What needs her first, most urgent reason first, the nearest date
+      // first within a reason; everything else after, in agenda order.
+      const aa = actionOf(a);
+      const ba = actionOf(b);
+      if (aa && ba) {
+        if (aa.rank !== ba.rank) return aa.rank - ba.rank;
+        const av = eventDayUtc(a.event_date) ?? Infinity;
+        const bv = eventDayUtc(b.event_date) ?? Infinity;
+        return av - bv;
+      }
+      if (aa || ba) return aa ? -1 : 1;
+      return agenda(a, b);
+    }
     if (sort.key === 'name') return collator.compare(nameOf(a), nameOf(b));
     if (sort.key === 'money') {
       // Ascending means "furthest into credit first", so descending, which is

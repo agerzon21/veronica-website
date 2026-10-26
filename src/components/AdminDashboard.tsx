@@ -27,7 +27,9 @@ import MobileSheetModal from './ui/MobileSheetModal';
 import AdminCalendarView from './AdminCalendarView';
 import { useAdminLang } from '../i18n/admin';
 import {
+  actionOf,
   balanceOf,
+  depositOf,
   bookingTotal,
   countFilters,
   formatDate,
@@ -72,15 +74,17 @@ interface Props {
   onVisibleOrderChange?: (ids: string[]) => void;
 }
 
-const SORT_STORAGE_KEY = 'vg:clientsSort';
+// A new key (2026-10-25) so everyone starts on Needs action once; a sort
+// chosen after that is remembered as before.
+const SORT_STORAGE_KEY = 'vg:clientsSort2';
 // The filter chip is NOT remembered (it was, until 2026-10-19). A chip left on
 // "To deliver" or "Unsigned" from last week hid every booking that did not
 // fit it, and the list read as missing clients. The sort is still kept: a
 // different order never hides anyone. The old key is cleared on load.
 const FILTER_STORAGE_KEY = 'vg:clientsFilter';
 
-const FILTER_KEYS: ClientFilter[] = ['all', 'upcoming', 'owes', 'overpaid', 'unsigned', 'deliver'];
-const SORT_KEYS: ClientSortKey[] = ['agenda', 'date', 'name', 'money'];
+const FILTER_KEYS: ClientFilter[] = ['all', 'action', 'upcoming', 'owes', 'overpaid', 'unsigned', 'deliver'];
+const SORT_KEYS: ClientSortKey[] = ['action', 'agenda', 'date', 'name', 'money'];
 
 /**
  * One definition of the five columns, spread into the header and into every
@@ -93,9 +97,10 @@ const SORT_KEYS: ClientSortKey[] = ['agenda', 'date', 'name', 'money'];
  */
 const COL = {
   client: { flex: '2.4 1 0', minW: 0 },
-  when: { flex: '1.35 1 0', minW: 0 },
-  contract: { flex: '1.4 1 0', minW: 0 },
-  gallery: { flex: '1.5 1 0', minW: 0 },
+  when: { flex: '1.3 1 0', minW: 0 },
+  contract: { flex: '1.3 1 0', minW: 0 },
+  deposit: { flex: '1.2 1 0', minW: 0 },
+  gallery: { flex: '1.3 1 0', minW: 0 },
   money: { flex: '1.35 1 0', minW: 0 },
 } as const;
 
@@ -110,8 +115,9 @@ const readStoredFilter = (): ClientFilter => {
 };
 
 const readStoredSort = (): ClientSort => {
-  // The agenda, so the screen still opens on the next shoot.
-  const fallback: ClientSort = { key: 'agenda', dir: 'asc' };
+  // What needs Vero first (2026-10-25). It used to open on the agenda, and a
+  // signed contract with no deposit sat among the rest with a green badge.
+  const fallback: ClientSort = { key: 'action', dir: 'asc' };
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(SORT_STORAGE_KEY);
@@ -589,6 +595,7 @@ function TableView({
             <SortHeader col={COL.client} label={t.clients.tableHeaders.client} sortKey="name" sort={sort} onToggle={onToggleSort} />
             <SortHeader col={COL.when} label={t.clients.tableHeaders.eventDate} sortKey="date" sort={sort} onToggle={onToggleSort} />
             <Box {...COL.contract} data-col="contract">{t.clients.tableHeaders.contract}</Box>
+            <Box {...COL.deposit} data-col="deposit">{t.clients.tableHeaders.deposit}</Box>
             <Box {...COL.gallery} data-col="gallery">{t.clients.tableHeaders.gallery}</Box>
             <SortHeader col={COL.money} label={t.clients.tableHeaders.balance} sortKey="money" sort={sort} onToggle={onToggleSort} align="right" />
           </Flex>
@@ -741,6 +748,7 @@ function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
             </Badge>
           )}
         </HStack>
+        <NeedsLine portal={portal} />
       </Box>
 
       <Box {...COL.when} color="gray.700">
@@ -753,8 +761,14 @@ function PortalRow({ portal, onClick }: { portal: AdminPortalSummary; onClick: (
       </Box>
 
       <Box {...COL.contract}>
-        <ContractStatusBadge status={portal.contract_status} />
-        <SubLine>{contractSubLine(portal, t)}</SubLine>
+        <ContractStatusBadge status={portal.contract_status} depositPending={depositPending(portal)} />
+        <SubLine tone={depositPending(portal) ? 'warn' : 'muted'}>
+          {depositPending(portal) ? t.clients.depositPendingLine : contractSubLine(portal, t)}
+        </SubLine>
+      </Box>
+
+      <Box {...COL.deposit}>
+        <DepositCell portal={portal} />
       </Box>
 
       <Box {...COL.gallery}>
@@ -839,6 +853,7 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
               </Badge>
             )}
           </HStack>
+          <NeedsLine portal={portal} />
         </Box>
         {/* Contract and Gallery side by side, money on its own full-width
             line beneath, matching the desktop column order: the two things
@@ -846,8 +861,12 @@ function PortalCard({ portal, onClick }: { portal: AdminPortalSummary; onClick: 
         <SimpleGrid columns={2} spacing={{ base: 2, md: 4 }} fontSize="xs">
           <VStack align="flex-start" spacing={0.5} minW={0}>
             <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.contract}</Text>
-            <ContractStatusBadge status={portal.contract_status} />
+            <ContractStatusBadge status={portal.contract_status} depositPending={depositPending(portal)} />
             <SubLine>{contractSubLine(portal, t)}</SubLine>
+          </VStack>
+          <VStack align="flex-start" spacing={0.5} minW={0}>
+            <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.deposit}</Text>
+            <DepositCell portal={portal} />
           </VStack>
           <VStack align="flex-start" spacing={0.5} minW={0}>
             <Text color="gray.400" textTransform="uppercase" letterSpacing="0.1em">{t.clients.tableHeaders.gallery}</Text>
@@ -898,14 +917,62 @@ function gallerySubLine(portal: AdminPortalSummary, t: ReturnType<typeof useAdmi
   return '';
 }
 
-function ContractStatusBadge({ status }: { status: AdminPortalSummary['contract_status'] }) {
+/** Signed, but the retainer is not in: the date is not actually reserved. */
+const depositPending = (p: AdminPortalSummary): boolean =>
+  p.mode === 'full' && p.contract_status === 'signed' && ['missing', 'partial'].includes(depositOf(p).state);
+
+/** "Needs: deposit $38" under the name, in orange, on every row that needs Vero. */
+function NeedsLine({ portal }: { portal: AdminPortalSummary }) {
+  const { t } = useAdminLang();
+  const action = actionOf(portal);
+  if (!action) return null;
+  const owed = balanceOf(portal);
+  const text =
+    action.reason === 'deposit'
+      ? t.clients.needs.deposit(formatMoney(depositOf(portal).amount))
+      : action.reason === 'balance'
+        ? t.clients.needs.balance(formatMoney(owed ?? 0))
+        : action.reason === 'unsigned'
+          ? t.clients.needs.unsigned()
+          : t.clients.needs.deliver();
+  return (
+    <Text fontSize="xs" fontWeight="600" color="orange.700" mt={1} data-testid="needs-line">
+      {text}
+    </Text>
+  );
+}
+
+/** The deposit column: in, partly in, not in, or nothing to collect. */
+function DepositCell({ portal }: { portal: AdminPortalSummary }) {
+  const { t } = useAdminLang();
+  const d = depositOf(portal);
+  if (d.state === 'none') return <Text fontSize="xs" color="gray.300">-</Text>;
+  const cfg = {
+    received: { color: 'green', label: t.clients.deposit.received },
+    partial: { color: 'orange', label: t.clients.deposit.partial },
+    missing: { color: 'orange', label: t.clients.deposit.missing },
+    free: { color: 'purple', label: t.clients.deposit.free },
+  }[d.state];
+  return (
+    <Box data-testid="deposit-cell" data-state={d.state}>
+      <Badge colorScheme={cfg.color} variant="subtle" fontSize={{ base: 'xs', md: '2xs' }}>
+        {cfg.label}
+      </Badge>
+      {d.amount > 0 && <SubLine tone={d.state === 'received' ? 'muted' : 'warn'}>{formatMoney(d.amount)}</SubLine>}
+    </Box>
+  );
+}
+
+function ContractStatusBadge({ status, depositPending: noDeposit = false }: { status: AdminPortalSummary['contract_status']; depositPending?: boolean }) {
   const { t } = useAdminLang();
   // Colors stay local; labels come from the shared dict so they
-  // read the same as everywhere else contract statuses appear.
+  // read the same as everywhere else contract statuses appear. Signed is
+  // green only once the deposit is in too (2026-10-25); until then it is
+  // yellow, because a signed contract alone does not reserve the date.
   const map = {
     none: { color: 'gray', label: t.clients.status.contract.none },
     pending: { color: 'orange', label: t.clients.status.contract.pending },
-    signed: { color: 'green', label: t.clients.status.contract.signed },
+    signed: { color: noDeposit ? 'yellow' : 'green', label: t.clients.status.contract.signed },
     void: { color: 'red', label: t.clients.status.contract.void },
   } as const;
   const cfg = map[status];
