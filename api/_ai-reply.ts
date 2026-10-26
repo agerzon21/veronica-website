@@ -42,6 +42,7 @@ import OpenAI from 'openai';
 import { stripSubjectHeader } from './_subject-strip.js';
 import { applyHouseStyle, WRITING_RULES_CATEGORY } from './_house-style.js';
 import { paymentFactsForCustomerReplies } from '../src/data/payment-handles.js';
+import { bookingOwedTotal, salesTaxModeOf } from '../src/data/sales-tax.js';
 import {
   borrowedPrices,
   businessFactsForCustomerReplies,
@@ -788,67 +789,111 @@ export async function portalContextBlock(
   conversationId: string,
 ): Promise<string | null> {
   try {
-    const rows = (await sql`
-      SELECT p.mode, p.client_email, p.contract_status,
-             (p.client_password_hash IS NOT NULL) AS account_active,
-             p.invite_sent_at, p.client_display_name, p.session_type, p.event_date
+    /**
+     * EVERY booking on the client's account (2026-10-26), each with where its
+     * contract and money stand. This used to be the one booking the thread
+     * was linked to, with no payment state at all, so for a couple with an
+     * engagement and a wedding the assistant saw only the wedding, "contract
+     * pending", and chased them for an engagement contract and deposit they
+     * had already signed and paid. An account is every full booking on the
+     * client's email (api/portal/_account.ts); the thread's own booking is
+     * included even when it is gallery-only.
+     */
+    const head = (await sql`
+      SELECT c.platform, c.external_user_id, c.linked_client_portal_id, p.client_email
       FROM conversations c
-      JOIN client_portals p ON p.id = c.linked_client_portal_id
+      LEFT JOIN client_portals p ON p.id = c.linked_client_portal_id
       WHERE c.id = ${conversationId}
       LIMIT 1
+    `) as Array<{ platform: string; external_user_id: string; linked_client_portal_id: string | null; client_email: string | null }>;
+    if (head.length === 0) return null;
+    const email = (head[0].client_email ?? (head[0].platform === 'email' ? head[0].external_user_id : '') ?? '').trim().toLowerCase();
+    const linkedId = head[0].linked_client_portal_id;
+    if (!linkedId && !email) return null;
+    const rows = (await sql`
+      SELECT p.id, p.mode, p.client_email, p.contract_status, p.contract_signed_at,
+             (p.client_password_hash IS NOT NULL) AS account_active,
+             (p.setup_token IS NOT NULL) AS invite_pending,
+             p.invite_sent_at, p.client_display_name, p.session_type, p.contract_template_key,
+             p.event_date::text AS event_day,
+             p.contract_total_amount::float8 AS total, p.contract_retainer_amount::float8 AS retainer,
+             p.paid_to_date::float8 AS paid, p.sales_tax, p.complimentary, p.gallery_delivered_at,
+             p.contract_variables->>'balance_due_window' AS balance_window,
+             (SELECT COALESCE(SUM(pc.amount), 0) FROM portal_charges pc WHERE pc.client_portal_id = p.id)::float8 AS charges
+      FROM client_portals p
+      WHERE p.id = ${linkedId}
+         OR (${email} <> '' AND p.mode = 'full' AND LOWER(p.client_email) = ${email})
+      ORDER BY p.event_date ASC NULLS LAST, p.created_at ASC
     `) as Array<{
+      id: string;
       mode: string;
       client_email: string | null;
       contract_status: string;
+      contract_signed_at: string | null;
       account_active: boolean;
+      invite_pending: boolean;
       invite_sent_at: string | null;
       client_display_name: string | null;
       session_type: string | null;
-      event_date: string | null;
+      contract_template_key: string | null;
+      event_day: string | null;
+      total: number | null;
+      retainer: number | null;
+      paid: number | null;
+      sales_tax: string | null;
+      complimentary: boolean | null;
+      gallery_delivered_at: string | null;
+      balance_window: string | null;
+      charges: number | null;
     }>;
     if (rows.length === 0) return null;
-    const p = rows[0];
+
+    const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
+    const day = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : null);
     const lines = [
-      'PORTAL STATUS (from the system, not the thread, the customer may not have mentioned any of this):',
-      `- This customer has a client portal (${p.mode} mode).`,
+      'BOOKINGS ON FILE FOR THIS CLIENT (from the system: this is the truth about what is signed and paid, even where the thread is out of date):',
     ];
-    // Who they are and what they booked. The thread often does not say: a
-    // portal is created from the admin panel, so the booking type and the date
-    // exist in the system and were never typed into the conversation. Without
-    // these the assistant had the portal state but not the shoot it belonged
-    // to, and asked Vero questions she had already answered in the form.
-    if (p.client_display_name) lines.push(`- Client name on the booking: ${p.client_display_name}.`);
-    if (p.session_type) lines.push(`- Booking type: ${p.session_type}.`);
-    if (p.event_date) {
-      // A DATE column comes back as a string from some drivers and as a Date
-      // at LOCAL midnight from others, and toISOString on the latter can roll
-      // the day backwards under a positive UTC offset. Trust the string when
-      // there is one.
-      const day =
-        typeof p.event_date === 'string'
-          ? p.event_date.slice(0, 10)
-          : new Date(p.event_date).toISOString().slice(0, 10);
-      lines.push(`- Event date: ${day}.`);
+    const full = rows.filter((r) => r.mode === 'full');
+    if (full.length) {
+      const anyActive = full.some((r) => r.account_active);
+      const pending = full.find((r) => r.invite_pending);
+      lines.push(
+        anyActive
+          ? '- Client portal: set up, they can sign in.'
+          : `- Client portal: NOT set up yet; the invite email went to ${full[0].client_email ?? 'them'}${pending?.invite_sent_at ? ` on ${day(pending.invite_sent_at)}` : ''} and may be in spam.`,
+      );
     }
-    if (p.mode === 'full') {
-      lines.push(
-        p.client_email
-          ? `- The portal invite email went to ${p.client_email}${
-              p.invite_sent_at ? ` on ${new Date(p.invite_sent_at).toISOString().slice(0, 10)}` : ''
-            }.`
-          : '- A portal invite email was sent.',
-      );
-      lines.push(
-        p.account_active
-          ? '- They have finished setting up their portal account.'
-          : '- They have NOT yet finished setting up their account, the invite link is sitting in their email, and spam folders eat these.',
-      );
-      lines.push(
-        `- Contract status: ${p.contract_status}. The contract is reviewed and signed INSIDE the portal, after account setup. It is never an email attachment, do not imply one.`,
-      );
+    for (const r of rows) {
+      const kind = (r.contract_template_key ?? r.session_type ?? 'session').replace(/[-_]+/g, ' ');
+      const here = r.id === linkedId && rows.length > 1 ? ' (the booking this thread is linked to)' : '';
+      const parts: string[] = [];
+      if (r.mode !== 'full') {
+        parts.push('gallery-only booking, no contract');
+      } else {
+        parts.push(r.contract_status === 'signed' ? `contract SIGNED${r.contract_signed_at ? ` on ${day(r.contract_signed_at)}` : ''}` : 'contract NOT SIGNED yet');
+      }
+      if (r.complimentary) {
+        parts.push('free booking, nothing to pay');
+      } else if (r.total !== null) {
+        const paid = r.paid ?? 0;
+        const owed = bookingOwedTotal(r.total, r.charges ?? 0, salesTaxModeOf(r.sales_tax)) ?? r.total;
+        if (r.retainer && r.retainer > 0) parts.push(`retainer ${money(r.retainer)} ${paid >= r.retainer ? 'PAID' : 'NOT PAID yet'}`);
+        parts.push(`total ${money(owed)}${owed !== r.total ? ' with tax' : ''}`);
+        parts.push(`paid ${money(paid)}`);
+        const left = Math.round((owed - paid) * 100) / 100;
+        parts.push(left > 0 ? `balance ${money(left)} still due${r.balance_window ? ` (due within ${r.balance_window.toLowerCase()} after the session)` : ''}` : 'PAID IN FULL');
+      }
+      parts.push(r.gallery_delivered_at ? 'photos delivered' : 'photos not delivered yet');
+      lines.push(`- ${kind.charAt(0).toUpperCase()}${kind.slice(1)}${r.event_day ? ` on ${r.event_day.slice(0, 10)}` : ''}${here}: ${parts.join('; ')}.`);
     }
     lines.push(
-      'If a follow-up about the portal fits the conversation, the useful message tells them the invite is in their inbox, what it unlocks, and to check spam if it is missing.',
+      'Before writing anything about a contract or a payment, go by this list, booking by booking. Never ask for a contract marked SIGNED or a payment marked PAID.',
+    );
+    if (rows.length > 1) {
+      lines.push('This client has more than one booking: always say which one you mean (for example "the wedding contract"), and never chase one that is already done.');
+    }
+    lines.push(
+      'The contract is reviewed and signed INSIDE the client portal (vero.photography/portal), after account setup. It is never an email attachment, do not imply one.',
     );
     return lines.join('\n');
   } catch (err) {

@@ -67,6 +67,7 @@ import { requireAdmin } from '../_admin-auth.js';
 import { deliverReply } from '../_reply-delivery.js';
 import { portalContextBlock } from '../_ai-reply.js';
 import { stripSubjectHeader, scrubSubjectLines } from '../_subject-strip.js';
+import { draftSenseProblem, threadTail } from '../_draft-sense.js';
 import { paymentFactsForAdmin } from '../../src/data/payment-handles.js';
 import {
   CONTRACT_TEMPLATES,
@@ -520,6 +521,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      * one failed is entirely capable of trying again.
      */
     const sendsThisRequest = { n: 0 };
+    // A send refused for how it reads (api/_draft-sense.ts) blocks any further
+    // send this turn: a rewrite is text Vero has not seen, and her "send it"
+    // was about the version she had.
+    const senseThisRequest = { sendBlocked: false, draftRefused: false };
 
     // Write the thread once here, holding nothing but Vero's message, before
     // any model call happens.
@@ -589,6 +594,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           userMessage,
           lastAssistantText: lastAssistantTextOf(priorMessages),
           sends: sendsThisRequest,
+          sense: senseThisRequest,
+          language,
           // The draft she was offered last turn, plus anything written this
           // turn before the tool ran. That is the whole of what she can
           // possibly have read.
@@ -807,6 +814,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // and Vero needs to know it happened even on a turn that otherwise went
     // fine. Every failure is rendered, not just the first: two failures used
     // to show as one.
+    // A draft refused for how it read (api/_draft-sense.ts) is silent while the
+    // model rewrites it. If the turn ended with no draft saved after that, she
+    // hears so once, or the Reply tab would hold old text with no word why.
+    if (senseThisRequest.draftRefused) {
+      newlyPersistedMessages.push({
+        role: 'assistant',
+        content:
+          language === 'ru'
+            ? '⚠️ Черновик не сохранён: он повторял начало прошлого письма или был длиннее, чем ты просила. Попроси меня переписать.'
+            : '⚠️ The draft was not saved: it repeated the last email\'s opening or ran longer than you asked. Ask me to try again.',
+      });
+    }
     const sendBlocks = toolFailures.filter((f) => f.tool === 'send_reply');
     const seenSendFailures = new Set<string>();
     // A rescued rule excuses a failed NOTE, and only that. It used to blank
@@ -1388,6 +1407,10 @@ async function executeToolCall(
     userMessage: string;
     lastAssistantText: string;
     sends: { n: number };
+    /** This turn's draft-sense state, shared across its tool calls (api/_draft-sense.ts). */
+    sense?: { sendBlocked: boolean; draftRefused: boolean };
+    /** The panel's language, for the notes Vero reads. */
+    language?: string;
     /** Everything the assistant has shown Vero, this turn and the one before. */
     shownText: string;
     /**
@@ -2042,6 +2065,17 @@ async function executeToolCall(
       if (claims.length) return { error: forbiddenClaimsError(claims) };
     }
 
+    // Reads like a person (api/_draft-sense.ts): no pleasantry the last email
+    // already used, none at all when chasing an unanswered email, and short
+    // when she asked for short. Silent to Vero while the model rewrites; the
+    // turn reports it only if no draft ended up saved.
+    const senseIssue = draftSenseProblem(text, await threadTail(sql, conversationId), sendCtx?.userMessage ?? '');
+    if (senseIssue) {
+      if (sendCtx?.sense) sendCtx.sense.draftRefused = true;
+      return { error: senseIssue, vero_note: '' };
+    }
+    if (sendCtx?.sense) sendCtx.sense.draftRefused = false;
+
     // Only the pending draft is replaceable. A sent message is a record of what
     // the customer actually received and must never be rewritten under it.
     const updated = (await sql`
@@ -2243,6 +2277,27 @@ async function executeToolCall(
     if (args.forbidden_claims_confirmed !== true) {
       const sendClaims = forbiddenClaims(text);
       if (sendClaims.length) return { error: forbiddenClaimsError(sendClaims) };
+    }
+
+    // Reads like a person (api/_draft-sense.ts), checked on what is about to
+    // leave. A refusal here also blocks any further send this turn, so a
+    // rewrite always goes back to Vero before it goes to the client.
+    if (sendCtx?.sense?.sendBlocked) {
+      return {
+        error: 'Not sent: the rewrite has not been shown to Vero yet. Save it with update_draft, show it to her, and send only after she approves this version.',
+        vero_note: '',
+      };
+    }
+    const sendSense = draftSenseProblem(text, await threadTail(sql, conversationId), sendCtx?.userMessage ?? '');
+    if (sendSense) {
+      if (sendCtx?.sense) sendCtx.sense.sendBlocked = true;
+      return {
+        error: `${sendSense.replace(/,? then call the tool again\.?$/i, '.')} Do not send: save the rewrite with update_draft, show it to Vero, and send only after she approves it.`,
+        vero_note:
+          sendCtx?.language === 'ru'
+            ? 'Не отправлено: письмо повторяло прошлое или было длиннее, чем ты просила. Сейчас покажу новый вариант.'
+            : 'Not sent: it repeated the last email or ran longer than you asked. Showing you a rewrite first.',
+      };
     }
 
     // Goes through the SAME path as the Messages panel's Send button
@@ -2682,6 +2737,22 @@ it into the chat, before any tool is involved. They are not tool rules.
 - **No boilerplate opener.** Not "I hope this message finds you well", not "I
   hope you are doing well", not "I wanted to reach out". Start with the thing
   you are actually saying.
+- **Read what this client was last sent, and write the next message, not the
+  same one again.** Never reuse its opening line or its pleasantries, and when
+  they have not replied since, this is a follow-up: say what it is about in the
+  first sentence and, if useful, refer back ("following up on my note about the
+  contract"). Two emails in a row that sound alike read as a machine.
+- **Short means short.** When Vero asks for a short, quick or brief message, it
+  is two or three sentences: the point, and nothing around it. A correction or
+  an apology is shortest of all: own it plainly in one sentence, say what is
+  true now, stop.
+- **Check BOOKINGS ON FILE before mentioning a contract or a payment.** It says,
+  booking by booking, what is signed and what is paid. Never ask for something
+  marked SIGNED or PAID, and when the client has more than one booking, name the
+  one you mean ("the wedding contract").
+These are also checked in code when a draft is saved or sent: a draft that
+repeats the last email's opening, opens with a stock pleasantry, or runs past
+the length she asked for is refused and comes back to you to rewrite.
 - **No placeholders.** Never write "[Client's Name]", "[date]" or any other
   bracketed blank. If you do not know the name, look at THE CONVERSATION
   CURRENTLY OPEN above, or at read_thread, or write the sentence without it.
