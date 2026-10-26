@@ -287,7 +287,10 @@ interface Props {
   /** Open the full new-client form seeded from this conversation. */
   onCreateFullClient?: (prefill: ClientPrefill) => void;
   /** Jump to the client portal this conversation is linked to. */
-  onOpenClient?: (portalId: string) => void;
+  onOpenClient?: (portalId: string, fromConversationId?: string) => void;
+  /** A thread to open on arrival (the Email button on a client's record), and the call that clears it. */
+  openConversationId?: string | null;
+  onOpenedConversation?: () => void;
 }
 
 export interface ConversationSummary {
@@ -664,7 +667,7 @@ interface SearchResult {
   bucket?: 'primary' | 'personal' | 'promotional';
 }
 
-const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient, onOpenClient }: Props) => {
+const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient, onOpenClient, openConversationId, onOpenedConversation }: Props) => {
   const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
 
@@ -729,7 +732,14 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, adminPassword]);
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(openConversationId ?? null);
+  // Handed over from a client's record: open that thread, once.
+  useEffect(() => {
+    if (!openConversationId) return;
+    setSelectedId(openConversationId);
+    onOpenedConversation?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openConversationId]);
   // Left rail fold. Default open; folds to avatars so the thread and the
   // refine panel have room.
   const [listCollapsed, setListCollapsed] = useState(false);
@@ -2191,7 +2201,7 @@ function ConversationView({
   refreshToken = 0,
 }: {
   onCreateFullClient?: (prefill: ClientPrefill) => void;
-  onOpenClient?: (portalId: string) => void;
+  onOpenClient?: (portalId: string, fromConversationId?: string) => void;
   summary: ConversationSummary;
   adminPassword: string;
   onRefreshList: () => void;
@@ -3546,7 +3556,7 @@ function ConversationView({
               lives on the top row now, the old second row was eating
               vertical space in the drill-down for a single button. */}
           <HStack spacing={2} flexShrink={0}>
-            {detail.linked_client_portal_id ? (
+            {(detail.client_portal_id ?? detail.linked_client_portal_id) ? (
               <IconButton
                 // Was a plain Box: it looked like the action it implies and
                 // did nothing when tapped. The whole point of knowing a
@@ -3554,10 +3564,12 @@ function ConversationView({
                 aria-label={t.messages.linkedToPortal}
                 title={t.messages.linkedToPortal}
                 icon={<Icon as={FaExternalLinkAlt} boxSize={3} />}
-                onClick={() =>
-                  detail.linked_client_portal_id &&
-                  onOpenClient?.(detail.linked_client_portal_id)
-                }
+                // The thread goes along, so Back from the client lands here
+                // again rather than on the whole inbox (2026-10-25).
+                onClick={() => {
+                  const portalId = detail.client_portal_id ?? detail.linked_client_portal_id;
+                  if (portalId) onOpenClient?.(portalId, summary.id);
+                }}
                 isDisabled={!onOpenClient}
                 variant="ghost"
                 size="md"

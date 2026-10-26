@@ -83,7 +83,7 @@ import {
   type TravelStatus,
 } from '../data/travel-fee';
 import { travelCopy } from './travelCopy';
-import { suggestedRetainer } from '../data/retainer';
+import { retainerProblem, suggestedRetainer } from '../data/retainer';
 import { discountOff } from '../data/discount';
 import type { DiscountMode } from '../data/package';
 import DiscountModeToggle from './ui/DiscountModeToggle';
@@ -1598,6 +1598,18 @@ const AdminNewClient = ({ adminPassword, onCancel, onCreated, prefill, onSwitchT
     if (retainer > priced) {
       setFieldErrors(new Set(['retainer']));
       setError(t.newClient.retainerExceedsTotal);
+      return;
+    }
+    // At least $50 and a multiple of $25 (src/data/retainer.ts). Checked on the
+    // session price, before travel, which is what the suggestion works from.
+    const retainerIssue = retainerProblem(retainer, priced);
+    if (retainerIssue) {
+      setFieldErrors(new Set(['retainer']));
+      setError(
+        retainerIssue === 'floor'
+          ? t.newClient.retainerBelowFloor(suggestedRetainer(priced))
+          : t.newClient.retainerNotRound(suggestedRetainer(priced)),
+      );
       return;
     }
 

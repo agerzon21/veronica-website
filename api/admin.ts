@@ -51,6 +51,7 @@ import messagesMarkReadHandler from './admin/_messages-mark-read.js';
 import messagesTranslateHandler from './admin/_messages-translate.js';
 import messagesSummaryHandler from './admin/_messages-summary.js';
 import messagesSearchHandler from './admin/_messages-search.js';
+import messagesOpenClientHandler from './admin/_messages-open-client.js';
 import messagesMarkPromotionalHandler from './admin/_messages-mark-promotional.js';
 import messagesMarkPersonalHandler from './admin/_messages-mark-personal.js';
 import messagesCloseLeadHandler from './admin/_messages-close-lead.js';
@@ -131,6 +132,7 @@ const HANDLERS: Record<
   'messages-translate': messagesTranslateHandler,
   'messages-summary': messagesSummaryHandler,
   'messages-search': messagesSearchHandler,
+  'messages-open-client': messagesOpenClientHandler,
   'messages-reset': messagesResetHandler,
   'messages-settings': messagesSettingsHandler,
   'messages-draft-discard': messagesDraftDiscardHandler,

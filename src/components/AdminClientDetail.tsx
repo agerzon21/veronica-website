@@ -11,6 +11,7 @@ import {
 } from '../data/sales-tax';
 import { fmtAdminDate, fmtAdminDateTime } from '../utils/adminDate';
 import FaPlus from '../icons/fa/FaPlus';
+import FaHome from '../icons/fa/FaHome';
 import type { SameClientSeed } from './AdminNewClient';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from 'react';
 import FaCheck from '../icons/fa/FaCheck';
@@ -33,6 +34,7 @@ import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBad
 import { deliveryMessageText } from '../data/delivery-message';
 import { galleryHeading, greetingName, welcomeNames } from '../data/client-greeting';
 import { DEFAULT_DISCOUNT_LABEL } from '../data/discount';
+import { retainerProblem, suggestedRetainer } from '../data/retainer';
 import { ExpiryRibbon, GalleryTitle } from './GalleryHeading';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
 import FaChevronRight from '../icons/fa/FaChevronRight';
@@ -48,7 +50,9 @@ import { parseCoverageWindow } from './clientPrefill';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaTimes from '../icons/fa/FaTimes';
+import type { IconType } from 'react-icons';
 import CTAButton from './ui/CTAButton';
+import SubTabButton from './ui/SubTabButton';
 import AdminClientInsurance, { type InsuranceState } from './AdminClientInsurance';
 import AdminBackButton from './ui/AdminBackButton';
 import {
@@ -92,6 +96,8 @@ interface Props {
   onOpenClient?: (id: string) => void;
   /** "Add a session for this client": the New Client form, seeded with them. */
   onAddSession?: (seed: SameClientSeed) => void;
+  /** Open this client's email thread in Messages (found or started by messages-open-client). */
+  onEmailClient?: (conversationId: string) => void;
 }
 
 interface PortalDetail {
@@ -461,13 +467,23 @@ const daysUntil = (iso: string | null): number | null => {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 };
 
-const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext, onOpenClient, onAddSession }: Props) => {
+const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext, onOpenClient, onAddSession, onEmailClient }: Props) => {
   const { t, lang } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
   // Payments: which form is open (none until asked for), and whether the
   // rarely used money settings are showing.
   const [openMoneyForm, setOpenMoneyForm] = useState<'payment' | 'charge' | null>(null);
+  // Which part of the record is open. A new client always opens on Overview.
+  const [tab, setTab] = useState<ClientTab>('overview');
+  useEffect(() => {
+    setTab('overview');
+    setOpenMoneyForm(null);
+  }, [portalId]);
+  const openTab = (next: ClientTab) => {
+    setTab(next);
+    document.getElementById('client-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const [moneyMoreOpen, setMoneyMoreOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   const [charges, setCharges] = useState<ChargeEntry[]>([]);
@@ -563,6 +579,27 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [hasUnsaved]);
+
+  /** The Email button: find or start this client's thread, then open it in Messages. */
+  const emailClient = async () => {
+    setError('');
+    try {
+      const res = await fetch('/api/admin/messages-open-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, portal_id: portalId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.conversation_id) {
+        onEmailClient?.(data.conversation_id);
+      } else {
+        setError(data.error || t.clientDetail.serverErrorStatus(res.status));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch {
+      setError(t.common.couldNotReach);
+    }
+  };
 
   const handleBack = () => {
     if (hasUnsaved) {
@@ -955,6 +992,143 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           ? { label: t.clientDetail.retainerPartly(formatMoney(paidSoFar)), tone: 'warn' }
           : { label: t.clientDetail.retainerNotPaid, tone: 'warn' };
 
+  /** The four money figures, on Overview and at the top of Payments. */
+  const moneyStatsGrid = portal.contract_total_amount === null || portal.complimentary ? null : (
+  <SimpleGrid columns={{ base: 2, md: 4 }} spacing={{ base: 4, md: 6 }} data-testid="payment-stats">
+    <Stat
+      label={t.clientDetail.statTotal}
+      value={formatMoney(portal.contract_total_amount)}
+      note={[
+        chargesTotal > 0 ? t.clientDetail.plusCharges(formatMoney(chargesTotal)) : null,
+        salesTaxAmount > 0 ? t.clientDetail.plusTax(formatMoney(salesTaxAmount)) : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || undefined}
+    />
+    <Stat
+      label={t.clientDetail.statRetainer}
+      value={retainerAmount > 0 ? formatMoney(retainerAmount) : t.clientDetail.retainerNone}
+      note={retainerAmount > 0 ? retainerState.label : undefined}
+      noteTone={retainerState.tone}
+    />
+    <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
+    <Stat
+      label={t.clientDetail.statRemaining}
+      value={formatMoney(balanceRemaining)}
+      emphasize
+      note={
+        cardPricingOf(portal.card_pricing) === 'dual' && balanceRemaining !== null && balanceRemaining > 0
+          ? t.clientDetail.remainingByCardShort(formatMoney(cardAmountFor(balanceRemaining, 'dual')))
+          : undefined
+      }
+    />
+  </SimpleGrid>
+  );
+
+  /**
+   * THE STATUS TRACKER AND WHAT NEEDS VERO (2026-10-25). Both read the same
+   * facts the rest of the page shows; nothing here is stored. The steps are
+   * the client portal's own five, so Vero and the client see one story.
+   */
+  const isFull = portal.mode === 'full';
+  const signed = portal.contract_status === 'signed';
+  const sessionIn = daysUntil(portal.event_date);
+  const sessionPast = sessionIn !== null && sessionIn < 0;
+  const hasPrice = portal.contract_total_amount !== null && !portal.complimentary;
+  const retainerDue = hasPrice && retainerAmount > 0 && paidSoFar < retainerAmount;
+  const balanceDue = hasPrice && balanceRemaining !== null && balanceRemaining > 0;
+  const trackerSteps: TrackerStep[] = [
+    ...(isFull
+      ? [{
+          key: 'contract',
+          label: t.clientDetail.stepContract,
+          detail: signed ? t.clientDetail.stepSigned : t.clientDetail.stepNotSigned,
+          state: (signed ? 'done' : 'action') as TrackerStep['state'],
+          tab: 'contract' as ClientTab,
+        }]
+      : []),
+    ...(hasPrice && retainerAmount > 0
+      ? [{
+          key: 'retainer',
+          label: t.clientDetail.stepRetainer,
+          detail: retainerDue ? t.clientDetail.stepNotReceived(formatMoney(retainerAmount)) : t.clientDetail.stepPaid,
+          state: (!retainerDue ? 'done' : signed || !isFull ? 'action' : 'waiting') as TrackerStep['state'],
+          tab: 'payments' as ClientTab,
+        }]
+      : []),
+    {
+      key: 'session',
+      label: t.clientDetail.stepSession,
+      detail:
+        sessionIn === null
+          ? t.clientDetail.stepNoDate
+          : sessionIn < 0
+            ? t.clientDetail.stepHappened
+            : sessionIn === 0
+              ? t.clientDetail.stepToday
+              : t.clientDetail.stepInDays(sessionIn),
+      state: sessionPast ? 'done' : 'waiting',
+      tab: 'overview',
+    },
+    ...(hasPrice
+      ? [{
+          key: 'balance',
+          label: t.clientDetail.stepBalance,
+          detail: balanceDue ? t.clientDetail.stepLeft(formatMoney(balanceRemaining ?? 0)) : t.clientDetail.stepPaidInFull,
+          state: (!balanceDue ? 'done' : sessionPast ? 'action' : 'waiting') as TrackerStep['state'],
+          tab: 'payments' as ClientTab,
+        }]
+      : []),
+    {
+      key: 'photos',
+      label: t.clientDetail.stepPhotos,
+      detail: portal.gallery_delivered_at ? t.clientDetail.stepDelivered : t.clientDetail.stepNotDelivered,
+      state: portal.gallery_delivered_at ? 'done' : sessionPast ? 'action' : 'waiting',
+      tab: 'gallery',
+    },
+  ];
+  const logPaymentNow = () => {
+    setOpenMoneyForm('payment');
+    openTab('payments');
+  };
+  const emailAction = onEmailClient && portal.client_email ? [{ label: t.clientDetail.actEmail, onClick: () => void emailClient(), icon: FaEnvelope }] : [];
+  const attention: AttentionItem[] = [
+    ...(retainerDue && (signed || !isFull)
+      ? [{
+          key: 'retainer',
+          title: t.clientDetail.attnRetainer(formatMoney(retainerAmount)),
+          detail: signed && portal.contract_signed_at
+            ? t.clientDetail.attnRetainerDetail(formatDate(portal.contract_signed_at))
+            : undefined,
+          actions: [{ label: t.clientDetail.logPaymentButton, onClick: logPaymentNow, icon: FaPlus }, ...emailAction],
+        }]
+      : []),
+    ...(isFull && !signed
+      ? [{
+          key: 'contract',
+          title: t.clientDetail.attnUnsigned,
+          detail: portal.setup_token ? t.clientDetail.attnUnsignedInvite : t.clientDetail.attnUnsignedDetail,
+          actions: [...emailAction, { label: t.clientDetail.actOpenContract, onClick: () => openTab(portal.setup_token ? 'settings' : 'contract') }],
+        }]
+      : []),
+    ...(balanceDue && sessionPast
+      ? [{
+          key: 'balance',
+          title: t.clientDetail.attnBalance(formatMoney(balanceRemaining ?? 0)),
+          detail: t.clientDetail.attnBalanceDetail,
+          actions: [{ label: t.clientDetail.logPaymentButton, onClick: logPaymentNow, icon: FaPlus }, ...emailAction],
+        }]
+      : []),
+    ...(sessionPast && !portal.gallery_delivered_at
+      ? [{
+          key: 'photos',
+          title: t.clientDetail.attnPhotos,
+          detail: t.clientDetail.attnPhotosDetail,
+          actions: [{ label: t.clientDetail.actOpenGallery, onClick: () => openTab('gallery') }],
+        }]
+      : []),
+  ];
+
   /** Insurance shows with the payments once it is in play, and waits under More options until then. */
   const insuranceInPlay = Boolean(portal.insurance_status && portal.insurance_status !== 'none');
   const insuranceBlock = (
@@ -1110,16 +1284,6 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           </Text>
         )}
         <Flex flexWrap="wrap" gap={2} mt={3}>
-          {portal.mode === 'full' && (
-            <HeaderChip tone={portal.contract_status === 'signed' ? 'good' : 'warn'}>
-              {portal.contract_status === 'signed'
-                ? t.clientDetail.chipContractSigned
-                : t.clientDetail.chipContractUnsigned}
-            </HeaderChip>
-          )}
-          <HeaderChip tone={portal.gallery_delivered_at ? 'good' : undefined}>
-            {portal.gallery_delivered_at ? t.clientDetail.chipGalleryDelivered : t.clientDetail.chipGalleryNotSent}
-          </HeaderChip>
           {portal.complimentary && <HeaderChip tone="info">{t.clientDetail.chipComplimentary}</HeaderChip>}
           {portal.mode === 'simple' && <HeaderChip>{t.clientDetail.badgeGalleryOnly}</HeaderChip>}
           {portal.setup_token && <HeaderChip tone="warn">{t.clientDetail.badgeInvitePending}</HeaderChip>}
@@ -1127,6 +1291,8 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             <HeaderChip tone="info">{t.clientDetail.chipOverpaid(formatMoney(overpaidBy))}</HeaderChip>
           )}
         </Flex>
+        {/* Contract, retainer, session, balance, photos: where the booking stands. */}
+        <StatusTracker steps={trackerSteps} onOpen={openTab} />
         {/* Preview the client's own portal, from the top of the page because
             it shows the whole portal, not just the gallery it used to sit in.
             Full-mode only: a gallery-only booking has no client account. */}
@@ -1180,7 +1346,66 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           on this system derive a balance and the one that gets it wrong reads
           total minus paid, which silently drops every charge. One arithmetic,
           one source. */}
-      <ShootSummary portal={portal} />
+      {/* THE TABS (2026-10-25). The record was one page five screens long,
+          every form open at once. Each tab is one job; every panel stays
+          mounted (display only), so a half typed field and its unsaved
+          warning survive a switch. */}
+      <Box position="relative" mb={5}>
+      <Box
+        display={{ base: 'block', md: 'none' }}
+        position="absolute"
+        right={0}
+        top={0}
+        bottom="1px"
+        w="40px"
+        pointerEvents="none"
+        zIndex={1}
+        bgGradient="linear(to-r, transparent, gray.50)"
+      />
+      <Flex
+        id="client-tabs"
+        borderBottom="1px solid"
+        borderColor="gray.200"
+        overflowX="auto"
+        sx={{ scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' }, scrollMarginTop: '80px' }}
+        data-testid="client-tabs"
+      >
+        {(
+          [
+            ['overview', t.clientDetail.tabOverview, FaHome],
+            ['payments', t.clientDetail.tabPayments, FaClipboardList],
+            ...(portal.mode === 'full' ? [['contract', t.clientDetail.tabContract, FaFileSignature]] : []),
+            ['gallery', t.clientDetail.tabGallery, FaImages],
+            ['info', t.clientDetail.tabInfo, FaUser],
+            ...(portal.mode === 'full' || adminLevel === 'super' ? [['settings', t.clientDetail.tabSettings, FaCog]] : []),
+          ] as Array<[ClientTab, string, IconType]>
+        ).map(([key, label, icon]) => (
+          <Box key={key} flexShrink={0} data-testid={`tab-${key}`}>
+            <SubTabButton active={tab === key} icon={icon} label={label} onClick={() => setTab(key)} />
+          </Box>
+        ))}
+        <Box flexShrink={0} w={{ base: '32px', md: 0 }} />
+      </Flex>
+      </Box>
+
+      <Box display={tab === 'overview' ? 'block' : 'none'} data-testid="panel-overview">
+        <AttentionCard items={attention} />
+        <ShootSummary portal={portal} onEmail={onEmailClient ? emailClient : undefined} />
+        {moneyStatsGrid && (
+          <Section title={t.clientDetail.overviewMoney} icon={FaClipboardList} hue="green">
+            <VStack align="stretch" spacing={4}>
+              {moneyStatsGrid}
+              <Box>
+                <CTAButton onClick={() => openTab('payments')} variant="outline" size="sm">
+                  {t.clientDetail.actOpenPayments}
+                </CTAButton>
+              </Box>
+            </VStack>
+          </Section>
+        )}
+      </Box>
+
+      <Box display={tab === 'payments' ? 'block' : 'none'} data-testid="panel-payments">
 
       {/* ─── Payments section. Surfaces whenever a total is on the
             books, full-mode portals always have one; simple-mode rows
@@ -1248,35 +1473,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 retainer paid?" meant scrolling the whole page and then doing
                 the sum. Tax and charges are notes under Total, because they
                 are part of what is owed, not separate things to chase. */}
-            <SimpleGrid columns={{ base: 2, md: 4 }} spacing={{ base: 4, md: 6 }} data-testid="payment-stats">
-              <Stat
-                label={t.clientDetail.statTotal}
-                value={formatMoney(portal.contract_total_amount)}
-                note={[
-                  chargesTotal > 0 ? t.clientDetail.plusCharges(formatMoney(chargesTotal)) : null,
-                  salesTaxAmount > 0 ? t.clientDetail.plusTax(formatMoney(salesTaxAmount)) : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ') || undefined}
-              />
-              <Stat
-                label={t.clientDetail.statRetainer}
-                value={retainerAmount > 0 ? formatMoney(retainerAmount) : t.clientDetail.retainerNone}
-                note={retainerAmount > 0 ? retainerState.label : undefined}
-                noteTone={retainerState.tone}
-              />
-              <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
-              <Stat
-                label={t.clientDetail.statRemaining}
-                value={formatMoney(balanceRemaining)}
-                emphasize
-                note={
-                  cardPricingOf(portal.card_pricing) === 'dual' && balanceRemaining !== null && balanceRemaining > 0
-                    ? t.clientDetail.remainingByCardShort(formatMoney(cardAmountFor(balanceRemaining, 'dual')))
-                    : undefined
-                }
-              />
-            </SimpleGrid>
+            {moneyStatsGrid}
 
             {/* Only when there is one. A permanent "Tips $0" on every booking
                 reads as a prompt to go and ask for one. */}
@@ -1399,6 +1596,9 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </Section>
       )}
 
+      </Box>
+
+      <Box display={tab === 'contract' ? 'block' : 'none'} data-testid="panel-contract">
       {/* ─── Contract section (full-mode only) ─── */}
       {portal.mode === 'full' && (
         <Section title={t.clientDetail.sectionContract} icon={FaFileSignature} hue="orange">
@@ -1537,6 +1737,9 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       )}
 
 
+      </Box>
+
+      <Box display={tab === 'gallery' ? 'block' : 'none'} data-testid="panel-gallery">
       {/* ─── Gallery section ─── */}
       <Section title={t.clientDetail.sectionPhotoGallery} icon={FaImages} hue="purple">
         <VStack align="stretch" spacing={4}>
@@ -1873,6 +2076,9 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </VStack>
       </Section>
 
+      </Box>
+
+      <Box display={tab === 'info' ? 'block' : 'none'} data-testid="panel-info">
       {/* ─── Editable details (admin can correct typos etc.) ─── */}
       <Section title={t.clientDetail.sectionDetails} icon={FaUser} hue="blue">
         <VStack align="stretch" spacing={4}>
@@ -2091,7 +2297,16 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 : undefined
             }
             saving={savingField === 'contract_retainer_amount'}
-            validate={(v) => (parseMoneyInput(v) === 'invalid' ? t.clientDetail.amountInvalid : null)}
+            validate={(v) => {
+              const amount = parseMoneyInput(v);
+              if (amount === 'invalid') return t.clientDetail.amountInvalid;
+              // The retainer rule (src/data/retainer.ts): at least $50, a multiple of $25.
+              const total = Number(portal.contract_total_amount ?? 0);
+              const issue = amount === null ? null : retainerProblem(amount, total);
+              if (issue === 'floor') return t.newClient.retainerBelowFloor(suggestedRetainer(total));
+              if (issue === 'step') return t.newClient.retainerNotRound(suggestedRetainer(total));
+              return null;
+            }}
             onSave={(v) => {
               const amount = parseMoneyInput(v);
               if (amount === 'invalid') return Promise.resolve(false);
@@ -2101,6 +2316,9 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </VStack>
       </Section>
 
+      </Box>
+
+      <Box display={tab === 'settings' ? 'block' : 'none'} data-testid="panel-settings">
       {/* ─── Account (full-mode only): onboarding status + tech-support
             actions. Resend invite if they haven't finished welcome,
             override password if they have. ─── */}
@@ -2116,12 +2334,135 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
       {adminLevel === 'super' && (
         <DangerZone portalId={portalId} adminPassword={adminPassword} onDeleted={onBack} />
       )}
+      </Box>
     </Box>
     </DirtyCtx.Provider>
   );
 };
 
 // ─── Sub-components ─────────────────────────────────────────────────────
+
+/** The tabs of a client's record (2026-10-25). Each panel stays mounted, so a half typed field survives a tab switch. */
+type ClientTab = 'overview' | 'payments' | 'contract' | 'gallery' | 'info' | 'settings';
+
+interface TrackerStep {
+  key: string;
+  label: string;
+  detail: string;
+  /** done: finished. action: Vero has to do or chase something. waiting: not due yet. */
+  state: 'done' | 'action' | 'waiting';
+  tab: ClientTab;
+}
+
+/**
+ * Where the booking stands, as the five steps the client's own portal shows
+ * them (Contract, Retainer, Session, Balance, Photos), so both of them read
+ * the same story. Each step says its state in words and opens the tab that
+ * deals with it.
+ */
+function StatusTracker({ steps, onOpen }: { steps: TrackerStep[]; onOpen: (tab: ClientTab) => void }) {
+  return (
+    <Flex gap={2} mt={4} wrap={{ base: 'wrap', md: 'nowrap' }} data-testid="status-tracker">
+      {steps.map((s, i) => {
+        const palette =
+          s.state === 'done'
+            ? { bg: 'green.50', border: 'green.200', dot: 'green.500', text: 'green.800' }
+            : s.state === 'action'
+              ? { bg: 'orange.50', border: 'orange.300', dot: 'orange.500', text: 'orange.800' }
+              : { bg: 'gray.50', border: 'gray.200', dot: 'gray.400', text: 'gray.600' };
+        return (
+          <Box
+            key={s.key}
+            as="button"
+            type="button"
+            onClick={() => onOpen(s.tab)}
+            data-testid={`step-${s.key}`}
+            data-state={s.state}
+            flex={{ base: '1 1 140px', md: '1 0 auto' }}
+            minW="118px"
+            textAlign="left"
+            bg={palette.bg}
+            border="1px solid"
+            borderColor={palette.border}
+            borderRadius="md"
+            px={3}
+            py={2}
+            _hover={{ borderColor: palette.dot }}
+          >
+            <HStack spacing={2}>
+              <Flex boxSize="20px" borderRadius="full" bg={palette.dot} color="white" align="center" justify="center" flexShrink={0}>
+                {s.state === 'done' ? (
+                  <Icon as={FaCheck} boxSize={2.5} />
+                ) : s.state === 'action' ? (
+                  <Text fontSize="xs" fontWeight="700" lineHeight="1">!</Text>
+                ) : (
+                  <Text fontSize="2xs" fontWeight="600" lineHeight="1">{i + 1}</Text>
+                )}
+              </Flex>
+              <Box minW={0}>
+                <Text fontSize="2xs" letterSpacing="0.14em" textTransform="uppercase" color="gray.500" lineHeight="1.3">
+                  {s.label}
+                </Text>
+                <Text fontSize="sm" fontWeight="500" color={palette.text} lineHeight="1.3" whiteSpace="nowrap">
+                  {s.detail}
+                </Text>
+              </Box>
+            </HStack>
+          </Box>
+        );
+      })}
+    </Flex>
+  );
+}
+
+interface AttentionItem {
+  key: string;
+  title: string;
+  detail?: string;
+  actions: Array<{ label: string; onClick: () => void; icon?: IconType }>;
+}
+
+/**
+ * What needs Vero, in plain words, with the button that deals with it. A
+ * signed contract with no retainer is first: it is a date that is not
+ * actually reserved, and on 2026-10-25 one was shot before anyone noticed.
+ */
+function AttentionCard({ items }: { items: AttentionItem[] }) {
+  const { t } = useAdminLang();
+  if (items.length === 0) {
+    return (
+      <HStack bg="green.50" border="1px solid" borderColor="green.200" borderRadius="lg" px={{ base: 4, md: 5 }} py={4} mb={4} spacing={3} data-testid="attention-all-set">
+        <Icon as={FaCheck} color="green.600" boxSize={4} />
+        <Text fontSize="sm" color="green.800" fontWeight="500">{t.clientDetail.allSet}</Text>
+      </HStack>
+    );
+  }
+  return (
+    <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="lg" px={{ base: 4, md: 5 }} py={4} mb={4} data-testid="attention">
+      <Text fontSize="xs" fontWeight="600" letterSpacing="0.15em" textTransform="uppercase" color="orange.800" mb={3}>
+        {t.clientDetail.attentionTitle}
+      </Text>
+      <VStack align="stretch" spacing={4} divider={<Box borderTop="1px solid" borderColor="orange.100" />}>
+        {items.map((it) => (
+          <Box key={it.key} data-testid={`attention-${it.key}`}>
+            <Text fontSize="md" fontWeight="600" color="gray.800">{it.title}</Text>
+            {it.detail && <Text fontSize="sm" color="gray.700" mt={1}>{it.detail}</Text>}
+            {it.actions.length > 0 && (
+              <Flex gap={2} wrap="wrap" mt={3}>
+                {it.actions.map((a, i) => (
+                  <CTAButton key={a.label} onClick={a.onClick} variant={i === 0 ? 'solid' : 'outline'} size="sm" icon={a.icon}>
+                    {a.label}
+                  </CTAButton>
+                ))}
+              </Flex>
+            )}
+          </Box>
+        ))}
+      </VStack>
+    </Box>
+  );
+}
+
 // (BackLink removed, replaced by shared <AdminBackButton /> at call sites.)
 
 /**
@@ -2634,7 +2975,7 @@ function SummaryAction({
  * Nothing here is new data and nothing below was removed. This is the same
  * record, read in the order the day actually needs it.
  */
-function ShootSummary({ portal }: { portal: PortalDetail }) {
+function ShootSummary({ portal, onEmail }: { portal: PortalDetail; onEmail?: () => void }) {
   const { t, lang } = useAdminLang();
   const [directionsOpen, setDirectionsOpen] = useState(false);
 
@@ -2679,7 +3020,11 @@ function ShootSummary({ portal }: { portal: PortalDetail }) {
           <SummaryAction
             icon={FaEnvelope}
             label={t.clientDetail.summaryEmail}
-            href={email ? `mailto:${email}` : undefined}
+            // In Messages, with her signature and the whole thread, rather
+            // than Apple Mail. mailto: stays only where there is no admin
+            // route to hand over to.
+            onClick={email && onEmail ? onEmail : undefined}
+            href={email && !onEmail ? `mailto:${email}` : undefined}
             hint={email ? undefined : t.clientDetail.summaryNoEmail}
           />
           {/* Same URL the Preview button below builds, including the preview

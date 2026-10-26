@@ -1949,8 +1949,8 @@ const dict = {
     },
     retainerLabel: { en: 'Retainer (USD)', ru: 'Задаток (USD)' },
     retainerHelp: {
-      en: 'Non-refundable deposit. Due at signing, reserves the date. Filled in from the total: 15% to the nearest $50, at least $50. With a discount, from the discounted price.',
-      ru: 'Невозвратный задаток. Оплачивается при подписании и бронирует дату. Считается от суммы: 15%, округлено до $50, не меньше $50. Со скидкой считается от цены со скидкой.',
+      en: 'Non-refundable deposit. Due at signing, reserves the date. Filled in from the total: 15%, rounded up to a multiple of $25, at least $50. With a discount, from the discounted price.',
+      ru: 'Невозвратный задаток. Оплачивается при подписании и бронирует дату. Считается от суммы: 15%, округлено вверх до кратного $25, не меньше $50. Со скидкой считается от цены со скидкой.',
     },
 
     // Gallery password
@@ -2112,6 +2112,15 @@ const dict = {
     retainerExceedsTotal: {
       en: 'Retainer cannot exceed total.',
       ru: 'Задаток не может быть больше общей суммы.',
+    },
+    // The retainer rule (src/data/retainer.ts): at least $50, a multiple of $25.
+    retainerBelowFloor: {
+      en: (suggested: string) => `The retainer has to be at least $50 (suggested for this price: $${suggested}).`,
+      ru: (suggested: string) => `Задаток должен быть не меньше $50 (для этой цены: $${suggested}).`,
+    },
+    retainerNotRound: {
+      en: (suggested: string) => `Make the retainer a multiple of $25, like $50, $75 or $100 (suggested for this price: $${suggested}).`,
+      ru: (suggested: string) => `Задаток должен быть кратен $25, например $50, $75 или $100 (для этой цены: $${suggested}).`,
     },
     // ── Invite delivery ──────────────────────────────────────────
     inviteSending: { en: 'Sending invite…', ru: 'Отправляем приглашение…' },
@@ -2571,6 +2580,58 @@ const dict = {
     // ─── Payments section ─────────────────────────────
     statTotal: { en: 'Total', ru: 'Всего' },
     statRetainer: { en: 'Retainer', ru: 'Задаток' },
+    // The record's tabs, status tracker and "Needs your attention" (2026-10-25).
+    tabOverview: { en: 'Overview', ru: 'Обзор' },
+    tabPayments: { en: 'Payments', ru: 'Оплаты' },
+    tabContract: { en: 'Contract', ru: 'Контракт' },
+    tabGallery: { en: 'Gallery', ru: 'Галерея' },
+    tabInfo: { en: 'Client info', ru: 'Клиент' },
+    tabSettings: { en: 'Settings', ru: 'Настройки' },
+    stepContract: { en: 'Contract', ru: 'Контракт' },
+    stepRetainer: { en: 'Retainer', ru: 'Задаток' },
+    stepSession: { en: 'Session', ru: 'Съёмка' },
+    stepBalance: { en: 'Balance', ru: 'Остаток' },
+    stepPhotos: { en: 'Photos', ru: 'Фото' },
+    stepSigned: { en: 'Signed', ru: 'Подписан' },
+    stepNotSigned: { en: 'Not signed', ru: 'Не подписан' },
+    stepPaid: { en: 'Paid', ru: 'Оплачен' },
+    stepNotReceived: { en: (x: string) => `${x} not received`, ru: (x: string) => `${x} не получен` },
+    stepNoDate: { en: 'No date', ru: 'Без даты' },
+    stepHappened: { en: 'Done', ru: 'Прошла' },
+    stepToday: { en: 'Today', ru: 'Сегодня' },
+    stepInDays: { en: (n: number) => (n === 1 ? 'Tomorrow' : `In ${n} days`), ru: (n: number) => (n === 1 ? 'Завтра' : `Через ${n} дн.`) },
+    stepLeft: { en: (x: string) => `${x} left`, ru: (x: string) => `Осталось ${x}` },
+    stepPaidInFull: { en: 'Paid in full', ru: 'Оплачено' },
+    stepDelivered: { en: 'Delivered', ru: 'Отправлены' },
+    stepNotDelivered: { en: 'Not sent yet', ru: 'Ещё не отправлены' },
+    attentionTitle: { en: 'Needs your attention', ru: 'Требует внимания' },
+    allSet: { en: 'All set. Nothing needs you on this booking right now.', ru: 'Всё в порядке, по этой съёмке сейчас ничего не нужно.' },
+    attnRetainer: { en: (x: string) => `Retainer of ${x} not received`, ru: (x: string) => `Задаток ${x} не получен` },
+    attnRetainerDetail: {
+      en: (date: string) => `The contract was signed ${date}, but the date is not reserved until the retainer is paid. If they paid by Zelle, Venmo, Cash App or cash, log it here.`,
+      ru: (date: string) => `Контракт подписан ${date}, но дата не забронирована, пока не оплачен задаток. Если клиент заплатил через Zelle, Venmo, Cash App или наличными, запиши оплату.`,
+    },
+    attnUnsigned: { en: 'Contract not signed yet', ru: 'Контракт ещё не подписан' },
+    attnUnsignedDetail: {
+      en: 'Nothing is reserved until the client signs and pays the retainer.',
+      ru: 'Ничего не забронировано, пока клиент не подпишет контракт и не оплатит задаток.',
+    },
+    attnUnsignedInvite: {
+      en: 'The client has not set up their portal yet, so they have not seen the contract. You can resend the invite from Settings.',
+      ru: 'Клиент ещё не настроил портал и не видел контракт. Приглашение можно отправить заново в «Настройках».',
+    },
+    attnBalance: { en: (x: string) => `Balance of ${x} still due`, ru: (x: string) => `Остаток ${x} ещё не оплачен` },
+    attnBalanceDetail: { en: 'The session has happened.', ru: 'Съёмка уже прошла.' },
+    attnPhotos: { en: 'Photos not delivered yet', ru: 'Фото ещё не отправлены' },
+    attnPhotosDetail: {
+      en: 'Paste the Drive folder in Gallery and press Save and send.',
+      ru: 'Вставь папку Google Drive в «Галерее» и нажми «Сохранить и отправить».',
+    },
+    actEmail: { en: 'Email client', ru: 'Написать клиенту' },
+    actOpenContract: { en: 'Open', ru: 'Открыть' },
+    actOpenGallery: { en: 'Open gallery', ru: 'Открыть галерею' },
+    actOpenPayments: { en: 'All payments', ru: 'Все оплаты' },
+    overviewMoney: { en: 'Money', ru: 'Деньги' },
     retainerPaid: { en: 'Paid', ru: 'Оплачен' },
     retainerNotPaid: { en: 'Not paid yet', ru: 'Ещё не оплачен' },
     retainerPartly: {

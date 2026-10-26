@@ -333,6 +333,9 @@ async function sendWhatsApp(
  * newest, so mail clients (Gmail, Apple Mail, Outlook) reconstruct
  * the full thread even for participants who join mid-way.
  */
+/** The subject of the first email in a thread Vero starts herself. */
+export const NEW_THREAD_SUBJECT = 'A note from Vero Photography';
+
 async function sendEmail(
   sql: ReturnType<typeof getDb>,
   conversationId: string,
@@ -385,7 +388,14 @@ async function sendEmail(
     [...historyRows]
       .reverse()
       .find((m) => m.channel === 'email' && m.subject?.trim())?.subject ?? null;
-  const subject = parentSubject ? deriveReplySubject(parentSubject) : 'Re: Your inquiry';
+  // A thread Vero started herself from a client's record (messages-open-client)
+  // has nothing to reply to, so its first email gets a plain subject of its
+  // own rather than "Re:" to an inquiry that never happened.
+  const subject = parentSubject
+    ? deriveReplySubject(parentSubject)
+    : historyRows.length === 0
+      ? NEW_THREAD_SUBJECT
+      : 'Re: Your inquiry';
 
   // Idempotency: pre-generate the Message-ID and INSERT the outbound
   // row BEFORE calling Resend. Then hand the pre-generated ID to

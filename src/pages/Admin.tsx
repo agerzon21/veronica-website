@@ -193,6 +193,9 @@ const Admin = () => {
   // if she was mid-refine on a reply and the page reloaded (a phone
   // pull-to-refresh is the way this actually happens), coming back to Clients
   // strands the panel AdminMessages is about to restore.
+  // A thread to open when Messages next mounts: the Email button on a
+  // client's record hands one over (messages-open-client).
+  const [openConversation, setOpenConversation] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<DashTab>(() => {
     try {
       return localStorage.getItem(REFINE_SESSION_KEY) ? 'messages' : 'clients';
@@ -635,7 +638,14 @@ const Admin = () => {
                   // Hand a thread off to the full new-client form with
                   // everything the conversation already established.
                   onCreateFullClient={(prefill) => setView({ kind: 'new-full', prefill })}
-                  onOpenClient={(id) => setView({ kind: 'detail', id })}
+                  onOpenClient={(id, fromConversation) => {
+                    // Back from the client reopens this thread: Messages
+                    // remounts on return and opens what is waiting here.
+                    if (fromConversation) setOpenConversation(fromConversation);
+                    setView({ kind: 'detail', id });
+                  }}
+                  openConversationId={openConversation}
+                  onOpenedConversation={() => setOpenConversation(null)}
                 />
               )}
               {dashTab === 'leads' && adminLevel === 'super' && (
@@ -732,6 +742,13 @@ const Admin = () => {
               adminPassword={password}
               onOpenClient={(id) => requestNav(() => setView({ kind: 'detail', id }))}
               onAddSession={(seed) => requestNav(() => setView({ kind: 'new-full', sameClient: seed }))}
+              onEmailClient={(conversationId) =>
+                requestNav(() => {
+                  setOpenConversation(conversationId);
+                  setDashTab('messages');
+                  setView({ kind: 'dashboard' });
+                })
+              }
               adminLevel={adminLevel}
               onDirtyChange={setDetailDirty}
               {...(() => {
