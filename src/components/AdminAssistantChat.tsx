@@ -16,7 +16,7 @@ import CTAButton from './ui/CTAButton';
 import { ASSISTANT_HANDOFF_KEY } from './AdminMessages';
 import { loadDraft, saveDraft, clearDraft, sweepDrafts } from './draftStore';
 import { translationTargetFor } from './translationDirection';
-import VoiceInput from './ui/VoiceInput';
+import VoiceInput, { useDictationInto } from './ui/VoiceInput';
 import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminLang } from '../i18n/admin';
 
@@ -770,9 +770,8 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   // was fundamentally flaky on iOS Safari (per multiple debugging
   // sessions), Whisper is one HTTP round-trip and always works.
   // Handler just appends the transcript into the composer input.
-  const handleTranscript = useCallback((text: string) => {
-    setInput((prev) => (prev ? `${prev} ${text}` : text));
-  }, []);
+  // Live words while she talks, replaced by the final transcript (VoiceInput).
+  const dictation = useDictationInto(input, setInput);
 
   return (
     <Flex
@@ -1066,7 +1065,8 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
             <VoiceInput
               adminPassword={adminPassword}
               language={lang}
-              onTranscript={handleTranscript}
+              onTranscript={dictation.onTranscript}
+              onLive={dictation.onLive}
               ariaLabelIdle={t.micRecordAria}
               ariaLabelRecording={t.micStopAria}
               ariaLabelUploading={lang === 'ru' ? 'Расшифровываю…' : 'Transcribing…'}

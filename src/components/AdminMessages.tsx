@@ -65,7 +65,7 @@ import AdminAssistantChat from './AdminAssistantChat';
 import CTAButton from './ui/CTAButton';
 import PillButton from './ui/PillButton';
 import ConfirmDialog from './ui/ConfirmDialog';
-import VoiceInput from './ui/VoiceInput';
+import VoiceInput, { useDictationInto } from './ui/VoiceInput';
 import { hasHardwareKeyboard } from '../utils/hardwareKeyboard';
 import { useAdminLang, type AdminT, type AdminLang } from '../i18n/admin';
 import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBadge';
@@ -2237,6 +2237,8 @@ function ConversationView({
   // conversation, so this remounts on every thread switch and the scoping
   // falls out of that for free.
   const [replyText, setReplyText] = useState(() => loadDraft('reply', summary.id));
+  // Live words while she dictates, replaced by the final transcript (VoiceInput).
+  const replyDictation = useDictationInto(replyText, setReplyText);
 
   useEffect(() => {
     const id = window.setTimeout(() => saveDraft('reply', summary.id, replyText), 400);
@@ -4311,7 +4313,8 @@ function ConversationView({
               // translate, so dictating in Russian stays safe.
               language="ru"
               uiLang={adminLang}
-              onTranscript={(text) => setReplyText((prev) => (prev ? `${prev} ${text}` : text))}
+              onTranscript={replyDictation.onTranscript}
+              onLive={replyDictation.onLive}
               ariaLabelIdle={t.messages.micRecordReply}
               ariaLabelRecording={t.messages.micReleaseStop}
               ariaLabelUploading={t.messages.micTranscribing}
