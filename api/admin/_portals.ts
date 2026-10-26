@@ -147,6 +147,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-049 database: no booking adds tax */
     }
 
+    /**
+     * When Vero (or the assistant) last actually SENT something to this
+     * client, on their email thread or any thread linked to the booking
+     * (2026-10-26). The Clients list's "Follow-ups for today" reads it: a
+     * follow-up counts as done the moment a message goes out, not when a box
+     * is ticked, so the two can never disagree. Drafts and failures do not count.
+     */
+    const lastContactById = new Map<string, string>();
+    try {
+      const contacts = (await sql`
+        select cp.id, max(m.sent_at) as last_contact_at
+        from client_portals cp
+        join conversations c
+          on c.linked_client_portal_id = cp.id
+          or (c.platform = 'email' and cp.client_email is not null and c.external_user_id = lower(cp.client_email))
+        join messages m
+          on m.conversation_id = c.id and m.direction = 'outbound' and coalesce(m.status, 'sent') = 'sent'
+        group by cp.id
+      `) as Array<{ id: string; last_contact_at: string | Date }>;
+      for (const c of contacts) lastContactById.set(c.id, new Date(c.last_contact_at).toISOString());
+    } catch (err) {
+      console.error('[admin/portals] could not read last contact (list still served):', err);
+    }
+
     return res.status(200).json({
       success: true,
       level: auth.level,
@@ -169,6 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         charges_total: chargesById.get(r.id) ?? 0,
         complimentary: complimentaryIds.has(r.id),
         sales_tax: salesTaxModeOf(salesTaxById.get(r.id)),
+        last_contact_at: lastContactById.get(r.id) ?? null,
         drive_url: r.drive_url,
         gallery_delivered_at: r.gallery_delivered_at,
         gallery_expires_at: r.gallery_expires_at,

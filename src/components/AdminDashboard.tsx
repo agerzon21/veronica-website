@@ -18,6 +18,8 @@ import FaCalendarAlt from '../icons/fa/FaCalendarAlt';
 import FaChevronDown from '../icons/fa/FaChevronDown';
 import FaChevronUp from '../icons/fa/FaChevronUp';
 import FaPlus from '../icons/fa/FaPlus';
+import FaCheck from '../icons/fa/FaCheck';
+import FaPaperPlane from '../icons/fa/FaPaperPlane';
 import FaSearch from '../icons/fa/FaSearch';
 import FaSyncAlt from '../icons/fa/FaSyncAlt';
 import FaTable from '../icons/fa/FaTable';
@@ -26,12 +28,16 @@ import PillButton from './ui/PillButton';
 import MobileSheetModal from './ui/MobileSheetModal';
 import AdminCalendarView from './AdminCalendarView';
 import { useAdminLang } from '../i18n/admin';
+import { followUpPrompt, followUpState } from '../data/follow-up';
 import {
   actionOf,
   balanceOf,
   depositOf,
   bookingTotal,
   countFilters,
+  eventDayUtc,
+  longEventDate,
+  standingInWords,
   formatDate,
   formatMoney,
   galleryDaysLeft,
@@ -72,6 +78,8 @@ interface Props {
    * an order nobody on the other side of the screen can see.
    */
   onVisibleOrderChange?: (ids: string[]) => void;
+  /** Send follow-up: open the client's thread with the Assistant asked for a draft. */
+  onFollowUp?: (portalId: string, prompt: string) => Promise<void> | void;
 }
 
 // A new key (2026-10-25) so everyone starts on Needs action once; a sort
@@ -138,6 +146,7 @@ const AdminDashboard = ({
   viewMode = 'table',
   onChangeViewMode,
   onVisibleOrderChange,
+  onFollowUp,
 }: Props) => {
   const { t, lang } = useAdminLang();
   // Fallback no-op, used only when a caller forgets to wire
@@ -281,6 +290,9 @@ const AdminDashboard = ({
       {/* The strip governs BOTH views, so it sits above the branch. Hidden
           on an account with no bookings at all, where filtering nothing by
           nothing is just furniture. */}
+      {/* What to chase today, above everything else on the screen. */}
+      {onFollowUp && <FollowUpsCard portals={portals} onOpenPortal={onOpenPortal} onFollowUp={onFollowUp} />}
+
       {portals.length > 0 && (
         <ListControls
           query={query}
@@ -915,6 +927,162 @@ function gallerySubLine(portal: AdminPortalSummary, t: ReturnType<typeof useAdmi
   }
   if (portal.drive_url) return t.clients.galleryNotSent;
   return '';
+}
+
+/**
+ * FOLLOW-UPS FOR TODAY (2026-10-26). Every booking where a nudge is due: a
+ * contract not signed, a retainer not in, a balance owed after the session.
+ * Send follow-up opens the client's thread with the Assistant asked for a
+ * draft; the row turns to "Followed up today" once a message actually goes
+ * out to them, and a client written to in the last few days is left alone.
+ */
+function FollowUpsCard({
+  portals,
+  onOpenPortal,
+  onFollowUp,
+}: {
+  portals: AdminPortalSummary[];
+  onOpenPortal: (id: string) => void;
+  onFollowUp: (portalId: string, prompt: string) => Promise<void> | void;
+}) {
+  const { t, lang } = useAdminLang();
+  const [busy, setBusy] = useState<string | null>(null);
+  const items = portals
+    .map((p) => ({ p, action: actionOf(p) }))
+    .filter((x): x is { p: AdminPortalSummary; action: NonNullable<ReturnType<typeof actionOf>> } =>
+      x.action !== null && x.action.reason !== 'deliver',
+    )
+    .map((x) => ({ ...x, state: followUpState(x.p.last_contact_at) }))
+    .filter((x) => x.state !== 'recent')
+    .sort((a, b) => {
+      if ((a.state === 'today') !== (b.state === 'today')) return a.state === 'today' ? 1 : -1;
+      if (a.action.rank !== b.action.rank) return a.action.rank - b.action.rank;
+      return (eventDayUtc(a.p.event_date) ?? Infinity) - (eventDayUtc(b.p.event_date) ?? Infinity);
+    });
+  if (items.length === 0) return null;
+  const done = items.filter((x) => x.state === 'today').length;
+  const allDone = done === items.length;
+
+  const amountFor = (p: AdminPortalSummary, reason: string): string | null =>
+    reason === 'balance' ? formatMoney(balanceOf(p) ?? 0) : depositOf(p).amount > 0 ? formatMoney(depositOf(p).amount) : null;
+  const longDate = longEventDate;
+  const start = async (p: AdminPortalSummary, reason: 'deposit' | 'unsigned' | 'balance') => {
+    setBusy(p.id);
+    try {
+      await onFollowUp(
+        p.id,
+        followUpPrompt({
+          name: p.client_display_name || p.client_email || 'this client',
+          reason,
+          amount: amountFor(p, reason),
+          eventDate: longDate(p.event_date),
+          invitePending: p.pending_invite,
+          // The client's other bookings, so a two-session couple is never
+          // asked about the one that is already done.
+          session: p.session_type,
+          others: portals
+            .filter((o) => o.id !== p.id && o.mode === 'full' && o.client_email && p.client_email && o.client_email.toLowerCase() === p.client_email.toLowerCase())
+            .map((o) => ({ session: o.session_type || 'session', date: longDate(o.event_date), status: standingInWords(o) })),
+        }),
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderLeft="4px solid"
+      borderLeftColor={allDone ? 'brand.success' : 'brand.caution'}
+      borderRadius="md"
+      px={{ base: 4, md: 6 }}
+      py={{ base: 4, md: 5 }}
+      mb={5}
+      data-testid="follow-ups"
+    >
+      <Flex align="center" justify="space-between" gap={3} mb={3} wrap="wrap">
+        <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color={allDone ? 'brand.success' : 'brand.caution'}>
+          {allDone ? t.clients.followUps.allDone : t.clients.followUps.title}
+        </Text>
+        <Text fontSize="sm" color="gray.500" data-testid="follow-ups-progress">
+          {t.clients.followUps.progress(done, items.length)}
+        </Text>
+      </Flex>
+      <VStack align="stretch" spacing={0} divider={<Box borderTop="1px solid" borderColor="gray.100" />}>
+        {items.map(({ p, action, state }) => {
+          const reason = action.reason as 'deposit' | 'unsigned' | 'balance';
+          const amount = amountFor(p, reason);
+          const what =
+            reason === 'deposit'
+              ? t.clients.followUps.why.deposit(amount ?? '')
+              : reason === 'balance'
+                ? t.clients.followUps.why.balance(amount ?? '')
+                : p.pending_invite
+                  ? t.clients.followUps.why.invite
+                  : t.clients.followUps.why.unsigned;
+          const last = p.last_contact_at
+            ? t.clients.followUps.lastSent(new Date(p.last_contact_at).toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-US', { month: 'short', day: 'numeric' }))
+            : t.clients.followUps.neverSent;
+          return (
+            <Flex
+              key={p.id}
+              py={3}
+              gap={{ base: 3, md: 4 }}
+              align={{ base: 'stretch', md: 'center' }}
+              direction={{ base: 'column', md: 'row' }}
+              data-testid="follow-up-row"
+              data-state={state}
+            >
+              <Box flex="1" minW={0}>
+                <HStack spacing={2} wrap="wrap">
+                  <Box
+                    as="button"
+                    type="button"
+                    onClick={() => onOpenPortal(p.id)}
+                    fontWeight="500"
+                    color="gray.800"
+                    textAlign="left"
+                    _hover={{ color: 'brand.accentText', textDecoration: 'underline' }}
+                  >
+                    {p.client_display_name || p.client_email || t.clients.unnamed}
+                  </Box>
+                  {formatDate(p.event_date) && (
+                    <Text fontSize="sm" color="gray.500">
+                      {formatDate(p.event_date)} · {relativeDay(p.event_date, t.clients.when)}
+                    </Text>
+                  )}
+                </HStack>
+                <Text fontSize="sm" color="gray.700" mt={0.5}>{what}</Text>
+                <Text fontSize="xs" color="gray.500" mt={0.5}>{last}</Text>
+              </Box>
+              <Box flexShrink={0}>
+                {state === 'today' ? (
+                  <HStack spacing={2} color="brand.success" data-testid="followed-up-today">
+                    <Icon as={FaCheck} boxSize={3} />
+                    <Text fontSize="sm" fontWeight="500">{t.clients.followUps.doneToday}</Text>
+                  </HStack>
+                ) : (
+                  <CTAButton
+                    onClick={() => void start(p, reason)}
+                    variant="solid"
+                    size="sm"
+                    icon={FaPaperPlane}
+                    isLoading={busy === p.id}
+                    fullWidth={{ base: true, md: false }}
+                  >
+                    {t.clients.followUps.send}
+                  </CTAButton>
+                )}
+              </Box>
+            </Flex>
+          );
+        })}
+      </VStack>
+    </Box>
+  );
 }
 
 /** Signed, but the retainer is not in: the date is not actually reserved. */

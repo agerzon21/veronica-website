@@ -70,7 +70,7 @@ interface Props {
    * time "Improve with assistant" is pressed there is no mount left to hook.
    * `token` changes on every request so pressing it twice re-seeds.
    */
-  seed?: { text: string; token: number } | null;
+  seed?: { text: string; token: number; submit?: boolean } | null;
   /**
    * Fired when the assistant sends the reply itself, via its `send_reply`
    * tool, rather than Vero sending from the draft card. Same end state, the
@@ -301,12 +301,21 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   const seedToken = seed?.token ?? null;
   useEffect(() => {
     if (seedToken === null || !seed?.text) return;
+    // A request to submit goes straight in (below); it never sits in the box.
+    if (seed.submit) return;
     setInput(seed.text);
     // Keyed on the token so the same prompt can be re-seeded deliberately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedToken]);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  /**
+   * A seed that asks to be SUBMITTED (Send follow-up, 2026-10-26) goes as soon
+   * as the history has loaded, so its turn is not overwritten by the history
+   * arriving after it. Once per token. It only ever asks for a draft: the send
+   * gate reads the request's own "do not send it yet" and refuses a send.
+   */
+  const submittedSeedRef = useRef<number | null>(null);
 
   /**
    * The chat stays mounted across conversation switches, and the composer
@@ -615,8 +624,9 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
     [toast, t.toastLabels, t.draftToastLabel],
   );
 
-  const handleSend = async () => {
-    const text = input.trim();
+  /** `text` sends that instead of the composer: a request handed in by a button, not typed. */
+  const handleSend = async (override?: string) => {
+    const text = (typeof override === 'string' ? override : input).trim();
     if (!text || sending) return;
     setSending(true);
     setInput('');
@@ -770,6 +780,15 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
   // was fundamentally flaky on iOS Safari (per multiple debugging
   // sessions), Whisper is one HTTP round-trip and always works.
   // Handler just appends the transcript into the composer input.
+  useEffect(() => {
+    if (!seed?.submit || !seed.text || loading || sending) return;
+    if (submittedSeedRef.current === seed.token) return;
+    submittedSeedRef.current = seed.token;
+    void handleSend(seed.text);
+    // Keyed on the token and on the history having loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.token, loading]);
+
   // Live words while she talks, replaced by the final transcript (VoiceInput).
   const dictation = useDictationInto(input, setInput);
 
@@ -1084,7 +1103,7 @@ const AdminAssistantChat = ({ adminPassword, embedded = false, conversationId = 
               isDisabled={sending}
             />
             <CTAButton
-              onClick={handleSend}
+              onClick={() => void handleSend()}
               icon={FaPaperPlane}
               variant="solid"
               size={embedded ? 'sm' : 'md'}

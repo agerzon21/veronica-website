@@ -340,6 +340,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* pre-migration-057 database: nothing was booked as a package */
     }
 
+    /** When something was last actually sent to this client (see _portals.ts). Allowed to fail. */
+    let lastContactAt: string | null = null;
+    try {
+      const lc = (await sql`
+        select max(m.sent_at) as at
+        from conversations c
+        join messages m on m.conversation_id = c.id and m.direction = 'outbound' and coalesce(m.status, 'sent') = 'sent'
+        where c.linked_client_portal_id = ${id}
+           or (c.platform = 'email' and c.external_user_id = lower(${rows[0].client_email ?? ''}))
+      `) as Array<{ at: string | Date | null }>;
+      lastContactAt = lc[0]?.at ? new Date(lc[0].at).toISOString() : null;
+    } catch {
+      /* the record is still served */
+    }
+
     /** This session's own discount (migration 058). Allowed to fail the same way. */
     let discountInfo: { discount_amount: number | null; discount_label: string | null } = { discount_amount: null, discount_label: null };
     try {
@@ -403,6 +418,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         package_id: packageInfo.package_id,
         regular_amount: packageInfo.regular_amount,
         discount_amount: discountInfo.discount_amount,
+        last_contact_at: lastContactAt,
         discount_label: discountInfo.discount_label,
         // We never return the raw blob URL, only whether a signed PDF
         // exists. Clients access it via the signed download endpoint.

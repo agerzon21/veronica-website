@@ -51,6 +51,8 @@ import DeliveryBadge, { DELIVERY_TERMINAL, deliveryStateOf } from './DeliveryBad
 import { deliveryMessageText } from '../data/delivery-message';
 import { galleryHeading, greetingName, welcomeNames } from '../data/client-greeting';
 import { DEFAULT_DISCOUNT_LABEL } from '../data/discount';
+import { followUpPrompt, followUpState, type FollowUpReason } from '../data/follow-up';
+import { longEventDate, standingInWords, type AdminPortalSummary } from './adminClients';
 import { retainerProblem, suggestedRetainer } from '../data/retainer';
 import { ExpiryRibbon, GalleryTitle } from './GalleryHeading';
 import FaChevronLeft from '../icons/fa/FaChevronLeft';
@@ -115,6 +117,8 @@ interface Props {
   onAddSession?: (seed: SameClientSeed) => void;
   /** Open this client's email thread in Messages (found or started by messages-open-client). */
   onEmailClient?: (conversationId: string) => void;
+  /** Send follow-up: open the client's thread with the Assistant asked for a draft (Admin.tsx startFollowUp). */
+  onFollowUp?: (portalId: string, prompt: string) => Promise<void> | void;
 }
 
 interface PortalDetail {
@@ -133,6 +137,8 @@ interface PortalDetail {
   regular_amount?: number | null;
   // Its own discount (migration 058), before any package share.
   discount_amount?: number | null;
+  /** When a message last actually went out to this client (portal-detail). */
+  last_contact_at?: string | null;
   discount_label?: string | null;
   client_display_name: string | null;
   client_email: string | null;
@@ -151,6 +157,13 @@ interface PortalDetail {
     contract_total_amount?: number | null;
     regular_amount?: number | null;
     package_id?: string | null;
+    // Where it stands, for the preview and for a follow-up about another booking.
+    contract_retainer_amount?: number | string | null;
+    paid_to_date?: number | string | null;
+    charges_total?: number;
+    complimentary?: boolean | null;
+    sales_tax?: string | null;
+    gallery_delivered_at?: string | null;
   }>;
   event_date: string | null;
   gallery_password: string;
@@ -484,7 +497,7 @@ const daysUntil = (iso: string | null): number | null => {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 };
 
-const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext, onOpenClient, onAddSession, onEmailClient }: Props) => {
+const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirtyChange, onPrev, onNext, onOpenClient, onAddSession, onEmailClient, onFollowUp }: Props) => {
   const { t, lang } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
@@ -1108,32 +1121,86 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
     setOpenMoneyForm('payment');
     openTab('payments');
   };
-  const emailAction = onEmailClient && portal.client_email ? [{ label: t.clientDetail.actEmail, onClick: () => void emailClient(), icon: FaEnvelope }] : [];
+  /**
+   * Send follow-up (2026-10-26): the Assistant asked for a draft about THIS
+   * booking, told where the client's other bookings stand, so a two-session
+   * client is never chased for the one already done.
+   */
+  const followUpFor = (reason: FollowUpReason, amount: number) => {
+    const others = (portal.same_client_bookings ?? []).map((b) => ({
+      session: typeLabel(b.contract_template_key ?? b.session_type).toLowerCase() || 'session',
+      date: longEventDate(b.event_date),
+      status: standingInWords({
+        id: b.id,
+        mode: 'full',
+        session_type: b.session_type,
+        client_display_name: b.client_display_name,
+        client_email: portal.client_email,
+        event_date: b.event_date,
+        contract_status: (b.contract_status ?? 'none') as AdminPortalSummary['contract_status'],
+        contract_signed_at: null,
+        contract_total_amount: b.contract_total_amount ?? null,
+        contract_retainer_amount: b.contract_retainer_amount == null ? null : Number(b.contract_retainer_amount),
+        paid_to_date: Number(b.paid_to_date ?? 0),
+        charges_total: b.charges_total ?? 0,
+        complimentary: b.complimentary ?? false,
+        sales_tax: salesTaxModeOf(b.sales_tax),
+        drive_url: null,
+        gallery_delivered_at: b.gallery_delivered_at ?? null,
+        gallery_expires_at: null,
+        gallery_password: '',
+        gallery_enabled: true,
+        pending_invite: false,
+        created_at: '',
+      }),
+    }));
+    return followUpPrompt({
+      name: portal.client_display_name || portal.client_email || 'this client',
+      reason,
+      amount: amount > 0 ? formatMoney(amount) : null,
+      eventDate: longEventDate(portal.event_date),
+      invitePending: Boolean(portal.setup_token),
+      session: typeLabel(portal.contract_template_key ?? portal.session_type).toLowerCase() || null,
+      others,
+    });
+  };
+  const followUpAction = (reason: FollowUpReason, amount: number) =>
+    onFollowUp && portal.client_email
+      ? [{ label: t.clientDetail.actFollowUp, onClick: () => void onFollowUp(portal.id, followUpFor(reason, amount)), icon: FaPaperPlane }]
+      : [];
+  // When she last wrote to them, under each thing to chase.
+  const lastContactLine =
+    followUpState(portal.last_contact_at) === 'today'
+      ? t.clientDetail.followedUpToday
+      : portal.last_contact_at
+        ? t.clientDetail.lastMessageSent(formatDate(portal.last_contact_at))
+        : t.clientDetail.noMessageYet;
+  const withLast = (detail?: string) => [detail, lastContactLine].filter(Boolean).join(' ');
   const attention: AttentionItem[] = [
     ...(retainerDue && (signed || !isFull)
       ? [{
           key: 'retainer',
           title: t.clientDetail.attnRetainer(formatMoney(retainerAmount)),
-          detail: signed && portal.contract_signed_at
-            ? t.clientDetail.attnRetainerDetail(formatDate(portal.contract_signed_at))
-            : undefined,
-          actions: [{ label: t.clientDetail.logPaymentButton, onClick: logPaymentNow, icon: FaPlus }, ...emailAction],
+          detail: withLast(
+            signed && portal.contract_signed_at ? t.clientDetail.attnRetainerDetail(formatDate(portal.contract_signed_at)) : undefined,
+          ),
+          actions: [...followUpAction('deposit', retainerAmount), { label: t.clientDetail.logPaymentButton, onClick: logPaymentNow, icon: FaPlus }],
         }]
       : []),
     ...(isFull && !signed
       ? [{
           key: 'contract',
           title: t.clientDetail.attnUnsigned,
-          detail: portal.setup_token ? t.clientDetail.attnUnsignedInvite : t.clientDetail.attnUnsignedDetail,
-          actions: [...emailAction, { label: t.clientDetail.actOpenContract, onClick: () => openTab(portal.setup_token ? 'settings' : 'contract') }],
+          detail: withLast(portal.setup_token ? t.clientDetail.attnUnsignedInvite : t.clientDetail.attnUnsignedDetail),
+          actions: [...followUpAction('unsigned', retainerAmount), { label: t.clientDetail.actOpenContract, onClick: () => openTab(portal.setup_token ? 'settings' : 'contract') }],
         }]
       : []),
     ...(balanceDue && sessionPast
       ? [{
           key: 'balance',
           title: t.clientDetail.attnBalance(formatMoney(balanceRemaining ?? 0)),
-          detail: t.clientDetail.attnBalanceDetail,
-          actions: [{ label: t.clientDetail.logPaymentButton, onClick: logPaymentNow, icon: FaPlus }, ...emailAction],
+          detail: withLast(t.clientDetail.attnBalanceDetail),
+          actions: [...followUpAction('balance', balanceRemaining ?? 0), { label: t.clientDetail.logPaymentButton, onClick: logPaymentNow, icon: FaPlus }],
         }]
       : []),
     ...(sessionPast && !portal.gallery_delivered_at

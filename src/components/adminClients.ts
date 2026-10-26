@@ -58,6 +58,8 @@ export interface AdminPortalSummary {
   gallery_enabled: boolean;
   pending_invite: boolean;
   created_at: string;
+  /** When a message last actually went out to this client (Follow-ups for today). */
+  last_contact_at?: string | null;
 }
 
 export type ClientFilter = 'all' | 'action' | 'upcoming' | 'owes' | 'overpaid' | 'unsigned' | 'deliver';
@@ -250,6 +252,25 @@ export const actionOf = (p: AdminPortalSummary): { rank: number; reason: ActionR
     return { rank: 4, reason: 'deliver' };
   }
   return null;
+};
+
+/**
+ * Where one booking stands, in words the Assistant can use, for a follow-up
+ * about another booking of the same client (src/data/follow-up.ts).
+ */
+export const standingInWords = (p: AdminPortalSummary): string => {
+  const a = actionOf(p);
+  if (!a) return p.contract_status === 'signed' ? 'contract signed and retainer paid, nothing outstanding' : 'nothing outstanding';
+  if (a.reason === 'deposit') return `contract signed, ${formatMoney(depositOf(p).amount)} retainer not paid yet`;
+  if (a.reason === 'unsigned') return 'contract not signed yet';
+  if (a.reason === 'balance') return `session done, ${formatMoney(balanceOf(p) ?? 0)} balance still due`;
+  return 'session done, photos not delivered yet';
+};
+
+/** A long calendar date for a request to the Assistant: "November 1, 2026". */
+export const longEventDate = (iso: string | null): string | null => {
+  const at = eventDayUtc(iso);
+  return at === null ? null : new Date(at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 };
 
 /** Does this booking belong under that chip? One predicate, used for the

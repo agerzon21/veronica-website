@@ -1,9 +1,23 @@
 import ToastHost from '../components/ui/ToastHost';
 import {
-  Box, Flex, HStack, VStack, Text, Input, Icon,
-  InputGroup, InputRightElement, IconButton, Spinner,
-  Drawer, DrawerBody, DrawerContent, DrawerOverlay, DrawerCloseButton,
+  Box,
+  Flex,
+  HStack,
+  VStack,
+  Text,
+  Input,
+  Icon,
+  InputGroup,
+  InputRightElement,
+  IconButton,
+  Spinner,
+  Drawer,
+  DrawerBody,
+  DrawerContent,
+  DrawerOverlay,
+  DrawerCloseButton,
   useDisclosure,
+  useToast,
 } from '@chakra-ui/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
@@ -131,6 +145,7 @@ const ADMIN_SESSION_KEY = 'vg:adminSession';
 const looksLikeSessionToken = (v: string) => /^[a-f0-9]{64}$/.test(v);
 
 const Admin = () => {
+  const toast = useToast();
   // Email is lazy-initialized from localStorage so a returning
   // admin sees their address already filled in, a real quality-of-
   // life win for Vero, who signs in daily. hasSavedEmail gates the
@@ -196,6 +211,8 @@ const Admin = () => {
   // A thread to open when Messages next mounts: the Email button on a
   // client's record hands one over (messages-open-client).
   const [openConversation, setOpenConversation] = useState<string | null>(null);
+  // With it, a request for that thread's Assistant (Send follow-up).
+  const [openAssistantPrompt, setOpenAssistantPrompt] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<DashTab>(() => {
     try {
       return localStorage.getItem(REFINE_SESSION_KEY) ? 'messages' : 'clients';
@@ -304,6 +321,34 @@ const Admin = () => {
     }
     setEmail('');
     setHasSavedEmail(false);
+  };
+
+  /**
+   * Send follow-up (2026-10-26): find or start the client's email thread, then
+   * open it in Messages with the Assistant asked for a draft. Used by the
+   * Clients list and by a client's record.
+   */
+  const startFollowUp = async (portalId: string, prompt: string) => {
+    try {
+      const res = await fetch('/api/admin/messages-open-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, portal_id: portalId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.conversation_id) {
+        toast({ title: data.error || 'Could not open the conversation for this client.', status: 'warning', duration: 4000 });
+        return;
+      }
+      requestNav(() => {
+        setOpenConversation(data.conversation_id);
+        setOpenAssistantPrompt(prompt);
+        setDashTab('messages');
+        setView({ kind: 'dashboard' });
+      });
+    } catch {
+      toast({ title: 'Could not reach the server.', status: 'warning', duration: 4000 });
+    }
   };
 
   const handleRefresh = async () => {
@@ -624,6 +669,7 @@ const Admin = () => {
                   viewMode={clientsView}
                   onChangeViewMode={setClientsView}
                   onVisibleOrderChange={setVisibleOrder}
+                  onFollowUp={startFollowUp}
                 />
               )}
               {dashTab === 'messages' && (
@@ -645,7 +691,11 @@ const Admin = () => {
                     setView({ kind: 'detail', id });
                   }}
                   openConversationId={openConversation}
-                  onOpenedConversation={() => setOpenConversation(null)}
+                  openAssistantPrompt={openAssistantPrompt}
+                  onOpenedConversation={() => {
+                    setOpenConversation(null);
+                    setOpenAssistantPrompt(null);
+                  }}
                 />
               )}
               {dashTab === 'leads' && adminLevel === 'super' && (
@@ -742,6 +792,7 @@ const Admin = () => {
               adminPassword={password}
               onOpenClient={(id) => requestNav(() => setView({ kind: 'detail', id }))}
               onAddSession={(seed) => requestNav(() => setView({ kind: 'new-full', sameClient: seed }))}
+              onFollowUp={startFollowUp}
               onEmailClient={(conversationId) =>
                 requestNav(() => {
                   setOpenConversation(conversationId);

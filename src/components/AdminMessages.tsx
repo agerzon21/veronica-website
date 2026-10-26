@@ -290,6 +290,8 @@ interface Props {
   onOpenClient?: (portalId: string, fromConversationId?: string) => void;
   /** A thread to open on arrival (the Email button on a client's record), and the call that clears it. */
   openConversationId?: string | null;
+  /** With it, a request for the Assistant to draft (Send follow-up): the panel opens on the Assistant and submits it. */
+  openAssistantPrompt?: string | null;
   onOpenedConversation?: () => void;
 }
 
@@ -667,7 +669,7 @@ interface SearchResult {
   bucket?: 'primary' | 'personal' | 'promotional';
 }
 
-const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient, onOpenClient, openConversationId, onOpenedConversation }: Props) => {
+const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFullClient, onOpenClient, openConversationId, openAssistantPrompt, onOpenedConversation }: Props) => {
   const { t } = useAdminLang();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
 
@@ -734,8 +736,11 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
   const [globalAiState, setGlobalAiState] = useState<'on' | 'off'>('on');
   const [selectedId, setSelectedId] = useState<string | null>(openConversationId ?? null);
   // Handed over from a client's record: open that thread, once.
+  // A follow-up request waiting for its thread to be the open one.
+  const pendingAssistRef = useRef<string | null>(null);
   useEffect(() => {
     if (!openConversationId) return;
+    pendingAssistRef.current = openAssistantPrompt ?? null;
     setSelectedId(openConversationId);
     onOpenedConversation?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -790,6 +795,8 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
     text: string;
     token: number;
     convId: string | null;
+    /** Submit it rather than leave it in the box (Send follow-up). */
+    submit?: boolean;
   } | null>(null);
   /**
    * Bumped to ask the open thread to reload. The thread owns its own detail
@@ -847,6 +854,22 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
    * open now means covering up the very message you want to see go out.
    * Vero's explicit current ask is: send, then show me the conversation.)
    */
+  /**
+   * Send follow-up (2026-10-26): once the client's thread is the open one, the
+   * panel opens on the Assistant and the request is submitted, so the draft is
+   * waiting in the Reply tab. It asks for a draft only; the send gate refuses
+   * to send on it, so sending is still Vero's own word.
+   */
+  useEffect(() => {
+    const prompt = pendingAssistRef.current;
+    if (!prompt || !selectedId) return;
+    pendingAssistRef.current = null;
+    openRefinePanel('assistant');
+    seedCounter.current += 1;
+    setAssistantSeed({ text: prompt, token: seedCounter.current, convId: selectedId, submit: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   const handleReplySentFromPanel = () => {
     setThreadRefresh((n) => n + 1);
     setPanelTab('summary');

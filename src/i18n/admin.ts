@@ -206,6 +206,22 @@ const dict = {
       free: { en: 'Free', ru: 'Бесплатно' },
     },
     depositPendingLine: { en: 'Deposit not received', ru: 'Задаток не получен' },
+    // "Follow-ups for today" on the Clients list (2026-10-26).
+    followUps: {
+      title: { en: 'Follow-ups for today', ru: 'Напоминания на сегодня' },
+      allDone: { en: 'All follow-ups done for today', ru: 'На сегодня все напоминания отправлены' },
+      progress: { en: (done: number, total: number) => `${done} of ${total} done`, ru: (done: number, total: number) => `${done} из ${total}` },
+      send: { en: 'Send follow-up', ru: 'Напомнить' },
+      doneToday: { en: 'Followed up today', ru: 'Сегодня отправлено' },
+      lastSent: { en: (d: string) => `Last message sent ${d}`, ru: (d: string) => `Последнее сообщение ${d}` },
+      neverSent: { en: 'No message sent yet', ru: 'Сообщений ещё не было' },
+      why: {
+        deposit: { en: (x: string) => `Contract signed, ${x} retainer not received`, ru: (x: string) => `Контракт подписан, задаток ${x} не получен` },
+        unsigned: { en: 'Contract not signed', ru: 'Контракт не подписан' },
+        invite: { en: 'Portal not set up, contract not signed', ru: 'Портал не настроен, контракт не подписан' },
+        balance: { en: (x: string) => `Session done, ${x} balance due`, ru: (x: string) => `Съёмка прошла, остаток ${x}` },
+      },
+    },
     needs: {
       deposit: { en: (x: string) => `Needs: deposit ${x}`, ru: (x: string) => `Нужно: задаток ${x}` },
       unsigned: { en: () => 'Needs: contract signed', ru: () => 'Нужно: подпись контракта' },
@@ -2649,6 +2665,10 @@ const dict = {
       ru: 'Вставь папку Google Drive в «Галерее» и нажми «Сохранить и отправить».',
     },
     actEmail: { en: 'Email client', ru: 'Написать клиенту' },
+    actFollowUp: { en: 'Send follow-up', ru: 'Напомнить' },
+    followedUpToday: { en: 'Followed up today.', ru: 'Сегодня уже написали.' },
+    lastMessageSent: { en: (d: string) => `Last message sent ${d}.`, ru: (d: string) => `Последнее сообщение: ${d}.` },
+    noMessageYet: { en: 'No message sent to them yet.', ru: 'Сообщений им ещё не было.' },
     actOpenContract: { en: 'Open contract', ru: 'Открыть контракт' },
     actOpenGallery: { en: 'Open gallery', ru: 'Открыть галерею' },
     actOpenPayments: { en: 'All payments', ru: 'Все оплаты' },
