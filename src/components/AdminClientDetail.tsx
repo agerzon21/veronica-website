@@ -1,4 +1,21 @@
-import { Box, VStack, HStack, Text, Input, Select, Checkbox, Flex, Icon, Badge, Textarea, SimpleGrid, Stack, IconButton, Spinner } from '@chakra-ui/react';
+import {
+  Box,
+  VStack,
+  HStack,
+  Text,
+  Input,
+  Select,
+  Checkbox,
+  Flex,
+  Icon,
+  Badge,
+  Textarea,
+  SimpleGrid,
+  Stack,
+  IconButton,
+  Spinner,
+  Grid,
+} from '@chakra-ui/react';
 import { CARD_FEE_DISCOUNT_METHOD, cardAmountFor, cardPricingOf, type CardPricing } from '../data/payment-handles';
 import {
   SALES_TAX_CONTRACT_KEYS,
@@ -482,7 +499,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   }, [portalId]);
   const openTab = (next: ClientTab) => {
     setTab(next);
-    document.getElementById('client-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('client-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
   const [moneyMoreOpen, setMoneyMoreOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
@@ -1202,118 +1219,32 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
 
           Nothing in the chip row is fixed width, which is what survives
           Russian. "Галерея не отправлена" simply takes another line. */}
-      {/* THE HEADER, in the same light card as every section under it
-          (2026-10-25). It was a full-width dark band with the money in 11px
-          type underneath, which read as a different site and made the most
-          important numbers the smallest on the page. The money now lives in
-          Payments, large, and the balance and gallery state in the summary
-          card just below, so this says who, what, when, and the two states
-          that need a person: an unsigned contract and an unused invite. */}
-      <Box
-        bg="white"
-        border="1px solid"
-        borderColor="gray.100"
-        borderRadius="lg"
-        boxShadow="sm"
-        px={{ base: 4, md: 6 }}
-        pt={3}
-        pb={4}
-        mb={4}
-        data-testid="client-header"
-      >
-        <Flex align="center" gap={2}>
-          <Box ml={-2} flexShrink={0}>
-            <AdminBackButton onClick={handleBack} label={t.common.back} />
-          </Box>
-          <Box flex="1" minW={0} />
-          {(onPrev || onNext) && (
-            <HStack spacing={0} flexShrink={0}>
-              <IconButton
-                aria-label={t.clientDetail.prevClient}
-                title={t.clientDetail.prevClient}
-                icon={<Icon as={FaChevronLeft} boxSize={3} />}
-                onClick={() => onPrev?.()}
-                isDisabled={!onPrev}
-                size="sm"
-                variant="ghost"
-                color="gray.500"
-                _disabled={{ opacity: 0.35, cursor: 'default' }}
-              />
-              <IconButton
-                aria-label={t.clientDetail.nextClient}
-                title={t.clientDetail.nextClient}
-                icon={<Icon as={FaChevronRight} boxSize={3} />}
-                onClick={() => onNext?.()}
-                isDisabled={!onNext}
-                size="sm"
-                variant="ghost"
-                color="gray.500"
-                _disabled={{ opacity: 0.35, cursor: 'default' }}
-              />
-            </HStack>
-          )}
-        </Flex>
-        <Text
-          as="h1"
-          m={0}
-          mt={1}
-          fontSize={{ base: '2xl', md: '3xl' }}
-          fontWeight="300"
-          color="gray.800"
-          lineHeight="1.2"
-          overflowWrap="anywhere"
-        >
-          {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
-        </Text>
-        <Text fontSize="sm" color="gray.600" mt={1.5}>
-          {[
-            portal.contract_template_key ? typeLabel(portal.contract_template_key) : portal.session_type ?? t.clientDetail.kickerFallback,
-            portal.event_date ? formatDate(portal.event_date) : null,
-            (typeof portal.contract_variables?.event_time === 'string' ? portal.contract_variables.event_time : '')
-              .trim()
-              .replace(/\s*\([^)]*\)\s*$/, '') || null,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
-        {/* The email, only when the name above is a NAME: with no display
-            name the heading already IS the email. */}
-        {portal.client_display_name && portal.client_email && (
-          <Text fontSize="sm" color="gray.500" mt={0.5} overflowWrap="anywhere">
-            {portal.client_email}
-          </Text>
-        )}
-        <Flex flexWrap="wrap" gap={2} mt={3}>
-          {portal.complimentary && <HeaderChip tone="info">{t.clientDetail.chipComplimentary}</HeaderChip>}
-          {portal.mode === 'simple' && <HeaderChip>{t.clientDetail.badgeGalleryOnly}</HeaderChip>}
-          {portal.setup_token && <HeaderChip tone="warn">{t.clientDetail.badgeInvitePending}</HeaderChip>}
-          {!portal.complimentary && overpaidBy > 0 && (
-            <HeaderChip tone="info">{t.clientDetail.chipOverpaid(formatMoney(overpaidBy))}</HeaderChip>
-          )}
-        </Flex>
-        {/* Contract, retainer, session, balance, photos: where the booking stands. */}
-        <StatusTracker steps={trackerSteps} onOpen={openTab} />
-        {/* Preview the client's own portal, from the top of the page because
-            it shows the whole portal, not just the gallery it used to sit in.
-            Full-mode only: a gallery-only booking has no client account. */}
-        {portal.mode === 'full' && (
-          <Box mt={3}>
-            <CTAButton onClick={() => setPortalPreviewOpen(true)} variant="outline" size="sm" icon={FaExternalLinkAlt}>
-              {t.clientDetail.previewClientPortal}
-            </CTAButton>
-          </Box>
-        )}
-      </Box>
-
-      {/* Every session this client has, this one included, in date order,
-          right under the header (2026-10-23). It used to be a row of buttons
-          half way down Details, and a client booked as a package opened on
-          one session with nothing in view saying there was another. Shown
-          only when there IS another, so a one-session client's page is
-          exactly what it was. */}
+      {/* Every session this client has, above the record because it picks
+          WHICH record (2026-10-23). Shown only when there is another. */}
       {(portal.same_client_bookings?.length ?? 0) > 0 && (
         <ClientSessionsStrip portal={portal} onOpenClient={onOpenClient} />
       )}
+
+      <ClientHeader
+        portal={portal}
+        onBack={handleBack}
+        onPrev={onPrev}
+        onNext={onNext}
+        onEmail={onEmailClient ? () => void emailClient() : undefined}
+        onPreviewPortal={portal.mode === 'full' ? () => setPortalPreviewOpen(true) : undefined}
+        overpaidBy={overpaidBy}
+        steps={trackerSteps}
+        tab={tab}
+        onTab={openTab}
+        tabs={[
+          { key: 'overview', label: t.clientDetail.tabOverview, icon: FaHome },
+          { key: 'payments', label: t.clientDetail.tabPayments, icon: FaClipboardList },
+          ...(portal.mode === 'full' ? [{ key: 'contract' as ClientTab, label: t.clientDetail.tabContract, icon: FaFileSignature }] : []),
+          { key: 'gallery', label: t.clientDetail.tabGallery, icon: FaImages },
+          { key: 'info', label: t.clientDetail.tabInfo, icon: FaUser },
+          ...(portal.mode === 'full' || adminLevel === 'super' ? [{ key: 'settings' as ClientTab, label: t.clientDetail.tabSettings, icon: FaCog }] : []),
+        ]}
+      />
 
       {leaveConfirm && hasUnsaved && (
         <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm" p={4} mt={2} mb={4}>
@@ -1342,55 +1273,8 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </Box>
       )}
 
-      {/* balanceRemaining is passed down rather than recomputed. Eight places
-          on this system derive a balance and the one that gets it wrong reads
-          total minus paid, which silently drops every charge. One arithmetic,
-          one source. */}
-      {/* THE TABS (2026-10-25). The record was one page five screens long,
-          every form open at once. Each tab is one job; every panel stays
-          mounted (display only), so a half typed field and its unsaved
-          warning survive a switch. */}
-      <Box position="relative" mb={5}>
-      <Box
-        display={{ base: 'block', md: 'none' }}
-        position="absolute"
-        right={0}
-        top={0}
-        bottom="1px"
-        w="40px"
-        pointerEvents="none"
-        zIndex={1}
-        bgGradient="linear(to-r, transparent, gray.50)"
-      />
-      <Flex
-        id="client-tabs"
-        borderBottom="1px solid"
-        borderColor="gray.200"
-        overflowX="auto"
-        sx={{ scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' }, scrollMarginTop: '80px' }}
-        data-testid="client-tabs"
-      >
-        {(
-          [
-            ['overview', t.clientDetail.tabOverview, FaHome],
-            ['payments', t.clientDetail.tabPayments, FaClipboardList],
-            ...(portal.mode === 'full' ? [['contract', t.clientDetail.tabContract, FaFileSignature]] : []),
-            ['gallery', t.clientDetail.tabGallery, FaImages],
-            ['info', t.clientDetail.tabInfo, FaUser],
-            ...(portal.mode === 'full' || adminLevel === 'super' ? [['settings', t.clientDetail.tabSettings, FaCog]] : []),
-          ] as Array<[ClientTab, string, IconType]>
-        ).map(([key, label, icon]) => (
-          <Box key={key} flexShrink={0} data-testid={`tab-${key}`}>
-            <SubTabButton active={tab === key} icon={icon} label={label} onClick={() => setTab(key)} />
-          </Box>
-        ))}
-        <Box flexShrink={0} w={{ base: '32px', md: 0 }} />
-      </Flex>
-      </Box>
-
       <Box display={tab === 'overview' ? 'block' : 'none'} data-testid="panel-overview">
         <AttentionCard items={attention} />
-        <ShootSummary portal={portal} onEmail={onEmailClient ? emailClient : undefined} />
         {moneyStatsGrid && (
           <Section title={t.clientDetail.overviewMoney} icon={FaClipboardList} hue="green">
             <VStack align="stretch" spacing={4}>
@@ -2356,20 +2240,17 @@ interface TrackerStep {
 
 /**
  * Where the booking stands, as the five steps the client's own portal shows
- * them (Contract, Retainer, Session, Balance, Photos), so both of them read
- * the same story. Each step says its state in words and opens the tab that
- * deals with it.
+ * (Contract, Retainer, Session, Balance, Photos): one connected line of
+ * steps, gold when done, the caution colour when Vero has to act, grey when
+ * not due yet. Each step opens the tab that deals with it.
  */
-function StatusTracker({ steps, onOpen }: { steps: TrackerStep[]; onOpen: (tab: ClientTab) => void }) {
+function Stepper({ steps, onOpen }: { steps: TrackerStep[]; onOpen: (tab: ClientTab) => void }) {
   return (
-    <Flex gap={2} mt={4} wrap={{ base: 'wrap', md: 'nowrap' }} data-testid="status-tracker">
+    <Flex data-testid="status-tracker" align="flex-start">
       {steps.map((s, i) => {
-        const palette =
-          s.state === 'done'
-            ? { bg: 'green.50', border: 'green.200', dot: 'green.500', text: 'green.800' }
-            : s.state === 'action'
-              ? { bg: 'orange.50', border: 'orange.300', dot: 'orange.500', text: 'orange.800' }
-              : { bg: 'gray.50', border: 'gray.200', dot: 'gray.400', text: 'gray.600' };
+        const done = s.state === 'done';
+        const act = s.state === 'action';
+        const leftDone = i > 0 && steps[i - 1].state === 'done';
         return (
           <Box
             key={s.key}
@@ -2378,40 +2259,275 @@ function StatusTracker({ steps, onOpen }: { steps: TrackerStep[]; onOpen: (tab: 
             onClick={() => onOpen(s.tab)}
             data-testid={`step-${s.key}`}
             data-state={s.state}
-            flex={{ base: '1 1 140px', md: '1 0 auto' }}
-            minW="118px"
-            textAlign="left"
-            bg={palette.bg}
-            border="1px solid"
-            borderColor={palette.border}
+            flex="1 1 0"
+            minW={0}
+            position="relative"
+            textAlign="center"
+            px={1}
+            pt={0}
+            pb={1}
             borderRadius="md"
-            px={3}
-            py={2}
-            _hover={{ borderColor: palette.dot }}
+            transition="background 0.15s"
+            _hover={{ bg: 'brand.surface' }}
+            _focusVisible={{ outline: '2px solid', outlineColor: 'brand.accent', outlineOffset: '2px' }}
           >
-            <HStack spacing={2}>
-              <Flex boxSize="20px" borderRadius="full" bg={palette.dot} color="white" align="center" justify="center" flexShrink={0}>
-                {s.state === 'done' ? (
-                  <Icon as={FaCheck} boxSize={2.5} />
-                ) : s.state === 'action' ? (
-                  <Text fontSize="xs" fontWeight="700" lineHeight="1">!</Text>
-                ) : (
-                  <Text fontSize="2xs" fontWeight="600" lineHeight="1">{i + 1}</Text>
-                )}
-              </Flex>
-              <Box minW={0}>
-                <Text fontSize="2xs" letterSpacing="0.14em" textTransform="uppercase" color="gray.500" lineHeight="1.3">
-                  {s.label}
-                </Text>
-                <Text fontSize="sm" fontWeight="500" color={palette.text} lineHeight="1.3" whiteSpace="nowrap">
-                  {s.detail}
-                </Text>
-              </Box>
-            </HStack>
+            {/* The line between this step and the one before it, behind the dots. */}
+            {i > 0 && (
+              <Box
+                position="absolute"
+                top="15px"
+                right="50%"
+                w="100%"
+                h="2px"
+                bg={leftDone ? 'brand.accent' : 'gray.200'}
+                zIndex={0}
+              />
+            )}
+            <Flex
+              position="relative"
+              zIndex={1}
+              mx="auto"
+              boxSize="32px"
+              borderRadius="full"
+              align="center"
+              justify="center"
+              bg={done ? 'brand.accent' : 'white'}
+              border="2px solid"
+              borderColor={done ? 'brand.accent' : act ? 'brand.caution' : 'gray.300'}
+              color={done ? 'white' : act ? 'brand.caution' : 'gray.400'}
+            >
+              {done ? (
+                <Icon as={FaCheck} boxSize={3} />
+              ) : (
+                <Text fontSize="sm" fontWeight="700" lineHeight="1">{act ? '!' : i + 1}</Text>
+              )}
+            </Flex>
+            <Text
+              mt={2}
+              fontSize={{ base: '9px', md: '2xs' }}
+              fontWeight="500"
+              letterSpacing={{ base: '0.08em', md: '0.16em' }}
+              textTransform="uppercase"
+              color="gray.500"
+              noOfLines={1}
+            >
+              {s.label}
+            </Text>
+            <Text
+              mt={0.5}
+              fontSize={{ base: 'xs', md: 'sm' }}
+              fontWeight={act ? '600' : '400'}
+              color={act ? 'brand.caution' : done ? 'gray.800' : 'gray.500'}
+              lineHeight="1.3"
+            >
+              {s.detail}
+            </Text>
           </Box>
         );
       })}
     </Flex>
+  );
+}
+
+/**
+ * THE HEADER (2026-10-26): the one part of the record that does not change
+ * between tabs, so it carries everything she reaches for at any moment.
+ * Who and when on the left; Directions, Call, Email, Gallery and Preview on
+ * the right, the site's own buttons, one style; where the booking stands
+ * across the middle; the tabs along its bottom edge, spread across the card
+ * so they read as part of it.
+ */
+function ClientHeader({
+  portal,
+  onBack,
+  onPrev,
+  onNext,
+  onEmail,
+  onPreviewPortal,
+  overpaidBy,
+  steps,
+  tab,
+  onTab,
+  tabs,
+}: {
+  portal: PortalDetail;
+  onBack: () => void;
+  onPrev?: (() => void) | null;
+  onNext?: (() => void) | null;
+  onEmail?: () => void;
+  onPreviewPortal?: () => void;
+  overpaidBy: number;
+  steps: TrackerStep[];
+  tab: ClientTab;
+  onTab: (tab: ClientTab) => void;
+  tabs: Array<{ key: ClientTab; label: string; icon: IconType }>;
+}) {
+  const { t, lang } = useAdminLang();
+  const [directionsOpen, setDirectionsOpen] = useState(false);
+  // The column first, the contract second: session_location is where she
+  // actually drives, and gallery-only bookings have no contract at all.
+  const address = effectiveAddress(portal);
+  // The Directions sheet: the stored list of places, or a one-entry list from
+  // the single address, so older records open a navigator exactly as before.
+  const sheetLocations = useMemo<SessionLocation[]>(() => {
+    const stored = parseLocations(portal.session_locations);
+    if (stored.length) return stored;
+    return address ? [{ ...EMPTY_LOCATION, address }] : [];
+  }, [portal.session_locations, address]);
+  const phone = (portal.client_phone ?? '').trim();
+  const email = (portal.client_email ?? '').trim();
+  const galleryHref = portal.drive_url
+    ? `/portal/pass?password=${encodeURIComponent(portal.gallery_password)}` +
+      (portal.gallery_preview_token ? `&preview=${encodeURIComponent(portal.gallery_preview_token)}` : '')
+    : undefined;
+  const time = (typeof portal.contract_variables?.event_time === 'string' ? portal.contract_variables.event_time : '')
+    .trim()
+    .replace(/\s*\([^)]*\)\s*$/, '');
+  const sameDay = (portal.same_date_bookings ?? []).map((b) => b.client_display_name || t.clientDetail.unnamed);
+
+  return (
+    <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" mb={5} data-testid="client-header">
+      <Box px={{ base: 5, md: 7 }} pt={{ base: 3, md: 4 }} pb={{ base: 5, md: 6 }}>
+        <Flex align="center" justify="space-between" mb={{ base: 2, md: 3 }}>
+          <Box ml={-2}>
+            <AdminBackButton onClick={onBack} label={t.common.back} />
+          </Box>
+          {(onPrev || onNext) && (
+            <HStack spacing={1}>
+              <IconButton
+                aria-label={t.clientDetail.prevClient}
+                title={t.clientDetail.prevClient}
+                icon={<Icon as={FaChevronLeft} boxSize={3} />}
+                onClick={() => onPrev?.()}
+                isDisabled={!onPrev}
+                size="sm"
+                variant="ghost"
+                color="gray.500"
+                _hover={{ bg: 'brand.surface', color: 'brand.accentText' }}
+              />
+              <IconButton
+                aria-label={t.clientDetail.nextClient}
+                title={t.clientDetail.nextClient}
+                icon={<Icon as={FaChevronRight} boxSize={3} />}
+                onClick={() => onNext?.()}
+                isDisabled={!onNext}
+                size="sm"
+                variant="ghost"
+                color="gray.500"
+                _hover={{ bg: 'brand.surface', color: 'brand.accentText' }}
+              />
+            </HStack>
+          )}
+        </Flex>
+
+        <Flex direction={{ base: 'column', lg: 'row' }} gap={{ base: 5, lg: 8 }} align={{ base: 'stretch', lg: 'flex-start' }}>
+          {/* Who, when, where. */}
+          <Box flex="1" minW={0}>
+            <Text as="h1" m={0} fontSize={{ base: '2xl', md: '3xl' }} fontWeight="300" color="gray.800" lineHeight="1.15" overflowWrap="anywhere">
+              {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
+            </Text>
+            <Text fontSize={{ base: 'sm', md: 'md' }} color="gray.700" mt={2}>
+              {[
+                portal.contract_template_key ? typeLabel(portal.contract_template_key) : portal.session_type ?? t.clientDetail.kickerFallback,
+                portal.event_date ? formatDate(portal.event_date) : null,
+                time || null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+            <VStack align="stretch" spacing={1.5} mt={3} fontSize="sm" color="gray.600">
+              <HStack spacing={2.5} align="flex-start">
+                <Icon as={FaMapMarkerAlt} boxSize={3.5} color="brand.accent" mt="3px" flexShrink={0} />
+                <Text minW={0} color={address ? 'gray.700' : 'gray.400'}>{address || t.clientDetail.summaryNoAddress}</Text>
+              </HStack>
+              {email && (
+                <HStack spacing={2.5}>
+                  <Icon as={FaEnvelope} boxSize={3.5} color="brand.accent" flexShrink={0} />
+                  <Text minW={0} overflowWrap="anywhere">{email}</Text>
+                </HStack>
+              )}
+              {phone && (
+                <HStack spacing={2.5}>
+                  <Icon as={FaMobileAlt} boxSize={3.5} color="brand.accent" flexShrink={0} />
+                  <Text>{phone}</Text>
+                </HStack>
+              )}
+            </VStack>
+            {(portal.complimentary || portal.mode === 'simple' || portal.setup_token || overpaidBy > 0 || sameDay.length > 0) && (
+              <Flex flexWrap="wrap" gap={2} mt={3} align="center">
+                {portal.complimentary && <HeaderChip tone="info">{t.clientDetail.chipComplimentary}</HeaderChip>}
+                {portal.mode === 'simple' && <HeaderChip>{t.clientDetail.badgeGalleryOnly}</HeaderChip>}
+                {portal.setup_token && <HeaderChip tone="warn">{t.clientDetail.badgeInvitePending}</HeaderChip>}
+                {overpaidBy > 0 && <HeaderChip tone="info">{t.clientDetail.chipOverpaid(formatMoney(overpaidBy))}</HeaderChip>}
+                {sameDay.length > 0 && (
+                  <Text fontSize="xs" color="gray.500">{t.clientDetail.alsoBookedThisDay(sameDay.join(', '))}</Text>
+                )}
+              </Flex>
+            )}
+          </Box>
+
+          {/* Everything she reaches for, on every tab: the site's own buttons,
+              one style, one grid. Disabled rather than hidden when there is
+              nothing behind one, so they never move. */}
+          <SimpleGrid columns={2} spacing={2} w={{ base: '100%', lg: '340px' }} flexShrink={0} data-testid="header-actions">
+            <CTAButton onClick={() => setDirectionsOpen(true)} isDisabled={!address} variant="outline" size="sm" icon={FaMapMarkerAlt} fullWidth>
+              {t.clientDetail.summaryDirections}
+            </CTAButton>
+            <CTAButton href={phone ? `tel:${phone.replace(/[^\d+]/g, '')}` : undefined} newTab={false} isDisabled={!phone} variant="outline" size="sm" icon={FaMobileAlt} fullWidth>
+              {t.clientDetail.summaryCall}
+            </CTAButton>
+            <CTAButton
+              onClick={email && onEmail ? onEmail : undefined}
+              href={email && !onEmail ? `mailto:${email}` : undefined}
+              newTab={false}
+              isDisabled={!email}
+              variant="outline"
+              size="sm"
+              icon={FaEnvelope}
+              fullWidth
+            >
+              {t.clientDetail.summaryEmail}
+            </CTAButton>
+            <CTAButton href={galleryHref} isDisabled={!galleryHref} variant="outline" size="sm" icon={FaImages} fullWidth>
+              {t.clientDetail.summaryGallery}
+            </CTAButton>
+            {onPreviewPortal && (
+              <Box gridColumn="span 2">
+                <CTAButton onClick={onPreviewPortal} variant="solid" size="sm" icon={FaExternalLinkAlt} fullWidth>
+                  {t.clientDetail.previewClientPortal}
+                </CTAButton>
+              </Box>
+            )}
+          </SimpleGrid>
+        </Flex>
+      </Box>
+
+      {/* Where the booking stands. */}
+      <Box px={{ base: 2, md: 6 }} py={{ base: 4, md: 5 }} borderTop="1px solid" borderColor="gray.100" bg="#fdfcf9">
+        <Stepper steps={steps} onOpen={onTab} />
+      </Box>
+
+      {/* The tabs, along the bottom edge, spread across the card. */}
+      {/* Every tab visible at every width: a grid of three on a phone, one
+          row across the card from a tablet up (two columns on a phone so no label is cut). A strip that scrolled sideways
+          hid half of them, and the point is that she sees they are there. */}
+      <Grid
+        id="client-tabs"
+        templateColumns={{ base: 'repeat(2, 1fr)', md: `repeat(${tabs.length}, 1fr)` }}
+        borderTop="1px solid"
+        borderColor="gray.200"
+        sx={{ scrollMarginTop: '80px' }}
+        data-testid="client-tabs"
+      >
+        {tabs.map(({ key, label, icon }) => (
+          <Box key={key} minW={0} data-testid={`tab-${key}`}>
+            <SubTabButton active={tab === key} icon={icon} label={label} onClick={() => onTab(key)} fill />
+          </Box>
+        ))}
+      </Grid>
+
+      <DirectionsSheet locations={sheetLocations} lang={lang} isOpen={directionsOpen} onClose={() => setDirectionsOpen(false)} />
+    </Box>
   );
 }
 
@@ -2429,36 +2545,53 @@ interface AttentionItem {
  */
 function AttentionCard({ items }: { items: AttentionItem[] }) {
   const { t } = useAdminLang();
-  if (items.length === 0) {
-    return (
-      <HStack bg="green.50" border="1px solid" borderColor="green.200" borderRadius="lg" px={{ base: 4, md: 5 }} py={4} mb={4} spacing={3} data-testid="attention-all-set">
-        <Icon as={FaCheck} color="green.600" boxSize={4} />
-        <Text fontSize="sm" color="green.800" fontWeight="500">{t.clientDetail.allSet}</Text>
-      </HStack>
-    );
-  }
+  const allSet = items.length === 0;
   return (
-    <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="lg" px={{ base: 4, md: 5 }} py={4} mb={4} data-testid="attention">
-      <Text fontSize="xs" fontWeight="600" letterSpacing="0.15em" textTransform="uppercase" color="orange.800" mb={3}>
-        {t.clientDetail.attentionTitle}
-      </Text>
-      <VStack align="stretch" spacing={4} divider={<Box borderTop="1px solid" borderColor="orange.100" />}>
-        {items.map((it) => (
-          <Box key={it.key} data-testid={`attention-${it.key}`}>
-            <Text fontSize="md" fontWeight="600" color="gray.800">{it.title}</Text>
-            {it.detail && <Text fontSize="sm" color="gray.700" mt={1}>{it.detail}</Text>}
-            {it.actions.length > 0 && (
-              <Flex gap={2} wrap="wrap" mt={3}>
-                {it.actions.map((a, i) => (
-                  <CTAButton key={a.label} onClick={a.onClick} variant={i === 0 ? 'solid' : 'outline'} size="sm" icon={a.icon}>
-                    {a.label}
-                  </CTAButton>
-                ))}
-              </Flex>
-            )}
-          </Box>
-        ))}
-      </VStack>
+    <Box
+      bg="white"
+      border="1px solid"
+      borderColor="gray.200"
+      borderLeft="4px solid"
+      borderLeftColor={allSet ? 'brand.success' : 'brand.caution'}
+      borderRadius="md"
+      px={{ base: 5, md: 7 }}
+      py={{ base: 5, md: 6 }}
+      mb={5}
+      data-testid={allSet ? 'attention-all-set' : 'attention'}
+    >
+      <HStack spacing={2.5} mb={allSet ? 0 : 4}>
+        <Flex align="center" justify="center" boxSize="26px" borderRadius="md" bg={allSet ? 'green.50' : 'orange.50'} flexShrink={0}>
+          {allSet ? (
+            <Icon as={FaCheck} boxSize={3} color="brand.success" />
+          ) : (
+            <Text fontSize="sm" fontWeight="700" color="brand.caution" lineHeight="1">!</Text>
+          )}
+        </Flex>
+        <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color={allSet ? 'brand.success' : 'brand.caution'}>
+          {allSet ? t.clientDetail.allSet : t.clientDetail.attentionTitle}
+        </Text>
+      </HStack>
+      {!allSet && (
+        <VStack align="stretch" spacing={5} divider={<Box borderTop="1px solid" borderColor="gray.100" />}>
+          {items.map((it) => (
+            <Flex key={it.key} data-testid={`attention-${it.key}`} direction={{ base: 'column', md: 'row' }} gap={{ base: 3, md: 6 }} align={{ base: 'stretch', md: 'center' }}>
+              <Box flex="1" minW={0}>
+                <Text fontSize="lg" fontWeight="500" color="gray.800" lineHeight="1.3">{it.title}</Text>
+                {it.detail && <Text fontSize="sm" color="gray.600" mt={1}>{it.detail}</Text>}
+              </Box>
+              {it.actions.length > 0 && (
+                <Flex gap={2} wrap="wrap" flexShrink={0} justify={{ base: 'stretch', md: 'flex-end' }}>
+                  {it.actions.map((a, i) => (
+                    <CTAButton key={a.label} onClick={a.onClick} variant={i === 0 ? 'solid' : 'outline'} size="sm" icon={a.icon} fullWidth={{ base: true, md: false }}>
+                      {a.label}
+                    </CTAButton>
+                  ))}
+                </Flex>
+              )}
+            </Flex>
+          ))}
+        </VStack>
+      )}
     </Box>
   );
 }
@@ -2545,10 +2678,16 @@ function Section({
             justify="center"
             boxSize="26px"
             borderRadius="md"
-            bg={`${hue}.50`}
+            // One palette for every section (2026-10-26): the brand's gold on
+            // cream. Each section used to wear its own colour (green, orange,
+            // purple, blue, teal), and the page read as five systems.
+            bg="brand.surface"
+            border="1px solid"
+            borderColor="brand.accentBorder"
             flexShrink={0}
+            data-hue={hue}
           >
-            <Icon as={icon} boxSize={3} color={`${hue}.500`} />
+            <Icon as={icon} boxSize={3} color="brand.accentText" />
           </Flex>
         )}
         <Text fontSize="xs" fontWeight="500" letterSpacing="0.2em" textTransform="uppercase" color="gray.500">
@@ -2873,243 +3012,6 @@ function DirectionsSheet({
         </CTAButton>
       </VStack>
     </MobileSheetModal>
-  );
-}
-
-function SummaryAction({
-  icon,
-  label,
-  href,
-  hint,
-  onClick,
-}: {
-  icon: React.ElementType;
-  label: string;
-  href?: string;
-  hint?: string;
-  onClick?: () => void;
-}) {
-  const live = Boolean(href || onClick);
-  const body = (
-    <VStack spacing={1.5} flex="1" minW={0}>
-      <Flex
-        align="center"
-        justify="center"
-        boxSize="48px"
-        borderRadius="full"
-        bg={live ? 'brand.accent' : 'gray.100'}
-        color={live ? 'white' : 'gray.400'}
-        opacity={live ? 1 : 0.7}
-      >
-        <Icon as={icon} boxSize={4} />
-      </Flex>
-      <Text
-        fontSize="2xs"
-        color={live ? 'gray.700' : 'gray.400'}
-        textAlign="center"
-        noOfLines={1}
-        w="100%"
-      >
-        {label}
-      </Text>
-    </VStack>
-  );
-
-  // The whole column is the target, not just the circle. 48px of circle is
-  // already over Apple's 44pt floor, but this is the control used one handed
-  // while walking to a car, so it gets the label's height as well.
-  const shared = {
-    flex: '1',
-    minW: 0,
-    display: 'flex',
-    minH: '76px',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    borderRadius: 'md',
-    sx: { WebkitTapHighlightColor: 'transparent' },
-  } as const;
-
-  if (!live) {
-    return (
-      <Box {...shared} aria-disabled="true" title={hint} cursor="not-allowed">
-        {body}
-      </Box>
-    );
-  }
-  if (href) {
-    return (
-      <Box
-        {...shared}
-        as="a"
-        href={href}
-        // tel: and mailto: hand off to another app and never navigate, so a
-        // new tab there just leaves an orphan blank one behind on iOS.
-        // Everything else, including the relative gallery preview, opens in a
-        // new tab: she is mid-task on this record and should still be on it
-        // when she comes back.
-        target={/^(tel|mailto):/.test(href) ? undefined : '_blank'}
-        rel={/^(tel|mailto):/.test(href) ? undefined : 'noopener noreferrer'}
-        _hover={{ textDecoration: 'none', bg: 'gray.50' }}
-      >
-        {body}
-      </Box>
-    );
-  }
-  return (
-    <Box {...shared} as="button" type="button" onClick={onClick} bg="transparent" border="none" _hover={{ bg: 'gray.50' }}>
-      {body}
-    </Box>
-  );
-}
-
-/**
- * Everything she needs before she has scrolled.
- *
- * The scenario this exists for: she is leaving for a shoot, late, one handed,
- * and needs the address in the navigator. Before this, the address was in
- * section five of seven and the agreed start time did not render AT ALL once
- * the contract was signed, which is to say it disappeared exactly when the
- * shoot was about to happen. Both were the highest scoring facts on the whole
- * screen.
- *
- * Nothing here is new data and nothing below was removed. This is the same
- * record, read in the order the day actually needs it.
- */
-function ShootSummary({ portal, onEmail }: { portal: PortalDetail; onEmail?: () => void }) {
-  const { t, lang } = useAdminLang();
-  const [directionsOpen, setDirectionsOpen] = useState(false);
-
-  // The column first, the contract second. session_location is where she
-  // actually drives; the contract variable is what the client agreed to, and
-  // on a signed booking those can legitimately differ. Gallery-only bookings
-  // have no contract at all, so without the column they had no address.
-  const address = effectiveAddress(portal);
-  /**
-   * What the Directions sheet is offered.
-   *
-   * The stored list when there is one. When there is not, a one-entry list
-   * built from whatever single address this booking does have, so every
-   * record written before the list existed goes on opening a navigator
-   * exactly as it did.
-   */
-  const sheetLocations = useMemo<SessionLocation[]>(() => {
-    const stored = parseLocations(portal.session_locations);
-    if (stored.length) return stored;
-    return address ? [{ ...EMPTY_LOCATION, address }] : [];
-  }, [portal.session_locations, address]);
-  const phone = (portal.client_phone ?? '').trim();
-  const email = (portal.client_email ?? '').trim();
-
-
-  return (
-    <Box bg="white" border="1px solid" borderColor="gray.200" borderRadius="md" mb={5} overflow="hidden">
-      <VStack align="stretch" spacing={0} px={{ base: 4, md: 6 }} pt={{ base: 4, md: 5 }} pb={2}>
-        <HStack spacing={2} px={1}>
-          <SummaryAction
-            icon={FaMapMarkerAlt}
-            label={t.clientDetail.summaryDirections}
-            onClick={address ? () => setDirectionsOpen(true) : undefined}
-            hint={address ? undefined : t.clientDetail.summaryNoAddress}
-          />
-          <SummaryAction
-            icon={FaMobileAlt}
-            label={t.clientDetail.summaryCall}
-            href={phone ? `tel:${phone.replace(/[^\d+]/g, '')}` : undefined}
-            hint={phone ? undefined : t.clientDetail.summaryNoPhone}
-          />
-          <SummaryAction
-            icon={FaEnvelope}
-            label={t.clientDetail.summaryEmail}
-            // In Messages, with her signature and the whole thread, rather
-            // than Apple Mail. mailto: stays only where there is no admin
-            // route to hand over to.
-            onClick={email && onEmail ? onEmail : undefined}
-            href={email && !onEmail ? `mailto:${email}` : undefined}
-            hint={email ? undefined : t.clientDetail.summaryNoEmail}
-          />
-          {/* Same URL the Preview button below builds, including the preview
-              token: without it an undelivered gallery shows her the withheld
-              notice instead of the photos she is about to release. Dead until
-              there is a folder to look at. */}
-          <SummaryAction
-            icon={FaImages}
-            label={t.clientDetail.summaryGallery}
-            href={
-              portal.drive_url
-                ? `/portal/pass?password=${encodeURIComponent(portal.gallery_password)}` +
-                  (portal.gallery_preview_token
-                    ? `&preview=${encodeURIComponent(portal.gallery_preview_token)}`
-                    : '')
-                : undefined
-            }
-            hint={portal.drive_url ? undefined : t.clientDetail.summaryNoGallery}
-          />
-        </HStack>
-      </VStack>
-
-      {/* The address row is ITSELF the map target. Three adjacent link buttons
-          was the wrong geometry for the one action used while moving, so the
-          row is the glance target and the three explicit apps stay below for
-          when she wants a specific one. */}
-      {address ? (
-        /* NOT a link. It was one, to the same URL the Directions tile above
-           already opens, so the address could never be selected or copied:
-           long pressing it on a phone offered link actions and copied a
-           google.com/maps/dir URL rather than the address. This is the place
-           the address is READ. Going there is the tile's job, and copying it
-           is a row in the sheet the tile opens. */
-        <Box
-          mx={{ base: 4, md: 6 }}
-          mb={3}
-          px={3}
-          py={3}
-          minH="56px"
-          bg="blue.50"
-          borderRadius="md"
-        >
-          <HStack spacing={3} align="center">
-            <Icon as={FaMapMarkerAlt} boxSize={4} color="blue.600" flexShrink={0} />
-            <Text fontSize="sm" color="blue.800" fontWeight="500" flex="1" minW={0}>
-              {address}
-            </Text>
-          </HStack>
-        </Box>
-      ) : (
-        <Box mx={{ base: 4, md: 6 }} mb={3} px={3} py={3} bg="gray.50" borderRadius="md">
-          <Text fontSize="xs" color="gray.500">{t.clientDetail.summaryNoAddress}</Text>
-        </Box>
-      )}
-
-      {/* The date, time, balance and gallery row that sat here is gone
-          (2026-10-25): the header above says when, Payments right below says
-          what is owed, and the gallery state is a badge in the header. */}
-
-      {/* Another booking on the same day. A note, not a warning: she takes
-          two on a day on purpose, and three dates in the real data already
-          do. It exists so she finds out here rather than on the day. */}
-      {(portal.same_date_bookings?.length ?? 0) > 0 && (
-        <Box px={{ base: 4, md: 6 }} py={2} borderTop="1px solid" borderColor="gray.100">
-          <Text fontSize="xs" color="gray.500">
-            {t.clientDetail.alsoBookedThisDay(
-              (portal.same_date_bookings ?? [])
-                .map((b) => b.client_display_name || t.clientDetail.unnamed)
-                .join(', '),
-            )}
-          </Text>
-        </Box>
-      )}
-
-      {/* The one control. Three stacked buttons here plus a fourth set in the
-          contract section made eight tappable map links on one client, two of
-          which opened a byte for byte identical URL. Every app is still
-          reachable; it is one tap further in and one place to look. */}
-      <DirectionsSheet
-        locations={sheetLocations}
-        lang={lang}
-        isOpen={directionsOpen}
-        onClose={() => setDirectionsOpen(false)}
-      />
-    </Box>
   );
 }
 

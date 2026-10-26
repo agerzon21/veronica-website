@@ -16,6 +16,7 @@ export default function SubTabButton({
   onClick,
   disabled = false,
   badge,
+  fill = false,
   'aria-label': ariaLabel,
 }: {
   active: boolean;
@@ -26,6 +27,8 @@ export default function SubTabButton({
   disabled?: boolean;
   /** Small marker after the label, e.g. that a draft is waiting. */
   badge?: React.ReactNode;
+  /** Fill its slot, for a strip of tabs spread across a card. Off everywhere else. */
+  fill?: boolean;
   'aria-label'?: string;
 }) {
   return (
@@ -40,6 +43,7 @@ export default function SubTabButton({
       py={{ base: 3.5, md: 2.5 }}
       minH={{ base: '48px', md: 'auto' }}
       flex={{ base: '1', md: 'none' }}
+      w={fill ? '100%' : undefined}
       mb="-1px"
       bg="transparent"
       border="none"
