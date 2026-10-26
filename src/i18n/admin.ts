@@ -2570,6 +2570,26 @@ const dict = {
 
     // ─── Payments section ─────────────────────────────
     statTotal: { en: 'Total', ru: 'Всего' },
+    statRetainer: { en: 'Retainer', ru: 'Задаток' },
+    retainerPaid: { en: 'Paid', ru: 'Оплачен' },
+    retainerNotPaid: { en: 'Not paid yet', ru: 'Ещё не оплачен' },
+    retainerPartly: {
+      en: (paid: string) => `Partly paid (${paid} so far)`,
+      ru: (paid: string) => `Оплачен частично (пока ${paid})`,
+    },
+    retainerNone: { en: 'None', ru: 'Нет' },
+    plusTax: { en: (x: string) => `+ ${x} tax`, ru: (x: string) => `+ ${x} налог` },
+    plusCharges: { en: (x: string) => `+ ${x} charges`, ru: (x: string) => `+ ${x} доплаты` },
+    remainingByCardShort: { en: (x: string) => `${x} by card`, ru: (x: string) => `${x} картой` },
+    logPaymentButton: { en: 'Log a payment', ru: 'Записать оплату' },
+    addChargeButton: { en: 'Add a charge', ru: 'Добавить доплату' },
+    paymentsLogged: { en: 'Payments', ru: 'Оплаты' },
+    noPaymentsYet: {
+      en: 'No payments logged yet. If the client already paid (Zelle, Venmo, cash), log it with Log a payment so the balance is right.',
+      ru: 'Оплат пока нет. Если клиент уже заплатил (Zelle, Venmo, наличные), запиши это через «Записать оплату», чтобы баланс был верным.',
+    },
+    moreMoneyOptions: { en: 'More options: tax, insurance, free booking, history', ru: 'Ещё: налог, страховка, бесплатно, история' },
+    fewerMoneyOptions: { en: 'Fewer options', ru: 'Скрыть' },
     statPaid: { en: 'Paid', ru: 'Оплачено' },
     statRemaining: { en: 'Remaining', ru: 'Осталось' },
     // A tip is money in that settles nothing, so it gets its own stat rather

@@ -465,6 +465,10 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   const { t, lang } = useAdminLang();
   const [portal, setPortal] = useState<PortalDetail | null>(null);
   const [portalPreviewOpen, setPortalPreviewOpen] = useState(false);
+  // Payments: which form is open (none until asked for), and whether the
+  // rarely used money settings are showing.
+  const [openMoneyForm, setOpenMoneyForm] = useState<'payment' | 'charge' | null>(null);
+  const [moneyMoreOpen, setMoneyMoreOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   const [charges, setCharges] = useState<ChargeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -936,6 +940,35 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
   const galleryDaysLeft = daysUntil(portal.gallery_expires_at);
 
   /**
+   * Was the retainer paid? Payments are not tagged as retainer or balance,
+   * so it is read the way the contract reads it: the retainer is the first
+   * money in, and it is covered once what has been paid reaches it.
+   */
+  const retainerAmount = portal.complimentary ? 0 : Number(portal.contract_retainer_amount ?? 0);
+  const paidSoFar = Number(portal.paid_to_date ?? 0);
+  const retainerState: { label: string; tone: 'good' | 'warn' | 'muted' } =
+    retainerAmount <= 0
+      ? { label: '', tone: 'muted' }
+      : paidSoFar >= retainerAmount
+        ? { label: t.clientDetail.retainerPaid, tone: 'good' }
+        : paidSoFar > 0
+          ? { label: t.clientDetail.retainerPartly(formatMoney(paidSoFar)), tone: 'warn' }
+          : { label: t.clientDetail.retainerNotPaid, tone: 'warn' };
+
+  /** Insurance shows with the payments once it is in play, and waits under More options until then. */
+  const insuranceInPlay = Boolean(portal.insurance_status && portal.insurance_status !== 'none');
+  const insuranceBlock = (
+    <AdminClientInsurance
+      portalId={portalId}
+      adminPassword={adminPassword}
+      state={portal as unknown as InsuranceState}
+      contractSigned={portal?.contract_status === 'signed'}
+      retainerPaid={retainerAmount > 0 ? paidSoFar >= retainerAmount : paidSoFar > 0}
+      onSaved={reload}
+    />
+  );
+
+  /**
    * Pennsylvania sales tax for this booking: added on top, included in a
    * grandfathered price, or not a PA sale at all (src/data/sales-tax.ts).
    *
@@ -995,25 +1028,30 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
 
           Nothing in the chip row is fixed width, which is what survives
           Russian. "Галерея не отправлена" simply takes another line. */}
-      <Box bg="#2c2925" mx={{ base: -4, md: -6 }} px={{ base: 4, md: 6 }} pt={3} pb={3.5} mb={5}>
+      {/* THE HEADER, in the same light card as every section under it
+          (2026-10-25). It was a full-width dark band with the money in 11px
+          type underneath, which read as a different site and made the most
+          important numbers the smallest on the page. The money now lives in
+          Payments, large, and the balance and gallery state in the summary
+          card just below, so this says who, what, when, and the two states
+          that need a person: an unsigned contract and an unused invite. */}
+      <Box
+        bg="white"
+        border="1px solid"
+        borderColor="gray.100"
+        borderRadius="lg"
+        boxShadow="sm"
+        px={{ base: 4, md: 6 }}
+        pt={3}
+        pb={4}
+        mb={4}
+        data-testid="client-header"
+      >
         <Flex align="center" gap={2}>
           <Box ml={-2} flexShrink={0}>
-            <AdminBackButton onClick={handleBack} label={t.common.back} onDark />
+            <AdminBackButton onClick={handleBack} label={t.common.back} />
           </Box>
-          <Text
-            as="h1"
-            flex="1"
-            minW={0}
-            m={0}
-            fontSize={{ base: 'lg', md: 'xl' }}
-            fontWeight="400"
-            color="#f4f2ee"
-            whiteSpace="nowrap"
-            overflow="hidden"
-            textOverflow="ellipsis"
-          >
-            {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
-          </Text>
+          <Box flex="1" minW={0} />
           {(onPrev || onNext) && (
             <HStack spacing={0} flexShrink={0}>
               <IconButton
@@ -1024,8 +1062,7 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 isDisabled={!onPrev}
                 size="sm"
                 variant="ghost"
-                color="#d5cec4"
-                _hover={{ bg: 'whiteAlpha.200', color: 'white' }}
+                color="gray.500"
                 _disabled={{ opacity: 0.35, cursor: 'default' }}
               />
               <IconButton
@@ -1036,111 +1073,69 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
                 isDisabled={!onNext}
                 size="sm"
                 variant="ghost"
-                color="#d5cec4"
-                _hover={{ bg: 'whiteAlpha.200', color: 'white' }}
+                color="gray.500"
                 _disabled={{ opacity: 0.35, cursor: 'default' }}
               />
             </HStack>
           )}
         </Flex>
-
-        {/* The email, which the old header carried and this must not drop.
-            Shown only when the name above is a NAME: when there is no display
-            name the heading already IS the email, and printing it twice is the
-            bug the previous header was fixed for. */}
+        <Text
+          as="h1"
+          m={0}
+          mt={1}
+          fontSize={{ base: '2xl', md: '3xl' }}
+          fontWeight="300"
+          color="gray.800"
+          lineHeight="1.2"
+          overflowWrap="anywhere"
+        >
+          {portal.client_display_name || portal.client_email || t.clientDetail.unnamed}
+        </Text>
+        <Text fontSize="sm" color="gray.600" mt={1.5}>
+          {[
+            portal.contract_template_key ? typeLabel(portal.contract_template_key) : portal.session_type ?? t.clientDetail.kickerFallback,
+            portal.event_date ? formatDate(portal.event_date) : null,
+            (typeof portal.contract_variables?.event_time === 'string' ? portal.contract_variables.event_time : '')
+              .trim()
+              .replace(/\s*\([^)]*\)\s*$/, '') || null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+        {/* The email, only when the name above is a NAME: with no display
+            name the heading already IS the email. */}
         {portal.client_display_name && portal.client_email && (
-          <Text
-            fontSize="xs"
-            color="#948b80"
-            mt={0.5}
-            ml={7}
-            whiteSpace="nowrap"
-            overflow="hidden"
-            textOverflow="ellipsis"
-          >
+          <Text fontSize="sm" color="gray.500" mt={0.5} overflowWrap="anywhere">
             {portal.client_email}
           </Text>
         )}
-
-        <Flex flexWrap="wrap" gap={1.5} mt={2}>
-          <StripChip>
-            {[
-              portal.session_type ?? t.clientDetail.kickerFallback,
-              portal.event_date ? formatDate(portal.event_date) : null,
-            ]
-              .filter(Boolean)
-              .join(' \u00b7 ')}
-          </StripChip>
-
-          {/* Money, in the one arithmetic this system allows: total plus
-              charges minus paid. It can be negative, and when it is, the chip
-              says so rather than rounding a real overpayment away to nothing. */}
-          {portal.complimentary && <StripChip tone="info">{t.clientDetail.chipComplimentary}</StripChip>}
-          {!portal.complimentary && balanceRemaining !== null && amountOwed !== null && (
-            <StripChip tone={overpaidBy > 0 ? 'info' : balanceRemaining > 0 ? 'warn' : 'good'}>
-              {overpaidBy > 0
-                ? t.clientDetail.chipOverpaid(formatMoney(overpaidBy))
-                : balanceRemaining > 0
-                  ? t.clientDetail.chipOwing(formatMoney(balanceRemaining))
-                  : t.clientDetail.chipSettled}
-            </StripChip>
-          )}
-
+        <Flex flexWrap="wrap" gap={2} mt={3}>
           {portal.mode === 'full' && (
-            <StripChip tone={portal.contract_status === 'signed' ? 'good' : 'warn'}>
+            <HeaderChip tone={portal.contract_status === 'signed' ? 'good' : 'warn'}>
               {portal.contract_status === 'signed'
                 ? t.clientDetail.chipContractSigned
                 : t.clientDetail.chipContractUnsigned}
-            </StripChip>
+            </HeaderChip>
           )}
-
-          <StripChip tone={portal.gallery_delivered_at ? 'good' : undefined}>
-            {portal.gallery_delivered_at
-              ? t.clientDetail.chipGalleryDelivered
-              : t.clientDetail.chipGalleryNotSent}
-          </StripChip>
-
-          {portal.mode === 'simple' && <StripChip>{t.clientDetail.badgeGalleryOnly}</StripChip>}
-          {portal.setup_token && <StripChip tone="warn">{t.clientDetail.badgeInvitePending}</StripChip>}
+          <HeaderChip tone={portal.gallery_delivered_at ? 'good' : undefined}>
+            {portal.gallery_delivered_at ? t.clientDetail.chipGalleryDelivered : t.clientDetail.chipGalleryNotSent}
+          </HeaderChip>
+          {portal.complimentary && <HeaderChip tone="info">{t.clientDetail.chipComplimentary}</HeaderChip>}
+          {portal.mode === 'simple' && <HeaderChip>{t.clientDetail.badgeGalleryOnly}</HeaderChip>}
+          {portal.setup_token && <HeaderChip tone="warn">{t.clientDetail.badgeInvitePending}</HeaderChip>}
+          {!portal.complimentary && overpaidBy > 0 && (
+            <HeaderChip tone="info">{t.clientDetail.chipOverpaid(formatMoney(overpaidBy))}</HeaderChip>
+          )}
         </Flex>
-
-        {/* THE ARITHMETIC BEHIND THE CHIP ABOVE, because "$1200 left" alone
-            never says left of what.
-
-            Total is the CONTRACT total and charges are listed separately, so
-            the row adds up in front of her: total, plus charges, less paid,
-            leaves the chip. Folding charges into Total would show the right
-            balance and a figure matching no contract anybody signed, which is
-            the same confusion this screen's one-arithmetic rule exists to
-            stop. Charges appear only when there are some.
-
-            Retainer is what the contract asked for up front, not a payment.
-            It sits between the two so the row reads as the deal, then the
-            money: it is the number she is chasing before the date, and on an
-            unpaid booking it is the one she quotes.
-
-            Gated on contract_total_amount, the same value the chip is gated
-            on, so a gallery-only portal with no contract shows neither. */}
-        {amountOwed !== null && !portal.complimentary && (
-          <Flex flexWrap="wrap" columnGap={3} rowGap={0} mt={1.5}>
-            <StripFact
-              label={t.clientDetail.stripTotal}
-              value={formatMoney(portal.contract_total_amount ?? 0)}
-            />
-            {chargesTotal > 0 && (
-              <StripFact label={t.clientDetail.stripCharges} value={formatMoney(chargesTotal)} />
-            )}
-            {salesTaxAmount > 0 && (
-              <StripFact label={t.clientDetail.stripTax} value={formatMoney(salesTaxAmount)} />
-            )}
-            {portal.contract_retainer_amount !== null && (
-              <StripFact
-                label={t.clientDetail.stripRetainer}
-                value={formatMoney(portal.contract_retainer_amount)}
-              />
-            )}
-            <StripFact label={t.clientDetail.stripPaid} value={formatMoney(portal.paid_to_date)} />
-          </Flex>
+        {/* Preview the client's own portal, from the top of the page because
+            it shows the whole portal, not just the gallery it used to sit in.
+            Full-mode only: a gallery-only booking has no client account. */}
+        {portal.mode === 'full' && (
+          <Box mt={3}>
+            <CTAButton onClick={() => setPortalPreviewOpen(true)} variant="outline" size="sm" icon={FaExternalLinkAlt}>
+              {t.clientDetail.previewClientPortal}
+            </CTAButton>
+          </Box>
         )}
       </Box>
 
@@ -1185,7 +1180,362 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
           on this system derive a balance and the one that gets it wrong reads
           total minus paid, which silently drops every charge. One arithmetic,
           one source. */}
-      <ShootSummary portal={portal} balanceRemaining={balanceRemaining} />
+      <ShootSummary portal={portal} />
+
+      {/* ─── Payments section. Surfaces whenever a total is on the
+            books, full-mode portals always have one; simple-mode rows
+            have one only when Vero entered totals at creation. ─── */}
+      {/* The whole Payments section is gated on a total existing, and the box
+          that sets one lives in the LAST section of the screen. So logging a
+          Zelle on a booking with no total meant scrolling to the bottom,
+          typing a total, saving, waiting for a full reload, and scrolling back
+          up to a section that had only just appeared. Ten of eighteen real
+          bookings are gallery-only and four of those carry no total at all, so
+          this is the common case, not an edge one. Set it from here instead. */}
+      {portal.complimentary && (
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
+          <VStack align="stretch" spacing={3}>
+            {complimentaryRow}
+            {moneyHistory}
+          </VStack>
+        </Section>
+      )}
+
+      {!portal.complimentary && portal.contract_total_amount === null && (
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
+          <VStack align="stretch" spacing={3}>
+            {/* First, on a booking with no price: a free one is the likeliest
+                reason there is none, and at the bottom, under the Total box
+                and the tax row, it went unfound (2026-10-19). */}
+            {complimentaryRow}
+            <Text fontSize="sm" color="gray.600">
+              {t.clientDetail.noTotalYetHelp}
+            </Text>
+            <InlineField
+              label={t.clientDetail.totalAmountLabel}
+              type="text"
+              value=""
+              placeholder="0"
+              helpText={t.clientDetail.totalAmountHelp}
+              saving={savingField === 'contract_total_amount'}
+              validate={(v) => {
+                const parsed = parseMoneyInput(v);
+                if (parsed === 'invalid') return t.clientDetail.amountInvalid;
+                // Clearing an already-empty field is not an edit. Without this
+                // the Save button offers to do nothing.
+                if (parsed === null) return t.clientDetail.amountInvalid;
+                return null;
+              }}
+              onSave={(v) => {
+                const amount = parseMoneyInput(v);
+                if (amount === 'invalid' || amount === null) return Promise.resolve(false);
+                return patch({ contract_total_amount: amount }, 'contract_total_amount');
+              }}
+            />
+            {salesTaxRow}
+            {moneyHistory}
+          </VStack>
+        </Section>
+      )}
+
+      {!portal.complimentary && portal.contract_total_amount !== null && (
+        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
+          <VStack align="stretch" spacing={5} data-testid="payments-section">
+            {/* THE FOUR NUMBERS, large, in the order money moves: what the
+                booking costs, what was due up front, what has come in, what is
+                left (2026-10-25). The retainer used to be missing here and
+                sat in a locked field at the bottom of Details, so "was the
+                retainer paid?" meant scrolling the whole page and then doing
+                the sum. Tax and charges are notes under Total, because they
+                are part of what is owed, not separate things to chase. */}
+            <SimpleGrid columns={{ base: 2, md: 4 }} spacing={{ base: 4, md: 6 }} data-testid="payment-stats">
+              <Stat
+                label={t.clientDetail.statTotal}
+                value={formatMoney(portal.contract_total_amount)}
+                note={[
+                  chargesTotal > 0 ? t.clientDetail.plusCharges(formatMoney(chargesTotal)) : null,
+                  salesTaxAmount > 0 ? t.clientDetail.plusTax(formatMoney(salesTaxAmount)) : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || undefined}
+              />
+              <Stat
+                label={t.clientDetail.statRetainer}
+                value={retainerAmount > 0 ? formatMoney(retainerAmount) : t.clientDetail.retainerNone}
+                note={retainerAmount > 0 ? retainerState.label : undefined}
+                noteTone={retainerState.tone}
+              />
+              <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
+              <Stat
+                label={t.clientDetail.statRemaining}
+                value={formatMoney(balanceRemaining)}
+                emphasize
+                note={
+                  cardPricingOf(portal.card_pricing) === 'dual' && balanceRemaining !== null && balanceRemaining > 0
+                    ? t.clientDetail.remainingByCardShort(formatMoney(cardAmountFor(balanceRemaining, 'dual')))
+                    : undefined
+                }
+              />
+            </SimpleGrid>
+
+            {/* Only when there is one. A permanent "Tips $0" on every booking
+                reads as a prompt to go and ask for one. */}
+            {tipsTotal > 0 && (
+              <Text fontSize="sm" color="gray.600">
+                {t.clientDetail.statTips}: {formatMoney(tipsTotal)}. {t.clientDetail.tipNotInBalance}
+              </Text>
+            )}
+
+            {/* The forms open on demand. They used to sit open, one under the
+                other, and pushed the history (the thing she came to read) down
+                by a full screen. */}
+            <Flex gap={2} wrap="wrap">
+              <CTAButton
+                onClick={() => setOpenMoneyForm(openMoneyForm === 'payment' ? null : 'payment')}
+                icon={FaPlus}
+                variant={openMoneyForm === 'payment' ? 'solid' : 'outline'}
+                size="sm"
+              >
+                {t.clientDetail.logPaymentButton}
+              </CTAButton>
+              <CTAButton
+                onClick={() => setOpenMoneyForm(openMoneyForm === 'charge' ? null : 'charge')}
+                icon={FaPlus}
+                variant={openMoneyForm === 'charge' ? 'solid' : 'outline'}
+                size="sm"
+              >
+                {t.clientDetail.addChargeButton}
+              </CTAButton>
+            </Flex>
+            {openMoneyForm === 'payment' && (
+              <AddPaymentForm
+                portalId={portalId}
+                adminPassword={adminPassword}
+                onAdded={() => {
+                  setOpenMoneyForm(null);
+                  reload();
+                }}
+                remaining={balanceRemaining}
+              />
+            )}
+            {openMoneyForm === 'charge' && (
+              <AddChargeForm
+                portalId={portalId}
+                adminPassword={adminPassword}
+                onAdded={() => {
+                  setOpenMoneyForm(null);
+                  reload();
+                }}
+              />
+            )}
+
+            <Box>
+              <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+                {t.clientDetail.paymentsLogged}
+              </Text>
+              {payments.length > 0 ? (
+                <VStack align="stretch" spacing={2}>
+                  {payments.map((p) => (
+                    <PaymentRow
+                      key={p.id}
+                      entry={p}
+                      portalId={portalId}
+                      adminPassword={adminPassword}
+                      onDeleted={reload}
+                    />
+                  ))}
+                </VStack>
+              ) : (
+                <Text fontSize="sm" color="gray.500" data-testid="no-payments">
+                  {t.clientDetail.noPaymentsYet}
+                </Text>
+              )}
+            </Box>
+
+            {/* Charges: money owed rather than money in. Every line here is
+                printed in the client's portal with its reason and note. */}
+            {charges.length > 0 && (
+              <Box>
+                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
+                  {t.clientDetail.chargesHistory}
+                </Text>
+                <VStack align="stretch" spacing={2}>
+                  {charges.map((c) => (
+                    <ChargeRow
+                      key={c.id}
+                      entry={c}
+                      portalId={portalId}
+                      adminPassword={adminPassword}
+                      onDeleted={reload}
+                    />
+                  ))}
+                </VStack>
+              </Box>
+            )}
+
+            {/* Event insurance stays in view once it is in play; until then
+                it waits with the other rarely used settings below. */}
+            {insuranceInPlay && insuranceBlock}
+
+            <Box borderTop="1px solid" borderColor="gray.100" pt={3}>
+              <CTAButton
+                onClick={() => setMoneyMoreOpen((v) => !v)}
+                variant="ghost"
+                size="sm"
+                icon={moneyMoreOpen ? FaChevronUp : FaChevronDown}
+              >
+                {moneyMoreOpen ? t.clientDetail.fewerMoneyOptions : t.clientDetail.moreMoneyOptions}
+              </CTAButton>
+              {moneyMoreOpen && (
+                <VStack align="stretch" spacing={5} mt={4} data-testid="money-more">
+                  {!insuranceInPlay && insuranceBlock}
+                  {salesTaxRow}
+                  {complimentaryRow}
+                  {moneyHistory}
+                </VStack>
+              )}
+            </Box>
+          </VStack>
+        </Section>
+      )}
+
+      {/* ─── Contract section (full-mode only) ─── */}
+      {portal.mode === 'full' && (
+        <Section title={t.clientDetail.sectionContract} icon={FaFileSignature} hue="orange">
+          <VStack align="stretch" spacing={3}>
+            {/* Status label + signed-PDF CTA, same stacking pattern so
+                the "View Signed Copy" button doesn't orphan below. */}
+            <Stack
+              direction={{ base: 'column', md: 'row' }}
+              align={{ base: 'stretch', md: 'center' }}
+              justify={{ base: 'flex-start', md: 'space-between' }}
+              spacing={{ base: 3, md: 4 }}
+            >
+              <Box>
+                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
+                  {t.clientDetail.status}
+                </Text>
+                {/* There are six contract types now, and each one is worded
+                    differently. "Pending signature" on its own no longer says
+                    WHICH contract is pending, so the type rides next to the
+                    status instead of only being visible inside the PDF. */}
+                <HStack spacing={2} flexWrap="wrap">
+                  <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
+                  <Badge colorScheme="gray" variant="outline" fontSize="2xs">
+                    {typeLabel(portal.contract_template_key)}
+                  </Badge>
+                </HStack>
+              </Box>
+              {portal.contract_status === 'signed' && portal.contract_signed_pdf_available && (
+                <Box w={{ base: '100%', md: 'auto' }}>
+                  <ViewSignedPdfButton portalId={portalId} adminPassword={adminPassword} />
+                </Box>
+              )}
+            </Stack>
+
+            {/* The session type is a label (the kicker above, the Clients list,
+                the calendar). The contract type is what the contract was
+                actually rendered from. The two are written together now, but
+                rows predating that, and rows whose label was edited by hand,
+                can still disagree, and a page whose heading reads "portrait"
+                while it quietly holds a wedding contract is the worst version
+                of this. Saying so beats hoping nobody looks. */}
+            {portal.contract_status === 'pending' &&
+              portal.session_type &&
+              portal.session_type !== portal.contract_template_key &&
+              // Other / Custom is the one type whose label is SUPPOSED to
+              // differ: the create form files the booking under whatever Vero
+              // typed in Session Label ("newborn", "branding") while the
+              // contract renders from the generic session template. Without
+              // this, every Other booking accused itself of a mismatch and
+              // told her to overwrite the label that made it an Other booking.
+              !templateSpecFor(portal.contract_template_key)?.allowsCustomLabel && (
+                <Box p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
+                  <Text fontSize="xs" color="yellow.800">
+                    {/* "filed under X" rather than "a X shoot": the label is a
+                        raw stored word, and "a engagement shoot" is what the
+                        article version prints for half of them. */}
+                    {t.clientDetail.typeMismatchWarning(
+                      portal.session_type,
+                      typeLabel(portal.contract_template_key),
+                    )}
+                  </Text>
+                </Box>
+              )}
+
+            {/* The column moved and the contract did not.
+                Rescheduling patches the event_date COLUMN, which moves the
+                header, the Clients list and the calendar. The contract prints
+                {{event_date}}, a variable, and a signed contract is frozen, so
+                the two genuinely disagree and no editor on this screen can
+                reconcile them. Saying so beats letting her believe a
+                reschedule reached the paperwork. Unsigned bookings never get
+                here: the server now keeps the variable in step on every
+                event_date patch. */}
+            {portal.contract_status === 'signed' &&
+              portal.contract_variables?.event_date &&
+              portal.event_date &&
+              contractDateString(portal.event_date) !== portal.contract_variables.event_date && (
+                <Box p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
+                  <Text fontSize="xs" color="orange.800">
+                    {t.clientDetail.contractDateDrift(
+                      portal.contract_variables.event_date,
+                      formatDate(portal.event_date),
+                    )}
+                  </Text>
+                </Box>
+              )}
+
+            {/* The address the CLIENT agreed to, as text. No map links.
+                It had three of its own, reading contract_variables while the
+                Directions button at the top of the screen reads the
+                session_location column. Those two are deliberately separate,
+                so she can correct a venue the morning of a shoot without
+                touching a frozen contract, which means they are EXPECTED to
+                diverge. Two sets of live map buttons on one screen pointing
+                at different places, with nothing saying which was current,
+                is a way to drive to the wrong wedding.
+                The contract value stays visible because it is what was
+                agreed. It just stops offering a second route out of the
+                building. */}
+            {(portal.contract_variables?.event_location ?? '').trim() && (
+              <Box>
+                <Text fontSize="2xs" fontWeight="500" textTransform="uppercase"
+                      letterSpacing="0.18em" color="gray.500" mb={1}>
+                  {t.clientDetail.contractAddressLabel}
+                </Text>
+                <Text fontSize="sm" color="gray.700" fontWeight="300">
+                  {portal.contract_variables!.event_location}
+                </Text>
+                {/* Only when it differs from where she will actually drive.
+                    Same orange note the contract DATE uses eighteen lines up,
+                    for the same reason. */}
+                {effectiveAddress(portal) !== portal.contract_variables!.event_location.trim() && (
+                  <Box mt={2} p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
+                    <Text fontSize="xs" color="orange.800">
+                      {t.clientDetail.contractAddressDrift(effectiveAddress(portal))}
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            {/* While the contract is pending, expose the same variable
+                fields that were used at creation. Saving re-renders the
+                contract body. Once signed, the contract is frozen and
+                this block disappears (the signed PDF link lives in the
+                client portal view itself). */}
+            {portal.contract_status === 'pending' && (
+              <EditContractVariables
+                portal={portal}
+                adminPassword={adminPassword}
+                onSaved={reload}
+              />
+            )}
+          </VStack>
+        </Section>
+      )}
+
 
       {/* ─── Gallery section ─── */}
       <Section title={t.clientDetail.sectionPhotoGallery} icon={FaImages} hue="purple">
@@ -1279,24 +1629,6 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
             </Flex>
           )}
 
-          {/* Preview the client's own portal. Full-mode only: a gallery-only
-              portal has no client account, so there is nothing to preview. */}
-          {portal.mode === 'full' && (
-            <Flex align="center" gap={2} wrap="wrap">
-              <CTAButton
-                onClick={() => setPortalPreviewOpen(true)}
-                variant="outline"
-                size="sm"
-                fullWidth={{ base: true, md: false }}
-              >
-                <Icon as={FaExternalLinkAlt} boxSize={3} mr={2} />
-                {t.clientDetail.previewClientPortal}
-              </CTAButton>
-              <Text fontSize="xs" color="gray.500" fontWeight="300">
-                {t.clientDetail.previewClientPortalHint}
-              </Text>
-            </Flex>
-          )}
 
           <AdminPortalPreview
             isOpen={portalPreviewOpen}
@@ -1541,326 +1873,6 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </VStack>
       </Section>
 
-      {/* ─── Payments section. Surfaces whenever a total is on the
-            books, full-mode portals always have one; simple-mode rows
-            have one only when Vero entered totals at creation. ─── */}
-      {/* The whole Payments section is gated on a total existing, and the box
-          that sets one lives in the LAST section of the screen. So logging a
-          Zelle on a booking with no total meant scrolling to the bottom,
-          typing a total, saving, waiting for a full reload, and scrolling back
-          up to a section that had only just appeared. Ten of eighteen real
-          bookings are gallery-only and four of those carry no total at all, so
-          this is the common case, not an edge one. Set it from here instead. */}
-      {portal.complimentary && (
-        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
-          <VStack align="stretch" spacing={3}>
-            {complimentaryRow}
-            {moneyHistory}
-          </VStack>
-        </Section>
-      )}
-
-      {!portal.complimentary && portal.contract_total_amount === null && (
-        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
-          <VStack align="stretch" spacing={3}>
-            {/* First, on a booking with no price: a free one is the likeliest
-                reason there is none, and at the bottom, under the Total box
-                and the tax row, it went unfound (2026-10-19). */}
-            {complimentaryRow}
-            <Text fontSize="sm" color="gray.600">
-              {t.clientDetail.noTotalYetHelp}
-            </Text>
-            <InlineField
-              label={t.clientDetail.totalAmountLabel}
-              type="text"
-              value=""
-              placeholder="0"
-              helpText={t.clientDetail.totalAmountHelp}
-              saving={savingField === 'contract_total_amount'}
-              validate={(v) => {
-                const parsed = parseMoneyInput(v);
-                if (parsed === 'invalid') return t.clientDetail.amountInvalid;
-                // Clearing an already-empty field is not an edit. Without this
-                // the Save button offers to do nothing.
-                if (parsed === null) return t.clientDetail.amountInvalid;
-                return null;
-              }}
-              onSave={(v) => {
-                const amount = parseMoneyInput(v);
-                if (amount === 'invalid' || amount === null) return Promise.resolve(false);
-                return patch({ contract_total_amount: amount }, 'contract_total_amount');
-              }}
-            />
-            {salesTaxRow}
-            {moneyHistory}
-          </VStack>
-        </Section>
-      )}
-
-      {!portal.complimentary && portal.contract_total_amount !== null && (
-        <Section title={t.clientDetail.sectionPayments} icon={FaClipboardList} hue="green">
-          <VStack align="stretch" spacing={5}>
-            {/* 3-up stat row, 4-up once something has been charged. On mobile
-                the columns stay side-by-side but spacing shrinks so the
-                numbers fit without wrapping, which is why a fourth one drops
-                to a 2x2 there rather than squeezing onto one row. */}
-            <SimpleGrid
-              columns={{
-                base: chargesTotal > 0 || salesTaxAmount > 0 ? 2 : 3,
-                md: 3 + (chargesTotal > 0 ? 1 : 0) + (salesTaxAmount > 0 ? 1 : 0),
-              }}
-              spacing={{ base: 3, md: 6 }}
-              fontSize="sm"
-            >
-              <Stat label={t.clientDetail.statTotal} value={formatMoney(portal.contract_total_amount)} />
-              {chargesTotal > 0 && (
-                <Stat label={t.clientDetail.statCharges} value={formatMoney(chargesTotal)} />
-              )}
-              {salesTaxAmount > 0 && (
-                <Stat label={t.clientDetail.statTax} value={formatMoney(salesTaxAmount)} />
-              )}
-              <Stat label={t.clientDetail.statPaid} value={formatMoney(portal.paid_to_date)} />
-              <Stat label={t.clientDetail.statRemaining} value={formatMoney(balanceRemaining)} emphasize={balanceRemaining !== null && balanceRemaining > 0} />
-              {/* Only when there is one. A permanent "Tips $0" on every
-                  booking reads as a prompt to go and ask for one. */}
-              {tipsTotal > 0 && (
-                <Stat label={t.clientDetail.statTips} value={formatMoney(tipsTotal)} />
-              )}
-            </SimpleGrid>
-
-            {/* On a dual booking the remaining balance is what Vero keeps; a
-                client paying it by card is charged more. Said here so the
-                number a client quotes back from their portal is recognisable. */}
-            {cardPricingOf(portal.card_pricing) === 'dual' && balanceRemaining !== null && balanceRemaining > 0 && (
-              <Text fontSize="xs" color="gray.500">
-                {t.clientDetail.remainingByCard(formatMoney(cardAmountFor(balanceRemaining, 'dual')))}
-              </Text>
-            )}
-
-            <AddPaymentForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} remaining={balanceRemaining} />
-
-            {/* Said once, near the number it explains, rather than on every
-                tip row. The stat above already separates the two totals; this
-                is the sentence that stops the separation looking like a bug. */}
-            {tipsTotal > 0 && (
-              <Text fontSize="xs" color="gray.500">{t.clientDetail.tipNotInBalance}</Text>
-            )}
-
-            {payments.length > 0 && (
-              <Box>
-                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
-                  {t.clientDetail.history}
-                </Text>
-                <VStack align="stretch" spacing={2}>
-                  {payments.map((p) => (
-                    <PaymentRow
-                      key={p.id}
-                      entry={p}
-                      portalId={portalId}
-                      adminPassword={adminPassword}
-                      onDeleted={reload}
-                    />
-                  ))}
-                </VStack>
-              </Box>
-            )}
-
-            {/* Charges: money owed rather than money in, so it sits below the
-                payment log with its own form and its own list. Every line here
-                is printed in the client's portal with its reason and note. */}
-            <AddChargeForm portalId={portalId} adminPassword={adminPassword} onAdded={reload} />
-
-            {/* Event insurance. Sits with the charges because a billable
-                policy becomes one, and because the decision to buy is made
-                against the same numbers: what the booking is worth and what
-                has actually been paid. */}
-            <AdminClientInsurance
-              portalId={portalId}
-              adminPassword={adminPassword}
-              state={portal as unknown as InsuranceState}
-              contractSigned={portal?.contract_status === 'signed'}
-              retainerPaid={
-                Number(portal?.contract_retainer_amount ?? 0) > 0
-                  ? Number(portal?.paid_to_date ?? 0) >= Number(portal?.contract_retainer_amount ?? 0)
-                  : Number(portal?.paid_to_date ?? 0) > 0
-              }
-              onSaved={reload}
-            />
-
-            {charges.length > 0 && (
-              <Box>
-                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={2}>
-                  {t.clientDetail.chargesHistory}
-                </Text>
-                <VStack align="stretch" spacing={2}>
-                  {charges.map((c) => (
-                    <ChargeRow
-                      key={c.id}
-                      entry={c}
-                      portalId={portalId}
-                      adminPassword={adminPassword}
-                      onDeleted={reload}
-                    />
-                  ))}
-                </VStack>
-              </Box>
-            )}
-            {salesTaxRow}
-            {complimentaryRow}
-            {moneyHistory}
-          </VStack>
-        </Section>
-      )}
-
-      {/* ─── Account (full-mode only): onboarding status + tech-support
-            actions. Resend invite if they haven't finished welcome,
-            override password if they have. ─── */}
-      {portal.mode === 'full' && (
-        <AccountSection
-          portal={portal}
-          adminPassword={adminPassword}
-          onChanged={reload}
-        />
-      )}
-
-      {/* ─── Contract section (full-mode only) ─── */}
-      {portal.mode === 'full' && (
-        <Section title={t.clientDetail.sectionContract} icon={FaFileSignature} hue="orange">
-          <VStack align="stretch" spacing={3}>
-            {/* Status label + signed-PDF CTA, same stacking pattern so
-                the "View Signed Copy" button doesn't orphan below. */}
-            <Stack
-              direction={{ base: 'column', md: 'row' }}
-              align={{ base: 'stretch', md: 'center' }}
-              justify={{ base: 'flex-start', md: 'space-between' }}
-              spacing={{ base: 3, md: 4 }}
-            >
-              <Box>
-                <Text fontSize="xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em" mb={1}>
-                  {t.clientDetail.status}
-                </Text>
-                {/* There are six contract types now, and each one is worded
-                    differently. "Pending signature" on its own no longer says
-                    WHICH contract is pending, so the type rides next to the
-                    status instead of only being visible inside the PDF. */}
-                <HStack spacing={2} flexWrap="wrap">
-                  <ContractBadge status={portal.contract_status} signedAt={portal.contract_signed_at} />
-                  <Badge colorScheme="gray" variant="outline" fontSize="2xs">
-                    {typeLabel(portal.contract_template_key)}
-                  </Badge>
-                </HStack>
-              </Box>
-              {portal.contract_status === 'signed' && portal.contract_signed_pdf_available && (
-                <Box w={{ base: '100%', md: 'auto' }}>
-                  <ViewSignedPdfButton portalId={portalId} adminPassword={adminPassword} />
-                </Box>
-              )}
-            </Stack>
-
-            {/* The session type is a label (the kicker above, the Clients list,
-                the calendar). The contract type is what the contract was
-                actually rendered from. The two are written together now, but
-                rows predating that, and rows whose label was edited by hand,
-                can still disagree, and a page whose heading reads "portrait"
-                while it quietly holds a wedding contract is the worst version
-                of this. Saying so beats hoping nobody looks. */}
-            {portal.contract_status === 'pending' &&
-              portal.session_type &&
-              portal.session_type !== portal.contract_template_key &&
-              // Other / Custom is the one type whose label is SUPPOSED to
-              // differ: the create form files the booking under whatever Vero
-              // typed in Session Label ("newborn", "branding") while the
-              // contract renders from the generic session template. Without
-              // this, every Other booking accused itself of a mismatch and
-              // told her to overwrite the label that made it an Other booking.
-              !templateSpecFor(portal.contract_template_key)?.allowsCustomLabel && (
-                <Box p={3} bg="yellow.50" border="1px solid" borderColor="yellow.200" borderRadius="sm">
-                  <Text fontSize="xs" color="yellow.800">
-                    {/* "filed under X" rather than "a X shoot": the label is a
-                        raw stored word, and "a engagement shoot" is what the
-                        article version prints for half of them. */}
-                    {t.clientDetail.typeMismatchWarning(
-                      portal.session_type,
-                      typeLabel(portal.contract_template_key),
-                    )}
-                  </Text>
-                </Box>
-              )}
-
-            {/* The column moved and the contract did not.
-                Rescheduling patches the event_date COLUMN, which moves the
-                header, the Clients list and the calendar. The contract prints
-                {{event_date}}, a variable, and a signed contract is frozen, so
-                the two genuinely disagree and no editor on this screen can
-                reconcile them. Saying so beats letting her believe a
-                reschedule reached the paperwork. Unsigned bookings never get
-                here: the server now keeps the variable in step on every
-                event_date patch. */}
-            {portal.contract_status === 'signed' &&
-              portal.contract_variables?.event_date &&
-              portal.event_date &&
-              contractDateString(portal.event_date) !== portal.contract_variables.event_date && (
-                <Box p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
-                  <Text fontSize="xs" color="orange.800">
-                    {t.clientDetail.contractDateDrift(
-                      portal.contract_variables.event_date,
-                      formatDate(portal.event_date),
-                    )}
-                  </Text>
-                </Box>
-              )}
-
-            {/* The address the CLIENT agreed to, as text. No map links.
-                It had three of its own, reading contract_variables while the
-                Directions button at the top of the screen reads the
-                session_location column. Those two are deliberately separate,
-                so she can correct a venue the morning of a shoot without
-                touching a frozen contract, which means they are EXPECTED to
-                diverge. Two sets of live map buttons on one screen pointing
-                at different places, with nothing saying which was current,
-                is a way to drive to the wrong wedding.
-                The contract value stays visible because it is what was
-                agreed. It just stops offering a second route out of the
-                building. */}
-            {(portal.contract_variables?.event_location ?? '').trim() && (
-              <Box>
-                <Text fontSize="2xs" fontWeight="500" textTransform="uppercase"
-                      letterSpacing="0.18em" color="gray.500" mb={1}>
-                  {t.clientDetail.contractAddressLabel}
-                </Text>
-                <Text fontSize="sm" color="gray.700" fontWeight="300">
-                  {portal.contract_variables!.event_location}
-                </Text>
-                {/* Only when it differs from where she will actually drive.
-                    Same orange note the contract DATE uses eighteen lines up,
-                    for the same reason. */}
-                {effectiveAddress(portal) !== portal.contract_variables!.event_location.trim() && (
-                  <Box mt={2} p={3} bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="sm">
-                    <Text fontSize="xs" color="orange.800">
-                      {t.clientDetail.contractAddressDrift(effectiveAddress(portal))}
-                    </Text>
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            {/* While the contract is pending, expose the same variable
-                fields that were used at creation. Saving re-renders the
-                contract body. Once signed, the contract is frozen and
-                this block disappears (the signed PDF link lives in the
-                client portal view itself). */}
-            {portal.contract_status === 'pending' && (
-              <EditContractVariables
-                portal={portal}
-                adminPassword={adminPassword}
-                onSaved={reload}
-              />
-            )}
-          </VStack>
-        </Section>
-      )}
-
-
       {/* ─── Editable details (admin can correct typos etc.) ─── */}
       <Section title={t.clientDetail.sectionDetails} icon={FaUser} hue="blue">
         <VStack align="stretch" spacing={4}>
@@ -2089,6 +2101,17 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
         </VStack>
       </Section>
 
+      {/* ─── Account (full-mode only): onboarding status + tech-support
+            actions. Resend invite if they haven't finished welcome,
+            override password if they have. ─── */}
+      {portal.mode === 'full' && (
+        <AccountSection
+          portal={portal}
+          adminPassword={adminPassword}
+          onChanged={reload}
+        />
+      )}
+
       {/* ─── Danger zone (super-admin only) ─── */}
       {adminLevel === 'super' && (
         <DangerZone portalId={portalId} adminPassword={adminPassword} onDeleted={onBack} />
@@ -2125,16 +2148,8 @@ const AdminClientDetail = ({ portalId, adminPassword, adminLevel, onBack, onDirt
  * arithmetic behind one of those chips, so they read as a line of numbers
  * under it rather than four more things to act on.
  */
-function StripFact({ label, value }: { label: string; value: string }) {
-  return (
-    <Box as="span" fontSize="11px" lineHeight="18px" whiteSpace="nowrap">
-      <Box as="span" color="rgba(244,242,238,0.55)">{label} </Box>
-      <Box as="span" color="#e6e1d8" fontWeight="500">{value}</Box>
-    </Box>
-  );
-}
 
-function StripChip({
+function HeaderChip({
   children,
   tone,
 }: {
@@ -2143,21 +2158,23 @@ function StripChip({
 }) {
   const palette =
     tone === 'good'
-      ? { bg: 'rgba(47,122,77,0.22)', color: '#9ad9b4' }
+      ? { bg: 'green.50', color: 'green.700', border: 'green.100' }
       : tone === 'warn'
-        ? { bg: '#fdf6ec', color: '#a9631a' }
+        ? { bg: 'orange.50', color: 'orange.700', border: 'orange.100' }
         : tone === 'info'
-          ? { bg: 'rgba(58,110,165,0.28)', color: '#a9c9ea' }
-          : { bg: 'rgba(244,242,238,0.10)', color: '#d5cec4' };
+          ? { bg: 'blue.50', color: 'blue.700', border: 'blue.100' }
+          : { bg: 'gray.50', color: 'gray.600', border: 'gray.200' };
   return (
     <Box
       as="span"
-      fontSize="11px"
-      lineHeight="22px"
-      px="9px"
-      borderRadius="11px"
+      fontSize="xs"
+      lineHeight="24px"
+      px={2.5}
+      borderRadius="full"
+      border="1px solid"
+      borderColor={palette.border}
       whiteSpace="nowrap"
-      fontWeight={tone === 'warn' ? '600' : '400'}
+      fontWeight="500"
       bg={palette.bg}
       color={palette.color}
     >
@@ -2165,6 +2182,7 @@ function StripChip({
     </Box>
   );
 }
+
 
 function Section({
   title,
@@ -2616,13 +2634,7 @@ function SummaryAction({
  * Nothing here is new data and nothing below was removed. This is the same
  * record, read in the order the day actually needs it.
  */
-function ShootSummary({
-  portal,
-  balanceRemaining,
-}: {
-  portal: PortalDetail;
-  balanceRemaining: number | null;
-}) {
+function ShootSummary({ portal }: { portal: PortalDetail }) {
   const { t, lang } = useAdminLang();
   const [directionsOpen, setDirectionsOpen] = useState(false);
 
@@ -2644,12 +2656,6 @@ function ShootSummary({
     if (stored.length) return stored;
     return address ? [{ ...EMPTY_LOCATION, address }] : [];
   }, [portal.session_locations, address]);
-  // The stored string is composed at creation as "2:00 PM to 10:00 PM
-  // (approximately 8 hours)", which is right for a contract and wrong for a
-  // glance: the duration is derivable from the two times she is already
-  // reading, and on a 320px screen that parenthetical turned one line into
-  // four. The contract keeps the full wording; only this summary trims it.
-  const time = (portal.contract_variables?.event_time ?? '').trim().replace(/\s*\([^)]*\)\s*$/, '');
   const phone = (portal.client_phone ?? '').trim();
   const email = (portal.client_email ?? '').trim();
 
@@ -2729,41 +2735,9 @@ function ShootSummary({
         </Box>
       )}
 
-      {/* Date, time and balance. The time is read straight from
-          contract_variables rather than from the contract editor, which is why
-          it survives signing: the editor is gated on contract_status ===
-          'pending' and takes the start time with it when it goes. */}
-      <SimpleGrid columns={{ base: 2, md: 3 }} spacing={0} borderTop="1px solid" borderColor="gray.100">
-        <SummaryFact
-          icon={FaClock}
-          label={t.clientDetail.summaryWhen}
-          value={
-            [portal.event_date ? formatDate(portal.event_date) : '', time].filter(Boolean).join(' · ') ||
-            t.clientDetail.summaryNotSet
-          }
-        />
-        <SummaryFact
-          icon={FaClipboardList}
-          label={t.clientDetail.summaryBalance}
-          value={
-            portal.complimentary
-              ? t.clientDetail.summaryFree
-              : balanceRemaining === null
-                ? t.clientDetail.summaryNoTotal
-                : formatMoney(balanceRemaining)
-          }
-          emphasize={!portal.complimentary && balanceRemaining !== null && balanceRemaining > 0}
-        />
-        <SummaryFact
-          icon={FaImages}
-          label={t.clientDetail.summaryGalleryState}
-          value={
-            portal.gallery_delivered_at
-              ? t.clientDetail.summaryDelivered
-              : t.clientDetail.summaryNotDelivered
-          }
-        />
-      </SimpleGrid>
+      {/* The date, time, balance and gallery row that sat here is gone
+          (2026-10-25): the header above says when, Payments right below says
+          what is owed, and the gallery state is a badge in the header. */}
 
       {/* Another booking on the same day. A note, not a warning: she takes
           two on a day on purpose, and three dates in the real data already
@@ -2959,46 +2933,38 @@ function ExtendGallery({
   );
 }
 
-function SummaryFact({
-  icon,
+
+function Stat({
   label,
   value,
   emphasize,
+  note,
+  noteTone,
 }: {
-  icon: React.ElementType;
   label: string;
   value: string;
   emphasize?: boolean;
+  /** A short line under the figure: what it includes, or whether it was paid. */
+  note?: string;
+  noteTone?: 'good' | 'warn' | 'muted';
 }) {
-  return (
-    <VStack align="flex-start" spacing={0.5} px={{ base: 4, md: 6 }} py={3} minW={0}>
-      <HStack spacing={1.5}>
-        <Icon as={icon} boxSize={2.5} color="gray.400" />
-        <Text fontSize="2xs" color="gray.400" textTransform="uppercase" letterSpacing="0.15em">
-          {label}
-        </Text>
-      </HStack>
-      <Text
-        fontSize="sm"
-        fontWeight={emphasize ? '600' : '400'}
-        color={emphasize ? 'orange.600' : 'gray.700'}
-        w="100%"
-      >
-        {value}
-      </Text>
-    </VStack>
-  );
-}
-
-function Stat({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
   return (
     <VStack align="flex-start" spacing={0.5}>
       <Text fontSize={{ base: 'xs', md: '2xs' }} color="gray.400" textTransform="uppercase" letterSpacing={{ base: '0.15em', md: '0.15em' }}>
         {label}
       </Text>
-      <Text fontSize={{ base: 'md', md: 'lg' }} fontWeight={emphasize ? '500' : '300'} color={emphasize ? 'gray.800' : 'gray.600'}>
+      <Text fontSize={{ base: 'xl', md: '2xl' }} fontWeight={emphasize ? '500' : '300'} color={emphasize ? 'gray.800' : 'gray.700'} lineHeight="1.2">
         {value}
       </Text>
+      {note && (
+        <Text
+          fontSize="xs"
+          fontWeight={noteTone === 'good' || noteTone === 'warn' ? '500' : '400'}
+          color={noteTone === 'good' ? 'green.700' : noteTone === 'warn' ? 'orange.700' : 'gray.500'}
+        >
+          {note}
+        </Text>
+      )}
     </VStack>
   );
 }
