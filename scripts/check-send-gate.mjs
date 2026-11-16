@@ -283,6 +283,15 @@ style('Hi\r\n---\r\nThere', 'Hi\r\n\r\nThere', 'CRLF text keeps its line endings
 style('One\n\n***\n\nTwo\n___\nThree', 'One\n\nTwo\n\nThree', 'the other two markdown rules');
 style('Warmly,\n\u2014\nVero\n\n---\n\nLet me know', 'Warmly,\nVero\n\nLet me know',
   'a long dash line and a hyphen fence in one reply');
+// Markdown emphasis (2026-11-16): "**Intimate Wedding**" reached a client's
+// inbox with the asterisks on, since replies go out as plain text.
+style('- **Intimate Wedding**: from $500, up to 3 hours.', '- Intimate Wedding: from $500, up to 3 hours.',
+  'THE ONE THAT BIT: bold package names in a bulleted email');
+style('__Full Wedding Day__ is $1,200', 'Full Wedding Day is $1,200', 'underscore bold');
+style('## My packages\n\nHi Laura', 'My packages\n\nHi Laura', 'a markdown heading keeps its words');
+style('Rated 5* by couples, *see below', 'Rated 5* by couples, *see below', 'single asterisks are real text');
+style('Prices: $500 ** $900', 'Prices: $500 ** $900', 'a stray pair with nothing inside is left alone');
+style('#1 choice for weddings', '#1 choice for weddings', 'a hash that is not a heading');
 // Untouched, byte for byte.
 for (const [text, note] of [
   ['- one\n- two', 'single-hyphen bullets'],

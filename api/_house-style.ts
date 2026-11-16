@@ -207,9 +207,29 @@ export function stripSeparatorLines(text: string): string {
   return out.join('\n');
 }
 
+/**
+ * Markdown emphasis and headings, which nothing downstream renders.
+ *
+ * Replies go out as plain text (buildReplyHtml escapes them; Instagram and
+ * WhatsApp have no markup), so "**Intimate Wedding**" arrived in Laura
+ * Pechart's inbox on 2026-11-16 with the asterisks on. A person writing an
+ * email does not type those. Bold and underline-bold lose their marks; a
+ * "## Heading" line keeps its words. Single asterisks are left alone: "5*"
+ * and "*" footnotes are real text, and a lone one reads as nothing.
+ *
+ * Text with none of these comes back byte for byte.
+ */
+const BOLD = /\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*|__(?=\S)([^_\n]+?)(?<=\S)__/g;
+const HEADING = /^[ \t]{0,3}#{1,6}[ \t]+(?=\S)/gm;
+
+export function stripMarkdownEmphasis(text: string): string {
+  if (!text) return text;
+  return text.replace(BOLD, (_m, a, b) => a ?? b).replace(HEADING, '');
+}
+
 /** Every rule this module enforces. One call site for generated text. */
 export function applyHouseStyle(text: string): string {
-  return stripSeparatorLines(stripLongDashes(text));
+  return stripMarkdownEmphasis(stripSeparatorLines(stripLongDashes(text)));
 }
 
 /**

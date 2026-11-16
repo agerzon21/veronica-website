@@ -78,6 +78,7 @@ try {
     port(`api/${f}.ts`);
   }
   port('src/utils/phoneFromText.ts');
+  port('src/data/assistant-instruction.ts');
 
   // ── the database, in memory ────────────────────────────────────────────
   // Four statements exist in the handler; each is matched by a fragment of
