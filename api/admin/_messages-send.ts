@@ -14,6 +14,8 @@
  *   → 401 wrong password
  *   → 404 no such conversation
  *   → 409 an identical message was just sent (retry with allowDuplicate)
+ *   → 422 code looks_like_instruction: reads like a note to the Assistant
+ *         (resend with allowInstruction once Vero confirms)
  *   → 502 upstream (IG API / Resend) rejected the send
  *
  * The message is persisted with sender='human' regardless of channel so
@@ -59,9 +61,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const result = await deliverReply(getDb(), conversationId, text, {
       via: 'composer',
       allowDuplicate: req.body?.allowDuplicate === true,
+      // Set only after Vero answered the "this reads like a note to the
+      // Assistant" warning with Send anyway.
+      allowInstruction: req.body?.allowInstruction === true,
     });
     if (!result.ok) {
-      return res.status(result.status).json({ success: false, error: result.error });
+      return res
+        .status(result.status)
+        .json({ success: false, error: result.error, code: result.code });
     }
     return res.status(200).json({ success: true, message: result.message ?? null });
   } catch (err) {

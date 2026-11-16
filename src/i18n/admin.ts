@@ -929,6 +929,25 @@ const dict = {
     },
     langMismatchTranslate: { en: 'Translate and send', ru: 'Перевести и отправить' },
     langMismatchSendAsIs: { en: 'Send as is', ru: 'Отправить как есть' },
+    // ── Reply reads like a note to the Assistant (2026-11-16) ─────
+    instructionTitle: {
+      en: 'This looks like a note to the Assistant',
+      ru: 'Похоже на задание для Ассистента',
+    },
+    instructionBody: {
+      en: (name: string) =>
+        `It talks about ${name} instead of to them. If you send it, ${name} gets these exact words.`,
+      ru: (name: string) =>
+        `Здесь говорится о клиенте (${name}), а не обращение к нему. Если отправить, ${name} получит именно этот текст.`,
+    },
+    instructionAskAssistant: {
+      en: 'Have the Assistant write it',
+      ru: 'Пусть Ассистент напишет',
+    },
+    instructionSendAnyway: {
+      en: (name: string) => `Send to ${name} anyway`,
+      ru: (name: string) => `Всё равно отправить (${name})`,
+    },
     micRecordReply: { en: 'Record voice reply', ru: 'Записать голосовой ответ' },
     // Classification pills
     classification: {

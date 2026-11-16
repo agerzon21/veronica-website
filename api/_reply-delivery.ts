@@ -18,6 +18,7 @@
 import { getDb } from './_db.js';
 import { stripSubjectHeader } from './_subject-strip.js';
 import { applyHouseStyle } from './_house-style.js';
+import { looksLikeAssistantInstruction } from '../src/data/assistant-instruction.js';
 import { sendIgTextMessage } from './_ig-send.js';
 import { sendWhatsAppTextMessage, WHATSAPP_MAX_TEXT_LEN } from './_whatsapp-send.js';
 import { sendEmailReply, deriveReplySubject } from './_email-send.js';
@@ -48,6 +49,8 @@ export interface DeliveryResult {
   status: number;
   message?: { id: string; sent_at: string; external_message_id: string | null } | null;
   error?: string;
+  /** Machine-readable reason, for a caller that answers it with a question. */
+  code?: 'looks_like_instruction';
 }
 
 /**
@@ -93,7 +96,16 @@ export async function deliverReply(
    * records. Making it required costs one word per caller and makes an
    * unlabelled send impossible to write.
    */
-  options: { via: SentVia; allowDuplicate?: boolean },
+  options: {
+    via: SentVia;
+    allowDuplicate?: boolean;
+    /**
+     * Vero saw the "this reads like a note to the Assistant" warning and chose
+     * to send it anyway. Only the composer can set it; the Assistant's
+     * send_reply never does, so it can never mail an instruction to a client.
+     */
+    allowInstruction?: boolean;
+  },
 ): Promise<DeliveryResult> {
   // A subject line in a reply body is never correct: email threading sets
   // "Re:" itself and Instagram has no subjects. See _subject-strip.ts.
@@ -118,6 +130,20 @@ export async function deliverReply(
    * messages are untouched.
    */
   text = applyHouseStyle(text);
+
+  // "Write to her that the $500 package..." reached a client on 2026-11-16:
+  // a note meant for the Assistant, typed into the reply box. Checked here,
+  // after any translation, so a Russian note that only became English on
+  // the way out is caught too. See src/data/assistant-instruction.ts.
+  if (!options.allowInstruction && looksLikeAssistantInstruction(text)) {
+    return {
+      ok: false,
+      status: 422,
+      code: 'looks_like_instruction',
+      error:
+        'Not sent: this reads like an instruction for the Assistant, not a message to the client.',
+    };
+  }
 
   const convoRows = (await sql`
     SELECT external_user_id, platform

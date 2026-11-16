@@ -73,6 +73,7 @@ import { moneyDigits, type ClientPrefill, type PrefillBooking } from './clientPr
 import { readWeddingPackage } from '../data/formMessage';
 import { findPhonesInText, formatPhone, formatWaId, type FoundPhone } from '../utils/phoneFromText';
 import { loadDraft, saveDraft, clearDraft } from './draftStore';
+import { looksLikeAssistantInstruction } from '../data/assistant-instruction';
 import { translationTargetFor, type ContentLang } from './translationDirection';
 
 /**
@@ -804,9 +805,9 @@ const AdminMessages = ({ adminPassword, adminLevel, onOpenAssistant, onCreateFul
    */
   const [threadRefresh, setThreadRefresh] = useState(0);
   const seedCounter = useRef(0);
-  const seedAssistant = (text: string) => {
+  const seedAssistant = (text: string, submit?: boolean) => {
     seedCounter.current += 1;
-    setAssistantSeed({ text, token: seedCounter.current, convId: selectedId });
+    setAssistantSeed({ text, token: seedCounter.current, convId: selectedId, submit });
   };
   // NOTE: the panel used to roll down to a bar docked above the bottom nav on
   // mobile, and that bar reopened it. It duplicated the AI strip at the top of
@@ -2240,8 +2241,8 @@ function ConversationView({
   /** Lets the parent put a dot on the Reply tab without owning the draft. */
   onPanelDraftChange?: (hasDraft: boolean) => void;
   onPanelTabChange?: (tab: AiPanelTab) => void;
-  /** Hands "improve this draft" to the panel's assistant. */
-  onSeedAssistant?: (text: string) => void;
+  /** Hands "improve this draft" to the panel's assistant; `submit` asks it right away. */
+  onSeedAssistant?: (text: string, submit?: boolean) => void;
   /** Changes when something outside the thread modified it. */
   refreshToken?: number;
   // Mobile back-navigation. On desktop this is unused (SelectPrompt
@@ -2635,7 +2636,11 @@ function ConversationView({
     theirs: ContentLang;
     /** The language Vero just typed in. */
     yours: ContentLang;
+    /** She already said Send anyway to the "note to the Assistant" warning. */
+    allowInstruction?: boolean;
   } | null>(null);
+  // Text that reads like a note to the Assistant, held while Vero decides.
+  const [instructionText, setInstructionText] = useState<string | null>(null);
   const [aiToggleLoading, setAiToggleLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiSummary | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
@@ -3103,6 +3108,9 @@ function ConversationView({
           text,
           // The whole point of a retry is to send the same words again.
           allowDuplicate: true,
+          // These words already got past the instruction check once (a
+          // duplicate) or already went out (a bounce).
+          allowInstruction: true,
         }),
       });
       const data = await res.json();
@@ -3151,15 +3159,47 @@ function ConversationView({
   const handleSend = () => {
     const raw = replyText.trim();
     if (!raw || sending) return;
+    // "Write to her that the $500 package..." went to a client on 2026-11-16:
+    // a note for the Assistant typed into this box. Ask first. The server
+    // asks again after translation (a 422 lands back in this same dialog).
+    if (looksLikeAssistantInstruction(raw)) {
+      setInstructionText(raw);
+      return;
+    }
+    continueSend(raw, false);
+  };
+
+  const continueSend = (raw: string, allowInstruction: boolean) => {
     const theirs = conversationLanguage(messages);
     const yours = languageOf(raw);
     // Nothing to ask about: they have not written yet, or she answered in the
     // language they wrote in.
     if (!theirs || theirs === yours) {
-      void deliverReply(raw, null);
+      void deliverReply(raw, null, allowInstruction);
       return;
     }
-    setLangMismatch({ text: raw, theirs, yours });
+    setLangMismatch({ text: raw, theirs, yours, allowInstruction });
+  };
+
+  /**
+   * The note was for the Assistant after all: hand it over and ask it right
+   * away, so the draft is waiting in the Reply tab. The Assistant's send gate
+   * only sends on Vero's own approval, and deliverReply refuses instructions
+   * from it outright, so this cannot loop back to the client.
+   */
+  const handleInstructionToAssistant = () => {
+    const text = instructionText;
+    setInstructionText(null);
+    if (!text) return;
+    setReplyText('');
+    clearDraft('reply', summary.id);
+    if (onRefine && onSeedAssistant) {
+      onSeedAssistant(text, true);
+      onRefine('assistant');
+      return;
+    }
+    sessionStorage.setItem(ASSISTANT_HANDOFF_KEY, text);
+    onOpenAssistant?.();
   };
 
   /**
@@ -3170,7 +3210,11 @@ function ConversationView({
    * was down would be the worse outcome by a distance, and the original is at
    * least readable.
    */
-  const deliverReply = async (raw: string, translateTo: ContentLang | null) => {
+  const deliverReply = async (
+    raw: string,
+    translateTo: ContentLang | null,
+    allowInstruction = false,
+  ) => {
     if (sending) return;
     setSending(true);
     try {
@@ -3215,10 +3259,14 @@ function ConversationView({
           password: adminPassword,
           conversationId: summary.id,
           text: outbound,
+          allowInstruction,
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.status === 422 && data.code === 'looks_like_instruction') {
+        // Only recognisable once translated. Ask about the words she wrote.
+        setInstructionText(raw);
+      } else if (res.ok && data.success) {
         setReplyText('');
         clearDraft('reply', summary.id);
         await loadDetail();
@@ -3857,6 +3905,64 @@ function ConversationView({
         onCancel={() => setDeleteConfirmOpen(false)}
       />
 
+      {/* Reads like a note to the Assistant ("Write to her that..."). One
+          went to a client on 2026-11-16. A warning, not a block: Alex wants
+          Vero to be able to send it if she really means to. Same stacked
+          three-button shape as the language dialog below. */}
+      <Modal
+        isOpen={instructionText !== null}
+        onClose={() => setInstructionText(null)}
+        isCentered
+        size={{ base: 'xs', md: 'sm' } as never}
+      >
+        <ModalOverlay />
+        <ModalContent mx={4}>
+          <ModalHeader fontSize="md" fontWeight="500" color="gray.800" pb={1}>
+            {t.messages.instructionTitle}
+          </ModalHeader>
+          <ModalBody pt={0} pb={2}>
+            <Text fontSize="sm" color="gray.600" lineHeight="1.6">
+              {t.messages.instructionBody(displayName)}
+            </Text>
+          </ModalBody>
+          <ModalFooter pb={{ base: 'max(env(safe-area-inset-bottom), 16px)', md: 4 }}>
+            <VStack spacing={2} w="100%" align="stretch">
+              <CTAButton
+                onClick={handleInstructionToAssistant}
+                icon={FaRobot}
+                variant="solid"
+                size="sm"
+                data-testid="instruction-to-assistant"
+              >
+                {t.messages.instructionAskAssistant}
+              </CTAButton>
+              <Button
+                variant="outline"
+                size="sm"
+                minH="44px"
+                data-testid="instruction-send-anyway"
+                onClick={() => {
+                  const text = instructionText;
+                  setInstructionText(null);
+                  if (text) continueSend(text, true);
+                }}
+                isDisabled={sending}
+              >
+                {t.messages.instructionSendAnyway(displayName)}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                minH="44px"
+                onClick={() => setInstructionText(null)}
+              >
+                {t.common.cancel}
+              </Button>
+            </VStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {/* Language mismatch. Only ever appears when the thread is in one
           language and the reply was typed in the other, so it is not a
           confirmation step on the way to sending: matching languages send
@@ -3889,7 +3995,7 @@ function ConversationView({
               <CTAButton
                 onClick={() => {
                   if (langMismatch) {
-                    void deliverReply(langMismatch.text, langMismatch.theirs);
+                    void deliverReply(langMismatch.text, langMismatch.theirs, langMismatch.allowInstruction);
                   }
                 }}
                 icon={FaLanguage}
@@ -3905,7 +4011,7 @@ function ConversationView({
                 size="sm"
                 minH="44px"
                 onClick={() => {
-                  if (langMismatch) void deliverReply(langMismatch.text, null);
+                  if (langMismatch) void deliverReply(langMismatch.text, null, langMismatch.allowInstruction);
                 }}
                 isDisabled={sending}
               >
