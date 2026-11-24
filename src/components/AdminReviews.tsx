@@ -1,9 +1,11 @@
 import {
   Box, VStack, HStack, Text, Flex, Icon, Badge, useToast, Spinner, Wrap, IconButton,
-  Switch, Input, Textarea, Select, Stack,
+  Switch, Input, Textarea, Select, Stack, InputGroup, InputRightElement,
 } from '@chakra-ui/react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import FaCamera from '../icons/fa/FaCamera';
+import FaCheckCircle from '../icons/fa/FaCheckCircle';
+import FaExclamationTriangle from '../icons/fa/FaExclamationTriangle';
 import FaEdit from '../icons/fa/FaEdit';
 import FaEnvelope from '../icons/fa/FaEnvelope';
 import FaExternalLinkAlt from '../icons/fa/FaExternalLinkAlt';
@@ -777,6 +779,7 @@ function ReviewEditorModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isEdit = review !== null;
+  const [authorPhotoBroken, setAuthorPhotoBroken] = useState(false);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -795,6 +798,7 @@ function ReviewEditorModal({
     setForm((f) => ({ ...f, photos: f.photos.filter((p) => p.key !== key) }));
 
   const reviewUrl = form.review_url.trim();
+  const linkCheck = useReviewLinkCheck(reviewUrl, adminPassword, review?.id ?? null);
 
   const handleSave = async () => {
     if (!form.author_name.trim() || !form.text.trim()) {
@@ -903,13 +907,28 @@ function ReviewEditorModal({
         </Field>
 
         <Field label={t.reviewsEditor.authorPhotoLabel} help={t.reviewsEditor.authorPhotoHelp}>
-          <Input
-            value={form.author_photo_url}
-            onChange={(e) => update('author_photo_url', e.target.value)}
-            placeholder="https://... or a Google Drive share link"
-            {...inputStyles}
-          />
-          {isDriveUrl(form.author_photo_url) && (
+          <Flex align="center" gap={2}>
+            {/* Round, like the avatar on the review card. */}
+            <PhotoPreview
+              url={form.author_photo_url}
+              round
+              onBrokenChange={setAuthorPhotoBroken}
+            />
+            <Input
+              flex="1"
+              minW={0}
+              value={form.author_photo_url}
+              onChange={(e) => update('author_photo_url', e.target.value)}
+              placeholder="https://... or a Google Drive share link"
+              {...inputStyles}
+            />
+          </Flex>
+          {authorPhotoBroken && (
+            <Text fontSize="xs" color="red.500" mt={1.5}>
+              {t.reviewsEditor.photoBroken}
+            </Text>
+          )}
+          {!authorPhotoBroken && isDriveUrl(form.author_photo_url) && (
             <Text fontSize="xs" color={driveFileId(form.author_photo_url) ? 'green.600' : 'red.500'} mt={1.5}>
               {driveFileId(form.author_photo_url)
                 ? t.reviewsEditor.driveRecognised
@@ -951,23 +970,51 @@ function ReviewEditorModal({
         </Stack>
 
         <Field label={t.reviewsEditor.reviewUrlLabel} help={t.reviewsEditor.reviewUrlHelp}>
-          <Input
-            type="url"
-            inputMode="url"
-            value={form.review_url}
-            onChange={(e) => update('review_url', e.target.value)}
-            placeholder="https://maps.app.goo.gl/..."
-            {...inputStyles}
-          />
-          {reviewUrl && (
+          <InputGroup>
+            <Input
+              type="url"
+              inputMode="url"
+              value={form.review_url}
+              onChange={(e) => update('review_url', e.target.value)}
+              placeholder="https://maps.app.goo.gl/..."
+              pr="44px"
+              {...inputStyles}
+            />
+            {linkCheck.state !== 'idle' && (
+              <InputRightElement h="100%" w="44px" pointerEvents="none">
+                {linkCheck.state === 'checking' ? (
+                  <Spinner size="sm" color="gray.400" />
+                ) : (
+                  <Icon
+                    as={linkCheck.tone === 'good' ? FaCheckCircle : FaExclamationTriangle}
+                    boxSize={4}
+                    color={LINK_TONE_COLOR[linkCheck.tone]}
+                    aria-hidden
+                  />
+                )}
+              </InputRightElement>
+            )}
+          </InputGroup>
+          {reviewUrl && !isHttpsUrl(reviewUrl) && (
+            <Text fontSize="xs" mt={1.5} color="red.500">
+              {t.reviewsEditor.urlNeedsHttps}
+            </Text>
+          )}
+          {linkCheck.state !== 'idle' && (
             <Text
               fontSize="xs"
               mt={1.5}
-              color={isHttpsUrl(reviewUrl) ? 'gray.600' : 'red.500'}
+              color={linkCheck.state === 'checking' ? 'gray.500' : LINK_TONE_COLOR[linkCheck.tone]}
+              data-testid="review-link-check"
             >
-              {isHttpsUrl(reviewUrl)
-                ? t.reviewsEditor.reviewUrlButtonPreview(verifyLabel(form.source, reviewUrl))
-                : t.reviewsEditor.urlNeedsHttps}
+              {linkCheck.state === 'checking'
+                ? t.reviewsEditor.linkChecking
+                : t.reviewsEditor.linkVerdict[linkCheck.verdict](linkCheck.duplicateOf ?? '')}
+            </Text>
+          )}
+          {reviewUrl && isHttpsUrl(reviewUrl) && (
+            <Text fontSize="xs" mt={1} color="gray.600">
+              {t.reviewsEditor.reviewUrlButtonPreview(verifyLabel(form.source, reviewUrl))}
             </Text>
           )}
         </Field>
@@ -1073,10 +1120,116 @@ function ReviewEditorModal({
   );
 }
 
+// ── A link's photo, shown beside it ─────────────────────────────────
+// The preview is how Vero finds out a link is wrong BEFORE it is on the site:
+// an unshared Drive file or a dead Maps image shows the broken state right
+// here. Used by every photo row and by the author photo (round, like the
+// avatar on the review card).
+function PhotoPreview({
+  url: raw,
+  round = false,
+  onBrokenChange,
+}: {
+  url: string;
+  round?: boolean;
+  onBrokenChange?: (broken: boolean) => void;
+}) {
+  const url = raw.trim();
+  const preview = url && isHttpsUrl(url) ? toDirectImageUrl(url, 200) : '';
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [preview]);
+  useEffect(() => onBrokenChange?.(broken), [broken, onBrokenChange]);
+  return (
+    <Flex
+      flex="none"
+      boxSize="44px"
+      borderRadius={round ? 'full' : 'sm'}
+      overflow="hidden"
+      bg="gray.50"
+      border="1px solid"
+      borderColor={broken ? 'red.300' : 'gray.200'}
+      align="center"
+      justify="center"
+    >
+      {preview && !broken ? (
+        <Box
+          as="img"
+          src={preview}
+          alt=""
+          w="100%"
+          h="100%"
+          objectFit="cover"
+          referrerPolicy="no-referrer"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <Icon as={round ? FaUser : FaImage} boxSize={4} color={broken ? 'red.400' : 'gray.300'} />
+      )}
+    </Flex>
+  );
+}
+
+// ── Does the review link lead to the review? ────────────────────────
+// Asks api/admin/_reviews-check-link.ts once typing pauses. The verdicts it
+// can return are listed there; 'unchecked' is neutral, never an error, since
+// it only means Google did not answer or the site is not one we fetch.
+type LinkVerdict =
+  | 'review' | 'other_business' | 'duplicate' | 'not_review' | 'opens' | 'broken' | 'unchecked';
+type LinkTone = 'good' | 'bad' | 'neutral';
+const LINK_TONE: Record<LinkVerdict, LinkTone> = {
+  review: 'good',
+  opens: 'good',
+  other_business: 'bad',
+  duplicate: 'bad',
+  not_review: 'bad',
+  broken: 'bad',
+  unchecked: 'neutral',
+};
+const LINK_TONE_COLOR: Record<LinkTone, string> = {
+  good: 'green.600',
+  bad: 'red.500',
+  neutral: 'gray.500',
+};
+type LinkCheck =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'done'; verdict: LinkVerdict; tone: LinkTone; duplicateOf?: string };
+
+function useReviewLinkCheck(url: string, adminPassword: string, reviewId: string | null): LinkCheck {
+  const [check, setCheck] = useState<LinkCheck>({ state: 'idle' });
+  useEffect(() => {
+    if (!url || !isHttpsUrl(url)) {
+      setCheck({ state: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setCheck({ state: 'checking' });
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch('/api/admin/reviews-check-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, url, reviewId }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        const verdict: LinkVerdict =
+          res.ok && data.success && data.verdict in LINK_TONE ? data.verdict : 'unchecked';
+        setCheck({ state: 'done', verdict, tone: LINK_TONE[verdict], duplicateOf: data.duplicateOf });
+      } catch {
+        if (!cancelled) setCheck({ state: 'done', verdict: 'unchecked', tone: 'neutral' });
+      }
+    }, 600);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [url, adminPassword, reviewId]);
+  return check;
+}
+
 // ── One photo link in the editor's list ─────────────────────────────
-// A preview square, the link, and a remove button. The preview is how Vero
-// finds out a link is wrong BEFORE it is on the homepage: an unshared Drive
-// file or a dead Maps image shows the broken state right here.
+// A preview square, the link, and a remove button.
 function PhotoUrlRow({
   index,
   value,
@@ -1091,9 +1244,7 @@ function PhotoUrlRow({
   const { t } = useAdminLang();
   const url = value.trim();
   const valid = !!url && isHttpsUrl(url);
-  const preview = valid ? toDirectImageUrl(url, 200) : '';
   const [broken, setBroken] = useState(false);
-  useEffect(() => setBroken(false), [preview]);
 
   let hint: { text: string; color: string } | null = null;
   if (url && !valid) hint = { text: t.reviewsEditor.urlNeedsHttps, color: 'red.500' };
@@ -1108,32 +1259,7 @@ function PhotoUrlRow({
   return (
     <Box>
       <Flex align="center" gap={2}>
-        <Flex
-          flex="none"
-          boxSize="44px"
-          borderRadius="sm"
-          overflow="hidden"
-          bg="gray.50"
-          border="1px solid"
-          borderColor={broken ? 'red.300' : 'gray.200'}
-          align="center"
-          justify="center"
-        >
-          {preview && !broken ? (
-            <Box
-              as="img"
-              src={preview}
-              alt=""
-              w="100%"
-              h="100%"
-              objectFit="cover"
-              referrerPolicy="no-referrer"
-              onError={() => setBroken(true)}
-            />
-          ) : (
-            <Icon as={FaImage} boxSize={4} color={broken ? 'red.400' : 'gray.300'} />
-          )}
-        </Flex>
+        <PhotoPreview url={value} onBrokenChange={setBroken} />
         <Input
           flex="1"
           minW={0}

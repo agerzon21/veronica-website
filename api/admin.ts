@@ -35,6 +35,7 @@ import reviewsListHandler from './admin/_reviews-list.js';
 import reviewsUpsertHandler from './admin/_reviews-upsert.js';
 import reviewsDeleteHandler from './admin/_reviews-delete.js';
 import reviewsAggregateHandler from './admin/_reviews-aggregate.js';
+import reviewsCheckLinkHandler from './admin/_reviews-check-link.js';
 import weddingsSettingsHandler from './admin/_weddings-settings.js';
 import weddingsVendorsListHandler from './admin/_weddings-vendors-list.js';
 import weddingsVendorsUpsertHandler from './admin/_weddings-vendors-upsert.js';
@@ -116,6 +117,7 @@ const HANDLERS: Record<
   'reviews-upsert': reviewsUpsertHandler,
   'reviews-delete': reviewsDeleteHandler,
   'reviews-aggregate': reviewsAggregateHandler,
+  'reviews-check-link': reviewsCheckLinkHandler,
   'weddings-settings': weddingsSettingsHandler,
   'weddings-vendors-list': weddingsVendorsListHandler,
   'weddings-vendors-upsert': weddingsVendorsUpsertHandler,

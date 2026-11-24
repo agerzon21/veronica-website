@@ -4005,6 +4005,40 @@ const dict = {
       en: (label: string) => `On the site, the button will read "${label}".`,
       ru: (label: string) => `На сайте кнопка будет называться «${label}».`,
     },
+    // The check beside "Link to the review" (2026-11-24). Verdicts come from
+    // api/admin/_reviews-check-link.ts. Each takes the duplicate's author
+    // name, which only 'duplicate' uses.
+    linkChecking: { en: 'Checking the link...', ru: 'Проверяем ссылку...' },
+    linkVerdict: {
+      review: {
+        en: () => 'Checked: this opens a Google review of Vero Photography.',
+        ru: () => 'Проверено: ссылка открывает отзыв о Vero Photography в Google.',
+      },
+      opens: {
+        en: () => 'Checked: the link opens.',
+        ru: () => 'Проверено: ссылка открывается.',
+      },
+      duplicate: {
+        en: (name: string) => `This is the same review as ${name}'s. Copy the link from the new review.`,
+        ru: (name: string) => `Это тот же отзыв, что у ${name}. Скопируй ссылку из нового отзыва.`,
+      },
+      other_business: {
+        en: () => 'This is a review of a different business, not Vero Photography.',
+        ru: () => 'Это отзыв о другом бизнесе, не о Vero Photography.',
+      },
+      not_review: {
+        en: () => 'This link does not open a review. On Google Maps, open the review itself, tap Share and copy that link.',
+        ru: () => 'Эта ссылка не открывает отзыв. В Google Maps открой сам отзыв, нажми «Поделиться» и скопируй ту ссылку.',
+      },
+      broken: {
+        en: () => 'This link does not open. Check that it was copied whole.',
+        ru: () => 'Ссылка не открывается. Проверь, что она скопирована целиком.',
+      },
+      unchecked: {
+        en: () => 'Could not check this link right now. It will still be saved.',
+        ru: () => 'Сейчас не получилось проверить ссылку. Она всё равно сохранится.',
+      },
+    },
     urlNeedsHttps: {
       en: 'Paste the full link, starting with https://',
       ru: 'Вставь полную ссылку, начиная с https://',
